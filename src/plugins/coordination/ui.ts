@@ -21,14 +21,13 @@ export function claimsUiView(claimsData: (ctx: Context) => ClaimsData) {
     panel: true,
     render(_params: Record<string, string[]>, ctx: Context) {
       const d = claimsData(ctx)
-      const held = d.claims.filter((c) => c.items.length || c.resources?.length || c.preparing)
+      const held = d.claims.filter((c) => c.items.length || c.preparing)
       const branch = (c: ClaimsData["claims"][number]) =>
         [
           `<h3><code>${esc(c.branch)}</code>${c.here ? ' <span class="tag">(here)</span>' : ""}${
             c.preparing ? ' <span class="tag">(being prepared)</span>' : ""
           }</h3>`,
           ...(c.note ? [`<p>${esc(c.note)}</p>`] : []),
-          ...(c.resources?.length ? [`<p>Holds ${c.resources.map((r) => `<code>${esc(r)}</code>`).join(", ")}: no other branch may.</p>`] : []),
           c.items.length ? `<ul>${c.items.map((e) => `<li>${itemLink(e.id, e.ref)} ${esc(e.title)}</li>`).join("")}</ul>` : "<p>No items.</p>",
         ].join("\n")
       const contested = d.contested.length

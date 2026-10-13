@@ -71,45 +71,25 @@ aside rather than merged.
 If `--ff-only` refuses, stop: the trunk moved. Merge it into the branch
 again, on the branch ([the rule](rules.md#every-merge-to-the-trunk-is-a-fast-forward)).
 
-## One holder at a time: resources
+## One writer: no locks
 
-An item may be claimed by several branches; a **resource** may not. A
-resource is something two sessions must never touch at once — the published
-site, another repository's trunk, the release tags — and it is held by one
-branch at a time. The resources are data, in naima.json:
+Naima has no locks. A claim says who works on what and never excludes
+anyone. What one session at a time must touch — the trunk, the published
+site, the release tags — has one writer, the owner of the trunk: it alone
+lands branches on the trunk, pushes it, publishes the site and makes
+releases, from the trunk. Every other session prepares on its own branch —
+the code, the site's sources, a draft of the release notes — and hands the
+branch over to be landed
+([the rule](rules.md#no-locks-the-owner-of-the-trunk-is-the-single-writer)).
 
-```sh
-naima plugin set coordination 'resources={"site":{"says":"the published site","role":"website-manager"}}'
-```
-
-Each one says what it is, and may name the [role](glossary.md#role) that
-holds it. Then:
-
-```sh
-naima claim --resource site --note "publishing"   # refused, naming the holder, while another branch holds it
-naima claims --resources                          # every resource: its holder, or free
-naima release --resource site                     # done: another branch may take it
-```
-
-The resource is written in the branch's own claim file, beside its items, so
-it is seen from every local branch exactly as an item claim is. A holder
-whose branch is gone is listed by `naima prune`, and refused claims name it
-too; a resource two branches hold at once — two claims made before either
-saw the other — fails `naima check`.
-
-A tool that touches a resource asks first: `naima claims --resources --json`
-prints, for each one, its holders with their branch and claim id, so a
-publish script can refuse unless the branch it runs on is the holder, and
-record the claim id in what it publishes.
-
-A role can be the one that holds a resource. A project declares its own roles
-in the roles plugin's `roles` option — for example a website manager that
-alone publishes the site, whose queue (`naima queue --role website-manager`)
-lists the items of kind `site` everyone else files instead of publishing
-themselves:
+A role can own a kind of work without writing the trunk. A project declares
+its own roles in the roles plugin's `roles` option — for example a website
+manager that prepares the site's changes, whose queue
+(`naima queue --role website-manager`) lists the items of kind `site`
+everyone else files:
 
 ```sh
-naima plugin set roles 'roles={"website-manager":{"title":"Website manager","owns":"the site: it alone publishes it","refuses":["publishing without the site claim"],"kinds":["site"],"types":[]}}'
+naima plugin set roles 'roles={"website-manager":{"title":"Website manager","owns":"the site'"'"'s sources: it prepares every site change on its branch","refuses":["making a site change filed by someone else without its item"],"kinds":["site"],"types":[]}}'
 naima new todos "Site: fix the install line" --set kind=site
 ```
 
@@ -123,7 +103,7 @@ a collision is rarer, not impossible: git reports it at the merge.
 ## Claims left behind
 
 ```sh
-naima prune            # claims naming a branch git no longer has, with the resources they hold
+naima prune            # claims naming a branch git no longer has
 naima prune --write    # remove them; commit the deletions
 ```
 

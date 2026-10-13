@@ -60,10 +60,10 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`close`](#naima-close) | trackers | archive a resolved item: fixed, and proven by an item that has passed | an item is archived only when fixed and proven: fixedOn set and a verified-by item that has passed, with every write hook agreeing; --force takes a hook's refusal on, for the one who owns the evidence |
 | [`bugs`](#naima-bugs) | trackers | how many bugs have no code written, and how many are fixed but unproven | nothing: it only counts |
 | [`open`](#naima-open) | coordination | start a piece of work: a worktree <worktrees>/<what> on a new branch <who>/<what> from the trunk, and its claim on the items, in one step | work happens on its own branch and worktree from the trunk, and its claim on the items is recorded in the same step |
-| [`claim`](#naima-claim) | coordination | record that this branch is working on items, or holds a resource no other branch may hold (writes one file on this branch) | a claim belongs to a branch, never to a detached HEAD, and is one file on that branch; a resource is one the configuration declares, and is refused, naming the holder, while another branch holds it |
-| [`release`](#naima-release) | coordination | drop this branch's claim on items or resources; the last one removes the file, unless the branch is being prepared (claim --preparing) | only this branch's own claim is dropped, and only on items and resources it holds; while the branch is being prepared, the emptied file is kept |
-| [`claims`](#naima-claims) | coordination | who holds what, recombined from every branch; with --resources, every declared resource and its one holder, or free | nothing: it only reads |
-| [`prune`](#naima-prune) | coordination | list (or with --write remove) claim files naming a branch git no longer has — a resource such a claim holds is held by no one alive, and listed with it; one only another ref carries is listed with that ref, to be dropped there. With --branch, delete a branch and its worktree, refusing one with unmerged commits that no archive/<branch> tag holds | the trunk is never pruned, and a branch with unmerged commits that no archive/<branch> tag holds is refused; nothing is removed without --write |
+| [`claim`](#naima-claim) | coordination | record that this branch is working on items (writes one file on this branch) | a claim belongs to a branch, never to a detached HEAD, and is one file on that branch; it never locks anything: several branches may claim one item |
+| [`release`](#naima-release) | coordination | drop this branch's claim on items; the last one removes the file, unless the branch is being prepared (claim --preparing) | only this branch's own claim is dropped, and only on items it holds; while the branch is being prepared, the emptied file is kept |
+| [`claims`](#naima-claims) | coordination | who holds what, recombined from every branch | nothing: it only reads |
+| [`prune`](#naima-prune) | coordination | list (or with --write remove) claim files naming a branch git no longer has; one only another ref carries is listed with that ref, to be dropped there. With --branch, delete a branch and its worktree, refusing one with unmerged commits that no archive/<branch> tag holds | the trunk is never pruned, and a branch with unmerged commits that no archive/<branch> tag holds is refused; nothing is removed without --write |
 | [`pass`](#naima-pass) | coordination | write this session's note (one new file), or list the newest | a session note is one new file: earlier ones are never rewritten; --ack is refused unless it carries every phrase the project's active rules ask an agent to acknowledge |
 | [`event`](#naima-event) | coordination | record an event the timeline cannot derive — a decision taken elsewhere, a build handed out, a policy, an outside fact — as one new file; everything else on `naima view timeline` is derived | an event has a YYYY-MM-DD date and a one-word kind, and is one new file; what the timeline derives is never recorded |
 | [`diary`](#naima-diary) | coordination | the project's story, day by day and in order: events recorded with --kind diary, every decision with its reason, every session note; nothing stored but those files | nothing: it reads the records, the decisions and the session notes, and writes nothing |
@@ -789,7 +789,7 @@ Claims and session notes, one file per session, recombined from every branch; th
 
 Its contributions' qualified ids are `coordination/<name>`.
 
-No session writes a file another session writes. A claim is one file per branch, `claims/<uuid>.json`; a session note is one file per session, `passes/<date>-<uuid>.md`. Both are written on the writer's own branch and never staged or committed by the tool: commit them with the work. `claims`, `pass --list` and `summary` recombine them at read time from every local branch — the trunk, every branch not merged into it, whatever each worktree stands on — each read from the disk of the worktree that stands on it, uncommitted files included, or from its ref when none does; remote-tracking refs are not read. The trunk is the branch origin's HEAD names, else `main`, else `master`; without one, every local branch is read. A claim belongs to a branch, so on a detached HEAD `claim` is refused. Several branches may claim one item: `claim` says who else holds it rather than refusing. A resource is the opposite: one branch at a time. The resources are data, `resources` (name → `says`, and the `role` that holds it, when one does); `claim --resource <name>` records it in the branch's claim file, beside its items, and is refused, naming the holder, while another branch holds it; `release --resource <name>` gives it back; `claims --resources` lists each with its holder or free; `prune` lists a holder whose branch is gone, and `naima check` flags a resource two branches hold. Work happens by one scheme, checked: the worktree `<worktrees>/<what>` stands on the branch `<who>/<what>` and carries a claim; `open` makes all three in one step. A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. `naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. What has no date is counted at the foot, never placed at a guess. Only what nothing derives — a decision taken elsewhere, a build handed out, a policy, an outside fact — is a record, one file per event, `events/<date>-<uuid>.md`, written by `naima event`. `pass --ack "<line>"` writes the acknowledgement line whichever plugin declares a rule's `ack` field asks an agent to give back — refused if a phrase is missing from it — and records it in the note's front matter; a note dated after 2026-10-02 missing it, or whose body no longer starts with it, is a problem (`session-note-ack`), tolerating one written before — on the day it shipped, or earlier, grandfathered like a closed item on the day `commits` shipped — since what it recorded is what the rules asked then.
+No session writes a file another session writes. A claim is one file per branch, `claims/<uuid>.json`; a session note is one file per session, `passes/<date>-<uuid>.md`. Both are written on the writer's own branch and never staged or committed by the tool: commit them with the work. `claims`, `pass --list` and `summary` recombine them at read time from every local branch — the trunk, every branch not merged into it, whatever each worktree stands on — each read from the disk of the worktree that stands on it, uncommitted files included, or from its ref when none does; remote-tracking refs are not read. The trunk is the branch origin's HEAD names, else `main`, else `master`; without one, every local branch is read. A claim belongs to a branch, so on a detached HEAD `claim` is refused. Several branches may claim one item: `claim` says who else holds it rather than refusing. There are no locks: a claim says who works on what and never excludes anyone. What one session at a time must touch — the trunk, the published site, the releases — is touched by one writer, the owner of the trunk; every other session prepares on its own branch. Work happens by one scheme, checked: the worktree `<worktrees>/<what>` stands on the branch `<who>/<what>` and carries a claim; `open` makes all three in one step. A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. `naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. What has no date is counted at the foot, never placed at a guess. Only what nothing derives — a decision taken elsewhere, a build handed out, a policy, an outside fact — is a record, one file per event, `events/<date>-<uuid>.md`, written by `naima event`. `pass --ack "<line>"` writes the acknowledgement line whichever plugin declares a rule's `ack` field asks an agent to give back — refused if a phrase is missing from it — and records it in the note's front matter; a note dated after 2026-10-02 missing it, or whose body no longer starts with it, is a problem (`session-note-ack`), tolerating one written before — on the day it shipped, or earlier, grandfathered like a closed item on the day `commits` shipped — since what it recorded is what the rules asked then.
 
 Options, each with the default it takes when nothing sets it:
 
@@ -798,7 +798,6 @@ Options, each with the default it takes when nothing sets it:
 | `who` |  | who works, when `naima open` is given no `--as`: the branch's first segment |
 | `worktrees` | `../<main worktree's folder>-worktrees` | the directory every worktree is a folder of, relative to the main worktree |
 | `exempt` | `[]` | branches the naming scheme does not apply to: names, or patterns with * |
-| `resources` | `{}` | what one branch at a time may hold — resource name → { "says": "<what it is>", "role": "<the role that holds it>" } — taken with naima claim --resource <name> |
 
 ### naima open
 
@@ -825,18 +824,17 @@ naima open export-drops export-keeps --as claude --name export-alpha
 
 ### naima claim
 
-Record that this branch is working on items, or holds a resource no other branch may hold (writes one file on this branch).
+Record that this branch is working on items (writes one file on this branch).
 
-**Enforces**: A claim belongs to a branch, never to a detached HEAD, and is one file on that branch; a resource is one the configuration declares, and is refused, naming the holder, while another branch holds it.
+**Enforces**: A claim belongs to a branch, never to a detached HEAD, and is one file on that branch; it never locks anything: several branches may claim one item.
 
 ```sh
-naima claim <item>... [--resource <name>]... [--note "why"] [--preparing
+naima claim <item>... [--note "why"] [--preparing
 naima --not-preparing]
 ```
 
 | Option | Default | What it does |
 |---|---|---|
-| `--resource` |  | take a declared resource (plugins.coordination.options.resources) for this branch: refused, naming the holder, while another branch holds it; repeatable, items optional |
 | `--note` |  | why this branch holds the items; replaces the previous note |
 | `--preparing` |  | mark the branch as being prepared to enter the trunk: from then on naima check notes every commit the trunk takes that the branch lacks, and every one committed on the trunk directly; items are optional |
 | `--not-preparing` |  | drop the mark |
@@ -845,47 +843,39 @@ Examples:
 
 ```sh
 naima claim export-drops export-keeps --note "alpha channel in the exporter"
-naima claim --resource site --note "publishing the site"
 naima claim --preparing
 ```
 
 ### naima release
 
-Drop this branch's claim on items or resources; the last one removes the file, unless the branch is being prepared (claim --preparing).
+Drop this branch's claim on items; the last one removes the file, unless the branch is being prepared (claim --preparing).
 
-**Enforces**: Only this branch's own claim is dropped, and only on items and resources it holds; while the branch is being prepared, the emptied file is kept.
+**Enforces**: Only this branch's own claim is dropped, and only on items it holds; while the branch is being prepared, the emptied file is kept.
 
 ```sh
-naima release <item>... [--resource <name>]...
+naima release <item>...
 ```
-
-| Option | Default | What it does |
-|---|---|---|
-| `--resource` |  | give back a resource this branch holds, so another branch may claim it; repeatable |
 
 Examples:
 
 ```sh
 naima release export-drops
-naima release --resource site
 ```
 
 ### naima claims
 
-Who holds what, recombined from every branch; with --resources, every declared resource and its one holder, or free.
+Who holds what, recombined from every branch.
 
 **Enforces**: Nothing: it only reads.
 
 ```sh
 naima claims [--branch <b>] [--json]
-naima claims --resources [--json]
 ```
 
 | Option | Default | What it does |
 |---|---|---|
 | `--branch` |  | only the claim of this branch |
-| `--json` |  | print the claims as JSON: each branch's items, resources, note and marks, and the items more than one branch holds |
-| `--resources` |  | list every declared resource with its holder — branch, claim id, since when, gone from git or not — or free; with --json, { resources: [{ name, says, role, declared, holders }] } |
+| `--json` |  | print the claims as JSON: each branch's items, note and marks, and the items more than one branch holds |
 
 Examples:
 
@@ -893,13 +883,11 @@ Examples:
 naima claims
 naima claims --branch fix/export-alpha
 naima claims --json
-naima claims --resources
-naima claims --resources --json
 ```
 
 ### naima prune
 
-List (or with --write remove) claim files naming a branch git no longer has — a resource such a claim holds is held by no one alive, and listed with it; one only another ref carries is listed with that ref, to be dropped there. With --branch, delete a branch and its worktree, refusing one with unmerged commits that no archive/<branch> tag holds.
+List (or with --write remove) claim files naming a branch git no longer has; one only another ref carries is listed with that ref, to be dropped there. With --branch, delete a branch and its worktree, refusing one with unmerged commits that no archive/<branch> tag holds.
 
 **Enforces**: The trunk is never pruned, and a branch with unmerged commits that no archive/<branch> tag holds is refused; nothing is removed without --write.
 
@@ -1003,7 +991,6 @@ naima event 2026-10-05 "The plan was entered" --kind diary
 | Check | What it holds |
 |---|---|
 | `claims-resolve` | a claim written in this worktree names items that exist |
-| `resources-one-holder` | every resource a claim holds is held by one branch only (a problem otherwise), by a branch git still has, and is one the configuration declares (notes otherwise) |
 | `worktree-policy` | every worktree but the main one is <worktrees>/<what> on the branch <who>/<what>, every local branch but the trunk is <who>/<what>, and every worktree carries a claim — one with commits the trunk lacks and no claim, now or released in those commits, nor a session note, is a problem for the worktree being checked, and (unless naima check --all-worktrees) a note naming any other worktree in the same state |
 | `trunk-moved-while-preparing` | a branch whose claim is marked preparing is told every commit the trunk took that it lacks, and which of them the trunk's reflog records as committed on the trunk directly |
 | `closed-not-claimed` | no archived item (one in a type that is not creatable, where naima close moves it) is claimed by the branch you stand on: what no-closing-own-claims refuses on a write, asserted on the tracker as it is, hand edits included |
@@ -1590,7 +1577,7 @@ naima roles --json
 | Role | Title | Owns | Refuses | Queue: kinds and types |
 |---|---|---|---|---|
 | `owner` | Owner | the decisions: judgement, a reserved decision, a credential, a physical act | any machine work; being asked what an agent can find out | `decision`, every `decisions` |
-| `coordinator` | Coordinator | the conversation with the owner, locked resources, the timer, spawning and merging workers | work a worker could do; more than one question at a time | `coordination` |
+| `coordinator` | Coordinator | the conversation with the owner; the trunk, as its single writer: it alone lands, pushes it, publishes the site and makes releases; the timer, spawning and merging workers | work a worker could do; more than one question at a time | `coordination` |
 | `lead-developer` | Lead developer | the queue: ranking it, sweeping fixed-but-unproven items, preparing branches, the merge train | merging without the gates; closing an item on reasoning; closing its own branch's items | `review`, `design`, `research` |
 | `implementer` | Implementer | one item, one cause, one branch: the code, analysis or text it asks for | widening scope; spawning workers; touching the trunk | `code`, `refactor` |
 | `tester` | Tester | performing gestures on the running software and writing down what happened | fixing what it finds; testing what it just wrote | `test`, every `tests` |

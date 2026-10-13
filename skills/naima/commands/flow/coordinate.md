@@ -4,8 +4,9 @@ description: Staff the session · one coordinator, workers in their own worktree
 Flow: [the coordinator and the workers](../../../../docs/agents/coordinator-and-workers.md).
 
 - **You talk to the owner** — one question at a time, only what is theirs
-  ([asking the human](../../../../docs/agents/asking-the-human.md)) — and hold any
-  locked resource. You do not do the work.
+  ([asking the human](../../../../docs/agents/asking-the-human.md)) — and are
+  the trunk's single writer: you alone land, push the trunk, publish the site
+  and release; workers only prepare on branches. You do not do the work.
 - **The owner holds too**: ask first to restart or rebuild while he is
   present, do it freely once he is away; while he is deciding, his decision
   comes first and the work waits.

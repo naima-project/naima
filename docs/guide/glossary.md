@@ -442,16 +442,6 @@ read from every local branch, so everyone sees who holds what (`naima
 claims`). Not to be confused with a [claim](#claim), a statement that
 something is true.
 
-### Resource
-
-Something only one branch at a time may touch — the published site, another
-repository's trunk, the release tags — declared as data in the coordination
-plugin's `resources` option. A branch takes one with `naima claim --resource
-<name>`, written in its [claim file](#claim-file); a second branch's claim is
-refused, naming the holder, until `naima release --resource <name>`
-([one holder at a time](several-branches.md#one-holder-at-a-time-resources)).
-*Everyday example:* the one key to the shop's front door.
-
 ### Session note
 
 A note of what a session changed, proved and left, written by `naima pass` as

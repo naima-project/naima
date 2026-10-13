@@ -64,7 +64,7 @@ its own state:
 
 | Collection | What each session writes | Recombined by |
 |---|---|---|
-| who is working on what, and who holds each resource | `<tracker>/CLAIMS/<uuid>.json` | `naima claims`, `naima claims --resources`, `naima summary` |
+| who is working on what | `<tracker>/CLAIMS/<uuid>.json` | `naima claims`, `naima summary` |
 | where each session left off | `<tracker>/PASSES/<date>-<uuid>.md` | `naima pass --list`, `naima summary` |
 | an [item](../guide/glossary.md#item)'s place on a board | the item's own `section` field | `naima board` |
 

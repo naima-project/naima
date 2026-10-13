@@ -1,7 +1,7 @@
 // Who is working on what, and where each session left off — without any
 // session ever writing a file another session writes.
 //
-//   <data>/claims/<uuid>.json        one per branch that claims work: items, shared; resources, exclusive
+//   <data>/claims/<uuid>.json        one per branch that claims work: its items, shared
 //   <data>/passes/<date>-<uuid>.md   one per session note
 //
 // Both are written on the writer's own branch, never staged, never committed
@@ -61,11 +61,9 @@ import {
   writeThroughGit,
 } from "./worktrees.ts"
 import { claimsUiView, notesUiView } from "./ui.ts"
-import { readResources, refusal, type Resource, type ResourcesData, resourcesData } from "./resources.ts"
 import { diaryCommand, eventCommand, EVENTS, timelineUiView, timelineView } from "./timeline.ts"
 
 export { type Timeline, type TimelineEvent, timelineOf } from "./timeline.ts"
-export { type Holder, type Resource, type ResourcesData } from "./resources.ts"
 
 export const CLAIMS = "claims"
 export const PASSES = "passes"
@@ -83,8 +81,6 @@ export interface Claim {
   /** The branch is being prepared to enter the trunk: it is told when the trunk moves under it. */
   preparing?: true
   items: ClaimEntry[]
-  /** The declared resources this branch holds, each by no other branch: absent when none. */
-  resources?: string[]
   file: string
   /** The ref it was read from; this worktree's branch when `local`. */
   ref: string
@@ -118,14 +114,12 @@ function parseClaim(f: BranchFile): Claim | null {
     const c = JSON.parse(f.text) as Partial<Claim>
     if (!Array.isArray(c.items)) return null
     const items = c.items.filter((e): e is ClaimEntry => typeof e?.id === "string")
-    const resources = Array.isArray(c.resources) ? c.resources.filter((r): r is string => typeof r === "string") : []
     return {
       branch: c.branch ?? f.ref,
       claimedAt: c.claimedAt ?? "",
       ...(c.note ? { note: c.note } : {}),
       ...(c.preparing === true ? { preparing: true as const } : {}),
       items,
-      ...(resources.length ? { resources } : {}),
       file: f.name,
       ref: f.ref,
       local: f.local,
@@ -231,25 +225,16 @@ function freshClaim(ctx: Context, branch: string): Claim {
   return { branch, claimedAt: today(ctx), items: [], file: committed?.file ?? `${randomUUID()}.json`, ref: branch, local: true }
 }
 
-/** A claim that holds nothing: no item, no resource. */
-const empty = (c: Claim): boolean => !c.items.length && !c.resources?.length
+/** A claim that holds nothing: no item. */
+const empty = (c: Claim): boolean => !c.items.length
 
-/** Every declared resource and who holds it, recombined from every branch now. */
-const resourcesNow = (ctx: Context, declared: Map<string, Resource>, all: Claim[] = readClaims(ctx)): ResourcesData =>
-  resourcesData(declared, all, allRefNames(ctx.root))
-
-const claimCommand = (declared: Map<string, Resource>): Command => ({
+const claimCommand: Command = {
   name: "claim",
-  says: "record that this branch is working on items, or holds a resource no other branch may hold (writes one file on this branch)",
+  says: "record that this branch is working on items (writes one file on this branch)",
   enforces:
-    "a claim belongs to a branch, never to a detached HEAD, and is one file on that branch; a resource is one the configuration declares, and is refused, naming the holder, while another branch holds it",
-  usage: 'claim <item>... [--resource <name>]... [--note "why"] [--preparing | --not-preparing]',
+    "a claim belongs to a branch, never to a detached HEAD, and is one file on that branch; it never locks anything: several branches may claim one item",
+  usage: 'claim <item>... [--note "why"] [--preparing | --not-preparing]',
   options: [
-    {
-      name: "--resource",
-      says:
-        "take a declared resource (plugins.coordination.options.resources) for this branch: refused, naming the holder, while another branch holds it; repeatable, items optional",
-    },
     { name: "--note", says: "why this branch holds the items; replaces the previous note" },
     {
       name: "--preparing",
@@ -260,7 +245,6 @@ const claimCommand = (declared: Map<string, Resource>): Command => ({
   ],
   examples: [
     'claim export-drops export-keeps --note "alpha channel in the exporter"',
-    'claim --resource site --note "publishing the site"',
     "claim --preparing",
   ],
   run(args, ctx) {
@@ -268,39 +252,23 @@ const claimCommand = (declared: Map<string, Resource>): Command => ({
       note: { type: "string" },
       preparing: { type: "boolean" },
       "not-preparing": { type: "boolean" },
-      resource: { type: "string", multiple: true },
     })
     const preparing = bool(p, "preparing") ? true : bool(p, "not-preparing") ? false : undefined
-    const wanted = strs(p, "resource")
     if (bool(p, "preparing") && bool(p, "not-preparing")) throw usageError(this)
-    if (!p.positionals.length && preparing === undefined && !wanted.length) throw usageError(this)
-    for (const r of wanted) {
-      if (!declared.has(r)) {
-        throw new Error(
-          declared.size
-            ? `${r} is not a declared resource: ${[...declared.keys()].join(", ")}`
-            : `${r} is not a declared resource: none is declared (plugins.coordination.options.resources)`,
-        )
-      }
-    }
+    if (!p.positionals.length && preparing === undefined) throw usageError(this)
     const items = p.positionals.map((r) => ctx.repo.resolve(r))
     const branch = currentBranch(ctx.root)
     if (branch === "HEAD") throw new Error("HEAD is detached: a claim belongs to a branch — git switch -c <branch>, then claim")
     const all = readClaims(ctx)
-    if (wanted.length) {
-      const now = resourcesNow(ctx, declared, all)
-      const refused = wanted.map((r) => refusal(r, branch, now)).filter((m): m is string => m !== null)
-      if (refused.length) throw new Error(refused.join("\n"))
-    }
     const held = myClaim(ctx, branch, all)
-    if (!held && !items.length && !wanted.length) throw new Error(`${branch} holds no claim: claim its items first (naima claim <item>...)`)
+    if (!held && !items.length) throw new Error(`${branch} holds no claim: claim its items first (naima claim <item>...)`)
     const mine = held ?? freshClaim(ctx, branch)
     const note = str(p, "note")
     if (note) mine.note = note
     if (preparing === true) mine.preparing = true
     if (preparing === false) delete mine.preparing
     if (preparing !== undefined) ctx.out(`${branch} is ${preparing ? "" : "no longer "}being prepared to enter the trunk`)
-    if (preparing === false && !items.length && !wanted.length && empty(mine) && mine.local) {
+    if (preparing === false && !items.length && empty(mine) && mine.local) {
       unlinkSync(join(ctx.root, rel(ctx, CLAIMS), mine.file))
       ctx.out(`removed ${join(rel(ctx, CLAIMS), mine.file)}, which held only the mark — commit the deletion on ${branch}`)
       return 0
@@ -315,49 +283,34 @@ const claimCommand = (declared: Map<string, Resource>): Command => ({
       mine.items.push({ id: item.meta.id, ref: label(item), title: item.meta.title })
       ctx.out(`claimed ${label(item)}`)
     }
-    for (const r of wanted) {
-      if (mine.resources?.includes(r)) {
-        ctx.out(`already held by ${branch}: ${r}`)
-        continue
-      }
-      mine.resources = [...(mine.resources ?? []), r]
-      ctx.out(`holds ${r} (claim ${mine.file.replace(/\.json$/, "")}): no other branch may claim it until naima release --resource ${r}`)
-    }
     ctx.out(`wrote ${writeClaim(ctx, mine)} — commit it on ${branch} with your work`)
     return 0
   },
-})
+}
 
 const release: Command = {
   name: "release",
-  says: "drop this branch's claim on items or resources; the last one removes the file, unless the branch is being prepared (claim --preparing)",
-  enforces: "only this branch's own claim is dropped, and only on items and resources it holds; while the branch is being prepared, the emptied file is kept",
-  usage: "release <item>... [--resource <name>]...",
-  options: [{ name: "--resource", says: "give back a resource this branch holds, so another branch may claim it; repeatable" }],
-  examples: ["release export-drops", "release --resource site"],
+  says: "drop this branch's claim on items; the last one removes the file, unless the branch is being prepared (claim --preparing)",
+  enforces: "only this branch's own claim is dropped, and only on items it holds; while the branch is being prepared, the emptied file is kept",
+  usage: "release <item>...",
+  examples: ["release export-drops"],
   run(args, ctx) {
-    const p = parse(args, { resource: { type: "string", multiple: true } })
+    const p = parse(args, {})
     const refs = p.positionals
-    const freed = strs(p, "resource")
-    if (!refs.length && !freed.length) throw usageError(this)
+    if (!refs.length) throw usageError(this)
     const branch = currentBranch(ctx.root)
     const mine = myClaim(ctx, branch)
     if (!mine) throw new Error(`nothing to release: ${branch} holds no claim here`)
-    for (const r of freed) if (!mine.resources?.includes(r)) throw new Error(`${branch} does not hold ${r}; nothing changed`)
     const ids = new Set(refs.map((r) => ctx.repo.resolve(r).meta.id))
     const kept = mine.items.filter((e) => !ids.has(e.id))
-    if (refs.length && kept.length === mine.items.length) throw new Error(`none of ${refs.join(", ")} is claimed on ${branch}; nothing changed`)
-    if (refs.length) ctx.out(`released ${mine.items.length - kept.length} on ${branch}`)
-    const keptResources = (mine.resources ?? []).filter((r) => !freed.includes(r))
-    for (const r of freed) ctx.out(`released ${r}: another branch may claim it`)
-    if (kept.length === 0 && !keptResources.length && mine.local && !mine.preparing) {
+    if (kept.length === mine.items.length) throw new Error(`none of ${refs.join(", ")} is claimed on ${branch}; nothing changed`)
+    ctx.out(`released ${mine.items.length - kept.length} on ${branch}`)
+    if (kept.length === 0 && mine.local && !mine.preparing) {
       unlinkSync(join(ctx.root, rel(ctx, CLAIMS), mine.file))
       ctx.out(`removed ${join(rel(ctx, CLAIMS), mine.file)} — commit the deletion on ${branch}`)
     } else {
       // A claim read from another ref cannot be deleted from here: an emptied copy on this branch overrides it.
       mine.items = kept
-      if (keptResources.length) mine.resources = keptResources
-      else delete mine.resources
       ctx.out(`wrote ${writeClaim(ctx, mine)}`)
       if (!kept.length && mine.preparing) ctx.out(`kept, empty, while ${branch} is being prepared: naima claim --not-preparing removes it`)
     }
@@ -375,7 +328,6 @@ export interface ClaimsData {
     note?: string
     preparing?: true
     items: ClaimEntry[]
-    resources?: string[]
   }[]
   /** The items more than one branch claims — allowed, and worth knowing. */
   contested: { id: string; ref: string; branches: string[] }[]
@@ -396,7 +348,6 @@ export function claimsData(ctx: Context, only?: string): ClaimsData {
       ...(c.note ? { note: c.note } : {}),
       ...(c.preparing ? { preparing: true as const } : {}),
       items: c.items,
-      ...(c.resources ? { resources: c.resources } : {}),
     })),
     contested: [...holders].filter(([, b]) => b.size > 1).map(([id, b]) => {
       const item = ctx.repo.byId.get(id)
@@ -405,50 +356,27 @@ export function claimsData(ctx: Context, only?: string): ClaimsData {
   }
 }
 
-const claimsCommand = (declared: Map<string, Resource>): Command => ({
+const claimsCommand: Command = {
   name: "claims",
-  says: "who holds what, recombined from every branch; with --resources, every declared resource and its one holder, or free",
+  says: "who holds what, recombined from every branch",
   enforces: "nothing: it only reads",
-  usage: "claims [--branch <b>] [--json] | claims --resources [--json]",
+  usage: "claims [--branch <b>] [--json]",
   options: [
     { name: "--branch", says: "only the claim of this branch" },
-    { name: "--json", says: "print the claims as JSON: each branch's items, resources, note and marks, and the items more than one branch holds" },
-    {
-      name: "--resources",
-      says:
-        "list every declared resource with its holder — branch, claim id, since when, gone from git or not — or free; with --json, { resources: [{ name, says, role, declared, holders }] }",
-    },
+    { name: "--json", says: "print the claims as JSON: each branch's items, note and marks, and the items more than one branch holds" },
   ],
-  examples: ["claims", "claims --branch fix/export-alpha", "claims --json", "claims --resources", "claims --resources --json"],
+  examples: ["claims", "claims --branch fix/export-alpha", "claims --json"],
   run(args, ctx) {
-    const p = parse(args, { branch: { type: "string" }, json: { type: "boolean" }, resources: { type: "boolean" } })
-    if (bool(p, "resources")) {
-      if (str(p, "branch")) throw usageError(this)
-      const r = resourcesNow(ctx, declared)
-      if (bool(p, "json")) {
-        ctx.out(JSON.stringify(r, null, 2))
-        return 0
-      }
-      if (!r.resources.length) ctx.out("no resources declared (plugins.coordination.options.resources)")
-      for (const res of r.resources) {
-        const who = res.holders.length
-          ? res.holders.map((h) => `${h.branch}${h.stale ? " (branch gone: naima prune)" : ""}  claim ${h.claim}  since ${h.claimedAt || "?"}`).join("; ")
-          : "free"
-        ctx.out(`  ${res.name}  ${who}  — ${res.says}${res.role ? ` (role ${res.role})` : ""}`)
-        if (res.holders.length > 1) ctx.out(`    held by more than one branch: all but one must release it`)
-      }
-      return 0
-    }
+    const p = parse(args, { branch: { type: "string" }, json: { type: "boolean" } })
     const d = claimsData(ctx, str(p, "branch"))
     if (bool(p, "json")) {
       ctx.out(JSON.stringify(d, null, 2))
       return 0
     }
-    if (!d.claims.some((c) => c.items.length || c.resources?.length)) ctx.out("no claims")
+    if (!d.claims.some((c) => c.items.length)) ctx.out("no claims")
     for (const c of d.claims) {
       ctx.out(`${c.branch}${c.here ? "  ← here" : ""}${c.local ? "  (working tree)" : ""}${c.note ? `  — ${c.note}` : ""}`)
       for (const e of c.items) ctx.out(`  ${e.ref}  ${e.title}`)
-      if (c.resources?.length) ctx.out(`  holds ${c.resources.join(", ")}`)
     }
     if (d.contested.length) {
       ctx.out("\nclaimed by more than one branch (allowed):")
@@ -456,7 +384,7 @@ const claimsCommand = (declared: Map<string, Resource>): Command => ({
     }
     return 0
   },
-})
+}
 
 /** The tag that keeps a branch's commits once the branch is deleted. */
 export const archiveTag = (branch: string): string => `archive/${branch}`
@@ -504,7 +432,7 @@ function pruneBranch(ctx: Context, branch: string, write: boolean, archive: bool
 const prune: Command = {
   name: "prune",
   says:
-    "list (or with --write remove) claim files naming a branch git no longer has — a resource such a claim holds is held by no one alive, and listed with it; one only another ref carries is listed with that ref, to be dropped there. With --branch, delete a branch and its worktree, refusing one with unmerged commits that no archive/<branch> tag holds",
+    "list (or with --write remove) claim files naming a branch git no longer has; one only another ref carries is listed with that ref, to be dropped there. With --branch, delete a branch and its worktree, refusing one with unmerged commits that no archive/<branch> tag holds",
   enforces: "the trunk is never pruned, and a branch with unmerged commits that no archive/<branch> tag holds is refused; nothing is removed without --write",
   usage: "prune [--write] | prune --branch <b> [--archive] [--write]",
   options: [
@@ -528,7 +456,7 @@ const prune: Command = {
     // Only a file on this disk can be removed from here; one another ref carries is dropped on that ref.
     const here = stale.filter((c) => c.local)
     const elsewhere = stale.filter((c) => !c.local)
-    const holds = (c: Claim) => `${c.items.length} items${c.resources?.length ? `, holds ${c.resources.join(", ")}` : ""}`
+    const holds = (c: Claim) => `${c.items.length} items`
     for (const c of here) ctx.out(`  ${c.branch}  ${holds(c)}  ${c.file}`)
     for (const c of elsewhere) {
       ctx.out(`  ${c.branch}  ${holds(c)}  ${c.file}  on ${c.ref}: drop it there (git switch ${c.ref}, naima prune --write)`)
@@ -704,32 +632,6 @@ const trunkMoved: Check = {
   run: (ctx) => readClaims(ctx).filter((c) => c.preparing).flatMap((c) => preparingFindings(ctx.root, c.branch)),
 }
 
-/** A resource has one holder: two branches holding it is a problem; a holder gone from git, or a resource no longer declared, a note. */
-const resourcesOneHolder = (declared: Map<string, Resource>): Check => ({
-  name: "resources-one-holder",
-  says:
-    "every resource a claim holds is held by one branch only (a problem otherwise), by a branch git still has, and is one the configuration declares (notes otherwise)",
-  run(ctx) {
-    return resourcesNow(ctx, declared).resources.flatMap((r): Finding[] => [
-      ...(r.holders.length > 1
-        ? [{
-          level: "problem" as const,
-          message: `${r.name} is held by ${
-            [...new Set(r.holders.map((h) => h.branch))].join(", ")
-          }: a resource has one holder — all but one release it (naima release --resource ${r.name})`,
-        }]
-        : []),
-      ...r.holders.filter((h) => h.stale).map((h): Finding => ({
-        level: "note",
-        message: `${r.name} is held by ${h.branch}, a branch git no longer has (claim ${h.claim}): naima prune lists it`,
-      })),
-      ...(!r.declared && r.holders.length
-        ? [{ level: "note" as const, message: `${r.name} is held but not declared (plugins.coordination.options.resources): release it, or declare it` }]
-        : []),
-    ])
-  },
-})
-
 const claimsResolve: Check = {
   name: "claims-resolve",
   says: "a claim written in this worktree names items that exist",
@@ -829,14 +731,13 @@ const whereWeWere: SummarySection = {
 const inHand: SummarySection = {
   name: "in hand",
   render(ctx) {
-    const data = readClaims(ctx).filter((c) => !empty(c)).map((c) => ({ branch: c.branch, items: c.items.map((e) => e.ref), resources: c.resources ?? [] }))
-    return rendered(data, (claims) => claims.map((c) => `  ${c.branch}: ${[...c.items, ...c.resources.map((r) => `resource ${r}`)].join(", ")}`))
+    const data = readClaims(ctx).filter((c) => !empty(c)).map((c) => ({ branch: c.branch, items: c.items.map((e) => e.ref) }))
+    return rendered(data, (claims) => claims.map((c) => `  ${c.branch}: ${c.items.join(", ")}`))
   },
 }
 
 export default function coordination(options: Record<string, unknown> = {}): Plugin {
   const policy = readPolicy(options)
-  const declared = readResources(options)
   return {
     name: "coordination",
     contract: CONTRACT,
@@ -847,7 +748,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       "`claims`, `pass --list` and `summary` recombine them at read time from every local branch — the trunk, every branch not merged into it, whatever each worktree stands on — each read from the disk of the worktree that stands on it, uncommitted files included, or from its ref when none does; remote-tracking refs are not read. " +
       "The trunk is the branch origin's HEAD names, else `main`, else `master`; without one, every local branch is read. A claim belongs to a branch, so on a detached HEAD `claim` is refused. " +
       "Several branches may claim one item: `claim` says who else holds it rather than refusing. " +
-      "A resource is the opposite: one branch at a time. The resources are data, `resources` (name → `says`, and the `role` that holds it, when one does); `claim --resource <name>` records it in the branch's claim file, beside its items, and is refused, naming the holder, while another branch holds it; `release --resource <name>` gives it back; `claims --resources` lists each with its holder or free; `prune` lists a holder whose branch is gone, and `naima check` flags a resource two branches hold. " +
+      "There are no locks: a claim says who works on what and never excludes anyone. What one session at a time must touch — the trunk, the published site, the releases — is touched by one writer, the owner of the trunk; every other session prepares on its own branch. " +
       "Work happens by one scheme, checked: the worktree `<worktrees>/<what>` stands on the branch `<who>/<what>` and carries a claim; `open` makes all three in one step. " +
       "A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. " +
       "`naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. " +
@@ -861,16 +762,10 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
         default: "../<main worktree's folder>-worktrees",
       },
       { name: "exempt", says: "branches the naming scheme does not apply to: names, or patterns with *", default: "[]" },
-      {
-        name: "resources",
-        says:
-          'what one branch at a time may hold — resource name → { "says": "<what it is>", "role": "<the role that holds it>" } — taken with naima claim --resource <name>',
-        default: "{}",
-      },
     ],
     dirs: [CLAIMS, PASSES, EVENTS],
-    checks: [claimsResolve, resourcesOneHolder(declared), worktreePolicy(policy), trunkMoved, closedNotClaimed, sessionNoteAck],
-    commands: [openCommand(policy), claimCommand(declared), release, claimsCommand(declared), prune, pass, eventCommand, diaryCommand(readPasses)],
+    checks: [claimsResolve, worktreePolicy(policy), trunkMoved, closedNotClaimed, sessionNoteAck],
+    commands: [openCommand(policy), claimCommand, release, claimsCommand, prune, pass, eventCommand, diaryCommand(readPasses)],
     views: [timelineView(readPasses)],
     contributes: { "ui-views": [claimsUiView(claimsData), timelineUiView(readPasses), notesUiView(readPasses)] },
     // The claims are a panel of naima ui, the timeline and the session notes tabs, when the ui plugin is loaded; without it, still commands and a view.

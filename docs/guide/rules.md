@@ -318,6 +318,17 @@ items moved, closed or deleted at once — tag the commit it starts from,
 **Convention**, enforced by git only when the project configures it:
 [closing a worktree](../agents/closing-a-worktree.md).
 
+### No locks: the owner of the trunk is the single writer
+
+Naima has no locks. Only the owner of the trunk — the coordinator — lands
+branches on the trunk, pushes it, publishes the site and makes releases, and
+does so from the trunk; every other session only prepares, on its own branch.
+**Convention**: [several branches](several-branches.md#one-writer-no-locks).
+
+Why: with one writer, nothing is contended, so a lock would only add state
+that can go stale; and what is published is always what the trunk holds,
+never a branch that has not landed.
+
 ### Claims are released, and a session note written, before merging
 
 **Convention**: [closing a worktree](../agents/closing-a-worktree.md).

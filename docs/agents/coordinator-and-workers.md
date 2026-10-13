@@ -13,7 +13,7 @@ coordinator does not do the work; it holds the conversation.**
           owner
             │  one question at a time, answers, decisions
             ▼
-      COORDINATOR ── holds any locked resource (a running app, a device)
+      COORDINATOR ── the trunk's one writer; drives a running app, a device
             │
             ├── worker ── own worktree, own branch ── reports ──┐
             ├── worker ── own worktree, own branch ── reports ──┤
@@ -35,6 +35,10 @@ coordinator does not do the work; it holds the conversation.**
   once he is away. While he is deciding, his decision comes first and the
   work that depends on it waits — the coordinator does not restart or
   rebuild around him just to keep busy.
+- **Is the trunk's single writer.** It alone lands branches on the trunk,
+  pushes it, publishes the site and makes releases, from the trunk; nothing
+  is locked, because nothing else writes them
+  ([the rule](../guide/rules.md#no-locks-the-owner-of-the-trunk-is-the-single-writer)).
 - Spawns workers, merges their branches, and keeps the queue honest.
 - Sets a timer that brings it back when nothing else will. The owner should
   never be the reason work resumes: [the non-stop loop](the-non-stop-loop.md)
@@ -53,7 +57,8 @@ Everything it needs to work without asking, because it cannot ask:
 - **what is already measured**, stated as given, so it does not re-derive it:
   the single biggest saving available;
 - **the gates**, with their current numbers, to run at the end;
-- **the constraints**: which resources it may not touch, that it does not
+- **the constraints**: that it only prepares on its branch — it never lands,
+  pushes the trunk, publishes or releases — that it does not
   commit on the trunk or touch another [worktree](../guide/glossary.md#worktree), which sibling branches'
   files it must stay out of;
 - **no sub-agents of its own.** A worker that spawns workers loses all of
@@ -65,7 +70,7 @@ Everything it needs to work without asking, because it cannot ask:
 
 | Job | Owns | Refuses |
 |---|---|---|
-| **Coordinator** | the conversation, locked resources, the timer, spawning and merging | work a worker could do; more than one question at a time |
+| **Coordinator** | the conversation, the trunk as its single writer (landing, pushing, publishing, releasing), the timer, spawning and merging | work a worker could do; more than one question at a time |
 | **Lead developer** | the queue: sweeping fixed-but-unproven [items](../guide/glossary.md#item), preparing branches, the merge train | merging without the [gates](../guide/glossary.md#gate); closing an item on reasoning; closing its own branch's items |
 | **Implementer** | one item, one cause, one branch | widening scope; spawning workers; touching the trunk |
 | **Tester** | performing gestures on the running software and writing down what happened | fixing what it finds; testing what it just wrote |
@@ -123,20 +128,6 @@ An actor that both drives the software and writes the assertion cannot tell a
 fact about the software from the current state of something editable — to it
 they are one motion. Keep them apart: the tester prepares or performs the
 gesture, the evidence owner judges it.
-
-### A locked resource has one holder
-
-Some things are touched by one session at a time: the published site,
-another repository's trunk, the release tags. They are the project's declared
-resources (`naima claims --resources` lists them, with their holder). Before
-touching one, take it — `naima claim --resource <name>` — and release it when
-done, `naima release --resource <name>`. A refused claim names the holder:
-then the change is filed as an item for the holder, or for the role the
-resource names, never made anyway. A worker gets a resource only when the
-coordinator says so; two workers never hold one at the same time, and a
-resource held by a branch that is gone is listed by `naima prune` before it
-is taken over
-([one holder at a time](../guide/several-branches.md#one-holder-at-a-time-resources)).
 
 ## Choosing the model
 

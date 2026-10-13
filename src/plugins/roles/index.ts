@@ -112,7 +112,7 @@ export const DEFAULT_ROLES: readonly RoleDef[] = [
   role(
     "coordinator",
     "Coordinator",
-    "the conversation with the owner, locked resources, the timer, spawning and merging workers",
+    "the conversation with the owner; the trunk, as its single writer: it alone lands, pushes it, publishes the site and makes releases; the timer, spawning and merging workers",
     [
       "work a worker could do",
       "more than one question at a time",

@@ -42,7 +42,8 @@ stopped, the owner's actions. Then, while it says NOT DONE:
 - **merge** finished branches nobody holds (`naima claims`), after the gates
   over the combined result; remove merged worktrees
   ([closing a worktree](closing-a-worktree.md));
-- **spawn workers** on the next agent work that needs no locked resource;
+- **spawn workers** on the next agent work, each preparing on its own branch — landing,
+  publishing and releasing stay with the coordinator;
 - **a line that cannot be done now gets a written deferral**, never a silent
   skip: `- [ ] step — deferred: <why>` in a work list, a triage field or a
   comment on an item.
