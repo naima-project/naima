@@ -14,6 +14,7 @@ import { bool, pairs, parse } from "./args.ts"
 import { gitOrNull, nativePath, runGit, toplevel } from "./git.ts"
 import { exclusions } from "./excludes.ts"
 import { agentPointer, writePointer } from "./pointer.ts"
+import { ALLOW_PRIVATE, allowPrivateOption } from "./private.ts"
 import { DATA_DIR, DATA_FILE, findData, globalOptions, PROGRAM_DIR, real, RELAUNCH, runtimeOf, trackerOf, trackerReadme } from "./layout.ts"
 import {
   align,
@@ -456,7 +457,7 @@ async function guide(opts: CliOptions, data: string, io: IO): Promise<number> {
 }
 
 function help(ctx: Context | null, data: string, io: IO): number {
-  io.out("usage: naima [--data <dir>] <command> [args]\n")
+  io.out(`usage: naima [--data <dir>] <command> [args] [${ALLOW_PRIVATE} "<reason>"]\n`)
   const entry = cliCommands.filter((c) => c.name !== "help")
   for (const c of entry) io.out(`  ${c.name.padEnd(10)} ${c.says}\n  ${"".padEnd(10)} naima ${c.usage}`)
   if (!ctx) {
@@ -538,10 +539,12 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     if (command === "plugin") return pluginCommand(args, opts, place, place.raw, io)
     const ctx = await openProject(place, opts, io)
     if (isHelp(command)) return help(ctx, data, io)
+    const { reason, rest: commandArgs } = allowPrivateOption(args)
+    if (reason !== undefined) ctx.allowPrivate = reason
     const cmd = ctx.registry.find<Command>("commands", command as string)?.value
     if (!cmd) throw new Error(`unknown command "${command}" — naima help`)
     if (args.includes("--help") || args.includes("-h")) return commandHelp(cmd, io)
-    const code = await cmd.run(args, ctx)
+    const code = await cmd.run(commandArgs, ctx)
     if (code !== RELAUNCH) return code
     // Only the entry point asks for a relaunch; a command's 75 would make the launcher run it again.
     io.err(`naima: ${command} exited ${RELAUNCH}, the code reserved for asking the launcher to relaunch — reported as ${EXIT.FAILED}`)

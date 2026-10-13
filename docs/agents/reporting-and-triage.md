@@ -65,7 +65,12 @@ The title says what happened, not what to do.
    in `attachments/`. Evidence travels with the claim. A file goes in with
    `naima attach` (below), never copied by hand, and is **redacted before
    attaching**: a token, a key, a password or a private path in a log is cut
-   out first, because an attachment is permanent once committed.
+   out first, because an attachment is permanent once committed. A command
+   and its output are copied exactly, with machine names, IP addresses, URIs
+   with a port, home-directory paths and user names replaced by `<host>`,
+   `<ip>`, `<path>`, `<user>`: redact before creating any item, note,
+   session note, event, description or attachment
+   ([the rule](../guide/rules.md#no-machine-names-or-private-infrastructure-in-a-repository)).
 3. **What is measured and what is inferred, marked apart.** "Read in the
    code, certain" against what you checked; "not reproduced" against what you
    assume. An item that keeps the two apart stays useful even when its
@@ -144,6 +149,13 @@ naima note <item> "Reproduced on 16-bit PNGs only; 8-bit keeps alpha." --by "tri
   a log, a test's output — takes `--own`. With neither it is refused, and so
   is a file holding a secret (the check `secrets` names the line): redact it
   and attach again. `--as <name>` renames it; a name already taken is refused.
+- Every one of these writes — `new`, `describe`, `note`, `set`, `attach`, and
+  `pass` and `event` — is refused when it adds a machine name, an IP address,
+  a URI with a port, a home-directory path, the user's name or a word of the
+  private list, each listed with its placeholder: rewrite it with `<host>`,
+  `<ip>`, `<path>`, `<user>` and run it again. `--allow-private "<reason>"`
+  lets a deliberate mention through and records why
+  ([the rule](../guide/rules.md#no-machine-names-or-private-infrastructure-in-a-repository)).
 - `naima check` holds both: `attachment-consent` fails on an attachment a
   branch adds with no record (copied in by hand), on a record whose file is
   gone, and on the owner's file with no yes; `secrets` fails on a private key

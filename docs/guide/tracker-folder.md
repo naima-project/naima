@@ -51,8 +51,7 @@ naima-tracker/
 **Your material is in `naima-data/`, never in `naima/`.** The program
 directory holds only what runs Naima: no tests, no fixtures, no CI, no agent
 rules, and none of Naima's own [items](glossary.md#item) — those live in
-[`naima-dev`](https://github.com/vincenzoml/naima-dev), a separate
-repository. Everything the project tracks — its
+the workshop, a separate, private repository. Everything the project tracks — its
 bugs, its todos, its features, its tests, its rules — is an item in its own
 `naima-data/`, in the directory of its type (a milestone is a
 [gate](glossary.md#gate) with a date, kept with the other gates in

@@ -13,7 +13,10 @@ when to use it.
   ([git, handled for the owner](git-for-the-owner.md)).
 - **Privacy.** The owner's chat is never copied into the repository
   verbatim; their files are attached only with an explicit yes
-  ([the rule](../guide/rules.md#the-owners-chat-stays-private)).
+  ([the rule](../guide/rules.md#the-owners-chat-stays-private)). Evidence
+  is redacted before any item, note, session note, event, description or
+  attachment is created: no machine name, address, home path or user name
+  ([the rule](../guide/rules.md#no-machine-names-or-private-infrastructure-in-a-repository)).
 - **Bootstrap.** In a project without `naima-tracker/`: install Deno if it is
   missing, with its official installer, clone Naima's `main`, shallow,
   outside the project, and run its `naima init` from the project, which

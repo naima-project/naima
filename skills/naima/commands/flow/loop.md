@@ -16,4 +16,5 @@ this checklist and the page disagree, the page wins.
 4. **STOPPED:** hand the owner the ordered list it prints, each line saying
    why it is his — one question at a time.
 5. **Owner still away:** run the gestures nobody has tried yet, attach each
-   attempt; keep the timer.
+   attempt, redacted first (`<host>`, `<ip>`, `<path>`, `<user>`:
+   [the rule](../../../../docs/guide/rules.md#no-machine-names-or-private-infrastructure-in-a-repository)); keep the timer.

@@ -24,6 +24,11 @@ shared only after their explicit yes, with
 `naima attach <item> <file> --consent "<their yes, restated>"`; your own
 evidence goes in with `--own`, redacted first
 ([the rule](../../docs/guide/rules.md#the-owners-chat-stays-private)).
+Evidence is copied exactly, but redact before creating any item, note,
+session note, event, description or attachment: no machine name, IP
+address, URI with a port, home-directory path or user name — write `<host>`,
+`<ip>`, `<path>`, `<user>`; the CLI refuses such a write
+([the rule](../../docs/guide/rules.md#no-machine-names-or-private-infrastructure-in-a-repository)).
 
 **Capture now, act later — always, not only on `/flow:report`.** Whenever
 the owner, in chat, asks for a feature, reports a problem, makes a decision

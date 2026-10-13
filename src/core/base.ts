@@ -15,6 +15,7 @@ import {
   joinProse,
   moveItem,
   NOTES_HEADING,
+  README,
   readReadme,
   saveMeta,
   saveProse,
@@ -26,9 +27,11 @@ import {
 import { byUrgency, isEvidenceType, isOpen, label, proves, refutes } from "./lifecycle.ts"
 import { CONTRACT } from "./contract.ts"
 import { shortOrId } from "./names.ts"
+import { writeFileAtomic } from "./files.ts"
+import { addedPrivate, allowanceLine, privateContext, type PrivateFinding, privateRefusal } from "./private.ts"
 import { asRendered, type Format, linesAs, rendered } from "./rendered.ts"
 import { flagsOf } from "./vocabulary.ts"
-import type { Command, Context, Contribution, FieldDef, Item, Plugin, Rendered, SummarySection, TypeDef, View, WriteHook } from "./types.ts"
+import type { Command, Context, Contribution, FieldDef, Item, Plugin, Rendered, SummarySection, TypeDef, View, Write, WriteHook } from "./types.ts"
 
 export function typeOrThrow(ctx: Context, id: string | undefined): TypeDef {
   const type = id ? ctx.registry.types.get(id) : undefined
@@ -761,6 +764,52 @@ const notesAppendOnly: WriteHook = {
   },
 }
 
+/** Every string an item's fields hold, by its path: `title`, `links.0.rel`. */
+function fieldStrings(value: unknown, path = ""): Map<string, string> {
+  const out = new Map<string, string>()
+  if (typeof value === "string") out.set(path, value)
+  else if (value && typeof value === "object") {
+    for (const [k, v] of Object.entries(value)) for (const [p, s] of fieldStrings(v, path ? `${path}.${k}` : k)) out.set(p, s)
+  }
+  return out
+}
+
+/** The reasons let through by the writes under way, for afterWrite to record in the item's notes. */
+const allowed = new WeakMap<Write, string>()
+
+const privateInfrastructure: WriteHook = {
+  name: "private-infrastructure",
+  says:
+    "a write of an item's title, fields or prose that adds a machine name, an IP address, a URI with a port, a home-directory path, the user's name or a word of the private list is refused, each finding listed with the placeholder to write instead; --allow-private \"<reason>\" lets a deliberate mention through and records the reason in the item's notes",
+  beforeWrite(write, ctx) {
+    const pc = privateContext()
+    const found: { what: string; findings: PrivateFinding[] }[] = []
+    const before = fieldStrings(write.kind === "create" ? {} : write.before ?? {})
+    for (const [path, value] of fieldStrings(write.item.meta)) {
+      const findings = addedPrivate(before.get(path) ?? "", value, pc)
+      if (findings.length) found.push({ what: `field ${path}`, findings })
+    }
+    if (write.prose !== undefined) {
+      const findings = addedPrivate(readReadme(write.item), write.prose, pc)
+      if (findings.length) found.push({ what: "README.md", findings })
+    }
+    if (!found.length) return
+    const all = found.flatMap((f) => f.findings)
+    if (ctx.allowPrivate === undefined) {
+      return found.map((f) => privateRefusal(`${label(write.item)} ${f.what}`, f.findings)).join("\n")
+    }
+    allowed.set(write, allowanceLine(ctx.allowPrivate, all))
+  },
+  afterWrite(write, ctx) {
+    const line = allowed.get(write)
+    if (line === undefined) return
+    allowed.delete(write)
+    const prose = splitProse(readReadme(write.item))
+    const entry = `### ${today(ctx)} — naima\n\n${line}`
+    writeFileAtomic(join(write.item.dir, README), joinProse({ ...prose, notes: [prose.notes || NOTES_HEADING, entry].join("\n\n") }))
+  },
+}
+
 export const corePlugin: Plugin = {
   name: "core",
   contract: CONTRACT,
@@ -785,5 +834,5 @@ export const corePlugin: Plugin = {
   checks: coreChecks,
   commands: [newCommand, show, list, set, note, describe, link, unlink, move, check, board, view, summary, plugins, types, runs],
   summary: [counts],
-  hooks: [statusMoves, notesAppendOnly],
+  hooks: [statusMoves, notesAppendOnly, privateInfrastructure],
 }

@@ -59,7 +59,9 @@ is his. Hand it over as it is, one question at a time
 ## 5. If the owner does not come back
 
 Do not idle. `naima loop` lists, under the owner's work, the proving gestures
-nobody has run yet: run each one you can, attach what happened to its item,
+nobody has run yet: run each one you can, attach what happened to its item —
+redacted first, with `<host>`, `<ip>`, `<path>`, `<user>` for what names the
+machine or the user ([the rule](../guide/rules.md#no-machine-names-or-private-infrastructure-in-a-repository)) —
 and leave the judgement to the owner. Then wait on the timer: a tick that
 finds new agent work resumes the loop.
 

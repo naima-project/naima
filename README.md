@@ -109,9 +109,8 @@ You don't need to know git, code or project management. You need an AI agent.
 - [The documentation](docs/README.md), starting with
   [installing and updating](docs/guide/install.md).
 - For agents: [the skill](skills/naima/SKILL.md).
-- Contributing: Naima is developed in
-  [vincenzoml/naima-dev](https://github.com/vincenzoml/naima-dev), which holds
-  the tests, the site and Naima's own tracker.
+- Contributing: Naima is developed in its workshop, a separate, private
+  repository, which holds the tests, the site and Naima's own tracker.
 
 ## Licence
 

@@ -314,8 +314,8 @@ refuses, and `naima queue --role <role>` is its queue.
   Extension is plain data, not class hierarchies. The core does not move; the
   rest is free to change.
 - **Iterate, don't overthink.** The simplest design that works now, improved
-  version by version
-  ([design principles](https://github.com/vincenzoml/naima-dev/blob/main/develop/requirements.md#design-principles)).
+  version by version (the design principles, kept with Naima's
+  requirements in its workshop).
 - **Plain language.** Every term is defined once, in the
   [glossary](guide/glossary.md), and reports to you say what changed and what
   is needed from you, nothing else.

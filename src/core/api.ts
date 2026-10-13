@@ -38,6 +38,7 @@ export {
 } from "./item.ts"
 export { storedLinks } from "./repo.ts"
 export { groupBy } from "./collections.ts"
+export { allowanceLine, findPrivate, guardPrivate, type PrivateContext, privateContext, type PrivateFinding } from "./private.ts"
 export { EXIT, isInternal, message, NaimaError } from "./errors.ts"
 export { isRegularFile, NEVER_SOURCE, pathMatches, walkFiles, writeFileAtomic } from "./files.ts"
 export { byUrgency, hasFlag, hasTrait, isEvidenceType, isOpen, label, linked, proves, refutes, statusDef, urgency } from "./lifecycle.ts"

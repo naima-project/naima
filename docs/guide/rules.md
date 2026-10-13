@@ -192,6 +192,39 @@ the check `attachment-consent`, which fails on an attachment a branch adds
 with no such record. Paraphrasing the chat in prose is **convention**:
 [reporting and triage](../agents/reporting-and-triage.md#3-what-a-report-carries).
 
+### No machine names or private infrastructure in a repository
+
+Nothing a repository holds — code, docs, tracker items, notes, session notes,
+events, attachments, evidence, commit messages — carries a machine's name or
+hostname, an IP address, a URI with a port, a home-directory or user-named
+local path, a user name, or anything else private about the infrastructure
+the work ran on. Evidence is still copied exactly, with those replaced by
+placeholders: `<host>`, `<ip>`, `<path>`, `<user>` — `ssh <host> uptime`,
+`<path>/run.log`. Redact **before** creating any item, note, session note,
+event, description or attachment, never after. A public repository's tracker
+is public too.
+
+Why: evidence is copied verbatim on purpose, and a verbatim command or log
+carries the name of the machine it ran on and the path of the user who ran
+it; once committed, it stays in the history of a repository anyone may read.
+
+**Enforced by** the write hook `private-infrastructure` and by `naima pass`,
+`naima event` and `naima attach`: every write of tracker text the CLI makes
+is checked before anything is on disk and refused when it adds one — a
+machine name, an IP address other than the loopback, a URI with a port on a
+host other than the loopback or an example domain, a path under `/Users/`,
+`/home/` or `C:\Users\`, the user's login name, or a word of the user's
+private list — each finding listed with its line and the placeholder to
+write instead. Nothing is rewritten silently: the author rewrites the text
+and runs the command again. A deliberate mention goes through with
+`--allow-private "<reason>"`, and the reason, with the counts by kind and
+never the values, is recorded in the item's notes, the session note or the
+event. The private list is one word per line (`#` starts a comment) in
+`$XDG_CONFIG_HOME/naima/private-words`, else `~/.config/naima/private-words`,
+or `%APPDATA%\naima\private-words` on Windows: outside every repository, so
+the names it holds are never committed. What the CLI does not write — code,
+docs, commit messages — is **convention**.
+
 ### Git is the agent's job, done safely
 
 The owner never has to learn git. Agents install it when it is missing,

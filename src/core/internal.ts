@@ -25,6 +25,7 @@ export {
   trackerReadme,
 } from "./layout.ts"
 export { consoleIO, createContext, type IO, type Place } from "./context.ts"
+export { PRIVATE_ENV, privateEnv, privateWordsFile } from "./private.ts"
 export { buildRegistry, type RegistryOptions } from "./registry.ts"
 export { CORE_POINTS } from "./points.ts"
 export { migrationsOf } from "./manifest.ts"

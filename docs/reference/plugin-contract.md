@@ -261,8 +261,8 @@ run.
 
 **Documentation is part of the manifest.** Every `says`, every example and
 every option entry is what `naima docs` turns into the reference, and with the
-`docs` plugin loaded `naima check` fails on a contribution that lacks its own:
-[the documentation rule](https://github.com/vincenzoml/naima-dev/blob/main/develop/documentation.md).
+`docs` plugin loaded `naima check` fails on a contribution that lacks its own
+([the rule](../guide/rules.md#features-are-documented-as-part-of-their-implementation)).
 
 ## The context
 

@@ -29,13 +29,16 @@ import {
   currentBranch,
   fieldValue,
   fieldValues,
+  findPrivate,
   gitOrNull,
+  guardPrivate,
   hasTrait,
   isOpen,
   type Item,
   label,
   linked,
   parse,
+  privateContext,
   readAcrossBranches,
   readReadme,
   rendered,
@@ -335,7 +338,8 @@ export const eventCommand: Command = {
     const dir = join(ctx.trackerRoot, EVENTS)
     mkdirSync(dir, { recursive: true })
     const name = `${date}-${randomUUID()}.md`
-    writeFileAtomic(join(dir, name), `---\ndate: ${date}\n${at ? `at: ${at}\n` : ""}kind: ${kind}\n---\n\n${text}\n`)
+    const allowance = guardPrivate("the event", findPrivate(text, privateContext()), ctx.allowPrivate)
+    writeFileAtomic(join(dir, name), `---\ndate: ${date}\n${at ? `at: ${at}\n` : ""}kind: ${kind}\n---\n\n${[text, allowance].filter(Boolean).join("\n\n")}\n`)
     ctx.out(`wrote ${ctx.trackerDir}/${EVENTS}/${name} — commit it on ${currentBranch(ctx.root)}`)
     return 0
   },

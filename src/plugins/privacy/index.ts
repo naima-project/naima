@@ -15,17 +15,25 @@ import {
   CONTRACT,
   type FieldDef,
   type Finding,
+  findPrivate,
   gitOrNull,
   gitPath,
+  guardPrivate,
   isGitRepo,
   isRegularFile,
   type Item,
+  joinProse,
   label,
+  NOTES_HEADING,
   parse,
   type Plugin,
   type PluginApi,
+  privateContext,
   projectFiles,
+  readReadme,
   saveMeta,
+  saveProse,
+  splitProse,
   str,
   today,
   trunk,
@@ -169,7 +177,7 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
     says:
       "copy a file into an item's attachments with a record of whose it is: the owner's, only with their explicit yes restated in --consent, or your own with --own; a file holding a secret is refused",
     enforces:
-      "an owner's file is attached only with their yes restated in --consent, or the writer's own with --own; a file holding a secret, a hidden or path-like name, or a name already used is refused",
+      "an owner's file is attached only with their yes restated in --consent, or the writer's own with --own; a file holding a secret, a hidden or path-like name, or a name already used is refused, and so is a text holding private infrastructure (a machine name, an IP address, a URI with a port, a home-directory path, the user's name, a word of the private list) unless --allow-private \"<reason>\" is given, which the item's notes record",
     usage: 'attach <item> <file> (--consent "<the owner\'s yes, restated>" | --own) [--as <name>] [--by <who>]',
     options: [
       { name: "--consent", says: "the file is the owner's: their explicit yes to storing it, restated; recorded on the item" },
@@ -203,6 +211,7 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
       if (secret) {
         throw new Error(`${file}:${secret.line} holds ${article(secret.shape)}: redact it before attaching — an attachment is permanent once committed`)
       }
+      const allowance = text === null ? undefined : guardPrivate(`attachment ${name}`, findPrivate(text, privateContext()), ctx.allowPrivate)
       const dest = join(item.dir, ATTACHMENTS, name)
       const records = recordsOf(item)
       const inPlace = src === resolve(dest)
@@ -221,6 +230,11 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
       } catch (e) {
         if (!inPlace) rmSync(dest, { force: true })
         throw e
+      }
+      if (allowance) {
+        const prose = splitProse(readReadme(item))
+        const entry = `### ${today(ctx)} — naima\n\n${name}: ${allowance}`
+        saveProse(ctx, item, joinProse({ ...prose, notes: [prose.notes || NOTES_HEADING, entry].join("\n\n") }))
       }
       ctx.out(`${label(item)}: attached ${name} (${consent ? "the owner's, consent recorded" : "your own"})`)
       return 0

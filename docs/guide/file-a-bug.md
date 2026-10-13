@@ -21,7 +21,9 @@ Something is broken. Write it down first, before anyone tries to fix it
    - **the evidence**: what you ran and what it printed, a number, a
      screenshot — files go in `attachments/` next to it, with
      `naima attach <item> <file> --own` (a secret in one is refused: cut it
-     out first);
+     out first; a machine name, an IP address, a home path or a user name is
+     refused too: write `<host>`, `<ip>`, `<path>`, `<user>`,
+     [the rule](rules.md#no-machine-names-or-private-infrastructure-in-a-repository));
    - **what you saw and what you only suppose**, kept apart;
    - **the consequence**: who notices, and when.
 

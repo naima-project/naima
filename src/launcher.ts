@@ -5,7 +5,8 @@
 //   read    the repository, the program wherever it is, and the data directory of every other worktree
 //   write   the tracker folder (naima-tracker/, the parent of the program), and the data and program if moved out of it
 //   run     git, and the programs the loaded contributions declare (`runs`: a verifier's tool, a metric's command), nothing else
-//   env     an allow-list of the environment (ENV below): what git needs, and Naima's own
+//   env     an allow-list of the environment (ENV below): what git needs, and Naima's own,
+//           plus the machine's name and the private word list (core/private.ts), read here
 //   net     none: the network is git's, for alignment and update — except for `naima ui` (UI below)
 //
 // `naima ui`, and no other command, may also listen on the loopback interface,
@@ -39,6 +40,7 @@ import {
   globalOptions,
   message,
   POINTER_FILES,
+  privateEnv,
   programOf,
   readConfig,
   real,
@@ -287,7 +289,13 @@ export async function launch(args: string[], cwd: string): Promise<number> {
   const program = given && existsSync(join(data, DATA_FILE)) ? programOf(data) : own
   const tracker = given ? trackerOf(data) : dirname(own)
   const root = toplevel(existing(tracker)) ?? resolve(cwd)
-  const env = { ...allowedEnv(Deno.env.toObject()), NAIMA_LAUNCHED: "1", ...(given ? { NAIMA_DATA: real(data) } : {}) }
+  // The machine's name and the private word list, which the program may not ask for itself: what tracker text is checked against.
+  const env = {
+    ...allowedEnv(Deno.env.toObject()),
+    ...privateEnv(Deno.env.toObject(), Deno.build.os),
+    NAIMA_LAUNCHED: "1",
+    ...(given ? { NAIMA_DATA: real(data) } : {}),
+  }
   const others = otherWorktrees(root, data)
   const tools = toolsDir(Deno.env.toObject(), Deno.build.os)
   const ui = uiGrant(parsed.rest[0], Deno.build.os, Deno.execPath(), tools)

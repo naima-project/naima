@@ -110,8 +110,7 @@ result as the installer.
 ```
 
 `main` is where Naima is developed: its tests, its site, the rules for
-working on it, and its own tracker live in
-[`naima-dev`](https://github.com/vincenzoml/naima-dev), a separate
+working on it, and its own tracker live in the workshop, a separate, private
 repository; cloning `vincenzoml/naima` gets none of that, only what runs it —
 `naima.ts`, `src/`, `docs/`, `skills/`, `README.md`, `LICENSE` and `NOTICE`,
 exactly what a project should carry. Tests hold the clone to that: no test

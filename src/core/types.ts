@@ -478,4 +478,9 @@ export interface Context {
   out(line?: string): void
   err(line: string): void
   now(): Date
+  /**
+   * The reason given with `--allow-private` for this command: a write holding private infrastructure goes through and
+   * the reason is recorded; without it such a write is refused (core/private.ts).
+   */
+  allowPrivate?: string
 }

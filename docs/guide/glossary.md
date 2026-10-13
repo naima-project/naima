@@ -486,8 +486,7 @@ pulls.
 
 What a project's program directory is: a git clone of Naima's own
 repository, checked out at the locked commit — without its tests or its own
-tracker, which live in a separate repository,
-[`naima-dev`](https://github.com/vincenzoml/naima-dev)
+tracker, which live in a separate, private repository, the workshop
 ([the clone](install.md#the-clone)).
 
 ### Update

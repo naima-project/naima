@@ -24,7 +24,9 @@ import {
   fieldValue,
   filesAt,
   type Finding,
+  findPrivate,
   gitOrNull,
+  guardPrivate,
   isClone,
   label,
   mustGit,
@@ -32,6 +34,7 @@ import {
   type Plugin,
   positiveInt,
   posixRelative,
+  privateContext,
   readAcrossBranches,
   rendered,
   short,
@@ -528,7 +531,8 @@ const pass: Command = {
     const dir = join(ctx.root, rel(ctx, PASSES))
     mkdirSync(dir, { recursive: true })
     const name = `${date}-${randomUUID()}.md`
-    const body = ack ? `${ack}\n\n${text}` : text
+    const allowance = guardPrivate("the session note", findPrivate(text, privateContext()), ctx.allowPrivate)
+    const body = [ack, text, allowance].filter(Boolean).join("\n\n")
     writeFileAtomic(
       join(dir, name),
       `---\ndate: ${date}\nat: ${now.toISOString()}\nbranch: ${branch}${ack ? `\nack: ${ack}` : ""}\n---\n\n${body}\n`,
