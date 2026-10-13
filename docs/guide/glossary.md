@@ -422,9 +422,27 @@ to one another's files ([work on several branches at once](several-branches.md))
 
 ### Fast-forward
 
-A merge that only moves the trunk forward onto the branch, adding no merge
+A merge that only moves a branch forward onto another, adding no merge
 commit: `git merge --ff-only <branch>`. It succeeds only when the branch
-already contains the trunk.
+already contains the other. A branch ready to land is fast-forwardable: it
+contains the trunk. It still lands as a [marker](#marker), not as a
+fast-forward.
+
+### Landing
+
+A branch entering the trunk, done by the [coordinator](#coordinator) with
+`naima land <branch>`, or by hand with the same git commands. Every landing
+closes at least one item and leaves one [marker](#marker) on the trunk
+([the rule](rules.md#every-landing-is-a-marker-naming-the-items-it-closes)).
+
+### Marker
+
+The commit a [landing](#landing) leaves on the trunk: a merge whose first
+parent is the trunk before it and whose second is the branch tip, whose
+tree is the branch tip's, and whose message is `Land <branch>` with one
+`Closes: <item id>` trailer per item it closes. The trunk's first-parent
+line is a list of markers, and `M^1..M^2` lists the commits marker `M`
+landed.
 
 ### Run
 

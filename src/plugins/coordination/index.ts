@@ -60,9 +60,11 @@ import {
   writeThroughGit,
 } from "./worktrees.ts"
 import { claimsUiView, notesUiView } from "./ui.ts"
+import { land, landingsAreMarkers } from "./land.ts"
 import { diaryCommand, eventCommand, EVENTS, timelineUiView, timelineView } from "./timeline.ts"
 
 export { type Timeline, type TimelineEvent, timelineOf } from "./timeline.ts"
+export { claimedInHistory, CLOSES, markerMessage, moveTrunk } from "./land.ts"
 
 export const CLAIMS = "claims"
 export const PASSES = "passes"
@@ -750,6 +752,8 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       "There are no locks: a claim says who works on what and never excludes anyone. What one session at a time must touch — the trunk, the published site, the releases — is touched by one writer, the coordinator; workers only prepare on their own branches, and the owner decides what lands and when, when it matters. " +
       "Work happens by one scheme, checked: the worktree `<worktrees>/<what>` stands on the branch `<who>/<what>` and carries a claim; `open` makes all three in one step. " +
       "A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. " +
+      "Landings are semi-linear: a branch the trunk is an ancestor of enters it as one marker commit, a merge whose tree is the branch tip's and whose message names the items it closes in `Closes:` trailers; `land` makes it from the main checkout, the shortcut for `git merge --no-ff`, and moves the trunk only from the commit it read. " +
+      "From the first marker on the trunk's first-parent line every first-parent commit is a marker, or `landings-are-markers` notes it; before it nothing is asked, so a history of fast-forwards keeps working. " +
       "`naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. " +
       "What has no date is counted at the foot, never placed at a guess. Only what nothing derives — a decision taken elsewhere, a build handed out, a policy, an outside fact — is a record, one file per event, `events/<date>-<uuid>.md`, written by `naima event`. " +
       `\`pass --ack "<line>"\` writes the acknowledgement line whichever plugin declares a rule's \`ack\` field asks an agent to give back — refused if a phrase is missing from it — and records it in the note's front matter; a note dated after ${ACK_REQUIRED_FROM} missing it, or whose body no longer starts with it, is a problem (\`session-note-ack\`), tolerating one written before — on the day it shipped, or earlier, grandfathered like a closed item on the day \`commits\` shipped — since what it recorded is what the rules asked then.`,
@@ -763,8 +767,8 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       { name: "exempt", says: "branches the naming scheme does not apply to: names, or patterns with *", default: "[]" },
     ],
     dirs: [CLAIMS, PASSES, EVENTS],
-    checks: [claimsResolve, worktreePolicy(policy), trunkMoved, closedNotClaimed, sessionNoteAck],
-    commands: [openCommand(policy), claimCommand, release, claimsCommand, prune, pass, eventCommand, diaryCommand(readPasses)],
+    checks: [claimsResolve, worktreePolicy(policy), trunkMoved, closedNotClaimed, sessionNoteAck, landingsAreMarkers],
+    commands: [openCommand(policy), claimCommand, release, claimsCommand, land, prune, pass, eventCommand, diaryCommand(readPasses)],
     views: [timelineView(readPasses)],
     contributes: { "ui-views": [claimsUiView(claimsData), timelineUiView(readPasses), notesUiView(readPasses)] },
     // The claims are a panel of naima ui, the timeline and the session notes tabs, when the ui plugin is loaded; without it, still commands and a view.

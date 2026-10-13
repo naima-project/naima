@@ -71,7 +71,8 @@ add the project's own data folders. `naima init` writes its own
   `git revert <commit>`.
 - **Work on a branch, in a worktree, per Naima's flows**: one
   [worktree](../guide/glossary.md#worktree) per piece of work
-  ([opening a worktree](opening-a-worktree.md)), merged only by fast-forward
+  ([opening a worktree](opening-a-worktree.md)), landed only once it is up to date
+  with the main branch, as one merge commit naming what it closes
   ([closing a worktree](closing-a-worktree.md)), never a commit on the main
   branch while branches are being prepared
   ([worktree isolation](worktree-isolation.md)).

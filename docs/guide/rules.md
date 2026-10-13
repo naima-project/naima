@@ -312,11 +312,35 @@ items moved, closed or deleted at once — tag the commit it starts from,
 `git tag checkpoint/<date>-<what>`. Plain `git branch -D` is not stopped:
 [closing a worktree](../agents/closing-a-worktree.md#8-only-then-remove-the-worktree-and-the-branch).
 
-### Every merge to the trunk is a fast-forward
+### Every landing is a marker naming the items it closes
 
-`git merge --ff-only <branch>`; if it refuses, stop and resolve on the branch.
-**Convention**, enforced by git only when the project configures it:
-[closing a worktree](../agents/closing-a-worktree.md).
+A branch enters the trunk as a [marker](glossary.md#marker): a merge
+commit whose first parent is the trunk, whose second is the branch tip,
+whose tree is the branch tip's, with one `Closes: <item id>` trailer per
+item it closes. The branch is prepared first: the trunk merged into it and
+its gates run again, so the trunk is an ancestor of the branch. A branch
+not up to date is never forced in. Every landing closes at least one item:
+partial work is split, the done part closed, the rest a new item. The
+trunk's first-parent line is the record of landings, and `M^1..M^2` lists
+the commits a marker `M` landed.
+
+The coordinator lands with `naima land <branch>`. By hand, the same commit:
+
+```sh
+git merge-base --is-ancestor main <branch> && \
+  git merge --no-ff <branch> -m "Land <branch>" -m "Closes: <item id>"
+```
+
+A hosting platform's merge button, with branches required to be up to
+date, makes the same shape. Naima's commands that act on git (`naima
+open`, `naima land`, `naima prune`) are shortcuts for what a person can do
+by hand; `naima check` is the authority. **Enforced by** the check
+`landings-are-markers`, as a note: from the first marker on the trunk's
+first-parent line, every commit on that line that is not a marker is named,
+with why. History before the first marker is not judged. Blocking such a
+commit with a git hook is [planned](../planned.md#blocking-a-landing-that-is-not-a-marker),
+for a project to opt into, never the default:
+[closing a worktree](../agents/closing-a-worktree.md#7-hand-it-over).
 
 ### No locks: the coordinator is the single writer
 

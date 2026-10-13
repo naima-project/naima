@@ -53,23 +53,30 @@ git merge --no-edit main
 - `naima release` drops this branch's claim. Run it here, not on the [trunk](glossary.md#trunk).
 - `naima pass` writes a [session note](glossary.md#session-note): what
   changed, what is proven, and what was **not** verified.
-- Merging the trunk into the branch first makes the final merge a
-  [fast-forward](glossary.md#fast-forward). Resolve any conflict here, and
-  run the checks again.
+- Merging the trunk into the branch first makes the trunk its ancestor,
+  which landing requires. Resolve any conflict here, and run the checks
+  again.
 
-Then, on the trunk:
+Then, from the main checkout, on the trunk:
 
 ```sh
-git merge --ff-only ada/export-alpha
+naima land ada/export-alpha                     # one marker commit, Closes: export-drops
 naima prune --branch ada/export-alpha --write   # the worktree and the branch
 ```
+
+`naima land` makes a [marker](glossary.md#marker): a merge commit with the
+branch tip's tree, naming each item it closes in a `Closes:` trailer. By
+hand, the same: `git merge-base --is-ancestor main ada/export-alpha && git
+merge --no-ff ada/export-alpha -m "Land ada/export-alpha" -m "Closes: <item
+id>"`.
 
 `prune --branch` deletes a branch only when the trunk holds its commits, or
 an `archive/<branch>` tag does: `--archive` makes the tag, for work set
 aside rather than merged.
 
-If `--ff-only` refuses, stop: the trunk moved. Merge it into the branch
-again, on the branch ([the rule](rules.md#every-merge-to-the-trunk-is-a-fast-forward)).
+If it refuses because the trunk is not an ancestor of the branch, stop: the
+trunk moved. Merge it into the branch again, on the branch
+([the rule](rules.md#every-landing-is-a-marker-naming-the-items-it-closes)).
 
 ## One writer: no locks
 

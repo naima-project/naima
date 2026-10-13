@@ -15,9 +15,10 @@ every shared view is built.
 
 ### 2. Nobody commits on the trunk while branches are being prepared
 
-A commit on the [trunk](../guide/glossary.md#trunk) while a branch is being prepared destroys that branch's
-fast-forward: what was a clean fast-forward becomes a merge over everything
-the branch touched. Work in hand goes on a branch:
+A commit on the [trunk](../guide/glossary.md#trunk) while a branch is being prepared leaves that branch
+out of date: the trunk is no longer its ancestor, and it must merge the trunk
+in, resolve and run its gates again before it can land. Work in hand goes on
+a branch:
 
 ```sh
 naima open <item> --as <who> --name <what>
@@ -29,29 +30,43 @@ so that git proves the result instead of a merge papering over it:
 ```sh
 git -C <worktree> cherry-pick <sha>     # the commit joins the branch
 git reset --keep <sha>^                 # the trunk goes back one; --keep, never --hard
-git merge --ff-only <branch>
 ```
+
+The commit then lands with the branch, as a [marker](../guide/glossary.md#marker) (rule 3). Once the
+trunk's first-parent line holds a marker, `naima check` notes every commit
+made on the trunk directly after it (the check `landings-are-markers`).
 
 Whether a project allows direct commits on the trunk at all is the [owner](../guide/glossary.md#owner)'s
 call; this rule is about not doing it under a branch being prepared.
 
-### 3. Every merge to the trunk is a fast-forward
+### 3. A branch lands up to date, as a marker
+
+A branch is prepared until the trunk is its ancestor: it could be
+fast-forwarded. It then lands as a [marker](../guide/glossary.md#marker), a merge commit that changes
+nothing the branch tip holds and names the items it closes:
 
 ```sh
-git merge --ff-only <branch>
+naima land <branch>
 ```
 
-**If it fails, stop.** Do not resolve on the trunk, do not `--no-ff`, do not
-force. The failure is information: the trunk moved under a branch prepared
-against it, and why it moved decides what to do — usually, merge the trunk
-into the branch and resolve there (step 6 of
+By hand, the same commit:
+
+```sh
+git merge-base --is-ancestor main <branch> && \
+  git merge --no-ff <branch> -m "Land <branch>" -m "Closes: <item id>"
+```
+
+**If it refuses, stop.** Do not resolve on the trunk, do not force. The
+refusal is information: the trunk moved under a branch prepared against it,
+and why it moved decides what to do — usually, merge the trunk into the
+branch and resolve there (step 6 of
 [closing a worktree](closing-a-worktree.md)).
 
-Why: a merge commit hides whether the branch was prepared. `--ff-only`
-cannot — it either passes, and the branch was ready, or it refuses before
-writing anything. A prepared branch needs nothing but the fast-forward; if it
-needs more, the resolution belongs on the branch, where whoever wrote the code
-is standing.
+Why: the marker's tree is the branch tip's, so what lands is exactly what
+the branch's gates judged; any resolution belongs on the branch, where
+whoever wrote the code is standing. The trunk's first-parent line is then
+the record of landings, one marker each, and `M^1..M^2` lists the commits
+marker `M` landed.
 
 ### 4. No shared mutable file
 
@@ -133,9 +148,13 @@ is reading them right now.
 - **Nobody commits on the trunk while a branch is being prepared.** Convention
   while `preparing` is unset; checked once set (`naima claim --preparing`,
   [closing a worktree](closing-a-worktree.md#0-say-the-branch-is-being-prepared)).
-- **Every merge to the trunk is a fast-forward.** Convention: `git merge
-  --ff-only` refuses on its own when it is not one; nothing papers over the
-  refusal with `--no-ff` or a force.
+- **A branch lands up to date, as a marker.** Enforced: `naima land`
+  refuses a branch the trunk is not an ancestor of, and moves the trunk only
+  if it has not moved meanwhile. A landing made by hand is convention,
+  checked after the fact: from the first marker on the trunk's first-parent
+  line, the check `landings-are-markers` notes every commit on that line
+  that is not a marker. Nothing blocks it; a git hook a project opts into
+  is [planned](../planned.md#blocking-a-landing-that-is-not-a-marker).
 - **No shared mutable file.** Convention, kept by the one-file-per-session
   shape above; nothing yet fails a hand-rolled shared log filed outside the
   tracker — candidate property for a later model.
