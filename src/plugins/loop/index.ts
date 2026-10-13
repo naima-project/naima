@@ -149,7 +149,7 @@ function ticks(target: string, stopped: boolean): string[] {
     `run naima loop ${target}: am I done, or did I stop?`,
     "resume what stopped: a worker that ended, a branch that waits for its merge",
     "merge finished branches nobody holds (naima claims), after the gates over the combined result; remove merged worktrees",
-    "spawn workers on the next agent work, each preparing on its own branch: landing, publishing and releasing stay with the owner of the trunk",
+    "spawn workers on the next agent work, each preparing on its own branch: landing, publishing and releasing stay with the coordinator, the single writer",
     "a line that cannot be done now gets a written deferral, never a silent skip",
     ...(stopped ? ["stopped: hand the owner his ordered list; while he is away, run the gestures nobody has tried yet and attach each attempt"] : []),
   ]

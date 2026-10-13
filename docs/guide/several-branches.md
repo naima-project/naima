@@ -75,12 +75,13 @@ again, on the branch ([the rule](rules.md#every-merge-to-the-trunk-is-a-fast-for
 
 Naima has no locks. A claim says who works on what and never excludes
 anyone. What one session at a time must touch — the trunk, the published
-site, the release tags — has one writer, the owner of the trunk: it alone
+site, the release tags — has one writer, the coordinator: it alone
 lands branches on the trunk, pushes it, publishes the site and makes
-releases, from the trunk. Every other session prepares on its own branch —
+releases, from the trunk, and the owner decides what lands and when, when
+it matters. Every worker prepares on its own branch —
 the code, the site's sources, a draft of the release notes — and hands the
 branch over to be landed
-([the rule](rules.md#no-locks-the-owner-of-the-trunk-is-the-single-writer)).
+([the rule](rules.md#no-locks-the-coordinator-is-the-single-writer)).
 
 A role can own a kind of work without writing the trunk. A project declares
 its own roles in the roles plugin's `roles` option — for example a website

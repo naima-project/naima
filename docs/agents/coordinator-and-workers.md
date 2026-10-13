@@ -38,7 +38,7 @@ coordinator does not do the work; it holds the conversation.**
 - **Is the trunk's single writer.** It alone lands branches on the trunk,
   pushes it, publishes the site and makes releases, from the trunk; nothing
   is locked, because nothing else writes them
-  ([the rule](../guide/rules.md#no-locks-the-owner-of-the-trunk-is-the-single-writer)).
+  ([the rule](../guide/rules.md#no-locks-the-coordinator-is-the-single-writer)).
 - Spawns workers, merges their branches, and keeps the queue honest.
 - Sets a timer that brings it back when nothing else will. The owner should
   never be the reason work resumes: [the non-stop loop](the-non-stop-loop.md)
