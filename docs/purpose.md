@@ -341,8 +341,9 @@ are in [the tutorial](guide/tutorial.md).
 5. **Evidence attached.** `naima attach export-keeps run.txt --own` puts the
    test's output in its `attachments/`; `naima set export-keeps status=passed`.
 6. **Gate and handover.** The gates run; `naima release export-drops` and
-   `naima pass "..."` record the end of the session; the branch is merged
-   with `git merge --ff-only`, which refuses rather than overwrite anything.
+   `naima pass "..."` record the end of the session; the coordinator lands
+   the branch with `naima land`, one merge commit naming the item it closes,
+   which refuses a branch not up to date rather than overwrite anything.
 7. **Closed by someone else.** From the main branch, `naima close
    export-drops` moves it to `naima-data/closed/` with its proof. It refuses
    from the fixer's own branch, and refuses without a passed proof.

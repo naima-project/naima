@@ -15,7 +15,11 @@ the sequence, not the reasoning; where the two disagree, the page wins.
    ([the rule](../../../../docs/guide/rules.md#no-machine-names-or-private-infrastructure-in-a-repository)).
 5. **Run the gates and read what breaks**, including `naima check`.
 6. **Merge the trunk into the branch**; resolve here; run the gates again.
-7. **Hand over**: `naima claim --not-preparing`, commit; then `git merge --ff-only <branch>`. If it refuses, STOP.
+7. **Hand over**: `naima claim --not-preparing`, commit; name the items the branch
+   closes (at least one; split partial work). The coordinator lands it from the
+   main checkout: `naima land <branch> [--closes <item>]...`, one marker commit.
+   By hand: `git merge-base --is-ancestor main <branch> && git merge --no-ff <branch>
+   -m "Land <branch>" -m "Closes: <item id>"`. If it refuses, STOP.
 8. **Only then** `naima prune --branch <branch> --write` (worktree and branch);
    unmerged work needs `--archive`, which tags it `archive/<branch>` first.
 

@@ -152,18 +152,23 @@ $ git add -A && git commit -qm "Release the claim, session note"
 held automatically: a feature cannot be marked `shipped` without naming where
 it is written up.
 
-## 6. The coordinator merges, and declares a release gate
+## 6. The coordinator lands, and declares a release gate
 
-Back in the main checkout, a fast-forward merge — refusing rather than
-risking an overwrite if the trunk had moved underneath:
+Back in the main checkout, `naima land` puts the branch on the trunk as one
+[marker](glossary.md#marker) commit naming the item it closes, taken from
+the claim the branch released. It refuses rather than risk an overwrite if
+the trunk had moved underneath:
 
 ```console
 $ cd ../demo
-$ git merge --ff-only worker/greet-lang
-Updating 4f64928..9ec50a9
-Fast-forward
- ...
+$ naima land worker/greet-lang
+landed worker/greet-lang on main: 9ec50a9d41c2, closing features/greet-by-name-user-s-own-language
+next: naima close each item once its proof is checked, then naima prune --branch worker/greet-lang --write
 ```
+
+By hand, the same commit is `git merge-base --is-ancestor main
+worker/greet-lang && git merge --no-ff worker/greet-lang -m "Land
+worker/greet-lang" -m "Closes: <item id>"`.
 
 Then the gate a release waits on
 ([plan with epics, milestones and gates](plan-with-epics-milestones-and-gates.md)):

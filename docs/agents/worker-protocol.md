@@ -41,8 +41,8 @@ before writing, and stop if a path on it is not yours.**
 
 The lead developer does not merge the first worker to report and leave the
 rest waiting on a second pass. Once more than one branch is ready, it runs
-the merge train over all of them in one sweep — gates between each merge,
-`--ff-only` at the end of each — so that a conflict between two workers'
+the landing train over all of them in one sweep — gates between each
+landing, each one `naima land <branch>` — so that a conflict between two workers'
 branches surfaces during the train, where whoever is merging is looking at
 both, rather than later as a mystery regression on the trunk. A single
 finished branch with nothing else ready merges on its own; it does not wait

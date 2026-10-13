@@ -18,7 +18,9 @@ Flow: [the coordinator and the workers](../../../../docs/agents/coordinator-and-
   cheap work.
 - **Set a timer**; the owner is never the reason work resumes
   ([the non-stop loop](../../../../docs/agents/the-non-stop-loop.md), `/flow:loop`).
-- **Merge** only `--ff-only`, after the gates over the combined result.
-- **After each merge**: what changed, then `naima queue`, then one question or none.
+- **Land** only with `naima land <branch>` (or its by-hand equivalent), on a
+  branch the trunk is an ancestor of, after the gates over the combined
+  result; each landing closes at least one item. `naima check` is the authority.
+- **After each landing**: what changed, then `naima queue`, then one question or none.
 - **Every report starts with the acknowledgement line**; check it with
   `naima rules check-ack <file|->` and report a breach to the owner.

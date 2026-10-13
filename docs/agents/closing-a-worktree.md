@@ -1,6 +1,6 @@
 # Closing a worktree
 
-Everything that has to be true before a branch is merged, in the order that
+Everything that has to be true before a branch lands, in the order that
 makes each step possible. Several steps cannot be done from the [trunk](../guide/glossary.md#trunk)
 afterwards, and the first is the one most often skipped.
 
@@ -84,9 +84,11 @@ naima release <item>...
 ```
 
 `release` acts on the branch you are standing on. Run from the trunk after
-the merge, it would release the trunk's claims and leave the branch's behind.
+the landing, it would release the trunk's claims and leave the branch's behind.
 It deletes your own [claim file](../guide/glossary.md#claim-file) and commits nothing: commit the deletion on the
-branch, so it rides the same fast-forward as the work.
+branch, so it lands with the work. `naima land` refuses a branch whose tip
+still holds its claim file, and takes the items the branch closes from the
+claims it committed and then released.
 
 Claims outlive their work when someone forgets. Release another branch's claim
 only when both hold: nothing is being worked on there, and nothing is
@@ -125,23 +127,59 @@ is the trunk's, open an item and say so in the [session note](../guide/glossary.
 
 ```sh
 git merge --no-edit main
-git merge-base --is-ancestor main HEAD && echo "fast-forward ready"
+git merge-base --is-ancestor main HEAD && echo "ready to land"
 ```
 
-This is what makes the merge back a fast-forward. Resolve conflicts here,
+This makes the trunk an ancestor of the branch, which is what landing
+requires. Resolve conflicts here,
 where the context is. Then run step 5 again: the merge brought code you have
 not tested with yours.
 
 ## 7. Hand it over
 
-Drop the mark and commit the removal: `naima claim --not-preparing`. Then say: the merge command, that it fast-forwards, what arrives red and from
-where, and what is left open with its gesture. The merge itself:
+Drop the mark and commit the removal: `naima claim --not-preparing`. Then say: the branch, the items it closes, what arrives red and from
+where, and what is left open with its gesture. Every landing closes at
+least one item: work only partly done is split, the done part closed, the
+rest filed as a new item.
+
+The [coordinator](coordinator-and-workers.md) lands it, from the main
+checkout, on the trunk:
 
 ```sh
-git merge --ff-only <branch>
+naima land <branch>                       # items from the branch's released claims
+naima land <branch> --closes <item>       # or named; repeatable
 ```
 
-If it refuses, stop ([worktree isolation](worktree-isolation.md), rule 3).
+It makes one [marker](../guide/glossary.md#marker) commit: the branch tip's tree, parents the
+trunk and the branch tip, message `Land <branch>` with one `Closes: <item
+id>` trailer per item. It moves the trunk only if the trunk has not moved
+meanwhile, then updates the main checkout's files to the marker, and says
+when a submodule moved (`git submodule update --init`). It refuses when:
+
+- it is not run from the main checkout, on the trunk;
+- the trunk is not an ancestor of the branch: merge the trunk into the
+  branch and run its gates again (step 6);
+- the branch has nothing the trunk lacks;
+- the main checkout has uncommitted changes to tracked files;
+- the branch tip still holds its claim file (step 3);
+- it cannot name an item the branch closes;
+- an item it closes is open and not fixed: its status is not done and
+  `fixedOn` is not set;
+- an untracked file in the main checkout would be overwritten; the trunk
+  is put back.
+
+By hand, the same commit:
+
+```sh
+git merge-base --is-ancestor main <branch> && \
+  git merge --no-ff <branch> -m "Land <branch>" -m "Closes: <item id>"
+```
+
+A hosting platform's merge button, with branches required to be up to
+date, makes the same shape. If either refuses, stop
+([worktree isolation](worktree-isolation.md#3-a-branch-lands-up-to-date-as-a-marker)).
+`naima land` then prints the next steps: `naima close` each item once its
+proof is checked, then step 8.
 
 ## 8. Only then, remove the worktree and the branch
 
@@ -163,7 +201,7 @@ deleted in one go), tag where it starts: `git tag checkpoint/<date>-<what>`.
   *and* proven by a gesture, and a branch that closes its own items on the
   strength of its own green tests is marking its own homework. `naima close`
   refuses anything that is not resolved, and refuses an item the branch you
-  stand on claims: close it from the trunk, after the merge, once someone
+  stand on claims: close it from the trunk, after the landing, once someone
   else has checked the proof. `naima close --force` is for the one who owns
   the [evidence](../guide/glossary.md#evidence) — a proof someone else performed, recorded here.
 - **Deleting the scratchpad.** It was never tracked.
@@ -174,10 +212,17 @@ deleted in one go), tag where it starts: `git tag checkpoint/<date>-<what>`.
   item the branch you stand on claims, and `naima close --force` is reserved
   for the evidence owner recording a proof someone else performed
   ([not part of closing](#not-part-of-closing)).
-- **A branch not fast-forwardable is never forced in.** Convention: `git
-  merge --ff-only` is the only merge command used here, and its refusal is
-  read as information, not worked around
-  ([worktree isolation](worktree-isolation.md#3-every-merge-to-the-trunk-is-a-fast-forward)).
+- **A branch not up to date is never forced in.** Enforced: `naima land`
+  refuses a branch the trunk is not an ancestor of, and lands nothing if
+  the trunk moved meanwhile. Convention by hand: `git merge-base
+  --is-ancestor` comes first, and its refusal is read as information, not
+  worked around
+  ([worktree isolation](worktree-isolation.md#3-a-branch-lands-up-to-date-as-a-marker)).
+- **Every landing is a marker naming the items it closes.** Enforced by
+  `naima land`; a landing made by hand is checked by `landings-are-markers`,
+  which notes, from the first marker on the trunk's first-parent line, every
+  commit there that is not one
+  ([the rule](../guide/rules.md#every-landing-is-a-marker-naming-the-items-it-closes)).
 - **No branch is deleted while it still holds work the trunk lacks.**
   Enforced by `naima prune`, which refuses without an `archive/<branch>` tag.
 - **A fix is not resolved until a gesture proves it.** Enforced by `naima

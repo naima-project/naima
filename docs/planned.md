@@ -80,6 +80,17 @@ instruction file (such as `AGENTS.md` or `CLAUDE.md`) pointing at the
 [skill](agents/skill.md). **Today:** the installer's instructions tell the
 agent to do it ([working with AI agents](guide/working-with-agents.md#get-an-agent-going)).
 
+## Blocking a landing that is not a marker
+
+An opt-in git hook (`reference-transaction`) that refuses any move of the
+trunk not made by `naima land`, for a project that wants a landing blocked
+rather than noted. Never the default: landing by hand or with a hosting
+platform's merge button stays allowed. **Today:** the check
+`landings-are-markers` notes, from the first marker on the trunk's
+first-parent line, every commit there that is not a
+[marker](guide/glossary.md#marker)
+([the rule](guide/rules.md#every-landing-is-a-marker-naming-the-items-it-closes)).
+
 ## Item types for other work
 
 Naima is born for software; these are packs of item types for other work

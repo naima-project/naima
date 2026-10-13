@@ -19,7 +19,7 @@ coordinator does not do the work; it holds the conversation.**
             ├── worker ── own worktree, own branch ── reports ──┤
             └── worker ── own worktree, own branch ── reports ──┘
                                                                 │
-                                  git merge --ff-only ◀─────────┘
+                                naima land <branch> ◀───────────┘
 ```
 
 ### What the coordinator does, and only this
@@ -71,7 +71,7 @@ Everything it needs to work without asking, because it cannot ask:
 | Job | Owns | Refuses |
 |---|---|---|
 | **Coordinator** | the conversation, the trunk as its single writer (landing, pushing, publishing, releasing), the timer, spawning and merging | work a worker could do; more than one question at a time |
-| **Lead developer** | the queue: sweeping fixed-but-unproven [items](../guide/glossary.md#item), preparing branches, the merge train | merging without the [gates](../guide/glossary.md#gate); closing an item on reasoning; closing its own branch's items |
+| **Lead developer** | the queue: sweeping fixed-but-unproven [items](../guide/glossary.md#item), preparing branches, the landing train | merging without the [gates](../guide/glossary.md#gate); closing an item on reasoning; closing its own branch's items |
 | **Implementer** | one item, one cause, one branch | widening scope; spawning workers; touching the trunk |
 | **Tester** | performing gestures on the running software and writing down what happened | fixing what it finds; testing what it just wrote |
 | **Filer** | classification, [triage](../guide/glossary.md#triage) fields, reports routed to the right tracker | inventing scope; deciding whether something is proven |
@@ -112,11 +112,12 @@ where work gets lost.
    name the gesture that would prove each one as a test item linked
    `verifies`. Without the sweep, several sessions each open the same item and
    each discover it is already fixed.
-2. **Preparing branches** for a clean fast-forward: the trunk merged in
+2. **Preparing branches** so the trunk is their ancestor: the trunk merged in
    first, the gates run over the combined result, claims released, session
    note written ([closing a worktree](closing-a-worktree.md)).
-3. **The merge train.** Finished branches merged in order, gates between,
-   `--ff-only` at the end. If it refuses, stop.
+3. **The landing train.** Finished branches landed in order with `naima land`,
+   gates between, each one a [marker](../guide/glossary.md#marker) naming the items it closes. If
+   it refuses, stop.
 
 It never merges without the gates, never closes an item on reasoning ("the
 code clearly does this now" is a diagnosis, not a measurement), and never
