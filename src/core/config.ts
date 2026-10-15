@@ -17,7 +17,7 @@ import { FORMAT, formatRefusal, formatsOf } from "./format.ts"
 import { DEFAULT_ENTRY_FILES } from "./pointer.ts"
 import type { Config, Extension, PluginConfig, PluginOptions, PluginSource, Severity } from "./types.ts"
 
-const KEYS = new Set(["format", "formats", "source", "commit", "verify", "program", "plugins", "rename", "extends", "entryFiles"])
+const KEYS = new Set(["format", "formats", "source", "commit", "verify", "program", "plugins", "rename", "extends", "entryFiles", "updates"])
 const COMMIT = /^[0-9a-f]{40}$/
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v)
@@ -111,7 +111,23 @@ export function parseConfig(raw: unknown, opts: { lenient?: boolean } = {}): Con
     rename: parseRename(raw["rename"]),
     extends: extensions as Extension[],
     entryFiles: parseEntryFiles(raw["entryFiles"]),
+    updates: parseUpdates(raw["updates"]),
   }
+}
+
+/** What a session start does about a newer Naima (`naima hello`): nothing, say it, or say what it changes and offer it. */
+export const UPDATE_POLICIES = ["off", "check", "update"] as const
+export type UpdatePolicy = (typeof UPDATE_POLICIES)[number]
+/** Absent, a session start checks: it only reads the source, and changes nothing. */
+export const DEFAULT_UPDATE_POLICY: UpdatePolicy = "check"
+
+/** `updates`: off, check or update; absent, the default. */
+export function parseUpdates(value: unknown): UpdatePolicy {
+  if (value === undefined) return DEFAULT_UPDATE_POLICY
+  if (typeof value !== "string" || !(UPDATE_POLICIES as readonly string[]).includes(value)) {
+    throw new Error(`${DATA_FILE}: updates is ${UPDATE_POLICIES.join(", ")} — what a session start does about a newer Naima`)
+  }
+  return value as UpdatePolicy
 }
 
 /** `entryFiles`: the agent-harness entry files `check` and `init --write-agent-pointer` act on, project root relative. Absent: sensible defaults. */

@@ -254,7 +254,7 @@ naima set <property> 'verifierOptions={"route":"lts","threads":8}'
 - The run record says how the verdict was reached. It gives the route, the
   size of the state space before and after shrinking, the hidden actions and
   the version of every tool. On `false`, the counterexample comes from the
-  full state space, in terms of the model's own actions.
+  shrunk state space, so each hidden action shows up in it as `tau`.
 - `"route":"cross-check"` runs both routes and holds only when they agree, and
   if they disagree the run is an error. It's worth running once on a model
   small enough for the standard route, to see that the two give the same

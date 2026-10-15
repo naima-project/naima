@@ -1,5 +1,5 @@
 // The commands the entry point answers itself, before any plugin is loaded:
-// init, update, plugin, guide, help. Documented like any plugin's command, so
+// init, update, rollback, hello, plugin, guide, help. Documented like any plugin's command, so
 // the reference lists them, and reserved: no plugin command may take one.
 
 import { DATA_DIR, DATA_FILE, PROGRAM_DIR, TRACKER_DIR } from "./layout.ts"
@@ -31,19 +31,47 @@ export const cliCommands: Omit<Command, "run">[] = [
   {
     name: "update",
     says:
-      `move the lock to the head of the source's main: fetch it into the program, check it out, migrate the data forward if its format moved, and record the new commit, as one change to commit; the only command that asks the source anything`,
+      `move the lock to the head of the source's main, or to the commit --to names: say what changes (the commits, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, migrate the data forward if its format moved, and record the new commit, as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima`,
     enforces:
-      "the lock moves only to the head of the source's main, with the data migrated forward in the same change; a source naima.json names other than the program's origin is refused, by every command, until --accept-source",
-    usage: "update [--check | --accept-source]",
+      "the lock moves only to a commit of the source's main, with the data migrated forward in the same change; never back past a migration, which runs forward only; a source naima.json names other than the program's origin is refused, by every command, until --accept-source",
+    usage: "update [--check | --to <commit> | --mode off|check|update | --accept-source]",
     options: [
-      { name: "--check", says: "only say whether the source's main has moved past the locked commit; exit 1 when it has" },
+      { name: "--check", says: "only say whether the source's main has moved past the locked commit, and what it changes; exit 1 when it has" },
+      {
+        name: "--to",
+        says:
+          "move the lock to this commit of the source's main, forward or back; back across a data format is refused, naming the commit to revert; the option updates is removed when that commit does not know it, and said",
+      },
+      {
+        name: "--mode",
+        says:
+          `set naima.json's updates, what naima hello does at a session start: off (nothing asked of the source), check (say when a newer Naima exists), update (say what it changes, and offer it; applied only after the owner's yes)`,
+        default: "check",
+      },
       {
         name: "--accept-source",
         says:
           "trust the source naima.json now names, after reviewing why it changed: every other command refuses to run a program from a source other than its origin; points the program's origin at the new source, checks out the locked commit, and moves nothing else",
       },
     ],
-    examples: ["update --check", "update", "update --accept-source"],
+    examples: ["update --check", "update", "update --to 0123456789ab", "update --mode update", "update --accept-source"],
+  },
+  {
+    name: "rollback",
+    says:
+      "move the lock back to the one naima.json recorded before it, found in its git history, as one change to commit: what update --to does with that commit",
+    enforces:
+      "the lock goes back only to a commit that reads the data's formats: a migration is undone by reverting its commit, never by running an older Naima on newer data",
+    usage: "rollback",
+    examples: ["rollback"],
+  },
+  {
+    name: "hello",
+    says:
+      `what an agent says first in a session: the banner (Naima is active in this repository, its version and commit); then, as naima.json's updates says, whether a newer Naima exists and what it changes; then what it offers on request: what Naima is and its documentation, an update check, an update after the owner's yes`,
+    enforces: "nothing: it never moves the lock nor writes the project; it asks the source only when updates is check or update",
+    usage: "hello",
+    examples: ["hello"],
   },
   {
     name: "plugin",
