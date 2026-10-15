@@ -37,7 +37,9 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | Command | Plugin | What it does | What it enforces |
 |---|---|---|---|
 | [`init`](#naima-init) | core | make the git repository around the program a Naima project, as its first run does by itself: beside the program, a git clone of Naima at naima-tracker/naima/, create naima-data/naima.json, locked to the clone's origin and its HEAD, which must be on the origin's main, and the tracker folder's README.md and .gitignore; print the line that keeps the program out of each host tool configuration it finds (deno.json, tsconfig.json, .prettierignore), and the one line that tells agents where Naima is; nothing outside naima-tracker/ is touched unless --write-excludes or --write-agent-pointer is given | the program is locked to a commit of its source's main, with nothing uncommitted, and nothing outside the tracker folder is written unless --write-excludes or --write-agent-pointer asks |
-| [`update`](#naima-update) | core | move the lock to the head of the source's main: fetch it into the program, check it out, migrate the data forward if its format moved, and record the new commit, as one change to commit; the only command that asks the source anything | the lock moves only to the head of the source's main, with the data migrated forward in the same change; a source naima.json names other than the program's origin is refused, by every command, until --accept-source |
+| [`update`](#naima-update) | core | move the lock to the head of the source's main, or to the commit --to names: say what changes (the commits, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, migrate the data forward if its format moved, and record the new commit, as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima | the lock moves only to a commit of the source's main, with the data migrated forward in the same change; never back past a migration, which runs forward only; a source naima.json names other than the program's origin is refused, by every command, until --accept-source |
+| [`rollback`](#naima-rollback) | core | move the lock back to the one naima.json recorded before it, found in its git history, as one change to commit: what update --to does with that commit | the lock goes back only to a commit that reads the data's formats: a migration is undone by reverting its commit, never by running an older Naima on newer data |
+| [`hello`](#naima-hello) | core | what an agent says first in a session: the banner (Naima is active in this repository, its version and commit); then, as naima.json's updates says, whether a newer Naima exists and what it changes; then what it offers on request: what Naima is and its documentation, an update check, an update after the owner's yes | nothing: it never moves the lock nor writes the project; it asks the source only when updates is check or update |
 | [`plugin`](#naima-plugin) | core | turn a plugin on or off, or set one of its options, in naima.json's plugins table — validated the way the project is validated on every load, instead of a hand-edit of the file | a name must be a first-party plugin (loaded or opt-in) or one the table already names with its own source; an option set on one whose options are known here must be one it declares; the whole file is re-validated before it is written, so nothing a later load would refuse ever reaches disk |
 | [`guide`](#naima-guide) | core | inside a project, first print what its plugins contribute to the guide, such as the project's active rules for agents; then where the running Naima's documentation is: the skill, the docs map, the guide for people, the rules, the pages for agents, the format, installing; read them as files | nothing: it only prints |
 | [`help`](#naima-help) | core | list every command the loaded plugins provide, with its usage | nothing: it only prints |
@@ -158,18 +160,22 @@ naima init --write-agent-pointer
 
 ### naima update
 
-Move the lock to the head of the source's main: fetch it into the program, check it out, migrate the data forward if its format moved, and record the new commit, as one change to commit; the only command that asks the source anything.
+Move the lock to the head of the source's main, or to the commit --to names: say what changes (the commits, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, migrate the data forward if its format moved, and record the new commit, as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima.
 
-**Enforces**: The lock moves only to the head of the source's main, with the data migrated forward in the same change; a source naima.json names other than the program's origin is refused, by every command, until --accept-source.
+**Enforces**: The lock moves only to a commit of the source's main, with the data migrated forward in the same change; never back past a migration, which runs forward only; a source naima.json names other than the program's origin is refused, by every command, until --accept-source.
 
 ```sh
 naima update [--check
+naima --to <commit>
+naima --mode off|check|update
 naima --accept-source]
 ```
 
 | Option | Default | What it does |
 |---|---|---|
-| `--check` |  | only say whether the source's main has moved past the locked commit; exit 1 when it has |
+| `--check` |  | only say whether the source's main has moved past the locked commit, and what it changes; exit 1 when it has |
+| `--to` |  | move the lock to this commit of the source's main, forward or back; back across a data format is refused, naming the commit to revert; the option updates is removed when that commit does not know it, and said |
+| `--mode` | `check` | set naima.json's updates, what naima hello does at a session start: off (nothing asked of the source), check (say when a newer Naima exists), update (say what it changes, and offer it; applied only after the owner's yes) |
 | `--accept-source` |  | trust the source naima.json now names, after reviewing why it changed: every other command refuses to run a program from a source other than its origin; points the program's origin at the new source, checks out the locked commit, and moves nothing else |
 
 Examples:
@@ -177,7 +183,41 @@ Examples:
 ```sh
 naima update --check
 naima update
+naima update --to 0123456789ab
+naima update --mode update
 naima update --accept-source
+```
+
+### naima rollback
+
+Move the lock back to the one naima.json recorded before it, found in its git history, as one change to commit: what update --to does with that commit.
+
+**Enforces**: The lock goes back only to a commit that reads the data's formats: a migration is undone by reverting its commit, never by running an older Naima on newer data.
+
+```sh
+naima rollback
+```
+
+Examples:
+
+```sh
+naima rollback
+```
+
+### naima hello
+
+What an agent says first in a session: the banner (Naima is active in this repository, its version and commit); then, as naima.json's updates says, whether a newer Naima exists and what it changes; then what it offers on request: what Naima is and its documentation, an update check, an update after the owner's yes.
+
+**Enforces**: Nothing: it never moves the lock nor writes the project; it asks the source only when updates is check or update.
+
+```sh
+naima hello
+```
+
+Examples:
+
+```sh
+naima hello
 ```
 
 ### naima plugin
@@ -594,6 +634,7 @@ naima runs --json
 | `layout` | every directory under the tracker root belongs to an item type or a plugin |
 | `duplicates` | items of one type with the same title are linked as duplicates, or reported |
 | `entry-pointers` | every agent-harness entry file naima.json configures (entryFiles; sensible defaults absent it) names no path or link, plain-text or markdown, that is missing from disk |
+| `unread-options` | every option naima.json's plugins table sets is one its loaded plugin declares: an option no plugin reads any more is noted, by name |
 | `one-format` | no item is still in a shape a format migration, the core's or a plugin's own, replaced: a tracker never mixes formats |
 
 **Summary sections**: `items`.

@@ -1,16 +1,29 @@
 // The one entry point: find the data, align the program when the launcher
 // runs it, load every plugin, dispatch. The commands that set up and move the
-// program itself — init, update, plugin, guide, help — are answered here,
+// program itself — init, update, rollback, hello, plugin, guide, help — are answered here,
 // before any plugin is loaded.
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { dirname, join, relative, resolve } from "node:path"
-import { carryRefusal, type Lock, parseConfig, parseLock, posixRelative, programDir, readRaw, sourceRefusal, writeRaw, writeValidatedRaw } from "./config.ts"
+import {
+  carryRefusal,
+  type Lock,
+  parseConfig,
+  parseLock,
+  parseUpdates,
+  posixRelative,
+  programDir,
+  readRaw,
+  sourceRefusal,
+  UPDATE_POLICIES,
+  writeRaw,
+  writeValidatedRaw,
+} from "./config.ts"
 import { consoleIO, type IO, type Place } from "./context.ts"
 import { cliCommands } from "./entry.ts"
 import { FORMAT, formatRefusal, isFormat, migrate, MIGRATIONS, type Step } from "./format.ts"
 import { formatsFor, type OpenOptions, openProject, owed } from "./project.ts"
-import { bool, pairs, parse } from "./args.ts"
+import { bool, pairs, parse, str } from "./args.ts"
 import { gitOrNull, nativePath, runGit, toplevel } from "./git.ts"
 import { exclusions } from "./excludes.ts"
 import { agentPointer, writePointer } from "./pointer.ts"
@@ -20,6 +33,7 @@ import {
   align,
   checkoutWork,
   COMMIT_UNAVAILABLE,
+  fetchCommit,
   fetchHead,
   ignoreProgram,
   isClone,
@@ -28,8 +42,10 @@ import {
   short,
   SOURCE_CHANGED,
   type Target,
+  verifySigned,
   withoutCredentials,
 } from "./program.ts"
+import { backwardFormats, banner, changeOf, counted, describe, OFFERS, versionOf } from "./updates.ts"
 import { EXIT, isInternal, message, NaimaError } from "./errors.ts"
 import type { Command, Context, GuideSection, Plugin } from "./types.ts"
 import { asRendered, linesAs } from "./rendered.ts"
@@ -238,38 +254,204 @@ function migrated(steps: readonly Step[], from: unknown, plugins: readonly { plu
   return out
 }
 
+/** What updating to `to` changes, said; nothing when the program's origin is not the lock's source, whose commits it may not hold. */
+async function said(t: Target, raw: Record<string, unknown>, to: string): Promise<string[]> {
+  if (withoutCredentials(runGit(t.program, ["remote", "get-url", "origin"]).out) !== t.source) return []
+  verifySigned(t.program, { ...t, commit: to })
+  return describe(await changeOf(t.program, raw, t.commit, to))
+}
+
+/** The commit `naima.json` named before the current lock, in its git history (the uncommitted file first), and the commit that recorded the current one. */
+function previousLock(place: Place, current: string): string {
+  const rel = posixRelative(place.root, join(place.data, DATA_FILE))
+  const log = runGit(place.root, ["log", "--format=%H", "--", rel])
+  for (const c of log.ok ? log.out.split("\n").filter((l) => l) : []) {
+    const text = runGit(place.root, ["show", `${c}:${rel}`])
+    let commit: unknown
+    try {
+      commit = (JSON.parse(text.out) as { commit?: unknown }).commit
+    } catch {
+      continue
+    }
+    if (typeof commit === "string" && commit !== current) return commit
+  }
+  throw new Error(`no earlier lock in the history of ${rel} — name the commit: naima update --to <commit>`)
+}
+
+/** The commit of the project that recorded the data's current formats: the one to revert to have the data as it was before. */
+function migratedBy(place: Place, raw: Record<string, unknown>): string | null {
+  const rel = posixRelative(place.root, join(place.data, DATA_FILE))
+  const formats = (o: Record<string, unknown>) => JSON.stringify([o["format"], o["formats"] ?? {}])
+  const now = formats(raw)
+  const log = runGit(place.root, ["log", "--format=%H", "--", rel])
+  let last: string | null = null
+  for (const c of log.ok ? log.out.split("\n").filter((l) => l) : []) {
+    let then: Record<string, unknown>
+    try {
+      then = JSON.parse(runGit(place.root, ["show", `${c}:${rel}`]).out) as Record<string, unknown>
+    } catch {
+      break
+    }
+    if (formats(then) !== now) break
+    last = c
+  }
+  return last
+}
+
+/** The full hash of `commit` in the program, fetched when it is a full hash the program lacks; an error naming it otherwise. */
+function resolveCommit(t: Target, commit: string): string {
+  if (!/^[0-9a-f]{4,40}$/.test(commit)) throw new Error(`${commit} is not a commit: name it by its hash`)
+  if (commit.length === 40) fetchCommit(t, commit)
+  const r = runGit(t.program, ["rev-parse", "--verify", "--quiet", `${commit}^{commit}`])
+  if (!r.ok) throw new Error(`no commit ${commit} in ${t.source}: name one of its main by its full hash`)
+  return r.out
+}
+
+/**
+ * Move the lock to `to`, a commit of the source's main, forward or back: say what changes, refuse a commit
+ * older than the data's formats, drop `updates` when `to` does not know it, align the program, record the
+ * lock. Forward across a format, the new Naima finishes (RELAUNCH); otherwise one change to commit.
+ */
+async function moveLock(opts: CliOptions, place: Place, lock: Lock, raw: Record<string, unknown>, io: IO, to: string): Promise<number> {
+  const t = targetOf(place, lock, opts)
+  const onMain = runGit(t.program, ["merge-base", "--is-ancestor", to, "refs/remotes/origin/main"]).ok ||
+    runGit(t.program, ["merge-base", "--is-ancestor", to, lock.commit]).ok
+  if (!onMain) throw new Error(`${short(to)} is not a commit of the source's main: the lock names only those`)
+  verifySigned(t.program, { ...t, commit: to })
+  const change = await changeOf(t.program, raw, lock.commit, to)
+  const tracker = posixRelative(place.root, trackerOf(place.data))
+  const back = backwardFormats(change)
+  if (back.length) {
+    const f = back[0] as (typeof back)[number]
+    const name = f.plugin === null ? "data format" : `${f.plugin} format`
+    const by = migratedBy(place, raw)
+    throw new Error(
+      `${short(to)} reads ${name} ${f.to}, and the data is format ${f.from}: migrations run forward only, so going back needs the data as it was — ${
+        by ? `git revert ${short(by)}, the commit that migrated it, then naima check` : `the migration is not committed: git checkout -- ${tracker}`
+      }`,
+    )
+  }
+  if (change.unknown && change.back) throw new Error(`cannot tell which data format ${short(to)} reads: ${change.unknown}`)
+  let next: Record<string, unknown> = { ...raw, commit: to }
+  const notes: string[] = []
+  if (change.config) {
+    if ("updates" in next && change.configWithoutUpdates === null) {
+      const { updates: _dropped, ...without } = next
+      next = without
+      notes.push(`${short(to)} does not know the option updates: removed from ${DATA_FILE}; it is set again after an update to a Naima that knows it`)
+    } else throw new Error(`${short(to)} does not read this ${DATA_FILE}: ${change.config}`)
+  }
+  for (const line of describe(change)) io.out(line)
+  // Move the program first, and only then the lock: a refusal leaves both where they were.
+  align({ ...t, commit: to })
+  writeRaw(place.data, next)
+  io.out(`locked ${short(lock.commit)} → ${short(to)}`)
+  for (const n of notes) io.out(n)
+  if (change.formats.some((f) => f.to > f.from)) return RELAUNCH // the new Naima finishes: it is the one that knows the new format
+  const verb = change.back ? "Roll Naima back to" : "Update Naima to"
+  io.out(`${short(to)} is the lock — commit it as one change: git add ${tracker} && git commit -m "${verb} ${short(to)}"`)
+  return 0
+}
+
 async function update(args: string[], opts: CliOptions, place: Place, lock: Lock, raw: Record<string, unknown>, io: IO): Promise<number> {
-  const p = parse(args, { check: { type: "boolean" }, "accept-source": { type: "boolean" } })
+  const p = parse(args, { check: { type: "boolean" }, "accept-source": { type: "boolean" }, to: { type: "string" }, mode: { type: "string" } })
   const check = bool(p, "check")
-  if (check && bool(p, "accept-source")) throw new Error(usage("update"))
+  const to = str(p, "to")
+  const mode = str(p, "mode")
+  if ([check, bool(p, "accept-source"), to !== undefined, mode !== undefined].filter((x) => x).length > 1 || p.positionals.length) {
+    throw new Error(usage("update"))
+  }
   if (bool(p, "accept-source")) {
     // The entry point has aligned the program to the new source already: accepting it is all this asks.
     io.out(`trusted ${lock.source} at the locked commit ${short(lock.commit)}; nothing else moved`)
+    return 0
+  }
+  const tracker = posixRelative(place.root, trackerOf(place.data))
+  if (mode !== undefined) {
+    const policy = parseUpdates(mode)
+    writeValidatedRaw(place.data, { ...raw, updates: policy })
+    io.out(`updates: ${policy} — ${POLICY_SAYS[policy]}; commit it: git add ${tracker} && git commit -m "Naima updates: ${policy}"`)
     return 0
   }
   const t = targetOf(place, lock, opts)
   if (check) {
     const head = remoteHead(t)
     if (head.commit === lock.commit) io.out(`current: the source's ${head.branch} is the locked commit ${short(head.commit)}`)
-    else io.out(`the source's ${head.branch} moved: ${short(lock.commit)} → ${short(head.commit)} — naima update`)
+    else {
+      io.out(`the source's ${head.branch} moved: ${short(lock.commit)} → ${short(head.commit)} — naima update`)
+      try {
+        fetchHead(t)
+        for (const line of await said(t, raw, head.commit)) io.out(line)
+      } catch (e) {
+        io.out(`what it changes is not known: ${message(e)}`)
+      }
+    }
     return head.commit === lock.commit ? 0 : 1
   }
   const carried = carryRefusal(raw, posixRelative(place.root, place.program))
   if (carried) throw new Error(carried)
-  const head = fetchHead(t)
-  if (head.commit !== lock.commit) {
-    // Move the program first, and only then the lock: a refusal leaves both where they were.
-    align({ ...t, commit: head.commit })
-    writeRaw(place.data, { ...raw, commit: head.commit })
-    io.out(`locked ${short(lock.commit)} → ${short(head.commit)}`)
-    return RELAUNCH // the new Naima finishes: it is the one that knows the new format
-  }
+  const target = to !== undefined ? resolveCommit(t, to) : fetchHead(t).commit
+  if (target !== lock.commit) return await moveLock(opts, place, lock, raw, io, target)
   const from = raw["format"]
   const { all } = await owed(raw, place, opts)
   const steps = migrate(place.data, MIGRATIONS, all.slice(1))
   for (const line of migrated(steps, from, all.slice(1))) io.out(line)
-  const tracker = posixRelative(place.root, trackerOf(place.data))
-  io.out(`${short(head.commit)} is the lock — commit it as one change: git add ${tracker} && git commit -m "Update Naima to ${short(head.commit)}"`)
+  io.out(`${short(target)} is the lock — commit it as one change: git add ${tracker} && git commit -m "Update Naima to ${short(target)}"`)
+  return 0
+}
+
+/** What each update policy makes a session start do. */
+const POLICY_SAYS: Record<(typeof UPDATE_POLICIES)[number], string> = {
+  off: "a session start does not ask the source; naima update --check does, on request",
+  check: "a session start says when a newer Naima exists",
+  update: "a session start says what a newer Naima changes, and offers it; it is applied only after the owner's yes",
+}
+
+/** `naima rollback`: the lock back to the one before it, found in naima.json's git history. */
+async function rollback(args: string[], opts: CliOptions, place: Place, lock: Lock, raw: Record<string, unknown>, io: IO): Promise<number> {
+  if (parse(args).positionals.length) throw new Error(usage("rollback"))
+  const carried = carryRefusal(raw, posixRelative(place.root, place.program))
+  if (carried) throw new Error(carried)
+  const t = targetOf(place, lock, opts)
+  return await moveLock(opts, place, lock, raw, io, resolveCommit(t, previousLock(place, lock.commit)))
+}
+
+/**
+ * `naima hello`: the banner, what the update policy finds, and the offers — what an agent says first in a
+ * session. Reads the source only as `updates` says; never moves the lock, never writes the project.
+ */
+async function hello(opts: CliOptions, place: Place, lock: Lock, raw: Record<string, unknown>, io: IO): Promise<number> {
+  const me = running(opts.programRoot)
+  const policy = parseUpdates(raw["updates"])
+  const lines: string[] = []
+  if (policy === "off") lines.push(`Updates are not checked (${DATA_FILE}: "updates": "off"); naima update --check checks on request.`)
+  else {
+    const t = targetOf(place, lock, opts)
+    try {
+      // Launched, the program may fetch into its own clone, tags too; the development build only reads the source.
+      const head = opts.launched ? fetchHead(t) : remoteHead(t)
+      if (head.commit === lock.commit) lines.push(`Naima is current: the source's ${head.branch} is the locked commit.`)
+      else {
+        const count = runGit(t.program, ["rev-list", "--count", `${lock.commit}..${head.commit}`])
+        const n = count.ok ? Number(count.out) : null
+        const commits = n === null ? "" : `, ${counted(n, "commit")}`
+        lines.push(`A newer Naima is available: ${short(lock.commit)} → ${short(head.commit)}${commits}.`)
+        if (policy === "check" || !opts.launched) lines.push("naima update --check says what it changes; updating waits for the owner's yes.")
+        else {
+          lines.push(...await said(t, raw, head.commit))
+          lines.push("Ask the owner before naima update: it moves the lock and migrates the data, as one change to commit.")
+        }
+      }
+    } catch (e) {
+      lines.push(`Could not check for a newer Naima: ${message(e)}.`)
+    }
+  }
+  // The banner first, read after the check: a fetch brings the tags that name the version.
+  io.out(
+    me ? banner(versionOf(me.repo, me.commit), me.commit) : `Naima is active in this repository: a development build, its lock commit ${short(lock.commit)}.`,
+  )
+  for (const line of lines) io.out(line)
+  io.out(OFFERS)
   return 0
 }
 
@@ -392,8 +574,11 @@ function pluginCommand(args: string[], opts: CliOptions, place: Place, raw: Reco
   if (refusal) throw new Error(refusal)
   const assigns = pairs(rest)
   const known = declaredOptions(name, opts)
-  for (const [key] of assigns) {
-    if (known && !known.includes(key)) throw new Error(`plugins.${name} declares no option "${key}" — its options: ${known.join(", ") || "none"}`)
+  for (const [key, value] of assigns) {
+    // Removing one is allowed: an option no plugin reads is what naima check notes, to be removed.
+    if (known && !known.includes(key) && value !== "") {
+      throw new Error(`plugins.${name} declares no option "${key}" — its options: ${known.join(", ") || "none"}`)
+    }
   }
   const entry = pluginEntry(raw, name)
   const options = { ...((entry["options"] as Record<string, unknown> | undefined) ?? {}) }
@@ -528,6 +713,7 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
         const code = e instanceof NaimaError ? e.code : null
         if (!((readOnly && code === SOURCE_CHANGED) || (moving && (code === COMMIT_UNAVAILABLE || code === OLD_LAYOUT)))) throw e
       }
+      for (const line of moved?.repaired ?? []) io.err(`naima: ${line}`)
       if (moved?.from && moved.from !== place.lock.commit) io.err(`naima: locked commit moved ${short(moved.from)} → ${short(place.lock.commit)}`)
       const target = runtimeOf(place.program)
       if (moved || (target && real(opts.programRoot) !== real(target))) return RELAUNCH
@@ -536,6 +722,11 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
       if (!opts.launched) throw new Error(`naima update moves the program, so it runs through the launcher: deno run -A <the program>/naima.ts update`)
       return await update(args, opts, place, place.lock, place.raw, io)
     }
+    if (command === "rollback") {
+      if (!opts.launched) throw new Error(`naima rollback moves the program, so it runs through the launcher: deno run -A <the program>/naima.ts rollback`)
+      return await rollback(args, opts, place, place.lock, place.raw, io)
+    }
+    if (command === "hello") return await hello(opts, place, place.lock, place.raw, io)
     if (command === "plugin") return pluginCommand(args, opts, place, place.raw, io)
     const ctx = await openProject(place, opts, io)
     if (isHelp(command)) return help(ctx, data, io)
