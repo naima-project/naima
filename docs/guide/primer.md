@@ -1,310 +1,324 @@
 # The Naima primer
 
-Every idea Naima uses, in the order you will meet it while your project
-runs. Read it once, top to bottom, in about fifteen minutes. Nothing here
-assumes you write code, know git or have managed a project: an AI agent does
-the machine work, and the commands are shown so you can recognise what it
-does. Each term links to its full definition in the [glossary](glossary.md),
-and each section to the page that has the detail. The rules are not repeated
-here: they are all on [the rules page](rules.md).
+This page walks through the ideas Naima uses, roughly in the order you run
+into them on a real project. It takes about fifteen minutes to read. You
+don't need to know git or to write code: AI agents do that part, and the
+commands appear only so you can recognise what they are doing. Terms link to
+the [glossary](glossary.md), and each section points to the page with the
+details. The rules themselves live on [the rules page](rules.md).
 
-One example runs through the page: a small web shop that sells bread, whose
-owner has asked agents to build and run it.
+As a running example, take a small online bakery whose owner has asked a team
+of agents to build and run the shop.
 
 ## 1. The project, the owner, the agents
 
-The **project** is the work kept in one git [repository](glossary.md#repository):
-software most often, but a data analysis or a paper with colleagues works the
-same way. The [owner](glossary.md#owner) is the person the project answers
-to — you. You decide what is wanted, and you judge what only a person can
-judge; you never need to type a command.
+A project is whatever lives in one git [repository](glossary.md#repository).
+Usually that is software, but a data analysis or a paper you write with
+colleagues works just as well. You are the [owner](glossary.md#owner): you
+decide what you want and you judge the things only a person can judge. You
+never have to type a command.
 
-The [agents](glossary.md#agent) do everything else. One of them, the
-[coordinator](glossary.md#coordinator), talks to you; the others, the
-[workers](glossary.md#worker), do pieces of work in the background and hand
-them back. A [session](glossary.md#session) is one stretch of work by one
-agent; agents forget between sessions, so everything that matters is written
-down.
+The [agents](glossary.md#agent) do the rest. One of them, the
+[coordinator](glossary.md#coordinator), is the one you talk to. The others,
+the [workers](glossary.md#worker), take pieces of work, do them in the
+background and report back. A [session](glossary.md#session) is one stretch
+of work by one agent. Agents don't remember anything from one session to the
+next, which is why everything important gets written down.
 
-It is written down in the [tracker](glossary.md#tracker), a folder in your
-repository called `naima-tracker/`: plain files, versioned with the work, no
-server and no account ([the tracker folder](tracker-folder.md)). Naima is the
-program that keeps that folder honest.
+It gets written down in the [tracker](glossary.md#tracker): a folder called
+`naima-tracker/` inside your repository, made of plain files that are
+versioned along with the work. There is no server to run and no account to
+create ([the tracker folder](tracker-folder.md)). Naima is the program that
+reads and writes that folder and checks that it stays consistent.
 
-*Example:* you tell the coordinator "customers should be able to order
-for tomorrow morning". That sentence is about to become a file.
+For example, you tell the coordinator that customers should be able to order
+bread for the next morning. A few seconds later that request is a file in the
+tracker.
 
-## 2. The item, and its types
+## 2. Items and their types
 
-An [item](glossary.md#item) is one piece of the work written down: a folder
-holding a page of prose (what it is, what is left), its fields (status,
-priority, dates) and its evidence. Every report, request, plan and proof is an
-item, and every item has a [type](glossary.md#type):
+Each piece of work written down in the tracker is an
+[item](glossary.md#item). An item is a small folder with a page of text (what
+the item is about and what is still missing), a few fields such as status,
+priority and dates, and any evidence collected along the way. Bug reports,
+requests, plans and proofs are all items, and every item has a
+[type](glossary.md#type):
 
-| Type | What it holds | Bread-shop example |
+| Type | What it is for | In the bakery |
 |---|---|---|
-| [bug](glossary.md#bug) | something broken | "the total ignores the discount" |
-| [todo](glossary.md#todo) | work that is not a defect | "move the photos to the new folder" |
-| [feature](glossary.md#feature) | something it should do | "order for tomorrow morning" |
-| [requirement](glossary.md#requirement) | what the result must satisfy, checkably | "an order placed by 20:00 is ready by 7:00" |
-| [specification](glossary.md#specification) | exactly how something must behave, in versions | "orders: the form, the cut-off, the receipt" |
-| [decision](glossary.md#decision) | a choice of yours, recorded once | "no orders on Sundays" |
-| [test](glossary.md#test-item) | a gesture that proves something, and its result | "order at 19:59, the receipt says 7:00" |
-| [property](glossary.md#property) | a statement a tool proves of a model of the design | "two orders never get the same number" |
-| [rule](glossary.md#rule) | something the project always holds to | "ask before deleting anything" |
-| [epic](glossary.md#epic) | a body of work that groups other items | "launch the online shop" |
+| [bug](glossary.md#bug) | something that is broken | the total ignores the discount |
+| [todo](glossary.md#todo) | a job that isn't a defect | move the photos to the new folder |
+| [feature](glossary.md#feature) | something the software should do | order for tomorrow morning |
+| [requirement](glossary.md#requirement) | a condition the result must meet, in a way you can check | an order placed by 20:00 is ready by 7:00 |
+| [specification](glossary.md#specification) | a precise, versioned description of how something behaves | orders: the form, the cut-off time, the receipt |
+| [decision](glossary.md#decision) | a choice you made, written down once | no orders on Sundays |
+| [test](glossary.md#test-item) | a way to check something, and what happened when it was run | order at 19:59 and the receipt says 7:00 |
+| [property](glossary.md#property) | a statement about a model of the design, checked by a tool | two orders never get the same number |
+| [rule](glossary.md#rule) | something the project always sticks to | ask before deleting anything |
+| [epic](glossary.md#epic) | a larger goal that groups other items | launch the online shop |
 
-**"Issue" is not a Naima word.** It is the everyday word, from other
-trackers, for a bug, a todo or a feature; in Naima you say which one it is,
-because each is proven and closed differently.
+Bugs, todos and features are what other trackers usually call issues. Naima
+keeps them as separate types because each one is checked and closed in its
+own way.
 
-A **metric** is not an item either: it is a measurement the project declares
-once — test time, coverage, page load time — and Naima takes it on every
-commit ([metrics and budgets](metrics-and-budgets.md)).
+Metrics are not items. A [metric](metrics-and-budgets.md) is a measurement
+you declare once, such as how long the tests take or how fast a page loads,
+and Naima records it on every commit.
 
-`naima types` lists the types a project has, each with its statuses; plugins
-can add more. When you report something, the agent files it at once, in its
-own words:
+`naima types` lists the types your project has and the statuses each can
+take; plugins can add new ones. When you report something, the agent files it
+straight away, in its own words:
 
 ```sh
 naima new bugs "The total ignores the discount"
 ```
 
-## 3. Status: open, done, and three words that are not synonyms
+## 3. Status, and the difference between fixed, resolved and closed
 
-Every item has a [status](glossary.md#status), and every status is in one of
-two categories: **open** (still to do) or **done** (settled). A bug is
-`open`, `partial` or `wontfix`; a feature goes from `requested` to `planned`
-to `shipped`, or is `withdrawn`; a test is `open`, `passed` or `failed`.
+Every item has a [status](glossary.md#status), and each status counts either
+as open (there is still something to do) or as done. A bug can be `open`,
+`partial` or `wontfix`. A feature moves from `requested` to `planned` to
+`shipped`, or gets `withdrawn`. A test is `open`, `passed` or `failed`.
 
-For a bug or a todo, "done" is three distinct steps:
+For bugs and todos, finishing happens in three separate steps:
 
-- [fixed](glossary.md#fixed) — the change exists. Nothing is proven yet.
-- [resolved](glossary.md#resolved) — fixed, and a test or property that
-  proves it has passed.
-- [closed](glossary.md#closed) — resolved, and moved to the archive with its
-  proof.
+- [fixed](glossary.md#fixed): the change has been made, but nothing has been
+  checked yet.
+- [resolved](glossary.md#resolved): a test or property that covers the fix
+  has passed.
+- [closed](glossary.md#closed): the item has been resolved and moved to the
+  archive, together with its proof.
 
-So "how many bugs are left" counts the unfixed ones; fixed but unproven is a
-different number, and Naima never adds the two
+Because of this, "how many bugs are left" and "how many fixes still need
+checking" are two different numbers, and Naima reports them separately
 ([the rule](rules.md#fixed-resolved-and-closed-are-three-states)).
 
-*Example:* the agent changes the discount code. The bug is fixed. It is not
-done.
+In the bakery, once the agent has changed the discount code, the bug is
+fixed. It isn't resolved until a test shows the discount working.
 
-## 4. Triage: how urgent, how big, whose hands
+## 4. Triage
 
-As soon as an item is filed, an agent [triages](glossary.md#triage) it:
-rewrites it clearly, looks for duplicates, and ranks it. The fields it sets
-are plain lists: [priority](glossary.md#priority) (`now`, `next`, `later`,
-`parked`), [impact](glossary.md#impact) (`blocker` to `low`),
-[effort](glossary.md#effort) (`S` to `XL`), and
-[confidence](glossary.md#confidence) (from `reported` to `measured`). One
-more says whose hands the proof needs, [run by](glossary.md#run-by): an
-agent's, a person's, or a build machine's — and when it is a person's,
-[why](glossary.md#human-because).
+Right after an item is filed, an agent [triages](glossary.md#triage) it: it
+rewrites the description so it is clear, looks for duplicates, and sets a few
+fields. These are [priority](glossary.md#priority) (`now`, `next`, `later`,
+`parked`), [impact](glossary.md#impact) (from `blocker` down to `low`),
+[effort](glossary.md#effort) (`S` to `XL`) and
+[confidence](glossary.md#confidence) (from `reported` up to `measured`).
+There is also [run by](glossary.md#run-by), which says who has to carry out
+the proof: an agent, a person, or a build machine. When it has to be a
+person, the item says [why](glossary.md#human-because).
 
 ```sh
 naima triage set total-ignores-discount priority=now impact=high
 ```
 
-Detail: [triage](triage.md).
+More in [triage](triage.md).
 
-## 5. Links: how items depend on each other
+## 5. Links between items
 
-A [link](glossary.md#link) says how two items relate. Only one direction is
-written; Naima works out the other side when it reads, so they never
-disagree. The [relations](glossary.md#relation) you will meet:
+A [link](glossary.md#link) records how two items relate. You only write one
+direction; Naima works out the reverse when it reads the tracker, so the two
+sides can't drift apart. These are the [relations](glossary.md#relation)
+you'll see most:
 
-| Relation | Reads as | Example |
+| Relation | Meaning | Example |
 |---|---|---|
-| `blocked-by` | waits on | the receipt e-mail is blocked by the order form |
-| `part-of` | is part of | the order form is part of the epic "launch the shop" |
-| `verifies` | is the gesture that proves | the 19:59 test verifies the cut-off feature |
-| `specified-by` | follows the specification | the order form follows "orders, version 2" |
-| `satisfies` | delivers or proves the requirement | the cut-off feature satisfies "ready by 7:00" |
-| `settles` | is the decision that answers | "no Sunday orders" settles "which days?" |
-| `duplicate-of` | describes the same thing as | two reports of the same wrong total |
+| `blocked-by` | waits on | the receipt e-mail waits on the order form |
+| `part-of` | belongs to | the order form belongs to the epic "launch the shop" |
+| `verifies` | is the test for | the 19:59 test checks the cut-off feature |
+| `specified-by` | follows | the order form follows version 2 of the orders specification |
+| `satisfies` | delivers or proves | the cut-off feature delivers "ready by 7:00" |
+| `settles` | answers | "no Sunday orders" answers "which days do we open?" |
+| `duplicate-of` | reports the same thing as | two reports of the same wrong total |
 
 ```sh
 naima link tests/order-at-1959 verifies features/order-for-tomorrow
 ```
 
-With the waits written down, `naima ready` lists what can start now and
-`naima order` the whole plan in a workable order
+Once dependencies are recorded, `naima ready` shows what can be started now
+and `naima order` lists all the work in an order that respects them
 ([say what waits on what](plan-with-epics-milestones-and-gates.md#say-what-waits-on-what-the-order-of-the-work)).
 
-## 6. Before work starts: the plan and your go
+## 6. Planning, and waiting for your go-ahead
 
-A request is filed as a feature in status `requested`. Before any work, the
-agent writes on it what "done" means — the behaviour, its limits, how it
-will be documented — and, when the behaviour must be exact, a
-[specification](glossary.md#specification) the work will follow. Then it
-waits for your go ([the rule](rules.md#dont-start-implementing-until-the-owner-says-so)).
-Your answers are recorded as [decisions](glossary.md#decision), and an agent
-searches them before it asks you anything, so a settled question is not asked
-twice.
+A new request starts as a feature with status `requested`. Before anyone
+works on it, the agent writes down on the item what finished will look like:
+how it should behave, where its limits are, how it will be documented. If the
+behaviour has to be exact, it also writes a
+[specification](glossary.md#specification). Then it waits for you to say go
+([the rule](rules.md#dont-start-implementing-until-the-owner-says-so)).
+
+Your answers to its questions are saved as
+[decisions](glossary.md#decision). Agents search them before asking you
+anything, so you shouldn't get the same question twice.
 
 ```sh
 naima decisions sunday
 ```
 
-Detail: [plan with requirements, specifications and decisions](plan-with-requirements-specs-and-decisions.md).
+More in [plan with requirements, specifications and decisions](plan-with-requirements-specs-and-decisions.md).
 
-## 7. Evidence: nothing is done until shown to be
+## 7. Evidence
 
-A [claim](glossary.md#claim) — "the discount works now" — proves nothing on
-its own. A [proof](glossary.md#proof) is a repeatable way to check it, and
-[evidence](glossary.md#evidence) is what the check showed: a log line, a
-screenshot, a before-and-after count, kept with the item. Three kinds of
-proof:
+When an agent says "the discount works now", that is a
+[claim](glossary.md#claim), and Naima doesn't accept it on its own. It wants
+a [proof](glossary.md#proof), meaning a check anyone can repeat, and the
+[evidence](glossary.md#evidence) that check produced: a log line, a
+screenshot, a count before and after, stored with the item. There are three
+kinds of proof:
 
-- **A test** is a gesture and its result. A test that proves a bug fix
-  counts only if it was seen failing before the fix and passing after:
-  [red, then green](glossary.md#red-then-green).
-- **A property** is a statement about a model of the design, proven or
-  refuted by a [verifier](glossary.md#verifier), a formal-methods tool;
-  `naima verify` runs it and keeps the run as evidence.
-- **A metric** holds a number to a budget: "the page loads in under a
-  second", measured on every commit.
+- A test is something you do plus what you expect to see. A test for a bug
+  fix only counts if it was seen failing before the fix and passing after it
+  ([red, then green](glossary.md#red-then-green)).
+- A property is a statement about a model of the design. A
+  [verifier](glossary.md#verifier), which is a formal-methods tool, proves it
+  or finds a counterexample; `naima verify` runs it and keeps the run as
+  evidence.
+- A metric keeps a number within a budget, for instance "the page loads in
+  under a second", measured on every commit.
 
-Evidence is ranked: you performing the gesture and seeing it is strongest;
-"the code looks right" proves nothing. A proof counts only for what it ran
-on: change the code it proved, and it must run again
+Not all evidence is equal. The strongest is you trying it yourself and seeing
+it work; "the code looks right" is the weakest. A proof also only covers the
+code it ran on, so if that code changes, the proof has to run again
 ([prove and close](prove-and-close.md)).
 
 ```sh
-naima set tests/discount-applied status=passed   # after it was seen red, then green
+naima set tests/discount-applied status=passed   # once it has been seen failing, then passing
 ```
 
-*Example:* the agent writes a test "a 10% discount on 20 € gives 18 €", runs
-it on the old code (it fails), on the fix (it passes), and attaches both
-outputs. The bug is now resolved. Another agent, not the one that fixed it,
-closes it ([the rule](rules.md#whoever-fixes-does-not-also-close)).
+In the bakery, the agent writes a test saying that a 10% discount on 20 €
+comes to 18 €. It runs the test on the old code, where it fails, then on the
+fixed code, where it passes, and attaches both outputs. The bug is now
+resolved. A different agent from the one that made the fix then closes it
+([the rule](rules.md#whoever-fixes-does-not-also-close)).
 
-## 8. Epic: a body of work
+## 8. Epics
 
-An [epic](glossary.md#epic) groups items that belong to one goal. You do not
-set its status: it is open while any of its items is open, and done when
-every one is closed.
+An [epic](glossary.md#epic) groups the items that serve one goal. You never
+set an epic's status yourself: it stays open as long as any of its items is
+open, and it is done once all of them are closed.
 
 ```sh
 naima epic add launch-the-shop features/order-for-tomorrow bugs/total-ignores-discount
 ```
 
-`naima epic` shows each open epic, how many of its items are closed, and
-whose hands the rest need.
+`naima epic` lists the open epics, how many of their items are closed, and
+who is needed to finish the rest.
 
-## 9. Gate: what must be settled first
+## 9. Gates
 
-A [gate](glossary.md#gate) is what something waits on — a release, a merge,
-a submission. Items join it, and it **holds** when nothing on it blocks. By
-default it waits for the work to be done; it can be told to wait for every
-proof too. A release is never cut on a gate that does not hold.
+A [gate](glossary.md#gate) is something that has to wait until certain work
+is finished: a release, a merge, a submission. You add items to it, and the
+gate holds when none of them is in the way any more. By default a gate waits
+for the work to be done; you can also make it wait until every proof has
+passed. A release is only made from a gate that holds.
 
 ```sh
 naima gate new launch "Shop goes live" --says "the first real customers"
 ```
 
-`naima gates` says which gates hold; `naima gate show launch` says what
-blocks this one and whose hands each blocker needs.
+`naima gates` shows which gates hold, and `naima gate show launch` shows
+what is still blocking that one and who has to deal with each blocker.
 
-## 10. Milestone: a gate with a date
+## 10. Milestones
 
 A [milestone](glossary.md#milestone) is a gate with a due date, and
-optionally a version. Naima counts the days left, and once the date has
-passed while the gate does not hold, `naima check` says so — as news, not as
-a failure.
+optionally a version number. Naima counts down the days, and if the date goes
+by while the gate still doesn't hold, `naima check` mentions it. It's
+reported as information, not as an error.
 
 ```sh
-naima gate new launch "Shop goes live" --due 2026-12-01 --version 1.0   # a gate with a date
+naima gate new launch "Shop goes live" --due 2026-12-01 --version 1.0
 ```
 
-Detail for epics, gates and milestones:
+More on epics, gates and milestones in
 [plan with epics, milestones and gates](plan-with-epics-milestones-and-gates.md).
 
 ## 11. Events, the timeline and the diary
 
-Most of the project's history is worked out, never written twice: when a
-gate opened (its first item filed) and passed (its last resolved), when an
-epic finished, each release, each session. `naima view timeline` shows it.
-What Naima cannot work out — a decision taken in a meeting, a build handed to
-testers — you or an agent record as an [event](glossary.md#event).
+Most of a project's history can be worked out from the tracker: when a gate
+opened (its first item was filed) and when it passed (its last item was
+resolved), when an epic was finished, each release, each session.
+`naima view timeline` puts all of that in order. Some things can't be worked
+out, such as a decision made in a meeting or a build handed to testers, so
+you or an agent record those as [events](glossary.md#event).
 
-An event of the kind `diary` is a line of the project's
-[diary](glossary.md#diary): what happened and why, day by day. `naima diary`
-tells the story back, with each decision and its reason and each session's
-note.
+Events of kind `diary` make up the project's [diary](glossary.md#diary): a
+day-by-day account of what happened and why. `naima diary` reads it back,
+along with each decision and its reason and the note from each session.
 
 ```sh
 naima event 2026-10-15 "The shop opens to friends first, to test the orders" --kind diary
 ```
 
-Detail: [keep a diary](plan-with-epics-milestones-and-gates.md#keep-a-diary).
+More in [keep a diary](plan-with-epics-milestones-and-gates.md#keep-a-diary).
 
 ## 12. Seeing where things stand
 
-Nothing about where things stand is stored: it is
-[derived](glossary.md#derived) from the items every time you ask, so it is
-never out of date.
+Naima doesn't store the state of the project anywhere. It
+[derives](glossary.md#derived) it from the items each time you ask, so what
+you see is always current.
 
-| Ask | You get |
+| Command | What it shows |
 |---|---|
-| `naima summary` | the whole project in one screen |
-| `naima board bugs` | a type's open items by section, most urgent first ([board](glossary.md#board)) |
-| `naima queue launch --human` | what on a gate needs a person, each with why ([queue](glossary.md#queue)) |
-| `naima view timeline` | when things happened |
-| `naima ui` | all of it in a window: summary, gates, boards, metrics, evidence |
+| `naima summary` | the whole project on one screen |
+| `naima board bugs` | one type's open items, grouped, most urgent first ([board](glossary.md#board)) |
+| `naima queue launch --human` | the items on a gate that need a person, and why ([queue](glossary.md#queue)) |
+| `naima view timeline` | what happened when |
+| `naima ui` | all of the above in a window: summary, gates, boards, metrics, evidence |
 
-Detail: [read the board, the queue and the gates](read-the-board.md).
+More in [read the board, the queue and the gates](read-the-board.md).
 
-## 13. Working in parallel: claims, branches, worktrees
+## 13. Working in parallel
 
-Several agents can work at once without stepping on each other. Each piece
-of work gets its own [branch](glossary.md#branch) — a line of history apart
-from the main one, the [trunk](glossary.md#trunk) — and its own
-[worktree](glossary.md#worktree), a separate copy of the folder. A
-[claim file](glossary.md#claim-file) records which branch holds which items,
-so everyone sees who works on what; it never locks anyone out.
+Several agents can work at the same time without getting in each other's way.
+Each piece of work gets its own [branch](glossary.md#branch), a separate line
+of history next to the main one (the [trunk](glossary.md#trunk)), and its own
+[worktree](glossary.md#worktree), a separate copy of the project folder. A
+[claim file](glossary.md#claim-file) records which branch is working on which
+items, so everyone can see who is doing what. Claims are only information:
+they don't stop anyone else from working on the same item.
 
 ```sh
 naima open total-ignores-discount --as claude
 ```
 
-When the work is proven, the coordinator [lands](glossary.md#landing) the
-branch on the trunk as one commit naming the items it closes. At the end of
-a session the agent writes a [session note](glossary.md#session-note) — what
-changed, what is proven, what is left — and the next session starts from it.
-Detail: [work on several branches at once](several-branches.md).
+When the work on a branch has been proven, the coordinator
+[lands](glossary.md#landing) it on the trunk as a single commit that names
+the items it closes. At the end of each session the agent writes a
+[session note](glossary.md#session-note) saying what changed, what has been
+proven and what is still open, and the next session picks up from there. More
+in [work on several branches at once](several-branches.md).
 
-## 14. Long work and its progress
+## 14. Long-running work
 
-Some work takes hours: a benchmark, a batch of analyses, a model checker.
-It is started as a [run](glossary.md#run): named, detached from the session,
-with a time budget (and a disk budget for what it creates), a log, and a
-progress file saying how far it is and how long is left, so a slow run is
-never mistaken for a hung one. An agent waits for it by name and cleans up
-after it.
+Some jobs take hours: a benchmark, a batch of analyses, a model checker. These
+are started as a [run](glossary.md#run). A run has a name, keeps going after
+the session that started it ends, and has a time limit (plus a disk limit for
+the files it creates), a log, and a progress file that says how far along it
+is and roughly how long is left. That way a slow run can be told apart from
+one that is stuck. Agents wait for a run by name and clean up after it.
 
 ```sh
 naima run nightly-benchmark --budget-time 2h -- sh bench.sh
 ```
 
-Detail: [long work](long-work.md).
+More in [long work](long-work.md).
 
-## 15. Rules, and the check that holds them
+## 15. Rules and checks
 
-A [rule](glossary.md#rule) is something the project always holds to, with
-its reason. The rules every project holds to are on
-[one page](rules.md), each marked enforced by Naima or kept by convention.
-Your own standing choices become rules of your project, and every agent reads
-them at the start of work ([write a project rule](write-a-project-rule.md)).
+A [rule](glossary.md#rule) is something the project always sticks to, along
+with the reason for it. The rules that apply to every project are collected
+on [one page](rules.md), each marked as either enforced by Naima or followed
+by convention. Your own standing choices can become rules of your project,
+and every agent reads them before starting work
+([write a project rule](write-a-project-rule.md)).
 
-A rule that a program enforces is a [check](glossary.md#check). `naima check`
-holds the whole tracker to every check, the way tests hold the code: it
-finds a broken link in the docs, a proof older than the work it proved, two
-items that wait on each other. It
-ends with `all invariants hold` when nothing is wrong.
+When a program enforces a rule, that's a [check](glossary.md#check).
+`naima check` runs every check over the tracker, much as tests run over code.
+It catches things like a broken link in the documentation, a proof that is
+older than the change it was supposed to cover, or two items that wait on
+each other. When everything is in order it prints `all invariants hold`.
 
 ```sh
 naima check
@@ -312,11 +326,12 @@ naima check
 
 ## Where to go next
 
-- [How the project runs](how-the-project-runs.md): the same ideas as one
-  flow, report to close.
-- [The tutorial](tutorial.md): an empty repository to a closed bug, every
-  command with its real output; then [a second tutorial](tutorial-2.md).
-- [Concepts](concepts.md), for the mechanics underneath; the
-  [glossary](glossary.md) for every term; the
-  [reference](../reference/reference.md) for every command, generated from
-  the code.
+- [How the project runs](how-the-project-runs.md) puts these ideas together
+  as one flow, from a report to a closed item.
+- [The tutorial](tutorial.md) goes from an empty repository to a closed bug,
+  showing every command with its real output; then there is
+  [a second tutorial](tutorial-2.md).
+- [Concepts](concepts.md) explains the mechanics underneath, the
+  [glossary](glossary.md) defines every term, and the
+  [reference](../reference/reference.md), generated from the code, documents
+  every command.
