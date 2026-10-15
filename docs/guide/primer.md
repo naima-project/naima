@@ -1,11 +1,20 @@
 # The Naima primer
 
+You don't need anything on this page to start using Naima. Once it is
+installed, the agents handle all of it for you: they file what you report,
+keep track of the work, prove it and close it, and they ask you only about
+the things that are yours to decide. Read on if you want to understand what
+they are doing and why.
+
 This page walks through the ideas Naima uses, roughly in the order you run
 into them on a real project. It takes about fifteen minutes to read. You
-don't need to know git or to write code: AI agents do that part, and the
-commands appear only so you can recognise what they are doing. Terms link to
-the [glossary](glossary.md), and each section points to the page with the
+don't need to know git or to write code. Terms link to the
+[glossary](glossary.md), and each section points to the page with the
 details. The rules themselves live on [the rules page](rules.md).
+
+The commands shown along the way are the ones the agents run for you. They
+are here so you can recognise them when you see them go by. You can run any
+of them yourself if you want to, but you never have to.
 
 As a running example, take a small online bakery whose owner has asked a team
 of agents to build and run the shop.
@@ -67,7 +76,8 @@ and Naima records it on every commit.
 
 `naima types` lists the types your project has and the statuses each can
 take; plugins can add new ones. When you report something, the agent files it
-straight away, in its own words:
+straight away, in its own words, with a command like this one (as everywhere
+on this page, the agent runs it, not you):
 
 ```sh
 naima new bugs "The total ignores the discount"
