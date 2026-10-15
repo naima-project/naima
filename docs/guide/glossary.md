@@ -42,13 +42,18 @@ it: a [test item](#test-item), or a [property](#property) a tool checks.
 
 ### Epic
 
-*Planned.* A large goal made of many features and todos, kept as one item.
+A body of work that groups items, kept as an item of type `epics`: its items
+are `part-of` it, and its status follows them — open while any is open, done
+when every one is closed (`naima epic`;
+[plan with epics, milestones and gates](plan-with-epics-milestones-and-gates.md)).
 *Everyday example:* "renovate the kitchen".
 
 ### Milestone
 
-*Planned.* A [gate](#gate) with a date. Naima's own items do not use them
-yet. *Everyday example:* "kitchen usable by 1 March".
+A [gate](#gate) with a due date, and optionally a version:
+`naima gate new <name> "<title>" --due YYYY-MM-DD`. Naima counts the days
+left, and `naima check` notes one overdue that does not hold.
+*Everyday example:* "kitchen usable by 1 March".
 
 ### Requirement
 
@@ -123,7 +128,8 @@ property, a rule. An item is a directory under the data directory, `<type>/<slug
 ### Type
 
 The kind of an item, and the directory it lives in: `bugs`, `todos`,
-`features`, `tests`, `properties`, and `closed` (the archive). Each type has
+`features`, `tests`, `properties`, `requirements`, `specs`, `decisions`,
+`rules`, `epics`, and `closed` (the archive). Each type has
 its own [statuses](#status). Plugins can add types; `naima types` lists those
 in use.
 
@@ -202,7 +208,10 @@ can never disagree.
 ### Relation
 
 The type of a link: `verifies` / `verified-by`, `blocks` / `blocked-by`,
-`duplicate-of`, `relates-to`.
+`part-of` / `has-part`, `specified-by` / `specifies`, `satisfies` /
+`satisfied-by`, `settles` / `settled-by`, `supersedes` / `superseded-by`,
+`duplicate-of`, `relates-to`; the [reference](../reference/reference.md)
+lists every one.
 
 ### Verifies
 
@@ -396,6 +405,21 @@ its own claimed items, a property set to `holds` by hand. A hand edit of
 `meta.json` never meets a write hook, so each one that protects a state of the
 tracker has a [check](#check) counterpart that `naima check` runs on the
 tracker as it is.
+
+### Event
+
+Something that happened that Naima cannot work out from the items and git —
+a decision taken in a meeting, a build handed out, an outside fact — recorded
+as one file by `naima event <date> "<what>" --kind <kind>`. Everything else on
+the timeline (`naima view timeline`) is worked out
+([the timeline](plan-with-epics-milestones-and-gates.md#see-when-things-happened-the-timeline)).
+
+### Diary
+
+The project's story, day by day: the [events](#event) of kind `diary`, every
+decision with its reason, and every [session note](#session-note), told in
+order by `naima diary`
+([keep a diary](plan-with-epics-milestones-and-gates.md#keep-a-diary)).
 
 ### Derived
 

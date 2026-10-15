@@ -10,7 +10,7 @@ Then start from who you are.
 
 | You are… | Start at | Then |
 |---|---|---|
-| **new to Naima** | [What Naima is for](purpose.md): what it is, what it manages, what exists and what is planned | [how the project runs](guide/how-the-project-runs.md), then [the tutorial](guide/tutorial.md) |
+| **new to Naima** | [What Naima is for](purpose.md): what it is, what it manages, what exists and what is planned | [the primer](guide/primer.md): every concept in the order you meet it, then [how the project runs](guide/how-the-project-runs.md) and [the tutorial](guide/tutorial.md) |
 | **a person whose project Naima runs** | [the guide](guide/README.md): how the project runs first, then a page per task | [questions](guide/faq.md), [glossary](guide/glossary.md) |
 | **an AI agent working on a project** | [the pages for agents](agents/README.md): the skill, the flows | [the rules](guide/rules.md) |
 | **looking something up** | [the reference](reference/reference.md): every command, type, field, check, gate, generated from the code | [the format](reference/format.md): every file and field on disk |

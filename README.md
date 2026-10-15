@@ -106,6 +106,8 @@ You don't need to know git, code or project management. You need an AI agent.
 
 ## Documentation
 
+- [The primer](docs/guide/primer.md): every concept of Naima, in the order
+  you meet it.
 - [The documentation](docs/README.md), starting with
   [installing and updating](docs/guide/install.md).
 - For agents: [the skill](skills/naima/SKILL.md).

@@ -12,6 +12,7 @@ then any project, with its own checks in place of tests.
 
 | Page | What it gives you |
 |---|---|
+| [The primer](primer.md) | every concept — item, bug, todo, feature, epic, gate, milestone, evidence, the diary, claims — in the order you meet it, each with one example; read it first |
 | [How the project runs](how-the-project-runs.md) | the [flow](glossary.md#flow) every piece of work follows — report, file, [triage](glossary.md#triage), claim, work, prove, close — then planning, [gates](glossary.md#gate), long work across sessions, and decisions |
 | [Working with AI agents](working-with-agents.md) | how to get an agent going, what to ask of it, and what it will ask of you |
 | [Rules](rules.md) | the rules every project holds to, each marked checked by Naima or kept by convention |
