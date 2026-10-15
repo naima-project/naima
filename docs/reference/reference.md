@@ -53,6 +53,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`unlink`](#naima-unlink) | core | remove a stored link | only a stored link is removed: an inverse is derived, never stored |
 | [`move`](#naima-move) | core | move an item to another type, keeping its id and links; refuses a status or field the new type does not declare | the id and links are kept; a status or field the new type does not declare is refused unless --force |
 | [`check`](#naima-check) | core | run every invariant; exit 1 on any problem | every invariant the loaded plugins declare (their checks): exit 1 on any problem; with --staged, the ones the pre-commit hook runs |
+| [`waive`](#naima-waive) | core | exempt one check's finding on one subject, with the reason, as a recorded waiver: the finding no longer fails `naima check`, which lists the waiver as a note instead | a waiver names a loaded check, a subject that check reports a finding on now, a reason and who waived it; it is one new file under waivers/, and one waiver per check and subject |
 | [`board`](#naima-board) | core | print a type's board, grouped by section, most urgent first; at its foot, the summary sections that stand beside the work, such as the metrics | nothing: it prints derived state, never stored |
 | [`view`](#naima-view) | core | print a plugin view — as text, its data as JSON, or markdown; without a name, list them | nothing: it prints derived state, never stored |
 | [`summary`](#naima-summary) | core | where the project stands, in one screen: every plugin's section | nothing: it prints derived state, never stored |
@@ -109,7 +110,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `relations` | core | link relations between items, each naming its inverse | core, trackers, epics, planning |
 | `checks` | core | invariants `naima check` holds: a problem fails it, a note does not | core, trackers, coordination, triage, gates, epics, planning, announce, beta-markers, verifier, metrics, rules, long-work, commit-hooks, privacy, docs |
 | `views` | core | `naima view <name>`: a named rendering of derived state | coordination, triage, planning |
-| `dirs` | core | directories under the tracker root a plugin owns that are not item types | coordination, metrics, commit-hooks, adopt |
+| `dirs` | core | directories under the tracker root a plugin owns that are not item types | core, coordination, metrics, commit-hooks, adopt |
 | `summary` | core | a block of `naima summary` | core, trackers, coordination, triage, gates, epics, beta-markers, metrics |
 | `guide` | core | a block `naima guide` prints first, inside a project, before the documentation pages | triage, rules |
 | `rank` | core | an additive term of every item's urgency; lower is more urgent | triage, gates |
@@ -133,7 +134,7 @@ Items, fields, links and the invariants every project has.
 
 Its contributions' qualified ids are `core/<name>`.
 
-An item is a directory under `<tracker>/<TYPE>/<slug>/`: `README.md` for the prose, `meta.json` for the fields, `attachments/` for the evidence. `meta.json` always holds `id` (a permanent uuid), `title` and `status` (one the item's type declares), and optionally `links`, a list of `{ rel, id }`. The slug may change; the id may not, and links hold ids. An item reference on the command line is an id, `type/slug`, a slug, or a fragment of a slug that matches one item. Fields are typed by the plugin that declares them — `string`, `strings` (comma-separated on the command line), `date` (YYYY, YYYY-MM or YYYY-MM-DD), `enum` (values in rank order), `boolean`, `number`, `object` (a JSON object, written as JSON on the command line) — and unknown fields are kept and not checked. Only one direction of a link is stored; the inverse is derived when read. Boards, queues, gate states and summaries are derived when asked and never stored. An item is open or done by its status's category; urgency is the sum of every plugin's rank terms, and done items sink.
+An item is a directory under `<tracker>/<TYPE>/<slug>/`: `README.md` for the prose, `meta.json` for the fields, `attachments/` for the evidence. `meta.json` always holds `id` (a permanent uuid), `title` and `status` (one the item's type declares), and optionally `links`, a list of `{ rel, id }`. The slug may change; the id may not, and links hold ids. An item reference on the command line is an id, `type/slug`, a slug, or a fragment of a slug that matches one item. Fields are typed by the plugin that declares them — `string`, `strings` (comma-separated on the command line), `date` (YYYY, YYYY-MM or YYYY-MM-DD), `enum` (values in rank order), `boolean`, `number`, `object` (a JSON object, written as JSON on the command line) — and unknown fields are kept and not checked. Only one direction of a link is stored; the inverse is derived when read. Boards, queues, gate states and summaries are derived when asked and never stored. An item is open or done by its status's category; urgency is the sum of every plugin's rank terms, and done items sink. A check's finding can be waived when it is accepted rather than fixed: `naima waive <check> <subject> --reason "<why>"` writes one file under `waivers/` naming the check, the subject, the reason, who and when. A waived finding is not a failure; every `naima check` lists the waivers in use as notes, and notes a waiver whose subject no longer exists or no longer fails. Only a check that names the subject of its findings can be waived.
 
 ### naima init
 
@@ -481,6 +482,27 @@ naima check --staged
 naima check --all-worktrees
 ```
 
+### naima waive
+
+Exempt one check's finding on one subject, with the reason, as a recorded waiver: the finding no longer fails `naima check`, which lists the waiver as a note instead.
+
+**Enforces**: A waiver names a loaded check, a subject that check reports a finding on now, a reason and who waived it; it is one new file under waivers/, and one waiver per check and subject.
+
+```sh
+naima waive <check> <subject> --reason "<why>" [--as <who>]
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--reason` |  | why the finding is accepted rather than fixed: recorded with the waiver and shown by every `naima check` |
+| `--as` | `the current branch's first segment, as in <who>/<what>` | who waives it |
+
+Examples:
+
+```sh
+naima waive session-note-ack passes/2026-10-10-<uuid>.md --reason "written before the session acknowledged the rules; adding a line now would falsify it"
+```
+
 ### naima board
 
 Print a type's board, grouped by section, most urgent first; at its foot, the summary sections that stand beside the work, such as the metrics.
@@ -636,6 +658,8 @@ naima runs --json
 | `entry-pointers` | every agent-harness entry file naima.json configures (entryFiles; sensible defaults absent it) names no path or link, plain-text or markdown, that is missing from disk |
 | `unread-options` | every option naima.json's plugins table sets is one its loaded plugin declares: an option no plugin reads any more is noted, by name |
 | `one-format` | no item is still in a shape a format migration, the core's or a plugin's own, replaced: a tracker never mixes formats |
+
+**Directories** it owns under the tracker root: `waivers/`.
 
 **Summary sections**: `items`.
 
@@ -832,7 +856,7 @@ Claims and session notes, one file per session, recombined from every branch; th
 
 Its contributions' qualified ids are `coordination/<name>`.
 
-No session writes a file another session writes. A claim is one file per branch, `claims/<uuid>.json`; a session note is one file per session, `passes/<date>-<uuid>.md`. Both are written on the writer's own branch and never staged or committed by the tool: commit them with the work. `claims`, `pass --list` and `summary` recombine them at read time from every local branch — the trunk, every branch not merged into it, whatever each worktree stands on — each read from the disk of the worktree that stands on it, uncommitted files included, or from its ref when none does; remote-tracking refs are not read. The trunk is the branch origin's HEAD names, else `main`, else `master`; without one, every local branch is read. A claim belongs to a branch, so on a detached HEAD `claim` is refused. Several branches may claim one item: `claim` says who else holds it rather than refusing. There are no locks: a claim says who works on what and never excludes anyone. What one session at a time must touch — the trunk, the published site, the releases — is touched by one writer, the coordinator; workers only prepare on their own branches, and the owner decides what lands and when, when it matters. Work happens by one scheme, checked: the worktree `<worktrees>/<what>` stands on the branch `<who>/<what>` and carries a claim; `open` makes all three in one step. A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. Landings are semi-linear: a branch the trunk is an ancestor of enters it as one marker commit, a merge whose tree is the branch tip's and whose message names the items it closes in `Closes:` trailers; `land` makes it from the main checkout, the shortcut for `git merge --no-ff`, and moves the trunk only from the commit it read. From the first marker on the trunk's first-parent line every first-parent commit is a marker, or `landings-are-markers` notes it; before it nothing is asked, so a history of fast-forwards keeps working. `naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. What has no date is counted at the foot, never placed at a guess. Only what nothing derives — a decision taken elsewhere, a build handed out, a policy, an outside fact — is a record, one file per event, `events/<date>-<uuid>.md`, written by `naima event`. `pass --ack "<line>"` writes the acknowledgement line whichever plugin declares a rule's `ack` field asks an agent to give back — refused if a phrase is missing from it — and records it in the note's front matter; a note dated after 2026-10-02 missing it, or whose body no longer starts with it, is a problem (`session-note-ack`), tolerating one written before — on the day it shipped, or earlier, grandfathered like a closed item on the day `commits` shipped — since what it recorded is what the rules asked then.
+No session writes a file another session writes. A claim is one file per branch, `claims/<uuid>.json`; a session note is one file per session, `passes/<date>-<uuid>.md`. Both are written on the writer's own branch and never staged or committed by the tool: commit them with the work. `claims`, `pass --list` and `summary` recombine them at read time from every local branch — the trunk, every branch not merged into it, whatever each worktree stands on — each read from the disk of the worktree that stands on it, uncommitted files included, or from its ref when none does; remote-tracking refs are not read. The trunk is the branch origin's HEAD names, else `main`, else `master`; without one, every local branch is read. A claim belongs to a branch, so on a detached HEAD `claim` is refused. Several branches may claim one item: `claim` says who else holds it rather than refusing. There are no locks: a claim says who works on what and never excludes anyone. What one session at a time must touch — the trunk, the published site, the releases — is touched by one writer, the coordinator; workers only prepare on their own branches, and the owner decides what lands and when, when it matters. Work happens by one scheme, checked: the worktree `<worktrees>/<what>` stands on the branch `<who>/<what>` and carries a claim; `open` makes all three in one step. A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. Landings are semi-linear: a branch the trunk is an ancestor of enters it as one marker commit, a merge whose tree is the branch tip's and whose message names the items it closes in `Closes:` trailers; `land` makes it from the main checkout, the shortcut for `git merge --no-ff`, and moves the trunk only from the commit it read. From the first marker on the trunk's first-parent line every first-parent commit is a marker, or `landings-are-markers` notes it; before it nothing is asked, so a history of fast-forwards keeps working. `naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. What has no date is counted at the foot, never placed at a guess. Only what nothing derives — a decision taken elsewhere, a build handed out, a policy, an outside fact — is a record, one file per event, `events/<date>-<uuid>.md`, written by `naima event`. `pass --ack "<line>"` writes the acknowledgement line whichever plugin declares a rule's `ack` field asks an agent to give back — refused if a phrase is missing from it — and records it in the note's front matter; a note dated after 2026-10-02 missing it, or whose body no longer starts with it, is a problem (`session-note-ack`), tolerating one written before — on the day it shipped, or earlier, grandfathered like a closed item on the day `commits` shipped — since what it recorded is what the rules asked then. A note is never edited after the fact: one written without the line is accepted with a recorded waiver, `naima waive session-note-ack passes/<file> --reason "<why>"`.
 
 Options, each with the default it takes when nothing sets it:
 

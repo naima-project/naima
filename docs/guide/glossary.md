@@ -422,6 +422,13 @@ working". A check reports either a **problem**, which makes `naima check`
 fail, or a **note**, which doesn't. A project can set each check to
 `problem`, `note` or `off` ([configuration](config.md#check-severity)).
 
+### Waiver
+
+A recorded exemption from one problem that a [check](#check) reports on one
+subject, written by `naima waive` with its reason, who gave it and when. The
+waived problem no longer fails `naima check`, which lists the waiver as a
+note instead ([the rule](rules.md#a-finding-is-fixed-or-waived-with-its-reason)).
+
 ### Invariant
 
 What a check holds true. When every invariant holds, `naima check` ends

@@ -708,10 +708,19 @@ const sessionNoteAck: Check = {
       .filter((p) => p.date > ACK_REQUIRED_FROM)
       .flatMap((p): Finding[] => {
         if (!p.ack) {
-          return [{ level: "problem", message: `${p.file}: a session note dated ${p.date} carries no acknowledgement line — naima pass --ack "<line>"` }]
+          return [{
+            level: "problem",
+            subject: `${PASSES}/${p.file}`,
+            message:
+              `${PASSES}/${p.file}: a session note dated ${p.date} carries no acknowledgement line — naima pass --ack "<line>", or, for a note already written, naima waive session-note-ack ${PASSES}/${p.file} --reason "<why>"`,
+          }]
         }
         if (!p.body.startsWith(p.ack)) {
-          return [{ level: "problem", message: `${p.file}: its body no longer begins with the acknowledgement line it was written with` }]
+          return [{
+            level: "problem",
+            subject: `${PASSES}/${p.file}`,
+            message: `${PASSES}/${p.file}: its body no longer begins with the acknowledgement line it was written with`,
+          }]
         }
         return []
       })
@@ -760,7 +769,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       "From the first marker on the trunk's first-parent line every first-parent commit is a marker, or `landings-are-markers` notes it; before it nothing is asked, so a history of fast-forwards keeps working. " +
       "`naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. " +
       "What has no date is counted at the foot, never placed at a guess. Only what nothing derives — a decision taken elsewhere, a build handed out, a policy, an outside fact — is a record, one file per event, `events/<date>-<uuid>.md`, written by `naima event`. " +
-      `\`pass --ack "<line>"\` writes the acknowledgement line whichever plugin declares a rule's \`ack\` field asks an agent to give back — refused if a phrase is missing from it — and records it in the note's front matter; a note dated after ${ACK_REQUIRED_FROM} missing it, or whose body no longer starts with it, is a problem (\`session-note-ack\`), tolerating one written before — on the day it shipped, or earlier, grandfathered like a closed item on the day \`commits\` shipped — since what it recorded is what the rules asked then.`,
+      `\`pass --ack "<line>"\` writes the acknowledgement line whichever plugin declares a rule's \`ack\` field asks an agent to give back — refused if a phrase is missing from it — and records it in the note's front matter; a note dated after ${ACK_REQUIRED_FROM} missing it, or whose body no longer starts with it, is a problem (\`session-note-ack\`), tolerating one written before — on the day it shipped, or earlier, grandfathered like a closed item on the day \`commits\` shipped — since what it recorded is what the rules asked then. A note is never edited after the fact: one written without the line is accepted with a recorded waiver, \`naima waive session-note-ack passes/<file> --reason "<why>"\`.`,
     options: [
       { name: "who", says: "who works, when `naima open` is given no `--as`: the branch's first segment" },
       {

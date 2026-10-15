@@ -127,6 +127,8 @@ export interface Finding {
   level: "problem" | "note"
   message: string
   item?: Item
+  /** What the finding is about, named so a waiver can name it too (`naima waive <check> <subject>`): a check that sets it lets its finding be waived. */
+  subject?: string
 }
 
 /** What `naima check` is asked for, beyond the tracker itself. */

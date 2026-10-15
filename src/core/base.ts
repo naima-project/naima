@@ -31,6 +31,7 @@ import { writeFileAtomic } from "./files.ts"
 import { addedPrivate, allowanceLine, privateContext, type PrivateFinding, privateRefusal } from "./private.ts"
 import { asRendered, type Format, linesAs, rendered } from "./rendered.ts"
 import { flagsOf } from "./vocabulary.ts"
+import { waive, WAIVERS } from "./waivers.ts"
 import type { Command, Context, Contribution, FieldDef, Item, Plugin, Rendered, SummarySection, TypeDef, View, Write, WriteHook } from "./types.ts"
 
 export function typeOrThrow(ctx: Context, id: string | undefined): TypeDef {
@@ -819,7 +820,10 @@ export const corePlugin: Plugin = {
     "An item reference on the command line is an id, `type/slug`, a slug, or a fragment of a slug that matches one item. " +
     "Fields are typed by the plugin that declares them — `string`, `strings` (comma-separated on the command line), `date` (YYYY, YYYY-MM or YYYY-MM-DD), `enum` (values in rank order), `boolean`, `number`, `object` (a JSON object, written as JSON on the command line) — and unknown fields are kept and not checked. " +
     "Only one direction of a link is stored; the inverse is derived when read. Boards, queues, gate states and summaries are derived when asked and never stored. " +
-    "An item is open or done by its status's category; urgency is the sum of every plugin's rank terms, and done items sink.",
+    "An item is open or done by its status's category; urgency is the sum of every plugin's rank terms, and done items sink. " +
+    'A check\'s finding can be waived when it is accepted rather than fixed: `naima waive <check> <subject> --reason "<why>"` writes one file under `waivers/` naming the check, the subject, the reason, who and when. ' +
+    "A waived finding is not a failure; every `naima check` lists the waivers in use as notes, and notes a waiver whose subject no longer exists or no longer fails. " +
+    "Only a check that names the subject of its findings can be waived.",
   fields: [
     { name: "section", kind: "string", says: "the heading the item is grouped under on its board" },
     { name: "created", kind: "date", says: "when the item was opened" },
@@ -831,8 +835,9 @@ export const corePlugin: Plugin = {
     { name: "blocks", inverse: "blocked-by", says: "must be resolved before" },
     { name: "blocked-by", inverse: "blocks", says: "waits on" },
   ],
+  dirs: [WAIVERS],
   checks: coreChecks,
-  commands: [newCommand, show, list, set, note, describe, link, unlink, move, check, board, view, summary, plugins, types, runs],
+  commands: [newCommand, show, list, set, note, describe, link, unlink, move, check, waive, board, view, summary, plugins, types, runs],
   summary: [counts],
   hooks: [statusMoves, notesAppendOnly, privateInfrastructure],
 }

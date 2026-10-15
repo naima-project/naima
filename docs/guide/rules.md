@@ -50,6 +50,37 @@ is convention.
 
 **Convention**, kept by the project's own CI when it runs `naima check`.
 
+### A finding is fixed, or waived with its reason
+
+When `naima check` reports a problem, you fix it. Sometimes the fix would do
+more harm than the problem. A session note written without its
+acknowledgement line is an example: notes are never edited, and adding the
+line afterwards would record something that did not happen. In that case
+you waive the finding instead:
+
+```sh
+naima waive session-note-ack passes/<file>.md --reason "<why it is accepted>"
+```
+
+This writes one file under `waivers/` in the tracker. The file names the
+check, the subject of the finding, the reason, who waived it (`--as`, or the
+first part of the branch name) and the day. You commit it like any other
+change to the tracker. From then on the finding no longer fails
+`naima check`, but every run still lists the waiver as a note, so it never
+goes out of sight. When the subject is gone, or no longer fails the check,
+the waiver is noted as waiving nothing, and you can remove it.
+
+Only a check that names the subject of its findings can be waived. Today
+that is `session-note-ack`.
+
+Why: a check that can't be satisfied without falsifying the record leaves two
+bad choices, editing the record or living with a red `naima check` that
+everyone learns to ignore. A waiver is the third choice, and since it carries
+its reason and stays visible, it can be questioned later.
+**Enforced by** the command `naima waive`, which refuses a waiver without a
+reason, for a check that isn't loaded, for a subject the check reports no
+problem on, or for a finding that is already waived.
+
 ### Write it down before fixing it
 
 A defect, a task or a request becomes an [item](glossary.md#item) first, and

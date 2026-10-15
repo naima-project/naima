@@ -13,6 +13,7 @@ import { brokenEntryLinks } from "./pointer.ts"
 import { storedLinks } from "./repo.ts"
 import type { Check, CheckOptions, Context, Finding, Item } from "./types.ts"
 import { unreadOptions } from "./updates.ts"
+import { applyWaivers } from "./waivers.ts"
 
 const problem = (message: string, item?: Finding["item"]): Finding => (item ? { level: "problem", message, item } : { level: "problem", message })
 const note = (message: string): Finding => ({ level: "note", message })
@@ -181,17 +182,19 @@ export interface CheckReport {
 
 /**
  * Run every check, in load order, awaiting the ones that are async — with `staged`, only those that read the
- * change staged for the next commit. A check that throws or rejects is itself a problem, never a crash.
+ * change staged for the next commit. A check that throws or rejects is itself a problem, never a crash. A finding a waiver
+ * names is dropped, and the waiver listed as a note.
  */
 export async function runChecks(ctx: Context, options: CheckOptions = {}): Promise<CheckReport> {
-  const findings: Finding[] = []
+  const found: { check: string; findings: Finding[] }[] = []
   for (const check of ctx.registry.checks) {
     if (options.staged && check.staged !== true) continue
     try {
-      findings.push(...await check.run(ctx, options))
+      found.push({ check: check.name, findings: await check.run(ctx, options) })
     } catch (e) {
-      findings.push(problem(`check "${check.name}" failed to run: ${message(e)}`))
+      found.push({ check: check.name, findings: [problem(`check "${check.name}" failed to run: ${message(e)}`)] })
     }
   }
+  const findings = applyWaivers(ctx, found)
   return { problems: findings.filter((f) => f.level === "problem"), notes: findings.filter((f) => f.level === "note") }
 }
