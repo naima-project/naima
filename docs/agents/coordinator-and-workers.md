@@ -1,13 +1,14 @@
 # The coordinator and the workers
 
-How a session is staffed when agents do the work. It does not replace
-[worktree isolation](worktree-isolation.md): that says what may be written
-where; this says who does what.
+This page is about how a session is staffed when agents do the work. It
+doesn't replace [worktree isolation](worktree-isolation.md), which says what
+may be written where. This page says who does what.
 
 ## The shape
 
-**One coordinator. Every piece of work in a background worker. The
-coordinator does not do the work; it holds the conversation.**
+There is one coordinator, and every piece of work is done by a worker in the
+background. The coordinator doesn't do the work itself. Its job is to hold
+the conversation with the owner.
 
 ```
           owner
@@ -24,46 +25,48 @@ coordinator does not do the work; it holds the conversation.**
 
 ### What the coordinator does, and only this
 
-- Talks to the [owner](../guide/glossary.md#owner) — **one question at a time**, and only questions that
-  are the owner's ([asking the human](asking-the-human.md)).
-- Holds whatever only one actor may drive at a time: a running application, a
-  device, a deployment. A worker never drives it unless it is handed over
-  explicitly, and then the coordinator does not touch it until the worker
-  reports.
-- **The owner is a resource holder too.** A restart or a rebuild is asked
-  first while he is present at the keyboard, and free to do without asking
-  once he is away. While he is deciding, his decision comes first and the
-  work that depends on it waits — the coordinator does not restart or
-  rebuild around him just to keep busy.
-- **Is the trunk's single writer.** It alone lands branches on the trunk,
-  pushes it, publishes the site and makes releases, from the trunk; nothing
-  is locked, because nothing else writes them
+- It talks to the [owner](../guide/glossary.md#owner), one question at a
+  time, and only asks questions that are the owner's to answer
+  ([asking the human](asking-the-human.md)).
+- It holds anything that only one actor may drive at a time, such as a
+  running application, a device or a deployment. A worker never drives one of
+  these unless it is explicitly handed over, and in that case the coordinator
+  doesn't touch it until the worker reports.
+- It treats the owner as a resource holder too. While the owner is at the
+  keyboard, the coordinator asks before a restart or a rebuild. Once he is
+  away, it can do them without asking. While he is making a decision, that
+  decision comes first and the work that depends on it waits, so the
+  coordinator doesn't restart or rebuild around him just to keep busy.
+- It is the trunk's single writer. Only the coordinator lands branches on
+  the trunk, pushes it, publishes the site and makes releases, all from the
+  trunk. Nothing is locked, because nothing else writes to them
   ([the rule](../guide/rules.md#no-locks-the-coordinator-is-the-single-writer)).
-- Spawns workers, merges their branches, and keeps the queue honest.
-- Sets a timer that brings it back when nothing else will. The owner should
-  never be the reason work resumes: [the non-stop loop](the-non-stop-loop.md)
-  — an explicit target written first, a three-minute wake-up, stopping only
-  when what is left is the owner's, and the owner's ordered action list as
-  the deliverable.
+- It spawns workers, merges their branches, and keeps the queue accurate.
+- It sets a timer to bring itself back when nothing else will, so the owner
+  never has to be the reason work starts again. This is
+  [the non-stop loop](the-non-stop-loop.md): an explicit target written down
+  first, a wake-up every three minutes, stopping only when what is left is
+  the owner's, and an ordered list of the owner's actions as the result.
 
 ### What a worker gets
 
-Everything it needs to work without asking, because it cannot ask:
+A worker can't ask questions, so the coordinator gives it everything it needs
+to work without asking:
 
-- **its own worktree** off the [trunk](../guide/glossary.md#trunk), its own branch, and its dependencies
-  installed (a fresh checkout has none);
-- **the item already filed** — a worker reads a tracker page, it does not
-  invent scope — and it claims what it takes (`naima claim`);
-- **what is already measured**, stated as given, so it does not re-derive it:
-  the single biggest saving available;
+- **its own worktree** off the [trunk](../guide/glossary.md#trunk), with its
+  own branch and its dependencies installed, since a fresh checkout has none;
+- **the item, already filed**, because a worker reads a tracker page rather
+  than inventing its own scope, and it claims what it takes (`naima claim`);
+- **what has already been measured**, stated as given so that the worker
+  doesn't work it out again, which is the biggest single saving there is;
 - **the gates**, with their current numbers, to run at the end;
-- **the constraints**: that it only prepares on its branch — it never lands,
-  pushes the trunk, publishes or releases — that it does not
-  commit on the trunk or touch another [worktree](../guide/glossary.md#worktree), which sibling branches'
-  files it must stay out of;
-- **no sub-agents of its own.** A worker that spawns workers loses all of
-  their work when it stops.
-- **the acknowledgement line to give back** — every report starts with it
+- **the constraints**: it only prepares work on its branch and never lands,
+  pushes the trunk, publishes or releases; it doesn't commit on the trunk or
+  touch another [worktree](../guide/glossary.md#worktree); and it is told
+  which sibling branches' files it must stay out of;
+- **no sub-agents of its own**, because a worker that spawns workers loses
+  all of their work when it stops;
+- **the acknowledgement line to give back**, which starts every report
   ([read the project's rules](read-the-project-rules.md#giving-the-acknowledgement-back)).
 
 ## The jobs
@@ -77,16 +80,17 @@ Everything it needs to work without asking, because it cannot ask:
 | **Filer** | classification, [triage](../guide/glossary.md#triage) fields, reports routed to the right tracker | inventing scope; deciding whether something is proven |
 | **Evidence owner** | whether a gesture proves the claim, weighed by [the evidence ranking](../guide/prove-and-close.md#3-perform-it-keep-the-evidence) and red-then-green for a regression | performing the gesture it then judges |
 
-These jobs, and the outward ones — the release manager, the documentarian,
-the [announcer](announcer.md), the community steward, the business role, and
-the verification engineer — are data: `naima roles` lists each with what it
-owns and refuses, and `naima queue --role <role>` is one role's queue, most
-urgent first. An item is on a role's queue by its `role` field when set, else
-by its `kind` (`code` is the implementer's, `test` the tester's) or its type
-(every `tests` item is the tester's, every `releases` item the release
-manager's). Staff a worker for a role from that queue.
+These jobs, and the outward ones (the release manager, the documentarian, the
+[announcer](announcer.md), the community steward, the business role and the
+verification engineer), are data. `naima roles` lists each one with what it
+owns and refuses, and `naima queue --role <role>` shows one role's queue,
+most urgent first. An item is on a role's queue because of its `role` field
+when that is set. Otherwise it goes by the item's `kind` (`code` belongs to
+the implementer, `test` to the tester) or by its type (every `tests` item
+belongs to the tester, and every `releases` item to the release manager).
+The coordinator staffs a worker for a role from that role's queue.
 
-Work passes between them in one direction:
+Work passes between the jobs in one direction:
 
 ```
 report ─▶ filer files it ─▶ lead developer triages and ranks
@@ -101,86 +105,95 @@ report ─▶ filer files it ─▶ lead developer triages and ranks
              tester performs the gesture ─▶ evidence owner closes it
 ```
 
-Nothing skips a step by being obvious. The two arrows that look skippable —
-naming the gesture for a fix, and judging a gesture someone performed — are
-where work gets lost.
+No step gets skipped because it seems obvious. Two of the arrows look as if
+they could be skipped, naming the gesture for a fix and judging a gesture
+someone else performed, and those are exactly where work gets lost.
 
 ### The lead developer's three jobs
 
-1. **The sweep.** Items whose fix already landed but whose [proof](../guide/glossary.md#proof) was never
-   linked. Read the board against the code, mark what is already fixed, and
-   name the gesture that would prove each one as a test item linked
-   `verifies`. Without the sweep, several sessions each open the same item and
-   each discover it is already fixed.
-2. **Preparing branches** so the trunk is their ancestor: the trunk merged in
-   first, the gates run over the combined result, claims released, session
-   note written ([closing a worktree](closing-a-worktree.md)).
-3. **The landing train.** Finished branches landed in order with `naima land`,
-   gates between, each one a [marker](../guide/glossary.md#marker) naming the items it closes. If
-   it refuses, stop.
+1. **The sweep.** This covers items whose fix has already landed but whose
+   [proof](../guide/glossary.md#proof) was never linked. Read the board
+   against the code, mark what is already fixed, and name the gesture that
+   would prove each one as a test item linked `verifies`. Without the sweep,
+   several sessions each open the same item and each find out it is already
+   fixed.
+2. **Preparing branches** so that the trunk is their ancestor. That means
+   merging the trunk in first, running the gates over the combined result,
+   releasing the claims and writing the session note
+   ([closing a worktree](closing-a-worktree.md)).
+3. **The landing train.** Finished branches are landed in order with
+   `naima land`, with the gates run between them, and each landing is a
+   [marker](../guide/glossary.md#marker) naming the items it closes. If
+   `naima land` refuses, stop.
 
-It never merges without the gates, never closes an item on reasoning ("the
-code clearly does this now" is a diagnosis, not a measurement), and never
-closes its own branch's items.
+The lead developer never merges without the gates and never closes an item
+on reasoning alone, because "the code clearly does this now" is a diagnosis,
+not a measurement. It also never closes its own branch's items.
 
 ### The tester and the resource holder are different actors
 
-An actor that both drives the software and writes the assertion cannot tell a
-fact about the software from the current state of something editable — to it
-they are one motion. Keep them apart: the tester prepares or performs the
-gesture, the evidence owner judges it.
+An actor that both drives the software and writes the assertion can't tell a
+fact about the software apart from the current state of something it can
+edit, because to that actor both happen in the same motion. So keep the two
+apart. The tester prepares or performs the gesture, and the evidence owner
+judges it.
 
 ## Choosing the model
 
-**A worker's model is a parameter, and choosing it is the largest saving
-available.** Use the strongest model for diagnosis and design, where being
-wrong costs a day; a faster, cheaper one for filing, triage, classification,
-merges, audits and running gates.
+A worker's model is a parameter, and choosing it well saves more than
+anything else. Use the strongest model for diagnosis and design, where being
+wrong can cost a day. Use a faster, cheaper one for filing, triage,
+classification, merges, audits and running gates.
 
 ## How many at once
 
-**Two** as the standing number; up to **four** only for short, cheap, parallel
-work. Concurrency is bounded by the budget as much as by the load: too many
-expensive workers at once exhaust it and die mid-task.
+Two workers at once is the standing number, and up to four only for short,
+cheap work that can run in parallel. The budget limits concurrency as much as
+the load does, because too many expensive workers at once use it up and die
+in the middle of their tasks.
 
-**When a worker dies, salvage before respawning.** Its worktree still holds
-everything it had not committed. Separate the work from mechanical churn,
-commit the work as WIP marked unreviewed, and hand the replacement that commit
-to read rather than a blank start.
+When a worker dies, the coordinator salvages its work before spawning a
+replacement. The dead worker's worktree still holds everything it hadn't
+committed. Separate the real work from mechanical churn, commit the work as
+WIP marked unreviewed, and give the replacement that commit to read instead
+of starting it from nothing.
 
 ## Gates run after a batch, not after every commit
 
-A worker commits freely — small commits, one idea each — and runs the full
-gate set once per batch. If the batch comes back red, `git bisect` over its
-own commits finds the culprit, which is what small commits are for. Commit
-before running the gates, so a red gate never costs uncommitted work. A branch
-is never reported done on an unrun gate set.
+A worker commits freely, in small commits with one idea each, and runs the
+full gate set once per batch. If the batch comes back red, `git bisect` over
+its own commits finds the culprit, which is what the small commits are for.
+It commits before running the gates, so that a red gate never costs
+uncommitted work. A branch is never reported as done while its gate set
+hasn't been run.
 
 ## Reporting
 
-Workers report to the coordinator, never to the owner, in the shape
-[the worker protocol](worker-protocol.md) fixes: what changed, red shown
-before green, the gate numbers, the queue after the change, one question or
-none. The coordinator's own reply to the owner keeps the same order and the
-same restraint — never a preamble, never the number before the work, never a
-restatement of what was just committed or filed: if it is worth explaining,
-it is worth committing.
+Workers report to the coordinator, never to the owner, in the shape that
+[the worker protocol](worker-protocol.md) sets out: what changed, the red
+result shown before the green one, the gate numbers, the queue after the
+change, and one question or none. The coordinator's own reply to the owner
+keeps the same order and the same restraint. It has no preamble, it doesn't
+put the numbers before the work, and it doesn't restate what was just
+committed or filed. Anything worth explaining belongs in the commit.
 
-**Every report starts with the acknowledgement line** the project's rules ask
-for (`naima rules --audience agents`, its last line) — a worker that omits it
-is not reporting, it is talking. The coordinator checks it before trusting
-the rest: `naima rules check-ack <file|->` on the worker's own reply, missing
-phrases named if any; a breach is reported to the owner, not patched over.
+Every report starts with the acknowledgement line that the project's rules
+ask for (`naima rules --audience agents`, its last line). A worker that
+leaves it out hasn't made a proper report. The coordinator checks the line
+before trusting the rest of the report, by running
+`naima rules check-ack <file|->` on the worker's reply, which names any
+missing phrases. If the line is wrong, the coordinator reports that to the
+owner rather than patching over it.
 
 ## Safety rules
 
-- **A worker never merges.** Candidate property for a later model: nothing
-  yet checks that a trunk-merging commit came from the lead developer's
-  session rather than a worker's; read from [the jobs table](#the-jobs)
-  today, not verified.
+- **A worker never merges.** Candidate property for a later model. Nothing
+  yet checks that a commit merging into the trunk came from the lead
+  developer's session rather than a worker's. Today this is read from
+  [the jobs table](#the-jobs), not verified.
 - **A branch never closes its own items.** Enforced by `naima close`
   ([closing a worktree](closing-a-worktree.md#not-part-of-closing)).
-- **The owner is never the reason work resumes.** Convention:
-  [the non-stop loop](the-non-stop-loop.md) sets a timer instead of waiting
-  on a reply.
+- **The owner is never the reason work resumes.** Convention.
+  [The non-stop loop](the-non-stop-loop.md) sets a timer instead of waiting
+  for a reply.
 - **One question at a time.** Convention: [asking the human](asking-the-human.md).

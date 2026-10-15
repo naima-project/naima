@@ -1,45 +1,51 @@
 # For agents
 
-Pages for an AI agent working on a project that Naima tracks. A person
-using Naima reads [the guide](../guide/README.md) instead; what a person
-should know about working with agents is
-[there too](../guide/working-with-agents.md).
+These pages are for an AI agent working on a project that Naima tracks. A
+person using Naima reads [the guide](../guide/README.md) instead, and what a
+person should know about working with agents is
+[there too](../guide/working-with-agents.md). For an overview of the ideas
+Naima uses, from items and statuses to proofs, gates and landings, read
+[the primer](../guide/primer.md) first.
 
-**What you are here.** Part of a quiet team that does the machine work for an
-[owner](../guide/glossary.md#owner) who only decides
+**What you are here.** You are part of a small team of agents that does the
+machine work for an [owner](../guide/glossary.md#owner), who only decides
 ([what Naima is for](../purpose.md)). The owner may be a researcher, a writer
-or a domain expert who has never programmed, and does not need to know git,
-code or project management. You apply the practice — [items](../guide/glossary.md#item), tests, [proofs](../guide/glossary.md#proof),
-[gates](../guide/glossary.md#gate), small commits, a formal check where a [verifier](../guide/glossary.md#verifier) exists — without asking them to
-learn it, and you bring them only what is genuinely theirs.
+or a domain expert who has never programmed, and doesn't need to know git,
+code or project management. You apply the practice for them without asking
+them to learn it: [items](../guide/glossary.md#item), tests,
+[proofs](../guide/glossary.md#proof), [gates](../guide/glossary.md#gate),
+small commits, and a formal check where a
+[verifier](../guide/glossary.md#verifier) exists. You bring them only the
+things that really are theirs to decide.
 
 ## How an agent learns a project
 
 1. **Load the skill**, [`skills/naima/SKILL.md`](../../skills/naima/SKILL.md)
-   in the program directory: it says how to install or align Naima, to update
-   at the start of a session, and where everything else is
+   in the program directory. It says how to install or align Naima, how to
+   update it at the start of a session, and where everything else is
    ([the Naima skill](skill.md)).
-2. **Read [the rules](../guide/rules.md)**: the rules every project holds to,
-   each marked checked by Naima or kept by convention. They are written there
-   and nowhere else; the [flows](../guide/glossary.md#flow) below apply them.
-3. **Read the project's own rules**: `naima rules --audience agents`. They
-   are data in its `naima-tracker/naima-data/`
+2. **Read [the rules](../guide/rules.md)** that every project holds to. Each
+   one is marked as checked by Naima or kept by convention. The rules are
+   written on that page and nowhere else, and the
+   [flows](../guide/glossary.md#flow) below apply them.
+3. **Read the project's own rules** with `naima rules --audience agents`.
+   They are data in the project's `naima-tracker/naima-data/`
    ([read the project's rules](read-the-project-rules.md)).
-4. **See where the project stands**: `naima summary`, `naima queue`,
+4. **See where the project stands** with `naima summary`, `naima queue` and
    `naima claims` ([read the board](../guide/read-the-board.md)).
-5. **Before acting, read the flow that applies**, below.
+5. **Before acting, read the flow that applies**, from the list below.
 
-Everything is plain markdown in the program directory, the documentation of
-the exact Naima the project runs: `naima guide` prints where. `naima help`
-lists the commands of that Naima, and the [reference](../reference/reference.md)
-documents each. A term not defined on a page is in the
-[glossary](../guide/glossary.md).
+Everything is plain markdown in the program directory, which holds the
+documentation of the exact Naima the project runs, and `naima guide` prints
+where that is. `naima help` lists the commands of that Naima, and the
+[reference](../reference/reference.md) documents each one. If a term isn't
+defined on a page, it is in the [glossary](../guide/glossary.md).
 
 ## The flows
 
-The written procedures for working on a project when some or all of the work
-is done by agents. They are general: any project that adopts Naima can follow
-them, and Naima's own repository does.
+The flows are the written procedures for working on a project when agents do
+some or all of the work. They are general, so any project that adopts Naima
+can follow them, and Naima's own repository does.
 
 | Flow | When |
 |---|---|
@@ -64,27 +70,28 @@ them, and Naima's own repository does.
 | [Community](community.md) | an outside issue or pull request, before it is triaged like any other report |
 | [Business](business.md) | a licence, funding, sponsorship or citation question, filed as a decision, never acted on here |
 
-Whatever the flow, the owner's chat is private: nothing from it goes into
-the repository verbatim, and a file the owner shared becomes an attachment
-only with their explicit yes
+Whichever flow applies, the owner's chat is private. Nothing from it goes
+into the repository word for word, and a file the owner shared becomes an
+attachment only if they explicitly say yes
 ([the rule](../guide/rules.md#the-owners-chat-stays-private)).
 
-Two words used throughout: the [owner](../guide/glossary.md#owner), the person
-the project answers to, and the [trunk](../guide/glossary.md#trunk), the
-branch releases come from.
+Two words are used throughout these pages. The
+[owner](../guide/glossary.md#owner) is the person the project answers to, and
+the [trunk](../guide/glossary.md#trunk) is the branch releases come from.
 
 ## As agent commands
 
 [`skills/naima/commands/flow/`](../../skills/naima/commands/flow/) holds one
 command per flow, for agent harnesses that read commands from the repository
-(Claude Code reads `.claude/commands/flow/` as `/flow:<name>`). They ship with
-the skill, outside any `.claude/` directory, so a harness never loads them from
-a project's `naima-tracker/naima/` unasked; Naima's own repository links its
-`.claude/commands/flow` to them. Each command is a checklist that points at its
-page here; where the two disagree, the page wins. To adopt them in another
-project, copy the directory into its `.claude/commands/flow/`, and the pages if
-the project does not depend on Naima's docs.
+(Claude Code reads `.claude/commands/flow/` as `/flow:<name>`). The commands
+ship with the skill, outside any `.claude/` directory, so that a harness
+doesn't load them from a project's `naima-tracker/naima/` without being
+asked to. Naima's own repository links its `.claude/commands/flow` to them.
+Each command is a checklist that points at its page here, and if the two
+disagree, the page wins. To adopt the commands in another project, copy the
+directory into its `.claude/commands/flow/`, and copy the pages too if the
+project doesn't depend on Naima's docs.
 
-In the commands, `naima` is the CLI: `deno run -A
+In the commands, `naima` is the CLI, `deno run -A
 naima-tracker/naima/naima.ts` ([installing](../guide/install.md)). In Naima's
 own repository it is `deno task naima`.

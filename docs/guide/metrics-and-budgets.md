@@ -1,27 +1,31 @@
 # Metrics and budgets
 
-A [metric](glossary.md#metric) is a name and the command that measures it:
-how long the tests take, the test coverage, how many lint warnings there are,
-the size of a build, how long an analysis runs. Nothing about it is specific
-to software: any command that prints a number, or succeeds or fails, is one.
+A [metric](glossary.md#metric) is a name together with the command that
+measures it. It might be how long the tests take, the test coverage, how many
+lint warnings there are, the size of a build, or how long an analysis runs.
+Nothing about it is specific to software, so any command that prints a
+number, or that succeeds or fails, can be a metric.
 
-Naima runs the project's metrics, prints every number next to the number it
-is compared to, records them per [commit](glossary.md#commit) as evidence,
-holds each to a bound, and draws them as a trend, a table or a chart over the
-commit timeline. A set of code-quality metrics comes built in — lines of code,
-complexity, duplication, coverage and more — so you can
+Naima runs the project's metrics and prints every number next to the number
+it is compared to. It records the numbers for each
+[commit](glossary.md#commit) as evidence, holds each one to a bound, and
+draws them as a trend, a table or a chart along the commit timeline. A set of
+code-quality metrics comes built in (lines of code, complexity, duplication,
+coverage and more), so you can
 [see how your code's quality moves over time](#see-how-your-codes-quality-moves-over-time)
-without installing anything.
+without installing anything. The agents run the commands on this page for
+you, unless you want to run them yourself.
 
-**Example.** "The analysis must still run in under ten minutes": a metric
-`analysis-time`, the command that runs the analysis, a budget of 600
-seconds. A run that takes longer fails, and a release waits for it.
+For example, say the analysis must still run in under ten minutes. That
+becomes a metric called `analysis-time`, with the command that runs the
+analysis and a budget of 600 seconds. A run that takes longer fails, and a
+release waits until it passes.
 
 ## Declare a metric
 
-Metrics are data in the project's `naima-tracker/naima-data/naima.json`,
-under the `metrics` plugin's options. The agent writes this once; you decide
-the bounds.
+Metrics are declared as data in the project's
+`naima-tracker/naima-data/naima.json`, under the `metrics` plugin's options.
+The agent writes this once, and you decide the bounds.
 
 ```json
 "plugins": {
@@ -56,8 +60,8 @@ the bounds.
 | `tolerance` | the slack around the bound, for a noisy number such as a duration. |
 | `because` | the [item](glossary.md#item) that says why the bound was last loosened; written by `naima metrics bound`. |
 
-A metric has one bound at most. With none it is recorded and holds nothing,
-except kind `exit`, which must then equal 0.
+A metric has at most one bound. A metric without a bound is recorded but
+not held to anything, except for kind `exit`, which must then equal 0.
 
 ### Kinds
 
@@ -69,15 +73,16 @@ except kind `exit`, which must then equal 0.
 | `duration` | how many seconds the command took |
 | `json` | the number at `field`, a dotted path, in the JSON the command prints; a list there counts its entries |
 
-A plugin can add a kind — a coverage report's format, say — through the
-`metric-kinds` extension point ([reference](../reference/reference.md)).
+A plugin can add a kind, for instance one that reads a coverage report's
+format, through the `metric-kinds` extension point
+([reference](../reference/reference.md)).
 
 ### What the program may start
 
 Naima runs with only the permissions it needs
-([install](install.md#the-permissions)). Declaring a metric lets it start
-that metric's program — the first word of `run` — and nothing more:
-`naima runs` lists every program it may start, and why.
+([install](install.md#the-permissions)). Declaring a metric allows it to
+start that metric's program, which is the first word of `run`, and nothing
+more. `naima runs` lists every program Naima may start, and why.
 
 ## Run them
 
@@ -87,19 +92,20 @@ naima metrics run tests lint   # some
 naima metrics run --record     # and write the numbers as evidence
 ```
 
-Every number comes with the number it is compared to: the last one recorded
-on an earlier commit of this line of history, and the bound.
+Every number is shown with what it is compared to, which is the last number
+recorded on an earlier commit of this line of history, and the bound.
 
 ```
   ✓ tests: 201 (was 197, +4; floor 197) — a gain the floor 197 has not followed: raise it — naima metrics bound tests 201
   ✓ test-time: 96.2 s (was 101.5 s, -5.3; budget 120 s) — within the budget
 ```
 
-It exits 1 when any metric fails: past its bound, no number read, or — a
-ratchet — a gain its bound has not followed. `--record` writes one file per
-run in `naima-data/metrics/`, named by the commit it measures; commit it with
-the work. A run on uncommitted changes says so, in the output and in the
-record.
+The command exits 1 when any metric fails. A metric fails when it is past
+its bound, when no number could be read, or, for a ratchet, when it has
+improved and its bound hasn't been moved to follow. `--record` writes one
+file per run in `naima-data/metrics/`, named after the commit it measures,
+and that file is committed along with the work. If the run measured
+uncommitted changes, it says so, both in the output and in the record.
 
 ## Move a bound
 
@@ -108,15 +114,16 @@ naima metrics bound tests 201                                  # tighten: a floo
 naima metrics bound test-time 140 --because bugs/slow-ci       # loosen: needs an item
 ```
 
-Tightening needs nothing. Loosening — a budget up, a floor down, a baseline
-moved — is refused unless `--because` names an item that says why, and the
-item is written into the metric; `naima check` reports a `because` that names
-no item.
+Tightening a bound needs no justification. Loosening it (raising a budget,
+lowering a floor or moving a baseline) is refused unless `--because` names an
+item that explains why, and that item is written into the metric.
+`naima check` reports any `because` that doesn't name an existing item.
 
 ## Code-quality metrics, built in
 
-`naima metrics presets` lists ready metrics. Declare one by naming its
-preset; add a bound or narrow the files if you like:
+`naima metrics presets` lists the ready-made metrics. You declare one by
+naming its preset, and you can add a bound or narrow down the files if you
+like.
 
 ```json
 "metrics": {
@@ -144,42 +151,44 @@ preset; add a bound or narrow the files if you like:
 | `deno.coverage` | line coverage of the tests | higher |
 | `node.tests`, `node.test-time` | the same for Node's test runner | higher, lower |
 
-The `code.*` metrics are measured by Naima itself, from the files: no
-program to install, nothing to configure. Lines and files work for every
-language Naima knows (TypeScript, JavaScript, Python, Rust, Go, Java, C,
-C++, shell and more); functions and complexity are found in TypeScript and
-JavaScript by a small estimator that counts each function's decisions — `if`,
-loops, `case`, `catch`, `&&`, `||`, `??` and `? :` — plus one. It is an
-estimate, good for watching a trend, not a parser. Another language's
-function finder can be added by a plugin (`code-languages`), and so can a new
-measure (`code-measures`): see the [reference](../reference/reference.md).
+Naima measures the `code.*` metrics itself by reading the files, so there
+is no program to install and nothing to configure. Lines and files work for
+every language Naima knows (TypeScript, JavaScript, Python, Rust, Go, Java,
+C, C++, shell and more). Functions and complexity are found only in
+TypeScript and JavaScript, by a small estimator that counts each function's
+decisions (`if`, loops, `case`, `catch`, `&&`, `||`, `??` and `? :`) and adds
+one. It's an estimate rather than a parser, and it's good for watching a
+trend. A plugin can add a function finder for another language
+(`code-languages`) or a new measure (`code-measures`), as described in the
+[reference](../reference/reference.md).
 
-The `deno.*` and `node.*` metrics run the tool: change `run` when your
-project runs its tests differently, say `["deno", "task", "test"]`. Metrics
-that run the same command share one run.
+The `deno.*` and `node.*` metrics run the tool itself. If your project runs
+its tests differently, for instance with `["deno", "task", "test"]`, change
+`run` to match. Metrics that run the same command share a single run.
 
 ## See how your code's quality moves over time
 
-**See your project's metrics: `naima ui`.** It opens a window, titled
-Naima; its **Metrics** tab holds the chart and the table of every metric. Tick the metrics you
-want and pick the first and the last commit, then **Show**. The window reads
-the records each time it shows them, so a metric recorded while it is open
-appears on the next **Show**. Closing the window ends it.
+To see your project's metrics, run `naima ui`. It opens a window titled
+Naima, and its **Metrics** tab holds the chart and the table of every metric.
+Tick the metrics you want, pick the first and the last commit, then press
+**Show**. The window reads the records each time it shows them, so a metric
+recorded while the window is open appears the next time you press **Show**.
+Closing the window ends it.
 
 ```sh
 naima ui              # a window
 naima ui --browser    # the same page in your browser; Ctrl-C ends it
 ```
 
-The window needs Deno. Its first run fetches the small library that draws
-it, so it needs the network once; where it cannot open — Naima run by Node or
-Bun, no network on that first run — your browser opens instead, and
-`naima ui` says why in one line. The page is served from your machine only,
-and only to the window or browser it opened: anyone else who tries the
-address is refused.
+The window needs Deno. The first time it runs, it fetches the small library
+that draws it, so it needs the network once. If the window can't open,
+because Naima is run by Node or Bun or there is no network on that first run,
+your browser opens instead and `naima ui` says why in one line. The page is
+served from your machine only, and only to the window or browser it opened,
+so anyone else who tries the address is refused.
 
-Every recorded run is a point on the commit timeline. Four ways to read them
-in the terminal:
+Every recorded run is a point on the commit timeline. You can also read them
+in the terminal, in four ways.
 
 ```sh
 naima metrics trend complexity            # one metric, as a line of text
@@ -196,14 +205,14 @@ complexity (no bound): ▃▄▄▅▃▂  3.12 → 2.98
   ...
 ```
 
-The chart has one panel per metric: commit dates along the bottom, the value
-up the side, and the metric's bound as a dashed line. Hover a point to see
-its commit. `--last 50` keeps the last fifty commits recorded. Without
-`--out` it is printed, so `> quality.svg` works too.
+The chart has one panel per metric, with commit dates along the bottom, the
+value up the side, and the metric's bound as a dashed line. Hovering over a
+point shows its commit. `--last 50` keeps only the last fifty recorded
+commits. Without `--out` the chart is printed, so `> quality.svg` works too.
 
-**Starting with a full timeline.** A project that has just declared its
+**Starting with a full timeline.** A project that has only just declared its
 metrics has no records yet. `naima metrics backfill` measures past commits
-and records each one:
+and records each one.
 
 ```sh
 naima metrics backfill                    # the last 30 commits of the main line
@@ -211,32 +220,34 @@ naima metrics backfill --last 50 --every 5
 naima metrics backfill --since v1.0 complexity duplication
 ```
 
-It never touches your files. The `code.*` metrics read each past commit
-straight from git; metrics that run a command run it in a temporary copy of
-the repository, removed at the end. A commit already recorded is skipped.
-Commit the records it writes, like any other.
+Backfilling never touches your files. The `code.*` metrics read each past
+commit straight from git, and metrics that run a command run it in a
+temporary copy of the repository, which is removed at the end. A commit that
+is already recorded is skipped. The records it writes are committed like any
+others.
 
-A project with a git submodule of its own measures its files like any other: the
-working tree through `git ls-files --recurse-submodules`, a past commit by
-following the gitlink `ls-tree` records into the submodule's own history at
-that commit — not whatever the submodule happens to be checked out to now.
-A submodule never fetched, or a gitlink whose commit the submodule's
-repository does not have, counts as no files for that commit; Naima says so
-once and keeps going.
+The files of a project with its own git submodule are measured in the same
+way. For the working tree Naima uses `git ls-files --recurse-submodules`. For
+a past commit it follows the gitlink that `ls-tree` records into the
+submodule's own history at that commit, rather than whatever the submodule
+happens to have checked out now. If a submodule was never fetched, or the
+submodule's repository doesn't have the commit a gitlink points to, that
+commit counts as having no files. Naima says so once and carries on.
 
-**Asking an agent.** You need none of these commands yourself. Say, for
-example, "plot coverage and complexity over the last 50 commits": the agent
-backfills what is missing, writes the chart, and shows it to you.
+**Asking an agent.** You don't need to run any of these commands yourself.
+You can say, for example, "plot coverage and complexity over the last 50
+commits", and the agent backfills what is missing, writes the chart and shows
+it to you.
 
-The timeline follows the history of the current commit: a record made on
-another branch appears once that branch is merged.
+The timeline follows the history of the current commit, so a record made on
+another branch shows up once that branch is merged.
 
 ## Beside the work
 
 `naima summary` has a metrics section, and `naima board` and `naima queue`
-show it at their foot, next to the tests and the items: each metric's last
-number, the one before, whether that is better or worse, its bound and a
-small trend.
+show the same section at the bottom, next to the tests and the items. For
+each metric it gives the last number, the one before, whether that is better
+or worse, the bound and a small trend.
 
 ```
 ── metrics
@@ -246,14 +257,15 @@ small trend.
 
 ## As a gate
 
-The `metrics` [gate](glossary.md#gate) holds when the latest record of the
-current commit has every metric within its bound: `naima gates metrics
---check` is the release condition "no number got worse", and it says which
-number fails and by how much:
+The `metrics` [gate](glossary.md#gate) holds when, in the latest record of
+the current commit, every metric is within its bound. `naima gates metrics
+--check` therefore works as the release condition "no number got worse", and
+when it fails it says which number failed and by how much.
 
 ```
 metrics — The project's metrics: BLOCKED by 0
   ✗ coverage: 78.1 %, past the floor 80
 ```
 
-Run `naima metrics run --record` first, so there is a record of the commit.
+Run `naima metrics run --record` first, so that there is a record for the
+commit.

@@ -1,15 +1,16 @@
 # Adopt an existing board
 
-The project already keeps its work somewhere: a `TODO.md`, a notes file, an
-issue list exported as markdown. `naima adopt` turns it into
-[items](glossary.md#item) without retyping it and without losing a line.
-Every step is a dry run until `--write`, and the file itself is never
-deleted.
+Your project may already keep its work somewhere, such as a `TODO.md`, a
+notes file, or an issue list exported as markdown. `naima adopt` turns that
+file into [items](glossary.md#item), so nobody has to retype it and no line
+gets lost. Every step only shows what it would do until you add `--write`,
+and the file itself is never deleted. The agents run these steps for you
+unless you want to run them yourself.
 
 ## Now
 
-1. **Propose the boundaries.** Each top-level list item (`- `, `* `, `+ `,
-   `1. `, with everything indented under it) becomes one item:
+1. **Propose the boundaries.** Each top-level list item (`- `, `* `, `+ `
+   or `1. `, together with everything indented under it) becomes one item:
 
    ```sh
    naima adopt propose TODO.md            # what it would mark
@@ -17,7 +18,8 @@ deleted.
    git diff TODO.md
    ```
 
-   The markers are HTML comments, invisible when the file is rendered:
+   The markers are HTML comments, so they don't show when the file is
+   rendered:
 
    ```md
    <!-- naima: todos key=fix-login-redirect-loop -->
@@ -26,14 +28,14 @@ deleted.
    <!-- /naima -->
    ```
 
-   The diff adds lines and deletes none; `propose` refuses to write
-   anything else. Read it and edit the markers by hand: the type (`todos`,
-   `bugs`, `features`, …), the `key`, and `status=` (a ticked checkbox is
-   proposed as `status=done`). Move, add or remove a pair to cut the board
-   differently; a heading or a paragraph outside every pair stays the board's
-   own prose.
+   The diff only adds lines and never deletes any, because `propose`
+   refuses to write anything else. Read it and edit the markers by hand if
+   needed. You can change the type (`todos`, `bugs`, `features`, …), the
+   `key`, and `status=` (a ticked checkbox is proposed as `status=done`). To
+   cut the board differently, move, add or remove a pair. A heading or a
+   paragraph that sits outside every pair stays as the board's own prose.
 
-2. **Split.** Commit the marked file first, so each item can name the
+2. **Split.** Commit the marked file first, so that each item can name the
    commit it came from:
 
    ```sh
@@ -42,12 +44,12 @@ deleted.
    ```
 
    Each item's page is its segment, byte for byte, under a title line taken
-   from the segment's first line. `section` is the nearest heading above it;
-   `adoptedFrom` says where it came from — `TODO.md#L8-L9@<commit>`, or
-   `working-tree` when the file was not committed. The board's own prose,
-   and each segment's text as it was adopted, are kept in
-   `naima-tracker/naima-data/adopted/<file>.json`: together they give the
-   file back exactly.
+   from the segment's first line. The field `section` is the nearest heading
+   above it, and `adoptedFrom` says where it came from, for example
+   `TODO.md#L8-L9@<commit>`, or `working-tree` when the file was not
+   committed. The board's own prose and each segment's text as it was adopted
+   are kept in `naima-tracker/naima-data/adopted/<file>.json`, and together
+   they give the file back exactly.
 
 3. **Audit.**
 
@@ -55,14 +57,15 @@ deleted.
    naima adopt audit TODO.md
    ```
 
-   It re-reads every committed version of the file, following renames, and
-   lists each line that no item and no board prose carries, with the commit
-   and line it was last seen on: a todo deleted months ago without being done
-   shows up here. It also says whether the board still round-trips byte for
-   byte. It exits 1 while anything is missing. Carry a missing line into an
-   item by hand, or put it back in the file and run the steps again.
+   This re-reads every committed version of the file, following renames, and
+   lists each line that isn't carried by any item or by the board's prose,
+   with the commit and line where it was last seen. So a todo that was
+   deleted months ago without being done shows up here. The audit also says
+   whether the board still round-trips byte for byte, and it exits 1 as long
+   as anything is missing. You can carry a missing line into an item by hand,
+   or put it back in the file and run the steps again.
 
-4. **Links, only on hard evidence.**
+4. **Links.** These are written only when there is hard evidence for them.
 
    ```sh
    naima adopt links TODO.md              # what it would link
@@ -71,25 +74,26 @@ deleted.
 
    A `relates-to` link is proposed only when both items name the same real
    commit of this repository and their titles share at least two words.
-   Everything else is printed for you to decide and never written: a shared
-   commit without shared wording, shared wording without a shared commit, and
-   each command in a fenced shell block, as a candidate
-   [gate](glossary.md#gate) — gates are declared in `naima.json`
+   Anything else is printed for you to decide and is never written. That
+   covers a shared commit without shared wording, shared wording without a
+   shared commit, and each command in a fenced shell block, which is shown as
+   a candidate [gate](glossary.md#gate). Gates are declared in `naima.json`
    ([configure the project](configure-the-project.md)).
 
 ## Again, later
 
-The file keeps living alongside the tracker. Run the steps again whenever it
-grows: `propose` marks only list items outside every pair, and `split`
-opens only keys not adopted yet. A segment whose text changed since it was
-adopted is reported, never written over; an item someone edited is never
-touched.
+The file can stay in use alongside the tracker, and the steps can be run
+again whenever it grows. `propose` only marks list items that are outside
+every pair, and `split` only opens keys that haven't been adopted yet. If a
+segment's text has changed since it was adopted, that is reported and not
+written over, and an item that someone has edited is never touched.
 
 ## What it does not do
 
-- Delete, empty or move the file. Retiring it is your decision, once the
-  audit says nothing is missing.
-- Read an issue tracker's API: export the list as markdown first.
-- Decide a link or a gate on wording alone.
+- It doesn't delete, empty or move the file. Retiring the file is your
+  decision, once the audit says nothing is missing.
+- It doesn't read an issue tracker's API, so export the list as markdown
+  first.
+- It doesn't decide a link or a gate on wording alone.
 
-Every option: [the reference](../reference/reference.md).
+Every option is in [the reference](../reference/reference.md).

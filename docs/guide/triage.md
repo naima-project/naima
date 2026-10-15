@@ -1,8 +1,11 @@
 # Triage
 
-[Triage](glossary.md#triage) ranks an [item](glossary.md#item) against everything else, so the
-list "most urgent first" means something. Four fields; three are set when the
-item is opened ([the rule](rules.md#triage-what-you-touch)).
+[Triage](glossary.md#triage) ranks an [item](glossary.md#item) against
+everything else, so that a list sorted "most urgent first" actually means
+something. It uses four fields, and three of them are set when the item is
+opened ([the rule](rules.md#triage-what-you-touch)). The agents triage what
+they file and run the commands on this page, unless you want to run them
+yourself.
 
 ## Set the fields
 
@@ -17,17 +20,17 @@ naima triage set export-drops impact=high priority=now confidence=measured
 | [confidence](glossary.md#confidence) | do we understand it? | `measured` · `diagnosed` · `reported` · `unclear` |
 | [effort](glossary.md#effort) | what does the fix cost? | `S` · `M` · `L` · `XL` |
 
-Set **effort** only once someone has looked at the code. A report says nothing
-about what a fix costs, and an unsized item sinking in the ranking is the
-honest outcome ([the rule](rules.md#effort-is-never-guessed)).
+Set **effort** only once someone has looked at the code. A report says
+nothing about what a fix will cost, so it's right for an item without a size
+to sink in the ranking ([the rule](rules.md#effort-is-never-guessed)).
 
 Every change to these fields stamps `triagedOn` with today's date.
 
 ## Rewrite the description, note what you checked
 
-Triage often rewrites a report so the next reader can act on it, and records
-what was checked. Both are commands, so they are dated, attributed and
-checked like every other write:
+Triage often rewrites a report so that the next reader can act on it, and
+records what was checked. Both are done with commands, so they are dated,
+attributed and checked like every other write:
 
 ```sh
 naima describe export-drops "Export to PNG loses the alpha channel on 16-bit images."
@@ -36,9 +39,10 @@ naima note export-drops "Reproduced with sample.png; 8-bit images keep alpha." -
 
 `naima describe` replaces the description and keeps the title and the notes.
 `naima note` adds a dated entry, with its author and branch, at the end of the
-item's **Notes** section; earlier notes are never rewritten. Both read a
-longer text from `--file`. Write in your own words: a person's message goes
-in verbatim only with their yes ([the rule](rules.md#the-owners-chat-stays-private)).
+item's **Notes** section, and earlier notes are never rewritten. Both can read
+a longer text from `--file`. Write in your own words, because a person's
+message only goes in verbatim if they say yes
+([the rule](rules.md#the-owners-chat-stays-private)).
 
 ## See what is missing
 
@@ -53,29 +57,29 @@ $ naima triage missing
   bugs/second-bug  Second bug
 ```
 
-The first is coverage: per type, how many open items have each field. The
-second lists what still lacks effort.
+The first command shows coverage, meaning how many open items of each type
+have each field set. The second lists the items that still lack effort.
 
 ## Let Naima guess the rest
 
-`naima triage derive` reads confidence off the words of each item's page, for
-the items no person has triaged yet, and reports what it would set; `--write`
-saves it, marked `triagedBy: derived`, so everyone can tell an inference from
-a decision. A person's later change to any of the four fields drops the mark.
-It never sets effort.
+For the items that no person has triaged yet, `naima triage derive` infers
+confidence from the wording of each item's page and reports what it would
+set. With `--write` it saves the result, marked `triagedBy: derived`, so that
+everyone can tell an inference from a decision. If a person later changes any
+of the four fields, the mark is dropped. It never sets effort.
 
 ## The order it produces
 
 `naima list --open`, `naima view next` and the "next up" block of
-`naima summary` show open items most urgent first: impact, priority, effort
-and the [gates](glossary.md#gate) an item is on, together. That order is
-worked out each time, never stored.
+`naima summary` show open items most urgent first, taking into account impact,
+priority, effort and the [gates](glossary.md#gate) an item is on. The order
+is worked out each time you ask and is never stored.
 
 ## Deferring
 
-A [deferral](glossary.md#deferral) — `priority=parked`, or a bug `wontfix` or
-a todo `dropped` — is captured in full like any other item, then say what
-would make it worth re-arguing:
+A [deferral](glossary.md#deferral) (`priority=parked`, a bug set to
+`wontfix` or a todo set to `dropped`) is recorded in full like any other item.
+Then say what would make it worth discussing again:
 
 ```sh
 naima triage set export-drops priority=parked reopensWhen="when the format gains an alpha channel in its spec"
@@ -86,10 +90,10 @@ $ naima view parked
   [open] bugs/export-drops  Export to PNG loses the alpha channel — reopens when: when the format gains an alpha channel in its spec
 ```
 
-An item left without `reopensWhen` is reported by `naima check`
-(`deferred-says-why`): say why, and what would reopen it, before moving on.
-Read `naima view parked` before filing something that looks familiar — the
-answer may already be "I already told you".
+`naima check` reports an item left without `reopensWhen`
+(`deferred-says-why`), so say why it was deferred and what would reopen it
+before moving on. Read `naima view parked` before filing something that looks
+familiar, because it may already have been considered and set aside.
 
 ## Authoritative documents
 
@@ -103,8 +107,9 @@ and which are retired, in `naima-data/naima.json`:
 } } } } }
 ```
 
-`naima guide` prints the list first, so an agent reads which document to
-trust, and which one not to start competing with, before anything else.
+`naima guide` prints this list first, so that before anything else an agent
+learns which document to trust and which one it shouldn't start competing
+with.
 
 ## Next
 

@@ -1,12 +1,14 @@
 # Documentation
 
-Start with [what Naima is for](purpose.md): a silent software house of AI
-agents, born for software, that turns vibe coding into an exact science —
-tests, metrics, reviews, gates and formal methods applied for an owner who
-only decides and need not be a programmer. Then any project: a data
-analysis, a paper with colleagues, each with its own checks in place of
-tests.
-Then start from who you are.
+Start with [what Naima is for](purpose.md). Naima is a silent software house
+of AI agents. It was born for software, and it turns vibe coding into an
+exact science by applying tests, metrics, reviews, gates and formal methods
+for an owner who only decides and doesn't need to be a programmer. It then
+works for any project, such as a data analysis or a paper written with
+colleagues, each with its own checks in place of tests. Once you have read
+that page, [the primer](guide/primer.md) gives the overview of every idea
+Naima uses. After that, pick your starting point from the table below,
+according to who you are.
 
 | You are… | Start at | Then |
 |---|---|---|
@@ -14,31 +16,34 @@ Then start from who you are.
 | **a person whose project Naima runs** | [the guide](guide/README.md): how the project runs first, then a page per task | [questions](guide/faq.md), [glossary](guide/glossary.md) |
 | **an AI agent working on a project** | [the pages for agents](agents/README.md): the skill, the flows | [the rules](guide/rules.md) |
 | **looking something up** | [the reference](reference/reference.md): every command, type, field, check, gate, generated from the code | [the format](reference/format.md): every file and field on disk |
-| **changing Naima's own code, or studying how it works** | developing Naima — requirements, architecture, plugins, documentation — is in the workshop, Naima's private development repository | [the rules](guide/rules.md) |
+| **changing Naima's own code, or studying how it works** | developing Naima (requirements, architecture, plugins, documentation) is in the workshop, Naima's private development repository | [the rules](guide/rules.md) |
 
 ## Where each thing is
 
-- **[purpose](purpose.md)** — what Naima is, and **[planned](planned.md)** —
-  everything it does not do yet, in one list.
-- **[guide/](guide/README.md)** — for people. No code assumed. How the
-  project runs, the tutorial, a page per everyday task, concepts, the [rules](guide/rules.md) (the only
-  page that states them), a project's own rules
-  ([write one](guide/write-a-project-rule.md)), installing, configuration,
-  questions, glossary, and [extending Naima](guide/extending-naima.md) for a
-  programmer writing a plugin or a researcher adopting Naima outside
-  software.
-- **[agents/](agents/README.md)** — for agents. How an agent learns a
-  project, the skill, [the project's own rules](agents/read-the-project-rules.md),
-  and the flows: the procedures an agent follows.
-- **[reference/](reference/)** — [the format](reference/format.md), the open
-  specification of every file; [the reference](reference/reference.md),
-  generated from the plugins' manifests, so it cannot drift from the code —
-  [every command, what it does and what it enforces](reference/reference.md#commands-at-a-glance) opens it;
-  [the plugin contract](reference/plugin-contract.md), for writing a plugin.
-- **`develop/`**, in the workshop, Naima's private development repository,
-  and not in a project's clone — for people changing Naima itself: architecture, the
-  documentation rule, how Naima's own tracker works.
+- **[purpose](purpose.md)** says what Naima is, and **[planned](planned.md)**
+  lists in one place everything it doesn't do yet.
+- **[guide/](guide/README.md)** is for people and assumes no code. It covers
+  how the project runs, the tutorial, a page per everyday task, concepts, the
+  [rules](guide/rules.md) (the only page that states them), a project's own
+  rules ([write one](guide/write-a-project-rule.md)), installing,
+  configuration, questions and the glossary. It also has
+  [extending Naima](guide/extending-naima.md), for a programmer writing a
+  plugin or a researcher adopting Naima outside software.
+- **[agents/](agents/README.md)** is for agents. It explains how an agent
+  learns a project, the skill, [the project's own rules](agents/read-the-project-rules.md),
+  and the flows, which are the procedures an agent follows.
+- **[reference/](reference/)** holds [the format](reference/format.md), the
+  open specification of every file, and [the reference](reference/reference.md).
+  The reference is generated from the plugins' manifests, so it can't drift
+  from the code, and it opens with
+  [every command, what it does and what it enforces](reference/reference.md#commands-at-a-glance).
+  It also holds [the plugin contract](reference/plugin-contract.md), for
+  writing a plugin.
+- **`develop/`** is for people changing Naima itself. It covers the
+  architecture, the documentation rule and how Naima's own tracker works. It
+  lives in the workshop, Naima's private development repository, and not in a
+  project's clone.
 
-The reference is generated by `naima docs`; in Naima's repository
+The reference is generated by `naima docs`. In Naima's repository,
 `deno task docs` rewrites it, and `deno task verify` fails when it is out of
 date or when anything loaded is undocumented.

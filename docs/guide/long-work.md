@@ -1,9 +1,11 @@
 # Long work: run it, wait for it, clean up after it
 
-A benchmark, a model-checking batch, a build that takes an hour: work that
-outlasts a conversation with an agent. Naima starts it, bounds it, tells you
-where it stands and removes what it left behind. An agent does all of this
-for you; each command below is what it types, so you can check what it did.
+Some work outlasts a conversation with an agent, such as a benchmark, a
+batch of model-checking jobs or a build that takes an hour. Naima starts that
+work, keeps it within limits, tells you how far along it is and removes what
+it leaves behind. The agents do all of this for you. The commands below are
+the ones they run, so you can check what they did, and you can run them
+yourself if you want to.
 
 ## Start a run
 
@@ -12,46 +14,51 @@ naima run bench --budget-time 2h --budget-disk 20G --creates /tmp/bench-stores -
 ```
 
 - `bench` is the run's name: lowercase letters, digits, `.`, `_`, `-`.
-- `--budget-time` is how long it may last. It is required: past it, the run is
-  ended — the command and everything it started.
-- `--budget-disk` with `--creates`: what the run creates (stores, temporary
-  folders) may not grow past this size; past it, the run is ended. The
-  declared paths are also what `naima run clean` removes. A path that is your
-  repository, a folder above it, your home folder, or one holding a file git
-  tracks is refused.
-- After `--`: one argument is a command line for the shell (pipes and `>`
-  work); several are a program and its arguments, run exactly as given.
+- `--budget-time` is how long the run may last, and it is required. Once the
+  time is up, the run is ended, meaning the command and everything it
+  started.
+- `--budget-disk` goes with `--creates`. What the run creates (stores,
+  temporary folders) may not grow past this size, and if it does, the run is
+  ended. The declared paths are also what `naima run clean` removes. Naima
+  refuses a path that is your repository, a folder above it, your home
+  folder, or a folder holding a file that git tracks.
+- After `--` comes the command. A single argument is treated as a command
+  line for the shell, so pipes and `>` work. Several arguments are treated as
+  a program and its arguments, and run exactly as given.
 
-The command runs in the folder you start it from, with your environment,
-detached: closing the session does not stop it. Its output goes to a log, and
-it says how far it is in the file named by `$NAIMA_RUN_PROGRESS` (below).
+The command runs detached, in the folder you start it from and with your
+environment, so closing the session doesn't stop it. Its output goes to a
+log, and it reports how far along it is in the file named by
+`$NAIMA_RUN_PROGRESS` (see below).
 
 ## Say how far it is
 
-Long work reports its progress: that is
+Long work has to report its progress, because that is
 [a rule](rules.md#long-work-reports-its-progress-or-says-why-it-cannot-and-what-it-reports-instead).
-The command writes one line at a time to `$NAIMA_RUN_PROGRESS`; the last line
-counts. A JSON object is read field by field, each field optional:
+The command writes one line at a time to `$NAIMA_RUN_PROGRESS`, and only the
+last line counts. If the line is a JSON object, Naima reads it field by
+field, and every field is optional.
 
 ```sh
 echo '{"stage":"render","done":12,"total":40,"unit":"frames"}' >> "$NAIMA_RUN_PROGRESS"
 ```
 
-- `stage` — what it is doing now; `done`, `total`, `unit` — how much of it is
-  done, of how much, of what;
-- `note` — anything else worth saying;
-- `overall` — `{ "done", "total", "unit" }` for the whole work around the
-  stage, such as scenes around frames.
+- `stage` is what the command is doing now, and `done`, `total` and `unit`
+  say how much of it is done, out of how much, and counted in what.
+- `note` is for anything else worth saying.
+- `overall` takes `{ "done", "total", "unit" }` for the larger piece of work
+  the stage belongs to, such as scenes around frames.
 
 Any other line is shown as it is. Naima works out the rate and, when the total
 is known, the time left, and shows them as
-`render: 12/40 frames (30%) · 2/s · ETA 14s`. Naima's own commands — `naima
-verify`, `naima metrics run`, `naima tools install` — write these lines by
-themselves when they run inside `naima run`, and print them on the terminal
-otherwise, once they have run for a couple of seconds.
+`render: 12/40 frames (30%) · 2/s · ETA 14s`. Some of Naima's own commands
+(`naima verify`, `naima metrics run` and `naima tools install`) write these
+lines by themselves when they run inside `naima run`. Otherwise they print
+them on the terminal, once they have been running for a couple of seconds.
 
-A command that truly cannot say how far it is — a solver with no progress
-output — is started with the reason instead:
+Some commands really can't say how far along they are, such as a solver that
+prints nothing while it works. Such a command is started with the reason
+instead:
 
 ```sh
 naima run solve --budget-time 12h --no-progress "the solver prints nothing until it ends" -- ./solve.sh
@@ -68,17 +75,19 @@ naima run status bench --tail 50  # one run, with the end of its log
 naima run stop bench              # end it now
 ```
 
-While it waits, `naima wait` prints every 30 seconds (`--report`) how long
-the run has been going and its progress. Then it prints how the run ended —
-succeeded, failed with its exit code, killed by a budget, stopped — with the
-end of its log, and exits 0 only when it succeeded. If the run is still going when the timeout passes, it says so
-and exits 1: waiting again is a decision, never an accident.
+While it waits, `naima wait` prints how long the run has been going and its
+progress, every 30 seconds (`--report`). When the run ends, it prints how it
+ended (succeeded, failed with its exit code, killed by a budget, or stopped)
+together with the end of its log, and it exits 0 only if the run succeeded.
+If the run is still going when the timeout passes, it says so and exits 1, so
+waiting again has to be a deliberate choice.
 
-`naima run list` marks two kinds of runs in capitals: **STALE**, still
-running but silent — no new progress line for `--stale`, 2 minutes by
-default; for a run started with `--no-progress`, nothing new in its log or
-progress file for 15 minutes — and **LOST**, whose supervisor stopped
-reporting — killed, or the machine restarted — so nobody knows how it ended.
+`naima run list` marks two kinds of runs in capitals. A **STALE** run is
+still running but has gone quiet. Normally that means no new progress line
+for the `--stale` interval, which is 2 minutes by default. For a run started
+with `--no-progress`, it means nothing new in its log or progress file for 15
+minutes. A **LOST** run is one whose supervisor stopped reporting, because it
+was killed or the machine restarted, so nobody knows how the run ended.
 
 ## Clean up
 
@@ -86,34 +95,39 @@ reporting — killed, or the machine restarted — so nobody knows how it ended.
 naima run clean bench
 ```
 
-Removes the paths the run declared with `--creates`, then its record. It is
-refused while the run is going, and it never removes a file git tracks.
+This removes the paths the run declared with `--creates`, and then the
+run's record. Naima refuses to do it while the run is still going, and it
+never removes a file that git tracks.
 
 ## On another machine
 
-A machine is declared once, in `naima.json`:
+You declare another machine once, in `naima.json`.
 
 ```json
 "long-work": { "options": { "hosts": {
   "lab": { "ssh": "me@lab.example.org", "dir": "/home/me/project" } } } }
 ```
 
-Then `naima run bench --host lab --budget-time 6h -- 'deno task bench'` runs it
-there, through the copy of Naima that machine already has for the project;
-`wait`, `run list`, `run status`, `run stop` and `run clean` ask it over ssh.
-A run on another machine must not change files the repository tracks there:
-if it does, it is reported failed, naming them.
+After that, `naima run bench --host lab --budget-time 6h -- 'deno task bench'`
+runs the work on that machine, using the copy of Naima it already has for the
+project, and `wait`, `run list`, `run status`, `run stop` and `run clean` ask
+it over ssh. A run on another machine must not change any file the repository
+tracks there. If it does, the run is reported as failed, and the report names
+the files.
 
 ## Where the records are
 
-Each run has a folder in `naima-tracker/.runs/<name>/`: what was asked
-(`run.json`), its state (`status.json`), its `log` and its `progress`. The
-folder ignores itself, so nothing of it is ever committed.
+Each run has a folder in `naima-tracker/.runs/<name>/`, holding what was
+asked for (`run.json`), the run's state (`status.json`), its `log` and its
+`progress`. The folder tells git to ignore it, so none of it is ever
+committed.
 
 ## Platforms
 
-macOS and Linux: everything above. Windows: local runs, ended with `taskkill`;
-a Windows machine cannot be a `--host`. The rule that makes these commands
-mandatory for agents: [long work goes through naima run](rules.md#long-work-goes-through-naima-run-and-naima-wait).
-The rule that it says how far it is:
-[long work reports its progress](rules.md#long-work-reports-its-progress-or-says-why-it-cannot-and-what-it-reports-instead).
+Everything above works on macOS and Linux. On Windows you get local runs,
+which are ended with `taskkill`, and a Windows machine can't be a `--host`.
+Agents are required to use these commands by the rule
+[long work goes through naima run](rules.md#long-work-goes-through-naima-run-and-naima-wait),
+and the rule
+[long work reports its progress](rules.md#long-work-reports-its-progress-or-says-why-it-cannot-and-what-it-reports-instead)
+is the one that asks it to say how far along it is.

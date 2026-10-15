@@ -1,81 +1,90 @@
 # Worktree isolation
 
-A system requirement, not a preference: every other [flow](../guide/glossary.md#flow) is written to obey
-it, and a procedure that violates it is a defect in the procedure. Each rule
-below is stated on [the rules page](../guide/rules.md#branches-and-worktrees),
-marked enforced or convention; this page says why, and how.
+Worktree isolation is a requirement of the system, not a preference. Every
+other [flow](../guide/glossary.md#flow) is written to follow it, and a
+procedure that breaks it has a defect. Each rule below is also stated on
+[the rules page](../guide/rules.md#branches-and-worktrees), where it is marked
+as enforced or as a convention. This page explains why each rule exists and
+how to follow it.
 
 ## The five rules
 
 ### 1. A worktree writes to its own branch and nowhere else
 
 No tool, flow or session writes into another checkout or commits onto a
-branch it is not standing on. **Reading** other branches is fine, and is how
-every shared view is built.
+branch it isn't on. Reading other branches is fine, and that is how every
+shared view is built.
 
 ### 2. Nobody commits on the trunk while branches are being prepared
 
-A commit on the [trunk](../guide/glossary.md#trunk) while a branch is being prepared leaves that branch
-out of date: the trunk is no longer its ancestor, and it must merge the trunk
-in, resolve and run its gates again before it can land. Work in hand goes on
-a branch:
+If someone commits on the [trunk](../guide/glossary.md#trunk) while a branch
+is being prepared, that branch is left out of date. The trunk is no longer
+its ancestor, so before it can land, the worker has to merge the trunk in,
+resolve any conflicts and run its gates again. Work in progress therefore
+goes on a branch:
 
 ```sh
 naima open <item> --as <who> --name <what>
 ```
 
 If it happens anyway, move the commit onto the branch and rewind the trunk,
-so that git proves the result instead of a merge papering over it:
+so that git proves the result rather than a merge covering it up:
 
 ```sh
 git -C <worktree> cherry-pick <sha>     # the commit joins the branch
 git reset --keep <sha>^                 # the trunk goes back one; --keep, never --hard
 ```
 
-The commit then lands with the branch, as a [marker](../guide/glossary.md#marker) (rule 3). Once the
-trunk's first-parent line holds a marker, `naima check` notes every commit
-made on the trunk directly after it (the check `landings-are-markers`).
+The commit then lands with the branch, as a
+[marker](../guide/glossary.md#marker) (rule 3). Once the trunk's first-parent
+line contains a marker, `naima check` notes every commit made directly on the
+trunk after it (the check `landings-are-markers`).
 
-Whether a project allows direct commits on the trunk at all is the [owner](../guide/glossary.md#owner)'s
-call; this rule is about not doing it under a branch being prepared.
+Whether a project allows direct commits on the trunk at all is the
+[owner](../guide/glossary.md#owner)'s call. This rule is only about not doing
+it while a branch is being prepared.
 
 ### 3. A branch lands up to date, as a marker
 
-A branch is prepared until the trunk is its ancestor: it could be
-fast-forwarded. It then lands as a [marker](../guide/glossary.md#marker), a merge commit that changes
-nothing the branch tip holds and names the items it closes:
+A branch keeps being prepared until the trunk is its ancestor, which means it
+could be fast-forwarded. It then lands as a
+[marker](../guide/glossary.md#marker), which is a merge commit that changes
+nothing in what the branch tip holds and names the items it closes. The
+coordinator lands it with:
 
 ```sh
 naima land <branch>
 ```
 
-By hand, the same commit:
+The same commit made by hand looks like this:
 
 ```sh
 git merge-base --is-ancestor main <branch> && \
   git merge --no-ff <branch> -m "Land <branch>" -m "Closes: <item id>"
 ```
 
-**If it refuses, stop.** Do not resolve on the trunk, do not force. The
-refusal is information: the trunk moved under a branch prepared against it,
-and why it moved decides what to do — usually, merge the trunk into the
-branch and resolve there (step 6 of
+If it refuses, stop. Don't resolve anything on the trunk and don't force it.
+The refusal tells you that the trunk moved after the branch was prepared
+against it, and the reason it moved decides what to do. Usually that means
+merging the trunk into the branch and resolving there (step 6 of
 [closing a worktree](closing-a-worktree.md)).
 
-Why: the marker's tree is the branch tip's, so what lands is exactly what
-the branch's gates judged; any resolution belongs on the branch, where
-whoever wrote the code is standing. The trunk's first-parent line is then
-the record of landings, one marker each, and `M^1..M^2` lists the commits
-marker `M` landed.
+The reason for this rule is that the marker's tree is the branch tip's tree,
+so what lands is exactly what the branch's gates judged. Any conflict
+resolution belongs on the branch, where the agent that wrote the code is
+working. The trunk's first-parent line then becomes the record of landings,
+with one marker for each, and `M^1..M^2` lists the commits that marker `M`
+landed.
 
 ### 4. No shared mutable file
 
-Nothing asks two sessions to edit one path to register, announce or log
-something: no registry, index, board or "who is doing what" file.
+Nothing should require two sessions to edit the same path to register,
+announce or log something. That rules out a registry, an index, a board or a
+"who is doing what" file.
 
-Where a collection is needed: **one file per session, named by a uuid, in a
-directory — and the collection is recombined when read.** Naima does this for
-its own state:
+Where a collection is needed, each session writes its own file, named by a
+uuid, into a directory, and the collection is put back together when it is
+read. Naima does this for its own state:
 
 | Collection | What each session writes | Recombined by |
 |---|---|---|
@@ -83,81 +92,85 @@ its own state:
 | where each session left off | `<tracker>/PASSES/<date>-<uuid>.md` | `naima pass --list`, `naima summary` |
 | an [item](../guide/glossary.md#item)'s place on a board | the item's own `section` field | `naima board` |
 
-The views read every local branch: the trunk, every branch not merged into
-it, and whatever each [worktree](../guide/glossary.md#worktree) stands on. A branch checked out in a worktree
-is read from that worktree's disk, uncommitted files included — so two
-workers' uncommitted claims on one item are seen by each other and by the
-trunk — and a file deleted there and not yet committed is gone from every
-view. A branch no worktree stands on is read from its ref, as committed.
-Remote-tracking refs are not read: a branch that exists only on another
-machine is seen once it is fetched and checked out, or merged.
+The views read every local branch: the trunk, every branch not yet merged
+into it, and whatever branch each [worktree](../guide/glossary.md#worktree)
+is on. A branch checked out in a worktree is read from that worktree's disk,
+including uncommitted files. This means that when two workers have
+uncommitted claims on the same item, each sees the other's, and the trunk
+sees both. It also means a file deleted there but not yet committed is gone
+from every view. A branch that no worktree is on is read from its ref, as
+committed. Remote-tracking refs aren't read, so a branch that exists only on
+another machine is seen once it has been fetched and checked out, or merged.
 
 #### Item slugs across branches
 
-Items are directories, `<type>/<slug>/`, so two branches that open an item
-with the same title would both write `<type>/<slug>/meta.json` and meet in an
-add/add conflict. `naima new` prevents it: before it writes, it reads the
-slugs every other local branch holds under that type — from each worktree's
-disk, uncommitted items included, or from the branch's ref — and takes the
-next free one (`<slug>-2`, …). When the branches cannot all be read (git
-fails, or the clone is shallow), the new slug ends in the first eight
-characters of the item's uuid instead, which no other branch can pick.
+Items are directories, `<type>/<slug>/`, so if two branches open an item with
+the same title, both would write `<type>/<slug>/meta.json` and end up in an
+add/add conflict. `naima new` prevents this. Before it writes, it reads the
+slugs that every other local branch holds under that type, from each
+worktree's disk (uncommitted items included) or from the branch's ref, and
+takes the next free one (`<slug>-2`, …). When it can't read all the branches,
+because git fails or the clone is shallow, the new slug ends with the first
+eight characters of the item's uuid instead, which no other branch can pick.
 
-This reduces collisions; it does not remove them. A branch that exists only
-on another machine, not yet fetched, is not seen: two such branches can still
-pick one slug. Outside git there are no other branches, and nothing is added.
+This makes collisions less likely but doesn't rule them out. A branch that
+exists only on another machine and hasn't been fetched isn't seen, so two
+such branches can still pick the same slug. Outside git there are no other
+branches, and nothing is added.
 
 ### 5. The smell
 
 > You are about to append a line to a file another session also appends to.
 
-Stop. Make it a directory of uuid-named files.
+If you notice this, stop and use a directory of uuid-named files instead.
 
 ## What is still allowed
 
-- **Reading any branch.** That is how the views work.
-- **Several branches claiming one item.** `naima claim` says who else holds
-  it rather than refusing: the point is to know, not to lock.
+- **Reading any branch.** That's how the views work.
+- **Several branches claiming one item.** `naima claim` tells you who else
+  holds the item rather than refusing, because the point is to know about it,
+  not to lock it.
 
 ## The shared-stash hazard
 
-`git stash` is one stack **per repository**, not per worktree: every worktree
-shares it. A bare `git stash pop` run in your checkout can apply another
-session's stash, landing its half-finished work in your files; a stash taken
-just to measure a clean baseline can swap files out from under a process that
-is reading them right now.
+`git stash` keeps one stack for the whole repository, not one per worktree,
+so every worktree shares it. A bare `git stash pop` in your checkout can
+apply another session's stash and put its half-finished work into your
+files. A stash taken just to measure a clean baseline can also swap files out
+from under a process that is reading them at that moment.
 
-- **Prefer a temporary WIP commit** over a stash: `git commit -m "WIP: not
-  reviewed"`, undone later with `git reset --soft HEAD^` or amended away. A
-  commit is yours alone; the stash stack is not.
+- **Prefer a temporary WIP commit** to a stash: `git commit -m "WIP: not
+  reviewed"`, which you undo later with `git reset --soft HEAD^` or amend
+  away. A commit belongs to you alone, whereas the stash stack doesn't.
 - **If a stash is unavoidable**, push it with a unique message (`git stash
-  push -m "<branch>-<why>"`), apply it by its sha
+  push -m "<branch>-<why>"`) and apply it by its sha
   (`git stash apply stash@{n}` only right after pushing it, or
-  `git apply "$(git stash show -p <sha>)"`), and never bare `pop`. Drop it by
-  finding the entry again with the message, not by position — position shifts
-  as other sessions push and pop.
+  `git apply "$(git stash show -p <sha>)"`). Never use a bare `pop`. To drop
+  it, find the entry again by its message rather than by its position,
+  because positions shift as other sessions push and pop.
 - **Never stash to measure a baseline while a resource is running.** A
   baseline is recorded once and read back
   ([closing a worktree](closing-a-worktree.md#5-run-the-gates-and-read-what-breaks)),
-  not re-measured by temporarily removing someone else's changes.
+  rather than measured again by temporarily removing someone else's changes.
 
 ## Safety rules
 
 - **A worktree writes to its own branch and nowhere else.** Enforced: no
-  command in Naima writes to a path outside the worktree it was invoked in.
-- **Nobody commits on the trunk while a branch is being prepared.** Convention
-  while `preparing` is unset; checked once set (`naima claim --preparing`,
+  Naima command writes to a path outside the worktree it was run in.
+- **Nobody commits on the trunk while a branch is being prepared.** This is a
+  convention while `preparing` is unset, and checked once it is set
+  (`naima claim --preparing`,
   [closing a worktree](closing-a-worktree.md#0-say-the-branch-is-being-prepared)).
-- **A branch lands up to date, as a marker.** Enforced: `naima land`
-  refuses a branch the trunk is not an ancestor of, and moves the trunk only
-  if it has not moved meanwhile. A landing made by hand is convention,
-  checked after the fact: from the first marker on the trunk's first-parent
-  line, the check `landings-are-markers` notes every commit on that line
-  that is not a marker. Nothing blocks it; a git hook a project opts into
-  is [planned](../planned.md#blocking-a-landing-that-is-not-a-marker).
+- **A branch lands up to date, as a marker.** Enforced: `naima land` refuses
+  a branch whose ancestor isn't the trunk, and moves the trunk only if it
+  hasn't moved in the meantime. A landing made by hand is a convention that
+  is checked afterwards. From the first marker on the trunk's first-parent
+  line onwards, the check `landings-are-markers` notes every commit on that
+  line that isn't a marker. Nothing blocks such a commit yet, and a git hook
+  that a project can opt into is [planned](../planned.md#blocking-a-landing-that-is-not-a-marker).
 - **No shared mutable file.** Convention, kept by the one-file-per-session
-  shape above; nothing yet fails a hand-rolled shared log filed outside the
-  tracker — candidate property for a later model.
+  layout above. Nothing yet fails a hand-made shared log kept outside the
+  tracker, which makes this a candidate property for a later model.
 - **Never `git stash pop` in a shared worktree set.** Candidate property for
-  a later model: nothing yet checks that a stash was applied by sha rather
-  than popped; until then this is read, not verified.
+  a later model. Nothing yet checks that a stash was applied by sha rather
+  than popped, so for now this is read rather than verified.

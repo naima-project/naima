@@ -1,17 +1,20 @@
 # A second tutorial: let the company run, not just the ledger
 
-The [first tutorial](tutorial.md) shows filing and closing one bug, by
-yourself, in one checkout. This one shows the company running itself: a
-feature with its definition of done, your go, a coordinator starting one
-worker in its own worktree, a property proven by a verifier beside the test,
-a release gate that blocks and then holds, and what is left for you at the
-end. Fifteen minutes. Every output below is what the commands printed when
-this tutorial was run; yours differs only in ids, dates and commit hashes.
+The [first tutorial](tutorial.md) shows you filing and closing one bug by
+yourself, in one checkout. This one shows the project running itself. It
+covers a feature with its definition of done, your go-ahead, a coordinator
+starting one worker in its own worktree, a property proven by a verifier
+alongside the test, a release gate that blocks and then holds, and what is
+left for you at the end. [The primer](primer.md) gives the overview of these
+ideas if you want it first. The tutorial takes about fifteen minutes. Every
+output below is what the commands printed when this tutorial was run, and
+yours will differ only in ids, dates and commit hashes.
 
-What you need: the same as the first tutorial — a terminal and git. Pick up
-from an installed project, or install one again
-([install](install.md#bootstrap-a-project)); this one starts from the same
-tiny `greet.sh` script.
+You need the same things as for the first tutorial, a terminal and git. You
+can carry on from an installed project or install one again
+([install](install.md#bootstrap-a-project)), and this tutorial starts from
+the same tiny `greet.sh` script. In everyday use the agents run these
+commands, and here you run them yourself to see what they do.
 
 ## 1. File a feature, with a definition of done
 
@@ -20,8 +23,8 @@ $ naima new features "Greet by name, in the user's own language"
 naima-tracker/naima-data/features/greet-by-name-user-s-own-language/  a7c9927e-1a14-497e-abe0-18576aeff93b
 ```
 
-Open its page and write what "done" means before anyone touches the code —
-not a feeling, something the next step can check against:
+Open its page and write what "done" means before anyone touches the code.
+It should be something the next step can check against, not a feeling:
 
 ```markdown
 # Greet by name, in the user's own language
@@ -37,7 +40,8 @@ fall back to English otherwise.
 - `sh greet.sh Ada xx` prints "Hello, Ada" (unknown language falls back).
 ```
 
-Triage it, so it carries how it ranks against everything else open:
+Triage it, so it records how it ranks against everything else that is
+open:
 
 ```console
 $ naima triage set features/greet-by-name-user-s-own-language impact=medium priority=next confidence=reported
@@ -46,15 +50,16 @@ features/greet-by-name-user-s-own-language: impact=medium priority=next confiden
 
 ## 2. The owner's go
 
-A `requested` feature is only asked for; nothing starts until you say go.
-That answer is a status, not a chat message lost the moment it scrolls past:
+A `requested` feature has only been asked for, and nothing starts until you
+say go. Your answer is recorded as a status, so it doesn't get lost the way a
+chat message does once it scrolls past:
 
 ```console
 $ naima set features/greet-by-name-user-s-own-language status=planned
 features/greet-by-name-user-s-own-language: status=planned
 ```
 
-Commit it, so the feature — filed, written up, triaged, approved — is part
+Commit it, so the feature (filed, written up, triaged and approved) is part
 of the trunk before anyone branches off it:
 
 ```console
@@ -63,8 +68,8 @@ $ git add naima-tracker && git commit -qm "File the greet-by-language feature, t
 
 ## 3. A coordinator starts one worker
 
-The coordinator does not write the code; it starts a worker in a worktree of
-its own, on its own branch, claiming the item there
+The coordinator doesn't write the code itself. It starts a worker in a
+worktree of its own, on its own branch, and claims the item there
 ([work on several branches at once](several-branches.md)):
 
 ```console
@@ -76,7 +81,7 @@ next: cd ../demo-worktrees/greet-lang, and install the dependencies a fresh chec
 
 ## 4. The worker: code, a test, and a property
 
-From inside the worktree, the worker writes the fix:
+Working inside the worktree, the worker writes the fix:
 
 ```console
 $ cd ../demo-worktrees/greet-lang
@@ -95,8 +100,9 @@ $ sh greet.sh Ada xx
 Hello, Ada
 ```
 
-Every "Done" line holds. Now the proof, two ways at once: a test, red on the
-old code and green on the new —
+Every "Done" line holds. The worker now proves it in two ways at once. The
+first is a test, which fails (red) on the old code and passes (green) on the
+new code:
 
 ```console
 $ naima new tests "greet.sh greets Ada in English, Italian, and falls back on an unknown language"
@@ -111,11 +117,11 @@ $ naima set tests/greet-sh-greets-ada-english-italian-falls status=passed eviden
 tests/greet-sh-greets-ada-english-italian-falls: status=passed evidenceKind=diff redSeen=2026-10-01
 ```
 
-— and a [property](prove-and-close.md#properties-proven-by-a-tool), checked
-by a verifier rather than read by eye. The example adapter every project
-ships (`example-regex`) treats the script itself as the model and a regular
-expression as the property; a real project would name `mcrl2` or `voxlogica`
-here instead, over its own model:
+The second is a [property](prove-and-close.md#properties-proven-by-a-tool),
+which a verifier checks instead of someone reading the code by eye. The
+example adapter that every project ships (`example-regex`) treats the script
+itself as the model and a regular expression as the property. A real project
+would name `mcrl2` or `voxlogica` here instead, working on its own model:
 
 ```console
 $ naima new properties "greet.sh greets in Italian"
@@ -126,10 +132,10 @@ $ naima verify properties/greet-sh-greets-italian
 holds     properties/greet-sh-greets-italian  greet.sh greets in Italian
 ```
 
-A feature backed by a test and a property is backed twice over: the test
-proves the behaviour a person cares about, the property states a fact about
-the code itself and a tool checks it on every run, not only the day it was
-written.
+With both a test and a property, the feature is backed in two different
+ways. The test proves the behaviour a person cares about. The property states
+a fact about the code itself, and a tool checks it on every run, not only on
+the day it was written.
 
 ## 5. Ship it, commit, release the claim
 
@@ -147,17 +153,17 @@ wrote naima-tracker/naima-data/passes/2026-10-01-40d543d9-b61b-4251-a5b2-f5dccc1
 $ git add -A && git commit -qm "Release the claim, session note"
 ```
 
-`docs=USAGE.md` is the rule
-([features are documented as part of their implementation](rules.md#features-are-documented-as-part-of-their-implementation))
-held automatically: a feature cannot be marked `shipped` without naming where
-it is written up.
+`docs=USAGE.md` is there because of the rule that
+[features are documented as part of their implementation](rules.md#features-are-documented-as-part-of-their-implementation),
+which Naima enforces automatically. A feature can't be marked `shipped`
+without naming where it is written up.
 
 ## 6. The coordinator lands, and declares a release gate
 
 Back in the main checkout, `naima land` puts the branch on the trunk as one
-[marker](glossary.md#marker) commit naming the item it closes, taken from
-the claim the branch released. It refuses rather than risk an overwrite if
-the trunk had moved underneath:
+[marker](glossary.md#marker) commit that names the item it closes, which it
+takes from the claim the branch released. If the trunk has moved in the
+meantime, it refuses rather than risk overwriting anything:
 
 ```console
 $ cd ../demo
@@ -166,11 +172,11 @@ landed worker/greet-lang on main: 9ec50a9d41c2, closing features/greet-by-name-u
 next: naima close each item once its proof is checked, then naima prune --branch worker/greet-lang --write
 ```
 
-By hand, the same commit is `git merge-base --is-ancestor main
+To make the same commit by hand, you would run `git merge-base --is-ancestor main
 worker/greet-lang && git merge --no-ff worker/greet-lang -m "Land
 worker/greet-lang" -m "Closes: <item id>"`.
 
-Then the gate a release waits on
+Next the coordinator declares the gate that a release waits on
 ([plan with epics, milestones and gates](plan-with-epics-milestones-and-gates.md)):
 
 ```console
@@ -182,9 +188,9 @@ $ naima gates v1 --check
 v1 — First release (version v1): HOLDS
 ```
 
-Had the gate been declared before the merge, it would have printed `BLOCKED
-by 1` and named the feature — this is what "a release gate holding" means in
-practice: nothing is said to hold until the work that backs it is actually on
+If the gate had been declared before the merge, it would have printed
+`BLOCKED by 1` and named the feature. That is what a release gate holding
+means in practice. The gate only holds once the work behind it is actually on
 the trunk.
 
 ## 7. What is left for you
@@ -197,10 +203,11 @@ $ naima claims
 no claims
 ```
 
-Nothing. The feature was asked for, approved once, built by a worker in its
-own worktree, proven twice (a test and a property), shipped with its
-documentation, merged, and its gate holds — without you doing any of the
-work, and without being asked anything you had not already decided in step 2.
-[How the project runs](how-the-project-runs.md) is the same flow, in full;
-[what happens while you are away](while-you-are-away.md) is what a coordinator
-does with several workers at once.
+There is nothing left for you. The feature was asked for, approved once,
+built by a worker in its own worktree, proven twice (by a test and a
+property), shipped with its documentation and merged, and its gate holds. You
+didn't do any of the work, and you weren't asked anything you hadn't already
+decided in step 2. [How the project runs](how-the-project-runs.md) describes
+the same flow in full, and
+[what happens while you are away](while-you-are-away.md) shows what a
+coordinator does with several workers at once.

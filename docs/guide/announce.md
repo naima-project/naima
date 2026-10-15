@@ -1,11 +1,16 @@
 # Announce only what is true
 
-What your project may tell the world — in release notes, the changelog, the README, the site — is computed from the tracker, never decided from memory. A
-[feature](glossary.md#feature) may be announced once it is **announceable**: user-facing, shipped, documented, and checked by a person or end to end.
+What your project tells the world in its release notes, changelog, README
+and site is worked out from the tracker rather than from anyone's memory. A
+[feature](glossary.md#feature) can be announced once it is *announceable*,
+which means it is user-facing, shipped, documented, and checked by a person or
+end to end. The agents run the commands on this page for you, unless you want
+to run them yourself.
 
 ## Mark what a feature is for
 
-Two fields, set on the feature when it is filed or later:
+Two fields describe this, and they can be set on the feature when it is filed
+or at any later time:
 
 ```sh
 naima set features/search facing=user      # someone using the software sees it
@@ -22,33 +27,38 @@ $ naima announce
   · features/export  Export  (shipped 2026-01-12)
 ```
 
-`★` is a major feature. `naima announce --since 2026-01-01` keeps those shipped (`fixedOn`) since a date; `naima announce --gate v1` those on a
-[gate](glossary.md#gate), what a release off it announces. `--json` prints the same as data.
+`★` marks a major feature. `naima announce --since 2026-01-01` keeps only the
+features shipped (`fixedOn`) since that date, and `naima announce --gate v1`
+keeps those on a [gate](glossary.md#gate), which is what a release made from
+that gate announces. `--json` prints the same list as data.
 
-`naima announce --all` adds every user-facing feature that is not announceable yet, each with what it lacks:
+`naima announce --all` also lists every user-facing feature that isn't
+announceable yet, each with what it still lacks:
 
 ```console
 1 user-facing, not announceable
   ✗ features/sharing  Sharing — not documented: set docs=<path>[#heading]
 ```
 
-A feature lacks one of four things:
+There are four things a feature can lack:
 
 | Lacks       | Fix                                                                                                                                                                                                |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | user-facing | `facing=user`, if it is                                                                                                                                                                            |
 | shipped     | it is not on the main branch yet: nothing to announce                                                                                                                                              |
 | documented  | the page that documents it, named in `docs`                                                                                                                                                        |
-| checked     | a [test item](glossary.md#test-item) that verifies it, passed, run by a person (`runBy=human`) or by an agent driving the running software (`runBy=agent-hands`) — a unit test alone is not enough |
+| checked     | a [test item](glossary.md#test-item) that verifies it and has passed, run by a person (`runBy=human`) or by an agent driving the running software (`runBy=agent-hands`); a unit test alone is not enough |
 
 ## The README and the site
 
-`naima check` fails when the README names a feature that is not announceable — by its label (`features/sharing`) or its full title. To hold the site's pages
-too, list them in the option `copy`:
+`naima check` fails when the README names a feature that isn't announceable,
+either by its label (`features/sharing`) or by its full title. To apply the
+same check to the site's pages, list them in the option `copy`:
 
 ```json
 "plugins": { "announce": { "options": { "copy": ["README.md", "site/index.html"] } } }
 ```
 
-The agent that writes the announcements, and what it refuses, is [the announcer](../agents/announcer.md). Every option is in the
-[reference](../reference/reference.md).
+The agent that writes the announcements, and the things it refuses to write,
+are described in [the announcer](../agents/announcer.md). Every option is in
+the [reference](../reference/reference.md).

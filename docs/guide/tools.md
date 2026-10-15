@@ -1,10 +1,11 @@
 # Tools: what a plugin needs, installed by Naima
 
-A model checker such as mCRL2 or Storm is a program of its own. The plugin
-that uses it says which one, at which exact version, and where each platform
-gets it from; Naima installs it on the machine it runs on, into a directory of
-its own, when you say yes. An agent does this for you; each command below is
-what it types, so you can check what it did.
+A model checker such as mCRL2 or Storm is a separate program. The plugin
+that uses it says which program it needs, at which exact version, and where
+each platform gets it from. When you say yes, Naima installs it on the
+machine it runs on, in a directory of its own. The agents do this for you,
+and each command below is what they type, so you can check what they did. You
+can also run the commands yourself if you want to.
 
 ## What this machine has
 
@@ -19,13 +20,15 @@ tools on this machine (darwin-arm64), in /Users/you/Library/Application Support/
   storm    1.14.0           missing — naima tools install storm  [storm]
 ```
 
-Every tool the project's plugins declare, with one state: `installed`,
-`missing` (with the command that installs it), `unavailable here` (with the
-reason, and what to do instead), or `no declaration for` this platform. It
-writes nothing. `naima tools --json` prints the same as data.
+This lists every tool the project's plugins declare, each in one state:
+`installed`, `missing` (with the command that installs it), `unavailable
+here` (with the reason and what to do instead), or `no declaration for` this
+platform. The command doesn't write anything. `naima tools --json` prints the
+same information as data.
 
-`naima tools show storm` prints what an install would fetch — for the tool and
-every tool it needs: the source, the size, the sha256 and the licence.
+`naima tools show storm` prints what an install would fetch for the tool and
+for every tool it needs, giving the source, the size, the sha256 and the
+licence of each.
 
 ## Install one
 
@@ -33,17 +36,19 @@ every tool it needs: the source, the size, the sha256 and the licence.
 naima tools install mcrl2
 ```
 
-Naima prints the plan — source, size, licence — and asks `Install? [y/N]`.
-Only `y` goes on. An agent has no terminal to ask on: it shows you the plan,
-asks you, and passes your answer with `--consent "<your yes, restated>" --by
-<you>`. The yes, who gave it, how and when are kept in the install's receipt.
+Naima prints the plan, with the source, the size and the licence, and asks
+`Install? [y/N]`. It only goes on if the answer is `y`. An agent has no
+terminal on which to ask, so it shows you the plan, asks you in chat, and
+passes your answer with `--consent "<your yes, restated>" --by <you>`. The
+yes, who gave it, how and when are all kept in the install's receipt.
 
-Then Naima downloads the file, checks that its size and sha256 are the
+Naima then downloads the file, checks that its size and sha256 match the
 declared ones, unpacks it, and runs the tool once to see that it works on this
 machine (for mCRL2, `mcrl22lps --version` must say `202607.0`). While it
-downloads it says how many bytes it has of the total, with the rate and the
-time left. If any step fails, nothing is kept. The verifier that declared the tool uses it from then
-on, without anything on your `PATH`.
+downloads, it shows how many bytes it has out of the total, along with the
+rate and the time left. If any step fails, nothing is kept. From then on, the
+verifier that declared the tool uses it without needing anything on your
+`PATH`.
 
 ## Where the tools go
 
@@ -53,11 +58,12 @@ on, without anything on your `PATH`.
 | Linux | `$XDG_DATA_HOME/naima/tools`, by default `~/.local/share/naima/tools` |
 | Windows | `%LOCALAPPDATA%\naima\tools` |
 
-`NAIMA_TOOLS`, set to an absolute path, names another. One directory per user
-and machine serves every project and every worktree. Nothing is written
-anywhere else: no `PATH`, no shell file, no system folder, no administrator
-rights. Deleting the directory removes every tool and leaves the machine as it
-was.
+Setting `NAIMA_TOOLS` to an absolute path picks a different directory. There
+is one directory per user and machine, shared by every project and every
+worktree. Naima writes nothing anywhere else, so it doesn't touch your `PATH`,
+your shell files or any system folder, and it doesn't need administrator
+rights. Deleting the directory removes every tool and leaves the machine as
+it was.
 
 ## Remove one
 
@@ -65,9 +71,9 @@ was.
 naima tools remove storm
 ```
 
-It removes every version of the tool from the directory. A tool another
-installed tool needs — the Python under Storm — is refused until that one is
-removed.
+This removes every version of the tool from the directory. If another
+installed tool needs it, as Storm needs its Python, the removal is refused
+until that other tool has been removed.
 
 ## The first tools
 
@@ -77,15 +83,15 @@ removed.
 | `storm` | stormpy 1.14.0 | `storm` | yes, macOS 14 or later | yes, macOS 15 or later | yes, glibc 2.34 or later | yes, glibc 2.34 or later | no build published |
 | `python` | 3.13.16 | `storm` | yes | yes | yes | yes | yes |
 
-- mCRL2 on Linux comes from its `.deb` package, unpacked into the tools
-  directory, never installed into the system.
-- Storm is its Python package, in a Python environment of its own, on a Python
-  Naima installs too: the system's Python is never used. `naima tools path
-  storm python` prints that Python, which imports `stormpy`, for your scripts.
-  The `storm` plugin is off until the project turns it on: `naima plugin
-  enable storm`.
-- Where a platform has no build, `naima tools` says so and what to do: run that
-  work on another machine (below).
+- On Linux, mCRL2 comes from its `.deb` package, which is unpacked into the
+  tools directory and never installed into the system.
+- Storm is installed as its Python package, in a Python environment of its
+  own, on a Python that Naima also installs. The system's Python is never
+  used. `naima tools path storm python` prints the path of that Python, which
+  can import `stormpy`, for use in your scripts. The `storm` plugin stays off
+  until the project turns it on with `naima plugin enable storm`.
+- Where a platform has no build, `naima tools` says so and tells you what to
+  do instead, which is to run that work on another machine (see below).
 
 ## On another machine
 
@@ -94,19 +100,22 @@ naima tools --host lab
 naima tools install mcrl2 --host lab
 ```
 
-`--host` asks a machine declared for [long work](long-work.md#on-another-machine)
-through its own Naima, over ssh. An install there shows that machine's plan
-and asks your yes here; the tool goes into that machine's tools directory.
+`--host` asks a machine declared for [long work](long-work.md#on-another-machine),
+through that machine's own Naima, over ssh. An install there shows that
+machine's plan and asks for your yes here, and the tool goes into that
+machine's tools directory.
 
 ## For plugin authors
 
 A plugin declares a tool under `contributes.tools`: `name`, `title`, `says`,
 `version` (one exact version), `licence`, `homepage`, `needs`, `programs`,
 `verify` (a program, its arguments, and what its output must contain), and
-`platforms`, one entry per `darwin-arm64`, `darwin-x64`, `linux-x64`,
-`linux-arm64`, `windows-x64`: either a source — `url`, `size`, `sha256`,
-`format` (`zip`, `tar.gz`, `dmg`, `deb` or `pip`), `bin` — or
-`{ "unavailable": "<why, and what to do>" }`. A declaration missing any of
-these stops the project from loading, naming the plugin. The plugin finds an
-installed program with `installedProgram(tool, program)` from the plugin API.
+`platforms`. The `platforms` field has one entry for each of `darwin-arm64`,
+`darwin-x64`, `linux-x64`, `linux-arm64` and `windows-x64`, and each entry is
+either a source (`url`, `size`, `sha256`, `format`, which is one of `zip`,
+`tar.gz`, `dmg`, `deb` or `pip`, and `bin`) or
+`{ "unavailable": "<why, and what to do>" }`. If a declaration is missing any
+of these, the project doesn't load, and the error names the plugin. The
+plugin finds an installed program with `installedProgram(tool, program)` from
+the plugin API.
 The [reference](../reference/reference.md) lists every declared tool.

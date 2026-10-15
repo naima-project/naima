@@ -1,15 +1,19 @@
 # Add a plugin someone gave you
 
-A colleague, or another project, hands you a [plugin](glossary.md#plugin): a
-file, or a git repository. You do not need to read its code to add it, but you
-decide to trust it — it runs inside Naima. Naima runs it only pinned, so what
+Sometimes a colleague, or another project, hands you a
+[plugin](glossary.md#plugin), either as a single file or as a git repository.
+You don't need to read its code to add it, but adding it means you trust it,
+because it runs inside Naima. Naima only runs a plugin that is pinned, so what
 runs is exactly what you reviewed
 ([the rule](rules.md#third-party-code-runs-only-pinned)).
+
+The agents can do every step below for you; they are written out so you can
+follow along or do them yourself.
 
 ## A file
 
 1. Put it in the project, for example `tools/hello.mjs`, and commit it.
-2. Find its fingerprint (its sha256):
+2. Find its fingerprint, which is its sha256:
 
    ```console
    $ shasum -a 256 tools/hello.mjs
@@ -18,9 +22,9 @@ runs is exactly what you reviewed
 
    On Windows: `Get-FileHash tools/hello.mjs`.
 
-3. Name it in `naima-tracker/naima-data/naima.json`, with that fingerprint.
-   The name, `hello` here, is yours to choose: lowercase letters, digits and
-   dashes.
+3. Name it in `naima-tracker/naima-data/naima.json`, together with that
+   fingerprint. You choose the name (`hello` here), and it can use lowercase
+   letters, digits and dashes.
 
    ```json
    {
@@ -30,26 +34,27 @@ runs is exactly what you reviewed
    }
    ```
 
-4. Check it, and see it loaded:
+4. Run the checks and make sure it is loaded:
 
    ```sh
    naima check
    naima plugins
    ```
 
-When the file changes, every command refuses until you pin the new
-fingerprint, and says it:
+If the file changes, every command refuses to run until you pin the new
+fingerprint, and it tells you why:
 
 ```console
 $ naima check
 naima: naima.json: plugins.hello: tools/hello.mjs has changed since it was pinned: its sha256 is 91532e4fc03758f98e3e2721b64f12d26c7e42536ae7c1bca388f8edb48ac96c, not 0000000000000000000000000000000000000000000000000000000000000000 — review it, then pin the new hash
 ```
 
-Review what changed, then copy the new fingerprint into `naima.json`.
+Review what changed, and then copy the new fingerprint into `naima.json`.
 
 ## A git repository
 
-Name the repository, the full commit to run, and the file in it:
+For a plugin in a git repository, you name the repository, the full commit
+to run, and the file inside it:
 
 ```json
 {
@@ -59,25 +64,28 @@ Name the repository, the full commit to run, and the file in it:
 }
 ```
 
-The first run fetches it into `naima-tracker/plugins/ops/`, which git ignores.
-To move to a newer version, change `commit`.
+The first run fetches it into `naima-tracker/plugins/ops/`, a folder git
+ignores. To move to a newer version, change `commit`.
 
 ## Its options
 
-If the plugin takes options, they go beside `source`:
+If the plugin takes options, they go next to `source`:
 
 ```json
 { "plugins": { "hello": { "source": { "path": "tools/hello.mjs", "sha256": "…" }, "options": { "strict": true } } } }
 ```
 
-What it adds — commands, types, checks — is in its own documentation, and in
-`naima docs`, which prints the reference of every loaded plugin, this one
-included.
+The commands, types and checks it adds are described in its own
+documentation. `naima docs` also prints the reference of every loaded plugin,
+including this one.
 
 ## Removing it
 
-Delete its entry from `plugins`. Its [items](glossary.md#item), if it added a type, stay on disk;
-`naima check` reports a folder no loaded plugin owns (the check `layout`).
+To remove a plugin, delete its entry from `plugins`. If it added a type, its
+[items](glossary.md#item) stay on disk, and `naima check` then reports a
+folder that no loaded plugin owns (this is the check called `layout`).
 
-Writing a plugin of your own: [extending Naima](extending-naima.md), and the
-full contract it is written against: [plugin contract](../reference/plugin-contract.md).
+If you want to write a plugin of your own, see
+[extending Naima](extending-naima.md), and the
+[plugin contract](../reference/plugin-contract.md) for the full contract it is
+written against.

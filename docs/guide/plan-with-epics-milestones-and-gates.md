@@ -1,11 +1,12 @@
 # Plan with epics, milestones and gates
 
-Three ways to say what a body of work is for and when it is done, each one command away. Nothing here needs editing `naima.json` by hand.
+Naima has three ways to say what a body of work is for and when it is done, and each of them takes a single command. Nothing here needs you to edit
+`naima.json` by hand. The agents run these commands for you, unless you want to run them yourself.
 
 | Word          | What it is                                                            | Made with                                       |
 | ------------- | --------------------------------------------------------------------- | ----------------------------------------------- |
 | **epic**      | a body of work that groups items; done when they all are              | `naima new epics "<title>"`                     |
-| **gate**      | what must be settled before something may happen — a release, a merge | `naima gate new <name> "<title>"`               |
+| **gate**      | what must be settled before something may happen, like a release or a merge | `naima gate new <name> "<title>"`               |
 | **milestone** | a gate with a date, and optionally a version                          | `naima gate new … --due YYYY-MM-DD --version v` |
 
 ## Group work in an epic
@@ -15,8 +16,8 @@ naima new epics "Onboarding"
 naima epic add onboarding bugs/first-run-crash todos/welcome-copy features/sample-project
 ```
 
-An item is now `part-of` the epic. The epic's status is not set: it follows its items — `open` while any is open, `done` when every one is closed. Setting it by
-hand against them is refused.
+Each item is now `part-of` the epic. Nobody sets the epic's status, because it follows its items. It is `open` while any of them is open and `done` once every
+one is closed, and Naima refuses an attempt to set it by hand to something its items contradict.
 
 ```sh
 naima epic
@@ -29,23 +30,24 @@ epics/onboarding  Onboarding  [open]  1 of 3 closed · gate beta
   ✗ features/sample-project  A sample project  (human)
 ```
 
-For each open epic: how many of its items are closed, what it still waits for, and whose hands each needs — an agent, a person, a build ([triage](triage.md)).
-`naima epic --all` lists the done ones too; `naima epic remove onboarding todos/welcome-copy` takes an item out.
+For each open epic, this shows how many of its items are closed, what it is still waiting for, and who has to deal with each remaining item: an agent, a person
+or a build ([triage](triage.md)). `naima epic --all` lists the finished epics too, and `naima epic remove onboarding todos/welcome-copy` takes an item out.
 
 ## Declare a gate
 
-When someone says "that's a gate for the beta":
+When someone says "that's a gate for the beta", the agent runs:
 
 ```sh
 naima gate new beta "Public beta" --says "the first outside users"
 naima gate add beta bugs/first-run-crash epics/onboarding
 ```
 
-The gate is written into the project's configuration, checked as it will be read; the items get `gate=beta` through the same checks as any `naima set`. An epic
-on a gate stands for its items: the gate waits for them, not for the epic itself. An empty epic on a gate blocks it — nothing is planned yet.
+The gate is written into the project's configuration, and it is checked in the same way it will later be read. The items get `gate=beta` through the same
+checks as any `naima set`. An epic on a gate stands for its items, so the gate waits for them rather than for the epic itself. An empty epic on a gate blocks
+it, because nothing has been planned yet.
 
-By default a gate waits for **code**: a fixed item that still owes its proof does not block it. `--holds-on proof` makes it wait for every proof too
-([prove and close](prove-and-close.md)).
+By default a gate waits for **code**, which means that a fixed item that still owes its proof doesn't block it. `--holds-on proof` makes the gate wait for every
+proof as well ([prove and close](prove-and-close.md)).
 
 ```sh
 naima gate show beta          # what blocks it, what is owed, whose hands
@@ -63,11 +65,12 @@ $ naima gates
 beta — Public beta (version 0.9; due 2026-12-01, 17 days left): BLOCKED by 2
 ```
 
-`naima gates`, `naima queue beta` and `naima summary` say the days left, `today`, or how many days overdue. Once the date has passed and the gate does not hold,
-`naima check` warns (the check `milestone-overdue`) — a note, not a failure: a late milestone is news, not a broken project.
+`naima gates`, `naima queue beta` and `naima summary` show the number of days left, `today`, or how many days overdue it is. Once the date has passed and the
+gate still doesn't hold, `naima check` warns about it (the check `milestone-overdue`). This is a note rather than a failure, because a late milestone is
+something to know about, not a sign that the project is broken.
 
-`naima gates --json` prints the same as data: each gate's name, title, timing, whether it holds, and the items blocking it or owing only proof. The gates are
-also a panel of the first screen of `naima ui`.
+`naima gates --json` prints the same information as data: each gate's name, title and timing, whether it holds, and the items that block it or only still owe a
+proof. The gates also have a panel on the first screen of `naima ui`.
 
 ## See when things happened: the timeline
 
@@ -83,28 +86,29 @@ naima view timeline
 undated, not placed: epic finished 1 — an item without created, or resolved without closedOn or fixedOn
 ```
 
-Nothing on it is stored: each event is worked out from the items and git every time. A gate opens on the day its first item was reported and passes on the day
-its last item was resolved — archived (`closedOn`), else fixed (`fixedOn`) — once none is open; an epic the same, from its items. A release is a version tag
-(`v0.9`, `1.2`), dated by its commit; a session is its note (`naima pass`). Something with no date is counted at the foot, never put at a guessed day.
+None of this is stored. Each event is worked out from the items and from git every time. A gate opens on the day its first item was reported. Once none of its
+items is open, it passes on the day its last item was resolved, which is the day it was archived (`closedOn`) or, failing that, the day it was fixed
+(`fixedOn`). An epic is dated the same way, from its items. A release is a version tag (`v0.9`, `1.2`), dated by its commit, and a session is dated by its note
+(`naima pass`). Anything without a date is counted at the bottom instead of being placed on a guessed day.
 
-Only what the tracker cannot know needs writing down — a decision taken in a meeting, a build handed out, a policy, an outside fact:
+You only need to write down what the tracker can't know, such as a decision taken in a meeting, a build handed out, a policy or an outside fact.
 
 ```sh
 naima event 2026-09-14 "Build 3 handed to the testers" --kind build
 ```
 
-Each is one file in `naima-tracker/naima-data/events/`. The timeline is also a tab of the window `naima ui` opens.
+Each event is one file in `naima-tracker/naima-data/events/`. The timeline is also a tab in the window that `naima ui` opens.
 
 ## Say what waits on what: the order of the work
 
-A plan is rarely a list. A specification waits on its requirements, a model on its specification, a release on everything it ships. Say so with one link per
-wait:
+A plan is rarely a simple list. A specification waits on its requirements, a model waits on its specification, and a release waits on everything it ships.
+You record each of these waits with one link.
 
 ```sh
 naima link todos/write-the-specification blocked-by todos/write-the-requirements
 ```
 
-Then Naima reads the plan for you:
+Naima can then read the plan for you.
 
 ```sh
 naima ready          # what can start now: every open item whose blockers are all settled
@@ -120,23 +124,25 @@ all items: 4 in order, deepest wait 2
   2  todos/model-it  Model it
 ```
 
-The depth is how many waits stand before an item. A settled blocker holds nothing back. Both take a gate's name to show only its items, and `--json`. Items that
-wait on each other in a cycle could never start: `naima check` fails such a cycle (the check `dependencies-acyclic`), naming every item on it.
+The depth is the number of waits that come before an item, and a blocker that is already settled doesn't hold anything back. Both commands accept a gate's name,
+to show only that gate's items, and both accept `--json`. Items that wait on each other in a cycle could never start, so `naima check` fails on such a cycle
+(the check `dependencies-acyclic`) and names every item in it.
 
-Both list work only. An epic is done by its items, so it is not listed and a wait on it is a wait on its open items. A requirement is what the work is held
-to, met when a test or property that verifies it passes, so it is not listed either; a `blocked-by` naming one is a note of `naima check` (the check
-`dependencies-wait-on-work`): wait on the work that delivers or proves it instead.
+Both commands list only work. An epic is done when its items are, so it isn't listed, and waiting on an epic means waiting on its open items. A requirement isn't
+listed either, because it is what the work is held to, and it is met when a test or property that verifies it passes. If a `blocked-by` link names a
+requirement, `naima check` notes it (the check `dependencies-wait-on-work`), and the link should wait on the work that delivers or proves the requirement
+instead.
 
 ## Keep a diary
 
-The timeline says when gates opened and epics finished. A diary says what happened and why, day after day. Write it as it happens:
+The timeline says when gates opened and when epics finished. A diary says what happened and why, day by day, and it is written as things happen.
 
 ```sh
 naima event 2026-10-05 "Work on the new engine starts from its requirements" --kind diary
 ```
 
-An event of today records the moment it was written, so the events of one day keep their order; one written later for an earlier day says when with `--at 09:30`
-(a local time) or a timestamp of that day, and without it sorts first in its day. Read the story back:
+An event dated today records the moment it was written, so the events of a single day stay in order. An event written later for an earlier day gives its time
+with `--at 09:30` (a local time) or a timestamp from that day, and without one it is sorted first in its day. You can read the account back like this.
 
 ```sh
 naima diary --from 2026-10-05
@@ -149,12 +155,13 @@ naima diary --from 2026-10-05
   18:40  session   main: Day one closed: the plan is entered.
 ```
 
-Each decision is told with its reason, from its page; each session note is told whole. Nothing is stored for the diary beyond those files.
+Each decision is shown with its reason, taken from its page, and each session note is shown in full. Nothing is stored for the diary apart from those files.
 
 ## Hold a declared list to its tests: coverage
 
-A list the project keeps somewhere else — the paid features in a pricing file, the API endpoints in the code, the limits — is declared once, by where it is, and
-read from there on every run: there is no copy to fall behind. In `plugins.gates.options.coverage` of `naima-tracker/naima-data/naima.json`:
+Some lists are kept elsewhere in the project, such as the paid features in a pricing file, the API endpoints in the code, or the limits. You declare such a list
+once, by saying where it is, and Naima reads it from there on every run, so there is no copy that can fall out of date. The declaration goes in
+`plugins.gates.options.coverage` of `naima-tracker/naima-data/naima.json`.
 
 ```json
 "coverage": {
@@ -163,10 +170,11 @@ read from there on every run: there is no copy to fall behind. In `plugins.gates
 }
 ```
 
-A JSON source names the file and where the list is in it (keys joined by dots, `*` for every element); an element that is an object is named by its `id`, or the
-field `key` says. A files source names the files and a regular expression: each match is an entry, its first group when it has one.
+A JSON source names the file and where the list is inside it, with keys joined by dots and `*` for every element. An element that is an object is named by its
+`id`, or by the field that `key` names. A files source names the files and a regular expression, and each match is an entry (its first group, if it has one).
 
-A test names the entries it proves in `covers` — `naima set tests/sso-signs-in covers=sso`, or `paid:sso` to say which list. Then:
+A test names the entries it proves in `covers`, for example `naima set tests/sso-signs-in covers=sso`, or `paid:sso` to say which list the entry belongs to.
+Then `naima coverage` shows what is covered.
 
 ```text
 $ naima coverage
@@ -176,11 +184,12 @@ paid — the paid features: 2 of 3 covered
   audit   tests/audit-log [open]
 ```
 
-`naima coverage --check` exits 1 while any entry has NO TEST. A gate can require a list — `naima gate new launch "Launch" --coverage paid` — and is then blocked
-by each entry with NO TEST. `naima check` notes a test whose `covers` names an entry the list no longer holds. Coverage is also a tab of `naima ui`.
+`naima coverage --check` exits 1 as long as any entry has NO TEST. A gate can require a list, as in `naima gate new launch "Launch" --coverage paid`, and it is
+then blocked by each entry with NO TEST. `naima check` notes a test whose `covers` names an entry that is no longer on the list. Coverage is also a tab in
+`naima ui`.
 
 ## Where it lives
 
-Epics are items, in `naima-tracker/naima-data/epics/`. Gates are under `plugins.gates.options.gates` in `naima-tracker/naima-data/naima.json`
-([configuration](config.md)), which `naima gate new` writes; coverage lists beside them, under `plugins.gates.options.coverage`. The timeline's records are in
-`naima-tracker/naima-data/events/`. Commit them all with the work.
+Epics are items, kept in `naima-tracker/naima-data/epics/`. Gates are stored under `plugins.gates.options.gates` in `naima-tracker/naima-data/naima.json`
+([configuration](config.md)), which is what `naima gate new` writes, and the coverage lists sit next to them under `plugins.gates.options.coverage`. The
+timeline's records are in `naima-tracker/naima-data/events/`. All of them are committed along with the work.

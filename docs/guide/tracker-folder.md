@@ -1,8 +1,9 @@
 # The tracker folder
 
-A project that uses Naima carries one folder, `naima-tracker/`, at its root,
-and runs the Naima inside it. Installing Deno and bootstrapping the folder:
-[installing and updating](install.md).
+A project that uses Naima has one folder, `naima-tracker/`, at its root, and
+runs the copy of Naima kept inside it. How to install Deno and bootstrap the
+folder is explained in [installing and updating](install.md). The agents run
+the commands on this page for you, unless you want to run them yourself.
 
 ## Just add naima
 
@@ -12,13 +13,14 @@ In any git repository, once Naima is installed ([installing](install.md#bootstra
 naima init
 ```
 
-It creates the rest of `naima-tracker/`, locked to the Naima that ran it, and
-prints the one next command. It asks nothing and touches no file outside
-`naima-tracker/`; run again, it changes nothing. When the project configures a
-tool that would read the program's `.ts` files — `deno.json`, `tsconfig.json`,
-prettier — it also prints the line that excludes `naima-tracker/naima/` from
-it, and writes those lines only when asked: `naima init --write-excludes`
-([the host's own tools](install.md#the-hosts-own-tools)). Then:
+This creates the rest of `naima-tracker/`, locked to the Naima that ran it,
+and prints the next command to run. It asks no questions and touches no file
+outside `naima-tracker/`, and running it again changes nothing. If the
+project configures a tool that would read the program's `.ts` files, such as
+`deno.json`, `tsconfig.json` or prettier, it also prints the line that
+excludes `naima-tracker/naima/` from that tool. It only writes those lines
+when asked to, with `naima init --write-excludes`
+([the host's own tools](install.md#the-hosts-own-tools)). After that:
 
 ```sh
 naima new bugs "Export drops the alpha channel"
@@ -27,7 +29,7 @@ git add naima-tracker && git commit -m "Track this project with Naima"
 ```
 
 Every first-party plugin is already on, with defaults inferred from the
-repository: [the automatic principle](config.md#the-automatic-principle).
+repository ([the automatic principle](config.md#the-automatic-principle)).
 
 ## The naima-tracker folder
 
@@ -48,41 +50,42 @@ naima-tracker/
 `git status` shows `naima-data/`, `README.md` and `.gitignore`, never
 `naima/`.
 
-**Your material is in `naima-data/`, never in `naima/`.** The program
-directory holds only what runs Naima: no tests, no fixtures, no CI, no agent
-rules, and none of Naima's own [items](glossary.md#item) — those live in
-the workshop, a separate, private repository. Everything the project tracks — its
-bugs, its todos, its features, its tests, its rules — is an item in its own
-`naima-data/`, in the directory of its type (a milestone is a
-[gate](glossary.md#gate) with a date, kept with the other gates in
-`naima.json` rather than in its own directory);
-`naima/` is replaced whole on every update. Only the item directories that hold something exist. Commands work
-from any subdirectory: Naima walks up from the current directory to the first
-`naima-tracker/naima-data/naima.json`. Every file and field is specified in
-[the format](../reference/format.md).
+Your material lives in `naima-data/`, never in `naima/`. The program
+directory holds only what runs Naima. It has no tests, no fixtures, no CI, no
+agent rules, and none of Naima's own [items](glossary.md#item), which live in
+the workshop, a separate, private repository. Everything the project tracks,
+such as its bugs, todos, features, tests and rules, is an item in its own
+`naima-data/`, in the directory for its type. (A milestone is a
+[gate](glossary.md#gate) with a date, so it is kept with the other gates in
+`naima.json` rather than in a directory of its own.) `naima/` is replaced as
+a whole on every update. Only the item directories that hold something
+exist. Commands work from any subdirectory, because Naima walks up from the
+current directory to the first `naima-tracker/naima-data/naima.json`. Every
+file and field is specified in [the format](../reference/format.md).
 
 ## The lock
 
-`naima.json` records which Naima runs the project — its `source` and its
-`commit` — and every run aligns `naima-tracker/naima/` to exactly that, so
-two people, or a person and an agent, never manage one tracker with two
-different Naimas. The lock moves only with `naima update`, as one reviewable
-commit: [updating](install.md#updating).
+`naima.json` records which Naima runs the project, by its `source` and its
+`commit`. Every run aligns `naima-tracker/naima/` to exactly that, so two
+people, or a person and an agent, never manage the same tracker with two
+different versions of Naima. The lock moves only with `naima update`, as one
+reviewable commit ([updating](install.md#updating)).
 
 ## Migration
 
-The data has a format, a number in `naima.json`. When an update brings a
-Naima that reads a newer format, `naima update` migrates the data forward in
-the same change, deterministically. A Naima never acts on data in another
-format: newer data is refused in one line, older data is left to `naima
-update`, and `naima check` fails on a tracker whose items mix formats — the
-mark of a branch that has not merged the [trunk](glossary.md#trunk)'s update yet. What to do then:
+The data has a format, recorded as a number in `naima.json`. When an update
+brings a Naima that reads a newer format, `naima update` migrates the data
+forward in the same change, deterministically. Naima never acts on data in a
+format other than its own. It refuses newer data with a one-line message and
+leaves older data to `naima update`, and `naima check` fails on a tracker
+whose items mix formats. That happens on a branch that hasn't yet merged the
+[trunk](glossary.md#trunk)'s update. What to do in that case is described in
 [migrations](../reference/format.md#migrations).
 
 ## Moving things
 
 - **The data directory** can live anywhere in the repository. Move it with
-  `git mv`, and run Naima with `naima --data <dir>` or `NAIMA_DATA=<dir>`;
-  say so in the tracker's README, so that the next person finds it.
+  `git mv`, and run Naima with `naima --data <dir>` or `NAIMA_DATA=<dir>`.
+  Mention this in the tracker's README so that the next person can find it.
 - **The program directory** is `program` in `naima.json`, relative to the data
   directory.
