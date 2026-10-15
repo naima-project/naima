@@ -241,6 +241,12 @@ behaves as follows:
   another worktree's, and a commit missing there is first fetched from a
   repository on this disk that has it (the clone running the command, or the
   project itself when the project is Naima), so it isn't downloaded again.
+- **It repairs the program, and says so.** If files were deleted from the
+  clone and nothing else changed, it restores them from git. A clone that git
+  can't read is moved aside next to it, never deleted, and cloned again, and
+  a missing one is cloned. Each of these uses a copy on this disk when one
+  holds the commit, and each is reported in one line
+  ([update Naima](update-naima.md#when-the-program-is-damaged)).
 - **It follows the lock, and says so.** If a pulled `naima.json` has a
   `commit` that moved, for instance because a teammate's `naima update` was
   merged, the run follows it and prints
@@ -285,9 +291,10 @@ git add naima-tracker && git commit -m "Update Naima to <commit>"
 ```
 
 Updating is explicit, which means it takes a deliberate command, not that
-only a person can do it. An agent runs `naima update --check` at the start
-of a session and, if main has moved, runs `naima update`, the checks and the
-commit ([the skill](../agents/skill.md)). When several branches are open,
+only a person can do it. An agent starts a session with `naima hello`, which
+checks for a newer Naima as the `updates` setting in `naima.json` says. Once
+the owner has said yes, the agent runs `naima update`, the checks and the
+commit ([update Naima](update-naima.md)). When several branches are open,
 update on a branch of its own and merge that first. The other branches then
 merge the [trunk](glossary.md#trunk) and run `naima update` again, which
 either finishes migrating their new items or does nothing.

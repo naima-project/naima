@@ -68,6 +68,7 @@ carries `format`.
 | `plugins` | no, `{}` | plugin name → `{ "options", "enabled", "replacedBy", "source", "checks" }`, first-party plugins included: their options (the project's gates are the `gates` plugin's), switched off, replaced, added from a pinned source — a path inside the program, `{ "path", "sha256" }` or `{ "git", "commit", "path" }` — their checks weighed ([configuration](../guide/config.md#the-plugins-table)) |
 | `rename` | no, `{}` | kind → `{ "<plugin>/<name>": "<short name>" }`: the name a third-party plugin's contribution goes by, when two plugins would store the same one ([names](plugin-contract.md#names)) |
 | `extends` | no, `[]` | the project's own additive changes to the loaded plugins' types and fields: `{ "type", "statuses", "traits", "transitions" }` or `{ "field", "values", "appliesTo", "traits" }` ([extending](plugin-contract.md#extending-another-plugins-types-and-fields)) |
+| `updates` | no, `check` | what a session start, `naima hello`, does about a newer Naima: `off`, `check` or `update`; set with `naima update --mode` ([update Naima](../guide/update-naima.md#what-happens-when-a-session-starts)) |
 | `entryFiles` | no, sensible defaults | the agent-harness entry files (`CLAUDE.md`, `AGENTS.md`, …) `naima check` and `naima init --write-agent-pointer` act on, project-root relative ([the agent-harness entry point](../guide/install.md#the-agent-harness-entry-point)) |
 
 Any other key is an error. `source`, `commit`, `verify` and `program` are the

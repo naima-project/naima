@@ -22,7 +22,7 @@ things that really are theirs to decide.
 
 1. **Load the skill**, [`skills/naima/SKILL.md`](../../skills/naima/SKILL.md)
    in the program directory. It says how to install or align Naima, how to
-   update it at the start of a session, and where everything else is
+   start a session with `naima hello`, and where everything else is
    ([the Naima skill](skill.md)).
 2. **Read [the rules](../guide/rules.md)** that every project holds to. Each
    one is marked as checked by Naima or kept by convention. The rules are

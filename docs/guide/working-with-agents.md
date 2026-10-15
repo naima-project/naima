@@ -29,8 +29,8 @@ mkdir -p .claude/skills && ln -s ../../naima-tracker/naima/skills/naima .claude/
 
 With other tools, tell the agent to read
 `naima-tracker/naima/skills/naima/SKILL.md` first. The skill teaches it to
-update Naima at the start of a session, to change the tracker only through
-the commands, and to follow the [flows](glossary.md#flow) and
+announce Naima at the start of a session with `naima hello` and to update it
+only once you've said yes, to change the tracker only through the commands, and to follow the [flows](glossary.md#flow) and
 [the rules](rules.md).
 
 ## What to ask of an agent

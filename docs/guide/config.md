@@ -22,6 +22,10 @@ else, it doesn't have to configure anything.
 - the **formats** of the data, and the **lock**, which says which Naima runs
   the project (`source`, `commit`, optionally `verify`) and where it is
   (`program`);
+- the **update policy**, `updates`, which says what a session start does
+  about a newer Naima. It is `off`, `check` (the default) or `update`, and the
+  agent sets it with `naima update --mode`
+  ([update Naima](update-naima.md#what-happens-when-a-session-starts));
 - the **`plugins` table**, which records what the project decides about each
   plugin: its options (the project's [gates](glossary.md#gate) are options of
   the `gates` plugin), whether it is switched off or replaced, any

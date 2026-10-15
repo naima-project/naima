@@ -424,8 +424,10 @@ the trunk holds, never a branch that hasn't landed.
 
 ### Update deliberately, as one commit
 
-The [lock](glossary.md#lock) moves only with `naima update`, as one
-reviewable commit. At the start of a session, run `naima update --check`.
+The [lock](glossary.md#lock) moves only with `naima update` or `naima
+rollback`, each as one reviewable commit, and only after the owner has said
+yes. A session starts with `naima hello`, which checks for a newer Naima as
+the `updates` setting in `naima.json` says.
 **Enforced by** [alignment](glossary.md#alignment), which never pulls and
 refuses a changed [source](glossary.md#source) until `naima update
 --accept-source` is run ([update Naima](update-naima.md)).
