@@ -157,6 +157,24 @@
   .link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .link svg { width: 14px; height: 14px; color: var(--accent); }
   .stars { font-family: var(--mono); color: var(--muted); padding-left: var(--s-2); border-left: 1px solid var(--line); }
+
+  /* The primer: the one call to read, under the tagline. Accent only in its icon and its ring. */
+  .primer {
+    display: inline-flex; align-items: center; gap: var(--s-3); margin-top: var(--s-3); max-width: 100%;
+    font: 600 var(--t-base)/1.2 var(--sans); color: var(--fg); text-decoration: none;
+    border: 1px solid var(--accent-line); border-radius: 999px; padding: var(--s-3) var(--s-5) var(--s-3) var(--s-4);
+    background: var(--surface);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-line) 22%, transparent), 0 0 28px var(--glow);
+    transition: border-color .15s, box-shadow .15s, transform .15s;
+  }
+  .primer svg { flex: none; width: 18px; height: 18px; color: var(--accent); }
+  .primer .sub { font: 500 var(--t-sm)/1.2 var(--sans); color: var(--muted); padding-left: var(--s-3); border-left: 1px solid var(--line); }
+  .primer .go { color: var(--muted); transition: transform .15s, color .15s; }
+  .primer:hover { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-line) 40%, transparent), 0 0 32px var(--glow); transform: translateY(-1px); }
+  .primer:hover .go { color: var(--accent); transform: translateX(3px); }
+  .primer:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+  @media (max-width: 420px) { .primer .sub { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .primer, .primer .go { transition: none; } .primer:hover, .primer:hover .go { transform: none; } }
 </style>
 </head>
 <body>
@@ -197,6 +215,7 @@
           <li><span aria-hidden="true">🗂️</span> It all lives in your repo. Plain files, versioned with your code. No server, no account.</li>
         </ul>
       </div>
+      <a class="primer" href="https://github.com/vincenzoml/naima/blob/main/docs/guide/primer.md"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M0 1.75A.75.75 0 0 1 .75 1h4.253c1.227 0 2.317.59 3 1.501A3.743 3.743 0 0 1 11.006 1h4.245a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75.75h-4.507a2.25 2.25 0 0 0-1.591.659l-.622.621a.75.75 0 0 1-1.06 0l-.622-.621A2.25 2.25 0 0 0 5.258 13H.75a.75.75 0 0 1-.75-.75Zm7.251 10.324.004-5.073-.002-2.253A2.25 2.25 0 0 0 5.003 2.5H1.5v9h3.757a3.75 3.75 0 0 1 1.994.574ZM8.755 4.75l-.004 7.322a3.752 3.752 0 0 1 1.992-.572H14.5v-9h-3.495a2.25 2.25 0 0 0-2.25 2.25Z"/></svg>Learn the concepts<span class="sub">the primer, 15 minutes</span><span class="go" aria-hidden="true">→</span></a>
     </div>
 
     <section aria-label="Install">
@@ -224,7 +243,7 @@
     </section>
 
     <nav class="links" aria-label="More">
-      <a class="link" href="https://github.com/vincenzoml/naima/tree/main/naima/docs">Documentation</a>
+      <a class="link" href="https://github.com/vincenzoml/naima/tree/main/docs">Documentation</a>
       <a class="link star" href="https://github.com/vincenzoml/naima"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>Star on GitHub<span class="stars">0</span></a>
     </nav>
   </div>

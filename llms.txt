@@ -42,6 +42,7 @@ root with `git init`):
 ## More
 
 - Source and README: https://github.com/vincenzoml/naima
-- The documentation: https://github.com/vincenzoml/naima/tree/main/naima/docs
+- The primer, every concept in the order a person meets it: https://github.com/vincenzoml/naima/blob/main/docs/guide/primer.md
+- The documentation: https://github.com/vincenzoml/naima/tree/main/docs
 - Code-quality metrics (complexity, duplication, coverage and more), per
   commit, in a native window: `naima ui`
