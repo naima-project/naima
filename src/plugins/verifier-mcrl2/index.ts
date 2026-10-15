@@ -16,8 +16,8 @@
 //
 //   mcrl22lps, lps2lts, ltsinfo -a                       the LTS, once per model version (lts-cache.ts)
 //   ltsconvert --tau=<unmentioned> -edpbranching-bisim   hide and reduce, per formula
-//   lts2pbes, pbessolve                                  the verdict on the reduced LTS
-//   lts2pbes -c, pbessolve --evidence-file, ltsconvert   on false: confirmed, and the counterexample, on the full LTS
+//   lts2pbes -c, pbessolve --evidence-file               the verdict on the reduced LTS, with its evidence
+//   ltsconvert ev.lts ev.aut                             on false: the counterexample, hidden actions as tau
 //
 // `cross-check` runs both and gives a verdict only when they agree.
 //
@@ -423,29 +423,17 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
     details["reduced"] = { equivalence: EQUIVALENCE, states: size.states, transitions: size.transitions }
 
     const pbes = join(dir, "reduced.pbes")
-    const translated = await s.step("lts2pbes", [`--formula=${formula}`, reduced, pbes])
+    const evidence = join(dir, "evidence.lts")
+    const translated = await s.step("lts2pbes", ["--counter-example", `--formula=${formula}`, reduced, pbes])
     if ("stop" in translated) return done(translated.stop)
-    const solved = await s.step("pbessolve", [pbes])
+    const solved = await s.step("pbessolve", [`--file=${reduced}`, `--evidence-file=${evidence}`, pbes])
     if ("stop" in solved) return done(solved.stop)
     const answer = answerOf(solved.out)
     if (answer === "true") return done({ verdict: "holds", output: s.log.join("\n") })
     if (answer !== "false") return done({ verdict: "unknown", output: `${s.log.join("\n")}\npbessolve answered neither true nor false` })
 
-    // False: confirmed on the full LTS, whose evidence is the counterexample over the model's own actions (§2, step 6).
-    details["counterexampleFrom"] = "unreduced LTS"
-    const fullPbes = join(dir, "full.pbes")
-    const evidence = join(dir, "evidence.lts")
-    const again = await s.step("lts2pbes", ["--counter-example", `--formula=${formula}`, full, fullPbes])
-    if ("stop" in again) return done(again.stop)
-    const confirmed = await s.step("pbessolve", [`--file=${full}`, `--evidence-file=${evidence}`, fullPbes])
-    if ("stop" in confirmed) return done(confirmed.stop)
-    const second = answerOf(confirmed.out)
-    if (second !== "false") {
-      return done({
-        verdict: "error",
-        output: `${s.log.join("\n")}\nthe reduced and the unreduced LTS disagree: false on the reduced one, ${second || "no answer"} on the unreduced one`,
-      })
-    }
+    // False: the reduced LTS's evidence is the counterexample; the hidden actions appear in it as tau (§2, step 6).
+    details["counterexampleFrom"] = "reduced LTS"
     const aut = join(dir, "evidence.aut")
     const printed = await s.step("ltsconvert", [evidence, aut])
     const counterexample = "out" in printed && existsSync(aut)
@@ -526,8 +514,8 @@ export function mcrl2Plugin(options: Record<string, unknown> = {}, run: Runner =
     about:
       "Off until `naima.json` names it under `plugins`, since it starts programs. Contributes the `mcrl2` verifier and the `mcrl2` tool. `model` is an mCRL2 specification; `property` is a modal mu-calculus formula, inline, or the path of an `.mcf` file from the project root, which is then an input of the run. " +
       "A property chooses its route in `verifierOptions.route`. `lps`, the default, is the standard route: `mcrl22lps`, `lps2pbes --counter-example`, and `pbessolve` with an evidence file: `true` holds; `false` is violated, and the evidence, printed by `lps2lts` as an `.aut` labelled transition system, is the counterexample; any other answer, or `verifierOptions.timeoutSeconds` reached by a step, is unknown. " +
-      "`lts`, the LTS route, is for a model whose state space is small but whose data makes the standard route slow. The formula is first checked to be in the fragment that divergence-preserving branching bisimilarity preserves — every visible step right after a star over an action formula that includes tau, no single step that includes tau, fixpoints only as the four inevitability patterns — and refused otherwise, as an error run whose output begins `LTS route refused:`. Then `mcrl22lps` and `lps2lts` (with `--threads` from `verifierOptions.threads`) make the LTS once per model version, kept in the run work folder under a key over the model's contents, the toolset's version and the recipe, and shared by every property of that model; per formula, `ltsconvert` hides every action the formula does not mention and reduces modulo `dpbranching-bisim`, and `lts2pbes` and `pbessolve` decide; on false, the full LTS is solved again with evidence, for the counterexample, and a disagreement is an error. " +
-      "`cross-check` runs both routes and gives a verdict only when they agree; a disagreement is an error whose output begins `the routes disagree:`. Each run records in its `details` the route, the version of every tool it started, and for the LTS route the LTS's key, reuse and size, the mentioned and hidden actions and the reduced size. " +
+      "`lts`, the LTS route, is for a model whose state space is small but whose data makes the standard route slow. The formula is first checked to be in the fragment that divergence-preserving branching bisimilarity preserves — every visible step right after a star over an action formula that includes tau, no single step that includes tau, fixpoints only as the four inevitability patterns — and refused otherwise, as an error run whose output begins `LTS route refused:`. Then `mcrl22lps` and `lps2lts` (with `--threads` from `verifierOptions.threads`) make the LTS once per model version, kept in the run work folder under a key over the model's contents, the toolset's version and the recipe, and shared by every property of that model; per formula, `ltsconvert` hides every action the formula does not mention and reduces modulo `dpbranching-bisim`; on the reduced LTS, `lts2pbes --counter-example` and one `pbessolve` with an evidence file decide; on false, the evidence, printed by `ltsconvert` as an `.aut` labelled transition system, is the counterexample, over the reduced LTS, where the hidden actions appear as tau. " +
+      "`cross-check` runs both routes and gives a verdict only when they agree; a disagreement is an error whose output begins `the routes disagree:`. Each run records in its `details` the route, the version of every tool it started, and for the LTS route the LTS's key, reuse and size, the mentioned and hidden actions, the reduced size, and on false that the counterexample comes from the reduced LTS. " +
       "The tools are taken from `bin` when it is given, otherwise from the mCRL2 202607.0 that `naima tools install mcrl2` installed on this machine, otherwise from PATH; the plugin declares that tool, so `naima tools` reports it. A tool that is not there is an error run whose output begins `tool missing:`; a tool that fails is an error with its output. The version recorded is the first line of `mcrl22lps --version`.",
     options: [
       {
