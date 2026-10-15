@@ -12,6 +12,7 @@ import { label } from "./lifecycle.ts"
 import { brokenEntryLinks } from "./pointer.ts"
 import { storedLinks } from "./repo.ts"
 import type { Check, CheckOptions, Context, Finding, Item } from "./types.ts"
+import { unreadOptions } from "./updates.ts"
 
 const problem = (message: string, item?: Finding["item"]): Finding => (item ? { level: "problem", message, item } : { level: "problem", message })
 const note = (message: string): Finding => ({ level: "note", message })
@@ -162,7 +163,16 @@ const entryPointers: Check = {
   run: (ctx) => brokenEntryLinks(ctx.root, ctx.config.entryFiles).map((b) => problem(`${b.file}: names ${JSON.stringify(b.target)}, which does not exist`)),
 }
 
-export const coreChecks: Check[] = [readable, identity, fields, values, links, layout, duplicates, entryPointers, formatCheck()]
+const unreadOptionsCheck: Check = {
+  name: "unread-options",
+  says: "every option naima.json's plugins table sets is one its loaded plugin declares: an option no plugin reads any more is noted, by name",
+  run: (ctx) =>
+    unreadOptions(ctx.config.plugins, ctx.registry.plugins).map(({ plugin, key, path }) =>
+      note(`${path} is set, and ${plugin} reads no option ${key} — it has no effect: naima plugin set ${plugin} ${key}= removes it`)
+    ),
+}
+
+export const coreChecks: Check[] = [readable, identity, fields, values, links, layout, duplicates, entryPointers, unreadOptionsCheck, formatCheck()]
 
 export interface CheckReport {
   problems: Finding[]

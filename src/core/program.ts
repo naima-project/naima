@@ -9,13 +9,13 @@
 // have, is refused, never reset. It never pulls on its own: only `naima
 // update` asks the source where its main is.
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { posixRelative } from "./config.ts"
 import { NaimaError } from "./errors.ts"
 import { writeFileAtomic } from "./files.ts"
-import { gitReason, mustGit, runGit } from "./git.ts"
-import { RUNTIME_DIR } from "./layout.ts"
+import { gitReason, mustGit, nativePath, runGit } from "./git.ts"
+import { real, RUNTIME_DIR } from "./layout.ts"
 
 /** Where a project's program is, and what it is locked to. Paths are absolute. */
 export interface Target {
@@ -107,6 +107,46 @@ const sourceChanged = (t: Target, from: string, at: string | null): NaimaError =
     SOURCE_CHANGED,
   )
 
+// ---- self-repair ----
+
+/**
+ * Whether git reads `dir` as a clone of its own with a HEAD: a clone whose
+ * .git lost its HEAD, or worse, is not one — git would read the repository
+ * around it instead — and is moved aside, never deleted.
+ */
+export function readableClone(dir: string): boolean {
+  const r = runGit(dir, ["rev-parse", "--show-toplevel", "HEAD"])
+  const top = r.ok ? r.out.split("\n")[0] : undefined
+  return !!top && real(nativePath(top)) === real(dir)
+}
+
+/**
+ * Restore the files missing from a clone's checkout, when that is all that
+ * differs from its HEAD: a deletion is no one's work, and git holds every
+ * file. Returns how many it restored; 0 when the checkout holds any other
+ * change, which is work, refused elsewhere and never touched here.
+ */
+export function restoreDeleted(dir: string): number {
+  if (!isClone(dir) || !readableClone(dir)) return 0
+  const status = runGit(dir, ["status", "--porcelain", "--untracked-files=all"])
+  const lines = status.ok ? status.out.split("\n").filter((l) => l) : []
+  if (!lines.length || !lines.every((l) => l.startsWith(" D "))) return 0
+  return runGit(dir, ["checkout", "--quiet", "--", "."]).ok ? lines.length : 0
+}
+
+/** The line that says files were restored: one line, with their number. */
+export const restoredFiles = (n: number, where: string): string => `restored ${n} ${n === 1 ? "file" : "files"} missing from ${where}`
+
+/** Move an unreadable clone aside, beside it: its files may be someone's, so it is never deleted. Returns where it went. */
+function moveAside(t: Target): string {
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, "0")
+  const stamp = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
+  const aside = `${t.program}.broken-${stamp}`
+  renameSync(t.program, aside)
+  return aside
+}
+
 // ---- the clone ----
 
 /**
@@ -134,7 +174,7 @@ function seeds(t: Target): string[] {
 const lockedRefspec = (commit: string): string => `+${commit}:refs/remotes/origin/naima-locked`
 
 /** Fetch `commit` into the program: from a seed on this disk that holds it, else from origin. */
-function fetchCommit(t: Target, commit: string): void {
+export function fetchCommit(t: Target, commit: string): void {
   if (has(t.program, commit)) return
   for (const seed of seeds(t)) {
     if (!runGit(t.root, ["-C", seed, "cat-file", "-e", `${commit}^{commit}`]).ok) continue
@@ -157,8 +197,8 @@ function fetchCommit(t: Target, commit: string): void {
   )
 }
 
-/** Clone the program: from a seed on this disk when one holds the commit, its origin then set to the source; else from the source. */
-function cloneProgram(t: Target): void {
+/** Clone the program: from a seed on this disk when one holds the commit, its origin then set to the source; else from the source. Says which. */
+function cloneProgram(t: Target): string {
   const seed = seeds(t).find((s) => runGit(t.root, ["-C", s, "cat-file", "-e", `${t.commit}^{commit}`]).ok)
   mkdirSync(dirname(t.program), { recursive: true })
   const r = runGit(t.root, ["clone", "--quiet", "--no-checkout", "-c", "core.autocrlf=false", ...(seed ? ["--local"] : []), "--", seed ?? t.source, t.program])
@@ -172,10 +212,11 @@ function cloneProgram(t: Target): void {
     }
     throw new Error(`cannot clone ${seed} into ${where(t)}: ${gitReason(r)}`)
   }
-  if (!seed) return
+  if (!seed) return t.source
   // A clone names the seed's branches, not its remote-tracking refs, and the commit may be only there.
   runGit(t.program, ["fetch", "--quiet", "--", seed, lockedRefspec(t.commit)])
   mustGit(t.program, "remote", "set-url", "origin", t.source)
+  return "a copy on this disk"
 }
 
 /**
@@ -202,9 +243,10 @@ export function cloneIntoNewWorktree(t: Target, from: string): void {
   }
 }
 
-/** What alignment changed: the commit the program was at before, null for a fresh clone. */
+/** What alignment changed: the commit the program was at before, null for a fresh clone; and what it repaired, a line each. */
 export interface Moved {
   from: string | null
+  repaired: string[]
 }
 
 /**
@@ -219,6 +261,11 @@ export interface Moved {
  */
 export function align(t: Target): Moved | null {
   let from: string | null = null
+  const repaired: string[] = []
+  let restoredFrom: string | null = null
+  if (isClone(t.program) && !readableClone(t.program)) {
+    repaired.push(`${where(t)} is not a git clone git can read: moved aside to ${posixRelative(t.root, moveAside(t))}`)
+  }
   if (!isClone(t.program)) {
     if (existsSync(t.program) && readdirSync(t.program).length) {
       const copy = existsSync(join(t.program, ".naima-copy.json"))
@@ -228,8 +275,10 @@ export function align(t: Target): Moved | null {
           : `${where(t)} exists and is not a git clone of Naima — move it away`,
       )
     }
-    cloneProgram(t)
+    restoredFrom = cloneProgram(t)
   } else {
+    const gone = restoreDeleted(t.program)
+    if (gone) repaired.push(restoredFiles(gone, where(t)))
     refuseLocalWork(t)
     from = runGit(t.program, ["rev-parse", "HEAD"]).out || null
     const origin = runGit(t.program, ["remote", "get-url", "origin"]).out
@@ -237,7 +286,7 @@ export function align(t: Target): Moved | null {
       if (!t.acceptSource) throw sourceChanged(t, withoutCredentials(origin), from)
       mustGit(t.program, "remote", "set-url", "origin", t.source)
     }
-    if (from === t.commit) return null
+    if (from === t.commit) return repaired.length ? { from, repaired } : null
   }
   fetchCommit(t, t.commit)
   if (oldLayout(t.program, t.commit)) {
@@ -251,7 +300,8 @@ export function align(t: Target): Moved | null {
   }
   verifySigned(t.program, t)
   mustGit(t.program, "checkout", "--quiet", "--detach", t.commit)
-  return { from }
+  if (restoredFrom) repaired.push(`restored ${where(t)} at ${short(t.commit)}, from ${restoredFrom}`)
+  return { from, repaired }
 }
 
 /** What `naima update` follows: the branch it read, and the commit that branch points at. */
@@ -269,9 +319,9 @@ export function remoteHead(t: Target): Head {
   return { branch: "main", commit }
 }
 
-/** `git fetch origin main` in the program: the head `naima update` moves the lock to. */
+/** `git fetch origin main` in the program, with the source's tags, which name versions: the head `naima update` moves the lock to. */
 export function fetchHead(t: Target): Head {
-  const r = runGit(t.program, ["fetch", "--quiet", "origin", "+refs/heads/main:refs/remotes/origin/main"])
+  const r = runGit(t.program, ["fetch", "--quiet", "--tags", "origin", "+refs/heads/main:refs/remotes/origin/main"])
   if (!r.ok) throw new Error(`cannot fetch main from ${t.source}: ${gitReason(r)}`)
   return { branch: "main", commit: mustGit(t.program, "rev-parse", "refs/remotes/origin/main") }
 }

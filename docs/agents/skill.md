@@ -23,9 +23,12 @@ when to use it.
   copies `naima/` into `naima-tracker/naima/`
   ([bootstrap a project](../guide/install.md#bootstrap-a-project)). In a project with
   one, every run aligns the program itself.
-- **Update at the start of a session.** `naima update --check`; when the
-  source's main has moved, `naima update`, the checks, and one commit
-  ([updating](../guide/install.md#updating)). Running it is the agent's job.
+- **Announce Naima at the start of a session.** Run `naima hello` and show
+  the user its first line as it is: Naima is active in this repository, with
+  its version and commit. Then pass on what it found about newer versions,
+  and offer to explain Naima, show its documentation, check for an update or
+  update. An update is applied only after the owner says yes, followed by
+  the checks and one commit ([update Naima](../guide/update-naima.md)).
 - **Read the project's rules.** `naima rules --audience agents`, before
   anything else: the project's own rules, kept as [items](../guide/glossary.md#item) of its tracker
   ([read the project's rules](read-the-project-rules.md)).

@@ -104,6 +104,12 @@ function moduleOf(where: Where, source: PluginSource, name: string): string {
   return path
 }
 
+/**
+ * A module of another commit of Naima, by its path: what `naima update` reads of the commit it would move to
+ * (core/updates.ts). The one other computed import of the core, and it too only loads a path on this disk.
+ */
+export const importFile = (path: string): Promise<Record<string, unknown>> => import(pathToFileURL(path).href)
+
 /** A module's default-exported factory, from where its source says, as pinned. */
 async function factoryAt(where: Where, source: PluginSource, name: string): Promise<PluginFactory> {
   const mod = (await import(pathToFileURL(moduleOf(where, source, name)).href)) as { default?: unknown }

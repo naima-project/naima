@@ -91,15 +91,30 @@ retyping it, and never delete the file
 When a run refuses, it says why in one line and what to do: local changes in
 the program, a commit the source does not have, data in another format.
 
-## 3. Update at the start of a session
+## 3. Announce Naima at the start of every session
 
 ```sh
-naima update --check
+naima hello
 ```
 
-When it says the source's dist moved, run `naima update`, then `naima check`,
-then commit `naima-tracker/` as one change. Updating is your job, not a
-person's: [updating](../../docs/guide/install.md#updating).
+Show the user its first line exactly as printed, for example `Naima is
+active in this repository: version 1.0.0, commit 45ba22c1134c.` Then pass on
+what it says about newer versions, and offer the three things it lists:
+explaining Naima and showing its documentation (`naima guide`), checking for
+an update, and updating.
+
+How much it checks depends on `updates` in `naima.json`, which is `off`,
+`check` (the default) or `update`. If the owner asks you to change it, run
+`naima update --mode <value>`.
+
+When an update is available and the owner wants to hear about it, tell them
+what it changes: the commits, any migration, rules added or removed, and
+settings that would stop being read. Then ask. Only when they say yes, run
+`naima update`, then `naima check`, and commit `naima-tracker/` as one
+change. `naima rollback` goes back to the previous version, also as one
+commit. Never update without asking
+([update Naima](../../docs/guide/update-naima.md)). To check on request, run
+`naima update --check`.
 
 ## 4. Read the project's rules
 

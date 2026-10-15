@@ -45,6 +45,8 @@ import {
   readConfig,
   real,
   RELAUNCH,
+  restoreDeleted,
+  restoredFiles,
   runtimeOf,
   toolsDir,
   toplevel,
@@ -299,7 +301,12 @@ export async function launch(args: string[], cwd: string): Promise<number> {
   const others = otherWorktrees(root, data)
   const tools = toolsDir(Deno.env.toObject(), Deno.build.os)
   const ui = uiGrant(parsed.rest[0], Deno.build.os, Deno.execPath(), tools)
-  let entry = runtimeOf(program) ?? own
+  // A program whose own entry is gone cannot repair itself: when files deleted from its clone are all that differs, git restores them.
+  if (!runtimeOf(program)) {
+    const restored = restoreDeleted(program)
+    if (restored) console.error(`naima: ${restoredFiles(restored, relative(root, program).split("\\").join("/"))}`)
+  }
+  let entry = real(runtimeOf(program) ?? own)
   for (let run = 0; run < MAX_RUNS; run++) {
     let flags: string[]
     try {
@@ -325,7 +332,7 @@ export async function launch(args: string[], cwd: string): Promise<number> {
     const { code } = await child.status
     if (ui) Deno.removeSignalListener("SIGINT", wait)
     if (code !== RELAUNCH) return code
-    entry = runtimeOf(program) ?? program
+    entry = real(runtimeOf(program) ?? program) // resolved, as the permissions name it: the program may have just been made
   }
   console.error(`naima: ${program} did not settle after ${MAX_RUNS} runs — its alignment keeps moving`)
   return 2
