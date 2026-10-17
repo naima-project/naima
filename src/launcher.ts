@@ -199,8 +199,8 @@ const isOn = (e: unknown): boolean => !!e && typeof e === "object" && (e as { en
 /**
  * May the loaded contributions start a program besides git? Only when the
  * project loads code the program does not ship — a third-party plugin, or a
- * replacement for a first-party one — or declares metrics, each naming the
- * program that measures it, or switches on a first-party plugin that is off
+ * replacement for a first-party one — or declares metrics or test suites, each
+ * naming the program that measures it, or switches on a first-party plugin that is off
  * until asked for (`OPT_IN`), each starting a model checker: no other
  * first-party contribution starts one.
  * Read in every format: a list of plugins (format 1), or a table whose entries
@@ -212,8 +212,8 @@ export function mayRun(data: string | null): boolean {
     const plugins = (JSON.parse(readFileSync(join(data, DATA_FILE), "utf8")) as { plugins?: unknown }).plugins
     if (Array.isArray(plugins)) return plugins.length > 0
     if (!plugins || typeof plugins !== "object") return false
-    const metrics = (plugins as { metrics?: { options?: { metrics?: unknown } } }).metrics?.options?.metrics
-    if (metrics && typeof metrics === "object" && Object.keys(metrics).length) return true
+    const options = (plugins as { metrics?: { options?: { metrics?: unknown; suites?: unknown } } }).metrics?.options
+    for (const declared of [options?.metrics, options?.suites]) if (declared && typeof declared === "object" && Object.keys(declared).length) return true
     const entries = plugins as Record<string, unknown>
     if (OPT_IN.some((name) => isOn(entries[name]))) return true
     return Object.values(plugins).some((e) => !!e && typeof e === "object" && ("source" in e || "replacedBy" in e))

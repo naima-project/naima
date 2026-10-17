@@ -109,6 +109,26 @@ set in the `excusePhrases` option of the `trackers` plugin. Any of these
 notes can be raised to a problem, or switched off, under
 `plugins.trackers.checks` in `naima.json`.
 
+### Tests a suite runs
+
+When the gesture is an automated test in one of the project's
+[test suites](metrics-and-budgets.md#record-the-test-suites-test-by-test),
+nobody has to attach its output or set its status by hand. The test item
+names the tests it stands for.
+
+```sh
+naima set export-keeps testNames="export > keeps the alpha channel"
+```
+
+Each time `naima metrics run --record` records a run of the suite, the item
+gets the result. Its status becomes `passed` or `failed`, the results of its
+tests are attached with the commit, a digest of what the run read and each
+failure's message, `evidenceKind` becomes `observation`, and `redSeen` is set
+when it passes after a recorded run in which it failed. For a regression
+test, that means recording a run on the code before the fix, where the test
+fails, and another on the fix, where it passes. Both runs stay in
+`naima-data/test-runs/`, so the red run is kept together with the green one.
+
 ## Optional: a session for the sitting itself
 
 Most of the time the test's own page and status say enough, namely what it

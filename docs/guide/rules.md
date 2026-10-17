@@ -152,6 +152,37 @@ A test that verifies a bug was run on the code before the fix and failed,
 then on the fix and passed. `redSeen` records the day it failed.
 **Enforced by** the check `regression-test-saw-red`, as a note.
 
+### Test suites are recorded test by test, at the end of a phase
+
+A project's test suites are declared, and recorded with
+`naima metrics run --record` at the end of a phase of work, when a branch
+lands, and in the periodic and release runs of the full suite, never after
+every edit. Each run is kept per test, with the commit, a digest of what it
+read and its log, and a test item gets its result from the run of the tests
+it names. A run whose inputs are unchanged is reused rather than repeated. A
+gate or a milestone that says the tests pass stands on the recorded run.
+**Enforced by** the gate `suites` and the check `test-suites`, as a note for
+a test item whose names match no test. When to record is **convention**
+([metrics and budgets](metrics-and-budgets.md#record-the-test-suites-test-by-test)).
+
+Why: when suites were recorded only as pass counts, most test items carried
+no evidence that they had ever run, and a milestone's "tests pass" rested on
+a commit message that nobody could check later.
+
+### Performance requirements are metrics with budgets
+
+A requirement about how long something takes, how much memory it uses, how
+much it handles per second or how big something is, is measured by a metric
+with a budget that names it in `satisfies`, so it is measured on every
+recorded run and shown over time. **Enforced by** the check
+`performance-requirement-has-metric`, as a note on a requirement that names
+such a measure with no metric, and the check `metric-satisfies`
+([metrics and budgets](metrics-and-budgets.md#performance-requirements-are-metrics-with-budgets)).
+
+Why: a performance requirement checked once, by hand, says nothing about the
+version that ships, and timings that live only in benchmark files are never
+compared with the ones before.
+
 ### A change to a model is proved, not just checked
 
 When a model changes because of an item (a bug, a todo or a feature), the

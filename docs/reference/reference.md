@@ -22,7 +22,7 @@ Every contribution below has a qualified id, `<plugin>/<name>`, and goes by its 
 - [tools](#tools) — the tools plugins need, installed by Naima into its own directory on the machine it runs on: naima tools reports them, installs one with consent, removes one
 - [verifier-mcrl2](#verifier-mcrl2) — the mCRL2 adapter: a property is a modal mu-calculus formula over an mCRL2 specification
 - [ui](#ui) — the views plugins contribute, shown by `naima ui` in a native window, or the browser, from a server on this machine only
-- [metrics](#metrics) — named measurements — a command's number, or a code-quality number taken in process — recorded per commit, held to a budget, a floor or a baseline, and read back along the commit timeline
+- [metrics](#metrics) — named measurements — a command's number, a code-quality number taken in process, a test suite's results — recorded per commit, held to a budget, a floor or a baseline, and read back along the commit timeline
 - [rules](#rules) — the project's own rules, kept as items: shown to agents first by naima guide, listed by naima rules
 - [long-work](#long-work) — long work, run and waited on by Naima: naima run starts a command detached, with budgets and a progress channel, locally or on a host; naima wait blocks on it by its record; naima run list, status, stop and clean; shipped rules make them mandatory for agents and make long work report its progress
 - [commit-hooks](#commit-hooks) — companion records required in the commit that makes a change, and the path-scoped pre-commit hook that holds them
@@ -125,9 +125,11 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `tools` | tools | a tool a plugin needs, which `naima tools install` installs into Naima's own directory: name, exact version, licence, programs, how an install is verified, and per platform a source (url, size, sha256, format) or the answer saying why there is none | verifier-mcrl2 |
 | `ui-views` | ui | a view `naima ui` shows as a tab, or as a panel of its first screen: `name` (its path), `title`, `says`, `order` (lower first, 0 when absent), `panel` (true: on the first screen, not a tab), `render(params, ctx) → { data, html, css? }`, rendered at each request | coordination, triage, gates, ui, metrics |
 | `metric-kinds` | metrics | how a metric's number is read from its run: `read({ exit, stdout, stderr, seconds }, metric) → number \| { error }`, `readsExit` | metrics |
-| `metrics` | metrics | a named measurement: `run` (a program and its arguments) and `kind`, or a code `measure`; a bound — `atMost`, `atLeast` or `equals` — and `better` |  |
+| `metrics` | metrics | a named measurement: `run` (a program and its arguments) and `kind`, a code `measure`, a test `suite`'s number or a `file`'s; a bound — `atMost`, `atLeast` or `equals` — and `better` |  |
 | `code-measures` | metrics | a code-quality number taken in process from the files: `measure({ files, source }, metric) → number \| { error }`, with its `unit` and `better` | metrics |
 | `code-languages` | metrics | a language code measures read: `extensions`, `code`, `comments`, `quotes`, and `functions(stripped) → [{ name, line, lines, complexity }]` when it can find them | metrics |
+| `test-formats` | metrics | how a test suite's machine-readable output is read: `parse(text) → [{ name, file, result, seconds, message }] \| { error }` | metrics |
+| `test-suites` | metrics | a test suite: `run` (a program and its arguments), the `format` its report is in, and where the `report` is |  |
 | `rules` | rules | a rule a plugin ships, active in every project that loads it beside the project's own rules items: `name`, `title`, `audience`, `strength`, `text`, `why`, and optionally `ack` and `enforcedBy`; a project retires one with the rules plugin's `retire` option | coordination, planning, long-work |
 
 ## core
@@ -2107,19 +2109,20 @@ naima ui --browser
 
 ## metrics
 
-Named measurements — a command's number, or a code-quality number taken in process — recorded per commit, held to a budget, a floor or a baseline, and read back along the commit timeline.
+Named measurements — a command's number, a code-quality number taken in process, a test suite's results — recorded per commit, held to a budget, a floor or a baseline, and read back along the commit timeline.
 
 Its contributions' qualified ids are `metrics/<name>`.
 
-A metric is a name and the command that measures it — test time, coverage, lint warnings, size, how long an analysis runs — or a code measure Naima takes itself from the files: lines of code, files, functions, function size, cyclomatic complexity, duplication, TODO markers, dependencies. The project declares its metrics as data in its configuration, from scratch or from a preset (`naima metrics presets`). `naima metrics run` runs them and prints every number with the one it is compared to: the last recorded on an earlier commit of this line of history, and the bound. A bound is a budget (`atMost`), a floor (`atLeast`) or a baseline (`equals`); a `ratchet` makes a gain fail until the bound follows it, so a budget only goes down and a floor only up; loosening a bound names the item that says why. `--record` writes the numbers, with the commit they measure, as evidence, one file per run; `naima metrics backfill` measures past commits — code measures from git's objects, commands in a temporary worktree — so the timeline starts full. `naima metrics trend`, `history` (text, JSON, CSV) and `plot` (an SVG chart or an HTML report, no dependency) read the records back along the commit timeline, and `naima summary`, `naima board` and `naima queue` show where each metric stands. How a number is read is a kind (`metric-kinds`), a code measure (`code-measures`) or a language's function finder (`code-languages`): any plugin may contribute one. Naima may start the programs the metrics name, and only those: the launcher grants each one.
+A metric is a name and the command that measures it — test time, coverage, lint warnings, size, how long an analysis runs — or a code measure Naima takes itself from the files: lines of code, files, functions, function size, cyclomatic complexity, duplication, TODO markers, dependencies — or a file a benchmark or a profile writes. The project declares its metrics as data in its configuration, from scratch or from a preset (`naima metrics presets`). `naima metrics run` runs them and prints every number with the one it is compared to: the last recorded on an earlier commit of this line of history, and the bound. A bound is a budget (`atMost`), a floor (`atLeast`) or a baseline (`equals`); a `ratchet` makes a gain fail until the bound follows it, so a budget only goes down and a floor only up; loosening a bound names the item that says why. A metric that measures a requirement names it in `satisfies`, and `naima check` notes a requirement that names a time, a memory, a throughput or a size with no such metric. A **test suite** is a test command whose machine-readable report — JUnit XML, TAP, libtest JSON (`test-formats`) — is read per test. Each suite gives three metrics, `<suite>.passed`, `<suite>.failed` (held to none) and `<suite>.seconds`, and `naima metrics run` runs it once for all of them — or, when a recorded run has exactly its inputs, reuses that run and says so; `--force <reason>` runs it again. `--record` writes the numbers, with the commit they measure, as evidence, one file per run, and each suite's run under `test-runs/`: every test's name, result, duration and message, the commit, the inputs' digest, and the log. A test item that names tests in `testNames` gets their result: status passed or failed, the run attached and named in `lastTestRun`, `evidenceKind` observation, and `redSeen` once it passes after a recorded failing run. The `suites` gate holds when every suite passed on HEAD by a recorded run, and names each run. `naima metrics backfill` measures past commits — code measures from git's objects, commands in a temporary worktree — so the timeline starts full. `naima metrics trend`, `history` (text, JSON, CSV) and `plot` (an SVG chart or an HTML report, no dependency) read the records back along the commit timeline, and `naima summary`, `naima board` and `naima queue` show where each metric stands. How a number is read is a kind (`metric-kinds`), a code measure (`code-measures`) or a language's function finder (`code-languages`): any plugin may contribute one. Naima may start the programs the metrics and suites name, and only those: the launcher grants each one.
 
 Options, each with the default it takes when nothing sets it:
 
 | Option | Default | What it does |
 |---|---|---|
-| `metrics` | `{}` | `plugins.metrics.options.metrics` in `naima-tracker/naima-data/naima.json`: metric name → { "preset", "run": [program, ...args], "prepare", "kind", "pattern", "field", or "measure" with "language", "include", "exclude", "statistic", "window"; "unit", "says", "better", one of "atMost" \| "atLeast" \| "equals", "ratchet", "tolerance", "because" }. kind defaults to exit, which with no bound must equal 0. A preset fills in the rest; any key beside it overrides it. |
+| `metrics` | `{}` | `plugins.metrics.options.metrics` in `naima-tracker/naima-data/naima.json`: metric name → { "preset", "run": [program, ...args], "prepare", "kind", "pattern", "field", or "measure" with "language", "include", "exclude", "statistic", "window", or "suite" with "field" (passed, failed, skipped, total, seconds), or "file" (a path from the project root) with "kind"; "unit", "says", "better", one of "atMost" \| "atLeast" \| "equals", "ratchet", "tolerance", "because", "satisfies": [requirements] }. kind defaults to exit for a command, which with no bound must equal 0, and to number for a file. A preset fills in the rest; any key beside it overrides it. |
+| `suites` | `{}` | `plugins.metrics.options.suites` in `naima-tracker/naima-data/naima.json`: suite name → { "preset" (deno, node, bun, pytest, cargo), "run": [program, ...args], "prepare", "format" (a test format), "report" (the file its report is written to, from the project root or under {tmp}; without it, the output), "inputs" (the paths or patterns of the files it reads; without it, every file outside the tracker), "says" }. Each gives the metrics <suite>.passed, <suite>.failed and <suite>.seconds. |
 
-**Extension points** it declares: `metric-kinds`, `metrics`, `code-measures`, `code-languages`.
+**Extension points** it declares: `metric-kinds`, `metrics`, `code-measures`, `code-languages`, `test-formats`, `test-suites`.
 
 ### naima metrics
 
@@ -2131,7 +2134,7 @@ The project's metrics — each a name and the command or code measure that takes
 
 ```sh
 naima metrics [list]
-naima metrics run [name...] [--record]
+naima metrics run [name...] [--record] [--force <reason>]
 naima metrics bound <name> <value> [--because <item>]
 naima metrics trend <name>
 naima metrics history [name...] [--json
@@ -2143,7 +2146,8 @@ naima metrics presets [--json]
 
 | Option | Default | What it does |
 |---|---|---|
-| `--record` |  | run: write the numbers, with the commit they measure, to metrics/ in the data directory |
+| `--record` |  | run: write the numbers, with the commit they measure, to metrics/ in the data directory; each suite's run, per test, to test-runs/, its results handed to the test items that name them |
+| `--force` |  | run: run the suites again although a recorded run has their inputs, for this reason, which the run records |
 | `--because` |  | bound: the item that says why a bound is loosened — a budget raised, a floor lowered; refused without it |
 | `--json` |  | history: one JSON list of commits, each with its date and values; presets: a ready declaration of every preset |
 | `--csv` |  | history: comma-separated, one row per commit — commit, date, then each metric |
@@ -2161,6 +2165,8 @@ Examples:
 naima metrics
 naima metrics run --record
 naima metrics run tests coverage
+naima metrics run unit --record
+naima metrics run unit --force "a flaky failure to confirm"
 naima metrics bound test-time 140 --because bugs/slow-ci
 naima metrics trend tests
 naima metrics history --csv
@@ -2175,8 +2181,11 @@ naima metrics presets
 | Check | What it holds |
 |---|---|
 | `metric-bound-because` | a metric's `because` names an item of the tracker |
+| `test-suites` | a suite's format is a known test format; a test item's testSuite names a declared suite, and its testNames match a test of that suite's last recorded run (a note) |
+| `metric-satisfies` | every item a metric's `satisfies` names exists; a metric that satisfies a requirement has a budget, a floor or a baseline (a note) |
+| `performance-requirement-has-metric` | a requirement whose title or page names a measure — a time, a memory, a throughput, a size — is satisfied by a metric that measures it, with a budget (a note) |
 
-**Directories** it owns under the tracker root: `metrics/`.
+**Directories** it owns under the tracker root: `metrics/`, `test-runs/`.
 
 **Summary sections**: `metrics`.
 
@@ -2232,6 +2241,14 @@ naima metrics presets
 | `markdown` | .md |  |
 | `json` | .json .jsonc |  |
 | `yaml` | .yml .yaml |  |
+
+**Test formats**, how a suite's report is read
+
+| Format | What it reads |
+|---|---|
+| `junit` | JUnit XML, from a file (`report`) or the output: pytest --junit-xml, deno test --reporter=junit, node --test-reporter=junit, bun test --reporter=junit, and most CI tools |
+| `tap` | TAP 13 or 14, with indented subtests and YAML diagnostics: deno test --reporter=tap, node --test-reporter=tap |
+| `libtest-json` | the JSON lines of Rust's test harness, cargo test -- -Z unstable-options --format json |
 
 ## rules
 

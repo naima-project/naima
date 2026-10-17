@@ -62,3 +62,38 @@ export const PRESETS: Record<string, Preset> = {
   },
   "node.test-time": { says: "how long node --test takes", run: ["node", "--test"], kind: "duration", unit: "s", better: "lower" },
 }
+
+/** A suite preset: the command a test runner is run with so that it writes a report Naima reads. */
+export interface SuitePreset {
+  says: string
+  run: string[]
+  format: string
+  report?: string
+}
+
+export const SUITE_PRESETS: Record<string, SuitePreset> = {
+  deno: {
+    says: "deno test, its JUnit report",
+    run: ["deno", "test", "-A", "--reporter=junit", "--junit-path={tmp}/report.xml"],
+    format: "junit",
+    report: "{tmp}/report.xml",
+  },
+  node: {
+    says: "node --test, its JUnit report",
+    run: ["node", "--test", "--test-reporter=junit", "--test-reporter-destination={tmp}/report.xml"],
+    format: "junit",
+    report: "{tmp}/report.xml",
+  },
+  bun: {
+    says: "bun test, its JUnit report",
+    run: ["bun", "test", "--reporter=junit", "--reporter-outfile={tmp}/report.xml"],
+    format: "junit",
+    report: "{tmp}/report.xml",
+  },
+  pytest: { says: "pytest, its JUnit report", run: ["pytest", "-q", "--junit-xml={tmp}/report.xml"], format: "junit", report: "{tmp}/report.xml" },
+  cargo: {
+    says: "cargo test, libtest's JSON lines (the nightly toolchain: the format is unstable)",
+    run: ["cargo", "+nightly", "test", "--", "-Z", "unstable-options", "--format", "json", "--report-time"],
+    format: "libtest-json",
+  },
+}
