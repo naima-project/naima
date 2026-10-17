@@ -31,12 +31,16 @@ export const cliCommands: Omit<Command, "run">[] = [
   {
     name: "update",
     says:
-      `move the lock to the head of the source's main, or to the commit --to names: say what changes (the commits, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, migrate the data forward if its format moved, and record the new commit, as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima`,
+      `move the lock to the head of the source's main, or to the commit --to names: say what changes (the commits, the change notes they add — breaking first, then those that ask an action —, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, rename and remove options in naima.json as the change notes say and remove those it reads nowhere, each said with its value, and record the new commit; moving forward, the new Naima finishes: it migrates the data if its format moved, names the rules agents acknowledge again, runs naima check, and files an item in the type with the trait follow-up for each problem or note that is new since the commit before; all as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima`,
     enforces:
       "the lock moves only to a commit of the source's main, with the data migrated forward in the same change; never back past a migration, which runs forward only; a source naima.json names other than the program's origin is refused, by every command, until --accept-source",
     usage: "update [--check | --to <commit> | --mode off|check|update | --accept-source]",
     options: [
-      { name: "--check", says: "only say whether the source's main has moved past the locked commit, and what it changes; exit 1 when it has" },
+      {
+        name: "--check",
+        says:
+          "only say whether the source's main has moved past the locked commit, and what it changes — and rehearse it: its own naima check, run on the project from a temporary copy of it, writing nothing, says what would newly fail or be noted; exit 1 when it has moved",
+      },
       {
         name: "--to",
         says:
@@ -68,7 +72,7 @@ export const cliCommands: Omit<Command, "run">[] = [
   {
     name: "hello",
     says:
-      `what an agent says first in a session: the banner (Naima is active in this repository, its version and commit); then, as naima.json's updates says, whether a newer Naima exists and what it changes; then what it offers on request: what Naima is and its documentation, an update check, an update after the owner's yes`,
+      `what an agent says first in a session: the banner (Naima is active in this repository, its version and commit); then, as naima.json's updates says, whether a newer Naima exists and, under update, what it changes and its rehearsal, as update --check says them; then what it offers on request: what Naima is and its documentation, an update check, an update after the owner's yes`,
     enforces: "nothing: it never moves the lock nor writes the project; it asks the source only when updates is check or update",
     usage: "hello",
     examples: ["hello"],

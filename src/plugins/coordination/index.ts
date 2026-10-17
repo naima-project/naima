@@ -63,6 +63,7 @@ import {
   writeThroughGit,
 } from "./worktrees.ts"
 import { claimsUiView, notesUiView } from "./ui.ts"
+import { changeNotesCheck, changesCommand } from "./changes.ts"
 import { land, landingReportsPoint, landingsAreMarkers } from "./land.ts"
 import { DIARY_RULE, diaryCheck, diaryCommand, eventCommand, EVENTS, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
 
@@ -768,6 +769,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       "A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. " +
       "Landings are semi-linear: a branch the trunk is an ancestor of enters it as one marker commit, a merge whose tree is the branch tip's and whose message names the items it closes in `Closes:` trailers; `land` makes it from the main checkout, the shortcut for `git merge --no-ff`, and moves the trunk only from the commit it read. " +
       "From the first marker on the trunk's first-parent line every first-parent commit is a marker, or `landings-are-markers` notes it; before it nothing is asked, so a history of fast-forwards keeps working. " +
+      "A repository of the project with `changes/config.json` — the project itself, or a product it holds as a submodule — names there the paths whose change is a change of behaviour; a branch that changes one adds a change note, `changes/<date>-<slug>.md`, in the same repository. `land` refuses a branch that does not, unless `--no-change-note` gives the reason, which the marker records as a `No-change-note:` trailer; `change-notes` notes it on the branch beforehand, and is a problem for a file of `changes/` that is not a change note. `changes` prints the release notes the change notes of a range make. " +
       "`naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. " +
       "What has no date is counted at the foot, never placed at a guess. Only what nothing derives — a decision taken elsewhere, a build handed out, a policy, an outside fact — is a record, one file per event, `events/<date>-<uuid>.md`, written by `naima event`. " +
       '`naima diary` tells the records of kind `diary`, every decision with its reason and every session note, day by day. The plugin ships the rule that agents keep the diary on their own, one entry per decision taken with the owner or notable turn and never a log of routine work, acknowledged as "Diary mode on"; the check `diary-entries` notes, never failing, a day with more diary entries than the option `diaryPerDay` allows, and an entry that only restates a session note of its day or a decision taken that day. ' +
@@ -783,8 +785,17 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       { name: "diaryPerDay", says: "how many diary entries a day may hold before the check diary-entries notes it: a positive whole number", default: "5" },
     ],
     dirs: [CLAIMS, PASSES, EVENTS],
-    checks: [claimsResolve, worktreePolicy(policy), trunkMoved, closedNotClaimed, sessionNoteAck, landingsAreMarkers, diaryCheck(readPasses, diaryPerDay)],
-    commands: [openCommand(policy), claimCommand, release, claimsCommand, land, prune, pass, eventCommand, diaryCommand(readPasses)],
+    checks: [
+      claimsResolve,
+      worktreePolicy(policy),
+      trunkMoved,
+      closedNotClaimed,
+      sessionNoteAck,
+      landingsAreMarkers,
+      diaryCheck(readPasses, diaryPerDay),
+      changeNotesCheck,
+    ],
+    commands: [openCommand(policy), claimCommand, release, claimsCommand, land, changesCommand, prune, pass, eventCommand, diaryCommand(readPasses)],
     views: [timelineView(readPasses)],
     contributes: { "ui-views": [claimsUiView(claimsData), timelineUiView(readPasses), notesUiView(readPasses)], rules: [DIARY_RULE] },
     // The claims are a panel of naima ui, the timeline and the session notes tabs, when the ui plugin is loaded; without it, still commands and a view.

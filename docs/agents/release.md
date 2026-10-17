@@ -29,7 +29,12 @@ makes sure none of them happens before the one before it is true.
 1. Find a gate that holds with `naima gates --check`, or with
    `naima gate show <name>` for a particular one. Don't propose a gate that
    doesn't hold.
-2. Build the changelog from what the gate's
+2. Build the changelog. Where the project keeps change notes (a `changes/`
+   folder with a `config.json`; Naima does), start from them:
+   `naima changes --from <previous tag> > changelog.md` lists every change of
+   behaviour since the last release, breaking changes and those that need an
+   action first, each with what a user has to do
+   ([the format](../../changes/README.md)). Then add what the gate's
    [epic](../guide/glossary.md#epic), or the gate itself, has closed since the
    last release. Run `naima list <type>` for each type the gate touches and
    keep the items whose `closedOn` is after the previous release's date

@@ -409,7 +409,8 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
         },
         initialStatus: "open",
         template: work,
-        traits: [FIXABLE],
+        // naima update files here what the new Naima's check finds and it could not fix (core/updates.ts).
+        traits: [FIXABLE, "follow-up"],
       },
       {
         id: "features",

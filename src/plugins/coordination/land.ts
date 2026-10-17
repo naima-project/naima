@@ -23,6 +23,7 @@ import {
   mustGit,
   parse,
   runGit,
+  str,
   strs,
   table,
   textsAt,
@@ -30,6 +31,7 @@ import {
   usageError,
   worktrees,
 } from "../../core/api.ts"
+import { changeNoteTrailers } from "./changes.ts"
 import { plural } from "./worktrees.ts"
 
 /** A landing just made: the branch, the trunk before it and the marker, and every file it changed, from the project root. */
@@ -84,8 +86,9 @@ async function reportLanding(ctx: Context, landing: Landing): Promise<void> {
 /** The trailer a marker names each item it closes with. */
 export const CLOSES = "Closes"
 
-/** The message of the marker landing `branch`: its subject, a blank line, one trailer per item. */
-export const markerMessage = (branch: string, ids: string[]): string => `Land ${branch}\n\n${ids.map((id) => `${CLOSES}: ${id}`).join("\n")}\n`
+/** The message of the marker landing `branch`: its subject, a blank line, one trailer per item, then any other trailer. */
+export const markerMessage = (branch: string, ids: string[], trailers: string[] = []): string =>
+  `Land ${branch}\n\n${[...ids.map((id) => `${CLOSES}: ${id}`), ...trailers].join("\n")}\n`
 
 /** An item as the branch tip has it: where it is, and whether a landing may close it. */
 interface Landed {
@@ -253,19 +256,29 @@ export const land: Command = {
   says:
     "land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor",
   enforces:
-    "runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, and one that names no item or an item open and not fixed; moves the trunk only from the commit it read (compare-and-swap); once landed, prints what every landing report says of the files the landing changed, never undoing it",
-  usage: "land <branch> [--closes <item>]...",
+    "runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item or an item open and not fixed, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, prints what every landing report says of the files the landing changed, never undoing it",
+  usage: 'land <branch> [--closes <item>]... [--no-change-note "<reason>"]',
   options: [
     { name: "--closes", says: "an item the landing closes, instead of those the branch claimed in its commits; repeat for several" },
+    {
+      name: "--no-change-note",
+      says:
+        "why the branch changes behaviour paths with no change note — a refactor, a test, nothing a person or an agent sees; recorded in the marker as a No-change-note: trailer",
+    },
   ],
-  examples: ["land claude/export-alpha", "land claude/export-alpha --closes export-drops"],
+  examples: [
+    "land claude/export-alpha",
+    "land claude/export-alpha --closes export-drops",
+    'land claude/tidy-loader --no-change-note "a refactor of the loader: nothing a person or an agent sees changes"',
+  ],
   async run(args, ctx) {
-    const p = parse(args, { closes: { type: "string", multiple: true } })
+    const p = parse(args, { closes: { type: "string", multiple: true }, "no-change-note": { type: "string" } })
     const branch = p.positionals[0]
     if (!branch || p.positionals.length > 1) throw usageError(this)
     const { main, old, tip, items } = preconditions(ctx, branch, strs(p, "closes"))
+    const trailers = changeNoteTrailers(ctx, branch, old, tip, str(p, "no-change-note"))
     const tree = mustGit(ctx.root, "rev-parse", `${tip}^{tree}`)
-    const made = runGit(ctx.root, ["commit-tree", tree, "-p", old, "-p", tip, "-F", "-"], { input: markerMessage(branch, items.map((i) => i.id)) })
+    const made = runGit(ctx.root, ["commit-tree", tree, "-p", old, "-p", tip, "-F", "-"], { input: markerMessage(branch, items.map((i) => i.id), trailers) })
     if (!made.ok) throw new Error(`git commit-tree: ${gitReason(made)}`)
     const marker = made.out.trim()
     moveTrunk(ctx.root, main, marker, old, `land: ${branch}`)

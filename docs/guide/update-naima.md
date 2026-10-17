@@ -37,7 +37,7 @@ There are three settings:
 |---|---|
 | `off` | It doesn't contact the source at all. |
 | `check` | It tells you when a newer Naima exists, and how many commits ahead it is. This is the default. |
-| `update` | It also tells you what the newer Naima would change, and the agent asks whether you want it. |
+| `update` | It also tells you what the newer Naima would change, with its change notes and a rehearsal of its check, and the agent asks whether you want it. |
 
 The default is `check` because it only reads, and changes nothing. Even with
 `update`, nothing is applied until you say yes.
@@ -50,31 +50,65 @@ naima update --check
 
 This tells you whether the [source](glossary.md#source) has a newer Naima
 than the one you are locked to. It exits with 1 when it does. In that case
-it also lists what would change:
+it also tells you what would change, in three parts.
+
+First come the change notes. Every change to how Naima behaves comes with a
+short note written by whoever made it ([change notes](../../changes/README.md)).
+Naima lists the notes added between your version and the newer one, grouped
+so the important ones come first:
+
+- breaking changes, which you have to act on or something stops working;
+- changes that need an action, with what to do;
+- new features, other changes of behaviour, and fixes.
+
+Then comes what Naima works out by comparing the two versions itself:
 
 - the commits, by their titles;
 - any change to the data [format](glossary.md#format), which means a
   [migration](glossary.md#migration) the update will run for you;
-- rules added to or removed from [the rules page](rules.md);
+- rules added to or removed from [the rules page](rules.md), and the rules
+  the notes say changed, which agents will acknowledge again;
 - settings in `naima.json` that the newer Naima no longer reads, by name,
-  for example `plugins.coordination.options.resources`.
+  for example `plugins.coordination.options.resources`, and what `naima
+  update` will do about them.
 
-To find this out, Naima reads the newer version's code straight from its own
-git copy, into a temporary folder that it deletes afterwards. Your project
-is not touched.
+Last comes a rehearsal. Naima runs the newer version's own `naima check` on
+your project and tells you what would newly fail and what would newly be
+noted. A line such as `newly failing: …` is something to fix after the
+update, or before it.
+
+To find all this out, Naima reads the newer version's code straight from its
+own git copy, into a temporary folder that it deletes afterwards, and runs
+its check from there. Your project is not touched. If the newer Naima
+changes the data format, the rehearsal can't run on data that hasn't been
+migrated yet. It says so, and the check at the end of the update takes its
+place.
 
 ## Updating
 
 ```sh
 naima update
-naima check
 git add naima-tracker && git commit -m "Update Naima to <commit>"
 ```
 
 `naima update` shows what changes, downloads the newer Naima, switches the
-program to it, migrates your data if the format changed, and records the new
-commit in the lock. If anything fails along the way, the previous version
-stays in place. You then review the change and commit it, like any other.
+program to it and records the new commit in the lock. If anything fails along
+the way, the previous version stays in place. Then the newer Naima finishes
+the update itself:
+
+- it migrates your data if the format changed;
+- it fixes what is mechanical in `naima.json`: an option a note says was
+  renamed gets its new name and keeps its value, and an option the newer
+  Naima doesn't read any more is removed. Each change is printed with the
+  value it held, so nothing disappears unseen;
+- it names the rules that changed, so the agents read them again and
+  acknowledge them in their next session note;
+- it runs `naima check`, and files a todo for each problem or note that is
+  new since the version you had, so nothing it couldn't fix by itself is
+  forgotten. A todo it has already filed isn't filed twice.
+
+Everything ends up in the tracker folder, as one change. You review it and
+commit it, like any other.
 
 To move to a particular commit of the source's main branch rather than the
 newest one, use `naima update --to <commit>`.
@@ -129,7 +163,8 @@ from inside the project ([fresh clones and worktrees](install.md#fresh-clones-an
 `naima check` points out any option in `naima.json`'s plugins table that the
 plugin doesn't recognise. Usually that is something a newer Naima stopped
 using, or a typo. It names the option, and
-`naima plugin set <plugin> <option>=` removes it.
+`naima plugin set <plugin> <option>=` removes it. `naima update` removes
+these options by itself, and says which ones it removed.
 
 ## When a teammate updated
 
