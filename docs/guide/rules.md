@@ -177,6 +177,17 @@ arises holds on any model, so it proves nothing until something shows the
 situation is reachable. **Enforced by** the check `property-witnessed`, as a
 note, waived with its reason when a witness makes no sense.
 
+A model that changes over several landings can be marked
+[in development](glossary.md#in-development), with an item of type `models`.
+While it is, the results of its properties are only information: a run that
+is out of date is a note, not a problem, and the two checks above ask
+nothing. It leaves development only when every property verified on it
+holds on a current run. Why: work that spans landings would otherwise keep
+`naima check` failing for a state everyone knows is temporary, and a model
+should come back under the rules only once all of its properties have been
+shown to hold again. **Enforced by** the write hook
+`leaves-development-proved`, and the check `model-development`.
+
 ### A page does not outlive its answer
 
 An unticked clause on an open item shouldn't name a test that has already

@@ -61,6 +61,10 @@ const verifierOf = (ctx: Context, id: string): Verifier | undefined => ctx.regis
 const verifierIds = (ctx: Context): string[] => ctx.registry.contributions("verifiers").map((c) => c.name)
 
 export const TYPE = "properties"
+/** The type of a model as an artefact of its own: whether it is in development. */
+export const MODELS = "models"
+const DEVELOPMENT = "development"
+const STABLE = "stable"
 
 const LAST_RUN = { name: "lastRun", kind: "string" } as const
 const VERIFIER_OPTIONS = { name: "verifierOptions", kind: "object" } as const
@@ -153,6 +157,9 @@ async function inputsOf(ctx: Context, verifier: Verifier, item: Item, request: V
   }
   return [...out].sort()
 }
+
+const modelTemplate = (title: string): string =>
+  `# ${title}\n\nWhat the model describes, and what is being changed while it is in development.\n\nSet \`model\` (a path from the project root) in meta.json: every property whose \`model\` is that path is verified on it.\n`
 
 const template = (title: string): string =>
   `# ${title}\n\nThe property in words, and why it matters.\n\nSet \`verifier\`, \`model\` (a path from the project root) and \`property\` in meta.json, then \`naima verify\`.\n`
@@ -355,6 +362,25 @@ export async function verifyItem(ctx: Context, item: Item, progress: Progress = 
 
 const properties = (ctx: Context): Item[] => ctx.repo.items.filter((i) => i.type === TYPE)
 
+/** Whether two `model` values name one file of the project. */
+const sameModel = (ctx: Context, a: unknown, b: unknown): boolean => {
+  if (typeof a !== "string" || typeof b !== "string") return false
+  const pa = modelPath(ctx.root, a)
+  return pa !== null && pa === modelPath(ctx.root, b)
+}
+
+/** The models item that marks `model` as in development, if one does. */
+export const developing = (ctx: Context, model: unknown): Item | undefined =>
+  ctx.repo.items.find((i) => i.type === MODELS && i.meta.status === DEVELOPMENT && sameModel(ctx, i.meta["model"], model))
+
+/** Why `item` is not a property holding on a run of exactly what it has now; empty when it is. Only what can be said without starting the tool. */
+function notCurrent(ctx: Context, item: Item): string[] {
+  if (item.meta.status !== "holds") return [`${label(item)} [${item.meta.status}]`]
+  const run = readRun(item)
+  if (!run || run.verdict !== "holds") return [`${label(item)}: holds, but carries no holding run`]
+  return staleness(ctx, item, run).map((why) => `${label(item)}: ${why}`)
+}
+
 const verify: Command = {
   name: "verify",
   says: "run the verifier of properties and attach each run as evidence",
@@ -434,7 +460,11 @@ const evidence: Check = {
       else if (run.verdict !== "holds") problem(item, `holds, but its last run says ${run.verdict}`)
       else {
         const whys = [...staleness(ctx, item, run), ...(await toolStaleness(ctx, item, run, out))]
-        for (const why of whys) problem(item, `${why} — run naima verify again`)
+        const model = developing(ctx, item.meta["model"])
+        for (const why of whys) {
+          if (!model) problem(item, `${why} — run naima verify again`)
+          else out.push({ level: "note", item, message: `${label(item)}: ${why} — ${label(model)} is in development, so this is informational` })
+        }
       }
     }
     return out
@@ -519,7 +549,7 @@ const failedFirst: Check = {
   run(ctx) {
     const out: Finding[] = []
     for (const item of properties(ctx)) {
-      if (item.meta.status !== "holds") continue
+      if (item.meta.status !== "holds" || developing(ctx, item.meta["model"])) continue
       const changes = changesProved(ctx, item)
       const now = readRun(item)
       if (!changes.length || now?.verdict !== "holds") continue
@@ -553,7 +583,7 @@ const witnessed: Check = {
   run(ctx) {
     const out: Finding[] = []
     for (const item of properties(ctx)) {
-      if (item.meta.status !== "holds") continue
+      if (item.meta.status !== "holds" || developing(ctx, item.meta["model"])) continue
       const changes = changesProved(ctx, item)
       if (!changes.length) continue
       const witnesses = linked(ctx, item, WITNESSED_BY).filter((w) => w.type === TYPE)
@@ -619,6 +649,55 @@ const holdsByVerifyOnly: WriteHook = {
   },
 }
 
+const leavesDevelopmentProved: WriteHook = {
+  name: "leaves-development-proved",
+  says:
+    "a model leaves development (its models item becomes stable, or is created stable) only when at least one property is verified on it and every one holds on a run of exactly what it has now; refused otherwise, naming each property that does not",
+  beforeWrite(write, ctx) {
+    const { item, before } = write
+    if (write.kind === "move" || item.type !== MODELS || item.meta.status !== STABLE || before?.status === STABLE) return
+    const model = item.meta["model"]
+    if (typeof model !== "string") return `${label(item)}: set model, the path of the model from the project root, before it leaves development`
+    const ours = properties(ctx).filter((p) => sameModel(ctx, p.meta["model"], model))
+    if (!ours.length) {
+      return `${label(item)}: no property is verified on ${model}, so nothing shows it out of development — file its properties and verify them first`
+    }
+    const whys = ours.flatMap((p) => notCurrent(ctx, p))
+    if (whys.length) return `${label(item)} cannot leave development: ${whys.join("; ")} — naima verify each, then set it stable again`
+  },
+}
+
+const modelDevelopment: Check = {
+  name: "model-development",
+  says:
+    "every models item names one model, and no two name the same; a stable model whose property does not hold on a run of what it has now is noted, since it either needs verifying or is in development again",
+  run(ctx) {
+    const out: Finding[] = []
+    const models = ctx.repo.items.filter((i) => i.type === MODELS)
+    for (const [n, m] of models.entries()) {
+      const model = m.meta["model"]
+      if (typeof model !== "string") {
+        out.push({ level: "problem", item: m, message: `${label(m)} names no model — naima set ${m.slug} model=<path from the project root>` })
+        continue
+      }
+      const twin = models.slice(n + 1).find((o) => sameModel(ctx, o.meta["model"], model))
+      if (twin) out.push({ level: "problem", item: m, message: `${label(m)} and ${label(twin)} name one model, ${model} — keep one` })
+      if (m.meta.status !== STABLE) continue
+      const whys = properties(ctx).filter((p) => sameModel(ctx, p.meta["model"], model)).flatMap((p) => notCurrent(ctx, p))
+      if (whys.length) {
+        out.push({
+          level: "note",
+          item: m,
+          message: `${label(m)} is stable, and not every property of it holds now: ${
+            whys.join("; ")
+          } — naima verify them, or set ${m.slug} status=${DEVELOPMENT} while the model changes`,
+        })
+      }
+    }
+    return out
+  },
+}
+
 const allHold: Gate = {
   name: "properties",
   title: "Every property holds",
@@ -640,6 +719,8 @@ export default function verifier(): Plugin {
       "`naima verify` runs the adapter and attaches the run — verdict, output, the adapter's `details` of how it reached the verdict when it gives them, the model's sha256, and one digest over every file the run read (the model and what the adapter's `inputs` says it includes) and the tool's version (the adapter's `version`) — and the counterexample as its own file, then sets the status from the verdict. " +
       'A conclusive run (holds or violated) already recorded on the property with the same identity — verifier, model, property, `verifierOptions`, and the one digest over every input and the tool\'s version — is reused instead of repeated: `naima verify` says `reused` and names the run, and `--force "<reason>"` runs it again, keeping the reason with the new run. An error is never reused. Every run is kept, two made in the same instant included. ' +
       "A property that holds is evidence exactly as a passed test is: it can `verify` a bug and close it. A verdict is only as good as what it was reached on, so `naima check` fails when a property claims to hold and its property, verifier, model path, `verifierOptions`, model contents, any file it includes, the set of files it reads, or the tool's version have changed since the run. " +
+      "A property that holds and proves a change — it verifies or satisfies a bug, a todo or a feature — is expected to carry a violated run of the same property, with its counterexample, on other inputs (`property-failed-first`), and to be backed by a witness property that holds, linked by `witnesses` (`property-witnessed`); both are notes that name the property, so either can be waived with its reason. " +
+      "A `models` item marks a model, by its path in `model`, as in development: while it is, the staleness of its properties is a note rather than a problem and the two change checks ask nothing of them; it leaves development (status `stable`) only when every property verified on it holds on a run of exactly what it has now. " +
       "The shipped adapter, `example-regex`, is a stand-in that shows the shape of a real one; the opt-in `verifier-mcrl2` and `verifier-voxlogica` plugins contribute the real ones.",
     types: [
       {
@@ -656,10 +737,26 @@ export default function verifier(): Plugin {
         initialStatus: "open",
         template,
       },
+      {
+        id: MODELS,
+        dir: "models",
+        title: "Models",
+        says: "a model, or another artefact properties are verified on, named by its path in model: whether it is in development",
+        statuses: {
+          [DEVELOPMENT]: {
+            category: "open",
+            says:
+              "changed across several landings: its properties' results are informational, their staleness a note, and the change checks ask nothing of them",
+          },
+          [STABLE]: { category: "done", says: "out of development: every property of the model held on a run of what it had when it left" },
+        },
+        initialStatus: DEVELOPMENT,
+        template: modelTemplate,
+      },
     ],
     fields: [
       { name: "verifier", kind: "string", says: "the adapter that checks it", appliesTo: [TYPE] },
-      { name: "model", kind: "string", says: "the model or specification file, from the project root, and inside it", appliesTo: [TYPE] },
+      { name: "model", kind: "string", says: "the model or specification file, from the project root, and inside it", appliesTo: [TYPE, MODELS] },
       { name: "property", kind: "string", says: "the property, in the verifier's own language", appliesTo: [TYPE] },
       { name: "lastRun", kind: "string", says: "the attachment holding the last run: a file name in the item's attachments/", appliesTo: [TYPE] },
       { name: "verifierOptions", kind: "object", says: "options handed to the verifier with the model and the property, as a JSON object", appliesTo: [TYPE] },
@@ -672,8 +769,8 @@ export default function verifier(): Plugin {
       { name: WITNESSES, inverse: WITNESSED_BY, says: "is a witness property, showing that the behaviour is reachable, for" },
       { name: WITNESSED_BY, inverse: WITNESSES, says: "is backed by the witness property" },
     ],
-    checks: [evidence, failedFirst, witnessed],
+    checks: [evidence, failedFirst, witnessed, modelDevelopment],
     commands: [verify, verifiers],
-    hooks: [reopenOnChange, holdsByVerifyOnly],
+    hooks: [reopenOnChange, holdsByVerifyOnly, leavesDevelopmentProved],
   }
 }

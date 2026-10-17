@@ -362,3 +362,35 @@ naima verify <witness>
 that holds is linked to it (`property-witnessed`). When a witness makes no
 sense, for instance because the property is itself about reaching the new
 behaviour, the agent waives the note with the reason, as above.
+
+### A model in development
+
+Some changes to a model take several landings, and in between the model is
+half done. Its properties may be violated or out of date for a while, and
+that's expected. For such a model you file an item of type `models` that
+names it, which starts in the status `development`.
+
+```sh
+naima new models "Buffer pool" --set model=models/pool.mcrl2
+```
+
+While the model is in development, a property verified on it whose run is
+out of date is a note in `naima check` instead of a problem, and the two
+checks above ask nothing of its properties. This also means `naima close`
+doesn't stop on such a run, so an item proved by one of these properties is
+best closed after the model leaves development. To leave development, every
+property whose `model` is that path has to hold on a run of the model as it
+is now. Setting the status to `stable` is refused otherwise, and the refusal
+names each property that isn't current.
+
+```sh
+naima verify --all
+naima set buffer-pool status=stable
+```
+
+A model with no property can't leave development, because nothing would
+show that it works. `naima check` reports a `models` item that names no
+model or the same model as another one, and notes a stable model when one
+of its properties no longer holds on a current run
+(`model-development`). Once that happens, the property is verified again,
+or the model goes back to `development` while it changes.

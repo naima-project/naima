@@ -1831,7 +1831,7 @@ Properties checked by formal-methods tools, with each run attached as evidence.
 
 Its contributions' qualified ids are `verifier/<name>`.
 
-A `properties` item names a `verifier` (an adapter any plugin can contribute), a `model` file (a path from the project root) and a `property` in the verifier's own language. `naima verify` runs the adapter and attaches the run — verdict, output, the adapter's `details` of how it reached the verdict when it gives them, the model's sha256, and one digest over every file the run read (the model and what the adapter's `inputs` says it includes) and the tool's version (the adapter's `version`) — and the counterexample as its own file, then sets the status from the verdict. A conclusive run (holds or violated) already recorded on the property with the same identity — verifier, model, property, `verifierOptions`, and the one digest over every input and the tool's version — is reused instead of repeated: `naima verify` says `reused` and names the run, and `--force "<reason>"` runs it again, keeping the reason with the new run. An error is never reused. Every run is kept, two made in the same instant included. A property that holds is evidence exactly as a passed test is: it can `verify` a bug and close it. A verdict is only as good as what it was reached on, so `naima check` fails when a property claims to hold and its property, verifier, model path, `verifierOptions`, model contents, any file it includes, the set of files it reads, or the tool's version have changed since the run. The shipped adapter, `example-regex`, is a stand-in that shows the shape of a real one; the opt-in `verifier-mcrl2` and `verifier-voxlogica` plugins contribute the real ones.
+A `properties` item names a `verifier` (an adapter any plugin can contribute), a `model` file (a path from the project root) and a `property` in the verifier's own language. `naima verify` runs the adapter and attaches the run — verdict, output, the adapter's `details` of how it reached the verdict when it gives them, the model's sha256, and one digest over every file the run read (the model and what the adapter's `inputs` says it includes) and the tool's version (the adapter's `version`) — and the counterexample as its own file, then sets the status from the verdict. A conclusive run (holds or violated) already recorded on the property with the same identity — verifier, model, property, `verifierOptions`, and the one digest over every input and the tool's version — is reused instead of repeated: `naima verify` says `reused` and names the run, and `--force "<reason>"` runs it again, keeping the reason with the new run. An error is never reused. Every run is kept, two made in the same instant included. A property that holds is evidence exactly as a passed test is: it can `verify` a bug and close it. A verdict is only as good as what it was reached on, so `naima check` fails when a property claims to hold and its property, verifier, model path, `verifierOptions`, model contents, any file it includes, the set of files it reads, or the tool's version have changed since the run. A property that holds and proves a change — it verifies or satisfies a bug, a todo or a feature — is expected to carry a violated run of the same property, with its counterexample, on other inputs (`property-failed-first`), and to be backed by a witness property that holds, linked by `witnesses` (`property-witnessed`); both are notes that name the property, so either can be waived with its reason. A `models` item marks a model, by its path in `model`, as in development: while it is, the staleness of its properties is a note rather than a problem and the two change checks ask nothing of them; it leaves development (status `stable`) only when every property verified on it holds on a run of exactly what it has now. The shipped adapter, `example-regex`, is a stand-in that shows the shape of a real one; the opt-in `verifier-mcrl2` and `verifier-voxlogica` plugins contribute the real ones.
 
 **Extension points** it declares: `verifiers`.
 
@@ -1888,12 +1888,21 @@ Properties: a property of the software, proven or refuted by a verifier. Items l
 | `violated` | open | refutes | the last run found a counterexample |
 | `error` | open |  | the last run could not reach a verdict |
 
+### type: models
+
+Models: a model, or another artefact properties are verified on, named by its path in model: whether it is in development. Items live in `naima-tracker/naima-data/models/`; a new one starts as `development`.
+
+| Status | Category | Flags | Meaning |
+|---|---|---|---|
+| `development` | open |  | changed across several landings: its properties' results are informational, their staleness a note, and the change checks ask nothing of them |
+| `stable` | done |  | out of development: every property of the model held on a run of what it had when it left |
+
 **Fields**
 
 | Field | Kind | Applies to | Meaning | Values |
 |---|---|---|---|---|
 | `verifier` | string | properties | the adapter that checks it |  |
-| `model` | string | properties | the model or specification file, from the project root, and inside it |  |
+| `model` | string | properties, models | the model or specification file, from the project root, and inside it |  |
 | `property` | string | properties | the property, in the verifier's own language |  |
 | `lastRun` | string | properties | the attachment holding the last run: a file name in the item's attachments/ |  |
 | `verifierOptions` | object | properties | options handed to the verifier with the model and the property, as a JSON object |  |
@@ -1912,6 +1921,7 @@ Properties: a property of the software, proven or refuted by a verifier. Items l
 | `property-evidence` | a property names a known verifier and an existing model; one that holds carries a run of its current property, verifier, model and options, on every file it reads as it is now and the tool's version as it is now |
 | `property-failed-first` | a property that holds and proves a change — it verifies or satisfies a bug, a todo or a feature — also carries a violated run of the same property, with its counterexample, on other inputs than those it holds on: the model before the change. A note, naming the property as its subject, so it can be waived with a reason |
 | `property-witnessed` | a property that holds and proves a change is backed by a witness property that holds — one linked to it by witnesses, showing the new behaviour is reachable, so the property does not hold only because the situation never arises. A note, naming the property as its subject, so it can be waived with a reason; a witnesses link with an item that is not a property at either end is noted too |
+| `model-development` | every models item names one model, and no two name the same; a stable model whose property does not hold on a run of what it has now is noted, since it either needs verifying or is in development again |
 
 **Write hooks**, run on every item write
 
@@ -1919,6 +1929,7 @@ Properties: a property of the software, proven or refuted by a verifier. Items l
 |---|---|
 | `property-reopens-when-changed` | changing a property's property, model, verifier or verifierOptions sets its status back to open: the last run was reached on something else, and says nothing about it |
 | `holds-only-by-verify` | a property becomes holds only with a run that holds for exactly what it has now, as naima verify writes it; holds set by hand without one — naima set, naima new --set — is refused |
+| `leaves-development-proved` | a model leaves development (its models item becomes stable, or is created stable) only when at least one property is verified on it and every one holds on a run of exactly what it has now; refused otherwise, naming each property that does not |
 
 **Gates**, listed by `naima gates`
 

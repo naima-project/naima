@@ -323,6 +323,14 @@ the property it backs, so that property can't be holding only because the
 situation it talks about never arises
 ([proving a change to a model](prove-and-close.md#proving-a-change-to-a-model)).
 
+### In development
+
+The status of a model that is being changed over several landings, kept on
+an item of type `models` that names the model's path. While a model is in
+development, what its properties say is only information, and leaving
+development needs every property of the model to hold on a current run
+([a model in development](prove-and-close.md#a-model-in-development)).
+
 ### Proves
 
 A status that counts as evidence for what the item [verifies](#verifies),
