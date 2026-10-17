@@ -4,7 +4,9 @@ A [metric](glossary.md#metric) is a name together with the command that
 measures it. It might be how long the tests take, the test coverage, how many
 lint warnings there are, the size of a build, or how long an analysis runs.
 Nothing about it is specific to software, so any command that prints a
-number, or that succeeds or fails, can be a metric.
+number, or that succeeds or fails, can be a metric. So can a file that a
+benchmark writes, and the results of a test suite, which Naima also records
+test by test.
 
 Naima runs the project's metrics and prints every number next to the number
 it is compared to. It records the numbers for each
@@ -47,6 +49,9 @@ The agent writes this once, and you decide the bounds.
 | `run` | the command, as a list: the program first, then its arguments. No shell. `{tmp}` in an argument is a fresh temporary path. |
 | `prepare` | a command run first, which must succeed: the test run a coverage report reads. |
 | `measure` | instead of `run`: a code measure Naima takes itself from the files (below). |
+| `suite`, `field` | instead of `run`: a number from a [test suite](#record-the-test-suites-test-by-test)'s run, where `field` is `passed`, `failed`, `skipped`, `total` or `seconds`. |
+| `file` | instead of `run`: a file, from the project root, that the number is read from as if a command had printed it. It's for [benchmarks and profiles](#benchmarks-and-profiles-that-write-files). |
+| `satisfies` | the [requirements](#performance-requirements-are-metrics-with-budgets) the metric measures, by their names. |
 | `language`, `include`, `exclude` | for a `measure`: the languages it reads (every programming language by default) and the paths it reads or leaves out — `"src"`, or a pattern such as `"**/*.test.ts"`. |
 | `statistic` | for function size and complexity: `mean` (default), `median`, `p90`, `max` or `sum`. |
 | `better` | `higher`, `lower` or `neither`: which way is an improvement. Without it, a budget means lower and a floor higher. |
@@ -61,7 +66,8 @@ The agent writes this once, and you decide the bounds.
 | `because` | the [item](glossary.md#item) that says why the bound was last loosened; written by `naima metrics bound`. |
 
 A metric has at most one bound. A metric without a bound is recorded but
-not held to anything, except for kind `exit`, which must then equal 0.
+not held to anything, except for kind `exit`, which must then equal 0. A
+metric that reads a file uses kind `number` unless it says otherwise.
 
 ### Kinds
 
@@ -118,6 +124,193 @@ Tightening a bound needs no justification. Loosening it (raising a budget,
 lowering a floor or moving a baseline) is refused unless `--because` names an
 item that explains why, and that item is written into the metric.
 `naima check` reports any `because` that doesn't name an existing item.
+
+## Record the test suites, test by test
+
+A test suite is a test command whose results Naima reads one test at a time,
+such as `deno test`, `node --test`, `bun test`, `pytest` or `cargo test`. The
+runner writes a report in a machine-readable format, and Naima reads which
+tests passed, which failed, how long each one took and what each failure
+said. Suites are declared next to the metrics, under `suites`.
+
+```json
+"plugins": {
+  "metrics": {
+    "options": {
+      "suites": {
+        "unit": { "preset": "deno", "inputs": ["src", "test", "deno.json"] },
+        "engine": { "preset": "cargo", "inputs": ["src", "tests", "Cargo.toml", "Cargo.lock"] }
+      }
+    }
+  }
+}
+```
+
+| Key | What it is |
+|---|---|
+| `preset` | a ready suite (below). Any other key overrides the preset's. |
+| `run` | the command, as a list: the program first, then its arguments. No shell. `{tmp}` in an argument is a fresh temporary directory, removed after the run. |
+| `prepare` | a command run first, which must succeed. |
+| `format` | how the report is read: `junit`, `tap` or `libtest-json`. |
+| `report` | the file the runner writes its report to, either from the project root or under `{tmp}`. Without it, Naima reads the command's output. |
+| `inputs` | the paths or patterns of the files the tests read, such as `"src"` or `"**/*.py"`. Without it, every file of the working tree outside the tracker counts. |
+| `says` | what the suite covers. |
+
+| Format | Written by |
+|---|---|
+| `junit` | JUnit XML: `pytest --junit-xml`, `deno test --reporter=junit`, `node --test-reporter=junit`, `bun test --reporter=junit`, and most CI tools |
+| `tap` | TAP 13 or 14, with indented subtests: `deno test --reporter=tap`, `node --test-reporter=tap` |
+| `libtest-json` | Rust's test harness with `-- -Z unstable-options --format json`, which needs the nightly toolchain |
+
+| Preset | The command |
+|---|---|
+| `deno` | `deno test -A --reporter=junit --junit-path={tmp}/report.xml` |
+| `node` | `node --test --test-reporter=junit --test-reporter-destination={tmp}/report.xml` |
+| `bun` | `bun test --reporter=junit --reporter-outfile={tmp}/report.xml` |
+| `pytest` | `pytest -q --junit-xml={tmp}/report.xml` |
+| `cargo` | `cargo +nightly test -- -Z unstable-options --format json --report-time` |
+
+A plugin can add a format through the `test-formats` extension point
+([reference](../reference/reference.md)).
+
+Each suite gives three metrics of its own. For a suite called `unit` they are
+`unit.passed`, `unit.failed`, which must be 0, and `unit.seconds`. They are
+compared, recorded, plotted and shown in the summary like any other metric.
+To hold one of them to a bound, declare it under `metrics` with its suite and
+field, for instance
+`"unit.seconds": { "suite": "unit", "field": "seconds", "atMost": 120 }`.
+
+### Run and record them
+
+`naima metrics run` runs every suite its metrics read, once each, and prints
+the counts and every failing test before the numbers. `naima metrics run
+unit` runs one suite and its metrics.
+
+```
+  ✗ suite unit: 211 passed, 1 failed, 3 skipped, in 48.2 s — run
+      ✗ export > keeps the alpha channel (./test/export.test.ts): AssertionError: expected 255, got 0
+  ✓ unit.passed: 211 tests (was 209, +2; no bound) — recorded, no bound
+  ✗ unit.failed: 1 tests (was 0, +1; baseline 0 tests) — differs from the baseline 0
+```
+
+With `--record`, each suite's run is also written to
+`naima-data/test-runs/<suite>/`, in a file named after the commit, with the
+run's log beside it. The record keeps every test's name, result, duration and
+failure message, the commit, and a digest of the files the run read. The
+project's own path is written as `<root>`, and machine names, home paths and
+user names are replaced by placeholders, as in any
+[evidence](rules.md#no-machine-names-or-private-infrastructure-in-a-repository).
+The record of the metrics names the run its numbers came from.
+
+### A run is not repeated when nothing it reads has changed
+
+The digest covers the command, the format, where the report is written, and
+every input file with its contents. When a recorded run has the same digest,
+Naima uses that run instead of running the suite again, and says which run
+it used. `naima verify` follows the same rule for a property's runs
+([prove and close](prove-and-close.md#properties-proven-by-a-tool)).
+
+```
+  ✓ suite unit: 212 passed, 0 failed, 3 skipped, in 47.9 s — reused: its inputs are those of the run of 3f2a91c04d1e on 2026-10-16, naima-tracker/naima-data/test-runs/unit/3f2a….json
+```
+
+This is why `inputs` is worth declaring. A suite that names the files its
+tests read is reused across commits that only change other files, such as the
+documentation. `--force "<reason>"` runs the suites again anyway, for
+instance to confirm a failure that comes and goes, and the reason is kept in
+the record. A run whose report couldn't be read is never reused.
+
+### Results land on the test items
+
+A [test item](prove-and-close.md#tests-a-suite-runs) names the tests it
+covers in `testNames`, separated by commas.
+
+```sh
+naima set export-keeps testNames="export > keeps the alpha channel,export > keeps the profile"
+naima set export-keeps testSuite=unit     # only if the names should match one suite
+```
+
+A name matches a test's whole name, its file and name together
+(`./test/export.test.ts > export > keeps the alpha channel`), or the end of
+its name after any ` > ` or `::`, so `keeps the alpha channel` and
+`tests::keeps_alpha` work too. A `*` stands for any text. Groups are part of a
+test's name: a step inside a Deno test, a `describe` block, or a Rust module.
+
+When `naima metrics run --record` records a run, every test item whose names
+match one of its tests gets the result:
+
+- its status becomes `passed` when every matched test that ran passed, and
+  `failed` when one of them failed;
+- the matched results are attached to the item, in a file named in
+  `lastTestRun`;
+- `evidenceKind` becomes `observation`, unless it was already stronger;
+- `redSeen` is set to the day of the failing run when the item passes after a
+  recorded run in which it failed, which is
+  [red, then green](rules.md#a-regression-test-is-seen-red-before-it-is-green).
+
+Skipped tests don't count, and an item whose matched tests were all skipped
+is left as it was. An item that the run already speaks for, because it was
+reused, is left as it was too. `naima check` notes a name that matches no
+test of the suite's last run, which usually means the test was renamed
+(`test-suites`).
+
+### When to record
+
+Recording happens at the end of a phase of work, when a branch lands, and in
+the periodic and release runs of the full suite, never after every edit.
+While working, `naima metrics run` without `--record` is enough, and an
+unchanged suite costs nothing because its last recorded run is reused.
+
+### A gate that says the tests pass
+
+The `suites` gate holds when the latest record of the current commit names a
+passing run for every suite, either made on that commit or reused because its
+inputs are unchanged. It names each run it stands on.
+
+```
+suites — Every test suite passes: HOLDS
+  ✓ backed by naima-tracker/naima-data/test-runs/unit/3f2a….json: 212 passed, 3 skipped, on 3f2a91c04d1e
+```
+
+A release or a milestone that needs the tests to pass checks this gate
+(`naima gates suites --check`), so its claim rests on the recorded run rather
+than on a commit message.
+
+## Performance requirements are metrics with budgets
+
+A requirement about performance, such as how long something takes, how much
+memory it uses, how much it handles per second, or how big something is,
+gets a metric that measures it, with a budget. The metric names the
+requirement in `satisfies`.
+
+```json
+"startup-time": {
+  "run": ["deno", "run", "-A", "bench/startup.ts"], "kind": "duration", "unit": "s",
+  "atMost": 2, "tolerance": 0.2, "satisfies": ["startup-under-two-seconds"]
+}
+```
+
+The requirement is then measured on every recorded run and shown over time
+like any other metric. `naima check` notes a requirement whose title or page
+names a time, a memory, a throughput or a size ("under 2 seconds", "peak
+memory", "requests per second", "64 MB") when no metric satisfies it
+(`performance-requirement-has-metric`). It also notes a metric that
+satisfies a requirement without a bound, and fails on a `satisfies` that
+names no item (`metric-satisfies`).
+
+### Benchmarks and profiles that write files
+
+Benchmarks and profilers usually write their results to a file. A metric
+with `file` reads the number from that file, and its `prepare` runs the
+benchmark that writes it.
+
+```json
+"parse-time": {
+  "prepare": ["cargo", "bench", "--bench", "parse"],
+  "file": "target/criterion/parse/new/estimates.json", "kind": "json", "field": "mean.point_estimate",
+  "unit": "ns", "atMost": 50000, "satisfies": ["parsing-stays-fast"]
+}
+```
 
 ## Code-quality metrics, built in
 
@@ -268,4 +461,5 @@ metrics — The project's metrics: BLOCKED by 0
 ```
 
 Run `naima metrics run --record` first, so that there is a record for the
-commit.
+commit. The gate names the record it read. The `suites` gate does the same
+for the test suites ([above](#a-gate-that-says-the-tests-pass)).

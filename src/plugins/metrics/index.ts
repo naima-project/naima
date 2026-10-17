@@ -26,6 +26,15 @@
 // tolerance  the slack around the bound, for a noisy number (a duration).
 // because    the item that says why the bound was last loosened.
 //
+// suite      instead of run: a test suite's number (suites.ts) — passed, failed,
+//            skipped, total or seconds, its `field`. Every suite declared under
+//            `suites` gives three metrics of its own: <suite>.passed, <suite>.failed
+//            (held to 0) and <suite>.seconds, unless a metric of that name is declared.
+// file       instead of run: a file the number is read from as a command's output
+//            would be — a benchmark's or a profile's results, `prepare` writing it.
+// satisfies  the requirements the metric measures: a performance requirement is a
+//            metric with a budget (requirements.ts).
+//
 // `naima metrics run --record` writes one file per run, metrics/<commit>-<id>.json,
 // so two branches never write the same file. Every number is printed with the
 // number it is compared to: the last one recorded on an earlier commit of this
@@ -38,7 +47,7 @@ import { spawnSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { isAbsolute, join, resolve } from "node:path"
+import { isAbsolute, join, relative, resolve } from "node:path"
 import {
   bool,
   type Check,
@@ -49,6 +58,8 @@ import {
   DATA_FILE,
   DEFAULT_DATA,
   type ExtensionPoint,
+  type FieldDef,
+  fieldValue,
   type Finding,
   type Item,
   label,
@@ -77,21 +88,41 @@ import {
   STATISTICS,
   workingTreeSource,
 } from "./code.ts"
+import { builtinFormats, type TestFormat } from "./formats.ts"
 import { htmlReport, plotSvg, REPORT_CSS, selectionPage, type Series } from "./plot.ts"
-import { PRESETS } from "./presets.ts"
+import { PRESETS, SUITE_PRESETS } from "./presets.ts"
+import { performanceRequirements, satisfiesChecked } from "./requirements.ts"
+import {
+  attachToItems,
+  checkCommand,
+  coveringItems,
+  LAST_TEST_RUN,
+  readSuiteRun,
+  readSuites,
+  recordedRuns,
+  recordSuiteRun,
+  runCommand,
+  type RunOutput,
+  RUNS_DIR,
+  runSuite,
+  SUITE_FIELDS,
+  suiteCommand,
+  type SuiteDef,
+  type SuiteField,
+  type SuiteOutcome,
+  suiteValue,
+  TEST_NAMES,
+  TEST_SUITE,
+  testMatches,
+} from "./suites.ts"
 
 export type { CodeMeasure, CodeSource, FunctionInfo, Language } from "./code.ts"
 export type { Series } from "./plot.ts"
-
-/** What a run of a metric's command left: what every kind reads its number from. */
-export interface RunOutput {
-  /** The exit code; -1 when the program could not be started. */
-  exit: number
-  stdout: string
-  stderr: string
-  /** Wall-clock seconds the command took. */
-  seconds: number
-}
+export type { TestFormat, TestResult } from "./formats.ts"
+export type { RunOutput, SuiteConfig, SuiteDef, SuiteRun } from "./suites.ts"
+export { parseJunit, parseLibtest, parseTap, parseXml } from "./formats.ts"
+export { recordedRuns, testMatches } from "./suites.ts"
+export { namedMeasure } from "./requirements.ts"
 
 /** How a number is read from a run: what any plugin contributes to the `metric-kinds` point. */
 export interface MetricKind {
@@ -136,12 +167,18 @@ export interface MetricConfig {
   tolerance?: number
   /** The id of the item that says why the bound was last loosened. */
   because?: string
+  /** Instead of run: the suite whose run gives the number, its `field` one of passed, failed, skipped, total, seconds. */
+  suite?: string
+  /** Instead of run: a file, from the project root, read as a command's output would be. */
+  file?: string
+  /** The requirements it measures: items, by slug, type/slug or id. */
+  satisfies?: string[]
 }
 
 /** A metric as the `metrics` point holds it: its name, its configuration, and the program it starts. */
 export interface MetricDef extends MetricConfig {
   name: string
-  /** The programs the launcher must let it start: the first word of `run` and of `prepare`; none for a measure. */
+  /** The programs the launcher must let it start: the first word of `run` and of `prepare` — its suite's for a suite's metric; none for a measure. */
   runs: string[]
   configured: true
 }
@@ -266,29 +303,57 @@ export const languagesPoint: ExtensionPoint<Language> = {
 /** The point the project's metrics stand on: `naima runs` and the launcher read the programs they start from it. */
 export const metricsPoint: ExtensionPoint<MetricDef> = {
   id: "metrics",
-  says: "a named measurement: `run` (a program and its arguments) and `kind`, or a code `measure`; a bound — `atMost`, `atLeast` or `equals` — and `better`",
+  says:
+    "a named measurement: `run` (a program and its arguments) and `kind`, a code `measure`, a test `suite`'s number or a `file`'s; a bound — `atMost`, `atLeast` or `equals` — and `better`",
   noun: "metric",
   stored: true,
   key: (m) => m.name,
   renamed: (m, name) => ({ ...m, name }),
   validate: (v) =>
-    isObject(v) && typeof v["name"] === "string" && (Array.isArray(v["run"]) || typeof v["measure"] === "string") ? null : "has no name, run or measure",
+    isObject(v) && typeof v["name"] === "string" && (Array.isArray(v["run"]) || ["measure", "suite", "file"].some((k) => typeof v[k] === "string"))
+      ? null
+      : "has no name, run, measure, suite or file",
+  configured: () => true,
+}
+
+/** The point for how a test suite's output is read: any plugin may add a format. */
+export const formatsPoint: ExtensionPoint<TestFormat> = {
+  id: "test-formats",
+  says: "how a test suite's machine-readable output is read: `parse(text) → [{ name, file, result, seconds, message }] | { error }`",
+  noun: "test format",
+  stored: true,
+  key: (f) => f.id,
+  renamed: (f, id) => ({ ...f, id }),
+  validate: (v) => {
+    const f = v as Partial<TestFormat> | null
+    if (!f || typeof f !== "object" || typeof f.id !== "string") return "has no id"
+    return typeof f.parse === "function" ? null : "has no parse function"
+  },
+  gaps: (f) => (typeof f.says === "string" && f.says.trim() ? [] : ["does not say what it reads"]),
+  document: (fs) => ["", "**Test formats**, how a suite's report is read", ...table(["Format", "What it reads"], fs.map((f) => [code(f.id), f.says]))],
+}
+
+/** The point the project's test suites stand on: `naima runs` and the launcher read the programs they start from it. */
+export const suitesPoint: ExtensionPoint<SuiteDef> = {
+  id: "test-suites",
+  says: "a test suite: `run` (a program and its arguments), the `format` its report is in, and where the `report` is",
+  noun: "test suite",
+  stored: true,
+  key: (s) => s.name,
+  renamed: (s, name) => ({ ...s, name }),
+  validate: (
+    v,
+  ) => (isObject(v) && typeof v["name"] === "string" && Array.isArray(v["run"]) && typeof v["format"] === "string" ? null : "has no name, run or format"),
   configured: () => true,
 }
 
 const num = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v)
 
-const COMMAND = (at: string, key: string, raw: unknown): void => {
-  if (!Array.isArray(raw) || !raw.length || !raw.every((w) => typeof w === "string" && w.length)) {
-    throw new Error(`${at}: ${key} is the command as a list, the program first: ["deno", "task", "test"]`)
-  }
-  if (!/^[^\s,]+$/.test(raw[0] as string)) throw new Error(`${at}: the program, ${JSON.stringify(raw[0])}, has a space or a comma`)
-}
-
 /** The project's metrics, as its naima.json says them, each preset filled in; throws on a malformed one, naming it. */
 export function readMetrics(options: Record<string, unknown>): Record<string, MetricConfig> {
   const metrics = options["metrics"] ?? {}
   if (!isObject(metrics)) throw new Error("metrics: options.metrics must be an object")
+  const suites = readSuites(options)
   const out: Record<string, MetricConfig> = {}
   for (const [name, given] of Object.entries(metrics)) {
     const at = `metrics: metric "${name}"`
@@ -301,19 +366,37 @@ export function readMetrics(options: Record<string, unknown>): Record<string, Me
     const base = typeof preset === "string" ? PRESETS[preset] : undefined
     // A preset's command and measure give way to the one the metric names itself.
     const fromPreset: Record<string, unknown> = base ? { ...base } : {}
-    if (given["run"] !== undefined || given["measure"] !== undefined) {
-      delete fromPreset["run"]
-      delete fromPreset["prepare"]
-      delete fromPreset["measure"]
+    if (SOURCES.some((k) => given[k] !== undefined)) {
+      for (const k of [...SOURCES, "prepare"]) delete fromPreset[k]
       if (given["run"] !== undefined) {
         delete fromPreset["statistic"]
       }
     }
     const raw: Record<string, unknown> = { ...fromPreset, ...given }
-    if (raw["run"] !== undefined && raw["measure"] !== undefined) throw new Error(`${at}: run or measure, not both`)
-    if (raw["measure"] === undefined) COMMAND(at, "run", raw["run"])
-    else if (typeof raw["measure"] !== "string") throw new Error(`${at}: measure is the name of a code measure: loc, complexity, …`)
-    if (raw["prepare"] !== undefined) COMMAND(at, "prepare", raw["prepare"])
+    const sources = SOURCES.filter((k) => raw[k] !== undefined)
+    if (sources.length > 1) throw new Error(`${at}: one of run, measure, suite or file — ${sources.join(" and ")} given`)
+    if (!sources.length || raw["run"] !== undefined) checkCommand(at, "run", raw["run"])
+    else if (raw["measure"] !== undefined && typeof raw["measure"] !== "string") {
+      throw new Error(`${at}: measure is the name of a code measure: loc, complexity, …`)
+    }
+    if (raw["suite"] !== undefined) {
+      if (typeof raw["suite"] !== "string" || !Object.hasOwn(suites, raw["suite"])) {
+        throw new Error(`${at}: suite names a suite declared under suites — suites: ${Object.keys(suites).join(", ") || "none"}`)
+      }
+      if (!(SUITE_FIELDS as readonly unknown[]).includes(raw["field"])) throw new Error(`${at}: a suite's metric reads field ${SUITE_FIELDS.join(", ")}`)
+      if (raw["prepare"] !== undefined || raw["kind"] !== undefined) throw new Error(`${at}: a suite's metric takes no prepare or kind: its suite runs it`)
+    }
+    if (raw["file"] !== undefined) {
+      const f = raw["file"]
+      if (typeof f !== "string" || !f || isAbsolute(f) || f.split(/[\\/]/).includes("..")) {
+        throw new Error(`${at}: file is a path from the project root, inside it`)
+      }
+      if (raw["kind"] === "exit" || raw["kind"] === "duration") throw new Error(`${at}: a file has no exit code or duration — kind number, count or json`)
+    }
+    if (raw["satisfies"] !== undefined && !(Array.isArray(raw["satisfies"]) && raw["satisfies"].every((r) => typeof r === "string" && r.trim()))) {
+      throw new Error(`${at}: satisfies is a list of the requirements it measures: ["startup-time"]`)
+    }
+    if (raw["prepare"] !== undefined) checkCommand(at, "prepare", raw["prepare"])
     for (const key of ["says", "kind", "pattern", "unit", "because", "statistic", "field"]) {
       if (raw[key] !== undefined && typeof raw[key] !== "string") throw new Error(`${at}: ${key} is a string`)
     }
@@ -352,8 +435,31 @@ export function readMetrics(options: Record<string, unknown>): Record<string, Me
     }
     out[name] = raw as MetricConfig
   }
+  // Every suite gives its own metrics, unless the project declares one of the same name.
+  for (const suite of Object.keys(suites)) {
+    for (const [field, m] of Object.entries(SUITE_METRICS)) {
+      const name = `${suite}.${field}`
+      if (!Object.hasOwn(out, name)) out[name] = { ...m, says: `${m.says}, suite ${suite}`, suite, field }
+    }
+  }
   return out
 }
+
+/** Where a metric's number comes from: a command, a code measure, a suite or a file. */
+const SOURCES = ["run", "measure", "suite", "file"] as const
+
+/** The metrics every suite gives: what passed, what failed — held to none — and how long it took. */
+const SUITE_METRICS: Record<string, MetricConfig> = {
+  passed: { says: "tests that pass", unit: "tests", better: "higher" },
+  failed: { says: "tests that fail", unit: "tests", equals: 0, better: "lower" },
+  seconds: { says: "how long the tests take", unit: "s", better: "lower" },
+}
+
+/** The kind a metric's number is read with: its own, or the default — exit for a command, number for a file. */
+const kindName = (m: MetricConfig): string => m.kind ?? (m.file !== undefined ? "number" : "exit")
+
+/** Does the metric run a command whose exit code it reads? Only then does no bound mean "must equal 0". */
+const readsCommand = (m: MetricConfig): boolean => m.measure === undefined && m.suite === undefined && m.file === undefined
 
 /** Which way is better for a metric: as it says, or as its bound implies — a budget lower, a floor higher. */
 export function betterOf(m: MetricConfig): "higher" | "lower" | "neither" {
@@ -364,7 +470,7 @@ export function betterOf(m: MetricConfig): "higher" | "lower" | "neither" {
 /** The bound a metric is held to, if any: kind exit with none must equal 0. */
 export function boundOf(m: MetricConfig): { bound: Bound; value: number } | null {
   for (const b of BOUNDS) if (num(m[b])) return { bound: b, value: m[b] }
-  return m.measure === undefined && (m.kind ?? "exit") === "exit" ? { bound: "equals", value: 0 } : null
+  return readsCommand(m) && kindName(m) === "exit" ? { bound: "equals", value: 0 } : null
 }
 
 const BOUND_WORD: Record<Bound, string> = { atMost: "budget", atLeast: "floor", equals: "baseline" }
@@ -412,6 +518,8 @@ export const DIR = "metrics"
 
 /** One run of the gate set, as recorded. */
 export interface MetricRecord {
+  /** The suites' runs its numbers come from, by suite: test-runs/<suite>/<file>, run then or reused. */
+  runs?: Record<string, string>
   commit: string
   /** True when the work had changes not committed: the numbers are of the commit and those changes. */
   dirty: boolean
@@ -431,19 +539,26 @@ const git = (ctx: Context, ...args: string[]): string | null => {
 
 const recordsDir = (ctx: Context): string => join(ctx.trackerRoot, DIR)
 
-/** Every record in the data directory. */
-export function readRecords(ctx: Context): MetricRecord[] {
+/** Every record in the data directory, with its file's name. */
+export function recordFiles(ctx: Context): { file: string; record: MetricRecord }[] {
   const dir = recordsDir(ctx)
   if (!existsSync(dir)) return []
   return readdirSync(dir).filter((f) => f.endsWith(".json")).flatMap((f) => {
     try {
       const r = JSON.parse(readFileSync(join(dir, f), "utf8")) as MetricRecord
-      return typeof r.commit === "string" && isObject(r.values) ? [r] : []
+      return typeof r.commit === "string" && isObject(r.values) ? [{ file: f, record: r }] : []
     } catch {
       return []
     }
   })
 }
+
+/** Every record in the data directory. */
+export const readRecords = (ctx: Context): MetricRecord[] => recordFiles(ctx).map((r) => r.record)
+
+/** The latest record of a commit, with its file's name, or undefined. */
+const latestOf = (ctx: Context, commit: string | null): { file: string; record: MetricRecord } | undefined =>
+  recordFiles(ctx).filter((r) => r.record.commit === commit).sort((a, b) => (a.record.at < b.record.at ? 1 : -1))[0]
 
 /** The line of history up to HEAD, oldest first, with each commit's date. */
 function line(ctx: Context): { commit: string; date: string }[] {
@@ -509,39 +624,49 @@ const kindOf = (ctx: Context, id: string): MetricKind | undefined => ctx.registr
 const measureOf = (ctx: Context, id: string): CodeMeasure | undefined => ctx.registry.find<CodeMeasure>("code-measures", id)?.value
 const languagesOf = (ctx: Context): Language[] => ctx.registry.contributions("code-languages").map((c) => c.value as Language)
 const metricsOf = (ctx: Context): MetricDef[] => ctx.registry.contributions("metrics").map((c) => c.value as MetricDef)
+const suitesOf = (ctx: Context): SuiteDef[] => ctx.registry.contributions("test-suites").map((c) => c.value as SuiteDef)
+const formatOf = (ctx: Context, id: string): TestFormat | undefined => ctx.registry.find<TestFormat>("test-formats", id)?.value
 
-/** Where a measurement is taken: the tree its commands run in and the files its code measures read. Runs shared by metrics with the same command are made once. */
+/**
+ * Where a measurement is taken: the tree its commands run in and the files its code measures read. Runs shared by
+ * metrics with the same command are made once, and a suite once for all its metrics.
+ */
 export interface Site {
   root: string
   source: () => CodeSource
   runs: Map<string, RunOutput>
+  suites?: Map<string, SuiteOutcome>
+  /** Why the suites are run again although a recorded run has their inputs; absent, such a run is reused. */
+  rerun?: string
 }
 
 /** The working tree, as `naima metrics run` measures it: its files as they are, uncommitted changes included. */
-export function workingSite(ctx: Context): Site {
+export function workingSite(ctx: Context, rerun?: string): Site {
   let source: CodeSource | undefined
-  return { root: ctx.root, source: () => (source ??= workingTreeSource(ctx.root, [ctx.trackerDir])), runs: new Map() }
+  return {
+    root: ctx.root,
+    source: () => (source ??= workingTreeSource(ctx.root, [ctx.trackerDir])),
+    runs: new Map(),
+    suites: new Map(),
+    ...(rerun !== undefined ? { rerun } : {}),
+  }
 }
 
-// deno-lint-ignore no-control-regex
-const ANSI = /\x1b\[[0-9;?]*[ -\/]*[@-~]/g
-
-/** Run a command in `cwd`, colour off, its output stripped of escape codes. */
-function runCommand(program: string, args: string[], cwd: string): RunOutput & { error?: Error } {
-  const start = performance.now()
-  const r = spawnSync(program, args, { cwd, encoding: "utf8", maxBuffer: 256 * 1024 * 1024, env: { ...process.env, NO_COLOR: "1" } })
-  return {
-    exit: r.error ? -1 : r.status ?? -1,
-    stdout: (r.stdout ?? "").replace(ANSI, ""),
-    stderr: (r.stderr ?? "").replace(ANSI, ""),
-    seconds: (performance.now() - start) / 1000,
-    ...(r.error ? { error: r.error } : {}),
-  }
+/** A suite's run at a site: made once, or a recorded run with the same inputs reused. */
+export function suiteAt(ctx: Context, name: string, site: Site): SuiteOutcome {
+  site.suites ??= new Map()
+  const done = site.suites.get(name)
+  if (done) return done
+  const s = suitesOf(ctx).find((x) => x.name === name)
+  if (!s) throw new Error(`no suite "${name}" — suites: ${suitesOf(ctx).map((x) => x.name).join(", ") || "none declared"}`)
+  const out = runSuite(ctx, s, formatOf(ctx, s.format), site.root, site.source().files, site.rerun)
+  site.suites.set(name, out)
+  return out
 }
 
 /** A metric's `prepare` and `run`, made once per site: `{tmp}` is a fresh temporary path, the same for both. */
 function runOf(m: MetricConfig, site: Site): RunOutput & { error?: Error; failed?: string } {
-  const key = JSON.stringify([m.prepare ?? null, m.run])
+  const key = JSON.stringify([m.prepare ?? null, m.run ?? null, m.file ?? null])
   const cached = site.runs.get(key)
   if (cached) return cached
   const tmp = join(tmpdir(), `naima-metric-${randomUUID().slice(0, 8)}`)
@@ -558,8 +683,16 @@ function runOf(m: MetricConfig, site: Site): RunOutput & { error?: Error; failed
         return out
       }
     }
-    const [program, ...args] = fill(m.run ?? [])
-    out = runCommand(program as string, args, site.root)
+    if (m.file !== undefined) {
+      const path = resolve(site.root, m.file)
+      const rel = relative(site.root, path)
+      out = existsSync(path) && rel && !rel.startsWith("..")
+        ? { exit: 0, stdout: readFileSync(path, "utf8"), stderr: "", seconds: 0 }
+        : { exit: -1, stdout: "", stderr: "", seconds: 0, failed: `no file ${m.file}` }
+    } else {
+      const [program, ...args] = fill(m.run ?? [])
+      out = runCommand(program as string, args, site.root)
+    }
   } finally {
     try {
       rmSync(tmp, { recursive: true, force: true })
@@ -585,7 +718,17 @@ export function measure(ctx: Context, m: MetricDef, site: Site = workingSite(ctx
       return { value: null, exit: -1, error: (e as Error).message }
     }
   }
-  const kind = kindOf(ctx, m.kind ?? "exit")
+  if (m.suite !== undefined) {
+    let o: SuiteOutcome
+    try {
+      o = suiteAt(ctx, m.suite, site)
+    } catch (e) {
+      return { value: null, exit: -1, error: (e as Error).message }
+    }
+    const v = suiteValue(o, (m.field ?? "failed") as SuiteField)
+    return typeof v === "number" ? { value: v, exit: o.run.exit } : { value: null, exit: o.run.exit, error: v.error }
+  }
+  const kind = kindOf(ctx, kindName(m))
   if (!kind) return { value: null, exit: -1, error: `no metric kind "${m.kind}"` }
   const run = runOf(m, site)
   if (run.failed) return { value: null, exit: run.exit, error: run.failed }
@@ -603,6 +746,8 @@ export function measure(ctx: Context, m: MetricDef, site: Site = workingSite(ctx
 
 /** What a metric measures with, in words: its command, or its code measure and selection. */
 export function measuredBy(m: MetricConfig): string {
+  if (m.suite !== undefined) return `suite ${m.suite}: ${m.field}`
+  if (m.file !== undefined) return [m.prepare ? `${m.prepare.join(" ")} &&` : "", `file ${m.file}`].filter(Boolean).join(" ")
   if (m.measure === undefined) return [m.prepare ? `${m.prepare.join(" ")} &&` : "", (m.run ?? []).join(" ")].filter(Boolean).join(" ")
   const sel = [
     m.statistic,
@@ -636,6 +781,12 @@ function writeBound(ctx: Context, name: string, value: number, because: Item | u
   const options = isObject(entry["options"]) ? entry["options"] : {}
   const metrics = isObject(options["metrics"]) ? options["metrics"] : {}
   const current = metrics[name]
+  const [suite, field] = name.split(".")
+  if (!isObject(current) && suite && field && readSuites(options)[suite]) {
+    throw new Error(
+      `metric "${name}" is suite ${suite}'s own: declare it to give it a bound — "${name}": { "suite": "${suite}", "field": "${field}", "atMost": … } under plugins.metrics.options.metrics in ${ctx.trackerDir}/${DATA_FILE}`,
+    )
+  }
   if (!isObject(current)) throw new Error(`metric "${name}" is not declared in ${ctx.trackerDir}/${DATA_FILE}`)
   const bound = BOUNDS.find((b) => num(current[b]))
   if (!bound) throw new Error(`metric "${name}" has no bound to move — give it atMost, atLeast or equals in ${ctx.trackerDir}/${DATA_FILE}`)
@@ -726,7 +877,7 @@ export function backfill(
         }
       }
       let source: CodeSource | undefined
-      const site: Site = { root: tree, source: () => (source ??= commitSource(ctx.root, commit, [ctx.trackerDir])), runs: new Map() }
+      const site: Site = { root: tree, source: () => (source ??= commitSource(ctx.root, commit, [ctx.trackerDir])), runs: new Map(), suites: new Map() }
       const { values, errors } = takeAll(ctx, wanted, site, progress, false)
       const date = commitDate(ctx, commit)
       writeRecord(ctx, { commit, dirty: false, at: ctx.now().toISOString(), ...(date ? { date } : {}), backfill: true, values })
@@ -820,9 +971,14 @@ const metricsCommand: Command = {
       "run: the metrics taken of those asked, each a stage named by its metric; backfill: the commits measured of those to measure; a metric's own command reports nothing while it runs, so the count moves between metrics",
   },
   usage:
-    "metrics [list] | metrics run [name...] [--record] | metrics bound <name> <value> [--because <item>] | metrics trend <name> | metrics history [name...] [--json | --csv] [--last <n>] | metrics backfill [name...] [--since <ref>] [--last <n>] [--every <n>] [--again] | metrics plot [name...] [--out <file>] [--html] [--last <n>] [--title <t>] | metrics presets [--json]",
+    "metrics [list] | metrics run [name...] [--record] [--force <reason>] | metrics bound <name> <value> [--because <item>] | metrics trend <name> | metrics history [name...] [--json | --csv] [--last <n>] | metrics backfill [name...] [--since <ref>] [--last <n>] [--every <n>] [--again] | metrics plot [name...] [--out <file>] [--html] [--last <n>] [--title <t>] | metrics presets [--json]",
   options: [
-    { name: "--record", says: "run: write the numbers, with the commit they measure, to metrics/ in the data directory" },
+    {
+      name: "--record",
+      says:
+        "run: write the numbers, with the commit they measure, to metrics/ in the data directory; each suite's run, per test, to test-runs/, its results handed to the test items that name them",
+    },
+    { name: "--force", says: "run: run the suites again although a recorded run has their inputs, for this reason, which the run records" },
     { name: "--because", says: "bound: the item that says why a bound is loosened — a budget raised, a floor lowered; refused without it" },
     { name: "--json", says: "history: one JSON list of commits, each with its date and values; presets: a ready declaration of every preset" },
     { name: "--csv", says: "history: comma-separated, one row per commit — commit, date, then each metric" },
@@ -838,6 +994,8 @@ const metricsCommand: Command = {
     "metrics",
     "metrics run --record",
     "metrics run tests coverage",
+    "metrics run unit --record",
+    'metrics run unit --force "a flaky failure to confirm"',
     "metrics bound test-time 140 --because bugs/slow-ci",
     "metrics trend tests",
     "metrics history --csv",
@@ -849,6 +1007,7 @@ const metricsCommand: Command = {
   run(args, ctx) {
     const p = parse(args, {
       record: { type: "boolean" },
+      force: { type: "string" },
       because: { type: "string" },
       json: { type: "boolean" },
       csv: { type: "boolean" },
@@ -863,7 +1022,14 @@ const metricsCommand: Command = {
     const [sub = "list", ...rest] = p.positionals
     const head = git(ctx, "rev-parse", "HEAD")
     const last = str(p, "last") === undefined ? undefined : positiveInt(str(p, "last"), 1, `metrics ${sub} --last`)
-    const named = (): MetricDef[] => (rest.length ? rest.map((n) => find(ctx, n)) : metricsOf(ctx))
+    // A suite's name stands for its metrics.
+    const named = (): MetricDef[] =>
+      rest.length
+        ? rest.flatMap((n) => {
+          const own = metricsOf(ctx).filter((m) => m.suite === n && suitesOf(ctx).some((x) => x.name === n))
+          return own.length && !metricsOf(ctx).some((m) => m.name === n) ? own : [find(ctx, n)]
+        })
+        : metricsOf(ctx)
     if (sub === "list") {
       if (rest.length) throw usageError(this)
       const ms = metricsOf(ctx)
@@ -876,10 +1042,17 @@ const metricsCommand: Command = {
         const lastValue = h.at(-1)
         const better = betterOf(m)
         ctx.out(
-          `${m.name.padEnd(16)} ${m.measure === undefined ? m.kind ?? "exit" : "measure"}, ${boundText(m)}${m.ratchet ? ", ratchet" : ""}${
-            better === "neither" ? "" : `, ${better} is better`
-          }; last ${fmt(lastValue?.value, m.unit)}  — ${measuredBy(m)}`,
+          `${m.name.padEnd(16)} ${m.measure !== undefined ? "measure" : m.suite !== undefined ? "suite" : kindName(m)}, ${boundText(m)}${
+            m.ratchet ? ", ratchet" : ""
+          }${better === "neither" ? "" : `, ${better} is better`}; last ${fmt(lastValue?.value, m.unit)}  — ${measuredBy(m)}`,
         )
+      }
+      for (const s of suitesOf(ctx)) {
+        const last = recordedRuns(ctx, s.name).at(-1)?.run
+        const said = last
+          ? (last.error ? `error on ${last.commit.slice(0, 12)}` : `${last.counts.passed} passed, ${last.counts.failed} failed on ${last.commit.slice(0, 12)}`)
+          : "none"
+        ctx.out(`suite ${s.name.padEnd(10)} ${s.format}; last run ${said}  — ${suiteCommand(s)}`)
       }
       return 0
     }
@@ -888,14 +1061,19 @@ const metricsCommand: Command = {
       if (!wanted.length) throw new Error(`no metrics declared — plugins.metrics.options.metrics in ${ctx.trackerDir}/${DATA_FILE}`)
       const dirty = (git(ctx, "status", "--porcelain", "--", ".", `:(exclude)${ctx.trackerDir}`) ?? "") !== ""
       const progress = progressFor((l) => ctx.err(l))
+      const rerun = str(p, "force")
+      if (rerun !== undefined && !rerun.trim()) throw new Error('--force needs a reason: --force "<why the suites run again>"')
+      const site = workingSite(ctx, rerun?.trim())
       let taken: ReturnType<typeof takeAll>
       try {
-        taken = takeAll(ctx, wanted, workingSite(ctx), progress)
+        taken = takeAll(ctx, wanted, site, progress)
         progress.overall(wanted.length, wanted.length, "metrics")
       } finally {
         progress.end()
       }
       const { values, errors } = taken
+      const suites = [...(site.suites?.values() ?? [])]
+      for (const o of suites) for (const line of suiteLines(ctx, o)) ctx.out(line)
       let failed = 0
       for (const m of wanted) {
         const v = values[m.name]!
@@ -920,8 +1098,27 @@ const metricsCommand: Command = {
       if (bool(p, "record")) {
         if (!head) throw new Error("nothing to record against: the repository has no commit yet")
         const date = commitDate(ctx, head)
-        const file = writeRecord(ctx, { commit: head, dirty, at: ctx.now().toISOString(), ...(date ? { date } : {}), values })
-        ctx.out(`wrote ${ctx.trackerDir}/${DIR}/${file} — commit it with the work it measures`)
+        const runs: Record<string, string> = {}
+        for (const o of suites) {
+          if (!o.reused) recordSuiteRun(ctx, o, head, dirty, date)
+          runs[o.run.suite] = (o.reused ?? o.recorded) as string
+        }
+        const file = writeRecord(ctx, {
+          commit: head,
+          dirty,
+          at: ctx.now().toISOString(),
+          ...(date ? { date } : {}),
+          ...(suites.length ? { runs } : {}),
+          values,
+        })
+        const fresh = suites.filter((o) => o.recorded).map((o) => `${ctx.trackerDir}/${o.recorded}`)
+        ctx.out(
+          `wrote ${ctx.trackerDir}/${DIR}/${file}${
+            fresh.length ? ` and ${fresh.join(", ")}, with ${fresh.length > 1 ? "their logs" : "its log"}` : ""
+          } — commit them with the work they measure`,
+        )
+        ctx.reload()
+        for (const line of attachToItems(ctx, suites)) ctx.out(line)
       }
       return failed ? 1 : 0
     }
@@ -1140,11 +1337,77 @@ const boundReasons: Check = {
         if (!measureOf(ctx, m.measure)) out.push({ level: "problem", message: `metric ${m.name}: no code measure "${m.measure}"` })
         continue
       }
-      const kind = m.kind ?? "exit"
+      if (m.suite !== undefined) continue
+      const kind = kindName(m)
       if (!kindOf(ctx, kind)) out.push({ level: "problem", message: `metric ${m.name}: no metric kind "${kind}"` })
     }
     return out
   },
+}
+
+/** The lines a suite's run is printed as: its counts, how it came to be — run, reused, run again — and its failures. */
+function suiteLines(ctx: Context, o: SuiteOutcome): string[] {
+  const r = o.run
+  const how = o.reused
+    ? `reused: its inputs are those of the run of ${r.commit.slice(0, 12)} on ${r.at.slice(0, 10)}, ${ctx.trackerDir}/${o.reused}`
+    : r.forced !== undefined
+    ? `run again: ${r.forced}`
+    : "run"
+  if (r.error) return [`  ✗ suite ${r.suite}: ${r.error} — ${how}`]
+  const failing = r.tests.filter((t) => t.result === "failed")
+  const shown = failing.slice(0, 20).map((t) => `      ✗ ${t.name}${t.file ? ` (${t.file})` : ""}${t.message ? `: ${t.message.split("\n")[0]}` : ""}`)
+  return [
+    `  ${
+      failing.length ? "✗" : "✓"
+    } suite ${r.suite}: ${r.counts.passed} passed, ${r.counts.failed} failed, ${r.counts.skipped} skipped, in ${r.seconds} s — ${how}`,
+    ...shown,
+    ...(failing.length > shown.length ? [`      … and ${failing.length - shown.length} more failing`] : []),
+  ]
+}
+
+const suitesCheck: Check = {
+  name: "test-suites",
+  says:
+    "a suite's format is a known test format; a test item's testSuite names a declared suite, and its testNames match a test of that suite's last recorded run (a note)",
+  run(ctx) {
+    const out: Finding[] = []
+    const suites = suitesOf(ctx)
+    for (const s of suites) {
+      if (!formatOf(ctx, s.format)) out.push({ level: "problem", message: `suite ${s.name}: no test format "${s.format}"` })
+    }
+    const last = new Map(suites.map((s) => [s.name, recordedRuns(ctx, s.name).filter((r) => !r.run.error).at(-1)?.run]))
+    for (const item of coveringItems(ctx)) {
+      const only = fieldValue(item, TEST_SUITE)
+      if (only !== undefined && !suites.some((s) => s.name === only)) {
+        out.push({ level: "problem", item, message: `${label(item)}: testSuite names ${only}, which is no declared suite` })
+        continue
+      }
+      const runs = [...last.entries()].filter(([name, run]) => run && (only === undefined || name === only)).map(([, run]) => run!)
+      if (!runs.length) continue
+      const names = fieldValue(item, TEST_NAMES) ?? []
+      const unmatched = names.filter((p) => !runs.some((r) => r.tests.some((t) => testMatches(p, t))))
+      if (unmatched.length) {
+        out.push({
+          level: "note",
+          item,
+          message: `${label(item)}: testNames ${unmatched.map((n) => JSON.stringify(n)).join(", ")} match no test of the last recorded run of ${
+            only ?? "any suite"
+          } — rename them, or the test is gone`,
+        })
+      }
+    }
+    return out
+  },
+}
+
+/** A gate result as the gates point takes it, declared here since plugins never import each other. */
+interface GateOutcome {
+  holds: boolean
+  blocking: Item[]
+  owed: Item[]
+  reasons: string[]
+  /** The recorded evidence it stands on. */
+  backedBy: string[]
 }
 
 /** The gate this plugin contributes: the shape the gates point takes, declared here since plugins never import each other. */
@@ -1155,76 +1418,162 @@ interface Gate {
   title: string
   says: string
   decides: string
-  evaluate(ctx: Context): { holds: boolean; blocking: Item[]; owed: Item[]; reasons: string[] }
+  evaluate(ctx: Context): GateOutcome
 }
+
+const metricsGate: Gate = {
+  name: "metrics",
+  configured: true,
+  title: "The project's metrics",
+  says: "every declared metric held to its bound on the last record of HEAD's commit",
+  decides:
+    "holds when the latest record of HEAD's commit (naima metrics run --record) has every declared metric within its bound; with no record of HEAD, it holds only if no metric is declared. It blocks on no item: it says which number fails, and how far, and names the record it read.",
+  evaluate(ctx) {
+    const ms = metricsOf(ctx)
+    if (!ms.length) return { holds: true, blocking: [], owed: [], reasons: [], backedBy: [] }
+    const head = git(ctx, "rev-parse", "HEAD")
+    const latest = latestOf(ctx, head)
+    if (!latest) {
+      return { holds: false, blocking: [], owed: [], reasons: [`no record of ${head?.slice(0, 12) ?? "HEAD"} — naima metrics run --record`], backedBy: [] }
+    }
+    const last = latest.record
+    const reasons = ms.flatMap((m) => {
+      const v = last.values[m.name]
+      if (v?.holds === true) return []
+      if (!v) return [`${m.name}: not in the record of ${head?.slice(0, 12)}`]
+      if (v.value === null) return [`${m.name}: no number`]
+      return [`${m.name}: ${fmt(v.value, m.unit)}, ${judge(m, v.value).why}`]
+    })
+    return { holds: reasons.length === 0, blocking: [], owed: [], reasons, backedBy: [`${ctx.trackerDir}/${DIR}/${latest.file}`] }
+  },
+}
+
+const suitesGate: Gate = {
+  name: "suites",
+  configured: true,
+  title: "Every test suite passes",
+  says: "every declared test suite passed on HEAD's commit, by a recorded run",
+  decides:
+    "holds when the latest record of HEAD's commit (naima metrics run --record) names, for every declared suite, a recorded run — made on it, or reused because its inputs are unchanged — with no failing test and no error. It blocks on no item: it says which suite failed and how, and names each run it stands on.",
+  evaluate(ctx) {
+    const suites = suitesOf(ctx)
+    const head = git(ctx, "rev-parse", "HEAD")
+    const latest = recordFiles(ctx).filter((r) => r.record.commit === head && r.record.runs).sort((a, b) => (a.record.at < b.record.at ? 1 : -1))
+    const reasons: string[] = []
+    const backedBy: string[] = []
+    for (const s of suites) {
+      const path = latest.map((r) => r.record.runs?.[s.name]).find((x): x is string => typeof x === "string")
+      const run = path ? readSuiteRun(ctx, path) : null
+      if (!path || !run) {
+        reasons.push(`suite ${s.name}: no recorded run for ${head?.slice(0, 12) ?? "HEAD"} — naima metrics run ${s.name} --record`)
+        continue
+      }
+      const where = `${ctx.trackerDir}/${path}`
+      if (run.error) reasons.push(`suite ${s.name}: ${run.error} — ${where}`)
+      else if (run.counts.failed) {
+        const names = run.tests.filter((t) => t.result === "failed").slice(0, 5).map((t) => t.name)
+        reasons.push(`suite ${s.name}: ${run.counts.failed} failing — ${names.join("; ")}${run.counts.failed > names.length ? "; …" : ""} — ${where}`)
+      } else backedBy.push(`${where}: ${run.counts.passed} passed, ${run.counts.skipped} skipped, on ${run.commit.slice(0, 12)}`)
+    }
+    return { holds: reasons.length === 0, blocking: [], owed: [], reasons, backedBy }
+  },
+}
+
+/** The fields a test item names its tests by, and keeps its last recorded result in. */
+const TEST_FIELDS: FieldDef[] = [
+  {
+    name: TEST_NAMES.name,
+    kind: TEST_NAMES.kind,
+    says:
+      "the tests of the project's suites this test item covers: names or patterns with *, matched against a test's name, its file and name, or the end of its name after ` > ` or `::`; comma-separated. A recorded suite run sets its status",
+    appliesTo: ["tests"],
+  },
+  {
+    name: TEST_SUITE.name,
+    kind: TEST_SUITE.kind,
+    says: "the one suite whose runs decide the test item, when its testNames should match no other",
+    appliesTo: ["tests"],
+  },
+  {
+    name: LAST_TEST_RUN.name,
+    kind: LAST_TEST_RUN.kind,
+    says:
+      "the attachment holding the last recorded suite results of the tests it covers: a file name in the item's attachments/, written by naima metrics run --record",
+    appliesTo: ["tests"],
+  },
+]
 
 export default function metrics(options: Record<string, unknown> = {}): Plugin {
   const declared = readMetrics(options)
+  const suites = readSuites(options)
+  const suiteDefs: SuiteDef[] = Object.entries(suites).map(([name, c]) => ({
+    ...c,
+    name,
+    runs: [...new Set([c.run[0], c.prepare?.[0]].filter((x): x is string => typeof x === "string"))],
+    configured: true,
+  }))
   const defs: MetricDef[] = Object.entries(declared).map(([name, c]) => ({
     ...c,
     name,
-    runs: [...new Set([c.run?.[0], c.prepare?.[0]].filter((x): x is string => typeof x === "string"))],
+    runs: c.suite !== undefined
+      ? suiteDefs.find((s) => s.name === c.suite)?.runs ?? []
+      : [...new Set([c.run?.[0], c.prepare?.[0]].filter((x): x is string => typeof x === "string"))],
     configured: true,
   }))
-  const gate: Gate = {
-    name: "metrics",
-    configured: true,
-    title: "The project's metrics",
-    says: "every declared metric held to its bound on the last record of HEAD's commit",
-    decides:
-      "holds when the latest record of HEAD's commit (naima metrics run --record) has every declared metric within its bound; with no record of HEAD, it holds only if no metric is declared. It blocks on no item: it says which number fails, and how far.",
-    evaluate(ctx) {
-      const ms = metricsOf(ctx)
-      if (!ms.length) return { holds: true, blocking: [], owed: [], reasons: [] }
-      const head = git(ctx, "rev-parse", "HEAD")
-      const last = readRecords(ctx).filter((r) => r.commit === head).sort((a, b) => (a.at < b.at ? 1 : -1))[0]
-      if (!last) return { holds: false, blocking: [], owed: [], reasons: [`no record of ${head?.slice(0, 12) ?? "HEAD"} — naima metrics run --record`] }
-      const reasons = ms.flatMap((m) => {
-        const v = last.values[m.name]
-        if (v?.holds === true) return []
-        if (!v) return [`${m.name}: not in the record of ${head?.slice(0, 12)}`]
-        if (v.value === null) return [`${m.name}: no number`]
-        return [`${m.name}: ${fmt(v.value, m.unit)}, ${judge(m, v.value).why}`]
-      })
-      return { holds: reasons.length === 0, blocking: [], owed: [], reasons }
-    },
-  }
   return {
     name: "metrics",
     contract: CONTRACT,
     says:
-      "named measurements — a command's number, or a code-quality number taken in process — recorded per commit, held to a budget, a floor or a baseline, and read back along the commit timeline",
+      "named measurements — a command's number, a code-quality number taken in process, a test suite's results — recorded per commit, held to a budget, a floor or a baseline, and read back along the commit timeline",
     about:
       "A metric is a name and the command that measures it — test time, coverage, lint warnings, size, how long an analysis runs — or a code measure Naima takes itself from the files: " +
-      "lines of code, files, functions, function size, cyclomatic complexity, duplication, TODO markers, dependencies. " +
+      "lines of code, files, functions, function size, cyclomatic complexity, duplication, TODO markers, dependencies — or a file a benchmark or a profile writes. " +
       "The project declares its metrics as data in its configuration, from scratch or from a preset (`naima metrics presets`). `naima metrics run` runs them and prints every number with the one it is compared to: " +
       "the last recorded on an earlier commit of this line of history, and the bound. A bound is a budget (`atMost`), a floor (`atLeast`) or a baseline (`equals`); " +
       "a `ratchet` makes a gain fail until the bound follows it, so a budget only goes down and a floor only up; loosening a bound names the item that says why. " +
-      "`--record` writes the numbers, with the commit they measure, as evidence, one file per run; `naima metrics backfill` measures past commits — code measures from git's objects, commands in a temporary worktree — so the timeline starts full. " +
+      "A metric that measures a requirement names it in `satisfies`, and `naima check` notes a requirement that names a time, a memory, a throughput or a size with no such metric. " +
+      "A **test suite** is a test command whose machine-readable report — JUnit XML, TAP, libtest JSON (`test-formats`) — is read per test. Each suite gives three metrics, `<suite>.passed`, `<suite>.failed` (held to none) and `<suite>.seconds`, " +
+      "and `naima metrics run` runs it once for all of them — or, when a recorded run has exactly its inputs, reuses that run and says so; `--force <reason>` runs it again. " +
+      "`--record` writes the numbers, with the commit they measure, as evidence, one file per run, and each suite's run under `test-runs/`: every test's name, result, duration and message, the commit, the inputs' digest, and the log. " +
+      "A test item that names tests in `testNames` gets their result: status passed or failed, the run attached and named in `lastTestRun`, `evidenceKind` observation, and `redSeen` once it passes after a recorded failing run. " +
+      "The `suites` gate holds when every suite passed on HEAD by a recorded run, and names each run. " +
+      "`naima metrics backfill` measures past commits — code measures from git's objects, commands in a temporary worktree — so the timeline starts full. " +
       "`naima metrics trend`, `history` (text, JSON, CSV) and `plot` (an SVG chart or an HTML report, no dependency) read the records back along the commit timeline, and `naima summary`, `naima board` and `naima queue` show where each metric stands. " +
-      "How a number is read is a kind (`metric-kinds`), a code measure (`code-measures`) or a language's function finder (`code-languages`): any plugin may contribute one. Naima may start the programs the metrics name, and only those: the launcher grants each one.",
+      "How a number is read is a kind (`metric-kinds`), a code measure (`code-measures`) or a language's function finder (`code-languages`): any plugin may contribute one. Naima may start the programs the metrics and suites name, and only those: the launcher grants each one.",
     options: [
       {
         name: "metrics",
         says:
-          `\`plugins.metrics.options.metrics\` in \`${DEFAULT_DATA}/${DATA_FILE}\`: metric name → { "preset", "run": [program, ...args], "prepare", "kind", "pattern", "field", or "measure" with "language", "include", "exclude", "statistic", "window"; "unit", "says", "better", one of "atMost" | "atLeast" | "equals", "ratchet", "tolerance", "because" }. kind defaults to exit, which with no bound must equal 0. A preset fills in the rest; any key beside it overrides it.`,
+          `\`plugins.metrics.options.metrics\` in \`${DEFAULT_DATA}/${DATA_FILE}\`: metric name → { "preset", "run": [program, ...args], "prepare", "kind", "pattern", "field", or "measure" with "language", "include", "exclude", "statistic", "window", or "suite" with "field" (passed, failed, skipped, total, seconds), or "file" (a path from the project root) with "kind"; "unit", "says", "better", one of "atMost" | "atLeast" | "equals", "ratchet", "tolerance", "because", "satisfies": [requirements] }. kind defaults to exit for a command, which with no bound must equal 0, and to number for a file. A preset fills in the rest; any key beside it overrides it.`,
+        default: "{}",
+      },
+      {
+        name: "suites",
+        says: `\`plugins.metrics.options.suites\` in \`${DEFAULT_DATA}/${DATA_FILE}\`: suite name → { "preset" (${
+          Object.keys(SUITE_PRESETS).join(", ")
+        }), "run": [program, ...args], "prepare", "format" (a test format), "report" (the file its report is written to, from the project root or under {tmp}; without it, the output), "inputs" (the paths or patterns of the files it reads; without it, every file outside the tracker), "says" }. Each gives the metrics <suite>.passed, <suite>.failed and <suite>.seconds.`,
         default: "{}",
       },
     ],
-    dirs: [DIR],
-    points: [kindsPoint, metricsPoint, measuresPoint, languagesPoint],
-    // The gate exists only where the project declares metrics: a project without any has no gate to hold.
+    dirs: [DIR, RUNS_DIR],
+    points: [kindsPoint, metricsPoint, measuresPoint, languagesPoint, formatsPoint, suitesPoint],
+    // A suite hands its results to test items: their status, redSeen and evidenceKind, which the trackers declare,
+    // and the fields that say which tests an item covers. Without a suite there is nothing to hand, and no field.
+    ...(suiteDefs.length ? { uses: { types: ["tests"], fields: ["redSeen", "evidenceKind"] }, fields: TEST_FIELDS } : {}),
+    // A gate exists only where the project declares what it reads: metrics, suites.
     contributes: {
       "metric-kinds": builtinKinds,
       "code-measures": builtinMeasures,
       "code-languages": builtinLanguages,
+      "test-formats": builtinFormats,
+      "test-suites": suiteDefs,
       metrics: defs,
-      gates: defs.length ? [gate] : [],
+      gates: [...(defs.length ? [metricsGate] : []), ...(suiteDefs.length ? [suitesGate] : [])],
       "ui-views": [metricsView],
     },
     // The gate is for the gates plugin, the view for the ui plugin, when each is loaded: without them the metrics still run.
     optional: ["gates", "ui-views"],
-    checks: [boundReasons],
+    checks: [boundReasons, suitesCheck, satisfiesChecked(metricsOf), performanceRequirements(metricsOf)],
     commands: [metricsCommand],
     summary: [summarySection],
   }

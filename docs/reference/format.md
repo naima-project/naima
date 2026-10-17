@@ -26,6 +26,8 @@ naima-tracker/
     claims/<uuid>.json      coordination: one file per branch that claims work
     passes/<date>-<uuid>.md coordination: one file per session note
     adopted/<file>.json     naima adopt: one record per board brought in
+    metrics/<commit>-<id>.json            naima metrics run --record: the numbers of one run
+    test-runs/<suite>/<commit>-<id>.json  the same: one run of a test suite, test by test, its .log beside it
 ```
 
 Naima writes nothing in the project outside this folder, with one

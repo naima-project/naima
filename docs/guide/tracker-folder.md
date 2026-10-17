@@ -44,6 +44,7 @@ naima-tracker/
     todos/  features/  tests/  properties/  rules/  closed/
     claims/  passes/   coordination across branches: one file per session
     metrics/           the numbers naima metrics run --record measured, one file per run
+    test-runs/         each test suite's recorded runs, test by test, with their logs
     adopted/           what naima adopt kept of a board it brought in, one file per board
 ```
 
