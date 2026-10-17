@@ -7,6 +7,8 @@ affects:
   - data
 commands:
   - added equivalent
+rules:
+  - changed A change to a model is proved, not just checked
 ---
 
 `naima equivalent <model>` compares a model with the earlier version its

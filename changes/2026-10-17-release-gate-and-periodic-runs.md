@@ -12,6 +12,8 @@ options:
   - added plugins.long-work.options.periodic
 checks:
   - added periodic-runs
+rules:
+  - changed A proof is current, and evidence against it wins
 ---
 
 A gate declared with `--full-suite` (`"fullSuite": true`) is a release gate:

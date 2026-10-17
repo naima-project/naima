@@ -96,6 +96,7 @@ import {
   attachToItems,
   checkCommand,
   coveringItems,
+  inputFiles,
   LAST_TEST_RUN,
   readSuiteRun,
   readSuites,
@@ -108,6 +109,7 @@ import {
   SUITE_FIELDS,
   suiteCommand,
   type SuiteDef,
+  suiteDigest,
   type SuiteField,
   type SuiteOutcome,
   suiteValue,
@@ -1482,6 +1484,49 @@ const suitesGate: Gate = {
   },
 }
 
+/** A landing as the coordination plugin hands it to a landing check: declared here, since plugins never import each other. */
+interface Landing {
+  branch: string
+  from: string
+  to: string
+  changed: string[]
+}
+
+/**
+ * The landing check: a suite that reads a file the landing changed needs a passing recorded run on its inputs as the
+ * branch has them, as `naima metrics run --record` reuses or makes it; each one without refuses the landing.
+ */
+const suitesCurrent = {
+  name: "suites-current",
+  says:
+    "the test suites reading a file the landing changed with no passing recorded run on their inputs as the branch has them — none recorded, or one that fails: each one refuses the landing",
+  blocks(ctx: Context, landing: Landing): string[] {
+    const suites = suitesOf(ctx)
+    if (!suites.length) return []
+    const files = workingTreeSource(ctx.root, [ctx.trackerDir]).files
+    const changed = new Set(landing.changed)
+    const out: string[] = []
+    for (const s of suites) {
+      const read = inputFiles(s, files).filter((f) => changed.has(f))
+      if (!read.length) continue
+      const digest = suiteDigest(s, ctx.root, files).sha256
+      const last = recordedRuns(ctx, s.name).filter((r) => r.run.inputsSha256 === digest).at(-1)
+      const where = last ? ` — ${ctx.trackerDir}/${last.path}` : ""
+      if (!last) {
+        out.push(
+          `suite ${s.name}: reads ${read.slice(0, 3).join(", ")}${
+            read.length > 3 ? ", …" : ""
+          }, which the landing changed, and has no recorded run on its inputs as they are now — naima metrics run --record`,
+        )
+      } else if (last.run.error) out.push(`suite ${s.name}: its recorded run on its inputs as they are now could not be read: ${last.run.error}${where}`)
+      else if (last.run.counts.failed) {
+        out.push(`suite ${s.name}: its recorded run on its inputs as they are now fails: ${last.run.counts.failed} failing${where}`)
+      }
+    }
+    return out
+  },
+}
+
 /** The fields a test item names its tests by, and keeps its last recorded result in. */
 const TEST_FIELDS: FieldDef[] = [
   {
@@ -1573,9 +1618,11 @@ export default function metrics(options: Record<string, unknown> = {}): Plugin {
       metrics: defs,
       gates: [...(defs.length ? [metricsGate] : []), ...(suiteDefs.length ? [suitesGate] : [])],
       "ui-views": [metricsView],
+      "landing-reports": suiteDefs.length ? [suitesCurrent] : [],
     },
-    // The gate is for the gates plugin, the view for the ui plugin, when each is loaded: without them the metrics still run.
-    optional: ["gates", "ui-views"],
+    // The gate is for the gates plugin, the view for the ui plugin, the landing check for the coordination plugin, when
+    // each is loaded: without them the metrics still run.
+    optional: ["gates", "ui-views", "landing-reports"],
     checks: [boundReasons, suitesCheck, satisfiesChecked(metricsOf), performanceRequirements(metricsOf)],
     commands: [metricsCommand],
     summary: [summarySection],

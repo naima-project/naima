@@ -68,7 +68,7 @@ import { land, landingReportsPoint, landingsAreMarkers } from "./land.ts"
 import { DIARY_RULE, diaryCheck, diaryCommand, eventCommand, EVENTS, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
 
 export { type Timeline, type TimelineEvent, timelineOf } from "./timeline.ts"
-export { claimedInHistory, CLOSES, type Landing, type LandingReport, landingReportsPoint, markerMessage, moveTrunk } from "./land.ts"
+export { claimedInHistory, CLOSES, type Landing, type LandingReport, landingReportsPoint, markerMessage, moveTrunk, STALE_PROOFS } from "./land.ts"
 
 export const CLAIMS = "claims"
 export const PASSES = "passes"

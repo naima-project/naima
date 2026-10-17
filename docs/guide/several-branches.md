@@ -75,9 +75,15 @@ trailer. To do the same by hand, run this:
 merge --no-ff ada/export-alpha -m "Land ada/export-alpha" -m "Closes: <item
 id>"`.
 
-Once the branch has landed, `naima land` also lists every property verified
-on a file the branch changed that doesn't hold on a current run, so the
-coordinator can verify it on the trunk. The list never stops the landing
+Before the trunk moves, `naima land` checks the proofs of what the branch
+changed. A property verified on a file the branch changed has to hold on a
+current run, and a test suite that reads one has to have a passing recorded
+run on the branch's files. Models in development are left out. If something
+isn't current, nothing lands: the worker runs `naima verify` or
+`naima metrics run --record` on the branch and commits the runs. When a proof
+can't be made current before landing, for instance because it takes days,
+`--stale-proofs "<reason>"` lands the branch anyway, and the marker keeps the
+reason in a `Stale-proofs:` trailer
 ([when the rules apply](prove-and-close.md#when-the-rules-apply)).
 
 `prune --branch` deletes a branch only when its commits are held by the

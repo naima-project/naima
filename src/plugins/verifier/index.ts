@@ -968,20 +968,16 @@ const fromRoot = (ctx: Context, model: unknown): string | null => {
 const propertiesCurrent = {
   name: "properties-current",
   says:
-    "the properties verified on what the landing changed — their model, or a file their last run read — that do not hold on a run of what the trunk has now, models in development left out: they are named, to verify on the trunk; the landing is not blocked",
-  report(ctx: Context, landing: Landing): string[] {
+    "the properties of what the landing changed — their model, a file their last run read, or the property itself — that do not hold on a run of what the branch has now, models in development left out: each one refuses the landing",
+  blocks(ctx: Context, landing: Landing): string[] {
     const changed = new Set(landing.changed)
+    const own = (p: Item): string => relative(ctx.root, p.dir).split(sep).join("/") + "/"
     const touched = properties(ctx).filter((p) => {
       if (developing(ctx, p.meta["model"])) return false
       const read = [fromRoot(ctx, p.meta["model"]), ...(readRun(p)?.inputs ?? []).map((i) => i.path)]
-      return read.some((f) => f !== null && changed.has(f))
+      return read.some((f) => f !== null && changed.has(f)) || landing.changed.some((f) => f.startsWith(own(p)))
     })
-    const whys = touched.flatMap((p) => notCurrent(ctx, p))
-    if (!whys.length) return []
-    return [
-      `${whys.length} of the properties on what this landing changed not current: the landing is not blocked — naima verify them on the trunk`,
-      ...whys.map((w) => `  ${w}`),
-    ]
+    return touched.flatMap((p) => notCurrent(ctx, p).map((why) => `${why} — naima verify ${p.slug}`))
   },
 }
 

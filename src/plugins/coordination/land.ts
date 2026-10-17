@@ -34,49 +34,81 @@ import {
 import { changeNoteTrailers } from "./changes.ts"
 import { plural } from "./worktrees.ts"
 
-/** A landing just made: the branch, the trunk before it and the marker, and every file it changed, from the project root. */
+/** A landing: the branch, the trunk before it, and every file it changed, from the project root. */
 export interface Landing {
   branch: string
   from: string
+  /** The marker, once landed; the branch tip while the landing is checked. */
   to: string
   changed: string[]
 }
 
-/** What a plugin says about a landing once it is made. It never refuses one: the landing tier reports, for now. */
+/**
+ * What a plugin says about a landing. `blocks` runs before the trunk moves, on the branch tip's files in the main
+ * checkout, and names what the landing changed whose proofs are not current: any line refuses the landing unless it
+ * is given a reason. `report` runs once the landing is made, and never refuses it.
+ */
 export interface LandingReport {
   name: string
   says: string
-  report(ctx: Context, landing: Landing): string[] | Promise<string[]>
+  blocks?(ctx: Context, landing: Landing): string[] | Promise<string[]>
+  report?(ctx: Context, landing: Landing): string[] | Promise<string[]>
 }
+
+/** The trailer a marker carries when it landed with proofs not current, and why. */
+export const STALE_PROOFS = "Stale-proofs"
 
 /** The point this plugin declares: what `naima land` reports after a landing, any plugin contributing. */
 export const landingReportsPoint: ExtensionPoint<LandingReport> = {
   id: "landing-reports",
   says:
-    "what `naima land` prints once a branch has landed, never blocking it: `name`, `says`, `report(ctx, { branch, from, to, changed }) → lines`, `changed` being every file the landing changed, from the project root",
+    "what `naima land` checks before a branch lands and reports once it has: `name`, `says`, and `blocks(ctx, { branch, from, to, changed }) → lines`, what the landing changed whose proofs are not current, any line refusing the landing unless --stale-proofs gives the reason, or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root",
   noun: "landing report",
   key: (r) => r.name,
   validate: (v) => {
     const r = v as Partial<LandingReport> | null
     if (!r || typeof r !== "object" || typeof r.name !== "string") return "has no name"
-    return typeof r.report === "function" ? null : "has no report function"
+    for (const k of ["blocks", "report"] as const) if (r[k] !== undefined && typeof r[k] !== "function") return `has a ${k} that is not a function`
+    return r.blocks || r.report ? null : "has neither a blocks nor a report function"
   },
   gaps: (r) => (typeof r.says === "string" && r.says.trim() ? [] : ["does not say what it reports"]),
   document: (
     rs,
-  ) => ["", "**Landing reports**, printed by `naima land` after a landing", ...table(["Report", "What it says"], rs.map((r) => [code(r.name), r.says]))],
+  ) => [
+    "",
+    "**Landing reports**, checked by `naima land` before a landing (blocks) or printed after it (reports)",
+    ...table(["Report", "When", "What it says"], rs.map((r) => [code(r.name), r.blocks ? "blocks" : "reports", r.says])),
+  ],
 }
 
 /** Every file between two commits, from the project root. */
 const changedFiles = (root: string, from: string, to: string): string[] =>
   (gitOrNull(root, "diff", "--name-only", "--no-renames", "-z", from, to) ?? "").split("\0").filter(Boolean)
 
+/** What every landing check finds not current, each line prefixed with its name; a check that fails says so and blocks nothing. */
+async function blockingLanding(ctx: Context, landing: Landing): Promise<string[]> {
+  ctx.reload()
+  const out: string[] = []
+  for (const c of ctx.registry.contributions("landing-reports")) {
+    const check = c.value as LandingReport
+    if (!check.blocks) continue
+    try {
+      for (const line of await check.blocks(ctx, landing)) out.push(`${c.name}: ${line}`)
+    } catch (e) {
+      ctx.out(`${c.name}: could not check: ${message(e)}`)
+    }
+  }
+  return out
+}
+
 /** Each landing report's lines, each prefixed with the report's name; one that fails says so, and the landing stands. */
 async function reportLanding(ctx: Context, landing: Landing): Promise<void> {
   ctx.reload()
   for (const c of ctx.registry.contributions("landing-reports")) {
+    const report = (c.value as LandingReport).report
+    if (!report) continue
     try {
-      for (const line of await (c.value as LandingReport).report(ctx, landing)) ctx.out(`${c.name}: ${line}`)
+      for (const line of await report(ctx, landing)) ctx.out(`${c.name}: ${line}`)
     } catch (e) {
       ctx.out(`${c.name}: could not report: ${message(e)}`)
     }
@@ -256,8 +288,8 @@ export const land: Command = {
   says:
     "land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor",
   enforces:
-    "runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item or an item open and not fixed, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, prints what every landing report says of the files the landing changed, never undoing it",
-  usage: 'land <branch> [--closes <item>]... [--no-change-note "<reason>"]',
+    "runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item or an item open and not fixed, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, prints what every landing report says of the files the landing changed, never undoing it",
+  usage: 'land <branch> [--closes <item>]... [--no-change-note "<reason>"] [--stale-proofs "<reason>"]',
   options: [
     { name: "--closes", says: "an item the landing closes, instead of those the branch claimed in its commits; repeat for several" },
     {
@@ -265,35 +297,60 @@ export const land: Command = {
       says:
         "why the branch changes behaviour paths with no change note — a refactor, a test, nothing a person or an agent sees; recorded in the marker as a No-change-note: trailer",
     },
+    {
+      name: "--stale-proofs",
+      says:
+        "why the branch lands although proofs of what it changed are not current — a suite that runs for days, left to the periodic run; recorded in the marker as a Stale-proofs: trailer",
+    },
   ],
   examples: [
     "land claude/export-alpha",
     "land claude/export-alpha --closes export-drops",
     'land claude/tidy-loader --no-change-note "a refactor of the loader: nothing a person or an agent sees changes"',
+    'land claude/scheduler --stale-proofs "the liveness property runs for two days: the nightly run checks it"',
   ],
   async run(args, ctx) {
-    const p = parse(args, { closes: { type: "string", multiple: true }, "no-change-note": { type: "string" } })
+    const p = parse(args, { closes: { type: "string", multiple: true }, "no-change-note": { type: "string" }, "stale-proofs": { type: "string" } })
     const branch = p.positionals[0]
     if (!branch || p.positionals.length > 1) throw usageError(this)
+    const stale = str(p, "stale-proofs")
+    if (stale !== undefined && (!stale.trim() || stale.includes("\n"))) throw new Error("--stale-proofs takes the reason, on one line")
     const { main, old, tip, items } = preconditions(ctx, branch, strs(p, "closes"))
     const trailers = changeNoteTrailers(ctx, branch, old, tip, str(p, "no-change-note"))
     const tree = mustGit(ctx.root, "rev-parse", `${tip}^{tree}`)
-    const made = runGit(ctx.root, ["commit-tree", tree, "-p", old, "-p", tip, "-F", "-"], { input: markerMessage(branch, items.map((i) => i.id), trailers) })
-    if (!made.ok) throw new Error(`git commit-tree: ${gitReason(made)}`)
-    const marker = made.out.trim()
-    moveTrunk(ctx.root, main, marker, old, `land: ${branch}`)
-    // The trunk moved; the checkout follows from the tree it had to the marker's, refusing to overwrite an untracked file.
-    const synced = runGit(ctx.root, ["read-tree", "-m", "-u", old, marker])
-    if (!synced.ok) {
-      const back = runGit(ctx.root, ["update-ref", "-m", `land: undo ${branch}`, `refs/heads/${main}`, old, marker])
-      throw new Error(
-        `the main checkout could not take ${branch}'s files (${gitReason(synced)}): ${
-          back.ok ? `${main} is back at ${old.slice(0, 12)}, nothing landed` : `${main} is at the marker ${marker.slice(0, 12)}, the checkout is not`
-        }`,
-      )
+    const changed = changedFiles(ctx.root, old, tip)
+    // The checkout takes the branch tip's files first, the trunk still where it was, refusing to overwrite an untracked
+    // file: the landing checks read them there, and on a refusal the checkout goes back and nothing has moved.
+    const synced = runGit(ctx.root, ["read-tree", "-m", "-u", old, tree])
+    if (!synced.ok) throw new Error(`the main checkout could not take ${branch}'s files (${gitReason(synced)}): nothing landed`)
+    const back = (): void => {
+      const r = runGit(ctx.root, ["read-tree", "-m", "-u", tree, old])
+      ctx.reload()
+      if (!r.ok) ctx.err(`the main checkout could not go back to ${main}'s files (${gitReason(r)}): git checkout -f ${main}`)
+    }
+    let marker: string
+    try {
+      const notCurrent = await blockingLanding(ctx, { branch, from: old, to: tip, changed })
+      if (notCurrent.length && stale === undefined) {
+        throw new Error(
+          `${branch} changes what has proofs not current:\n${notCurrent.map((l) => `  ${l}`).join("\n")}\n` +
+            `run them on the branch and commit their runs (naima verify, naima metrics run --record), or land with --stale-proofs "<reason>" when they cannot be made current before landing: nothing landed`,
+        )
+      }
+      if (notCurrent.length) {
+        trailers.push(`${STALE_PROOFS}: ${stale!.trim()}`)
+        for (const l of notCurrent) ctx.out(`${l} — landed anyway: ${stale!.trim()}`)
+      }
+      const made = runGit(ctx.root, ["commit-tree", tree, "-p", old, "-p", tip, "-F", "-"], { input: markerMessage(branch, items.map((i) => i.id), trailers) })
+      if (!made.ok) throw new Error(`git commit-tree: ${gitReason(made)}`)
+      marker = made.out.trim()
+      moveTrunk(ctx.root, main, marker, old, `land: ${branch}`)
+    } catch (e) {
+      back()
+      throw e
     }
     ctx.out(`landed ${branch} on ${main}: ${marker.slice(0, 12)}, closing ${items.map((i) => i.ref).join(", ")}`)
-    await reportLanding(ctx, { branch, from: old, to: marker, changed: changedFiles(ctx.root, old, marker) })
+    await reportLanding(ctx, { branch, from: old, to: marker, changed })
     const subs = (gitOrNull(ctx.root, "diff-tree", "-r", "--no-commit-id", old, marker) ?? "").split("\n").filter((l) => /^:\d+ 160000 /.test(l))
     if (subs.length) ctx.out(`${plural(subs.length, "submodule")} moved: git submodule update --init`)
     ctx.out(`next: naima close each item once its proof is checked, then naima prune --branch ${branch} --write`)

@@ -244,10 +244,13 @@ shown to hold again. **Enforced by** the write hook
 Nothing of this is asked while a branch is being prepared, because a branch
 is in development by nature. It is asked when the branch lands. Why: landing
 is the moment a change becomes part of the project, and asking earlier only
-slows down work that is still being tried. **Convention** for now:
-`naima land` lists, after the landing, every property verified on a file the
-branch changed that doesn't hold on a current run, and doesn't block the
-landing ([when the rules apply](prove-and-close.md#when-the-rules-apply)).
+slows down work that is still being tried. **Enforced by** `naima land`: it
+refuses a branch when a property verified on a file the branch changed, or a
+test suite that reads one, has no current result on the branch, outside
+models in development. A proof that can't be made current before landing,
+such as a suite that runs for days, is left to the periodic run with
+`--stale-proofs "<reason>"`, and the reason stays in the landing commit
+([when the rules apply](prove-and-close.md#when-the-rules-apply)).
 
 ### A page does not outlive its answer
 

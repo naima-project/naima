@@ -180,9 +180,11 @@ naima land <branch> --closes <item>       # or named; repeatable
 This makes one [marker](../guide/glossary.md#marker) commit, whose tree is
 the branch tip's tree, whose parents are the trunk and the branch tip, and
 whose message is `Land <branch>` with one `Closes: <item id>` trailer per
-item. It moves the trunk only if the trunk hasn't moved in the meantime. Then
-it updates the main checkout's files to the marker, and says when a submodule
-moved (`git submodule update --init`). It refuses when:
+item. It first brings the main checkout's files to the branch tip's and
+checks the proofs of what the branch changed there. Then it moves the trunk,
+only if the trunk hasn't moved in the meantime, and says when a submodule
+moved (`git submodule update --init`). When it refuses after that first
+step, the files go back and nothing has moved. It refuses when:
 
 - it isn't run from the main checkout, on the trunk;
 - the trunk isn't an ancestor of the branch, in which case merge the trunk
@@ -197,8 +199,16 @@ moved (`git submodule update --init`). It refuses when:
   project or in a submodule, and adds no change note there. If nothing
   anyone can see changes, land it with `--no-change-note "<reason>"`, and
   the marker keeps the reason in a `No-change-note:` trailer;
+- a proof of what the branch changed isn't current: a property verified on a
+  file it changed that doesn't hold on a current run, or a test suite that
+  reads such a file with no passing recorded run on the branch's files,
+  models in development left out. The worker runs `naima verify` or
+  `naima metrics run --record` on the branch and commits the runs. A proof
+  that can't be made current before landing, such as a suite that runs for
+  days, is landed with `--stale-proofs "<reason>"`, and the marker keeps the
+  reason in a `Stale-proofs:` trailer;
 - an untracked file in the main checkout would be overwritten, in which case
-  the trunk is put back.
+  nothing moves.
 
 The same commit, made by hand:
 

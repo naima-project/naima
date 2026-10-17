@@ -463,7 +463,7 @@ the project. This table shows what is asked at each moment.
 | When | What is asked | What it blocks |
 |---|---|---|
 | While a branch is being prepared | nothing; the agent runs what it needs | nothing |
-| Landing | `naima land` lists, after the landing, every property verified on a file the branch changed that doesn't hold on a current run | nothing yet: the coordinator verifies the listed properties on the trunk |
+| Landing | every property verified on a file the branch changed, or on the property itself, holds on a current run, and every test suite that reads a changed file has a passing recorded run on the branch | the landing, unless `naima land --stale-proofs "<reason>"` |
 | A model in development | nothing; what its properties say is information | nothing |
 | Leaving development | every property of the model holds on a current run | setting the model `stable` |
 | Periodic, such as nightly | a run declared in the `periodic` option, such as `naima verify --all`, started by `naima run periodic` ([long work](long-work.md#run-it-on-a-schedule)) | nothing: a failure is filed as a bug |
