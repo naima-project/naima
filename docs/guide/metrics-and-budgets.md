@@ -207,7 +207,8 @@ The record of the metrics names the run its numbers came from.
 The digest covers the command, the format, where the report is written, and
 every input file with its contents. When a recorded run has the same digest,
 Naima uses that run instead of running the suite again, and says which run
-it used.
+it used. `naima verify` follows the same rule for a property's runs
+([prove and close](prove-and-close.md#properties-proven-by-a-tool)).
 
 ```
   ✓ suite unit: 212 passed, 0 failed, 3 skipped, in 47.9 s — reused: its inputs are those of the run of 3f2a91c04d1e on 2026-10-16, naima-tracker/naima-data/test-runs/unit/3f2a….json
@@ -215,7 +216,7 @@ it used.
 
 This is why `inputs` is worth declaring. A suite that names the files its
 tests read is reused across commits that only change other files, such as the
-documentation. `--rerun "<reason>"` runs the suites again anyway, for
+documentation. `--force "<reason>"` runs the suites again anyway, for
 instance to confirm a failure that comes and goes, and the reason is kept in
 the record. A run whose report couldn't be read is never reused.
 

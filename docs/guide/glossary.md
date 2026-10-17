@@ -70,6 +70,16 @@ proven by a test linked to it ([planning](plan-with-requirements-specs-and-decis
 The precise description of how something must behave. It is kept in
 numbered versions, and only one of them is current ([planning](plan-with-requirements-specs-and-decisions.md)). *Everyday example:* the plumber's drawing with every pipe size.
 
+### Elicitation
+
+Working out requirements from what the [owner](#owner) says, at every
+prompt and not only at the start: the agent files a new requirement or
+revises one, restates it so that a test can decide it, and settles how it
+will be checked
+([requirements come from every conversation](plan-with-requirements-specs-and-decisions.md#requirements-come-from-every-conversation)).
+*Everyday example:* noting "the counter must hold 50 kg" when the customer
+mentions the stone top, and asking how heavy it is.
+
 ### Decision
 
 A choice that belongs to the [owner](#owner), recorded with its reason so
@@ -97,6 +107,16 @@ A formal-methods tool that checks a design over every possible order of
 events and, when the design is wrong, prints the exact steps that break it.
 mCRL2 is one, and VoxLogicA checks properties of images. Naima runs one through a
 [verifier](#verifier).
+
+### Model
+
+A short description of a behaviour's states and of the moves between them,
+written before the code so that a [model checker](#model-checker) can check
+its [properties](#property) over every order of events. It can be a state
+machine, an mCRL2 specification, or a state machine encoded in mCRL2
+([design with a model](design-with-a-model.md)).
+*Everyday example:* the drawing of a lift's floors and doors, checked to
+make sure the doors never open between floors.
 
 ## The tracker
 
@@ -315,6 +335,22 @@ An item of type `properties`, holding a statement about the work, or about
 a model of it, that a [verifier](#verifier) checks. `holds` proves, and
 `violated` refutes.
 
+### Witness
+
+A [property](#property) that shows a behaviour can actually happen in the
+model, such as "the pool can be non-empty". It is linked with `witnesses` to
+the property it backs, so that property can't be holding only because the
+situation it talks about never arises
+([proving a change to a model](prove-and-close.md#proving-a-change-to-a-model)).
+
+### In development
+
+The status of a model that is being changed over several landings, kept on
+an item of type `models` that names the model's path. While a model is in
+development, what its properties say is only information, and leaving
+development needs every property of the model to hold on a current run
+([a model in development](prove-and-close.md#a-model-in-development)).
+
 ### Proves
 
 A status that counts as evidence for what the item [verifies](#verifies),
@@ -356,7 +392,9 @@ The field `evidenceKind` on a test, which says what rank of
 
 A regression test proves a fix only if it was seen failing on the code
 before the fix and then passing on the fixed code. The field `redSeen`
-records the day it was seen failing.
+records the day it was seen failing. A property that proves a change to a
+model follows the same order: it is violated on the model before the change,
+with its counterexample kept, and holds on the changed one.
 
 ### Run by
 
@@ -424,9 +462,10 @@ fail, or a **note**, which doesn't. A project can set each check to
 
 ### Waiver
 
-A recorded exemption from one problem that a [check](#check) reports on one
-subject, written by `naima waive` with its reason, who gave it and when. The
-waived problem no longer fails `naima check`, which lists the waiver as a
+A recorded exemption from one finding, a problem or a note, that a
+[check](#check) reports on one subject, written by `naima waive` with its
+reason, who gave it and when. `naima check` no longer reports the waived
+finding, so a waived problem no longer fails it, and it lists the waiver as a
 note instead ([the rule](rules.md#a-finding-is-fixed-or-waived-with-its-reason)).
 
 ### Invariant

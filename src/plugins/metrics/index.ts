@@ -971,14 +971,14 @@ const metricsCommand: Command = {
       "run: the metrics taken of those asked, each a stage named by its metric; backfill: the commits measured of those to measure; a metric's own command reports nothing while it runs, so the count moves between metrics",
   },
   usage:
-    "metrics [list] | metrics run [name...] [--record] [--rerun <reason>] | metrics bound <name> <value> [--because <item>] | metrics trend <name> | metrics history [name...] [--json | --csv] [--last <n>] | metrics backfill [name...] [--since <ref>] [--last <n>] [--every <n>] [--again] | metrics plot [name...] [--out <file>] [--html] [--last <n>] [--title <t>] | metrics presets [--json]",
+    "metrics [list] | metrics run [name...] [--record] [--force <reason>] | metrics bound <name> <value> [--because <item>] | metrics trend <name> | metrics history [name...] [--json | --csv] [--last <n>] | metrics backfill [name...] [--since <ref>] [--last <n>] [--every <n>] [--again] | metrics plot [name...] [--out <file>] [--html] [--last <n>] [--title <t>] | metrics presets [--json]",
   options: [
     {
       name: "--record",
       says:
         "run: write the numbers, with the commit they measure, to metrics/ in the data directory; each suite's run, per test, to test-runs/, its results handed to the test items that name them",
     },
-    { name: "--rerun", says: "run: run the suites again although a recorded run has their inputs, for this reason, which the run records" },
+    { name: "--force", says: "run: run the suites again although a recorded run has their inputs, for this reason, which the run records" },
     { name: "--because", says: "bound: the item that says why a bound is loosened — a budget raised, a floor lowered; refused without it" },
     { name: "--json", says: "history: one JSON list of commits, each with its date and values; presets: a ready declaration of every preset" },
     { name: "--csv", says: "history: comma-separated, one row per commit — commit, date, then each metric" },
@@ -995,7 +995,7 @@ const metricsCommand: Command = {
     "metrics run --record",
     "metrics run tests coverage",
     "metrics run unit --record",
-    'metrics run unit --rerun "a flaky failure to confirm"',
+    'metrics run unit --force "a flaky failure to confirm"',
     "metrics bound test-time 140 --because bugs/slow-ci",
     "metrics trend tests",
     "metrics history --csv",
@@ -1007,7 +1007,7 @@ const metricsCommand: Command = {
   run(args, ctx) {
     const p = parse(args, {
       record: { type: "boolean" },
-      rerun: { type: "string" },
+      force: { type: "string" },
       because: { type: "string" },
       json: { type: "boolean" },
       csv: { type: "boolean" },
@@ -1061,8 +1061,8 @@ const metricsCommand: Command = {
       if (!wanted.length) throw new Error(`no metrics declared — plugins.metrics.options.metrics in ${ctx.trackerDir}/${DATA_FILE}`)
       const dirty = (git(ctx, "status", "--porcelain", "--", ".", `:(exclude)${ctx.trackerDir}`) ?? "") !== ""
       const progress = progressFor((l) => ctx.err(l))
-      const rerun = str(p, "rerun")
-      if (rerun !== undefined && !rerun.trim()) throw new Error('--rerun needs a reason: --rerun "<why the suites run again>"')
+      const rerun = str(p, "force")
+      if (rerun !== undefined && !rerun.trim()) throw new Error('--force needs a reason: --force "<why the suites run again>"')
       const site = workingSite(ctx, rerun?.trim())
       let taken: ReturnType<typeof takeAll>
       try {
@@ -1350,8 +1350,8 @@ function suiteLines(ctx: Context, o: SuiteOutcome): string[] {
   const r = o.run
   const how = o.reused
     ? `reused: its inputs are those of the run of ${r.commit.slice(0, 12)} on ${r.at.slice(0, 10)}, ${ctx.trackerDir}/${o.reused}`
-    : r.rerun !== undefined
-    ? `run again: ${r.rerun}`
+    : r.forced !== undefined
+    ? `run again: ${r.forced}`
     : "run"
   if (r.error) return [`  ✗ suite ${r.suite}: ${r.error} — ${how}`]
   const failing = r.tests.filter((t) => t.result === "failed")
@@ -1533,7 +1533,7 @@ export default function metrics(options: Record<string, unknown> = {}): Plugin {
       "a `ratchet` makes a gain fail until the bound follows it, so a budget only goes down and a floor only up; loosening a bound names the item that says why. " +
       "A metric that measures a requirement names it in `satisfies`, and `naima check` notes a requirement that names a time, a memory, a throughput or a size with no such metric. " +
       "A **test suite** is a test command whose machine-readable report — JUnit XML, TAP, libtest JSON (`test-formats`) — is read per test. Each suite gives three metrics, `<suite>.passed`, `<suite>.failed` (held to none) and `<suite>.seconds`, " +
-      "and `naima metrics run` runs it once for all of them — or, when a recorded run has exactly its inputs, reuses that run and says so; `--rerun <reason>` runs it again. " +
+      "and `naima metrics run` runs it once for all of them — or, when a recorded run has exactly its inputs, reuses that run and says so; `--force <reason>` runs it again. " +
       "`--record` writes the numbers, with the commit they measure, as evidence, one file per run, and each suite's run under `test-runs/`: every test's name, result, duration and message, the commit, the inputs' digest, and the log. " +
       "A test item that names tests in `testNames` gets their result: status passed or failed, the run attached and named in `lastTestRun`, `evidenceKind` observation, and `redSeen` once it passes after a recorded failing run. " +
       "The `suites` gate holds when every suite passed on HEAD by a recorded run, and names each run. " +

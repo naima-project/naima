@@ -44,6 +44,41 @@ writes the new version of the spec, gets it agreed, and then builds to it
 If the owner reverses an earlier request, the agent records the reversal and
 never overwrites the old request.
 
+### Elicit the requirements it carries
+
+Any prompt of the owner can carry a requirement, even one that is mostly
+about something else, so the agent checks every prompt for one, not only
+when a flow is invoked
+([the rule](../guide/rules.md#requirements-are-elicited-at-every-prompt)).
+This is a step of this flow rather than a flow of its own, because it starts
+from the same thing, a prompt of the owner, and needs the same duplicate
+search and triage. A separate pass over the same words would either be
+skipped or file the same requirement twice.
+
+1. **Does it add a requirement or change one?** Read the requirements first,
+   with `naima view requirements` or `naima list requirements --open`.
+2. **File it or revise it.** A new one is filed with
+   `naima new requirements "<what must hold>" --dedupe`. A refinement, such
+   as a tighter number, is written on the existing page with
+   `naima describe` and a `naima note` saying what changed and why. A
+   requirement that is replaced altogether is filed anew, and the old one is
+   set to `dropped` with its reason. A change to exactly how something
+   behaves is the next version of its spec (`naima spec revise`).
+3. **Make it checkable.** A vague wish is restated as something a test can
+   decide, in the agent's own words.
+4. **Settle how it is checked or measured.** It is checked by a test, by a
+   property of a model when the behaviour has states or concurrency (propose
+   the model, [design with a model](../guide/design-with-a-model.md)), or by
+   a metric with a budget for anything measurable
+   ([metrics and budgets](../guide/metrics-and-budgets.md)). The agent
+   proposes the check and asks the owner only for what is theirs, usually
+   the number a budget holds to, after searching `naima decisions <words>`
+   ([asking the human](asking-the-human.md)).
+5. **Write the answer down.** The check goes on the requirement's page, and
+   the test or property is linked `verifies` once it exists. For a metric,
+   that is a test whose gesture is `naima metrics run <metric>` within its
+   budget.
+
 ## 2. Write it before you understand it
 
 The agent opens the item with what was observed, **then** investigates:
@@ -259,6 +294,15 @@ The proof must also be **current**. `naima close` refuses when:
   [verifier](../guide/glossary.md#verifier) or options have changed since
   its run. The agent performs the gesture again (`naima verify`) and then
   closes.
+
+When the item changes a model, the agent runs the property that proves it
+on the model before the change, where it must be violated, and again after,
+where it must hold, and links a witness property that shows the new
+behaviour is reachable. `naima verify` reuses a run it already has on the
+same inputs, so going back to an earlier model costs nothing. A finding
+that can't be met is waived with its reason, never left to be read past
+([the rule](../guide/rules.md#a-change-to-a-model-is-proved-not-just-checked),
+[the steps](../guide/prove-and-close.md#proving-a-change-to-a-model)).
 
 An agent never closes an item, or sets `holds`, by editing `meta.json` or
 moving a directory. Every write hook that would refuse the change has a

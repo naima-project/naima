@@ -174,8 +174,8 @@ export interface SuiteRun {
   tests: TestResult[]
   /** The log's file name, beside the record. */
   log?: string
-  /** Why it was run again although a recorded run had the same inputs. */
-  rerun?: string
+  /** Why it was run although a run of the same identity was recorded (`naima metrics run --force "<reason>"`), as `naima verify` keeps it. */
+  forced?: string
   /** Why no result could be read: the run is evidence of that, and of nothing else. */
   error?: string
 }
@@ -320,7 +320,7 @@ export function runSuite(
     format: s.format,
     inputsSha256: digest.sha256,
     files: digest.files,
-    ...(rerun !== undefined ? { rerun } : {}),
+    ...(rerun !== undefined ? { forced: rerun } : {}),
   }
   const clean = redactor(ctx)
   const failedRun = (error: string, out?: RunOutput): SuiteOutcome => ({

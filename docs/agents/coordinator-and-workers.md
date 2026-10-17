@@ -124,7 +124,10 @@ someone else performed, and those are exactly where work gets lost.
 3. **The landing train.** Finished branches are landed in order with
    `naima land`, with the gates run between them, and each landing is a
    [marker](../guide/glossary.md#marker) naming the items it closes. If
-   `naima land` refuses, stop.
+   `naima land` refuses, stop. When it lists properties that are not
+   current after a landing, the coordinator runs `naima verify` on them on
+   the trunk before the next landing, or files a bug for one that is now
+   violated.
 
 The lead developer never merges without the gates and never closes an item
 on reasoning alone, because "the code clearly does this now" is a diagnosis,

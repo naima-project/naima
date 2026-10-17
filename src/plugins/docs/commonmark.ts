@@ -1,4 +1,4 @@
-// A CommonMark parser, as far as links and anchors need it.
+// A CommonMark parser, as far as links, anchors and code blocks need it.
 //
 // It follows the CommonMark specification, version 0.31.2
 // (https://spec.commonmark.org/0.31.2/), and its two-phase parsing strategy:
@@ -13,9 +13,10 @@
 //
 // What it returns is what a link check needs: every link and image destination
 // with its line, every heading's plain text, every anchor an HTML `id` (or an
-// `<a name>`) declares. Regular expressions appear only where the specification
-// itself defines a token by a regular pattern (a list marker, a fence, an HTML
-// tag, an entity), never to find structure.
+// `<a name>`) declares; and, for a page whose examples are checked, every code
+// block with its info word and text. Regular expressions appear only where the
+// specification itself defines a token by a regular pattern (a list marker, a
+// fence, an HTML tag, an entity), never to find structure.
 //
 // Known limits, deliberate: tabs are expanded to tab stops of 4 before the
 // block phase (the specification's partial-tab rules matter only to code-block
@@ -36,11 +37,20 @@ export interface MarkdownHeading {
   line: number
 }
 
+/** A code block: a fenced block's info word (`mcrl2` for "```mcrl2"), empty for none or an indented block; its text; its 1-based first line. */
+export interface MarkdownCode {
+  info: string
+  text: string
+  line: number
+}
+
 export interface ParsedMarkdown {
   links: MarkdownLink[]
   headings: MarkdownHeading[]
   /** Anchors declared in HTML: every `id` attribute, and `name` on `<a>`. */
   htmlAnchors: string[]
+  /** Every code block, fenced or indented, in the order of the document. */
+  code: MarkdownCode[]
 }
 
 // ── tokens the specification defines by a regular pattern ──────────────────
@@ -803,6 +813,7 @@ class BlockParser {
   private links: MarkdownLink[] = []
   private anchors: string[] = []
   private headings: MarkdownHeading[] = []
+  private code: MarkdownCode[] = []
 
   parse(input: string): ParsedMarkdown {
     const lines = input.replace(/\r\n?/g, "\n").split("\n")
@@ -814,7 +825,12 @@ class BlockParser {
     while (this.tip !== this.doc) this.finalize(this.tip)
     this.finalize(this.doc)
     this.processInlines()
-    return { links: this.links.sort((a, b) => a.line - b.line), headings: this.headings, htmlAnchors: this.anchors }
+    return {
+      links: this.links.sort((a, b) => a.line - b.line),
+      headings: this.headings,
+      htmlAnchors: this.anchors,
+      code: this.code.sort((a, b) => a.line - b.line),
+    }
   }
 
   private findNextNonspace(): void {
@@ -1151,6 +1167,12 @@ class BlockParser {
       }
     } else if (block.type === "html_block") {
       this.anchors.push(...htmlAnchorsOf(block.lines.map((l) => l.text).join("\n")))
+    } else if (block.type === "code_block") {
+      // A fenced block's first line is the rest of its opening fence, the info string; an indented block drops its trailing blank lines.
+      const lines = block.lines.map((l) => l.text)
+      const info = block.fenced ? (lines.shift() ?? "").trim().split(/[ \t]/)[0] ?? "" : ""
+      while (!block.fenced && lines.length && !lines[lines.length - 1]?.trim()) lines.pop()
+      this.code.push({ info, text: lines.join("\n"), line: block.startLine })
     }
     this.tip = above ?? this.doc
   }
@@ -1192,7 +1214,7 @@ function lineMapper(lines: { text: string; line: number }[]): (offset: number) =
   }
 }
 
-/** Parse a markdown document: its links with their lines, its headings' plain text, its HTML anchors. */
+/** Parse a markdown document: its links with their lines, its headings' plain text, its HTML anchors, its code blocks. */
 export function parseMarkdown(text: string): ParsedMarkdown {
   return new BlockParser().parse(text)
 }
