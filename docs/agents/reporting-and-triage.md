@@ -260,6 +260,15 @@ The proof must also be **current**. `naima close` refuses when:
   its run. The agent performs the gesture again (`naima verify`) and then
   closes.
 
+When the item changes a model, the agent runs the property that proves it
+on the model before the change, where it must be violated, and again after,
+where it must hold, and links a witness property that shows the new
+behaviour is reachable. `naima verify` reuses a run it already has on the
+same inputs, so going back to an earlier model costs nothing. A finding
+that can't be met is waived with its reason, never left to be read past
+([the rule](../guide/rules.md#a-change-to-a-model-is-proved-not-just-checked),
+[the steps](../guide/prove-and-close.md#proving-a-change-to-a-model)).
+
 An agent never closes an item, or sets `holds`, by editing `meta.json` or
 moving a directory. Every write hook that would refuse the change has a
 matching check, so a hand edit fails `naima check`. The check

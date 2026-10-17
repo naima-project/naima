@@ -63,11 +63,11 @@ import {
   writeThroughGit,
 } from "./worktrees.ts"
 import { claimsUiView, notesUiView } from "./ui.ts"
-import { land, landingsAreMarkers } from "./land.ts"
+import { land, landingReportsPoint, landingsAreMarkers } from "./land.ts"
 import { diaryCommand, eventCommand, EVENTS, timelineUiView, timelineView } from "./timeline.ts"
 
 export { type Timeline, type TimelineEvent, timelineOf } from "./timeline.ts"
-export { claimedInHistory, CLOSES, markerMessage, moveTrunk } from "./land.ts"
+export { claimedInHistory, CLOSES, type Landing, type LandingReport, landingReportsPoint, markerMessage, moveTrunk } from "./land.ts"
 
 export const CLAIMS = "claims"
 export const PASSES = "passes"
@@ -786,6 +786,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
     contributes: { "ui-views": [claimsUiView(claimsData), timelineUiView(readPasses), notesUiView(readPasses)] },
     // The claims are a panel of naima ui, the timeline and the session notes tabs, when the ui plugin is loaded; without it, still commands and a view.
     optional: ["ui-views"],
+    points: [landingReportsPoint],
     summary: [whereWeWere, inHand],
     hooks: [noClosingOwnWork],
   }

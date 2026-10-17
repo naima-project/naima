@@ -698,6 +698,40 @@ const modelDevelopment: Check = {
   },
 }
 
+/** A landing as the coordination plugin hands it to a landing report: declared here, since plugins never import each other. */
+interface Landing {
+  branch: string
+  from: string
+  to: string
+  changed: string[]
+}
+
+/** The path a property's `model` names, from the project root with forward slashes; null for one outside it. */
+const fromRoot = (ctx: Context, model: unknown): string | null => {
+  const abs = typeof model === "string" ? modelPath(ctx.root, model) : null
+  return abs ? relative(ctx.root, abs).split(sep).join("/") : null
+}
+
+const propertiesCurrent = {
+  name: "properties-current",
+  says:
+    "the properties verified on what the landing changed — their model, or a file their last run read — that do not hold on a run of what the trunk has now, models in development left out: they are named, to verify on the trunk; the landing is not blocked",
+  report(ctx: Context, landing: Landing): string[] {
+    const changed = new Set(landing.changed)
+    const touched = properties(ctx).filter((p) => {
+      if (developing(ctx, p.meta["model"])) return false
+      const read = [fromRoot(ctx, p.meta["model"]), ...(readRun(p)?.inputs ?? []).map((i) => i.path)]
+      return read.some((f) => f !== null && changed.has(f))
+    })
+    const whys = touched.flatMap((p) => notCurrent(ctx, p))
+    if (!whys.length) return []
+    return [
+      `${whys.length} of the properties on what this landing changed not current: the landing is not blocked — naima verify them on the trunk`,
+      ...whys.map((w) => `  ${w}`),
+    ]
+  },
+}
+
 const allHold: Gate = {
   name: "properties",
   title: "Every property holds",
@@ -762,9 +796,9 @@ export default function verifier(): Plugin {
       { name: "verifierOptions", kind: "object", says: "options handed to the verifier with the model and the property, as a JSON object", appliesTo: [TYPE] },
     ],
     points: [verifiersPoint],
-    contributes: { verifiers: [exampleRegex], gates: [allHold] },
-    // Its gate is there when a gates plugin is: without one, nothing lists gates.
-    optional: ["gates"],
+    contributes: { verifiers: [exampleRegex], gates: [allHold], "landing-reports": [propertiesCurrent] },
+    // Its gate is there when a gates plugin is, its landing report when the coordination plugin is: without them, nothing lists either.
+    optional: ["gates", "landing-reports"],
     relations: [
       { name: WITNESSES, inverse: WITNESSED_BY, says: "is a witness property, showing that the behaviour is reachable, for" },
       { name: WITNESSED_BY, inverse: WITNESSES, says: "is backed by the witness property" },

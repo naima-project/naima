@@ -8,25 +8,78 @@
 
 import {
   type Check,
+  code,
   type Command,
   type Context,
   currentBranch,
+  type ExtensionPoint,
   filesAt,
   type Finding,
   gitOrNull,
   gitReason,
   isUuid,
   label,
+  message,
   mustGit,
   parse,
   runGit,
   strs,
+  table,
   textsAt,
   trunk,
   usageError,
   worktrees,
 } from "../../core/api.ts"
 import { plural } from "./worktrees.ts"
+
+/** A landing just made: the branch, the trunk before it and the marker, and every file it changed, from the project root. */
+export interface Landing {
+  branch: string
+  from: string
+  to: string
+  changed: string[]
+}
+
+/** What a plugin says about a landing once it is made. It never refuses one: the landing tier reports, for now. */
+export interface LandingReport {
+  name: string
+  says: string
+  report(ctx: Context, landing: Landing): string[] | Promise<string[]>
+}
+
+/** The point this plugin declares: what `naima land` reports after a landing, any plugin contributing. */
+export const landingReportsPoint: ExtensionPoint<LandingReport> = {
+  id: "landing-reports",
+  says:
+    "what `naima land` prints once a branch has landed, never blocking it: `name`, `says`, `report(ctx, { branch, from, to, changed }) → lines`, `changed` being every file the landing changed, from the project root",
+  noun: "landing report",
+  key: (r) => r.name,
+  validate: (v) => {
+    const r = v as Partial<LandingReport> | null
+    if (!r || typeof r !== "object" || typeof r.name !== "string") return "has no name"
+    return typeof r.report === "function" ? null : "has no report function"
+  },
+  gaps: (r) => (typeof r.says === "string" && r.says.trim() ? [] : ["does not say what it reports"]),
+  document: (
+    rs,
+  ) => ["", "**Landing reports**, printed by `naima land` after a landing", ...table(["Report", "What it says"], rs.map((r) => [code(r.name), r.says]))],
+}
+
+/** Every file between two commits, from the project root. */
+const changedFiles = (root: string, from: string, to: string): string[] =>
+  (gitOrNull(root, "diff", "--name-only", "--no-renames", "-z", from, to) ?? "").split("\0").filter(Boolean)
+
+/** Each landing report's lines, each prefixed with the report's name; one that fails says so, and the landing stands. */
+async function reportLanding(ctx: Context, landing: Landing): Promise<void> {
+  ctx.reload()
+  for (const c of ctx.registry.contributions("landing-reports")) {
+    try {
+      for (const line of await (c.value as LandingReport).report(ctx, landing)) ctx.out(`${c.name}: ${line}`)
+    } catch (e) {
+      ctx.out(`${c.name}: could not report: ${message(e)}`)
+    }
+  }
+}
 
 /** The trailer a marker names each item it closes with. */
 export const CLOSES = "Closes"
@@ -200,13 +253,13 @@ export const land: Command = {
   says:
     "land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor",
   enforces:
-    "runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, and one that names no item or an item open and not fixed; moves the trunk only from the commit it read (compare-and-swap)",
+    "runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, and one that names no item or an item open and not fixed; moves the trunk only from the commit it read (compare-and-swap); once landed, prints what every landing report says of the files the landing changed, never undoing it",
   usage: "land <branch> [--closes <item>]...",
   options: [
     { name: "--closes", says: "an item the landing closes, instead of those the branch claimed in its commits; repeat for several" },
   ],
   examples: ["land claude/export-alpha", "land claude/export-alpha --closes export-drops"],
-  run(args, ctx) {
+  async run(args, ctx) {
     const p = parse(args, { closes: { type: "string", multiple: true } })
     const branch = p.positionals[0]
     if (!branch || p.positionals.length > 1) throw usageError(this)
@@ -227,6 +280,7 @@ export const land: Command = {
       )
     }
     ctx.out(`landed ${branch} on ${main}: ${marker.slice(0, 12)}, closing ${items.map((i) => i.ref).join(", ")}`)
+    await reportLanding(ctx, { branch, from: old, to: marker, changed: changedFiles(ctx.root, old, marker) })
     const subs = (gitOrNull(ctx.root, "diff-tree", "-r", "--no-commit-id", old, marker) ?? "").split("\n").filter((l) => /^:\d+ 160000 /.test(l))
     if (subs.length) ctx.out(`${plural(subs.length, "submodule")} moved: git submodule update --init`)
     ctx.out(`next: naima close each item once its proof is checked, then naima prune --branch ${branch} --write`)

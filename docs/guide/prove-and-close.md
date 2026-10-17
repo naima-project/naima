@@ -394,3 +394,24 @@ model or the same model as another one, and notes a stable model when one
 of its properties no longer holds on a current run
 (`model-development`). Once that happens, the property is verified again,
 or the model goes back to `development` while it changes.
+
+### When the rules apply
+
+Work on a branch is in development by nature. While a branch is being
+prepared, nothing above is asked of it, and the agent runs what it needs,
+normally the item's own property before and after the change. The rules
+apply when the branch lands, because that's when the change becomes part of
+the project. This table shows what is asked at each moment.
+
+| When | What is asked | What it blocks |
+|---|---|---|
+| While a branch is being prepared | nothing; the agent runs what it needs | nothing |
+| Landing | `naima land` lists, after the landing, every property verified on a file the branch changed that doesn't hold on a current run | nothing yet: the coordinator verifies the listed properties on the trunk |
+| A model in development | nothing; what its properties say is information | nothing |
+| Leaving development | every property of the model holds on a current run | setting the model `stable` |
+| Any `naima check` | the notes `property-failed-first` and `property-witnessed`; a property that claims to hold on a run that is out of date is a problem, outside development | `naima check` and `naima close`, for the problem |
+
+Because `naima verify` reuses every run whose inputs haven't changed, a
+property of a model nobody touched costs nothing at any of these moments.
+Long suites run on a schedule or before a release, and a landing that waits
+for them, are [planned](../planned.md#model-checkers-and-the-strength-of-evidence).

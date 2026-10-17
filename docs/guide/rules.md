@@ -188,6 +188,14 @@ should come back under the rules only once all of its properties have been
 shown to hold again. **Enforced by** the write hook
 `leaves-development-proved`, and the check `model-development`.
 
+Nothing of this is asked while a branch is being prepared, because a branch
+is in development by nature. It is asked when the branch lands. Why: landing
+is the moment a change becomes part of the project, and asking earlier only
+slows down work that is still being tried. **Convention** for now:
+`naima land` lists, after the landing, every property verified on a file the
+branch changed that doesn't hold on a current run, and doesn't block the
+landing ([when the rules apply](prove-and-close.md#when-the-rules-apply)).
+
 ### A page does not outlive its answer
 
 An unticked clause on an open item shouldn't name a test that has already
