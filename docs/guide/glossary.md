@@ -70,6 +70,16 @@ proven by a test linked to it ([planning](plan-with-requirements-specs-and-decis
 The precise description of how something must behave. It is kept in
 numbered versions, and only one of them is current ([planning](plan-with-requirements-specs-and-decisions.md)). *Everyday example:* the plumber's drawing with every pipe size.
 
+### Elicitation
+
+Working out requirements from what the [owner](#owner) says, at every
+prompt and not only at the start: the agent files a new requirement or
+revises one, restates it so that a test can decide it, and settles how it
+will be checked
+([requirements come from every conversation](plan-with-requirements-specs-and-decisions.md#requirements-come-from-every-conversation)).
+*Everyday example:* noting "the counter must hold 50 kg" when the customer
+mentions the stone top, and asking how heavy it is.
+
 ### Decision
 
 A choice that belongs to the [owner](#owner), recorded with its reason so
@@ -97,6 +107,16 @@ A formal-methods tool that checks a design over every possible order of
 events and, when the design is wrong, prints the exact steps that break it.
 mCRL2 is one, and VoxLogicA checks properties of images. Naima runs one through a
 [verifier](#verifier).
+
+### Model
+
+A short description of a behaviour's states and of the moves between them,
+written before the code so that a [model checker](#model-checker) can check
+its [properties](#property) over every order of events. It can be a state
+machine, an mCRL2 specification, or a state machine encoded in mCRL2
+([design with a model](design-with-a-model.md)).
+*Everyday example:* the drawing of a lift's floors and doors, checked to
+make sure the doors never open between floors.
 
 ## The tracker
 

@@ -14,7 +14,11 @@
 //
 // The diary (`naima diary`) is the project's story told from the same files:
 // the records of kind `diary`, the decisions with their reasons, and the
-// session notes, day by day, in order.
+// session notes, day by day, in order. The plugin ships the rule that agents
+// keep it, one entry per decision taken with the owner or notable turn, and
+// the check `diary-entries` notes a day with more entries than the option
+// `diaryPerDay` allows, and an entry that only restates what the diary
+// already shows.
 //
 // It reads other plugins' vocabulary by name and declares none of it used:
 // without gates or epics loaded there are simply no gate or epic events.
@@ -24,11 +28,13 @@ import { mkdirSync } from "node:fs"
 import { join } from "node:path"
 import {
   type BranchFile,
+  type Check,
   type Command,
   type Context,
   currentBranch,
   fieldValue,
   fieldValues,
+  type Finding,
   findPrivate,
   gitOrNull,
   guardPrivate,
@@ -364,17 +370,21 @@ function section(page: string, heading: string): string {
   return after.split(/\n\s*\n|\n## /)[0]?.replace(/\s+/g, " ").trim() ?? ""
 }
 
+/** Every dated decision, as the diary tells it: its title, and its reason when its page gives one. */
+function decisionsOf(ctx: Context): { date: string; title: string; text: string }[] {
+  if (!ctx.registry.types.has(DECISIONS)) return []
+  return ctx.repo.items.filter((i) => i.type === DECISIONS).flatMap((d) => {
+    const date = fieldValue(d, DECIDED_ON) ?? created(d)
+    if (!isDate(date)) return []
+    const title = String(d.meta.title ?? "")
+    const why = section(readReadme(d), "Why")
+    return [{ date, title, text: why ? `${title}. Why: ${why}` : title }]
+  })
+}
+
 /** The diary: records of kind diary, decisions with their reasons, session notes -- oldest first. */
 export function diaryOf(ctx: Context, passes: SessionNote[]): DiaryEntry[] {
-  const out: DiaryEntry[] = []
-  if (ctx.registry.types.has(DECISIONS)) {
-    for (const d of ctx.repo.items.filter((i) => i.type === DECISIONS)) {
-      const date = fieldValue(d, DECIDED_ON) ?? created(d)
-      if (!isDate(date)) continue
-      const why = section(readReadme(d), "Why")
-      out.push({ date, kind: "decision", text: why ? `${d.meta.title}. Why: ${why}` : d.meta.title })
-    }
-  }
+  const out: DiaryEntry[] = decisionsOf(ctx).map((d) => ({ date: d.date, kind: "decision", text: d.text }))
   for (const r of readRecords(ctx).filter((r) => r.kind === DIARY)) {
     out.push({ date: r.date, ...(r.at ? { at: r.at } : {}), kind: "diary", text: r.text.replace(/\s+/g, " ") })
   }
@@ -423,6 +433,85 @@ export function diaryCommand(passes: (ctx: Context) => SessionNote[]): Command {
         ctx.out(`  ${e.at ? localTime(e.at) : "--:--"}  ${e.kind.padEnd(8)}  ${e.text}`)
       }
       return 0
+    },
+  }
+}
+
+/** The rule this plugin ships: agents keep the diary, sparingly. */
+export const DIARY_RULE = {
+  name: "agents-keep-the-diary",
+  title: "Agents keep the diary: one entry per decision taken with the owner or notable turn, never a log of routine work",
+  audience: "agents",
+  strength: "must",
+  text:
+    'An agent adds a diary entry on its own, without being asked (`naima event <today> "<what, and why>" --kind diary`), when a decision is taken with the owner in conversation (what was decided and why, in a sentence or two, naming the item it concerns), when the direction of the work changes (a plan dropped, a strategy chosen), or when something notable happens outside the tracker (an incident, a repository made private, a request from outside the project). It writes none for routine work, landings, items filed, fixes or test runs, and none for what a session note, a decision item or the timeline already records, since `naima diary` shows those already. A day holds a few entries at most: the related turns of one conversation make one entry, written once that exchange has settled, never one entry per turn and never a second entry that repeats the first.',
+  why:
+    "the diary is where the owner reads why the project went where it did; a decision taken in chat and never written down has to be reconstructed later, and a diary that logs every landing buries the few turns that matter under what the timeline already shows.",
+  ack: "Diary mode on",
+  enforcedBy: "diary-entries",
+}
+
+const DIARY_PER_DAY = 5
+
+/** The coordination option `diaryPerDay`: how many diary entries a day may hold before the check notes it. */
+export function readDiaryPerDay(options: Record<string, unknown>): number {
+  const v = options["diaryPerDay"] ?? DIARY_PER_DAY
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 1) {
+    throw new Error(
+      `coordination: option diaryPerDay must be a positive whole number, the diary entries a day may hold before naima check notes it; got ${
+        JSON.stringify(v)
+      }`,
+    )
+  }
+  return v
+}
+
+/** Text reduced to its words, lowercase, so that a restatement is found whatever its spacing and punctuation. */
+const words = (s: string): string => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()
+
+/** `diary-entries`: a crowded day, and an entry that only restates what the diary already shows -- as notes, never failing. */
+export function diaryCheck(passes: (ctx: Context) => SessionNote[], perDay: number): Check {
+  return {
+    name: "diary-entries",
+    says:
+      "as notes, never failing: a day with more diary entries than the coordination option diaryPerDay (5 by default), and a diary entry that only restates a session note of its day or a decision taken that day, which naima diary already shows",
+    run(ctx) {
+      const out: Finding[] = []
+      const rule = `rule coordination/${DIARY_RULE.name}`
+      const records = readRecords(ctx).filter((r) => r.kind === DIARY)
+      const byDay = new Map<string, number>()
+      for (const r of records) byDay.set(r.date, (byDay.get(r.date) ?? 0) + 1)
+      for (const [day, n] of [...byDay].sort(([a], [b]) => a.localeCompare(b))) {
+        if (n <= perDay) continue
+        out.push({
+          level: "note",
+          message:
+            `diary: ${day} has ${n} diary entries, more than ${perDay} — one entry per decision taken with the owner or notable turn, the related turns of one conversation in one (${rule}; the limit is the coordination option diaryPerDay)`,
+        })
+      }
+      const notes = passes(ctx)
+      const decisions = decisionsOf(ctx)
+      for (const r of records) {
+        const said = words(r.text)
+        if (!said) continue
+        const where = `${ctx.trackerDir}/${EVENTS}/${r.file} (${JSON.stringify(r.title)})`
+        const note = notes.find((p) => p.date === r.date && words(p.body).includes(said))
+        const decision = decisions.find((d) => d.date === r.date && words(d.text).includes(said))
+        if (note) {
+          out.push({
+            level: "note",
+            message: `${where}: a diary entry that only restates the session note of ${r.date} on ${note.branch}, which naima diary already shows (${rule})`,
+          })
+        } else if (decision) {
+          out.push({
+            level: "note",
+            message: `${where}: a diary entry that only restates the decision ${
+              JSON.stringify(decision.title)
+            }, which naima diary already shows with its reason (${rule})`,
+          })
+        }
+      }
+      return out
     },
   }
 }
