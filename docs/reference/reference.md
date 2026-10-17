@@ -37,9 +37,9 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | Command | Plugin | What it does | What it enforces |
 |---|---|---|---|
 | [`init`](#naima-init) | core | make the git repository around the program a Naima project, as its first run does by itself: beside the program, a git clone of Naima at naima-tracker/naima/, create naima-data/naima.json, locked to the clone's origin and its HEAD, which must be on the origin's main, and the tracker folder's README.md and .gitignore; print the line that keeps the program out of each host tool configuration it finds (deno.json, tsconfig.json, .prettierignore), and the one line that tells agents where Naima is; nothing outside naima-tracker/ is touched unless --write-excludes or --write-agent-pointer is given | the program is locked to a commit of its source's main, with nothing uncommitted, and nothing outside the tracker folder is written unless --write-excludes or --write-agent-pointer asks |
-| [`update`](#naima-update) | core | move the lock to the head of the source's main, or to the commit --to names: say what changes (the commits, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, migrate the data forward if its format moved, and record the new commit, as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima | the lock moves only to a commit of the source's main, with the data migrated forward in the same change; never back past a migration, which runs forward only; a source naima.json names other than the program's origin is refused, by every command, until --accept-source |
+| [`update`](#naima-update) | core | move the lock to the head of the source's main, or to the commit --to names: say what changes (the commits, the change notes they add — breaking first, then those that ask an action —, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, rename and remove options in naima.json as the change notes say and remove those it reads nowhere, each said with its value, and record the new commit; moving forward, the new Naima finishes: it migrates the data if its format moved, names the rules agents acknowledge again, runs naima check, and files an item in the type with the trait follow-up for each problem or note that is new since the commit before; all as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima | the lock moves only to a commit of the source's main, with the data migrated forward in the same change; never back past a migration, which runs forward only; a source naima.json names other than the program's origin is refused, by every command, until --accept-source |
 | [`rollback`](#naima-rollback) | core | move the lock back to the one naima.json recorded before it, found in its git history, as one change to commit: what update --to does with that commit | the lock goes back only to a commit that reads the data's formats: a migration is undone by reverting its commit, never by running an older Naima on newer data |
-| [`hello`](#naima-hello) | core | what an agent says first in a session: the banner (Naima is active in this repository, its version and commit); then, as naima.json's updates says, whether a newer Naima exists and what it changes; then what it offers on request: what Naima is and its documentation, an update check, an update after the owner's yes | nothing: it never moves the lock nor writes the project; it asks the source only when updates is check or update |
+| [`hello`](#naima-hello) | core | what an agent says first in a session: the banner (Naima is active in this repository, its version and commit); then, as naima.json's updates says, whether a newer Naima exists and, under update, what it changes and its rehearsal, as update --check says them; then what it offers on request: what Naima is and its documentation, an update check, an update after the owner's yes | nothing: it never moves the lock nor writes the project; it asks the source only when updates is check or update |
 | [`plugin`](#naima-plugin) | core | turn a plugin on or off, or set one of its options, in naima.json's plugins table — validated the way the project is validated on every load, instead of a hand-edit of the file | a name must be a first-party plugin (loaded or opt-in) or one the table already names with its own source; an option set on one whose options are known here must be one it declares; the whole file is re-validated before it is written, so nothing a later load would refuse ever reaches disk |
 | [`guide`](#naima-guide) | core | inside a project, first print what its plugins contribute to the guide, such as the project's active rules for agents; then where the running Naima's documentation is: the skill, the docs map, the guide for people, the rules, the pages for agents, the format, installing; read them as files | nothing: it only prints |
 | [`help`](#naima-help) | core | list every command the loaded plugins provide, with its usage | nothing: it only prints |
@@ -66,7 +66,8 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`claim`](#naima-claim) | coordination | record that this branch is working on items (writes one file on this branch) | a claim belongs to a branch, never to a detached HEAD, and is one file on that branch; it never locks anything: several branches may claim one item |
 | [`release`](#naima-release) | coordination | drop this branch's claim on items; the last one removes the file, unless the branch is being prepared (claim --preparing) | only this branch's own claim is dropped, and only on items it holds; while the branch is being prepared, the emptied file is kept |
 | [`claims`](#naima-claims) | coordination | who holds what, recombined from every branch | nothing: it only reads |
-| [`land`](#naima-land) | coordination | land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor | runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, and one that names no item or an item open and not fixed; moves the trunk only from the commit it read (compare-and-swap) |
+| [`land`](#naima-land) | coordination | land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor | runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item or an item open and not fixed, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; moves the trunk only from the commit it read (compare-and-swap) |
+| [`changes`](#naima-changes) | coordination | print the release notes a range of commits makes, assembled from the change notes it adds to changes/, as Markdown: breaking changes first, then those that need an action, then features, behaviour changes and fixes, each with its text and what to do; from the newest version tag (v…) to HEAD unless --from and --to say otherwise, in every repository of the project with a changes/config.json (the project itself, a submodule) unless --repo names one | nothing: it only prints; a change note that does not parse is named on stderr |
 | [`prune`](#naima-prune) | coordination | list (or with --write remove) claim files naming a branch git no longer has; one only another ref carries is listed with that ref, to be dropped there. With --branch, delete a branch and its worktree, refusing one with unmerged commits that no archive/<branch> tag holds | the trunk is never pruned, and a branch with unmerged commits that no archive/<branch> tag holds is refused; nothing is removed without --write |
 | [`pass`](#naima-pass) | coordination | write this session's note (one new file), or list the newest | a session note is one new file: earlier ones are never rewritten; --ack is refused unless it carries every phrase the project's active rules ask an agent to acknowledge |
 | [`event`](#naima-event) | coordination | record an event the timeline cannot derive — a decision taken elsewhere, a build handed out, a policy, an outside fact — as one new file; everything else on `naima view timeline` is derived | an event has a YYYY-MM-DD date and a one-word kind, and is one new file; what the timeline derives is never recorded |
@@ -161,7 +162,7 @@ naima init --write-agent-pointer
 
 ### naima update
 
-Move the lock to the head of the source's main, or to the commit --to names: say what changes (the commits, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, migrate the data forward if its format moved, and record the new commit, as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima.
+Move the lock to the head of the source's main, or to the commit --to names: say what changes (the commits, the change notes they add — breaking first, then those that ask an action —, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, rename and remove options in naima.json as the change notes say and remove those it reads nowhere, each said with its value, and record the new commit; moving forward, the new Naima finishes: it migrates the data if its format moved, names the rules agents acknowledge again, runs naima check, and files an item in the type with the trait follow-up for each problem or note that is new since the commit before; all as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima.
 
 **Enforces**: The lock moves only to a commit of the source's main, with the data migrated forward in the same change; never back past a migration, which runs forward only; a source naima.json names other than the program's origin is refused, by every command, until --accept-source.
 
@@ -174,7 +175,7 @@ naima --accept-source]
 
 | Option | Default | What it does |
 |---|---|---|
-| `--check` |  | only say whether the source's main has moved past the locked commit, and what it changes; exit 1 when it has |
+| `--check` |  | only say whether the source's main has moved past the locked commit, and what it changes — and rehearse it: its own naima check, run on the project from a temporary copy of it, writing nothing, says what would newly fail or be noted; exit 1 when it has moved |
 | `--to` |  | move the lock to this commit of the source's main, forward or back; back across a data format is refused, naming the commit to revert; the option updates is removed when that commit does not know it, and said |
 | `--mode` | `check` | set naima.json's updates, what naima hello does at a session start: off (nothing asked of the source), check (say when a newer Naima exists), update (say what it changes, and offer it; applied only after the owner's yes) |
 | `--accept-source` |  | trust the source naima.json now names, after reviewing why it changed: every other command refuses to run a program from a source other than its origin; points the program's origin at the new source, checks out the locked commit, and moves nothing else |
@@ -207,7 +208,7 @@ naima rollback
 
 ### naima hello
 
-What an agent says first in a session: the banner (Naima is active in this repository, its version and commit); then, as naima.json's updates says, whether a newer Naima exists and what it changes; then what it offers on request: what Naima is and its documentation, an update check, an update after the owner's yes.
+What an agent says first in a session: the banner (Naima is active in this repository, its version and commit); then, as naima.json's updates says, whether a newer Naima exists and, under update, what it changes and its rehearsal, as update --check says them; then what it offers on request: what Naima is and its documentation, an update check, an update after the owner's yes.
 
 **Enforces**: Nothing: it never moves the lock nor writes the project; it asks the source only when updates is check or update.
 
@@ -766,7 +767,7 @@ Traits: `fixable`.
 
 Todos: work that is not a defect: a task, a decision, a tidy-up. Items live in `naima-tracker/naima-data/todos/`; a new one starts as `open`.
 
-Traits: `fixable`.
+Traits: `fixable`, `follow-up`.
 
 | Status | Category | Flags | Meaning |
 |---|---|---|---|
@@ -856,7 +857,7 @@ Claims and session notes, one file per session, recombined from every branch; th
 
 Its contributions' qualified ids are `coordination/<name>`.
 
-No session writes a file another session writes. A claim is one file per branch, `claims/<uuid>.json`; a session note is one file per session, `passes/<date>-<uuid>.md`. Both are written on the writer's own branch and never staged or committed by the tool: commit them with the work. `claims`, `pass --list` and `summary` recombine them at read time from every local branch — the trunk, every branch not merged into it, whatever each worktree stands on — each read from the disk of the worktree that stands on it, uncommitted files included, or from its ref when none does; remote-tracking refs are not read. The trunk is the branch origin's HEAD names, else `main`, else `master`; without one, every local branch is read. A claim belongs to a branch, so on a detached HEAD `claim` is refused. Several branches may claim one item: `claim` says who else holds it rather than refusing. There are no locks: a claim says who works on what and never excludes anyone. What one session at a time must touch — the trunk, the published site, the releases — is touched by one writer, the coordinator; workers only prepare on their own branches, and the owner decides what lands and when, when it matters. Work happens by one scheme, checked: the worktree `<worktrees>/<what>` stands on the branch `<who>/<what>` and carries a claim; `open` makes all three in one step. A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. Landings are semi-linear: a branch the trunk is an ancestor of enters it as one marker commit, a merge whose tree is the branch tip's and whose message names the items it closes in `Closes:` trailers; `land` makes it from the main checkout, the shortcut for `git merge --no-ff`, and moves the trunk only from the commit it read. From the first marker on the trunk's first-parent line every first-parent commit is a marker, or `landings-are-markers` notes it; before it nothing is asked, so a history of fast-forwards keeps working. `naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. What has no date is counted at the foot, never placed at a guess. Only what nothing derives — a decision taken elsewhere, a build handed out, a policy, an outside fact — is a record, one file per event, `events/<date>-<uuid>.md`, written by `naima event`. `pass --ack "<line>"` writes the acknowledgement line whichever plugin declares a rule's `ack` field asks an agent to give back — refused if a phrase is missing from it — and records it in the note's front matter; a note dated after 2026-10-02 missing it, or whose body no longer starts with it, is a problem (`session-note-ack`), tolerating one written before — on the day it shipped, or earlier, grandfathered like a closed item on the day `commits` shipped — since what it recorded is what the rules asked then. A note is never edited after the fact: one written without the line is accepted with a recorded waiver, `naima waive session-note-ack passes/<file> --reason "<why>"`.
+No session writes a file another session writes. A claim is one file per branch, `claims/<uuid>.json`; a session note is one file per session, `passes/<date>-<uuid>.md`. Both are written on the writer's own branch and never staged or committed by the tool: commit them with the work. `claims`, `pass --list` and `summary` recombine them at read time from every local branch — the trunk, every branch not merged into it, whatever each worktree stands on — each read from the disk of the worktree that stands on it, uncommitted files included, or from its ref when none does; remote-tracking refs are not read. The trunk is the branch origin's HEAD names, else `main`, else `master`; without one, every local branch is read. A claim belongs to a branch, so on a detached HEAD `claim` is refused. Several branches may claim one item: `claim` says who else holds it rather than refusing. There are no locks: a claim says who works on what and never excludes anyone. What one session at a time must touch — the trunk, the published site, the releases — is touched by one writer, the coordinator; workers only prepare on their own branches, and the owner decides what lands and when, when it matters. Work happens by one scheme, checked: the worktree `<worktrees>/<what>` stands on the branch `<who>/<what>` and carries a claim; `open` makes all three in one step. A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. Landings are semi-linear: a branch the trunk is an ancestor of enters it as one marker commit, a merge whose tree is the branch tip's and whose message names the items it closes in `Closes:` trailers; `land` makes it from the main checkout, the shortcut for `git merge --no-ff`, and moves the trunk only from the commit it read. From the first marker on the trunk's first-parent line every first-parent commit is a marker, or `landings-are-markers` notes it; before it nothing is asked, so a history of fast-forwards keeps working. A repository of the project with `changes/config.json` — the project itself, or a product it holds as a submodule — names there the paths whose change is a change of behaviour; a branch that changes one adds a change note, `changes/<date>-<slug>.md`, in the same repository. `land` refuses a branch that does not, unless `--no-change-note` gives the reason, which the marker records as a `No-change-note:` trailer; `change-notes` notes it on the branch beforehand, and is a problem for a file of `changes/` that is not a change note. `changes` prints the release notes the change notes of a range make. `naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. What has no date is counted at the foot, never placed at a guess. Only what nothing derives — a decision taken elsewhere, a build handed out, a policy, an outside fact — is a record, one file per event, `events/<date>-<uuid>.md`, written by `naima event`. `pass --ack "<line>"` writes the acknowledgement line whichever plugin declares a rule's `ack` field asks an agent to give back — refused if a phrase is missing from it — and records it in the note's front matter; a note dated after 2026-10-02 missing it, or whose body no longer starts with it, is a problem (`session-note-ack`), tolerating one written before — on the day it shipped, or earlier, grandfathered like a closed item on the day `commits` shipped — since what it recorded is what the rules asked then. A note is never edited after the fact: one written without the line is accepted with a recorded waiver, `naima waive session-note-ack passes/<file> --reason "<why>"`.
 
 Options, each with the default it takes when nothing sets it:
 
@@ -956,21 +957,47 @@ naima claims --json
 
 Land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor.
 
-**Enforces**: Runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, and one that names no item or an item open and not fixed; moves the trunk only from the commit it read (compare-and-swap).
+**Enforces**: Runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item or an item open and not fixed, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; moves the trunk only from the commit it read (compare-and-swap).
 
 ```sh
-naima land <branch> [--closes <item>]...
+naima land <branch> [--closes <item>]... [--no-change-note "<reason>"]
 ```
 
 | Option | Default | What it does |
 |---|---|---|
 | `--closes` |  | an item the landing closes, instead of those the branch claimed in its commits; repeat for several |
+| `--no-change-note` |  | why the branch changes behaviour paths with no change note — a refactor, a test, nothing a person or an agent sees; recorded in the marker as a No-change-note: trailer |
 
 Examples:
 
 ```sh
 naima land claude/export-alpha
 naima land claude/export-alpha --closes export-drops
+naima land claude/tidy-loader --no-change-note "a refactor of the loader: nothing a person or an agent sees changes"
+```
+
+### naima changes
+
+Print the release notes a range of commits makes, assembled from the change notes it adds to changes/, as Markdown: breaking changes first, then those that need an action, then features, behaviour changes and fixes, each with its text and what to do; from the newest version tag (v…) to HEAD unless --from and --to say otherwise, in every repository of the project with a changes/config.json (the project itself, a submodule) unless --repo names one.
+
+**Enforces**: Nothing: it only prints; a change note that does not parse is named on stderr.
+
+```sh
+naima changes [--from <commit>] [--to <commit>] [--repo <path>]
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--from` | `the newest version tag before --to, else the first commit` | where the range starts, a commit or tag |
+| `--to` | `HEAD` | where the range ends |
+| `--repo` |  | the repository to read, relative to the project's root: one with a changes/config.json |
+
+Examples:
+
+```sh
+naima changes
+naima changes --from v1.0.0
+naima changes --repo naima --from v1.0.0 --to main
 ```
 
 ### naima prune
@@ -1084,6 +1111,7 @@ naima event 2026-10-05 "The plan was entered" --kind diary
 | `closed-not-claimed` | no archived item (one in a type that is not creatable, where naima close moves it) is claimed by the branch you stand on: what no-closing-own-claims refuses on a write, asserted on the tracker as it is, hand edits included |
 | `session-note-ack` | a session note dated after 2026-10-02 carries the acknowledgement line it was written with (naima pass --ack), and its body still begins with it — a rule change afterwards never invalidates a note already written, since what was asked of it then is what it recorded |
 | `landings-are-markers` | from the first landing marker on the trunk's first-parent line (a merge whose first parent the second contains, whose tree is the second's, with a Closes: trailer), every first-parent commit is a marker: a fast-forward, a commit made on the trunk, a merge not up to date, or one without a Closes: naming an item done or fixed is a note naming it. Before the first marker nothing is asked |
+| `change-notes` | every file of a changes/ directory that has a changes/config.json — the project's own, or a submodule's — is a change note that parses; on a branch other than the trunk, one whose commits change a behaviour path that file names with no change note added is a note, as naima land would refuse it |
 
 **Views**, printed by `naima view <name>`
 

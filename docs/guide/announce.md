@@ -32,6 +32,23 @@ features shipped (`fixedOn`) since that date, and `naima announce --gate v1`
 keeps those on a [gate](glossary.md#gate), which is what a release made from
 that gate announces. `--json` prints the same list as data.
 
+## The changelog
+
+When the project keeps change notes, one file for each change of behaviour in
+a `changes/` folder ([the format](../../changes/README.md)), the changelog is
+put together from them:
+
+```sh
+naima changes --from v1.0.0
+```
+
+This prints the release notes for everything since that tag, as Markdown,
+with breaking changes and the changes you have to act on first, then new
+features, other changes of behaviour and fixes. Each one says what changed
+and, when there is something to do, what to do. Without `--from` it starts at
+the newest version tag. `naima announce` still decides which features an
+announcement may name.
+
 `naima announce --all` also lists every user-facing feature that isn't
 announceable yet, each with what it still lacks:
 

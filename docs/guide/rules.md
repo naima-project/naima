@@ -451,6 +451,28 @@ the trunk holds, never a branch that hasn't landed.
 
 **Convention**: [closing a worktree](../agents/closing-a-worktree.md).
 
+### Every change of behaviour carries a change note
+
+A repository that has a `changes/config.json` lists there the paths whose
+change alters behaviour. That can be the project itself, or a product the
+project holds as a submodule, as Naima's workshop holds Naima. Behaviour is
+meant widely: commands, options and APIs, how the software is used, and the
+workflows, including the rules agents acknowledge. A branch that changes one
+of those paths adds a change note on the same branch, one Markdown file in
+that repository's `changes/` folder, saying what kind of change it is, what
+it touches and what a user has to do
+([the format](../../changes/README.md)). Release notes are assembled from the
+notes with `naima changes`, and an update of Naima shows them before it is
+applied ([update Naima](update-naima.md)).
+
+A change nobody can see, such as a refactor or a new test, needs no note,
+but the coordinator says so when landing it: `naima land <branch>
+--no-change-note "<reason>"`, and the marker keeps the reason in a
+`No-change-note:` trailer.
+**Enforced by** `naima land`, which refuses a branch that changes those paths
+without a note, and by the check `change-notes`, which notes it on the branch
+beforehand and fails on a file in `changes/` that isn't a valid note.
+
 ## Naima itself
 
 ### Update deliberately, as one commit

@@ -45,7 +45,25 @@ import {
   verifySigned,
   withoutCredentials,
 } from "./program.ts"
-import { backwardFormats, banner, changeOf, counted, describe, OFFERS, versionOf } from "./updates.ts"
+import {
+  backwardFormats,
+  banner,
+  changeOf,
+  checkFrom,
+  counted,
+  describe,
+  type Findings,
+  FOLLOW_UP,
+  newly,
+  OFFERS,
+  pageRules,
+  rehearse,
+  versionOf,
+  withCommit,
+} from "./updates.ts"
+import { changedRules, notesBetween } from "./changes.ts"
+import { createItem, saveProse } from "./item.ts"
+import { isOpen } from "./lifecycle.ts"
 import { EXIT, isInternal, message, NaimaError } from "./errors.ts"
 import type { Command, Context, GuideSection, Plugin } from "./types.ts"
 import { asRendered, linesAs } from "./rendered.ts"
@@ -254,11 +272,98 @@ function migrated(steps: readonly Step[], from: unknown, plugins: readonly { plu
   return out
 }
 
-/** What updating to `to` changes, said; nothing when the program's origin is not the lock's source, whose commits it may not hold. */
-async function said(t: Target, raw: Record<string, unknown>, to: string): Promise<string[]> {
+/**
+ * What updating to `to` changes, said — the commits, their change notes, what is computed — and the rehearsal:
+ * `to`'s own naima check run on the project, writing nothing. Nothing when the program's origin is not the lock's
+ * source, whose commits it may not hold.
+ */
+async function said(opts: CliOptions, place: Place, t: Target, raw: Record<string, unknown>, to: string): Promise<string[]> {
   if (withoutCredentials(runGit(t.program, ["remote", "get-url", "origin"]).out) !== t.source) return []
   verifySigned(t.program, { ...t, commit: to })
-  return describe(await changeOf(t.program, raw, t.commit, to))
+  return [...describe(await changeOf(t.program, raw, t.commit, to)), ...await rehearse(t.program, to, opts.programRoot, place)]
+}
+
+/** The lock naima.json holds in the project's last commit; null when it holds none. */
+function committedLock(place: Place): string | null {
+  const r = runGit(place.root, ["show", `HEAD:${posixRelative(place.root, join(place.data, DATA_FILE))}`])
+  if (!r.ok) return null
+  try {
+    const commit = (JSON.parse(r.out) as { commit?: unknown }).commit
+    return typeof commit === "string" ? commit : null
+  } catch {
+    return null
+  }
+}
+
+/** A finding as an item's title: its first words, short enough to read. */
+const titleOf = (finding: string): string => {
+  const words = `After the Naima update: ${finding}`.split(/\s+/)
+  let title = ""
+  for (const w of words) {
+    if ((title + " " + w).length > 100) return `${title}…`
+    title = title ? `${title} ${w}` : w
+  }
+  return title
+}
+
+/** File an item for each finding the update left, in the type that carries the trait follow-up; one already open with its title is not filed again. */
+async function fileLeft(opts: CliOptions, place: Place, io: IO, commit: string, findings: readonly string[]): Promise<void> {
+  if (!findings.length) return
+  const ctx = await openProject(place, opts, io)
+  const type = [...ctx.registry.types.values()].find((t) => t.creatable !== false && t.traits?.includes(FOLLOW_UP))
+  if (!type) {
+    io.out(`not filed, no type of this project carries the trait ${FOLLOW_UP}: ${findings.join("; ")}`)
+    return
+  }
+  for (const finding of findings) {
+    const title = titleOf(finding)
+    if (ctx.repo.items.some((i) => i.type === type.id && i.meta.title === title && isOpen(ctx, i))) continue
+    try {
+      const item = createItem(ctx, type, title)
+      saveProse(
+        ctx,
+        item,
+        `# ${title}\n\nAfter naima update moved the lock to ${
+          short(commit)
+        }, naima check found this, and the update could not fix it by itself:\n\n> ${finding}\n\nFix it, or accept it with its reason (naima waive).\n`,
+      )
+      io.out(`filed ${type.id}/${item.slug} for what the update left: ${finding}`)
+    } catch (e) {
+      io.out(`not filed: ${finding} — ${message(e)}`)
+    }
+  }
+}
+
+/**
+ * How `naima update` ends, run by the Naima it moved to: the rules the move changed, for agents to acknowledge
+ * again; naima check; and an item filed for each problem or note the check newly finds — newly against the
+ * locked commit of the project's last commit, whose own check runs from a temporary copy.
+ */
+async function finish(opts: CliOptions, place: Place, lock: Lock, io: IO): Promise<void> {
+  const program = place.program
+  const was = committedLock(place)
+  const moved = was !== null && was !== lock.commit && runGit(program, ["merge-base", "--is-ancestor", was, lock.commit]).ok
+  let baseline: Findings | null = null
+  if (moved) {
+    const rules = [...new Set([...pageRules(program, was, lock.commit), ...changedRules(notesBetween(program, was, lock.commit).notes)])]
+    if (rules.length) {
+      io.out(
+        `Rules changed: ${rules.join("; ")} — agents read them again (naima rules --audience agents) and give their acknowledgement in the next session note`,
+      )
+    }
+    try {
+      baseline = await withCommit(program, was, (dir) => checkFrom(dir, place))
+    } catch {
+      baseline = null // the older Naima cannot read the data any more: every problem is the update's to look at
+    }
+  }
+  const now = await checkFrom(opts.programRoot, place)
+  if (moved) {
+    const left = baseline ? newly(baseline, now) : { problems: now.problems, notes: [] }
+    await fileLeft(opts, place, io, lock.commit, [...left.problems, ...left.notes])
+  }
+  io.out(`naima check: ${counted(now.problems.length, "problem")}, ${counted(now.notes.length, "note")}${now.problems.length ? ":" : ""}`)
+  for (const p of now.problems) io.out(`  ✗ ${p}`)
 }
 
 /** The commit `naima.json` named before the current lock, in its git history (the uncommitted file first), and the commit that recorded the current one. */
@@ -332,7 +437,7 @@ async function moveLock(opts: CliOptions, place: Place, lock: Lock, raw: Record<
     )
   }
   if (change.unknown && change.back) throw new Error(`cannot tell which data format ${short(to)} reads: ${change.unknown}`)
-  let next: Record<string, unknown> = { ...raw, commit: to }
+  let next: Record<string, unknown> = { ...change.rewritten, commit: to }
   const notes: string[] = []
   if (change.config) {
     if ("updates" in next && change.configWithoutUpdates === null) {
@@ -346,8 +451,10 @@ async function moveLock(opts: CliOptions, place: Place, lock: Lock, raw: Record<
   align({ ...t, commit: to })
   writeRaw(place.data, next)
   io.out(`locked ${short(lock.commit)} → ${short(to)}`)
+  for (const r of change.rewrites) io.out(r)
   for (const n of notes) io.out(n)
-  if (change.formats.some((f) => f.to > f.from)) return RELAUNCH // the new Naima finishes: it is the one that knows the new format
+  // Forward, the new Naima finishes: it knows the new format, and its own check is the one that ends the update.
+  if (!change.back || change.formats.some((f) => f.to > f.from)) return RELAUNCH
   const verb = change.back ? "Roll Naima back to" : "Update Naima to"
   io.out(`${short(to)} is the lock — commit it as one change: git add ${tracker} && git commit -m "${verb} ${short(to)}"`)
   return 0
@@ -381,7 +488,7 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
       io.out(`the source's ${head.branch} moved: ${short(lock.commit)} → ${short(head.commit)} — naima update`)
       try {
         fetchHead(t)
-        for (const line of await said(t, raw, head.commit)) io.out(line)
+        for (const line of await said(opts, place, t, raw, head.commit)) io.out(line)
       } catch (e) {
         io.out(`what it changes is not known: ${message(e)}`)
       }
@@ -396,6 +503,7 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
   const { all } = await owed(raw, place, opts)
   const steps = migrate(place.data, MIGRATIONS, all.slice(1))
   for (const line of migrated(steps, from, all.slice(1))) io.out(line)
+  await finish(opts, place, lock, io)
   io.out(`${short(target)} is the lock — commit it as one change: git add ${tracker} && git commit -m "Update Naima to ${short(target)}"`)
   return 0
 }
@@ -438,7 +546,7 @@ async function hello(opts: CliOptions, place: Place, lock: Lock, raw: Record<str
         lines.push(`A newer Naima is available: ${short(lock.commit)} → ${short(head.commit)}${commits}.`)
         if (policy === "check" || !opts.launched) lines.push("naima update --check says what it changes; updating waits for the owner's yes.")
         else {
-          lines.push(...await said(t, raw, head.commit))
+          lines.push(...await said(opts, place, t, raw, head.commit))
           lines.push("Ask the owner before naima update: it moves the lock and migrates the data, as one change to commit.")
         }
       }

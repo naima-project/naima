@@ -123,6 +123,19 @@ is still unproven, and what to pick up next. Say what was **not** verified,
 because that is worth more to the next reader than the list of what was.
 Don't rewrite another session's note, and don't number yours.
 
+If the branch changes how the software behaves, it also carries a change
+note. That applies in any repository with a `changes/config.json`, which
+lists the paths that count: the project itself, or a product it holds as a
+submodule. Behaviour includes commands and options, how the software is used,
+and the workflows and rules agents follow. Write one Markdown file in that
+repository's `changes/` folder, in the format its
+[`changes/README.md`](../../changes/README.md) describes, and commit it with
+the change. `naima check` notes a branch that changes those paths without
+one. If nothing anyone can see changes, such as a refactor or a new test,
+say so in the hand-over instead (step 7), so the coordinator can give the
+reason when landing
+([the rule](../guide/rules.md#every-change-of-behaviour-carries-a-change-note)).
+
 ## 5. Run the gates, and read what breaks
 
 Run the project's full [gate](../guide/glossary.md#gate) set, including
@@ -180,6 +193,10 @@ moved (`git submodule update --init`). It refuses when:
 - it can't name an item the branch closes;
 - an item it closes is open and not fixed, meaning its status isn't done and
   `fixedOn` isn't set;
+- the branch changes a path that a `changes/config.json` lists, in the
+  project or in a submodule, and adds no change note there. If nothing
+  anyone can see changes, land it with `--no-change-note "<reason>"`, and
+  the marker keeps the reason in a `No-change-note:` trailer;
 - an untracked file in the main checkout would be overwritten, in which case
   the trunk is put back.
 
@@ -195,6 +212,38 @@ produces the same shape. If either of them refuses, stop
 ([worktree isolation](worktree-isolation.md#3-a-branch-lands-up-to-date-as-a-marker)).
 `naima land` then prints the next steps, which are to `naima close` each item
 once its proof has been checked, and then step 8.
+
+### When the work is in a product held as a submodule
+
+Some projects keep the product they ship in a git submodule and track it from
+the repository around it, as Naima's own workshop holds Naima in `naima/`.
+The work is then two branches: one in the submodule with the code and its
+change note, and one in the project with the tracker changes and the new
+pointer. The product's own history lands the same way, as markers, so each
+change note arrives together with the items its landing closes. The
+coordinator lands the product first, then the project:
+
+```sh
+# 1. In the main checkout's submodule: the product branch, up to date with the product's main, as a marker.
+git -C naima fetch <the worker's worktree>/naima <branch>
+git -C naima switch main
+git -C naima merge-base --is-ancestor main FETCH_HEAD && \
+  git -C naima merge --no-ff FETCH_HEAD -m "Land <branch>" -m "Closes: <item id>"
+git -C naima push origin main
+
+# 2. On the project branch: the pointer moves to that marker.
+git -C <the worker's worktree>/naima fetch origin main && git -C <the worker's worktree>/naima switch --detach origin/main
+git -C <the worker's worktree> add naima && git -C <the worker's worktree> commit -m "Naima at its landing of <branch>"
+
+# 3. The project branch lands as usual.
+naima land <branch>
+```
+
+A product branch that changes behaviour with no change note gets the same
+`No-change-note: <reason>` trailer in step 1 that `naima land` writes in step
+3. `naima land` reads the product's commits between the trunk's pointer and
+the branch's, so the submodule in the main checkout has to hold them: step 1
+puts them there.
 
 ## 8. Only then, remove the worktree and the branch
 

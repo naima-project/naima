@@ -507,6 +507,17 @@ one `Closes: <item id>` trailer for each item it closes. Following the
 trunk's first parents gives a list of markers, and `M^1..M^2` lists the
 commits that marker `M` landed.
 
+### Change note
+
+A short Markdown file describing one change to how the software behaves,
+added by the branch that makes the change. It lives in the `changes/` folder
+of the repository it describes, and its header says what kind of change it is
+(breaking, a change of behaviour, a feature or a fix), what it touches, and
+what a user has to do. Release notes are assembled from change notes, and a
+Naima update shows the new ones before it is applied
+([the format](../../changes/README.md),
+[the rule](rules.md#every-change-of-behaviour-carries-a-change-note)).
+
 ### Run
 
 A long command started by `naima run`. It has a name, keeps going

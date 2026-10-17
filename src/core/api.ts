@@ -59,6 +59,18 @@ export {
 } from "./base.ts"
 export { type CheckReport, runChecks } from "./check.ts"
 export {
+  behaviourOf,
+  type ChangeNote,
+  CHANGES,
+  CHANGES_CONFIG,
+  isNotePath,
+  noteGroups,
+  notesBetween,
+  parseChangeNote,
+  releaseNotes,
+  unnoted,
+} from "./changes.ts"
+export {
   type AcrossOptions,
   allRefNames,
   type BranchFile,

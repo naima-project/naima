@@ -1,21 +1,28 @@
-// What moving the lock changes, said before it moves: the commits, the data
-// formats, the rules page, and the options the other commit no longer reads. And
+// What moving the lock changes, said before it moves: the commits, the change
+// notes they add (core/changes.ts), the data formats, the rules page, the
+// options the other commit no longer reads and how naima update rewrites them,
+// and a rehearsal — the other commit's own naima check run on the project. And
 // what a session starts with: the banner `naima hello` prints
 // (docs/guide/update-naima.md).
 //
 // The other commit is read, not run in place of this one: its files are
 // checked out from the program's own git into a folder inside the program's
-// .git, its manifests imported from there under the same permissions, and the
-// folder removed. Nothing in the project, nor the program's checkout, changes.
+// .git, its manifests imported from there under the same permissions — its
+// check run from there, in this process, writing nothing — and the folder
+// removed. Nothing in the project, nor the program's checkout, changes.
 
 import { mkdirSync, rmSync } from "node:fs"
 import { join } from "node:path"
+import { changedRules, type ChangeNote, noteLines, notesBetween, type OptionMove, optionMoves, rewriteOptions } from "./changes.ts"
 import { message } from "./errors.ts"
 import { FORMAT } from "./format.ts"
 import { importFile } from "./plugins.ts"
 import { runGit } from "./git.ts"
 import { short } from "./program.ts"
 import type { FirstParty, Plugin } from "./types.ts"
+
+/** The trait of the type naima update files what it leaves in: a finding of the new Naima's check it could not fix by itself. */
+export const FOLLOW_UP = "follow-up"
 
 /** `n` of `noun`, its plural made with an s. */
 export const counted = (n: number, noun: string): string => `${n} ${noun}${n === 1 ? "" : "s"}`
@@ -83,6 +90,14 @@ export interface Change {
   back: boolean
   /** Their subjects, newest first. */
   commits: string[]
+  /** The change notes the commits add (forward) or take away (back), oldest first. */
+  notes: ChangeNote[]
+  /** Each file of changes/ among them that is not a change note, with why. */
+  unreadableNotes: string[]
+  /** naima.json as naima update writes it, forward: the notes' renames and removals made, the options `to` reads nowhere removed. */
+  rewritten: Record<string, unknown>
+  /** Each rewrite, said with the value it moved or removed. */
+  rewrites: string[]
   /** The formats `to` reads that differ from the data's. */
   formats: FormatChange[]
   /** One line per rule added to or removed from the rules page. */
@@ -133,8 +148,8 @@ interface Read {
   parse: (raw: unknown) => unknown
 }
 
-/** Check `commit` out of `program`'s git into a folder of its .git, and import what it says of itself. The folder is removed after. */
-async function readCommit(program: string, commit: string): Promise<Read> {
+/** Check `commit` out of `program`'s git into a folder of its .git, and run `use` on that folder; the folder is removed after. */
+export async function withCommit<T>(program: string, commit: string, use: (dir: string) => Promise<T>): Promise<T> {
   const base = join(program, ".git", "naima-preview")
   const dir = join(base, commit)
   const env = { GIT_INDEX_FILE: join(base, `${commit}.index`) }
@@ -145,23 +160,28 @@ async function readCommit(program: string, commit: string): Promise<Read> {
       const r = runGit(program, args, { env })
       if (!r.ok) throw new Error(`git ${args[0]}: ${r.err.split("\n")[0]}`)
     }
-    // deno-lint-ignore no-explicit-any
-    const load = (f: string) => importFile(join(dir, f)) as Promise<any>
-    const [format, builtins, plugins, manifest, config] = await Promise.all([
-      load("src/core/format.ts"),
-      load("src/builtins.ts"),
-      load("src/core/plugins.ts"),
-      load("src/core/manifest.ts"),
-      load("src/core/config.ts"),
-    ])
-    const firstParty = builtins.firstParty as FirstParty[]
-    const made = firstParty.map((p) => p.factory({}, plugins.apiFor(p.name, { rename: {} })) as Plugin)
-    const reads = new Map(made.map((p) => [p.name, 1 + (manifest.migrationsOf(p) as unknown[]).length]))
-    return { format: format.FORMAT as number, plugins: made, reads, parse: config.parseConfig as (raw: unknown) => unknown }
+    return await use(dir)
   } finally {
     rmSync(dir, { recursive: true, force: true })
     rmSync(env.GIT_INDEX_FILE, { force: true })
   }
+}
+
+/** Import what the Naima checked out in `dir` says of itself. */
+async function readCommit(dir: string): Promise<Read> {
+  // deno-lint-ignore no-explicit-any
+  const load = (f: string) => importFile(join(dir, f)) as Promise<any>
+  const [format, builtins, plugins, manifest, config] = await Promise.all([
+    load("src/core/format.ts"),
+    load("src/builtins.ts"),
+    load("src/core/plugins.ts"),
+    load("src/core/manifest.ts"),
+    load("src/core/config.ts"),
+  ])
+  const firstParty = builtins.firstParty as FirstParty[]
+  const made = firstParty.map((p) => p.factory({}, plugins.apiFor(p.name, { rename: {} })) as Plugin)
+  const reads = new Map(made.map((p) => [p.name, 1 + (manifest.migrationsOf(p) as unknown[]).length]))
+  return { format: format.FORMAT as number, plugins: made, reads, parse: config.parseConfig as (raw: unknown) => unknown }
 }
 
 const refusalOf = (parse: (raw: unknown) => unknown, raw: unknown): string | null => {
@@ -185,11 +205,16 @@ export async function changeOf(program: string, raw: Record<string, unknown>, fr
     const r = runGit(program, ["show", `${c}:docs/guide/rules.md`])
     return r.ok ? r.out : null
   }
+  const between = back ? notesBetween(program, to, from) : notesBetween(program, from, to)
   const change: Change = {
     from,
     to,
     back,
     commits,
+    notes: between.notes,
+    unreadableNotes: between.unreadable,
+    rewritten: raw,
+    rewrites: [],
     formats: [],
     rules: [],
     unread: [],
@@ -199,7 +224,7 @@ export async function changeOf(program: string, raw: Record<string, unknown>, fr
   }
   let theirs: Read
   try {
-    theirs = await readCommit(program, to)
+    theirs = await withCommit(program, to, readCommit)
   } catch (e) {
     change.unknown = message(e)
     change.rules = ruleLines(headings(page(from)), headings(page(to)))
@@ -215,8 +240,13 @@ export async function changeOf(program: string, raw: Record<string, unknown>, fr
   }
   change.rules = ruleLines(headings(page(from)), headings(page(to)))
   change.unread = unreadOptions((raw["plugins"] ?? {}) as Table, theirs.plugins, true).map((u) => u.path)
+  if (!back) {
+    const r = rewriteOptions(raw, optionMoves(change.notes) as OptionMove[], change.unread)
+    change.rewritten = r.raw
+    change.rewrites = r.said
+  }
   if (!change.formats.length) {
-    const lock = { ...raw, commit: to }
+    const lock = { ...change.rewritten, commit: to }
     change.config = refusalOf(theirs.parse, lock)
     if (change.config && "updates" in lock) {
       const { updates: _dropped, ...without } = lock
@@ -239,6 +269,9 @@ export function describe(c: Change, limit = 10): string[] {
   const out = [`What changes: ${short(c.from)} → ${short(c.to)}, ${commits}:`]
   for (const s of c.commits.slice(0, limit)) out.push(`  - ${s}`)
   if (n > limit) out.push(`  - and ${n - limit} more`)
+  if (c.back && c.notes.length) out.push(`  change notes undone: ${c.notes.map((x) => x.title).join("; ")}`)
+  else out.push(...noteLines(c.notes))
+  for (const u of c.unreadableNotes) out.push(`  not a change note: ${u}`)
   if (c.unknown) {
     out.push(`  formats, options: unknown — ${short(c.to)}'s own code could not be read (${c.unknown})`)
   } else if (!c.formats.length) out.push("  data format: unchanged")
@@ -252,6 +285,76 @@ export function describe(c: Change, limit = 10): string[] {
     }
   }
   out.push(...(c.rules.length ? c.rules.map((r) => `  ${r}`) : ["  rules: unchanged"]))
+  const acks = c.back ? [] : changedRules(c.notes)
+  if (acks.length) out.push(`  rules to acknowledge again: ${acks.join("; ")}`)
   if (c.unread.length) out.push(`  options no longer read: ${c.unread.join(", ")}`)
+  if (c.rewrites.length) out.push("  naima update rewrites naima.json:", ...c.rewrites.map((r) => `    ${r}`))
   return out
+}
+
+/** The rules the rules page adds or removes from `a` to `b`, as change notes say them: "added <heading>", "removed <heading>". */
+export function pageRules(program: string, a: string, b: string): string[] {
+  const page = (c: string) => {
+    const r = runGit(program, ["show", `${c}:docs/guide/rules.md`])
+    return r.ok ? r.out : null
+  }
+  const before = headings(page(a))
+  const after = headings(page(b))
+  return [...after.filter((h) => !before.includes(h)).map((h) => `added ${h}`), ...before.filter((h) => !after.includes(h)).map((h) => `removed ${h}`)]
+}
+
+/** What a naima check finds, as it prints it: its problems and its notes, a message each. */
+export interface Findings {
+  problems: string[]
+  notes: string[]
+}
+
+/** Where a check runs: the project's root and its data. */
+interface Where {
+  root: string
+  data: string
+}
+
+/**
+ * What the Naima whose program is `programRoot` finds when it runs naima check on the project, in this
+ * process, as its development build does: it aligns nothing and writes nothing. Read from what the command
+ * prints, the one interface every version shares; an error when it refuses to run.
+ */
+export async function checkFrom(programRoot: string, where: Where): Promise<Findings> {
+  // deno-lint-ignore no-explicit-any
+  const [internal, builtins] = (await Promise.all(["src/core/internal.ts", "src/builtins.ts"].map((f) => importFile(join(programRoot, f))))) as any[]
+  const lines: string[] = []
+  const errors: string[] = []
+  const io = { out: (l = "") => lines.push(l), err: (l: string) => errors.push(l), now: () => new Date() }
+  const code = await internal.runCli(["check"], { cwd: where.root, programRoot, data: where.data, launched: false, io, firstParty: builtins.firstParty })
+  if (code !== 0 && code !== 1) throw new Error(errors.map((e) => e.replace(/^naima: /, "")).join("; ") || `naima check exited ${code}`)
+  return {
+    problems: lines.filter((l) => l.startsWith("  ✗ ")).map((l) => l.slice(4)),
+    notes: lines.filter((l) => l.startsWith("  · ")).map((l) => l.slice(4)),
+  }
+}
+
+/** What `after` finds that `before` did not. */
+export const newly = (before: Findings, after: Findings): Findings => ({
+  problems: after.problems.filter((p) => !before.problems.includes(p)),
+  notes: after.notes.filter((n) => !before.notes.includes(n)),
+})
+
+/**
+ * The rehearsal: `to`'s own naima check, run on the project from a temporary copy of `to`, against the one the
+ * running Naima (`running`) makes now; said as what would newly fail or be noted. Nothing is written.
+ */
+export async function rehearse(program: string, to: string, running: string, where: Where): Promise<string[]> {
+  try {
+    const before = await checkFrom(running, where)
+    const after = await withCommit(program, to, (dir) => checkFrom(dir, where))
+    const fresh = newly(before, after)
+    const out = [`Rehearsal: ${short(to)}'s naima check on this repository, from a temporary copy, nothing written:`]
+    for (const p of fresh.problems) out.push(`  newly failing: ${p}`)
+    for (const n of fresh.notes) out.push(`  newly noted: ${n}`)
+    if (!fresh.problems.length && !fresh.notes.length) out.push("  nothing newly fails or is noted")
+    return out
+  } catch (e) {
+    return [`Rehearsal not run: ${message(e)} — naima update ends with the new Naima's own naima check`]
+  }
 }

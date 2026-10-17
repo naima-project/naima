@@ -165,7 +165,10 @@ mechanisms, used together:
   whoever declares it. `fixedOn` applies to every `fixable` type: the
   `trackers` plugin's bugs, todos, features and archive, and a third-party
   `incidents` type that says it is fixable. `appliesTo` still names types
-  exactly; a field with both applies to both.
+  exactly; a field with both applies to both. The core reads one trait
+  itself: `naima update` files what the new Naima's check finds and it could
+  not fix in the first creatable type that carries `follow-up` — the
+  `trackers` plugin's todos.
 - **Extensions.** A plugin — or the project, under `extends` in
   [`naima.json`](format.md#naimajson) — adds to a type it does not own:
   statuses, traits, transitions; or to a field: enum values, the open list of

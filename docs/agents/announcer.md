@@ -51,6 +51,11 @@ but not that someone using the software gets what the copy says.
 3. Write the notes in the project's words, one line per feature, from the
    feature's title and its docs page. Nothing from the owner's chat goes in
    word for word ([the rule](../guide/rules.md#the-owners-chat-stays-private)).
+   Where the project keeps change notes (a `changes/` folder with a
+   `config.json`), `naima changes --from <previous tag>` gives the changelog
+   part: every change of behaviour in the range, breaking changes and those
+   that need an action first, each with what a user has to do. Take what to
+   do from there, and the features to announce from `naima announce`.
 4. Before handing off, run `naima check`. Its `copy-names-only-announceable`
    check fails if the README, or any other file in the option `copy`, names
    a feature that isn't announceable, either by its label or by its full

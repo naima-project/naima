@@ -108,10 +108,14 @@ How much it checks depends on `updates` in `naima.json`, which is `off`,
 `naima update --mode <value>`.
 
 When an update is available and the owner wants to hear about it, tell them
-what it changes: the commits, any migration, rules added or removed, and
-settings that would stop being read. Then ask. Only when they say yes, run
-`naima update`, then `naima check`, and commit `naima-tracker/` as one
-change. `naima rollback` goes back to the previous version, also as one
+what it changes: the breaking changes and the actions its change notes ask
+for first, then the rest, any migration, rules added or removed, settings
+that would stop being read, and what the rehearsal says would newly fail.
+Then ask. Only when they say yes, run `naima update`. It renames and removes
+settings as the notes say, names the rules to acknowledge again — read them
+with `naima rules --audience agents` and give them back in your next session
+note — runs `naima check` and files a todo for each new finding it could not
+fix. Commit `naima-tracker/` as one change. `naima rollback` goes back to the previous version, also as one
 commit. Never update without asking
 ([update Naima](../../docs/guide/update-naima.md)). To check on request, run
 `naima update --check`.
