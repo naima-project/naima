@@ -107,7 +107,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `commands` | core | `naima <name>`: a command, with its usage, options and examples | core, trackers, coordination, triage, gates, epics, planning, roles, announce, loop, beta-markers, verifier, tools, ui, metrics, rules, long-work, commit-hooks, privacy, adopt, docs |
 | `types` | core | item types: a directory of items, their statuses, and the status a new one starts in | trackers, epics, planning, verifier, rules |
 | `fields` | core | typed fields of an item's meta.json, and the types they apply to | core, trackers, triage, gates, planning, roles, announce, verifier, rules, privacy, adopt, docs |
-| `relations` | core | link relations between items, each naming its inverse | core, trackers, epics, planning |
+| `relations` | core | link relations between items, each naming its inverse | core, trackers, epics, planning, verifier |
 | `checks` | core | invariants `naima check` holds: a problem fails it, a note does not | core, trackers, coordination, triage, gates, epics, planning, announce, beta-markers, verifier, metrics, rules, long-work, commit-hooks, privacy, docs |
 | `views` | core | `naima view <name>`: a named rendering of derived state | coordination, triage, planning |
 | `dirs` | core | directories under the tracker root a plugin owns that are not item types | core, coordination, metrics, commit-hooks, adopt |
@@ -1898,12 +1898,20 @@ Properties: a property of the software, proven or refuted by a verifier. Items l
 | `lastRun` | string | properties | the attachment holding the last run: a file name in the item's attachments/ |  |
 | `verifierOptions` | object | properties | options handed to the verifier with the model and the property, as a JSON object |  |
 
+**Link relations** — only the direction written is stored; the inverse is derived when read.
+
+| Relation | Inverse | Reads as |
+|---|---|---|
+| `witnesses` | `witnessed-by` | is a witness property, showing that the behaviour is reachable, for |
+| `witnessed-by` | `witnesses` | is backed by the witness property |
+
 **Checks**, run by `naima check`
 
 | Check | What it holds |
 |---|---|
 | `property-evidence` | a property names a known verifier and an existing model; one that holds carries a run of its current property, verifier, model and options, on every file it reads as it is now and the tool's version as it is now |
 | `property-failed-first` | a property that holds and proves a change — it verifies or satisfies a bug, a todo or a feature — also carries a violated run of the same property, with its counterexample, on other inputs than those it holds on: the model before the change. A note, naming the property as its subject, so it can be waived with a reason |
+| `property-witnessed` | a property that holds and proves a change is backed by a witness property that holds — one linked to it by witnesses, showing the new behaviour is reachable, so the property does not hold only because the situation never arises. A note, naming the property as its subject, so it can be waived with a reason; a witnesses link with an item that is not a property at either end is noted too |
 
 **Write hooks**, run on every item write
 

@@ -170,6 +170,13 @@ property as its subject, so when there is no earlier model to run it on, the
 finding is waived with the reason
 ([a finding is fixed, or waived](#a-finding-is-fixed-or-waived-with-its-reason)).
 
+The same property is backed by a [witness](glossary.md#witness): a second
+property, linked to it with `witnesses`, that holds and shows the new
+behaviour can actually happen. Why: a property about a situation that never
+arises holds on any model, so it proves nothing until something shows the
+situation is reachable. **Enforced by** the check `property-witnessed`, as a
+note, waived with its reason when a witness makes no sense.
+
 ### A page does not outlive its answer
 
 An unticked clause on an open item shouldn't name a test that has already

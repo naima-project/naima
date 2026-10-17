@@ -343,3 +343,22 @@ visible in every `naima check`.
 ```sh
 naima waive property-failed-first properties/<slug> --reason "the model was written with the pool in it"
 ```
+
+A property can also hold only because the situation it talks about never
+arises. "Every pooled unit is reused correctly" holds on a model where
+nothing is ever pooled. A [witness](glossary.md#witness) rules that out. It's
+a second property that shows the new behaviour can actually happen, such as
+"the pool can be non-empty" or "a pooled unit can be taken again", and it is
+linked to the property it backs.
+
+```sh
+naima new properties "the pool can be non-empty"
+naima set <witness> verifier=mcrl2 model=models/pool.mcrl2 property=models/pool-non-empty.mcf
+naima link <witness> witnesses <property>
+naima verify <witness>
+```
+
+`naima check` notes a property that holds and proves a change when no witness
+that holds is linked to it (`property-witnessed`). When a witness makes no
+sense, for instance because the property is itself about reaching the new
+behaviour, the agent waives the note with the reason, as above.

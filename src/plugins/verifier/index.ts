@@ -36,6 +36,7 @@ import {
   progressFor,
   saveMeta,
   setFieldValue,
+  storedLinks,
   str,
   usageError,
   writeFileAtomic,
@@ -542,6 +543,55 @@ const failedFirst: Check = {
   },
 }
 
+const WITNESSES = "witnesses"
+const WITNESSED_BY = "witnessed-by"
+
+const witnessed: Check = {
+  name: "property-witnessed",
+  says:
+    "a property that holds and proves a change is backed by a witness property that holds — one linked to it by witnesses, showing the new behaviour is reachable, so the property does not hold only because the situation never arises. A note, naming the property as its subject, so it can be waived with a reason; a witnesses link with an item that is not a property at either end is noted too",
+  run(ctx) {
+    const out: Finding[] = []
+    for (const item of properties(ctx)) {
+      if (item.meta.status !== "holds") continue
+      const changes = changesProved(ctx, item)
+      if (!changes.length) continue
+      const witnesses = linked(ctx, item, WITNESSED_BY).filter((w) => w.type === TYPE)
+      if (witnesses.some((w) => w.meta.status === "holds")) continue
+      const subject = label(item)
+      const what = witnesses.length
+        ? `none of its witnesses holds: ${witnesses.map((w) => `${label(w)} [${w.meta.status}]`).join(", ")} — run naima verify on them`
+        : `no witness property backs it — file one that shows the new behaviour is reachable and link it (naima link <witness> ${WITNESSES} ${item.slug})`
+      out.push({
+        level: "note",
+        item,
+        subject,
+        message: `${subject} proves ${
+          changes.map(label).join(", ")
+        }, and ${what}, or waive it with the reason: naima waive property-witnessed ${subject} --reason "<why>"`,
+      })
+    }
+    for (const item of ctx.repo.items) {
+      for (const l of storedLinks(item.meta)) {
+        if (l.rel !== WITNESSES && l.rel !== WITNESSED_BY) continue
+        const other = ctx.repo.byId.get(l.id)
+        if (!other) continue
+        const odd = [item, other].filter((i) => i.type !== TYPE)
+        if (odd.length) {
+          out.push({
+            level: "note",
+            item,
+            message: `${label(item)} ${l.rel} ${label(other)}, and ${odd.map(label).join(" and ")} ${
+              odd.length > 1 ? "are" : "is"
+            } not a property: ${WITNESSES} links a witness property to the property it backs`,
+          })
+        }
+      }
+    }
+    return out
+  },
+}
+
 /** What a run was reached on: change any of them and the run no longer speaks for the property. */
 const RUN_INPUTS = ["property", "model", "verifier", VERIFIER_OPTIONS.name] as const
 
@@ -618,7 +668,11 @@ export default function verifier(): Plugin {
     contributes: { verifiers: [exampleRegex], gates: [allHold] },
     // Its gate is there when a gates plugin is: without one, nothing lists gates.
     optional: ["gates"],
-    checks: [evidence, failedFirst],
+    relations: [
+      { name: WITNESSES, inverse: WITNESSED_BY, says: "is a witness property, showing that the behaviour is reachable, for" },
+      { name: WITNESSED_BY, inverse: WITNESSES, says: "is backed by the witness property" },
+    ],
+    checks: [evidence, failedFirst, witnessed],
     commands: [verify, verifiers],
     hooks: [reopenOnChange, holdsByVerifyOnly],
   }

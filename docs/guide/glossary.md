@@ -315,6 +315,14 @@ An item of type `properties`, holding a statement about the work, or about
 a model of it, that a [verifier](#verifier) checks. `holds` proves, and
 `violated` refutes.
 
+### Witness
+
+A [property](#property) that shows a behaviour can actually happen in the
+model, such as "the pool can be non-empty". It is linked with `witnesses` to
+the property it backs, so that property can't be holding only because the
+situation it talks about never arises
+([proving a change to a model](prove-and-close.md#proving-a-change-to-a-model)).
+
 ### Proves
 
 A status that counts as evidence for what the item [verifies](#verifies),
@@ -356,7 +364,9 @@ The field `evidenceKind` on a test, which says what rank of
 
 A regression test proves a fix only if it was seen failing on the code
 before the fix and then passing on the fixed code. The field `redSeen`
-records the day it was seen failing.
+records the day it was seen failing. A property that proves a change to a
+model follows the same order: it is violated on the model before the change,
+with its counterexample kept, and holds on the changed one.
 
 ### Run by
 
@@ -424,9 +434,10 @@ fail, or a **note**, which doesn't. A project can set each check to
 
 ### Waiver
 
-A recorded exemption from one problem that a [check](#check) reports on one
-subject, written by `naima waive` with its reason, who gave it and when. The
-waived problem no longer fails `naima check`, which lists the waiver as a
+A recorded exemption from one finding, a problem or a note, that a
+[check](#check) reports on one subject, written by `naima waive` with its
+reason, who gave it and when. `naima check` no longer reports the waived
+finding, so a waived problem no longer fails it, and it lists the waiver as a
 note instead ([the rule](rules.md#a-finding-is-fixed-or-waived-with-its-reason)).
 
 ### Invariant
