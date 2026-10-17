@@ -363,6 +363,43 @@ that holds is linked to it (`property-witnessed`). When a witness makes no
 sense, for instance because the property is itself about reaching the new
 behaviour, the agent waives the note with the reason, as above.
 
+### A refactoring, proved by equivalence
+
+A refactoring changes how a model is written without changing what it does:
+a process split in two, data reorganised, names changed. There is no bug to
+see violated first, and running every property again would only repeat what
+is known. Instead the two versions are compared, and when they behave the
+same, every earlier result still holds.
+
+```sh
+# the model is rewritten
+naima equivalent models/pool.mcrl2
+```
+
+`naima equivalent` looks in git for the version of the model that each
+property's last run read, in the index or in the commits that changed the
+file (`--from <revision>` names the revision instead). The verifier then
+compares that version with the model as it is now. For mCRL2 this means the
+state space of each version, then `ltscompare`. When the two are equivalent,
+each property gets a new run with the earlier verdict, marked `carried`: it
+names the run it came from, the earlier version, the equivalence and what
+the comparison printed. From then on `naima verify` reuses that run, so
+nothing is run again.
+
+The comparison is made modulo an equivalence, given with `--modulo`. mCRL2
+offers two. `bisim`, strong bisimilarity, is the default, and every property
+carries over under it. `dpbranching-bisim`, divergence-preserving branching
+bisimilarity, also accepts a model that takes different internal steps, and
+carries over only the properties the [LTS route](#two-model-checkers-mcrl2-and-voxlogica)
+accepts. A property it doesn't preserve is named, to verify again.
+
+Nothing carries over when the two versions are not equivalent: the command
+names the properties to verify again and prints what tells the versions
+apart, for mCRL2 a formula that one satisfies and the other doesn't. A
+result also stays where it is when anything besides the model changed since
+its run, such as the property, its options, an included formula file or the
+tool's version, because then the comparison wouldn't cover the change.
+
 ### A model in development
 
 Some changes to a model take several landings, and in between the model is
@@ -409,6 +446,7 @@ the project. This table shows what is asked at each moment.
 | Landing | `naima land` lists, after the landing, every property verified on a file the branch changed that doesn't hold on a current run | nothing yet: the coordinator verifies the listed properties on the trunk |
 | A model in development | nothing; what its properties say is information | nothing |
 | Leaving development | every property of the model holds on a current run | setting the model `stable` |
+| A refactoring | `naima equivalent` compares the model with the version its properties were verified on, and carries their results over when the two are equivalent | nothing: what doesn't carry over is verified again |
 | Any `naima check` | the notes `property-failed-first` and `property-witnessed`; a property that claims to hold on a run that is out of date is a problem, outside development | `naima check` and `naima close`, for the problem |
 
 Because `naima verify` reuses every run whose inputs haven't changed, a

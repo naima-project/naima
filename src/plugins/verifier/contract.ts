@@ -23,6 +23,27 @@ export interface VerifyResult {
   details?: Record<string, unknown>
 }
 
+/** Two versions of one model, compared modulo an equivalence: a refactoring proved by equivalence. */
+export interface CompareRequest {
+  /** Absolute path of a copy of the model as the earlier runs read it. */
+  before: string
+  /** Absolute path of the model as it is now. */
+  after: string
+  /** One of the adapter's `equivalences`. */
+  equivalence: string
+  progress?: Progress
+}
+
+export interface CompareResult {
+  /** `equivalent`: the results the equivalence preserves carry over; `different`: none does; `error`: no answer, and the output says why. */
+  verdict: "equivalent" | "different" | "error"
+  output: string
+  /** On `different`: what tells the two versions apart, such as a formula one satisfies and the other does not. */
+  counterexample?: string
+  /** How the answer was reached — the sizes, the tools' versions — as a JSON object the carried runs keep. */
+  details?: Record<string, unknown>
+}
+
 /** An adapter to a formal-methods tool. */
 export interface Verifier {
   id: string
@@ -41,12 +62,18 @@ export interface Verifier {
   inputs?(request: VerifyRequest, ctx: Context): string[] | Promise<string[]>
   /** The version of the tool a run uses, recorded with the run; a property run by another version is stale. Absent: none recorded. */
   version?(ctx: Context): string | Promise<string>
+  /** The equivalences `compare` decides, by name, each with what it preserves; the first is the default. Absent: it cannot compare. */
+  equivalences?: Record<string, string>
+  /** Compare two versions of a model modulo one of `equivalences`. */
+  compare?(request: CompareRequest, ctx: Context): Promise<CompareResult>
+  /** Why a result of `property` does not carry over modulo `equivalence`; null when it does. Absent: every result does. */
+  preserves?(request: { property: string; options: Record<string, unknown>; equivalence: string }, ctx: Context): string | null
 }
 
 export const verifiersPoint: ExtensionPoint<Verifier> = {
   id: "verifiers",
   says:
-    "an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest",
+    "an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest; and `equivalences` with `compare({ before, after, equivalence }, ctx) → { verdict, output, counterexample?, details? }` and `preserves({ property, options, equivalence }, ctx)`, for `naima equivalent`",
   noun: "verifier",
   stored: true,
   key: (v) => v.id,
@@ -55,7 +82,14 @@ export const verifiersPoint: ExtensionPoint<Verifier> = {
     const a = v as Partial<Verifier> | null
     if (!a || typeof a !== "object" || typeof a.id !== "string") return "has no id"
     if (typeof a.verify !== "function") return "has no verify function"
-    for (const k of ["inputs", "version"] as const) if (a[k] !== undefined && typeof a[k] !== "function") return `has a ${k} that is not a function`
+    for (const k of ["inputs", "version", "compare", "preserves"] as const) {
+      if (a[k] !== undefined && typeof a[k] !== "function") return `has a ${k} that is not a function`
+    }
+    const e = a.equivalences
+    if (e !== undefined && (!e || typeof e !== "object" || Array.isArray(e) || !Object.values(e).every((s) => typeof s === "string"))) {
+      return "has equivalences that are not an object of names to what each preserves"
+    }
+    if ((a.compare === undefined) !== (e === undefined || !Object.keys(e).length)) return "has compare without equivalences, or equivalences without compare"
     return null
   },
   gaps: (v) => (typeof v.says === "string" && v.says.trim() ? [] : ["does not say what it checks"]),

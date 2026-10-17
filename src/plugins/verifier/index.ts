@@ -11,8 +11,8 @@
 // version has changed since its run.
 
 import { createHash } from "node:crypto"
-import { existsSync, readdirSync, readFileSync } from "node:fs"
-import { isAbsolute, join, relative, resolve, sep } from "node:path"
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import {
   ATTACHMENTS,
   bool,
@@ -23,6 +23,8 @@ import {
   fieldValue,
   type Finding,
   findPrivate,
+  gitOrNull,
+  gitPath,
   guardPrivate,
   hasTrait,
   type Item,
@@ -38,15 +40,17 @@ import {
   setFieldValue,
   storedLinks,
   str,
+  textsAt,
+  toplevel,
   usageError,
   writeFileAtomic,
   type WriteHook,
   writeJson,
 } from "../../core/api.ts"
 import { exampleRegex } from "./adapters/example-regex.ts"
-import { type Verdict, type Verifier, verifiersPoint, type VerifyRequest, type VerifyResult } from "./contract.ts"
+import { type CompareResult, type Verdict, type Verifier, verifiersPoint, type VerifyRequest, type VerifyResult } from "./contract.ts"
 
-export type { Verdict, Verifier, VerifyRequest, VerifyResult } from "./contract.ts"
+export type { CompareRequest, CompareResult, Verdict, Verifier, VerifyRequest, VerifyResult } from "./contract.ts"
 
 /** The gate this plugin contributes to the gates point: the shape that point takes, declared here since plugins never import each other. */
 interface Gate {
@@ -89,7 +93,23 @@ export interface RunRecord {
   details?: Record<string, unknown>
   /** Why the run was made although a run of the same identity was recorded (`naima verify --force "<reason>"`); absent otherwise. */
   forced?: string
+  /** The verdict came over from a run on an earlier version of the model, the two being equivalent (`naima equivalent`); absent for a run of the tool. */
+  carried?: Carried
   at: string
+}
+
+/** How a verdict came over from a run on an earlier version of the model: which run, from which version, by which comparison. */
+export interface Carried {
+  /** The run on the earlier version: a file in the item's attachments/. */
+  from: string
+  /** The sha256 of the model as that run read it. */
+  modelSha256: string
+  /** The equivalence the two versions were found equivalent modulo. */
+  equivalence: string
+  /** What the comparison printed. */
+  output: string
+  /** How the comparison reached its answer, as the adapter said: the sizes, the tools' versions. */
+  details?: Record<string, unknown>
 }
 
 export interface RunInput {
@@ -175,6 +195,13 @@ function asRun(value: unknown): RunRecord | string {
     if (r[k] !== undefined && typeof r[k] !== "string") return `${k} is not text`
   }
   if (r["details"] !== undefined && !isObject(r["details"])) return "details is not a JSON object"
+  const carried = r["carried"] as Record<string, unknown> | undefined
+  if (carried !== undefined) {
+    if (!isObject(carried) || !["from", "modelSha256", "equivalence", "output"].every((k) => typeof carried[k] === "string")) {
+      return "carried is not a { from, modelSha256, equivalence, output } object"
+    }
+    if (carried["details"] !== undefined && !isObject(carried["details"])) return "carried.details is not a JSON object"
+  }
   const inputs = r["inputs"]
   if (
     inputs !== undefined &&
@@ -334,7 +361,6 @@ export async function verifyItem(ctx: Context, item: Item, progress: Progress = 
     result = { verdict: "error", output: e instanceof Error ? e.message : String(e) }
   }
   const at = ctx.now().toISOString()
-  const stamp = freshStamp(join(item.dir, ATTACHMENTS), at.replace(/[:.]/g, "-"))
   const record: RunRecord = {
     verifier: id,
     model,
@@ -351,13 +377,20 @@ export async function verifyItem(ctx: Context, item: Item, progress: Progress = 
     ...(result.details !== undefined ? { details: result.details } : {}),
     ...(opts.force !== undefined ? { forced: opts.force } : {}),
   }
+  keepRun(ctx, item, record)
+  return { verdict: result.verdict }
+}
+
+/** Attach a run to the property — its record, and its counterexample as a file of its own — and make it the last run, its status from the verdict. */
+function keepRun(ctx: Context, item: Item, record: RunRecord): string {
+  const stamp = freshStamp(join(item.dir, ATTACHMENTS), record.at.replace(/[:.]/g, "-"))
   const name = `run-${stamp}.json`
   writeJson(join(item.dir, ATTACHMENTS, name), record)
-  if (result.counterexample !== undefined) writeFileAtomic(join(item.dir, ATTACHMENTS, `counterexample-${stamp}.txt`), result.counterexample + "\n")
-  item.meta.status = STATUS[result.verdict]
+  if (record.counterexample !== undefined) writeFileAtomic(join(item.dir, ATTACHMENTS, `counterexample-${stamp}.txt`), record.counterexample + "\n")
+  item.meta.status = STATUS[record.verdict]
   setFieldValue(item, LAST_RUN, name)
   saveMeta(ctx, item)
-  return { verdict: result.verdict }
+  return name
 }
 
 const properties = (ctx: Context): Item[] => ctx.repo.items.filter((i) => i.type === TYPE)
@@ -432,6 +465,225 @@ const verifiers: Command = {
   run(_args, ctx) {
     for (const c of ctx.registry.contributions("verifiers")) ctx.out(`  ${c.name.padEnd(16)} ${(c.value as Verifier).says}`)
     return 0
+  },
+}
+
+/** Where a comparison keeps the earlier version of a model: beside the program, inside the launcher's fence, ignored by git. */
+function workDir(ctx: Context): string {
+  const work = join(dirname(ctx.program), ".naima-work")
+  const dir = join(work, "verifier")
+  mkdirSync(dir, { recursive: true })
+  if (!existsSync(join(work, ".gitignore"))) writeFileSync(join(work, ".gitignore"), "*\n")
+  return dir
+}
+
+/**
+ * The earlier versions of the model at `path` that git holds, by the sha256 of their contents: those `wanted`, at
+ * `from` when it is given, otherwise in the index and in the last 200 commits that changed the file.
+ */
+function earlierVersions(ctx: Context, path: string, wanted: Set<string>, from?: string): Map<string, string> {
+  const out = new Map<string, string>()
+  const top = toplevel(ctx.root)
+  if (!top) return out
+  // git names the top level by its real path: a project reached through a symbolic link is read by its real one too.
+  const file = gitPath(relative(realpathSync(top), realpathSync(path)))
+  const revs = from !== undefined ? [from] : ["", ...(gitOrNull(top, "log", "--format=%H", "-n", "200", "--", file)?.split("\n").filter(Boolean) ?? [])]
+  const texts = textsAt(top, revs.map((r) => `${r}:${file}`))
+  for (const text of texts) {
+    if (text === null) continue
+    const sha = createHash("sha256").update(text, "utf8").digest("hex")
+    if (wanted.has(sha) && !out.has(sha)) out.set(sha, text)
+  }
+  return out
+}
+
+/** Why `run`, on an earlier version of the model, cannot carry over to what `item` reads now beyond the model: anything but the model changed. */
+function carryBlockers(item: Item, run: RunRecord, inputs: RunInput[], toolVersion: string | undefined): string[] {
+  const { verifier, model, property } = item.meta
+  const out: string[] = []
+  if (run.property !== property || run.verifier !== verifier || run.model !== model) out.push("its run was made on another property, verifier or model path")
+  if ((run.optionsSha256 ?? optionsHash({})) !== optionsHash(optionsOf(item))) out.push("its run was made with other verifierOptions")
+  if (!run.inputs || run.inputsSha256 !== digestOf(run.inputs, run.toolVersion)) {
+    out.push("its run record lists no inputs, or a digest that does not match them")
+  } else {
+    const was = new Map(run.inputs.map((i) => [i.path, i.sha256]))
+    const now = new Map(inputs.map((i) => [i.path, i.sha256]))
+    if (canonical([...was.keys()].sort()) !== canonical([...now.keys()].sort())) {
+      out.push(`its run read ${[...was.keys()].join(", ")}, the model now reads ${[...now.keys()].join(", ")}`)
+    } else {
+      const changed = [...now].filter(([p, sha]) => p !== model && was.get(p) !== sha).map(([p]) => p)
+      if (changed.length) out.push(`besides the model, ${changed.join(", ")} changed since its run`)
+    }
+  }
+  if (run.toolVersion !== toolVersion) {
+    out.push(`its run was made by tool version ${JSON.stringify(run.toolVersion ?? null)}, not ${JSON.stringify(toolVersion ?? null)}`)
+  }
+  return out
+}
+
+/** One property whose last run, on an earlier version of the model, can carry over when the two versions are equivalent. */
+interface Carry {
+  item: Item
+  /** Its last run's file in attachments/. */
+  from: string
+  run: RunRecord
+  /** What a run on the model as it is now reads. */
+  inputs: RunInput[]
+}
+
+const equivalent: Command = {
+  name: "equivalent",
+  says:
+    "compare a model with the earlier version its properties were verified on, modulo an equivalence, and carry each result over to the model as it is now when the two are equivalent: a refactoring proved without running its properties again",
+  enforces:
+    "a result carries over only from a conclusive run on an earlier version of the model, with everything else it read unchanged — the property, the options, every other input, the tool's version — when the verifier finds the two versions equivalent and says the equivalence preserves the property; the carried run is recorded as such, naming the run it came from, the earlier version and the comparison",
+  usage: "equivalent <model> [--modulo <equivalence>] [--from <revision>]",
+  long: {
+    reports:
+      "the stages of the comparison, each tool with the count it exposes — for mCRL2 the states lps2lts explores, for the earlier version and then for the model as it is now",
+  },
+  options: [
+    { name: "--modulo", says: "the equivalence to compare modulo, one the verifier names; absent, its first, the strongest" },
+    {
+      name: "--from",
+      says:
+        "the git revision holding the earlier version; absent, the version each run read is looked for in the index and in the commits that changed the model",
+    },
+  ],
+  examples: ["equivalent models/scheduler.mcrl2", "equivalent models/scheduler.mcrl2 --modulo dpbranching-bisim --from main"],
+  async run(args, ctx) {
+    const p = parse(args, { modulo: { type: "string" }, from: { type: "string" } })
+    const [model, ...extra] = p.positionals
+    if (!model || extra.length) throw usageError(this)
+    const path = modelPath(ctx.root, model)
+    if (!path) throw new Error(`model ${model} is outside the project — model is a path from the project root`)
+    if (!existsSync(path)) throw new Error(`model ${model} does not exist`)
+    const ours = properties(ctx).filter((i) => sameModel(ctx, i.meta["model"], model))
+    if (!ours.length) throw new Error(`no property is verified on ${model} — nothing to carry over`)
+    const ids = [...new Set(ours.map((i) => String(i.meta["verifier"])))]
+    if (ids.length > 1) throw new Error(`the properties of ${model} name several verifiers (${ids.join(", ")}): a model is compared by one`)
+    const id = ids[0]!
+    const verifier = verifierOf(ctx, id)
+    if (!verifier) throw new Error(`no verifier "${id}" — verifiers: ${verifierIds(ctx).join(", ")}`)
+    if (!verifier.compare || !verifier.equivalences) {
+      throw new Error(`verifier "${id}" cannot compare two versions of a model — naima verify the properties instead`)
+    }
+    const names = Object.keys(verifier.equivalences)
+    const equivalence = str(p, "modulo") ?? names[0]!
+    if (!names.includes(equivalence)) throw new Error(`--modulo ${equivalence}: verifier ${id} compares modulo ${names.join(", ")}`)
+    const from = str(p, "from")
+    const toolVersion = verifier.version ? await verifier.version(ctx) : undefined
+    const now = sha256(path)
+
+    let failing = 0
+    const refuse = (item: Item, why: string): void => {
+      failing++
+      ctx.out(`not carried ${label(item)}: ${why} — naima verify ${item.slug}`)
+    }
+    const carries: Carry[] = []
+    for (const item of ours) {
+      const from = fieldValue(item, LAST_RUN)
+      const run = readRun(item)
+      if (typeof from !== "string" || !run || !conclusive(run.verdict)) {
+        refuse(item, `its last run is no verdict to carry over [${item.meta.status}]`)
+        continue
+      }
+      if (run.modelSha256 === now && !staleness(ctx, item, run).length) {
+        ctx.out(`current     ${label(item)}  ${item.meta.title}  (${run.verdict} on the model as it is now)`)
+        continue
+      }
+      const property = String(item.meta["property"])
+      const request = { model: path, property, options: optionsOf(item) }
+      const inputs = (await inputsOf(ctx, verifier, item, request)).map((rel): RunInput => {
+        const abs = resolve(ctx.root, rel)
+        return { path: rel, sha256: existsSync(abs) ? sha256(abs) : "" }
+      })
+      const blockers = carryBlockers(item, run, inputs, toolVersion)
+      if (blockers.length) {
+        refuse(item, blockers.join("; "))
+        continue
+      }
+      const kept = verifier.preserves ? verifier.preserves({ property, options: request.options, equivalence }, ctx) : null
+      if (kept !== null) {
+        refuse(item, `${equivalence} does not preserve it: ${kept}`)
+        continue
+      }
+      carries.push({ item, from, run, inputs })
+    }
+
+    const wanted = new Set(carries.map((c) => c.run.modelSha256))
+    const versions = earlierVersions(ctx, path, wanted, from)
+    const progress = progressFor((l) => ctx.err(l))
+    try {
+      for (const [n, sha] of [...wanted].entries()) {
+        progress.overall(n, wanted.size, "versions")
+        const group = carries.filter((c) => c.run.modelSha256 === sha)
+        const text = versions.get(sha)
+        if (text === undefined) {
+          const where = from !== undefined ? `is not at ${from}` : "is in neither the index nor the model's git history"
+          for (const c of group) refuse(c.item, `the version of ${model} its run read (sha256 ${sha.slice(0, 12)}) ${where}`)
+          continue
+        }
+        const dir = mkdtempSync(join(workDir(ctx), "before-"))
+        let result: CompareResult
+        try {
+          const before = join(dir, basename(path))
+          writeFileSync(before, text)
+          result = await verifier.compare({ before, after: path, equivalence, progress }, ctx)
+        } catch (e) {
+          result = { verdict: "error", output: e instanceof Error ? e.message : String(e) }
+        } finally {
+          rmSync(dir, { recursive: true, force: true })
+        }
+        if (result.verdict !== "equivalent") {
+          failing += group.length
+          ctx.out(
+            result.verdict === "different"
+              ? `${model} is not equivalent to the version its properties were verified on, modulo ${equivalence}: their results do not carry over — naima verify ${
+                group.map((c) => c.item.slug).join(" ")
+              }`
+              : `${model} could not be compared with the version its properties were verified on: ${result.output.trim().split("\n").slice(-5).join("\n  ")}`,
+          )
+          if (result.counterexample) ctx.out(`  what tells them apart: ${result.counterexample}`)
+          continue
+        }
+        for (const c of group) {
+          // The property, verifier and model path are the run's: carryBlockers found them unchanged.
+          const record: RunRecord = {
+            verifier: c.run.verifier,
+            model: c.run.model,
+            modelSha256: now,
+            property: c.run.property,
+            optionsSha256: optionsHash(optionsOf(c.item)),
+            inputs: c.inputs,
+            ...(toolVersion !== undefined ? { toolVersion } : {}),
+            inputsSha256: digestOf(c.inputs, toolVersion),
+            verdict: c.run.verdict,
+            output:
+              `carried over from ${ATTACHMENTS}/${c.from}, a run on an earlier version of ${model}: the two versions are equivalent modulo ${equivalence}`,
+            ...(c.run.counterexample !== undefined ? { counterexample: c.run.counterexample } : {}),
+            carried: {
+              from: c.from,
+              modelSha256: sha,
+              equivalence,
+              output: result.output,
+              ...(result.details !== undefined ? { details: result.details } : {}),
+            },
+            at: ctx.now().toISOString(),
+          }
+          keepRun(ctx, c.item, record)
+          ctx.out(
+            `carried     ${
+              label(c.item)
+            }  ${c.item.meta.title}  (${c.run.verdict} on the earlier version, ${ATTACHMENTS}/${c.from}; equivalent modulo ${equivalence})`,
+          )
+        }
+      }
+      progress.overall(wanted.size, wanted.size, "versions")
+    } finally {
+      progress.end()
+    }
+    return failing ? 1 : 0
   },
 }
 
@@ -755,6 +1007,7 @@ export default function verifier(): Plugin {
       "A property that holds is evidence exactly as a passed test is: it can `verify` a bug and close it. A verdict is only as good as what it was reached on, so `naima check` fails when a property claims to hold and its property, verifier, model path, `verifierOptions`, model contents, any file it includes, the set of files it reads, or the tool's version have changed since the run. " +
       "A property that holds and proves a change — it verifies or satisfies a bug, a todo or a feature — is expected to carry a violated run of the same property, with its counterexample, on other inputs (`property-failed-first`), and to be backed by a witness property that holds, linked by `witnesses` (`property-witnessed`); both are notes that name the property, so either can be waived with its reason. " +
       "A `models` item marks a model, by its path in `model`, as in development: while it is, the staleness of its properties is a note rather than a problem and the two change checks ask nothing of them; it leaves development (status `stable`) only when every property verified on it holds on a run of exactly what it has now. " +
+      "A refactoring of a model is proved by equivalence: `naima equivalent <model>` finds, in git, the earlier version each property's last run read, has the verifier compare it with the model as it is now modulo an equivalence (`--modulo`, the adapter's first by default), and, when the two are equivalent, records for each property a run that carries the earlier verdict over to the new version, marked `carried` with the run it came from, the earlier version's sha256 and the comparison's output; a later `naima verify` reuses it. Nothing carries over when the versions differ, when the equivalence does not preserve the property, or when anything besides the model changed — the property, its options, another input, the tool's version. " +
       "The shipped adapter, `example-regex`, is a stand-in that shows the shape of a real one; the opt-in `verifier-mcrl2` and `verifier-voxlogica` plugins contribute the real ones.",
     types: [
       {
@@ -804,7 +1057,7 @@ export default function verifier(): Plugin {
       { name: WITNESSED_BY, inverse: WITNESSES, says: "is backed by the witness property" },
     ],
     checks: [evidence, failedFirst, witnessed, modelDevelopment],
-    commands: [verify, verifiers],
+    commands: [verify, verifiers, equivalent],
     hooks: [reopenOnChange, holdsByVerifyOnly, leavesDevelopmentProved],
   }
 }

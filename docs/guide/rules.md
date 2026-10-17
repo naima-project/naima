@@ -177,6 +177,16 @@ arises holds on any model, so it proves nothing until something shows the
 situation is reachable. **Enforced by** the check `property-witnessed`, as a
 note, waived with its reason when a witness makes no sense.
 
+A refactoring, a change to a model that is meant to change nothing it does,
+is proved instead by comparing the two versions: `naima equivalent` has the
+verifier check that the old and new model are equivalent, and carries every
+earlier result over to the new one, marked as carried
+([a refactoring, proved by equivalence](prove-and-close.md#a-refactoring-proved-by-equivalence)).
+Why: running every property again on a model that behaves exactly as before
+only repeats what is known, and the comparison shows that it does behave the
+same, which the properties alone would not. **Convention**: a refactoring
+that cannot be shown equivalent is verified again like any other change.
+
 A model that changes over several landings can be marked
 [in development](glossary.md#in-development), with an item of type `models`.
 While it is, the results of its properties are only information: a run that

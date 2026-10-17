@@ -21,6 +21,11 @@
 //
 // `cross-check` runs both and gives a verdict only when they agree.
 //
+// Two versions of a model (a refactoring) are compared modulo an equivalence:
+//
+//   mcrl22lps, lps2lts, ltsinfo                          each version's LTS, the new one through the cache
+//   ltscompare --equivalence=<e> --counter-example      true: equivalent; false: different, with a distinguishing formula
+//
 // `pbessolve` printing `true` holds, `false` is violated and the evidence is
 // the counterexample; anything else, or a time limit hit, is unknown. A tool
 // that is not there, or that fails, is an error that says which.
@@ -64,6 +69,18 @@ interface VerifyResult {
   counterexample?: string
   details?: Record<string, unknown>
 }
+interface CompareRequest {
+  before: string
+  after: string
+  equivalence: string
+  progress?: Progress
+}
+interface CompareResult {
+  verdict: "equivalent" | "different" | "error"
+  output: string
+  counterexample?: string
+  details?: Record<string, unknown>
+}
 interface Verifier {
   id: string
   says: string
@@ -71,6 +88,9 @@ interface Verifier {
   verify(request: VerifyRequest, ctx: Context): Promise<VerifyResult>
   inputs(request: VerifyRequest, ctx: Context): string[]
   version(ctx: Context): Promise<string>
+  equivalences: Record<string, string>
+  compare(request: CompareRequest, ctx: Context): Promise<CompareResult>
+  preserves(request: { property: string; options: Record<string, unknown>; equivalence: string }, ctx: Context): string | null
 }
 
 /** The program, started for real: colour off, no shell; its standard error handed to `onStderr` as it comes, so a long step reports while it runs. */
@@ -141,7 +161,7 @@ export function withoutCounting(tool: string, text: string): string {
   return text.split(/\r\n|\r|\n/).filter((f) => c.count(f) === null).join("\n")
 }
 
-const TOOLS = ["mcrl22lps", "lps2pbes", "pbessolve", "lps2lts", "ltsinfo", "ltsconvert", "lts2pbes"] as const
+const TOOLS = ["mcrl22lps", "lps2pbes", "pbessolve", "lps2lts", "ltsinfo", "ltsconvert", "lts2pbes", "ltscompare"] as const
 type Tool = (typeof TOOLS)[number]
 
 const INSTALL =
@@ -153,6 +173,16 @@ export type Route = (typeof ROUTES)[number]
 
 /** The equivalence the LTS route reduces modulo (§2, step 4). */
 export const EQUIVALENCE = "dpbranching-bisim"
+
+/**
+ * The equivalences two versions of a model are compared modulo, the strongest first, each with the properties whose
+ * results it carries over: strong bisimilarity preserves every modal mu-calculus formula; divergence-preserving
+ * branching bisimilarity the fragment the LTS route accepts (formula.ts).
+ */
+export const EQUIVALENCES: Record<string, string> = {
+  bisim: "strong bisimilarity: preserves every modal mu-calculus formula",
+  "dpbranching-bisim": "divergence-preserving branching bisimilarity: preserves the formulas the LTS route accepts, those in the fragment it preserves",
+}
 
 /** The arguments of the steps that make an LTS, beyond its files: part of the cache key. `--threads` changes no LTS, so it is not here. */
 const RECIPE: LtsRecord["recipe"] = { mcrl22lps: [], lps2lts: [] }
@@ -309,18 +339,23 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
     return done({ verdict: "violated", output: s.log.join("\n"), counterexample })
   }
 
-  /** The LTS of the model, from the cache or generated into it (§4). */
+  /**
+   * The LTS of the model, from the cache or generated into it (§4). `earlier`, a copy of an earlier version of the
+   * model kept at `rel`: its LTS is taken from the cache when it is there, and otherwise made in `dir`, outside the
+   * cache, so it never supersedes the LTS of the model as it is now.
+   */
   async function ltsOf(
     model: string,
     ctx: Context,
     s: ReturnType<typeof steps>,
     threads: number,
+    earlier?: { rel: string; dir: string },
   ): Promise<{ stop: VerifyResult } | { dir: string; record: LtsRecord; reused: boolean }> {
     const version = await run(path("mcrl22lps"), ["--version"], workBase(ctx.program))
     if (version.missing) return { stop: { verdict: "error", output: missing("mcrl22lps") } }
     if (version.exit !== 0) return { stop: { verdict: "error", output: `mcrl22lps --version exited ${version.exit}: ${shown(version)}` } }
     const toolVersion = version.stdout.trim().split("\n")[0]!.trim()
-    const rel = relative(ctx.root, model).split(sep).join("/")
+    const rel = earlier?.rel ?? relative(ctx.root, model).split(sep).join("/")
     const inputs = [{ path: rel, sha256: sha256File(model) }]
     const key = cacheKey(inputs, toolVersion, RECIPE)
     const root = cacheRoot(workBase(ctx.program))
@@ -329,8 +364,9 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
       s.log.push(`LTS reused from the cache: ${key} (${found.record.states} states, ${found.record.transitions} transitions)`)
       return { ...found, reused: true }
     }
-    if (existsSync(join(root, key))) discard(join(root, key))
-    const folder = freshFolder(root)
+    if (existsSync(join(root, key)) && !earlier) discard(join(root, key))
+    const folder = earlier ? earlier.dir : freshFolder(root)
+    if (earlier) mkdirSync(folder, { recursive: true })
     try {
       const lps = join(folder, ENTRY_LPS)
       const lts = join(folder, ENTRY_LTS)
@@ -356,11 +392,12 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
         generationSeconds,
         at: new Date().toISOString(),
       }
+      if (earlier) return { dir: folder, record, reused: false }
       const entry = publish(root, folder, record)
       prune(root, key, rel)
       return { ...entry, reused: false }
     } finally {
-      if (existsSync(folder)) discard(folder)
+      if (!earlier && existsSync(folder)) discard(folder)
     }
   }
 
@@ -482,12 +519,68 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
     }
   }
 
+  /** Two versions of a model compared modulo `equivalence`: each one's LTS, then ltscompare, with a distinguishing formula when they differ. */
+  async function compare({ before, after, equivalence, progress = NO_PROGRESS }: CompareRequest, ctx: Context): Promise<CompareResult> {
+    if (!Object.hasOwn(EQUIVALENCES, equivalence)) {
+      return { verdict: "error", output: `the mcrl2 verifier compares modulo ${Object.keys(EQUIVALENCES).join(", ")}, not ${JSON.stringify(equivalence)}` }
+    }
+    const dir = mkdtempSync(join(workBase(ctx.program), "compare-"))
+    let phase = "before"
+    const s = steps(undefined, dir, { ...progress, stage: (n, t, u) => progress.stage(`${phase}: ${n}`, t, u) })
+    const failed = async (r: VerifyResult, details: Record<string, unknown>): Promise<CompareResult> => ({
+      verdict: "error",
+      output: r.output,
+      details: { ...details, tools: await s.tools() },
+    })
+    try {
+      const rel = relative(ctx.root, after).split(sep).join("/")
+      const old = await ltsOf(before, ctx, s, 1, { rel, dir: join(dir, "before") })
+      if ("stop" in old) return await failed(old.stop, { equivalence })
+      phase = "after"
+      const now = await ltsOf(after, ctx, s, 1)
+      if ("stop" in now) return await failed(now.stop, { equivalence })
+      const size = (l: { record: LtsRecord; reused: boolean }) => ({ states: l.record.states, transitions: l.record.transitions, reused: l.reused })
+      const details: Record<string, unknown> = { equivalence, before: size(old), after: size(now) }
+      phase = "compare"
+      const distinguishing = join(dir, "distinguishing.mcf")
+      const compared = await s.step("ltscompare", [
+        `--equivalence=${equivalence}`,
+        "--counter-example",
+        `--counter-example-file=${distinguishing}`,
+        join(old.dir, ENTRY_LTS),
+        join(now.dir, ENTRY_LTS),
+      ])
+      if ("stop" in compared) return await failed(compared.stop, details)
+      const answer = answerOf(compared.out)
+      const done = { ...details, tools: await s.tools() }
+      if (answer === "true") return { verdict: "equivalent", output: s.log.join("\n"), details: done }
+      if (answer !== "false") return { verdict: "error", output: `${s.log.join("\n")}\nltscompare answered neither true nor false`, details: done }
+      const counterexample = existsSync(distinguishing) ? readFileSync(distinguishing, "utf8").trim() : "ltscompare wrote no distinguishing formula"
+      return { verdict: "different", output: s.log.join("\n"), counterexample, details: done }
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+
+  /** Why a result of `property` does not carry over modulo `equivalence`; null when it does. */
+  function preserves({ property, equivalence }: { property: string; equivalence: string }, ctx: Context): string | null {
+    if (!Object.hasOwn(EQUIVALENCES, equivalence)) return `the mcrl2 verifier compares modulo ${Object.keys(EQUIVALENCES).join(", ")}`
+    if (equivalence === "bisim") return null
+    const file = formulaFile(property, ctx.root)
+    if (file && !existsSync(file)) return `the formula file ${property.trim()} does not exist`
+    const fragment = checkFragment(file ? readFileSync(file, "utf8") : property)
+    return fragment.ok ? null : fragment.reason
+  }
+
   return {
     id: "mcrl2",
     says:
       "an mCRL2 specification against a modal mu-calculus formula, inline or an .mcf file: by the standard route (mcrl22lps, lps2pbes, pbessolve), by the LTS route (the state space once per model, hidden and reduced per formula, lts2pbes, pbessolve) for a formula the reduction preserves, or both, cross-checked; the evidence is the counterexample",
     runs: TOOLS.map(path),
     verify: (request, ctx) => check(request, ctx),
+    equivalences: EQUIVALENCES,
+    compare,
+    preserves,
     inputs: ({ model, property }, ctx) => {
       const f = formulaFile(property, ctx.root)
       return f ? [model, f] : [model]
@@ -516,7 +609,8 @@ export function mcrl2Plugin(options: Record<string, unknown> = {}, run: Runner =
       "A property chooses its route in `verifierOptions.route`. `lps`, the default, is the standard route: `mcrl22lps`, `lps2pbes --counter-example`, and `pbessolve` with an evidence file: `true` holds; `false` is violated, and the evidence, printed by `lps2lts` as an `.aut` labelled transition system, is the counterexample; any other answer, or `verifierOptions.timeoutSeconds` reached by a step, is unknown. " +
       "`lts`, the LTS route, is for a model whose state space is small but whose data makes the standard route slow. The formula is first checked to be in the fragment that divergence-preserving branching bisimilarity preserves — every visible step right after a star over an action formula that includes tau, no single step that includes tau, fixpoints only as the four inevitability patterns — and refused otherwise, as an error run whose output begins `LTS route refused:`. Then `mcrl22lps` and `lps2lts` (with `--threads` from `verifierOptions.threads`) make the LTS once per model version, kept in the run work folder under a key over the model's contents, the toolset's version and the recipe, and shared by every property of that model; per formula, `ltsconvert` hides every action the formula does not mention and reduces modulo `dpbranching-bisim`; on the reduced LTS, `lts2pbes --counter-example` and one `pbessolve` with an evidence file decide; on false, the evidence, printed by `ltsconvert` as an `.aut` labelled transition system, is the counterexample, over the reduced LTS, where the hidden actions appear as tau. " +
       "`cross-check` runs both routes and gives a verdict only when they agree; a disagreement is an error whose output begins `the routes disagree:`. Each run records in its `details` the route, the version of every tool it started, and for the LTS route the LTS's key, reuse and size, the mentioned and hidden actions, the reduced size, and on false that the counterexample comes from the reduced LTS. " +
-      "The tools are taken from `bin` when it is given, otherwise from the mCRL2 202607.0 that `naima tools install mcrl2` installed on this machine, otherwise from PATH; the plugin declares that tool, so `naima tools` reports it. A tool that is not there is an error run whose output begins `tool missing:`; a tool that fails is an error with its output. The version recorded is the first line of `mcrl22lps --version`.",
+      "The tools are taken from `bin` when it is given, otherwise from the mCRL2 202607.0 that `naima tools install mcrl2` installed on this machine, otherwise from PATH; the plugin declares that tool, so `naima tools` reports it. A tool that is not there is an error run whose output begins `tool missing:`; a tool that fails is an error with its output. The version recorded is the first line of `mcrl22lps --version`. " +
+      "For `naima equivalent`, it compares two versions of a model modulo `bisim` (strong bisimilarity, the default, which preserves every formula) or `dpbranching-bisim` (divergence-preserving branching bisimilarity, which preserves the formulas the LTS route accepts): `mcrl22lps`, `lps2lts` and `ltsinfo` for each version, the new one through the LTS cache, then `ltscompare --counter-example`; on false, the distinguishing formula it writes is what tells them apart.",
     options: [
       {
         name: "bin",

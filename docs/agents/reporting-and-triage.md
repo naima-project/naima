@@ -299,7 +299,11 @@ When the item changes a model, the agent runs the property that proves it
 on the model before the change, where it must be violated, and again after,
 where it must hold, and links a witness property that shows the new
 behaviour is reachable. `naima verify` reuses a run it already has on the
-same inputs, so going back to an earlier model costs nothing. A finding
+same inputs, so going back to an earlier model costs nothing. When the
+change is a refactoring, meant to change nothing the model does, the agent
+runs `naima equivalent <model>` instead: if the verifier finds the two
+versions equivalent, every earlier result carries over, and only what it
+names is verified again. A finding
 that can't be met is waived with its reason, never left to be read past
 ([the rule](../guide/rules.md#a-change-to-a-model-is-proved-not-just-checked),
 [the steps](../guide/prove-and-close.md#proving-a-change-to-a-model)).
