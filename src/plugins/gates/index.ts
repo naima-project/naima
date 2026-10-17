@@ -74,6 +74,8 @@ export interface GateResult {
   owed: Item[]
   /** What stops it that is no item, in words: a number past its bound. */
   reasons?: string[]
+  /** The recorded evidence it stands on, in words: a record, a suite's run. */
+  backedBy?: string[]
 }
 
 /** A named release or merge condition, backed by items: what any plugin contributes to the `gates` point. */
@@ -241,6 +243,7 @@ function printGate(ctx: Context, gate: GateDef, r: GateResult, hands = false): v
   )
   const who = (i: Item) => (hands ? `  (${runByOf(ctx, i) || "unclassified"})` : "")
   for (const why of r.reasons ?? []) ctx.out(`  ✗ ${why}`)
+  for (const by of r.backedBy ?? []) ctx.out(`  ✓ backed by ${by}`)
   for (const i of r.blocking) ctx.out(`  ✗ ${label(i)}  ${i.meta.title}${who(i)}`)
   for (const i of r.owed) ctx.out(`  · ${label(i)}  ${i.meta.title}${who(i)}`)
 }
@@ -261,6 +264,8 @@ interface GateRow {
   when: string
   holds: boolean
   reasons: string[]
+  /** The recorded evidence it stands on. */
+  backedBy: string[]
   blocking: GateItemRow[]
   owed: GateItemRow[]
 }
@@ -282,6 +287,7 @@ async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: Gate
         when: timing(ctx, def),
         holds: result.holds,
         reasons: result.reasons ?? [],
+        backedBy: result.backedBy ?? [],
         blocking: result.blocking.map(item),
         owed: result.owed.map(item),
       },
@@ -333,6 +339,7 @@ const gatesUiView = {
           g.owed.length ? `, ${g.owed.length} owed` : ""
         }${g.when ? ` · ${esc(g.when)}` : ""}</p>`,
         ...(g.reasons.length ? [`<ul>${g.reasons.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>`] : []),
+        ...(g.backedBy.length ? [`<p>Backed by:</p><ul>${g.backedBy.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>`] : []),
         items("blocking", g.blocking),
         items("owing only proof", g.owed),
       ].join("\n")

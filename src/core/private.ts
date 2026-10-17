@@ -209,6 +209,16 @@ export function findPrivate(text: string, ctx: PrivateContext): PrivateFinding[]
   return spans.sort((a, b) => a.start - b.start).map((s) => ({ kind: s.kind, line: lineOf(s.start), text: s.text }))
 }
 
+/**
+ * `text` with every private thing `findPrivate` finds replaced by its placeholder — `<path>`, `<host>`, `<ip>`,
+ * `<user>` — for evidence a tool printed, which is kept exactly but for these.
+ */
+export function redactPrivate(text: string, ctx: PrivateContext): string {
+  let out = text
+  for (const f of findPrivate(text, ctx).sort((a, b) => b.text.length - a.text.length)) out = out.split(f.text).join(KINDS[f.kind].placeholder)
+  return out
+}
+
 /** The findings of `after` that `before` does not already hold: what a write adds, so an old mention does not block every later write. */
 export function addedPrivate(before: string, after: string, ctx: PrivateContext): PrivateFinding[] {
   const had = new Map<string, number>()
