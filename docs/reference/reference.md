@@ -53,7 +53,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`unlink`](#naima-unlink) | core | remove a stored link | only a stored link is removed: an inverse is derived, never stored |
 | [`move`](#naima-move) | core | move an item to another type, keeping its id and links; refuses a status or field the new type does not declare | the id and links are kept; a status or field the new type does not declare is refused unless --force |
 | [`check`](#naima-check) | core | run every invariant; exit 1 on any problem | every invariant the loaded plugins declare (their checks): exit 1 on any problem; with --staged, the ones the pre-commit hook runs |
-| [`waive`](#naima-waive) | core | exempt one check's finding on one subject, with the reason, as a recorded waiver: the finding no longer fails `naima check`, which lists the waiver as a note instead | a waiver names a loaded check, a subject that check reports a finding on now, a reason and who waived it; it is one new file under waivers/, and one waiver per check and subject |
+| [`waive`](#naima-waive) | core | exempt one check's finding on one subject, a problem or a note, with the reason, as a recorded waiver: `naima check` no longer reports the finding, so a problem no longer fails it, and lists the waiver as a note instead | a waiver names a loaded check, a subject that check reports a finding on now, a reason and who waived it; it is one new file under waivers/, and one waiver per check and subject |
 | [`board`](#naima-board) | core | print a type's board, grouped by section, most urgent first; at its foot, the summary sections that stand beside the work, such as the metrics | nothing: it prints derived state, never stored |
 | [`view`](#naima-view) | core | print a plugin view — as text, its data as JSON, or markdown; without a name, list them | nothing: it prints derived state, never stored |
 | [`summary`](#naima-summary) | core | where the project stands, in one screen: every plugin's section | nothing: it prints derived state, never stored |
@@ -484,7 +484,7 @@ naima check --all-worktrees
 
 ### naima waive
 
-Exempt one check's finding on one subject, with the reason, as a recorded waiver: the finding no longer fails `naima check`, which lists the waiver as a note instead.
+Exempt one check's finding on one subject, a problem or a note, with the reason, as a recorded waiver: `naima check` no longer reports the finding, so a problem no longer fails it, and lists the waiver as a note instead.
 
 **Enforces**: A waiver names a loaded check, a subject that check reports a finding on now, a reason and who waived it; it is one new file under waivers/, and one waiver per check and subject.
 
@@ -1903,6 +1903,7 @@ Properties: a property of the software, proven or refuted by a verifier. Items l
 | Check | What it holds |
 |---|---|
 | `property-evidence` | a property names a known verifier and an existing model; one that holds carries a run of its current property, verifier, model and options, on every file it reads as it is now and the tool's version as it is now |
+| `property-failed-first` | a property that holds and proves a change — it verifies or satisfies a bug, a todo or a feature — also carries a violated run of the same property, with its counterexample, on other inputs than those it holds on: the model before the change. A note, naming the property as its subject, so it can be waived with a reason |
 
 **Write hooks**, run on every item write
 

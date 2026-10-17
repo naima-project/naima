@@ -24,8 +24,10 @@ import {
   type Finding,
   findPrivate,
   guardPrivate,
+  hasTrait,
   type Item,
   label,
+  linked,
   NO_PROGRESS,
   parse,
   type Plugin,
@@ -499,6 +501,47 @@ async function toolStaleness(ctx: Context, item: Item, run: RunRecord, findings:
   return out
 }
 
+/** The trait of a type whose items are changes to the work: a bug, a todo, a feature, an archived one (the trackers plugin's). */
+const CHANGE = "fixable"
+
+/** The changes `item` proves: what it verifies or satisfies that is a change. */
+const changesProved = (ctx: Context, item: Item): Item[] =>
+  [...new Set([...linked(ctx, item, "verifies"), ...linked(ctx, item, "satisfies")])].filter((c) => hasTrait(ctx, c, CHANGE))
+
+/** What a run's verdict speaks for, in one value: the digest over every input and the tool's version, or the model's alone in a run recorded before it. */
+const readOn = (run: RunRecord): string => run.inputsSha256 ?? run.modelSha256
+
+const failedFirst: Check = {
+  name: "property-failed-first",
+  says:
+    "a property that holds and proves a change — it verifies or satisfies a bug, a todo or a feature — also carries a violated run of the same property, with its counterexample, on other inputs than those it holds on: the model before the change. A note, naming the property as its subject, so it can be waived with a reason",
+  run(ctx) {
+    const out: Finding[] = []
+    for (const item of properties(ctx)) {
+      if (item.meta.status !== "holds") continue
+      const changes = changesProved(ctx, item)
+      const now = readRun(item)
+      if (!changes.length || now?.verdict !== "holds") continue
+      const red = runsOf(item).filter((k) =>
+        k.run.verdict === "violated" && k.run.verifier === now.verifier && k.run.property === now.property && readOn(k.run) !== readOn(now)
+      )
+      if (red.some((k) => (k.run.counterexample ?? "").trim())) continue
+      const subject = label(item)
+      const what = red.length
+        ? `its violated run on the model before the change (${red.map((k) => k.name).join(", ")}) kept no counterexample`
+        : "no violated run of it on the model before the change is recorded"
+      out.push({
+        level: "note",
+        item,
+        subject,
+        message: `${subject} holds and proves ${changes.map(label).join(", ")}, and ${what} — run naima verify on that model and keep its counterexample, ` +
+          `or waive it with the reason: naima waive property-failed-first ${subject} --reason "<why>"`,
+      })
+    }
+    return out
+  },
+}
+
 /** What a run was reached on: change any of them and the run no longer speaks for the property. */
 const RUN_INPUTS = ["property", "model", "verifier", VERIFIER_OPTIONS.name] as const
 
@@ -575,7 +618,7 @@ export default function verifier(): Plugin {
     contributes: { verifiers: [exampleRegex], gates: [allHold] },
     // Its gate is there when a gates plugin is: without one, nothing lists gates.
     optional: ["gates"],
-    checks: [evidence],
+    checks: [evidence, failedFirst],
     commands: [verify, verifiers],
     hooks: [reopenOnChange, holdsByVerifyOnly],
   }

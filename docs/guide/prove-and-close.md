@@ -309,3 +309,37 @@ a run that takes longer than that and records it as `error` (undecided). If
 the tool isn't installed, the run is recorded as an error whose output begins
 with `tool missing:` and explains how to install it, and the property is
 never reported as holding.
+
+## Proving a change to a model
+
+When a model changes because of an item, such as a bug in a protocol or a
+feature that adds a buffer pool, the property linked to that item has to show
+that the change made a difference. A property that holds both before and
+after the change says nothing about it, because it may hold for a reason
+that has nothing to do with the change. So the property is run twice: on the
+model before the change, where it should be violated, and on the changed
+model, where it should hold. It's the same red-then-green order a regression
+test follows.
+
+```sh
+naima new properties "a pooled unit can be reused"
+naima set <property> verifier=mcrl2 model=models/pool.mcrl2 property=models/reuse.mcf
+naima link <property> verifies <bug>
+naima verify <property>     # on the model before the change: violated
+# the model is changed
+naima verify <property>     # on the changed model: holds
+```
+
+Both runs stay in the property's `attachments/`, and the violated one keeps
+its counterexample, which is the evidence that the property could fail.
+`naima check` notes a property that holds and verifies or satisfies a bug, a
+todo or a feature when none of its runs is a violated run of the same
+property, with a counterexample, on other inputs than the ones it holds on
+(`property-failed-first`). Sometimes there's no earlier model to run it on,
+for instance when the model was written with the change already in it. In
+that case the agent waives the note with the reason, and the waiver stays
+visible in every `naima check`.
+
+```sh
+naima waive property-failed-first properties/<slug> --reason "the model was written with the pool in it"
+```

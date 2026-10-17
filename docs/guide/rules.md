@@ -71,15 +71,16 @@ goes out of sight. When the subject is gone, or no longer fails the check,
 the waiver is noted as waiving nothing, and you can remove it.
 
 Only a check that names the subject of its findings can be waived. Today
-that is `session-note-ack`.
+those are `session-note-ack` and the checks of
+[a change to a model is proved, not just checked](#a-change-to-a-model-is-proved-not-just-checked).
 
 Why: a check that can't be satisfied without falsifying the record leaves two
 bad choices, editing the record or living with a red `naima check` that
 everyone learns to ignore. A waiver is the third choice, and since it carries
 its reason and stays visible, it can be questioned later.
 **Enforced by** the command `naima waive`, which refuses a waiver without a
-reason, for a check that isn't loaded, for a subject the check reports no
-problem on, or for a finding that is already waived.
+reason, for a check that isn't loaded, for a subject the check reports
+nothing on, or for a finding that is already waived.
 
 ### Write it down before fixing it
 
@@ -150,6 +151,24 @@ something when it sits beside the value it is compared with.
 A test that verifies a bug was run on the code before the fix and failed,
 then on the fix and passed. `redSeen` records the day it failed.
 **Enforced by** the check `regression-test-saw-red`, as a note.
+
+### A change to a model is proved, not just checked
+
+When a model changes because of an item (a bug, a todo or a feature), the
+property linked to that item shows that the change made a difference. It is
+run on the model before the change, where it is violated and its
+counterexample is kept, and on the changed model, where it holds. Naima keeps
+every run of a property, so both runs stay with it
+([proving a change to a model](prove-and-close.md#proving-a-change-to-a-model)).
+
+Why: a property can hold for reasons that have nothing to do with the change,
+for instance because the situation it describes never arises. Seeing it
+violated on the old model shows that it can fail at all, which is the same
+reason a regression test is seen red before it is green.
+**Enforced by** the check `property-failed-first`, as a note. It names the
+property as its subject, so when there is no earlier model to run it on, the
+finding is waived with the reason
+([a finding is fixed, or waived](#a-finding-is-fixed-or-waived-with-its-reason)).
 
 ### A page does not outlive its answer
 
