@@ -17,6 +17,10 @@
 //
 // Data only: four types, their fields and relations, checks that read them,
 // two views and two commands. No type derives from another.
+//
+// It ships two rules: requirements are elicited at every prompt of the owner,
+// each with how it is checked or measured; behaviour with states or
+// concurrency is designed from a model first, kept in step with the code.
 
 import {
   bool,
@@ -576,6 +580,35 @@ const SITTING_RUN: FieldDef = {
   appliesTo: ["sessions"],
 }
 
+// ── rules ─────────────────────────────────────────────────────────────────────
+
+/** The rule that requirements come from every conversation, not only from the start of the work. */
+export const ELICITATION_RULE = {
+  name: "requirements-elicited-at-every-prompt",
+  title: "Requirements are elicited at every prompt, each with how it is checked or measured",
+  audience: "agents",
+  strength: "must",
+  text:
+    'At every prompt of the owner, an agent checks whether what was said adds a requirement or changes one, and when it does, files it at once as part of the report flow: a new one with `naima new requirements "<what must hold>"`, a changed one by revising its page, and a change to exactly how something behaves as the next version of its specification (`naima spec revise`). A vague wish is restated as something a test can decide, and the agent settles how it will be checked or measured: a test, a property of a model, or, for anything measurable (a time, a size, a count, a rate), a metric with a budget. The agent proposes the check and asks the owner only for what is theirs to give, such as the number a budget holds to; the answer goes on the page of the requirement, and the test or property that checks it (for a metric, a test whose gesture is `naima metrics run <metric>` within its budget) is linked `verifies` once it exists. A requirement on behaviour with states or concurrency is proposed as a model with its properties.',
+  why:
+    "the owner keeps stating needs in passing, long after the work has started; a requirement heard in chat and never filed is lost, and one filed with no way to check it can never be met, so it is argued over instead of measured.",
+  ack: "Elicitation mode on",
+  enforcedBy: "requirements-proven",
+}
+
+/** The rule that behaviour with states or concurrency starts from a model. */
+export const MODEL_FIRST_RULE = {
+  name: "behaviour-designed-from-a-model",
+  title: "Behaviour with states or concurrency is designed from a model first, kept in step with the code",
+  audience: "everyone",
+  strength: "should",
+  text:
+    'Before implementing behaviour that has states or concurrency (a lifecycle, a protocol, a scheduler, a retry loop, two processes sharing data), whoever designs it writes a model of it: a state machine, as data or drawn; an mCRL2 specification; or a state machine encoded in mCRL2, for which the guide gives a template. Another form a tool can check is welcome too. Each property the behaviour must have is an item, a `properties` item checked by `naima verify` where a verifier exists, and the model changes in the same change as the code it describes. A trivial change needs no model; skipping it on non-trivial behaviour needs its reason, written on the item as a note (`naima note <item> "No model: <reason>"`).',
+  why:
+    "behaviour with states fails in the orders of events nobody thought to test, and a model checker explores every order; a model written after the code only describes the code, defects included, while one written first is what the code is checked against.",
+  ack: "Model first mode on",
+}
+
 // ── hooks ─────────────────────────────────────────────────────────────────────
 
 const stamp: WriteHook = {
@@ -606,7 +639,8 @@ export default function planning(): Plugin {
       "A **decision** is a choice or a standing permission of the owner's, dated and restated in the owner's words: it `settles` the items that waited on it and `supersedes` the decision it replaces. " +
       "Before asking the owner anything, an agent runs `naima decisions <words>`; after the owner answers, it records the answer with `naima new decisions`, so a settled question is never asked again. " +
       'A **release** opens at its first stage (`naima new releases "<name>"`); each stage\'s output is recorded with `naima note`, headed `Stage: <name>` (or `Stage: <name> — skipped, decided by <who>`), and the hook refuses `status=released` while a stage is unrecorded — `naima view releases` shows what each one still owes. ' +
-      "A **session** is a dated, append-only record of one test sitting, linked `records` to the test or tests it was for; several share a `run` name when they were sat together. It is optional — most of the time the test's own page and status say enough — and is never edited once written: a later sitting is a new session.",
+      "A **session** is a dated, append-only record of one test sitting, linked `records` to the test or tests it was for; several share a `run` name when they were sat together. It is optional — most of the time the test's own page and status say enough — and is never edited once written: a later sitting is a new session. " +
+      'The plugin ships two rules, listed by `naima rules` when the rules plugin is loaded: requirements are elicited at every prompt of the owner, each with how it is checked or measured (a test, a property, or a metric with a budget), acknowledged as "Elicitation mode on" and held in part by `requirements-proven`, which notes a requirement nothing proves; and behaviour with states or concurrency is designed from a model first (a state machine, mCRL2, or a state machine encoded in mCRL2), its properties as items, kept in step with the code, acknowledged as "Model first mode on".',
     types: [requirementsType, specsType, decisionsType, releasesType, sessionsType],
     fields: [SPEC, VERSION, DECIDED_ON, STANDING, SITTING_RUN],
     relations: [
@@ -627,5 +661,8 @@ export default function planning(): Plugin {
     views: [requirementsView, releasesView],
     checks: [requirementsCheck, specsCheck, decisionsCheck, releasesCheck],
     hooks: [stamp, releasesHook],
+    contributes: { rules: [ELICITATION_RULE, MODEL_FIRST_RULE] },
+    // The rules are listed by naima rules when the rules plugin is loaded; without it, planning works the same.
+    optional: ["rules"],
   }
 }

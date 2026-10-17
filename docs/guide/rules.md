@@ -342,6 +342,96 @@ working links as broken, because it couldn't see anchors declared in HTML.
 People switch off or ignore a check that raises false alarms, and then the
 real defects it exists to find go unseen as well.
 
+### Agents keep the diary
+
+An agent adds an entry to the [diary](glossary.md#diary) on its own, without
+being asked, when something happens that the owner will later want to read
+about. The first case is a decision taken with the
+[owner](glossary.md#owner) in conversation, written in a sentence or two
+that says what was decided, why, and which item it concerns. The second is a
+change in the direction of the work, such as a plan dropped or a strategy
+chosen. The third is something notable that happens outside the tracker,
+such as an incident, a repository made private or a request from outside the
+project.
+
+```sh
+naima event 2026-10-17 "The owner chose to ship the export before the importer, because the testers need it first (features/csv-export)" --kind diary
+```
+
+Routine work gets no entry, because landings, items filed, fixes and test
+runs are already in the tracker. Neither does anything that a session note,
+a decision item or the timeline already records, since `naima diary` shows
+those by itself. A day holds a few entries at most, and the related turns of
+one conversation make a single entry, written once that exchange has
+settled.
+
+Why: the diary is where the owner reads why the project went where it did.
+A decision taken in chat and never written down has to be reconstructed
+later, and a diary that logs every landing buries the few turns that matter.
+
+This rule ships with Naima, is active for agents in every project, and is
+acknowledged as "Diary mode on". **Enforced by** the check `diary-entries`,
+as a note, on a day with more diary entries than the coordination plugin's
+`diaryPerDay` option allows (5 by default), and on an entry that only
+restates a session note of its day or a decision taken that day. Choosing
+what deserves an entry is **convention**
+([keep a diary](plan-with-epics-milestones-and-gates.md#keep-a-diary)).
+
+### Requirements are elicited at every prompt
+
+Requirements aren't written once at the start of the work. Whenever the
+owner says something, the agent checks whether it adds a
+[requirement](glossary.md#requirement) or changes one. A new one is filed
+straight away, a changed one is revised on its page, and a change to exactly
+how something behaves becomes the next version of its
+[specification](glossary.md#specification). A vague wish is restated as
+something a test can decide, and the agent works out how it will be checked:
+by a test, by a [property](glossary.md#property) of a model, or, for
+anything that can be measured, by a [metric](glossary.md#metric) with a
+budget. The agent proposes the check and asks the owner only for what is
+theirs to give, such as the number a budget holds to.
+
+Why: the owner keeps stating needs in passing, long after the work has
+started. A requirement heard in chat and never filed is lost, and one filed
+with no way to check it can never be met, so people argue about it instead
+of measuring it.
+
+This rule ships with Naima, is active for agents in every project, and is
+acknowledged as "Elicitation mode on". **Enforced by** the check
+`requirements-proven`, as a note, on a requirement that nothing delivers or
+proves. The rest is **convention**
+([requirements come from every conversation](plan-with-requirements-specs-and-decisions.md#requirements-come-from-every-conversation),
+[reporting and triage](../agents/reporting-and-triage.md#elicit-the-requirements-it-carries)).
+
+### Behaviour with states is designed from a model first
+
+Before anyone implements behaviour that has states or concurrency, such as a
+lifecycle, a protocol, a scheduler, a retry loop or two processes sharing
+data, they write a [model](glossary.md#model) of it. The model can be a
+state machine, kept as data or drawn, an mCRL2 specification, or a state
+machine encoded in mCRL2, and any other form that a tool can check is
+welcome too. Each property the behaviour must have becomes a property item,
+checked by `naima verify` where a [verifier](glossary.md#verifier) exists,
+and the model changes in the same change as the code it describes. A trivial
+change needs no model. Skipping the model for behaviour that isn't trivial
+needs a reason, written on the item as a note.
+
+```sh
+naima note features/job-retries "No model: <the reason>"
+```
+
+Why: behaviour with states fails in orders of events that nobody thought to
+test, and a model checker explores every order. A model written after the
+code only describes the code, defects included, while one written first is
+what the code is checked against.
+
+This rule ships with Naima, applies to everyone in every project as a
+*should*, and is acknowledged as "Model first mode on". **Convention**:
+nothing checks that a model exists, and a property item, once there, is
+held current by the check `property-evidence`
+([design with a model](design-with-a-model.md), with a template of a state
+machine in mCRL2).
+
 ## Branches and worktrees
 
 ### One worktree per piece of work

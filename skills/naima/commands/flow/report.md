@@ -22,7 +22,13 @@ it owns the routing table.
    ([the rule](../../../../docs/guide/rules.md#no-machine-names-or-private-infrastructure-in-a-repository)).
 3. **Triage it now**: `naima triage set <item> impact=… priority=… confidence=…`.
    `effort` only if you have looked at the code.
-4. **Link, don't repeat**: `naima link <a> <relation> <b>`.
-5. `naima check`.
+4. **Elicit the requirement it carries**: does it add or change one? File it
+   (`naima new requirements … --dedupe`), revise it, or `naima spec revise`;
+   restate it so a test can decide it; settle how it is checked (a test, a
+   property of a model, or a metric with a budget), asking the owner only
+   for the number
+   ([elicit](../../../../docs/agents/reporting-and-triage.md#elicit-the-requirements-it-carries)).
+5. **Link, don't repeat**: `naima link <a> <relation> <b>`.
+6. `naima check`.
 
 "I already told you" means it was lost: write it now and say it was missing.
