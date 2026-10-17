@@ -11,7 +11,7 @@
 // version has changed since its run.
 
 import { createHash } from "node:crypto"
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { isAbsolute, join, relative, resolve, sep } from "node:path"
 import {
   ATTACHMENTS,
@@ -22,15 +22,19 @@ import {
   CONTRACT,
   fieldValue,
   type Finding,
+  findPrivate,
+  guardPrivate,
   type Item,
   label,
   NO_PROGRESS,
   parse,
   type Plugin,
+  privateContext,
   type Progress,
   progressFor,
   saveMeta,
   setFieldValue,
+  str,
   usageError,
   writeFileAtomic,
   type WriteHook,
@@ -76,6 +80,8 @@ export interface RunRecord {
   counterexample?: string
   /** How the adapter reached the verdict, as it said: a JSON object; absent when it said nothing. */
   details?: Record<string, unknown>
+  /** Why the run was made although a run of the same identity was recorded (`naima verify --force "<reason>"`); absent otherwise. */
+  forced?: string
   at: string
 }
 
@@ -155,7 +161,7 @@ function asRun(value: unknown): RunRecord | string {
   const missing = ["verifier", "model", "modelSha256", "property", "output", "at"].filter((k) => typeof r[k] !== "string")
   if (missing.length) return `${missing.join(", ")} missing or not text`
   if (!VERDICTS.includes(r["verdict"] as Verdict)) return `verdict ${JSON.stringify(r["verdict"])} is not one of ${VERDICTS.join(", ")}`
-  for (const k of ["optionsSha256", "counterexample", "toolVersion", "inputsSha256"]) {
+  for (const k of ["optionsSha256", "counterexample", "toolVersion", "inputsSha256", "forced"]) {
     if (r[k] !== undefined && typeof r[k] !== "string") return `${k} is not text`
   }
   if (r["details"] !== undefined && !isObject(r["details"])) return "details is not a JSON object"
@@ -195,6 +201,66 @@ export function readRun(item: Item): RunRecord | null {
   return r && "run" in r ? r.run : null
 }
 
+/** One run kept in a property's attachments/: the file's name, and the record it holds. */
+export interface KeptRun {
+  name: string
+  run: RunRecord
+}
+
+const RUN_FILE = /^run-.+\.json$/
+
+/** The order of runs made in the same instant: `run-<stamp>.json` first, then `run-<stamp>-2.json`, and so on. */
+const sequence = (name: string): number => Number(/Z-(\d+)\.json$/.exec(name)?.[1] ?? 1)
+
+/** Every run recorded on the item that can be trusted, oldest first; a malformed record is left out, as `property-evidence` reports the one that matters. */
+export function runsOf(item: Item): KeptRun[] {
+  const dir = join(item.dir, ATTACHMENTS)
+  if (!existsSync(dir)) return []
+  const out: KeptRun[] = []
+  for (const name of readdirSync(dir)) {
+    if (!RUN_FILE.test(name)) continue
+    try {
+      const run = asRun(JSON.parse(readFileSync(join(dir, name), "utf8")))
+      if (typeof run !== "string") out.push({ name, run })
+    } catch {
+      // not a record: nothing to reuse or to count as evidence
+    }
+  }
+  return out.sort((a, b) => a.run.at.localeCompare(b.run.at) || sequence(a.name) - sequence(b.name))
+}
+
+/** A stamp no run of the item has yet: the instant, then `-2`, `-3`… for runs made in the same one, so a run never overwrites another. */
+function freshStamp(dir: string, stamp: string): string {
+  let out = stamp
+  for (let n = 2; existsSync(join(dir, `run-${out}.json`)) || existsSync(join(dir, `counterexample-${out}.txt`)); n++) out = `${stamp}-${n}`
+  return out
+}
+
+/** A verdict about the model: what a run of the same identity would say again. An error or an unknown says something about the run, so it is never reused. */
+const conclusive = (v: Verdict): boolean => v === "holds" || v === "violated"
+
+/** What identifies a run: the property, the verifier, the model path, the options, and one digest over every input and the tool's version. */
+interface Identity {
+  verifier: string
+  model: string
+  property: string
+  optionsSha256: string
+  inputsSha256: string
+}
+
+/** Whether `run` was made on exactly `identity`, its digest consistent with the inputs it lists. */
+const madeOn = (run: RunRecord, identity: Identity): boolean =>
+  run.verifier === identity.verifier && run.model === identity.model && run.property === identity.property &&
+  (run.optionsSha256 ?? optionsHash({})) === identity.optionsSha256 && run.inputsSha256 === identity.inputsSha256 &&
+  run.inputs !== undefined && digestOf(run.inputs, run.toolVersion) === run.inputsSha256
+
+/** What `verifyItem` did: the verdict, and the recorded run it reused instead of running, when it did. */
+export interface VerifyOutcome {
+  verdict: Verdict
+  /** The file in the item's attachments/ whose verdict was reused; absent when the verifier ran. */
+  reused?: string
+}
+
 /** The model's absolute path, when `model` names a file inside the project; null for one that escapes it. */
 export function modelPath(root: string, model: string): string | null {
   if (isAbsolute(model)) return null
@@ -203,8 +269,12 @@ export function modelPath(root: string, model: string): string | null {
   return rel === "" || rel.startsWith("..") || isAbsolute(rel) ? null : abs
 }
 
-/** Run one property's verifier and attach the result. Returns the verdict. */
-export async function verifyItem(ctx: Context, item: Item, progress: Progress = NO_PROGRESS): Promise<Verdict> {
+/**
+ * Run one property's verifier and attach the result. A conclusive run already recorded on the same identity —
+ * inputs, tool version, options — is reused instead: the property takes its verdict and points to it. `force`, a
+ * reason, runs it again and records the reason with the run.
+ */
+export async function verifyItem(ctx: Context, item: Item, progress: Progress = NO_PROGRESS, opts: { force?: string } = {}): Promise<VerifyOutcome> {
   const { verifier: id, model, property } = item.meta
   if (typeof id !== "string" || typeof model !== "string" || typeof property !== "string") {
     throw new Error(`${label(item)}: set verifier, model and property first`)
@@ -233,6 +303,19 @@ export async function verifyItem(ctx: Context, item: Item, progress: Progress = 
   } catch (e) {
     unversioned = e instanceof Error ? e.message : String(e)
   }
+  const identity: Identity = { verifier: id, model, property, optionsSha256: optionsHash(options), inputsSha256: digestOf(inputs, toolVersion) }
+  if (opts.force === undefined && unversioned === undefined) {
+    const known = runsOf(item).filter((k) => conclusive(k.run.verdict) && madeOn(k.run, identity)).pop()
+    if (known) {
+      const status = STATUS[known.run.verdict]
+      if (item.meta.status !== status || fieldValue(item, LAST_RUN) !== known.name) {
+        item.meta.status = status
+        setFieldValue(item, LAST_RUN, known.name)
+        saveMeta(ctx, item)
+      }
+      return { verdict: known.run.verdict, reused: known.name }
+    }
+  }
   const hash = sha256(path)
   let result: VerifyResult
   try {
@@ -241,21 +324,22 @@ export async function verifyItem(ctx: Context, item: Item, progress: Progress = 
     result = { verdict: "error", output: e instanceof Error ? e.message : String(e) }
   }
   const at = ctx.now().toISOString()
-  const stamp = at.replace(/[:.]/g, "-")
+  const stamp = freshStamp(join(item.dir, ATTACHMENTS), at.replace(/[:.]/g, "-"))
   const record: RunRecord = {
     verifier: id,
     model,
     modelSha256: hash,
     property,
-    optionsSha256: optionsHash(options),
+    optionsSha256: identity.optionsSha256,
     inputs,
     ...(toolVersion !== undefined ? { toolVersion } : {}),
-    inputsSha256: digestOf(inputs, toolVersion),
+    inputsSha256: identity.inputsSha256,
     verdict: result.verdict,
     output: result.output,
     at,
     ...(result.counterexample !== undefined ? { counterexample: result.counterexample } : {}),
     ...(result.details !== undefined ? { details: result.details } : {}),
+    ...(opts.force !== undefined ? { forced: opts.force } : {}),
   }
   const name = `run-${stamp}.json`
   writeJson(join(item.dir, ATTACHMENTS, name), record)
@@ -263,7 +347,7 @@ export async function verifyItem(ctx: Context, item: Item, progress: Progress = 
   item.meta.status = STATUS[result.verdict]
   setFieldValue(item, LAST_RUN, name)
   saveMeta(ctx, item)
-  return result.verdict
+  return { verdict: result.verdict }
 }
 
 const properties = (ctx: Context): Item[] => ctx.repo.items.filter((i) => i.type === TYPE)
@@ -272,27 +356,35 @@ const verify: Command = {
   name: "verify",
   says: "run the verifier of properties and attach each run as evidence",
   enforces:
-    "a property holds only with a run of its verifier on exactly what it has now, attached as evidence; a model or input outside the project is refused",
-  usage: "verify <property>... | verify --all",
+    "a property holds only with a run of its verifier on exactly what it has now, attached as evidence; a model or input outside the project is refused; a conclusive run (holds or violated) already recorded on the same identity — every input's digest with the tool's version, and the options — is reused, not repeated, unless --force gives the reason to run it again",
+  usage: 'verify <property>... | verify --all [--force "<reason>"]',
   long: {
     reports:
       "the properties done of those asked, with a rate and an ETA; within a property, each stage of its verifier with the count its tool exposes — for mCRL2 each tool, with the states lps2lts explores and the BES equations pbessolve generates",
   },
-  options: [{ name: "--all", says: "every property item" }],
-  examples: ["verify no-deadlock", "verify --all"],
+  options: [
+    { name: "--all", says: "every property item" },
+    { name: "--force", says: "run again even when a run of the same identity is recorded, for the reason given: kept with the new run" },
+  ],
+  examples: ["verify no-deadlock", "verify --all", 'verify no-deadlock --force "the first run was cut short by a reboot"'],
   async run(args, ctx) {
-    const p = parse(args, { all: { type: "boolean" } })
+    const p = parse(args, { all: { type: "boolean" }, force: { type: "string" } })
     const items = bool(p, "all") ? properties(ctx) : p.positionals.map((r) => ctx.repo.resolve(r))
     if (!items.length) throw usageError(this)
+    const given = str(p, "force")
+    const force = given === undefined ? undefined : given.trim()
+    if (force === "") throw new Error('--force needs the reason the recorded result is not enough: --force "<reason>"')
+    const allowance = force === undefined ? undefined : guardPrivate("the reason", findPrivate(force, privateContext()), ctx.allowPrivate)
     let failing = 0
     for (const item of items) if (item.type !== TYPE) throw new Error(`${label(item)} is not a property`)
     const progress = progressFor((l) => ctx.err(l))
     try {
       for (const [i, item] of items.entries()) {
         progress.overall(i, items.length, "properties")
-        const verdict = await verifyItem(ctx, item, progress)
+        const { verdict, reused } = await verifyItem(ctx, item, progress, force === undefined ? {} : { force: allowance ? `${force} ${allowance}` : force })
         if (verdict !== "holds") failing++
-        ctx.out(`${verdict.padEnd(9)} ${label(item)}  ${item.meta.title}`)
+        const said = reused ? `  (reused ${ATTACHMENTS}/${reused}: a run on the same inputs, tool version and options)` : ""
+        ctx.out(`${verdict.padEnd(9)} ${label(item)}  ${item.meta.title}${said}`)
       }
       progress.overall(items.length, items.length, "properties")
     } finally {
@@ -453,6 +545,7 @@ export default function verifier(): Plugin {
     about:
       "A `properties` item names a `verifier` (an adapter any plugin can contribute), a `model` file (a path from the project root) and a `property` in the verifier's own language. " +
       "`naima verify` runs the adapter and attaches the run — verdict, output, the adapter's `details` of how it reached the verdict when it gives them, the model's sha256, and one digest over every file the run read (the model and what the adapter's `inputs` says it includes) and the tool's version (the adapter's `version`) — and the counterexample as its own file, then sets the status from the verdict. " +
+      'A conclusive run (holds or violated) already recorded on the property with the same identity — verifier, model, property, `verifierOptions`, and the one digest over every input and the tool\'s version — is reused instead of repeated: `naima verify` says `reused` and names the run, and `--force "<reason>"` runs it again, keeping the reason with the new run. An error is never reused. Every run is kept, two made in the same instant included. ' +
       "A property that holds is evidence exactly as a passed test is: it can `verify` a bug and close it. A verdict is only as good as what it was reached on, so `naima check` fails when a property claims to hold and its property, verifier, model path, `verifierOptions`, model contents, any file it includes, the set of files it reads, or the tool's version have changed since the run. " +
       "The shipped adapter, `example-regex`, is a stand-in that shows the shape of a real one; the opt-in `verifier-mcrl2` and `verifier-voxlogica` plugins contribute the real ones.",
     types: [

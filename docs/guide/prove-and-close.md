@@ -194,6 +194,25 @@ longer current, and `naima verify` has to be run again. The example adapter
 reads `#include <path>` lines, so you can see this with a model split across
 several files.
 
+A run that has already been made isn't made again. A run is identified by
+what it read and how: the digest over its files and the tool's version,
+together with the property, the verifier, the model and `verifierOptions`.
+When `naima verify` finds a run with the same identity among the property's
+earlier runs, and that run reached a verdict (`holds` or `violated`), it
+takes that verdict instead of starting the tool, says `reused` and names the
+run it took it from. So a model you changed and then changed back gets its
+old verdict at once. A run that ended in an error is always made again,
+because an error says more about the run than about the model. To run a
+property again anyway, for instance because you doubt the machine it ran on,
+you give the reason, which is kept in the new run's record.
+
+```sh
+naima verify <property> --force "the first run was cut short by a reboot"
+```
+
+Every run stays in the property's `attachments/`, two runs made in the same
+instant included, so the earlier verdicts can always be read again.
+
 ### Two model checkers: mCRL2 and VoxLogicA
 
 Two verifiers come with Naima. Each is a separate plugin and needs its tool
