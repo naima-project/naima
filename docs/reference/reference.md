@@ -53,7 +53,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`unlink`](#naima-unlink) | core | remove a stored link | only a stored link is removed: an inverse is derived, never stored |
 | [`move`](#naima-move) | core | move an item to another type, keeping its id and links; refuses a status or field the new type does not declare | the id and links are kept; a status or field the new type does not declare is refused unless --force |
 | [`check`](#naima-check) | core | run every invariant; exit 1 on any problem | every invariant the loaded plugins declare (their checks): exit 1 on any problem; with --staged, the ones the pre-commit hook runs |
-| [`waive`](#naima-waive) | core | exempt one check's finding on one subject, with the reason, as a recorded waiver: the finding no longer fails `naima check`, which lists the waiver as a note instead | a waiver names a loaded check, a subject that check reports a finding on now, a reason and who waived it; it is one new file under waivers/, and one waiver per check and subject |
+| [`waive`](#naima-waive) | core | exempt one check's finding on one subject, a problem or a note, with the reason, as a recorded waiver: `naima check` no longer reports the finding, so a problem no longer fails it, and lists the waiver as a note instead | a waiver names a loaded check, a subject that check reports a finding on now, a reason and who waived it; it is one new file under waivers/, and one waiver per check and subject |
 | [`board`](#naima-board) | core | print a type's board, grouped by section, most urgent first; at its foot, the summary sections that stand beside the work, such as the metrics | nothing: it prints derived state, never stored |
 | [`view`](#naima-view) | core | print a plugin view — as text, its data as JSON, or markdown; without a name, list them | nothing: it prints derived state, never stored |
 | [`summary`](#naima-summary) | core | where the project stands, in one screen: every plugin's section | nothing: it prints derived state, never stored |
@@ -66,7 +66,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`claim`](#naima-claim) | coordination | record that this branch is working on items (writes one file on this branch) | a claim belongs to a branch, never to a detached HEAD, and is one file on that branch; it never locks anything: several branches may claim one item |
 | [`release`](#naima-release) | coordination | drop this branch's claim on items; the last one removes the file, unless the branch is being prepared (claim --preparing) | only this branch's own claim is dropped, and only on items it holds; while the branch is being prepared, the emptied file is kept |
 | [`claims`](#naima-claims) | coordination | who holds what, recombined from every branch | nothing: it only reads |
-| [`land`](#naima-land) | coordination | land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor | runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item or an item open and not fixed, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; moves the trunk only from the commit it read (compare-and-swap) |
+| [`land`](#naima-land) | coordination | land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor | runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item or an item open and not fixed, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, prints what every landing report says of the files the landing changed, never undoing it |
 | [`changes`](#naima-changes) | coordination | print the release notes a range of commits makes, assembled from the change notes it adds to changes/, as Markdown: breaking changes first, then those that need an action, then features, behaviour changes and fixes, each with its text and what to do; from the newest version tag (v…) to HEAD unless --from and --to say otherwise, in every repository of the project with a changes/config.json (the project itself, a submodule) unless --repo names one | nothing: it only prints; a change note that does not parse is named on stderr |
 | [`prune`](#naima-prune) | coordination | list (or with --write remove) claim files naming a branch git no longer has; one only another ref carries is listed with that ref, to be dropped there. With --branch, delete a branch and its worktree, refusing one with unmerged commits that no archive/<branch> tag holds | the trunk is never pruned, and a branch with unmerged commits that no archive/<branch> tag holds is refused; nothing is removed without --write |
 | [`pass`](#naima-pass) | coordination | write this session's note (one new file), or list the newest | a session note is one new file: earlier ones are never rewritten; --ack is refused unless it carries every phrase the project's active rules ask an agent to acknowledge |
@@ -86,7 +86,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`announce`](#naima-announce) | announce | the features that may be announced — user-facing, shipped, documented and checked by a person or end to end — major first: the source of release notes | nothing: it only lists, and only features user-facing, shipped, documented and checked by a person or end to end |
 | [`loop`](#naima-loop) | loop | the non-stop loop on a target chosen before starting — a work list, an epic or a gate: done or not, the next agent work, the stop verdict, and once stopped the owner's ordered action list, each line saying why it is his | the loop runs only on a target chosen before starting — a work list, an epic or a gate —; with --check, exit 1 while it is not stopped |
 | [`beta`](#naima-beta) | beta-markers | list what is marked as shipped without proof, and the state of each proof | nothing: it only reads |
-| [`verify`](#naima-verify) | verifier | run the verifier of properties and attach each run as evidence | a property holds only with a run of its verifier on exactly what it has now, attached as evidence; a model or input outside the project is refused |
+| [`verify`](#naima-verify) | verifier | run the verifier of properties and attach each run as evidence | a property holds only with a run of its verifier on exactly what it has now, attached as evidence; a model or input outside the project is refused; a conclusive run (holds or violated) already recorded on the same identity — every input's digest with the tool's version, and the options — is reused, not repeated, unless --force gives the reason to run it again |
 | [`verifiers`](#naima-verifiers) | verifier | list the verifier adapters every plugin contributes | nothing: it only reads |
 | [`tools`](#naima-tools) | tools | the tools the loaded plugins declare, on this machine or a declared host: what is installed, missing or unavailable; show what an install would fetch; install one with consent into Naima's own directory, its download checked and the tool verified, never touching PATH or the system; remove one; print an installed program's path | an install fetches only the declared source, refuses a size or sha256 that differs, keeps nothing that fails its verification, and goes on only with consent — a yes on a terminal, or --consent with --by, recorded in the receipt; nothing is written outside the tools directory; a tool another installed tool needs is not removed |
 | [`ui`](#naima-ui) | ui | show the views the plugins contribute — first the summary, the gates, what is next and the claims, then the boards, the metrics, the session notes, each item with its evidence and the other tabs — in a native window titled Naima, served from this machine only, live from the files; closing the window stops it | the views are served only on the loopback interface, and every request without this run's token is refused |
@@ -108,7 +108,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `commands` | core | `naima <name>`: a command, with its usage, options and examples | core, trackers, coordination, triage, gates, epics, planning, roles, announce, loop, beta-markers, verifier, tools, ui, metrics, rules, long-work, commit-hooks, privacy, adopt, docs |
 | `types` | core | item types: a directory of items, their statuses, and the status a new one starts in | trackers, epics, planning, verifier, rules |
 | `fields` | core | typed fields of an item's meta.json, and the types they apply to | core, trackers, triage, gates, planning, roles, announce, verifier, rules, privacy, adopt, docs |
-| `relations` | core | link relations between items, each naming its inverse | core, trackers, epics, planning |
+| `relations` | core | link relations between items, each naming its inverse | core, trackers, epics, planning, verifier |
 | `checks` | core | invariants `naima check` holds: a problem fails it, a note does not | core, trackers, coordination, triage, gates, epics, planning, announce, beta-markers, verifier, metrics, rules, long-work, commit-hooks, privacy, docs |
 | `views` | core | `naima view <name>`: a named rendering of derived state | coordination, triage, planning |
 | `dirs` | core | directories under the tracker root a plugin owns that are not item types | core, coordination, metrics, commit-hooks, adopt |
@@ -118,6 +118,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `extends` | core | additive changes to another plugin's type — statuses (an existing one only with its category), traits, transitions — or field — enum values, more types or traits it applies to | roles |
 | `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done | core, coordination, triage, epics, planning, verifier |
 | `migrations` | core | a plugin's own data migrations, in order from its format 1, run by `naima update` after the core's | gates |
+| `landing-reports` | coordination | what `naima land` prints once a branch has landed, never blocking it: `name`, `says`, `report(ctx, { branch, from, to, changed }) → lines`, `changed` being every file the landing changed, from the project root | verifier |
 | `gates` | gates | a named release or merge condition, backed by items: `title`, `says`, `decides`, `evaluate(ctx) → { holds, blocking, owed }` | verifier |
 | `roles` | roles | a role of the company of agents: `title`, what it `owns`, what it `refuses` (never empty), the `kinds` and `types` on its queue, and `queue(ctx)`, its open items most urgent first | roles |
 | `verifiers` | verifier | an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest | verifier, verifier-mcrl2 |
@@ -127,7 +128,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `metrics` | metrics | a named measurement: `run` (a program and its arguments) and `kind`, or a code `measure`; a bound — `atMost`, `atLeast` or `equals` — and `better` |  |
 | `code-measures` | metrics | a code-quality number taken in process from the files: `measure({ files, source }, metric) → number \| { error }`, with its `unit` and `better` | metrics |
 | `code-languages` | metrics | a language code measures read: `extensions`, `code`, `comments`, `quotes`, and `functions(stripped) → [{ name, line, lines, complexity }]` when it can find them | metrics |
-| `rules` | rules | a rule a plugin ships, active in every project that loads it beside the project's own rules items: `name`, `title`, `audience`, `strength`, `text`, `why`, and optionally `ack` and `enforcedBy`; a project retires one with the rules plugin's `retire` option | long-work |
+| `rules` | rules | a rule a plugin ships, active in every project that loads it beside the project's own rules items: `name`, `title`, `audience`, `strength`, `text`, `why`, and optionally `ack` and `enforcedBy`; a project retires one with the rules plugin's `retire` option | coordination, planning, long-work |
 
 ## core
 
@@ -485,7 +486,7 @@ naima check --all-worktrees
 
 ### naima waive
 
-Exempt one check's finding on one subject, with the reason, as a recorded waiver: the finding no longer fails `naima check`, which lists the waiver as a note instead.
+Exempt one check's finding on one subject, a problem or a note, with the reason, as a recorded waiver: `naima check` no longer reports the finding, so a problem no longer fails it, and lists the waiver as a note instead.
 
 **Enforces**: A waiver names a loaded check, a subject that check reports a finding on now, a reason and who waived it; it is one new file under waivers/, and one waiver per check and subject.
 
@@ -857,7 +858,7 @@ Claims and session notes, one file per session, recombined from every branch; th
 
 Its contributions' qualified ids are `coordination/<name>`.
 
-No session writes a file another session writes. A claim is one file per branch, `claims/<uuid>.json`; a session note is one file per session, `passes/<date>-<uuid>.md`. Both are written on the writer's own branch and never staged or committed by the tool: commit them with the work. `claims`, `pass --list` and `summary` recombine them at read time from every local branch — the trunk, every branch not merged into it, whatever each worktree stands on — each read from the disk of the worktree that stands on it, uncommitted files included, or from its ref when none does; remote-tracking refs are not read. The trunk is the branch origin's HEAD names, else `main`, else `master`; without one, every local branch is read. A claim belongs to a branch, so on a detached HEAD `claim` is refused. Several branches may claim one item: `claim` says who else holds it rather than refusing. There are no locks: a claim says who works on what and never excludes anyone. What one session at a time must touch — the trunk, the published site, the releases — is touched by one writer, the coordinator; workers only prepare on their own branches, and the owner decides what lands and when, when it matters. Work happens by one scheme, checked: the worktree `<worktrees>/<what>` stands on the branch `<who>/<what>` and carries a claim; `open` makes all three in one step. A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. Landings are semi-linear: a branch the trunk is an ancestor of enters it as one marker commit, a merge whose tree is the branch tip's and whose message names the items it closes in `Closes:` trailers; `land` makes it from the main checkout, the shortcut for `git merge --no-ff`, and moves the trunk only from the commit it read. From the first marker on the trunk's first-parent line every first-parent commit is a marker, or `landings-are-markers` notes it; before it nothing is asked, so a history of fast-forwards keeps working. A repository of the project with `changes/config.json` — the project itself, or a product it holds as a submodule — names there the paths whose change is a change of behaviour; a branch that changes one adds a change note, `changes/<date>-<slug>.md`, in the same repository. `land` refuses a branch that does not, unless `--no-change-note` gives the reason, which the marker records as a `No-change-note:` trailer; `change-notes` notes it on the branch beforehand, and is a problem for a file of `changes/` that is not a change note. `changes` prints the release notes the change notes of a range make. `naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. What has no date is counted at the foot, never placed at a guess. Only what nothing derives — a decision taken elsewhere, a build handed out, a policy, an outside fact — is a record, one file per event, `events/<date>-<uuid>.md`, written by `naima event`. `pass --ack "<line>"` writes the acknowledgement line whichever plugin declares a rule's `ack` field asks an agent to give back — refused if a phrase is missing from it — and records it in the note's front matter; a note dated after 2026-10-02 missing it, or whose body no longer starts with it, is a problem (`session-note-ack`), tolerating one written before — on the day it shipped, or earlier, grandfathered like a closed item on the day `commits` shipped — since what it recorded is what the rules asked then. A note is never edited after the fact: one written without the line is accepted with a recorded waiver, `naima waive session-note-ack passes/<file> --reason "<why>"`.
+No session writes a file another session writes. A claim is one file per branch, `claims/<uuid>.json`; a session note is one file per session, `passes/<date>-<uuid>.md`. Both are written on the writer's own branch and never staged or committed by the tool: commit them with the work. `claims`, `pass --list` and `summary` recombine them at read time from every local branch — the trunk, every branch not merged into it, whatever each worktree stands on — each read from the disk of the worktree that stands on it, uncommitted files included, or from its ref when none does; remote-tracking refs are not read. The trunk is the branch origin's HEAD names, else `main`, else `master`; without one, every local branch is read. A claim belongs to a branch, so on a detached HEAD `claim` is refused. Several branches may claim one item: `claim` says who else holds it rather than refusing. There are no locks: a claim says who works on what and never excludes anyone. What one session at a time must touch — the trunk, the published site, the releases — is touched by one writer, the coordinator; workers only prepare on their own branches, and the owner decides what lands and when, when it matters. Work happens by one scheme, checked: the worktree `<worktrees>/<what>` stands on the branch `<who>/<what>` and carries a claim; `open` makes all three in one step. A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. Landings are semi-linear: a branch the trunk is an ancestor of enters it as one marker commit, a merge whose tree is the branch tip's and whose message names the items it closes in `Closes:` trailers; `land` makes it from the main checkout, the shortcut for `git merge --no-ff`, and moves the trunk only from the commit it read. From the first marker on the trunk's first-parent line every first-parent commit is a marker, or `landings-are-markers` notes it; before it nothing is asked, so a history of fast-forwards keeps working. A repository of the project with `changes/config.json` — the project itself, or a product it holds as a submodule — names there the paths whose change is a change of behaviour; a branch that changes one adds a change note, `changes/<date>-<slug>.md`, in the same repository. `land` refuses a branch that does not, unless `--no-change-note` gives the reason, which the marker records as a `No-change-note:` trailer; `change-notes` notes it on the branch beforehand, and is a problem for a file of `changes/` that is not a change note. `changes` prints the release notes the change notes of a range make. `naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. What has no date is counted at the foot, never placed at a guess. Only what nothing derives — a decision taken elsewhere, a build handed out, a policy, an outside fact — is a record, one file per event, `events/<date>-<uuid>.md`, written by `naima event`. `naima diary` tells the records of kind `diary`, every decision with its reason and every session note, day by day. The plugin ships the rule that agents keep the diary on their own, one entry per decision taken with the owner or notable turn and never a log of routine work, acknowledged as "Diary mode on"; the check `diary-entries` notes, never failing, a day with more diary entries than the option `diaryPerDay` allows, and an entry that only restates a session note of its day or a decision taken that day. `pass --ack "<line>"` writes the acknowledgement line whichever plugin declares a rule's `ack` field asks an agent to give back — refused if a phrase is missing from it — and records it in the note's front matter; a note dated after 2026-10-02 missing it, or whose body no longer starts with it, is a problem (`session-note-ack`), tolerating one written before — on the day it shipped, or earlier, grandfathered like a closed item on the day `commits` shipped — since what it recorded is what the rules asked then. A note is never edited after the fact: one written without the line is accepted with a recorded waiver, `naima waive session-note-ack passes/<file> --reason "<why>"`.
 
 Options, each with the default it takes when nothing sets it:
 
@@ -866,6 +867,9 @@ Options, each with the default it takes when nothing sets it:
 | `who` |  | who works, when `naima open` is given no `--as`: the branch's first segment |
 | `worktrees` | `../<main worktree's folder>-worktrees` | the directory every worktree is a folder of, relative to the main worktree |
 | `exempt` | `[]` | branches the naming scheme does not apply to: names, or patterns with * |
+| `diaryPerDay` | `5` | how many diary entries a day may hold before the check diary-entries notes it: a positive whole number |
+
+**Extension points** it declares: `landing-reports`.
 
 ### naima open
 
@@ -957,7 +961,7 @@ naima claims --json
 
 Land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor.
 
-**Enforces**: Runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item or an item open and not fixed, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; moves the trunk only from the commit it read (compare-and-swap).
+**Enforces**: Runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item or an item open and not fixed, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, prints what every landing report says of the files the landing changed, never undoing it.
 
 ```sh
 naima land <branch> [--closes <item>]... [--no-change-note "<reason>"]
@@ -1111,6 +1115,7 @@ naima event 2026-10-05 "The plan was entered" --kind diary
 | `closed-not-claimed` | no archived item (one in a type that is not creatable, where naima close moves it) is claimed by the branch you stand on: what no-closing-own-claims refuses on a write, asserted on the tracker as it is, hand edits included |
 | `session-note-ack` | a session note dated after 2026-10-02 carries the acknowledgement line it was written with (naima pass --ack), and its body still begins with it — a rule change afterwards never invalidates a note already written, since what was asked of it then is what it recorded |
 | `landings-are-markers` | from the first landing marker on the trunk's first-parent line (a merge whose first parent the second contains, whose tree is the second's, with a Closes: trailer), every first-parent commit is a marker: a fast-forward, a commit made on the trunk, a merge not up to date, or one without a Closes: naming an item done or fixed is a note naming it. Before the first marker nothing is asked |
+| `diary-entries` | as notes, never failing: a day with more diary entries than the coordination option diaryPerDay (5 by default), and a diary entry that only restates a session note of its day or a decision taken that day, which naima diary already shows |
 | `change-notes` | every file of a changes/ directory that has a changes/config.json — the project's own, or a submodule's — is a change note that parses; on a branch other than the trunk, one whose commits change a behaviour path that file names with no change note added is a note, as naima land would refuse it |
 
 **Views**, printed by `naima view <name>`
@@ -1136,6 +1141,12 @@ naima event 2026-10-05 "The plan was entered" --kind diary
 | `claims` | Claims | first screen | who holds what, recombined from every branch, and the items more than one branch holds; its data is `naima claims --json` |
 | `timeline` | Timeline | tab | the project's events — gates, epics, releases, sessions, records — derived from the items and git, oldest first |
 | `notes` | Session notes | tab | the newest session notes, across every branch, newest first; `?n=` says how many (5); its data is `naima pass --list [n] --json` |
+
+**Shipped rules**, active in every project that loads the plugin, listed by `naima rules`
+
+| Rule | Title | For | Strength | Enforced by | Ack |
+|---|---|---|---|---|---|
+| `agents-keep-the-diary` | Agents keep the diary: one entry per decision taken with the owner or notable turn, never a log of routine work | agents | must | `diary-entries` | `Diary mode on` |
 
 ## triage
 
@@ -1492,7 +1503,7 @@ Requirements proven by tests, specifications versioned name-vN, and the owner's 
 
 Its contributions' qualified ids are `planning/<name>`.
 
-Planning as items, so each is proven or checked rather than implied by a test. A **requirement** says what must hold: the features, tests or epics that deliver it are linked `satisfies`, the tests or properties that prove it `verifies`; it is `met` only once a proof has passed and none refutes it, and `naima view requirements` traces each one. A **specification** says how something must behave, versioned `name-vN`: `naima spec revise <spec>` opens the next version as a draft that `supersedes` the old one, one version per name is `current`, and an item that follows a spec is linked `specified-by` — work starts from the spec, and closes when the code matches it. A **decision** is a choice or a standing permission of the owner's, dated and restated in the owner's words: it `settles` the items that waited on it and `supersedes` the decision it replaces. Before asking the owner anything, an agent runs `naima decisions <words>`; after the owner answers, it records the answer with `naima new decisions`, so a settled question is never asked again. A **release** opens at its first stage (`naima new releases "<name>"`); each stage's output is recorded with `naima note`, headed `Stage: <name>` (or `Stage: <name> — skipped, decided by <who>`), and the hook refuses `status=released` while a stage is unrecorded — `naima view releases` shows what each one still owes. A **session** is a dated, append-only record of one test sitting, linked `records` to the test or tests it was for; several share a `run` name when they were sat together. It is optional — most of the time the test's own page and status say enough — and is never edited once written: a later sitting is a new session.
+Planning as items, so each is proven or checked rather than implied by a test. A **requirement** says what must hold: the features, tests or epics that deliver it are linked `satisfies`, the tests or properties that prove it `verifies`; it is `met` only once a proof has passed and none refutes it, and `naima view requirements` traces each one. A **specification** says how something must behave, versioned `name-vN`: `naima spec revise <spec>` opens the next version as a draft that `supersedes` the old one, one version per name is `current`, and an item that follows a spec is linked `specified-by` — work starts from the spec, and closes when the code matches it. A **decision** is a choice or a standing permission of the owner's, dated and restated in the owner's words: it `settles` the items that waited on it and `supersedes` the decision it replaces. Before asking the owner anything, an agent runs `naima decisions <words>`; after the owner answers, it records the answer with `naima new decisions`, so a settled question is never asked again. A **release** opens at its first stage (`naima new releases "<name>"`); each stage's output is recorded with `naima note`, headed `Stage: <name>` (or `Stage: <name> — skipped, decided by <who>`), and the hook refuses `status=released` while a stage is unrecorded — `naima view releases` shows what each one still owes. A **session** is a dated, append-only record of one test sitting, linked `records` to the test or tests it was for; several share a `run` name when they were sat together. It is optional — most of the time the test's own page and status say enough — and is never edited once written: a later sitting is a new session. The plugin ships two rules, listed by `naima rules` when the rules plugin is loaded: requirements are elicited at every prompt of the owner, each with how it is checked or measured (a test, a property, or a metric with a budget), acknowledged as "Elicitation mode on" and held in part by `requirements-proven`, which notes a requirement nothing proves; and behaviour with states or concurrency is designed from a model first (a state machine, mCRL2, or a state machine encoded in mCRL2), its properties as items, kept in step with the code, acknowledged as "Model first mode on".
 
 **Uses**, declared by other plugins: fields `runBy`, `humanBecause`; relations `verified-by`.
 
@@ -1639,6 +1650,13 @@ Sessions: a dated, append-only record of one test sitting: written once and neve
 |---|---|
 | `planning-stamps` | a new spec takes its name and version from its title (`Export format v2` is export-format, version 2) unless given; a new decision is dated today unless given |
 | `release-stages` | a release is marked released only once every stage is recorded, or skipped and said by whom |
+
+**Shipped rules**, active in every project that loads the plugin, listed by `naima rules`
+
+| Rule | Title | For | Strength | Enforced by | Ack |
+|---|---|---|---|---|---|
+| `requirements-elicited-at-every-prompt` | Requirements are elicited at every prompt, each with how it is checked or measured | agents | must | `requirements-proven` | `Elicitation mode on` |
+| `behaviour-designed-from-a-model` | Behaviour with states or concurrency is designed from a model first, kept in step with the code | everyone | should |  | `Model first mode on` |
 
 ## roles
 
@@ -1859,7 +1877,7 @@ Properties checked by formal-methods tools, with each run attached as evidence.
 
 Its contributions' qualified ids are `verifier/<name>`.
 
-A `properties` item names a `verifier` (an adapter any plugin can contribute), a `model` file (a path from the project root) and a `property` in the verifier's own language. `naima verify` runs the adapter and attaches the run — verdict, output, the adapter's `details` of how it reached the verdict when it gives them, the model's sha256, and one digest over every file the run read (the model and what the adapter's `inputs` says it includes) and the tool's version (the adapter's `version`) — and the counterexample as its own file, then sets the status from the verdict. A property that holds is evidence exactly as a passed test is: it can `verify` a bug and close it. A verdict is only as good as what it was reached on, so `naima check` fails when a property claims to hold and its property, verifier, model path, `verifierOptions`, model contents, any file it includes, the set of files it reads, or the tool's version have changed since the run. The shipped adapter, `example-regex`, is a stand-in that shows the shape of a real one; the opt-in `verifier-mcrl2` and `verifier-voxlogica` plugins contribute the real ones.
+A `properties` item names a `verifier` (an adapter any plugin can contribute), a `model` file (a path from the project root) and a `property` in the verifier's own language. `naima verify` runs the adapter and attaches the run — verdict, output, the adapter's `details` of how it reached the verdict when it gives them, the model's sha256, and one digest over every file the run read (the model and what the adapter's `inputs` says it includes) and the tool's version (the adapter's `version`) — and the counterexample as its own file, then sets the status from the verdict. A conclusive run (holds or violated) already recorded on the property with the same identity — verifier, model, property, `verifierOptions`, and the one digest over every input and the tool's version — is reused instead of repeated: `naima verify` says `reused` and names the run, and `--force "<reason>"` runs it again, keeping the reason with the new run. An error is never reused. Every run is kept, two made in the same instant included. A property that holds is evidence exactly as a passed test is: it can `verify` a bug and close it. A verdict is only as good as what it was reached on, so `naima check` fails when a property claims to hold and its property, verifier, model path, `verifierOptions`, model contents, any file it includes, the set of files it reads, or the tool's version have changed since the run. A property that holds and proves a change — it verifies or satisfies a bug, a todo or a feature — is expected to carry a violated run of the same property, with its counterexample, on other inputs (`property-failed-first`), and to be backed by a witness property that holds, linked by `witnesses` (`property-witnessed`); both are notes that name the property, so either can be waived with its reason. A `models` item marks a model, by its path in `model`, as in development: while it is, the staleness of its properties is a note rather than a problem and the two change checks ask nothing of them; it leaves development (status `stable`) only when every property verified on it holds on a run of exactly what it has now. The shipped adapter, `example-regex`, is a stand-in that shows the shape of a real one; the opt-in `verifier-mcrl2` and `verifier-voxlogica` plugins contribute the real ones.
 
 **Extension points** it declares: `verifiers`.
 
@@ -1867,24 +1885,26 @@ A `properties` item names a `verifier` (an adapter any plugin can contribute), a
 
 Run the verifier of properties and attach each run as evidence.
 
-**Enforces**: A property holds only with a run of its verifier on exactly what it has now, attached as evidence; a model or input outside the project is refused.
+**Enforces**: A property holds only with a run of its verifier on exactly what it has now, attached as evidence; a model or input outside the project is refused; a conclusive run (holds or violated) already recorded on the same identity — every input's digest with the tool's version, and the options — is reused, not repeated, unless --force gives the reason to run it again.
 
 **Progress**: The properties done of those asked, with a rate and an ETA; within a property, each stage of its verifier with the count its tool exposes — for mCRL2 each tool, with the states lps2lts explores and the BES equations pbessolve generates.
 
 ```sh
 naima verify <property>...
-naima verify --all
+naima verify --all [--force "<reason>"]
 ```
 
 | Option | Default | What it does |
 |---|---|---|
 | `--all` |  | every property item |
+| `--force` |  | run again even when a run of the same identity is recorded, for the reason given: kept with the new run |
 
 Examples:
 
 ```sh
 naima verify no-deadlock
 naima verify --all
+naima verify no-deadlock --force "the first run was cut short by a reboot"
 ```
 
 ### naima verifiers
@@ -1914,21 +1934,40 @@ Properties: a property of the software, proven or refuted by a verifier. Items l
 | `violated` | open | refutes | the last run found a counterexample |
 | `error` | open |  | the last run could not reach a verdict |
 
+### type: models
+
+Models: a model, or another artefact properties are verified on, named by its path in model: whether it is in development. Items live in `naima-tracker/naima-data/models/`; a new one starts as `development`.
+
+| Status | Category | Flags | Meaning |
+|---|---|---|---|
+| `development` | open |  | changed across several landings: its properties' results are informational, their staleness a note, and the change checks ask nothing of them |
+| `stable` | done |  | out of development: every property of the model held on a run of what it had when it left |
+
 **Fields**
 
 | Field | Kind | Applies to | Meaning | Values |
 |---|---|---|---|---|
 | `verifier` | string | properties | the adapter that checks it |  |
-| `model` | string | properties | the model or specification file, from the project root, and inside it |  |
+| `model` | string | properties, models | the model or specification file, from the project root, and inside it |  |
 | `property` | string | properties | the property, in the verifier's own language |  |
 | `lastRun` | string | properties | the attachment holding the last run: a file name in the item's attachments/ |  |
 | `verifierOptions` | object | properties | options handed to the verifier with the model and the property, as a JSON object |  |
+
+**Link relations** — only the direction written is stored; the inverse is derived when read.
+
+| Relation | Inverse | Reads as |
+|---|---|---|
+| `witnesses` | `witnessed-by` | is a witness property, showing that the behaviour is reachable, for |
+| `witnessed-by` | `witnesses` | is backed by the witness property |
 
 **Checks**, run by `naima check`
 
 | Check | What it holds |
 |---|---|
 | `property-evidence` | a property names a known verifier and an existing model; one that holds carries a run of its current property, verifier, model and options, on every file it reads as it is now and the tool's version as it is now |
+| `property-failed-first` | a property that holds and proves a change — it verifies or satisfies a bug, a todo or a feature — also carries a violated run of the same property, with its counterexample, on other inputs than those it holds on: the model before the change. A note, naming the property as its subject, so it can be waived with a reason |
+| `property-witnessed` | a property that holds and proves a change is backed by a witness property that holds — one linked to it by witnesses, showing the new behaviour is reachable, so the property does not hold only because the situation never arises. A note, naming the property as its subject, so it can be waived with a reason; a witnesses link with an item that is not a property at either end is noted too |
+| `model-development` | every models item names one model, and no two name the same; a stable model whose property does not hold on a run of what it has now is noted, since it either needs verifying or is in development again |
 
 **Write hooks**, run on every item write
 
@@ -1936,6 +1975,13 @@ Properties: a property of the software, proven or refuted by a verifier. Items l
 |---|---|
 | `property-reopens-when-changed` | changing a property's property, model, verifier or verifierOptions sets its status back to open: the last run was reached on something else, and says nothing about it |
 | `holds-only-by-verify` | a property becomes holds only with a run that holds for exactly what it has now, as naima verify writes it; holds set by hand without one — naima set, naima new --set — is refused |
+| `leaves-development-proved` | a model leaves development (its models item becomes stable, or is created stable) only when at least one property is verified on it and every one holds on a run of exactly what it has now; refused otherwise, naming each property that does not |
+
+**Landing reports**, printed by `naima land` after a landing
+
+| Report | What it says |
+|---|---|
+| `properties-current` | the properties verified on what the landing changed — their model, or a file their last run read — that do not hold on a run of what the trunk has now, models in development left out: they are named, to verify on the trunk; the landing is not blocked |
 
 **Gates**, listed by `naima gates`
 

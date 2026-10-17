@@ -52,6 +52,15 @@ These rules hold:
   gives its time with `--at`, or else it sorts first in its day. Decisions
   don't need a diary event, because `naima diary` already includes each one
   with its reason.
+- **Write a diary entry without being asked, sparingly.** One entry for a
+  decision taken with the owner in conversation (what, why, and the item),
+  a change of direction, or a notable event outside the tracker; the related
+  turns of one conversation make one entry. None for routine work, landings,
+  items filed, fixes, test runs, or what a session note or the timeline
+  already records. The check `diary-entries` notes a day above the
+  coordination option `diaryPerDay` (5 by default) and an entry that only
+  restates a session note or a decision
+  ([the rule](../guide/rules.md#agents-keep-the-diary)).
 - **Commit what the commands wrote**, meaning the epic's folder, the items,
   `naima-tracker/naima-data/naima.json` and any `events/` file, together with
   the work that led to it.

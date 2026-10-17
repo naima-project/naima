@@ -194,6 +194,25 @@ longer current, and `naima verify` has to be run again. The example adapter
 reads `#include <path>` lines, so you can see this with a model split across
 several files.
 
+A run that has already been made isn't made again. A run is identified by
+what it read and how: the digest over its files and the tool's version,
+together with the property, the verifier, the model and `verifierOptions`.
+When `naima verify` finds a run with the same identity among the property's
+earlier runs, and that run reached a verdict (`holds` or `violated`), it
+takes that verdict instead of starting the tool, says `reused` and names the
+run it took it from. So a model you changed and then changed back gets its
+old verdict at once. A run that ended in an error is always made again,
+because an error says more about the run than about the model. To run a
+property again anyway, for instance because you doubt the machine it ran on,
+you give the reason, which is kept in the new run's record.
+
+```sh
+naima verify <property> --force "the first run was cut short by a reboot"
+```
+
+Every run stays in the property's `attachments/`, two runs made in the same
+instant included, so the earlier verdicts can always be read again.
+
 ### Two model checkers: mCRL2 and VoxLogicA
 
 Two verifiers come with Naima. Each is a separate plugin and needs its tool
@@ -290,3 +309,109 @@ a run that takes longer than that and records it as `error` (undecided). If
 the tool isn't installed, the run is recorded as an error whose output begins
 with `tool missing:` and explains how to install it, and the property is
 never reported as holding.
+
+## Proving a change to a model
+
+When a model changes because of an item, such as a bug in a protocol or a
+feature that adds a buffer pool, the property linked to that item has to show
+that the change made a difference. A property that holds both before and
+after the change says nothing about it, because it may hold for a reason
+that has nothing to do with the change. So the property is run twice: on the
+model before the change, where it should be violated, and on the changed
+model, where it should hold. It's the same red-then-green order a regression
+test follows.
+
+```sh
+naima new properties "a pooled unit can be reused"
+naima set <property> verifier=mcrl2 model=models/pool.mcrl2 property=models/reuse.mcf
+naima link <property> verifies <bug>
+naima verify <property>     # on the model before the change: violated
+# the model is changed
+naima verify <property>     # on the changed model: holds
+```
+
+Both runs stay in the property's `attachments/`, and the violated one keeps
+its counterexample, which is the evidence that the property could fail.
+`naima check` notes a property that holds and verifies or satisfies a bug, a
+todo or a feature when none of its runs is a violated run of the same
+property, with a counterexample, on other inputs than the ones it holds on
+(`property-failed-first`). Sometimes there's no earlier model to run it on,
+for instance when the model was written with the change already in it. In
+that case the agent waives the note with the reason, and the waiver stays
+visible in every `naima check`.
+
+```sh
+naima waive property-failed-first properties/<slug> --reason "the model was written with the pool in it"
+```
+
+A property can also hold only because the situation it talks about never
+arises. "Every pooled unit is reused correctly" holds on a model where
+nothing is ever pooled. A [witness](glossary.md#witness) rules that out. It's
+a second property that shows the new behaviour can actually happen, such as
+"the pool can be non-empty" or "a pooled unit can be taken again", and it is
+linked to the property it backs.
+
+```sh
+naima new properties "the pool can be non-empty"
+naima set <witness> verifier=mcrl2 model=models/pool.mcrl2 property=models/pool-non-empty.mcf
+naima link <witness> witnesses <property>
+naima verify <witness>
+```
+
+`naima check` notes a property that holds and proves a change when no witness
+that holds is linked to it (`property-witnessed`). When a witness makes no
+sense, for instance because the property is itself about reaching the new
+behaviour, the agent waives the note with the reason, as above.
+
+### A model in development
+
+Some changes to a model take several landings, and in between the model is
+half done. Its properties may be violated or out of date for a while, and
+that's expected. For such a model you file an item of type `models` that
+names it, which starts in the status `development`.
+
+```sh
+naima new models "Buffer pool" --set model=models/pool.mcrl2
+```
+
+While the model is in development, a property verified on it whose run is
+out of date is a note in `naima check` instead of a problem, and the two
+checks above ask nothing of its properties. This also means `naima close`
+doesn't stop on such a run, so an item proved by one of these properties is
+best closed after the model leaves development. To leave development, every
+property whose `model` is that path has to hold on a run of the model as it
+is now. Setting the status to `stable` is refused otherwise, and the refusal
+names each property that isn't current.
+
+```sh
+naima verify --all
+naima set buffer-pool status=stable
+```
+
+A model with no property can't leave development, because nothing would
+show that it works. `naima check` reports a `models` item that names no
+model or the same model as another one, and notes a stable model when one
+of its properties no longer holds on a current run
+(`model-development`). Once that happens, the property is verified again,
+or the model goes back to `development` while it changes.
+
+### When the rules apply
+
+Work on a branch is in development by nature. While a branch is being
+prepared, nothing above is asked of it, and the agent runs what it needs,
+normally the item's own property before and after the change. The rules
+apply when the branch lands, because that's when the change becomes part of
+the project. This table shows what is asked at each moment.
+
+| When | What is asked | What it blocks |
+|---|---|---|
+| While a branch is being prepared | nothing; the agent runs what it needs | nothing |
+| Landing | `naima land` lists, after the landing, every property verified on a file the branch changed that doesn't hold on a current run | nothing yet: the coordinator verifies the listed properties on the trunk |
+| A model in development | nothing; what its properties say is information | nothing |
+| Leaving development | every property of the model holds on a current run | setting the model `stable` |
+| Any `naima check` | the notes `property-failed-first` and `property-witnessed`; a property that claims to hold on a run that is out of date is a problem, outside development | `naima check` and `naima close`, for the problem |
+
+Because `naima verify` reuses every run whose inputs haven't changed, a
+property of a model nobody touched costs nothing at any of these moments.
+Long suites run on a schedule or before a release, and a landing that waits
+for them, are [planned](../planned.md#model-checkers-and-the-strength-of-evidence).

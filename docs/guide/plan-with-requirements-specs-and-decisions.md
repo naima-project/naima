@@ -45,6 +45,48 @@ has passed, or when one has failed. It also reminds you of a requirement that
 is proven but not yet marked met, and of one that nothing delivers or
 proves.
 
+## Requirements come from every conversation
+
+Requirements aren't written once, at the start of the work. Whenever you say
+something about what you want, the agent checks whether it adds a
+requirement or changes one, and files it straight away, in the background,
+while the work underway carries on
+([the rule](rules.md#requirements-are-elicited-at-every-prompt)).
+
+- A new need becomes a new requirement.
+- A need that refines an existing requirement, such as a tighter number, is
+  written on that requirement's page, with a note saying what changed and
+  why. One that replaces it altogether is filed as a new requirement, and the
+  old one is set to `dropped` with its reason, so nothing is overwritten.
+- A change to exactly how something behaves becomes the next version of its
+  specification (below).
+
+A wish is often vague when it is first said, like "the shop should feel
+fast". The agent restates it as something a test can decide, such as "a
+product page loads in under one second", and then works out how it will be
+checked. There are three ways.
+
+| How | When | Example |
+|---|---|---|
+| a test | the result can be tried and seen | the exported file opens in the spreadsheet |
+| a [property](glossary.md#property) of a model | the behaviour has states or runs in parallel | a job is never retried more than twice ([design with a model](design-with-a-model.md)) |
+| a [metric](glossary.md#metric) with a budget | it can be measured: a time, a size, a count, a rate | page load time, at most 1 second ([metrics and budgets](metrics-and-budgets.md)) |
+
+The agent proposes the check, and asks you only for what is yours to give,
+which is usually the number a budget holds to. The answer is written on the
+requirement's page, and the test or property that checks it is linked to it
+once it exists. For a metric, that is a test whose gesture is running the
+metric (`naima metrics run page-load`) and seeing it within its budget.
+
+```sh
+naima new requirements "A product page loads in under one second"
+naima note requirements/product-page-loads-under-one-second "Checked by the metric page-load, with a budget of 1 s, run on every commit."
+naima link tests/page-load-within-budget verifies requirements/product-page-loads-under-one-second
+```
+
+`naima check` notes a requirement that nothing delivers or proves yet, so a
+requirement filed without a way to check it doesn't go unnoticed.
+
 ## Specifications: how it must behave, version by version
 
 A specification is the precise description of a behaviour. It is kept in

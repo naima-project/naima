@@ -87,7 +87,7 @@ export function applyWaivers(ctx: Context, found: { check: string; findings: Fin
 export const waive: Command = {
   name: "waive",
   says:
-    "exempt one check's finding on one subject, with the reason, as a recorded waiver: the finding no longer fails `naima check`, which lists the waiver as a note instead",
+    "exempt one check's finding on one subject, a problem or a note, with the reason, as a recorded waiver: `naima check` no longer reports the finding, so a problem no longer fails it, and lists the waiver as a note instead",
   enforces:
     "a waiver names a loaded check, a subject that check reports a finding on now, a reason and who waived it; it is one new file under waivers/, and one waiver per check and subject",
   usage: 'waive <check> <subject> --reason "<why>" [--as <who>]',
@@ -112,10 +112,10 @@ export const waive: Command = {
       throw new Error(`${name} on ${subject} is already waived — ${WAIVERS}/ holds it`)
     }
     const findings = await check.run(ctx, {})
-    if (!findings.some((f) => f.subject === subject && f.level === "problem")) {
+    if (!findings.some((f) => f.subject === subject)) {
       const subjects = [...new Set(findings.flatMap((f) => (f.subject === undefined ? [] : [f.subject])))]
       throw new Error(
-        `${name} reports no problem on ${subject}: nothing to waive${subjects.length ? ` — it reports on: ${subjects.join(", ")}` : ""}`,
+        `${name} reports nothing on ${subject}: nothing to waive${subjects.length ? ` — it reports on: ${subjects.join(", ")}` : ""}`,
       )
     }
     const allowance = guardPrivate("the waiver", findPrivate(`${subject}\n${reason}`, privateContext()), ctx.allowPrivate)

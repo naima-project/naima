@@ -75,6 +75,11 @@ trailer. To do the same by hand, run this:
 merge --no-ff ada/export-alpha -m "Land ada/export-alpha" -m "Closes: <item
 id>"`.
 
+Once the branch has landed, `naima land` also lists every property verified
+on a file the branch changed that doesn't hold on a current run, so the
+coordinator can verify it on the trunk. The list never stops the landing
+([when the rules apply](prove-and-close.md#when-the-rules-apply)).
+
 `prune --branch` deletes a branch only when its commits are held by the
 trunk or by an `archive/<branch>` tag. `--archive` makes that tag, for work
 that is set aside rather than merged.

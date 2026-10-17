@@ -43,6 +43,16 @@ say so — never argue that it was already said. The full shape of a report
 is [reporting and triage](../../docs/agents/reporting-and-triage.md); this
 line is so it happens even when nobody typed `/flow:report`.
 
+The same holds for requirements: check every prompt for a requirement it
+adds or changes, file or revise it, and settle how it is checked — a test, a
+property of a model, or a metric with a budget
+([elicit](../../docs/agents/reporting-and-triage.md#elicit-the-requirements-it-carries)).
+Behaviour with states or concurrency is designed from a model first
+([design with a model](../../docs/guide/design-with-a-model.md)). A decision
+taken with the owner, a change of direction or a notable event outside the
+tracker gets one diary entry, never routine work
+([the rule](../../docs/guide/rules.md#agents-keep-the-diary)).
+
 In this page, `naima` means, from the project's root:
 
 ```sh

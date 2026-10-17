@@ -157,6 +157,18 @@ naima diary --from 2026-10-05
 
 Each decision is shown with its reason, taken from its page, and each session note is shown in full. Nothing is stored for the diary apart from those files.
 
+The agents write diary entries on their own, without being asked, for a decision taken with you in conversation, a change in the direction of the work, or
+something notable that happens outside the tracker. They write none for routine work, and none for what a session note or a decision already says, so the
+diary stays short enough to read ([the rule](rules.md#agents-keep-the-diary)). `naima check` notes a day with more than five diary entries, and an entry that
+only repeats a session note or a decision of its day. The number is the coordination plugin's `diaryPerDay` option in
+`naima-tracker/naima-data/naima.json`.
+
+```json
+"plugins": {
+  "coordination": { "options": { "diaryPerDay": 3 } }
+}
+```
+
 ## Hold a declared list to its tests: coverage
 
 Some lists are kept elsewhere in the project, such as the paid features in a pricing file, the API endpoints in the code, or the limits. You declare such a list
