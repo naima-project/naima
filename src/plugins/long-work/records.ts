@@ -16,7 +16,7 @@ export const RUNS_DIR = ".runs"
 /** A run's name: what its record is called. */
 export const NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/
 /** The words after `naima run` that are subcommands, never a run's name. */
-export const SUBCOMMANDS = ["list", "status", "stop", "clean"] as const
+export const SUBCOMMANDS = ["list", "status", "stop", "clean", "periodic"] as const
 
 export const RUN_FILE = "run.json"
 export const STATUS_FILE = "status.json"

@@ -65,7 +65,12 @@ person or agent running the stage says happened.
 1. **Pre-release checks.** The gate still holds, because things can change
    between proposing the release and running the runbook. `naima check` and
    the project's full set of gates pass from a clean checkout, not from the
-   worktree that has been edited all afternoon.
+   worktree that has been edited all afternoon. The release gate is declared
+   `--full-suite`, so it also waits for every property and test suite to be
+   current: run them first with `naima verify --all` and
+   `naima metrics run --record`, which reuse every result whose inputs
+   haven't changed
+   ([a release gate](../guide/read-the-board.md#a-release-gate-waits-for-the-full-suite)).
 2. **Private draft.** The artefact is built and put somewhere only the
    release role can see it, such as a draft release or an unlisted build, and
    not yet in the public location.

@@ -58,6 +58,7 @@ interface Gate {
   title: string
   says: string
   decides: string
+  inFullSuite: boolean
   evaluate(ctx: Context): { holds: boolean; blocking: Item[]; owed: Item[] }
 }
 
@@ -987,11 +988,15 @@ const propertiesCurrent = {
 const allHold: Gate = {
   name: "properties",
   title: "Every property holds",
-  says: "no property item is open, violated or in error",
-  decides: "blocked by every properties item whose status is not holds; nothing is owed.",
+  says: "every property holds on a run of what the project has now, outside models in development",
+  decides:
+    "blocked by every properties item that is open, violated or in error, or that holds on a run its property, verifier, model, options or input files have changed since; a property of a model in development is owed instead. Part of the full suite a release gate requires; the tool's version is checked by naima check.",
+  inFullSuite: true,
   evaluate(ctx) {
-    const blocking = properties(ctx).filter((i) => i.meta.status !== "holds")
-    return { holds: blocking.length === 0, blocking, owed: [] }
+    const behind = properties(ctx).filter((i) => notCurrent(ctx, i).length > 0)
+    const owed = behind.filter((i) => developing(ctx, i.meta["model"]))
+    const blocking = behind.filter((i) => !owed.includes(i))
+    return { holds: blocking.length === 0, blocking, owed }
   },
 }
 

@@ -129,6 +129,18 @@ tool version that has changed since). **Enforced by** `naima close` and the
 check `property-evidence`. A property becomes `holds` only through
 `naima verify` (the write hook `holds-only-by-verify`).
 
+A release waits for the whole project to be current: every property holding
+on a run of what the project has now, and every test suite passing on the
+current commit. Long suites run on a schedule instead, and a failure there
+is filed as a bug. Why: a release is the one moment nothing may be out of
+date, and a suite that takes a night can't run at every landing, so it runs
+on its own clock and its failures land in the tracker instead of being
+waited on. **Enforced by** a gate declared `--full-suite`
+([a release gate](read-the-board.md#a-release-gate-waits-for-the-full-suite)),
+and, for the periodic runs, `naima run periodic` and the check
+`periodic-runs`, as a note
+([run it on a schedule](long-work.md#run-it-on-a-schedule)).
+
 ### Evidence travels with the claim
 
 Saying "it works" without a number, a log line or an attachment is not a

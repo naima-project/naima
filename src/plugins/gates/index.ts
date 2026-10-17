@@ -17,6 +17,9 @@
 //                 past its date and does not hold.
 // coverage        the coverage lists it requires (coverage.ts): each entry
 //                 with NO TEST blocks it.
+// fullSuite       a release gate: it holds only when every gate that is part
+//                 of the full suite (`inFullSuite`, such as every property
+//                 current and every test suite passing) holds too.
 //
 // `naima gate new|add|remove|show` declares a gate and puts items on it, so
 // nobody edits naima.json by hand. An item whose type carries the `group`
@@ -91,6 +94,8 @@ export interface GateDef {
   due?: string
   /** The version a milestone ships as. */
   version?: string
+  /** Part of the project's full suite: a gate declared with `fullSuite`, a release gate, holds only when this one does too. */
+  inFullSuite?: boolean
   /** May be async: a gate backed by an external tool awaits it. */
   evaluate(ctx: Context): GateResult | Promise<GateResult>
 }
@@ -100,7 +105,8 @@ const blank = (s: unknown): boolean => typeof s !== "string" || !s.trim()
 /** The point this plugin declares: every plugin's gates, `naima gates` lists them all. */
 export const gatesPoint: ExtensionPoint<GateDef> = {
   id: "gates",
-  says: "a named release or merge condition, backed by items: `title`, `says`, `decides`, `evaluate(ctx) → { holds, blocking, owed }`",
+  says:
+    "a named release or merge condition, backed by items: `title`, `says`, `decides`, `evaluate(ctx) → { holds, blocking, owed }`; `inFullSuite` makes it part of the full suite a release gate (`fullSuite`) requires",
   noun: "gate",
   stored: true,
   key: (g) => g.name,
@@ -109,6 +115,7 @@ export const gatesPoint: ExtensionPoint<GateDef> = {
     const g = v as Partial<GateDef> | null
     if (!g || typeof g !== "object") return "is not an object"
     if (typeof g.name !== "string" || typeof g.title !== "string") return "has no name or title"
+    if (g.inFullSuite !== undefined && typeof g.inFullSuite !== "boolean") return "has an inFullSuite that is not true or false"
     return typeof g.evaluate === "function" ? null : "has no evaluate function"
   },
   gaps: (g) => [...(blank(g.says) ? ["does not say what it is for"] : []), ...(blank(g.decides) ? ["does not say how it decides"] : [])],
@@ -117,7 +124,10 @@ export const gatesPoint: ExtensionPoint<GateDef> = {
   document: (gates) => [
     "",
     "**Gates**, listed by `naima gates`",
-    ...table(["Gate", "Title", "What it is for", "How it decides"], gates.map((g) => [code(g.name), g.title, g.says, g.decides ?? ""])),
+    ...table(
+      ["Gate", "Title", "What it is for", "How it decides", "In the full suite"],
+      gates.map((g) => [code(g.name), g.title, g.says, g.decides ?? "", g.inFullSuite ? "yes" : ""]),
+    ),
   ],
 }
 
@@ -134,6 +144,8 @@ export interface GateConfig {
   version?: string
   /** The coverage lists it requires: each entry with NO TEST blocks it. */
   coverage?: string[]
+  /** A release gate: it holds only when every gate that is part of the full suite (`inFullSuite`) holds too. */
+  fullSuite?: boolean
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -158,6 +170,7 @@ function readOptions(options: Record<string, unknown>): Record<string, GateConfi
       }
       for (const l of c.coverage) if (!Object.hasOwn(lists, l)) throw new Error(`gates: gate "${name}": coverage names no list "${l}"`)
     }
+    if (c.fullSuite !== undefined && typeof c.fullSuite !== "boolean") throw new Error(`gates: gate "${name}": fullSuite is true or false`)
   }
   return gates as Record<string, GateConfig>
 }
@@ -216,6 +229,49 @@ export function timing(ctx: Context, g: Pick<GateDef, "due" | "version">): strin
   return parts.join("; ")
 }
 
+/**
+ * The full suite, as a release gate asks for it: every gate that is part of it, each evaluated, what blocks it and
+ * what it owes joined, each reason said with the gate it comes from.
+ */
+export async function fullSuite(ctx: Context): Promise<GateResult & { parts: string[] }> {
+  const parts = gatesOf(ctx).map((c) => c.value).filter((g) => g.inFullSuite === true)
+  const blocking: Item[] = []
+  const owed: Item[] = []
+  const reasons: string[] = []
+  const backedBy: string[] = []
+  for (const g of parts) {
+    const r = await g.evaluate(ctx)
+    for (const i of r.blocking) if (!blocking.includes(i)) blocking.push(i)
+    for (const i of r.owed) if (!owed.includes(i) && !r.blocking.includes(i)) owed.push(i)
+    reasons.push(...(r.reasons ?? []).map((why) => `${g.name}: ${why}`))
+    if (!r.holds && !r.blocking.length && !r.reasons?.length) reasons.push(`${g.name}: does not hold`)
+    backedBy.push(...(r.backedBy ?? []))
+  }
+  return {
+    holds: !blocking.length && !reasons.length,
+    blocking,
+    owed: owed.filter((i) => !blocking.includes(i)),
+    reasons,
+    backedBy,
+    parts: parts.map((g) => g.name),
+  }
+}
+
+/** A release gate's own result joined with the full suite's: its blocking items, owed items and reasons added to the gate's. */
+async function withFullSuite(ctx: Context, own: GateResult): Promise<GateResult> {
+  const suite = await fullSuite(ctx)
+  const blocking = [...own.blocking, ...suite.blocking.filter((i) => !own.blocking.includes(i))]
+  const owed = [...own.owed, ...suite.owed].filter((i, n, all) => !blocking.includes(i) && all.indexOf(i) === n)
+  const why = [...(own.reasons ?? []), ...(suite.reasons ?? [])]
+  return {
+    holds: own.holds && suite.holds,
+    blocking,
+    owed,
+    ...(why.length ? { reasons: why } : {}),
+    ...(suite.backedBy?.length ? { backedBy: suite.backedBy } : {}),
+  }
+}
+
 export function evaluateGate(ctx: Context, name: string, holdsOn: "code" | "proof"): GateResult {
   const open = gatedItems(ctx, name).filter((i) => isOpen(ctx, i))
   const blocking = holdsOn === "proof" ? open : open.filter((i) => !owesOnlyProof(ctx, i))
@@ -237,9 +293,9 @@ export function runByOf(ctx: Context, item: Item): string {
 function printGate(ctx: Context, gate: GateDef, r: GateResult, hands = false): void {
   const when = timing(ctx, gate)
   ctx.out(
-    `${gate.name} — ${gate.title}${when ? ` (${when})` : ""}: ${r.holds ? "HOLDS" : `BLOCKED by ${r.blocking.length}`}${
-      r.owed.length ? `, ${r.owed.length} owed` : ""
-    }`,
+    `${gate.name} — ${gate.title}${gate.inFullSuite ? " [in the full suite]" : ""}${when ? ` (${when})` : ""}: ${
+      r.holds ? "HOLDS" : `BLOCKED by ${r.blocking.length}`
+    }${r.owed.length ? `, ${r.owed.length} owed` : ""}`,
   )
   const who = (i: Item) => (hands ? `  (${runByOf(ctx, i) || "unclassified"})` : "")
   for (const why of r.reasons ?? []) ctx.out(`  ✗ ${why}`)
@@ -469,19 +525,25 @@ const gateCommand: Command = {
     "declare a gate — a milestone, with a date and a version — put items on it or take them off, and show one; writes go to naima.json and to the items, validated, through the write hooks",
   enforces: "writes to naima.json and to the items are validated and pass the write hooks",
   usage:
-    'gate new <name> "<title>" [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] | gate add <gate> <item>... | gate remove <gate> <item>... | gate show <gate>',
+    'gate new <name> "<title>" [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite] | gate add <gate> <item>... | gate remove <gate> <item>... | gate show <gate>',
   options: [
     { name: "--says", says: "gate new: what the gate is for, in one sentence" },
     { name: "--due", says: "gate new: the date it is due, YYYY-MM-DD, which makes it a milestone" },
     { name: "--version", says: "gate new: the version it ships as" },
     { name: "--holds-on", says: 'gate new: "code" (the default) waits for code and lets proof be owed; "proof" waits for every proof too' },
     { name: "--coverage", says: "gate new: the coverage lists it requires, comma-separated: each entry with NO TEST blocks it" },
+    {
+      name: "--full-suite",
+      says:
+        "gate new: a release gate, which holds only when every gate that is part of the full suite holds too: every property current, every test suite passing",
+    },
   ],
   examples: [
     'gate new beta "Public beta" --says "the first outside users" --due 2026-12-01 --version 0.9',
     "gate add beta bugs/export-drops-alpha epics/onboarding",
     "gate remove beta bugs/export-drops-alpha",
     "gate show beta",
+    'gate new v1 "First release" --version 1.0 --full-suite',
   ],
   async run(args, ctx) {
     const p = parse(args, {
@@ -490,6 +552,7 @@ const gateCommand: Command = {
       version: { type: "string" },
       "holds-on": { type: "string" },
       coverage: { type: "string" },
+      "full-suite": { type: "boolean" },
     })
     const [sub, name, ...rest] = p.positionals
     if (sub === "new") {
@@ -504,6 +567,7 @@ const gateCommand: Command = {
         ...(version !== undefined ? { version } : {}),
         ...(holdsOn !== undefined ? { holdsOn } : {}),
         ...(coverage?.length ? { coverage } : {}),
+        ...(bool(p, "full-suite") ? { fullSuite: true } : {}),
       } as GateConfig
       declareGate(ctx, name, gate)
       ctx.out(`gate ${name} declared in ${ctx.trackerDir}/${DATA_FILE} — put items on it: naima gate add ${name} <item>...`)
@@ -612,11 +676,16 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
       " An item whose type groups others (an epic) stands for the items it groups." +
       (c.coverage?.length
         ? ` Blocked too by every entry with NO TEST of the coverage list${c.coverage.length === 1 ? "" : "s"} ${c.coverage.join(", ")}.`
+        : "") +
+      (c.fullSuite
+        ? " A release gate: it holds only when every gate that is part of the full suite holds too (naima gates marks them), their blocking items, owed items and reasons joining its own."
         : ""),
     evaluate: (ctx) => {
       const r = evaluateGate(ctx, name, c.holdsOn ?? "code")
       const reasons = c.coverage?.length ? coverageReasons(ctx, lists, c.coverage) : []
-      return reasons.length ? { ...r, holds: false, reasons } : r
+      const own = reasons.length ? { ...r, holds: false, reasons } : r
+      // A gate that is not a release gate answers at once, as it always has; a release gate awaits its parts.
+      return c.fullSuite ? withFullSuite(ctx, own) : own
     },
   }))
   const status: SummarySection = {

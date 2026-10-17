@@ -1418,6 +1418,8 @@ interface Gate {
   title: string
   says: string
   decides: string
+  /** Part of the full suite a release gate requires. */
+  inFullSuite?: boolean
   evaluate(ctx: Context): GateOutcome
 }
 
@@ -1451,6 +1453,7 @@ const metricsGate: Gate = {
 const suitesGate: Gate = {
   name: "suites",
   configured: true,
+  inFullSuite: true,
   title: "Every test suite passes",
   says: "every declared test suite passed on HEAD's commit, by a recorded run",
   decides:

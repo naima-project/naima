@@ -23,7 +23,9 @@ Every key and its default are listed in [configuration](config.md).
 
 Then put [items](glossary.md#item) on it with `naima set <item> gate=v1`,
 and see where it stands with `naima gates v1`. What `holdsOn` means is
-explained in [gates](read-the-board.md#gates).
+explained in [gates](read-the-board.md#gates). Add `"fullSuite": true` to
+make it wait for every property and test suite of the project as well
+([a release gate](read-the-board.md#a-release-gate-waits-for-the-full-suite)).
 
 ## Define the values a field takes
 

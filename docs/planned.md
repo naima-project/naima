@@ -33,11 +33,9 @@ ones come first.
   would be attached and checked, instead of only its day being recorded in
   `redSeen`. Properties already work this way
   ([proving a change to a model](guide/prove-and-close.md#proving-a-change-to-a-model)).
-- **Tiers for proofs beyond the landing**: a landing that waits for, or is
-  refused on, properties that are not current, where today `naima land` only
-  lists them; long suites run nightly or weekly on a declared host, a failure
-  filed as a bug; and a release gate that runs the full suite, reusing every
-  unchanged result.
+- **A landing that waits for its proofs**: a landing refused on properties
+  of what it changed that are not current, where today `naima land` only
+  lists them.
 - **A Storm verifier**: `naima tools install storm` installs Storm
   ([tools](guide/tools.md)), but no verifier runs it yet. On Windows, reaching
   it through a Linux environment isn't built either.

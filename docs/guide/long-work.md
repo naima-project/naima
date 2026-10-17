@@ -89,6 +89,40 @@ with `--no-progress`, it means nothing new in its log or progress file for 15
 minutes. A **LOST** run is one whose supervisor stopped reporting, because it
 was killed or the machine restarted, so nobody knows how the run ended.
 
+## Run it on a schedule
+
+Some work is too long for any landing, such as the whole set of properties
+of a large model or a benchmark that takes a night. You declare it once as a
+periodic run, in `naima.json`, with how often it runs, its time budget and
+its command.
+
+```json
+"long-work": { "options": { "periodic": {
+  "nightly": { "every": "1d", "budgetTime": "8h", "host": "lab",
+    "command": "naima verify --all && naima metrics run --record" } } } }
+```
+
+`budgetDisk` with `creates`, `host` and `noProgress` mean what they mean for
+`naima run`. Then this starts every periodic run that is due:
+
+```sh
+naima run periodic
+```
+
+A periodic run is an ordinary run with the name it was declared under, so
+`naima run list`, `naima wait nightly` and the rest work on it. It is due
+once its period has passed since it last started, and the finished record is
+cleaned before it starts again. Nothing starts it on its own: the command is
+run by the owner's scheduler (cron, launchd or the Task Scheduler) or at the
+start of a session, and `naima check` notes a periodic run that has never
+run, or that is more than two periods late (`periodic-runs`).
+
+When a periodic run ends without succeeding, the next `naima run periodic`
+files a bug, `Periodic run nightly failed`, saying how it ended, with the end
+of its log. The project's path and any private name are taken out of what it
+writes. If the run fails again while that bug is open, the new failure is
+added to it as a note instead of filing another bug.
+
 ## Clean up
 
 ```sh

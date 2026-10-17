@@ -75,7 +75,7 @@ declared once in the configuration, and then items are put on it.
    $ naima gates
    v1 — First release: BLOCKED by 1
      ✗ bugs/second-bug  Second bug
-   properties — Every property holds: HOLDS
+   properties — Every property holds [in the full suite]: HOLDS
    ```
 
 `holdsOn` decides what blocks the gate.
@@ -88,6 +88,27 @@ declared once in the configuration, and then items are put on it.
 
 `naima gates v1 --check` exits with 1 while the gate is blocked, so a
 release script or CI can wait on it.
+
+### A release gate waits for the full suite
+
+A gate declared with `"fullSuite": true`, or with
+`naima gate new v1 "First release" --full-suite`, is a release gate. Besides
+its own items, it waits for every gate that is part of the project's full
+suite, which `naima gates` marks `[in the full suite]`:
+
+- `properties`: every property holds on a run of the project as it is now.
+  A property whose model, formula file or options changed since its run
+  blocks the gate, and so does one that is open, violated or in error. The
+  properties of a [model in development](prove-and-close.md#a-model-in-development)
+  are listed as owed instead.
+- `suites`, once the project declares test suites: every suite passed on the
+  current commit, by a recorded run
+  ([metrics and budgets](metrics-and-budgets.md)).
+
+The gate doesn't run anything. Before a release, the full suite is run with
+`naima verify --all` and `naima metrics run --record`. Both reuse every
+result whose inputs haven't changed, so only what changed since the last run
+costs time. Then the gate says whether everything is current.
 
 ## The queue
 

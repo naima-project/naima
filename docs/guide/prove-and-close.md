@@ -466,10 +466,12 @@ the project. This table shows what is asked at each moment.
 | Landing | `naima land` lists, after the landing, every property verified on a file the branch changed that doesn't hold on a current run | nothing yet: the coordinator verifies the listed properties on the trunk |
 | A model in development | nothing; what its properties say is information | nothing |
 | Leaving development | every property of the model holds on a current run | setting the model `stable` |
+| Periodic, such as nightly | a run declared in the `periodic` option, such as `naima verify --all`, started by `naima run periodic` ([long work](long-work.md#run-it-on-a-schedule)) | nothing: a failure is filed as a bug |
+| Release | a gate declared with `--full-suite` waits for every property to hold on a current run and every test suite to pass ([a release gate](read-the-board.md#a-release-gate-waits-for-the-full-suite)) | the release |
 | A refactoring | `naima equivalent` compares the model with the version its properties were verified on, and carries their results over when the two are equivalent | nothing: what doesn't carry over is verified again |
 | Any `naima check` | the notes `property-failed-first` and `property-witnessed`; a property that claims to hold on a run that is out of date is a problem, outside development | `naima check` and `naima close`, for the problem |
 
 Because `naima verify` reuses every run whose inputs haven't changed, a
 property of a model nobody touched costs nothing at any of these moments.
-Long suites run on a schedule or before a release, and a landing that waits
-for them, are [planned](../planned.md#model-checkers-and-the-strength-of-evidence).
+Suites that take hours or days belong to the periodic and release moments,
+never to a landing.
