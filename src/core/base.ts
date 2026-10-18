@@ -521,6 +521,16 @@ export async function alongside(ctx: Context): Promise<string[]> {
   return out
 }
 
+/** The summary sections marked `hello: true`, rendered now, their lines as they are: what `naima hello` says after the update check. */
+export async function atSessionStart(ctx: Context): Promise<string[]> {
+  const out: string[] = []
+  for (const c of ctx.registry.contributions("summary")) {
+    const section = c.value as SummarySection
+    if (section.hello === true) out.push(...asRendered(await section.render(ctx), `summary section "${c.name}"`).text())
+  }
+  return out
+}
+
 const board: Command = {
   name: "board",
   says: "print a type's board, grouped by section, most urgent first; at its foot, the summary sections that stand beside the work, such as the metrics",

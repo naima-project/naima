@@ -300,14 +300,14 @@ export const land: Command = {
     {
       name: "--stale-proofs",
       says:
-        "why the branch lands although proofs of what it changed are not current — a suite that runs for days, left to the periodic run; recorded in the marker as a Stale-proofs: trailer",
+        "why the branch lands although proofs of what it changed are not current — a suite that runs for days, due as a long run the owner starts; recorded in the marker as a Stale-proofs: trailer",
     },
   ],
   examples: [
     "land claude/export-alpha",
     "land claude/export-alpha --closes export-drops",
     'land claude/tidy-loader --no-change-note "a refactor of the loader: nothing a person or an agent sees changes"',
-    'land claude/scheduler --stale-proofs "the liveness property runs for two days: the nightly run checks it"',
+    'land claude/scheduler --stale-proofs "the liveness property runs for two days: it is due as a long run, and the owner will start it"',
   ],
   async run(args, ctx) {
     const p = parse(args, { closes: { type: "string", multiple: true }, "no-change-note": { type: "string" }, "stale-proofs": { type: "string" } })

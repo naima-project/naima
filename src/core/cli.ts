@@ -69,6 +69,7 @@ import type { Command, Context, GuideSection, Plugin } from "./types.ts"
 import { asRendered, linesAs } from "./rendered.ts"
 import { shortOrId } from "./names.ts"
 import { apiFor } from "./plugins.ts"
+import { atSessionStart } from "./base.ts"
 
 export interface CliOptions extends OpenOptions {
   cwd: string
@@ -525,8 +526,9 @@ async function rollback(args: string[], opts: CliOptions, place: Place, lock: Lo
 }
 
 /**
- * `naima hello`: the banner, what the update policy finds, and the offers — what an agent says first in a
- * session. Reads the source only as `updates` says; never moves the lock, never writes the project.
+ * `naima hello`: the banner, what the update policy finds, what waits on the owner (the summary sections marked
+ * `hello`, such as the long runs that are due), and the offers — what an agent says first in a session. Reads the
+ * source only as `updates` says; never moves the lock, never writes the project, never starts a run.
  */
 async function hello(opts: CliOptions, place: Place, lock: Lock, raw: Record<string, unknown>, io: IO): Promise<number> {
   const me = running(opts.programRoot)
@@ -553,6 +555,13 @@ async function hello(opts: CliOptions, place: Place, lock: Lock, raw: Record<str
     } catch (e) {
       lines.push(`Could not check for a newer Naima: ${message(e)}.`)
     }
+  }
+  // What waits on the owner's decision, such as a long run that is due: said, never started. A project that does not
+  // open says why on its next command; the greeting goes on without these lines.
+  try {
+    lines.push(...await atSessionStart(await openProject(place, opts, { ...io, err: () => {} })))
+  } catch {
+    // nothing to add
   }
   // The banner first, read after the check: a fetch brings the tags that name the version.
   io.out(

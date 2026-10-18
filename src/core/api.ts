@@ -46,6 +46,7 @@ export { flagsOf } from "./vocabulary.ts"
 export {
   addLink,
   alongside,
+  atSessionStart,
   type BoardData,
   boardData,
   type BoardRow,

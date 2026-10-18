@@ -25,8 +25,9 @@ when to use it.
   one, every run aligns the program itself.
 - **Announce Naima at the start of a session.** Run `naima hello` and show
   the user its first line as it is: Naima is active in this repository, with
-  its version and commit. Then pass on what it found about newer versions,
-  and offer to explain Naima, show its documentation, check for an update or
+  its version and commit. Then pass on what it found about newer versions
+  and any long run it says is due, which is started only with the owner's
+  yes, and offer to explain Naima, show its documentation, check for an update or
   update. An update is applied only after the owner says yes, followed by
   the checks and one commit ([update Naima](../guide/update-naima.md)).
 - **Read the project's rules.** `naima rules --audience agents`, before

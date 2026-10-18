@@ -19,10 +19,12 @@ naima hello
 The first line it prints is the one the agent shows you, for example
 `Naima is active in this repository: version 1.0.0, commit 45ba22c1134c.`
 The version is the latest release tag at or before the locked commit. After
-that comes what Naima found about newer versions, and a reminder of what you
-can ask for: an explanation of Naima and its documentation, a check for an
-update, or an update. `naima hello` never changes the lock and never writes
-anything in your project.
+that comes what Naima found about newer versions, then one line for each
+long run that is due ([long work](long-work.md#when-a-long-run-is-due)), and
+a reminder of what you can ask for: an explanation of Naima and its
+documentation, a check for an update, or an update. `naima hello` never
+changes the lock, never writes anything in your project and never starts a
+run.
 
 How much it looks for updates depends on the `updates` setting in
 `naima.json`. You can ask the agent to change it, and it runs this:

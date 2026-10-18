@@ -109,9 +109,9 @@ naima hello
 
 Show the user its first line exactly as printed, for example `Naima is
 active in this repository: version 1.0.0, commit 45ba22c1134c.` Then pass on
-what it says about newer versions, and offer the three things it lists:
-explaining Naima and showing its documentation (`naima guide`), checking for
-an update, and updating.
+what it says about newer versions and any long run it says is due, and offer
+the three things it lists: explaining Naima and showing its documentation
+(`naima guide`), checking for an update, and updating.
 
 How much it checks depends on `updates` in `naima.json`, which is `off`,
 `check` (the default) or `update`. If the owner asks you to change it, run
@@ -148,6 +148,12 @@ A command that will outlast a few minutes, or run on another machine, goes
 through `naima run <name> --budget-time <d> -- <command>` and `naima wait
 <name> --timeout <d>`, never a hand-written wait loop
 ([long work](../../docs/agents/long-work.md)).
+
+Nothing runs unattended: never schedule a run, and never start a long run on
+your own. When `naima hello` or `naima summary` says a long run is due, pass
+the line on, file it with `naima run due`, and ask the owner before starting
+it with `naima run <name>`
+([nothing runs unattended](../../docs/guide/rules.md#nothing-runs-unattended)).
 
 A tool a verifier needs that is missing (`tool missing:`) is installed with
 `naima tools install <tool>`, only after showing the owner the plan and
