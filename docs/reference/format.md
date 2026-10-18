@@ -30,11 +30,13 @@ naima-tracker/
     test-runs/<suite>/<commit>-<id>.json  the same: one run of a test suite, test by test, its .log beside it
 ```
 
-Naima writes nothing in the project outside this folder, with one
-exception: the marker lines `naima adopt propose --write` inserts into the
+Naima writes nothing in the project outside this folder, with these
+exceptions: the marker lines `naima adopt propose --write` inserts into the
 board being adopted, which only add lines
-([adopt an existing board](../guide/adopt-an-existing-board.md)) — and the
-host files `naima init --write-excludes` and `--write-agent-pointer` name.
+([adopt an existing board](../guide/adopt-an-existing-board.md)); the
+pointer line and the session-start hooks `naima init` and `naima update`
+write ([running naima hello at every session start](../guide/install.md#running-naima-hello-at-every-session-start));
+and the host files `naima init --write-excludes` names.
 Nothing is written outside the project.
 
 The program finds its data beside itself: `naima-data/`, the sibling of the
@@ -71,7 +73,8 @@ carries `format`.
 | `rename` | no, `{}` | kind → `{ "<plugin>/<name>": "<short name>" }`: the name a third-party plugin's contribution goes by, when two plugins would store the same one ([names](plugin-contract.md#names)) |
 | `extends` | no, `[]` | the project's own additive changes to the loaded plugins' types and fields: `{ "type", "statuses", "traits", "transitions" }` or `{ "field", "values", "appliesTo", "traits" }` ([extending](plugin-contract.md#extending-another-plugins-types-and-fields)) |
 | `updates` | no, `check` | what a session start, `naima hello`, does about a newer Naima: `off`, `check` or `update`; set with `naima update --mode` ([update Naima](../guide/update-naima.md#what-happens-when-a-session-starts)) |
-| `entryFiles` | no, sensible defaults | the agent-harness entry files (`CLAUDE.md`, `AGENTS.md`, …) `naima check` and `naima init --write-agent-pointer` act on, project-root relative ([the agent-harness entry point](../guide/install.md#the-agent-harness-entry-point)) |
+| `entryFiles` | no, sensible defaults | the agent-harness entry files (`AGENTS.md`, `CLAUDE.md`, …) `naima check`, `naima init` and `naima update` act on, project-root relative ([the agent-harness entry point](../guide/install.md#the-agent-harness-entry-point)) |
+| `agents` | no, the tools whose files the project holds | the agent tools the project uses, by their adapter's id, as the table of hooks lists them: `naima init` and `naima update` install the session-start hook of each that has one, and `naima check` notes one missing; `[]` installs none ([running naima hello at every session start](../guide/install.md#running-naima-hello-at-every-session-start)) |
 
 Any other key is an error. `source`, `commit`, `verify` and `program` are the
 lock: they keep these names and meanings in every format, so that any Naima

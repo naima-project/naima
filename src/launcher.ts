@@ -3,7 +3,8 @@
 // with only these (docs/guide/install.md says why each one exists):
 //
 //   read    the repository, the program wherever it is, and the data directory of every other worktree
-//   write   the tracker folder (naima-tracker/, the parent of the program), and the data and program if moved out of it
+//   write   the tracker folder (naima-tracker/, the parent of the program), and the data and program if moved out of it;
+//           for init and update, the entry files and the session-start settings of the agent tools in use (session-start.ts)
 //   run     git, and the programs the loaded contributions declare (`runs`: a verifier's tool, a metric's command), nothing else
 //   env     an allow-list of the environment (ENV below): what git needs, and Naima's own,
 //           plus the machine's name and the private word list (core/private.ts), read here
@@ -39,7 +40,6 @@ import {
   findData,
   globalOptions,
   message,
-  POINTER_FILES,
   privateEnv,
   programOf,
   readConfig,
@@ -48,6 +48,8 @@ import {
   restoreDeleted,
   restoredFiles,
   runtimeOf,
+  type SessionConfig,
+  sessionStartPaths,
   toolsDir,
   toplevel,
   trackerOf,
@@ -249,23 +251,25 @@ function declaredRuns(entry: string, cwd: string, read: string, env: Record<stri
   }
 }
 
-/** The project's configured `entryFiles`, or the sensible defaults: `data` may hold no naima.json yet, or one this Naima cannot parse. */
-function entryFilesOf(data: string | null): readonly string[] {
-  if (!data || !existsSync(join(data, DATA_FILE))) return DEFAULT_ENTRY_FILES
+/** The project's configured `entryFiles` and `agents`, or the defaults: `data` may hold no naima.json yet, or one this Naima cannot parse. */
+function sessionConfigOf(data: string | null): SessionConfig {
+  if (!data || !existsSync(join(data, DATA_FILE))) return { entryFiles: DEFAULT_ENTRY_FILES }
   try {
-    return readConfig(data).entryFiles
+    return readConfig(data)
   } catch {
-    return DEFAULT_ENTRY_FILES
+    return { entryFiles: DEFAULT_ENTRY_FILES }
   }
 }
 
-/** The host files the run may write outside the tracker folder: only `init --write-excludes` and `init --write-agent-pointer` have any. */
+/** The host files the run may write outside the tracker folder: only init's and update's, the pointer line and the session-start hooks, and init --write-excludes's. */
 function hostFiles(rest: string[], root: string, data: string | null): string[] {
   const [command, ...args] = rest
-  if (command !== "init") return []
+  if (command !== "init" && command !== "update") return []
+  const config = sessionConfigOf(data)
+  const hooks = !(command === "init" && args.includes("--no-session-hook"))
   return [
-    ...(args.includes("--write-excludes") ? EXCLUDE_FILES.map((f) => join(root, f)) : []),
-    ...(args.includes("--write-agent-pointer") ? [...new Set([...POINTER_FILES, ...entryFilesOf(data)])].map((f) => join(root, f)) : []),
+    ...(command === "init" && args.includes("--write-excludes") ? EXCLUDE_FILES.map((f) => join(root, f)) : []),
+    ...sessionStartPaths(root, config, { hooks }),
   ]
 }
 

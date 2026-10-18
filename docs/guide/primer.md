@@ -291,7 +291,7 @@ items, so everyone can see who is doing what. Claims are only information:
 they don't stop anyone else from working on the same item.
 
 ```sh
-naima open total-ignores-discount --as claude
+naima open total-ignores-discount --as agent
 ```
 
 When the work on a branch has been proven, the coordinator

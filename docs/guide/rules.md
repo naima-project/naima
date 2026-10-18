@@ -676,6 +676,27 @@ the `updates` setting in `naima.json` says.
 refuses a changed [source](glossary.md#source) until `naima update
 --accept-source` is run ([update Naima](update-naima.md)).
 
+### Every session starts with naima hello
+
+An agent runs `naima hello` at the start of every session and passes on
+what it says, so the owner always knows which Naima is active and whether a
+newer one exists. A skill is loaded only when the agent judges it relevant,
+so the instruction is also in the pointer line of the project's entry file,
+and for an agent tool that can run a command when a session starts, a hook
+runs it ([running naima hello at every session start](install.md#running-naima-hello-at-every-session-start)).
+**Enforced by** the check `session-start`, as a note, and by `naima init`
+and `naima update`, which write the line and the hooks.
+
+### Naima is tied to no agent tool or model
+
+Naima works with any agent that can run a command, on any model. Its code,
+its skill and its documentation name no agent tool or model, except in a
+tool's adapter and in an example marked as one tool's. A project that uses
+a particular tool says so in its own `naima.json` (`agents`). The reason: a
+project chooses its tools, and what Naima brings is the method and the
+records, not a vendor. **Convention** for a project; in Naima's own
+repository a test holds it.
+
 ### A tracker never mixes formats
 
 **Enforced by** the check `one-format`. After a teammate has updated, merge
