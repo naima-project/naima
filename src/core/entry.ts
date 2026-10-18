@@ -10,10 +10,10 @@ export const cliCommands: Omit<Command, "run">[] = [
   {
     name: "init",
     says:
-      `make the git repository around the program a Naima project, as its first run does by itself: beside the program, a git clone of Naima at ${TRACKER_DIR}/${PROGRAM_DIR}/, create ${DATA_DIR}/${DATA_FILE}, locked to the clone's origin and its HEAD, which must be on the origin's main, and the tracker folder's README.md and .gitignore; print the line that keeps the program out of each host tool configuration it finds (deno.json, tsconfig.json, .prettierignore), and the one line that tells agents where Naima is; nothing outside ${TRACKER_DIR}/ is touched unless --write-excludes or --write-agent-pointer is given`,
+      `make the git repository around the program a Naima project, as its first run does by itself: beside the program, a git clone of Naima at ${TRACKER_DIR}/${PROGRAM_DIR}/, create ${DATA_DIR}/${DATA_FILE}, locked to the clone's origin and its HEAD, which must be on the origin's main, and the tracker folder's README.md and .gitignore; print the line that keeps the program out of each host tool configuration it finds (deno.json, tsconfig.json, .prettierignore); and write what makes an agent run naima hello at the start of every session: the line that tells agents where Naima is and to run it, into the host's AGENTS.md, else the first entry file it has, else a new AGENTS.md, and the session-start hook of each agent tool the project uses that has one (naima.json's agents; absent it, those whose files the project holds); nothing else outside ${TRACKER_DIR}/ is touched unless --write-excludes is given`,
     enforces:
-      "the program is locked to a commit of its source's main, with nothing uncommitted, and nothing outside the tracker folder is written unless --write-excludes or --write-agent-pointer asks",
-    usage: "init [--write-excludes] [--write-agent-pointer]",
+      "the program is locked to a commit of its source's main, with nothing uncommitted; outside the tracker folder, only the pointer line, the session-start hooks and, with --write-excludes, the exclusion lines are written",
+    usage: "init [--write-excludes] [--no-session-hook]",
     options: [
       {
         name: "--write-excludes",
@@ -21,17 +21,16 @@ export const cliCommands: Omit<Command, "run">[] = [
           "also write those lines into the host's own files: deno.json and tsconfig.json when they are plain JSON, .prettierignore; a file with comments is left to be edited by hand",
       },
       {
-        name: "--write-agent-pointer",
-        says:
-          "also write the line telling agents where Naima is into the host's AGENTS.md, else its CLAUDE.md, else a new AGENTS.md, unless one of its entry files has it",
+        name: "--no-session-hook",
+        says: "install no agent tool's session-start hook: only the pointer line is written; naima check notes the hook missing, and naima update installs it",
       },
     ],
-    examples: ["init", "init --write-excludes", "init --write-agent-pointer"],
+    examples: ["init", "init --write-excludes", "init --no-session-hook"],
   },
   {
     name: "update",
     says:
-      `move the lock to the head of the source's main, or to the commit --to names: say what changes (the commits, the change notes they add — breaking first, then those that ask an action —, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, rename and remove options in naima.json as the change notes say and remove those it reads nowhere, each said with its value, and record the new commit; moving forward, the new Naima finishes: it migrates the data if its format moved, names the rules agents acknowledge again, runs naima check, and files an item in the type with the trait follow-up for each problem or note that is new since the commit before; all as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima`,
+      `move the lock to the head of the source's main, or to the commit --to names: say what changes (the commits, the change notes they add — breaking first, then those that ask an action —, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, rename and remove options in naima.json as the change notes say and remove those it reads nowhere, each said with its value, and record the new commit; moving forward, the new Naima finishes: it migrates the data if its format moved, names the rules agents acknowledge again, runs naima check, and files an item in the type with the trait follow-up for each problem or note that is new since the commit before; writes, and says, what makes agents run naima hello at every session start where it is missing — the pointer line, rewritten when it does not say so, and each session-start hook as naima init installs them; all as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima`,
     enforces:
       "the lock moves only to a commit of the source's main, with the data migrated forward in the same change; never back past a migration, which runs forward only; a source naima.json names other than the program's origin is refused, by every command, until --accept-source",
     usage: "update [--check | --to <commit> | --mode off|check|update | --accept-source]",

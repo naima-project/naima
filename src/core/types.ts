@@ -408,8 +408,10 @@ export interface Config {
   rename: Record<string, Record<string, string>>
   /** The project's own additive changes to the loaded plugins' types and fields. */
   extends: Extension[]
-  /** The agent-harness entry files `check` and `init --write-agent-pointer` act on, project-root relative. Absent: sensible defaults (`DEFAULT_ENTRY_FILES`). */
+  /** The agent-harness entry files `check` and `init` act on, project-root relative. Absent: sensible defaults (`DEFAULT_ENTRY_FILES`). */
   entryFiles: string[]
+  /** The agent tools the project uses, by adapter id, whose session-start hooks init and update install. Absent: those whose files the project holds. */
+  agents?: string[]
   /** What a session start (`naima hello`) does about a newer Naima: off, check (the default) or update. */
   updates: "off" | "check" | "update"
 }

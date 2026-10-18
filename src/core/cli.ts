@@ -26,7 +26,6 @@ import { formatsFor, type OpenOptions, openProject, owed } from "./project.ts"
 import { bool, pairs, parse, str } from "./args.ts"
 import { gitOrNull, nativePath, runGit, toplevel } from "./git.ts"
 import { exclusions } from "./excludes.ts"
-import { agentPointer, writePointer } from "./pointer.ts"
 import { ALLOW_PRIVATE, allowPrivateOption } from "./private.ts"
 import { DATA_DIR, DATA_FILE, findData, globalOptions, PROGRAM_DIR, real, RELAUNCH, runtimeOf, trackerOf, trackerReadme } from "./layout.ts"
 import {
@@ -70,6 +69,7 @@ import { asRendered, linesAs } from "./rendered.ts"
 import { shortOrId } from "./names.ts"
 import { apiFor } from "./plugins.ts"
 import { atSessionStart } from "./base.ts"
+import { type SessionConfig, startSessions } from "./session-start.ts"
 
 export interface CliOptions extends OpenOptions {
   cwd: string
@@ -165,15 +165,11 @@ function excludeHost(root: string, program: string, write: boolean, io: IO): voi
   }
 }
 
-/** Print, and with --write-agent-pointer write, the line that tells agents where Naima is. */
-function pointAgents(root: string, tracker: string, entryFiles: readonly string[], write: boolean, io: IO): void {
-  const p = agentPointer(root, tracker, entryFiles)
-  if (p.present) return
-  if (!write) io.out(`agent pointer missing from ${p.file}: ${p.line}   (naima init --write-agent-pointer adds it)`)
-  else {
-    writePointer(root, tracker, p.file)
-    io.out(`wrote ${p.file}: ${p.line}`)
-  }
+/** Write what makes an agent run naima hello at every session start — the pointer line, and with `hooks` each tool's hook — and say it. */
+function startAgents(root: string, tracker: string, config: SessionConfig, hooks: boolean, io: IO): string[] {
+  const done = startSessions(root, tracker, config, { hooks })
+  for (const line of done.said) io.out(line)
+  return done.wrote
 }
 
 /** The installer's refusal outside a git repository, said by init and by a first run alike. */
@@ -237,15 +233,16 @@ function createData(data: string, opts: CliOptions): { root: string; tracker: st
 }
 
 async function init(args: string[], opts: CliOptions, data: string, io: IO): Promise<number> {
-  const p = parse(args, { "write-excludes": { type: "boolean" }, "write-agent-pointer": { type: "boolean" } })
+  // --write-agent-pointer is accepted and changes nothing: the pointer is always written.
+  const p = parse(args, { "write-excludes": { type: "boolean" }, "write-agent-pointer": { type: "boolean" }, "no-session-hook": { type: "boolean" } })
   const write = bool(p, "write-excludes")
-  const writeAgent = bool(p, "write-agent-pointer")
+  const hooks = !bool(p, "no-session-hook")
   const found = locate(data)
   if (found) {
     io.out(`${posixRelative(found.root, join(found.data, DATA_FILE))} already exists — left as it is`)
     const config = parseConfig(found.raw, { lenient: true })
     excludeHost(found.root, found.program, write, io)
-    pointAgents(found.root, trackerOf(found.data), config.entryFiles, writeAgent, io)
+    startAgents(found.root, trackerOf(found.data), config, hooks, io)
     io.out(await nextStep(found, opts, io))
     return 0
   }
@@ -257,7 +254,7 @@ async function init(args: string[], opts: CliOptions, data: string, io: IO): Pro
     : ""
   io.out(made.said + cloned)
   excludeHost(made.root, made.program, write, io)
-  pointAgents(made.root, made.tracker, parseConfig(readRaw(place.data)).entryFiles, writeAgent, io)
+  startAgents(made.root, made.tracker, parseConfig(readRaw(place.data)), hooks, io)
   io.out(await nextStep(place, opts, io))
   return 0
 }
@@ -504,8 +501,10 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
   const { all } = await owed(raw, place, opts)
   const steps = migrate(place.data, MIGRATIONS, all.slice(1))
   for (const line of migrated(steps, from, all.slice(1))) io.out(line)
+  // A mechanical fix, said: what makes agents run naima hello at every session start, where it is missing.
+  const wrote = startAgents(place.root, trackerOf(place.data), parseConfig(readRaw(place.data), { lenient: true }), true, io)
   await finish(opts, place, lock, io)
-  io.out(`${short(target)} is the lock — commit it as one change: git add ${tracker} && git commit -m "Update Naima to ${short(target)}"`)
+  io.out(`${short(target)} is the lock — commit it as one change: git add ${[tracker, ...wrote].join(" ")} && git commit -m "Update Naima to ${short(target)}"`)
   return 0
 }
 
@@ -801,7 +800,7 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     const given = opts.launched && opts.data ? opts.data : flag ?? opts.data
     const data = findData(opts.cwd, real(opts.programRoot), given)
     if (command === "init") {
-      if (args.some((a) => a !== "--write-excludes" && a !== "--write-agent-pointer")) throw new Error(usage("init"))
+      if (args.some((a) => !["--write-excludes", "--write-agent-pointer", "--no-session-hook"].includes(a))) throw new Error(usage("init"))
       return await init(args, opts, data, io)
     }
     if (command === "guide") return await guide(opts, data, io)

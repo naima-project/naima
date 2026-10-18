@@ -7,7 +7,8 @@ export * from "./api.ts"
 export { carryRefusal, type Lock, parseConfig, parseLock, PLUGIN_NAME, programOf, readConfig } from "./config.ts"
 export { apiFor, composePlugins, type PluginSource } from "./plugins.ts"
 export { EXCLUDE_FILES, type Exclusion, exclusions } from "./excludes.ts"
-export { agentPointer, brokenEntryLinks, DEFAULT_ENTRY_FILES, type EntryPointer, POINTER_FILES, pointerLine, writePointer } from "./pointer.ts"
+export { agentPointer, AGENTS_FILE, brokenEntryLinks, DEFAULT_ENTRY_FILES, type EntryPointer, pointerLine, upgradePointer, writePointer } from "./pointer.ts"
+export { adaptersInUse, type SessionConfig, sessionStartGaps, sessionStartPaths, startSessions } from "./session-start.ts"
 export { FORMAT, formatCheck, formatOf, formatRefusal, migrate, MIGRATIONS, type Migrations, type Step } from "./format.ts"
 export {
   ABOUT,

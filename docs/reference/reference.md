@@ -36,8 +36,8 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 
 | Command | Plugin | What it does | What it enforces |
 |---|---|---|---|
-| [`init`](#naima-init) | core | make the git repository around the program a Naima project, as its first run does by itself: beside the program, a git clone of Naima at naima-tracker/naima/, create naima-data/naima.json, locked to the clone's origin and its HEAD, which must be on the origin's main, and the tracker folder's README.md and .gitignore; print the line that keeps the program out of each host tool configuration it finds (deno.json, tsconfig.json, .prettierignore), and the one line that tells agents where Naima is; nothing outside naima-tracker/ is touched unless --write-excludes or --write-agent-pointer is given | the program is locked to a commit of its source's main, with nothing uncommitted, and nothing outside the tracker folder is written unless --write-excludes or --write-agent-pointer asks |
-| [`update`](#naima-update) | core | move the lock to the head of the source's main, or to the commit --to names: say what changes (the commits, the change notes they add — breaking first, then those that ask an action —, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, rename and remove options in naima.json as the change notes say and remove those it reads nowhere, each said with its value, and record the new commit; moving forward, the new Naima finishes: it migrates the data if its format moved, names the rules agents acknowledge again, runs naima check, and files an item in the type with the trait follow-up for each problem or note that is new since the commit before; all as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima | the lock moves only to a commit of the source's main, with the data migrated forward in the same change; never back past a migration, which runs forward only; a source naima.json names other than the program's origin is refused, by every command, until --accept-source |
+| [`init`](#naima-init) | core | make the git repository around the program a Naima project, as its first run does by itself: beside the program, a git clone of Naima at naima-tracker/naima/, create naima-data/naima.json, locked to the clone's origin and its HEAD, which must be on the origin's main, and the tracker folder's README.md and .gitignore; print the line that keeps the program out of each host tool configuration it finds (deno.json, tsconfig.json, .prettierignore); and write what makes an agent run naima hello at the start of every session: the line that tells agents where Naima is and to run it, into the host's AGENTS.md, else the first entry file it has, else a new AGENTS.md, and the session-start hook of each agent tool the project uses that has one (naima.json's agents; absent it, those whose files the project holds); nothing else outside naima-tracker/ is touched unless --write-excludes is given | the program is locked to a commit of its source's main, with nothing uncommitted; outside the tracker folder, only the pointer line, the session-start hooks and, with --write-excludes, the exclusion lines are written |
+| [`update`](#naima-update) | core | move the lock to the head of the source's main, or to the commit --to names: say what changes (the commits, the change notes they add — breaking first, then those that ask an action —, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, rename and remove options in naima.json as the change notes say and remove those it reads nowhere, each said with its value, and record the new commit; moving forward, the new Naima finishes: it migrates the data if its format moved, names the rules agents acknowledge again, runs naima check, and files an item in the type with the trait follow-up for each problem or note that is new since the commit before; writes, and says, what makes agents run naima hello at every session start where it is missing — the pointer line, rewritten when it does not say so, and each session-start hook as naima init installs them; all as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima | the lock moves only to a commit of the source's main, with the data migrated forward in the same change; never back past a migration, which runs forward only; a source naima.json names other than the program's origin is refused, by every command, until --accept-source |
 | [`rollback`](#naima-rollback) | core | move the lock back to the one naima.json recorded before it, found in its git history, as one change to commit: what update --to does with that commit | the lock goes back only to a commit that reads the data's formats: a migration is undone by reverting its commit, never by running an older Naima on newer data |
 | [`hello`](#naima-hello) | core | what an agent says first in a session: the banner (Naima is active in this repository, its version and commit); then, as naima.json's updates says, whether a newer Naima exists and, under update, what it changes and its rehearsal, as update --check says them; then, one line each, what waits on the owner's decision, such as a long run that is due, never started; then what it offers on request: what Naima is and its documentation, an update check, an update after the owner's yes | nothing: it never moves the lock, writes the project nor starts a run; it asks the source only when updates is check or update |
 | [`plugin`](#naima-plugin) | core | turn a plugin on or off, or set one of its options, in naima.json's plugins table — validated the way the project is validated on every load, instead of a hand-edit of the file | a name must be a first-party plugin (loaded or opt-in) or one the table already names with its own source; an option set on one whose options are known here must be one it declares; the whole file is re-validated before it is written, so nothing a later load would refuse ever reaches disk |
@@ -143,30 +143,30 @@ An item is a directory under `<tracker>/<TYPE>/<slug>/`: `README.md` for the pro
 
 ### naima init
 
-Make the git repository around the program a Naima project, as its first run does by itself: beside the program, a git clone of Naima at naima-tracker/naima/, create naima-data/naima.json, locked to the clone's origin and its HEAD, which must be on the origin's main, and the tracker folder's README.md and .gitignore; print the line that keeps the program out of each host tool configuration it finds (deno.json, tsconfig.json, .prettierignore), and the one line that tells agents where Naima is; nothing outside naima-tracker/ is touched unless --write-excludes or --write-agent-pointer is given.
+Make the git repository around the program a Naima project, as its first run does by itself: beside the program, a git clone of Naima at naima-tracker/naima/, create naima-data/naima.json, locked to the clone's origin and its HEAD, which must be on the origin's main, and the tracker folder's README.md and .gitignore; print the line that keeps the program out of each host tool configuration it finds (deno.json, tsconfig.json, .prettierignore); and write what makes an agent run naima hello at the start of every session: the line that tells agents where Naima is and to run it, into the host's AGENTS.md, else the first entry file it has, else a new AGENTS.md, and the session-start hook of each agent tool the project uses that has one (naima.json's agents; absent it, those whose files the project holds); nothing else outside naima-tracker/ is touched unless --write-excludes is given.
 
-**Enforces**: The program is locked to a commit of its source's main, with nothing uncommitted, and nothing outside the tracker folder is written unless --write-excludes or --write-agent-pointer asks.
+**Enforces**: The program is locked to a commit of its source's main, with nothing uncommitted; outside the tracker folder, only the pointer line, the session-start hooks and, with --write-excludes, the exclusion lines are written.
 
 ```sh
-naima init [--write-excludes] [--write-agent-pointer]
+naima init [--write-excludes] [--no-session-hook]
 ```
 
 | Option | Default | What it does |
 |---|---|---|
 | `--write-excludes` |  | also write those lines into the host's own files: deno.json and tsconfig.json when they are plain JSON, .prettierignore; a file with comments is left to be edited by hand |
-| `--write-agent-pointer` |  | also write the line telling agents where Naima is into the host's AGENTS.md, else its CLAUDE.md, else a new AGENTS.md, unless one of its entry files has it |
+| `--no-session-hook` |  | install no agent tool's session-start hook: only the pointer line is written; naima check notes the hook missing, and naima update installs it |
 
 Examples:
 
 ```sh
 naima init
 naima init --write-excludes
-naima init --write-agent-pointer
+naima init --no-session-hook
 ```
 
 ### naima update
 
-Move the lock to the head of the source's main, or to the commit --to names: say what changes (the commits, the change notes they add — breaking first, then those that ask an action —, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, rename and remove options in naima.json as the change notes say and remove those it reads nowhere, each said with its value, and record the new commit; moving forward, the new Naima finishes: it migrates the data if its format moved, names the rules agents acknowledge again, runs naima check, and files an item in the type with the trait follow-up for each problem or note that is new since the commit before; all as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima.
+Move the lock to the head of the source's main, or to the commit --to names: say what changes (the commits, the change notes they add — breaking first, then those that ask an action —, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, rename and remove options in naima.json as the change notes say and remove those it reads nowhere, each said with its value, and record the new commit; moving forward, the new Naima finishes: it migrates the data if its format moved, names the rules agents acknowledge again, runs naima check, and files an item in the type with the trait follow-up for each problem or note that is new since the commit before; writes, and says, what makes agents run naima hello at every session start where it is missing — the pointer line, rewritten when it does not say so, and each session-start hook as naima init installs them; all as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima.
 
 **Enforces**: The lock moves only to a commit of the source's main, with the data migrated forward in the same change; never back past a migration, which runs forward only; a source naima.json names other than the program's origin is refused, by every command, until --accept-source.
 
@@ -661,6 +661,7 @@ naima runs --json
 | `layout` | every directory under the tracker root belongs to an item type or a plugin |
 | `duplicates` | items of one type with the same title are linked as duplicates, or reported |
 | `entry-pointers` | every agent-harness entry file naima.json configures (entryFiles; sensible defaults absent it) names no path or link, plain-text or markdown, that is missing from disk |
+| `session-start` | an agent is told to run naima hello at the start of every session: an entry file holds the pointer line, which says so, and each agent tool the project uses (naima.json's agents; absent it, those whose files the project holds) that has a session-start hook has it installed; each one missing is noted, with the naima update that adds it |
 | `unread-options` | every option naima.json's plugins table sets is one its loaded plugin declares: an option no plugin reads any more is noted, by name |
 | `one-format` | no item is still in a shape a format migration, the core's or a plugin's own, replaced: a tracker never mixes formats |
 
@@ -893,8 +894,8 @@ naima open <item>... [--as <who>] [--name <what>] [--note "why"]
 Examples:
 
 ```sh
-naima open export-drops --as claude --note "alpha channel in the exporter"
-naima open export-drops export-keeps --as claude --name export-alpha
+naima open export-drops --as agent --note "alpha channel in the exporter"
+naima open export-drops export-keeps --as agent --name export-alpha
 ```
 
 ### naima claim
@@ -979,10 +980,10 @@ naima land <branch> [--closes <item>]... [--no-change-note "<reason>"] [--stale-
 Examples:
 
 ```sh
-naima land claude/export-alpha
-naima land claude/export-alpha --closes export-drops
-naima land claude/tidy-loader --no-change-note "a refactor of the loader: nothing a person or an agent sees changes"
-naima land claude/scheduler --stale-proofs "the liveness property runs for two days: it is due as a long run, and the owner will start it"
+naima land agent/export-alpha
+naima land agent/export-alpha --closes export-drops
+naima land agent/tidy-loader --no-change-note "a refactor of the loader: nothing a person or an agent sees changes"
+naima land agent/scheduler --stale-proofs "the liveness property runs for two days: it is due as a long run, and the owner will start it"
 ```
 
 ### naima changes
@@ -1031,7 +1032,7 @@ Examples:
 ```sh
 naima prune
 naima prune --write
-naima prune --branch claude/old-idea --archive --write
+naima prune --branch agent/old-idea --archive --write
 ```
 
 ### naima pass

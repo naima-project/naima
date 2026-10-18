@@ -334,6 +334,11 @@ queue.
 - **Iterate, don't overthink.** Use the simplest design that works now, and
   improve it version by version (the design principles are kept with Naima's
   requirements in its workshop).
+- **Any agent, any model.** Naima is a command-line program over files and
+  git, so any agent that can run a command can use it, on any model. Nothing
+  in it assumes one tool: what is particular to a tool is in that tool's
+  adapter, and a project names the tools it uses in its own configuration
+  ([the rule](guide/rules.md#naima-is-tied-to-no-agent-tool-or-model)).
 - **Plain language.** Every term is defined once, in the
   [glossary](guide/glossary.md). Reports to you say what changed and what is
   needed from you, and nothing else.
