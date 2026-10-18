@@ -178,6 +178,14 @@ An item of type `features`, for something the work should be able to do.
 It goes from `requested` to `shipped`. *Everyday example:* "a dishwasher under the
 counter".
 
+### Artifact
+
+An item of type `artifacts`, for something the work makes and keeps: an
+analysis, a report, a dataset, a figure. It has a due date and the files it
+consists of. When it is delivered, Naima records the commit and the inputs it
+was made from, so `naima check` can tell you when it is out of date
+([artifacts](artifacts.md)). *Everyday example:* "the monthly sales report".
+
 ### Status
 
 Where an item is in its life, for example `open`, `partial`, `passed` or

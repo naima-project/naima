@@ -14,8 +14,11 @@
 //                 stage's output recorded with `naima note` ("Stage: <name>"),
 //                 or named who decided to skip it; a hook refuses `released`
 //                 while a stage is unrecorded.
+//   artifacts     what the project makes and keeps (artifacts.ts): due by a
+//                 day, produced by a todo, made of files; delivering one
+//                 records the commit and inputs it was made from.
 //
-// Data only: four types, their fields and relations, checks that read them,
+// Data only: five types, their fields and relations, checks that read them,
 // two views and two commands. No type derives from another.
 //
 // It ships two rules: requirements are elicited at every prompt of the owner,
@@ -51,6 +54,7 @@ import {
   type View,
   type WriteHook,
 } from "../../core/api.ts"
+import { ARTIFACT_FIELDS, ARTIFACT_RELATIONS, artifactsCheck, artifactsType, deliveryHook } from "./artifacts.ts"
 
 // ── requirements ──────────────────────────────────────────────────────────────
 
@@ -632,7 +636,7 @@ export default function planning(): Plugin {
   return {
     name: "planning",
     contract: CONTRACT,
-    says: "requirements proven by tests, specifications versioned name-vN, and the owner's decisions recorded once",
+    says: "requirements proven by tests, specifications versioned name-vN, the owner's decisions recorded once, and the artifacts the project makes and keeps",
     about: "Planning as items, so each is proven or checked rather than implied by a test. " +
       "A **requirement** says what must hold: the features, tests or epics that deliver it are linked `satisfies`, the tests or properties that prove it `verifies`; it is `met` only once a proof has passed and none refutes it, and `naima view requirements` traces each one. " +
       "A **specification** says how something must behave, versioned `name-vN`: `naima spec revise <spec>` opens the next version as a draft that `supersedes` the old one, one version per name is `current`, and an item that follows a spec is linked `specified-by` — work starts from the spec, and closes when the code matches it. " +
@@ -640,27 +644,29 @@ export default function planning(): Plugin {
       "Before asking the owner anything, an agent runs `naima decisions <words>`; after the owner answers, it records the answer with `naima new decisions`, so a settled question is never asked again. " +
       'A **release** opens at its first stage (`naima new releases "<name>"`); each stage\'s output is recorded with `naima note`, headed `Stage: <name>` (or `Stage: <name> — skipped, decided by <who>`), and the hook refuses `status=released` while a stage is unrecorded — `naima view releases` shows what each one still owes. ' +
       "A **session** is a dated, append-only record of one test sitting, linked `records` to the test or tests it was for; several share a `run` name when they were sat together. It is optional — most of the time the test's own page and status say enough — and is never edited once written: a later sitting is a new session. " +
+      "An **artifact** is something the project makes and keeps — an analysis, a profile, a report, a dataset, a figure: `due` by a day, made by the todo or feature linked `produces`, made of `files` (paths from the project root) or its attachments, made from `inputs` (files or directories) and the data of the tests, properties or other artifacts it `uses`, and replaced by a later version that `supersedes` it. `naima set <artifact> status=delivered` refuses while a file it names is missing or it has none, and otherwise records `madeFrom` — the commit, one digest over its inputs and the data of what it uses, the moment — and `deliveredOn`, from which `naima diary` tells the delivery; neither is set by hand. `artifacts-current` notes an artifact past its due day and not delivered, a delivered one whose inputs changed since it was made, and a planned one nothing produces. " +
       'The plugin ships two rules, listed by `naima rules` when the rules plugin is loaded: requirements are elicited at every prompt of the owner, each with how it is checked or measured (a test, a property, or a metric with a budget), acknowledged as "Elicitation mode on" and held in part by `requirements-proven`, which notes a requirement nothing proves; and behaviour with states or concurrency is designed from a model first (a state machine, mCRL2, or a state machine encoded in mCRL2), its properties as items, kept in step with the code, acknowledged as "Model first mode on".',
-    types: [requirementsType, specsType, decisionsType, releasesType, sessionsType],
-    fields: [SPEC, VERSION, DECIDED_ON, STANDING, SITTING_RUN],
+    types: [requirementsType, specsType, decisionsType, releasesType, sessionsType, artifactsType],
+    fields: [SPEC, VERSION, DECIDED_ON, STANDING, SITTING_RUN, ...ARTIFACT_FIELDS],
     relations: [
       { name: "satisfies", inverse: "satisfied-by", says: "delivers or proves the requirement" },
       { name: "satisfied-by", inverse: "satisfies", says: "is delivered by" },
       { name: "specified-by", inverse: "specifies", says: "follows the specification" },
       { name: "specifies", inverse: "specified-by", says: "is the specification followed by" },
-      { name: "supersedes", inverse: "superseded-by", says: "replaces an earlier version or decision" },
+      { name: "supersedes", inverse: "superseded-by", says: "replaces an earlier version, decision or artifact" },
       { name: "superseded-by", inverse: "supersedes", says: "is replaced by" },
       { name: "settles", inverse: "settled-by", says: "is the decision that answers" },
       { name: "settled-by", inverse: "settles", says: "is answered by the decision" },
       { name: "records", inverse: "recorded-by", says: "is the session recording a sitting of" },
       { name: "recorded-by", inverse: "records", says: "has a sitting recorded by the session" },
+      ...ARTIFACT_RELATIONS,
     ],
     // What it reads of others: who performs a proof and why, and what proves an item.
     uses: { fields: [RUN_BY.name, HUMAN_BECAUSE.name], relations: ["verified-by"] },
     commands: [spec, decisions],
     views: [requirementsView, releasesView],
-    checks: [requirementsCheck, specsCheck, decisionsCheck, releasesCheck],
-    hooks: [stamp, releasesHook],
+    checks: [requirementsCheck, specsCheck, decisionsCheck, releasesCheck, artifactsCheck],
+    hooks: [stamp, releasesHook, deliveryHook],
     contributes: { rules: [ELICITATION_RULE, MODEL_FIRST_RULE] },
     // The rules are listed by naima rules when the rules plugin is loaded; without it, planning works the same.
     optional: ["rules"],

@@ -61,6 +61,7 @@ requests, plans and proofs are all items, and every item has a
 | [requirement](glossary.md#requirement) | a condition the result must meet, in a way you can check | an order placed by 20:00 is ready by 7:00 |
 | [specification](glossary.md#specification) | a precise, versioned description of how something behaves | orders: the form, the cut-off time, the receipt |
 | [decision](glossary.md#decision) | a choice you made, written down once | no orders on Sundays |
+| [artifact](glossary.md#artifact) | something the work makes and keeps, such as a report or a figure, due by a date | the monthly sales report |
 | [test](glossary.md#test-item) | a way to check something, and what happened when it was run | order at 19:59 and the receipt says 7:00 |
 | [property](glossary.md#property) | a statement about a model of the design, checked by a tool | two orders never get the same number |
 | [rule](glossary.md#rule) | something the project always sticks to | ask before deleting anything |

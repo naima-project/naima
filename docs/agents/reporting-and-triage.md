@@ -36,6 +36,7 @@ gets lost, and then the owner has to say it again.
 | "it must always hold that Z" — a condition the result must meet | `requirements`, proven by a test linked `verifies` |
 | "the behaviour must be Z" — exactly how something behaves | `specs`: a new one, or the next version of the current one (`naima spec revise`) |
 | "yes, do that" / "we go with X" — the owner decides or permits | `decisions`, linked `settles` to the items that waited on it |
+| "I need an analysis / a report / a figure by Friday" — something made and kept | `artifacts` with `due`, made by a todo linked `produces`, delivered with `naima set <artifact> status=delivered` ([artifacts](../guide/artifacts.md)) |
 
 A defect doesn't go in `todos`, and a request only becomes a feature once the
 code exists. A change of behaviour starts as a change to the spec. The agent

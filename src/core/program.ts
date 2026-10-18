@@ -135,7 +135,7 @@ export function restoreDeleted(dir: string): number {
 }
 
 /** The line that says files were restored: one line, with their number. */
-export const restoredFiles = (n: number, where: string): string => `restored ${n} ${n === 1 ? "file" : "files"} missing from ${where}`
+export const restoredFiles = (n: number, where: string): string => `restored ${n} file${n === 1 ? "" : "s"} missing from ${where}`
 
 /** Move an unreadable clone aside, beside it: its files may be someone's, so it is never deleted. Returns where it went. */
 function moveAside(t: Target): string {

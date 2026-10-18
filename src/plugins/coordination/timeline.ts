@@ -358,7 +358,7 @@ const DECIDED_ON = { name: "decidedOn", kind: "date" } as const
 export interface DiaryEntry {
   date: string
   at?: string
-  kind: "decision" | "diary" | "session"
+  kind: "decision" | "diary" | "session" | "delivery"
   text: string
 }
 
@@ -382,9 +382,25 @@ function decisionsOf(ctx: Context): { date: string; title: string; text: string 
   })
 }
 
-/** The diary: records of kind diary, decisions with their reasons, session notes -- oldest first. */
+const ARTIFACTS = "artifacts"
+const DELIVERED_ON = { name: "deliveredOn", kind: "date" } as const
+
+/** Every artifact delivered, on the day it was: its title and label, at the moment its madeFrom records when it does. */
+function deliveriesOf(ctx: Context): DiaryEntry[] {
+  if (!ctx.registry.types.has(ARTIFACTS)) return []
+  return ctx.repo.items.filter((i) => i.type === ARTIFACTS).flatMap((a): DiaryEntry[] => {
+    const date = fieldValue(a, DELIVERED_ON)
+    if (!date || !isDate(date)) return []
+    const made = a.meta["madeFrom"]
+    const at = made && typeof made === "object" ? (made as { at?: unknown }).at : undefined
+    return [{ date, ...(typeof at === "string" && isMoment(at) ? { at } : {}), kind: "delivery", text: `Delivered: ${a.meta.title} (${label(a)})` }]
+  })
+}
+
+/** The diary: records of kind diary, decisions with their reasons, artifacts delivered, session notes -- oldest first. */
 export function diaryOf(ctx: Context, passes: SessionNote[]): DiaryEntry[] {
   const out: DiaryEntry[] = decisionsOf(ctx).map((d) => ({ date: d.date, kind: "decision", text: d.text }))
+  out.push(...deliveriesOf(ctx))
   for (const r of readRecords(ctx).filter((r) => r.kind === DIARY)) {
     out.push({ date: r.date, ...(r.at ? { at: r.at } : {}), kind: "diary", text: r.text.replace(/\s+/g, " ") })
   }
@@ -400,8 +416,8 @@ export function diaryCommand(passes: (ctx: Context) => SessionNote[]): Command {
   return {
     name: "diary",
     says:
-      "the project's story, day by day and in order: events recorded with --kind diary, every decision with its reason, every session note; nothing stored but those files",
-    enforces: "nothing: it reads the records, the decisions and the session notes, and writes nothing",
+      "the project's story, day by day and in order: events recorded with --kind diary, every decision with its reason, every artifact delivered, every session note; nothing stored but those files",
+    enforces: "nothing: it reads the records, the decisions, the artifacts and the session notes, and writes nothing",
     usage: "diary [--from <YYYY-MM-DD>] [--to <YYYY-MM-DD>] [--json]",
     options: [
       { name: "--from", says: "the first day to tell" },
