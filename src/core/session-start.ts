@@ -4,12 +4,19 @@
 // by the tool's adapter (adapters/). `naima init` installs both, `naima
 // update` adds what an older project lacks and says so, and `naima check`
 // notes what is missing (features/naima-hello-runs-at-start-every-agent).
+// Each write is said in one plain sentence: what was installed, and why.
+// A write the permissions the program runs with do not grant is not
+// attempted: an update launched by an older launcher, whose fence predates
+// these files, leaves them to the next run, under the newer launcher.
 
 import { existsSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { adapter, ADAPTERS, type AgentAdapter } from "./adapters/index.ts"
 import { posixRelative } from "./config.ts"
-import { PROGRAM_DIR } from "./layout.ts"
+import { mayWrite } from "./files.ts"
+import { runGit } from "./git.ts"
+import { DATA_FILE, PROGRAM_DIR, trackerOf } from "./layout.ts"
+import { short } from "./program.ts"
 import { agentPointer, AGENTS_FILE, upgradePointer, writePointer } from "./pointer.ts"
 
 /** The part of naima.json this reads: the entry files, and the agent tools the project names, if it names them. */
@@ -46,37 +53,98 @@ export function sessionStartGaps(root: string, tracker: string, config: SessionC
   return out
 }
 
+/** The pointer line, as what is left to write. */
+const pointerPart = (file: string): string => `the line in ${file} that tells agents to run naima hello`
+
+/** A tool's session-start hook, as what is left to install. */
+const hookPart = (a: AgentAdapter, file: string): string => `${a.name}'s session-start hook in ${file}`
+
+/** Why the pointer line is there, said after what was written. */
+const POINTER_WHY = "it tells every agent where Naima is and to run naima hello at the start of a session, so each session starts knowing which Naima is active"
+
 /**
  * Add what is missing: the pointer line (or rewrite an earlier one), and with `hooks` each session-start hook
- * of a tool in use. Returns the lines that say what was done, and the files written, project-root relative.
+ * of a tool in use. Returns one plain sentence for each thing written, the files written (project-root
+ * relative), and what was left because this run may not write it.
  */
-export function startSessions(root: string, tracker: string, config: SessionConfig, opts: { hooks: boolean }): { said: string[]; wrote: string[] } {
+export function startSessions(
+  root: string,
+  tracker: string,
+  config: SessionConfig,
+  opts: { hooks: boolean },
+): { said: string[]; wrote: string[]; left: string[] } {
   const said: string[] = []
   const wrote: string[] = []
+  const left: string[] = []
   const p = agentPointer(root, tracker, config.entryFiles)
-  if (!p.present) {
+  if (!p.current && !mayWrite(join(root, p.file))) left.push(pointerPart(p.file))
+  else if (!p.present) {
     writePointer(root, tracker, p.file)
-    said.push(`wrote ${p.file}: ${p.line}`)
+    said.push(`Added a line to ${p.file}: ${POINTER_WHY}.`)
     wrote.push(p.file)
   } else if (!p.current && upgradePointer(root, tracker, p.file)) {
-    said.push(`rewrote the pointer in ${p.file}: ${p.line}`)
+    said.push(`Rewrote the out-of-date Naima line in ${p.file}: ${POINTER_WHY}.`)
     wrote.push(p.file)
   } else if (!p.current) {
     writePointer(root, tracker, p.file) // an earlier pointer that only links the docs: the line goes beside it
-    said.push(`wrote ${p.file}: ${p.line}`)
+    said.push(`Added a line to ${p.file}: ${POINTER_WHY}.`)
     wrote.push(p.file)
   }
-  if (!opts.hooks) return { said, wrote }
+  if (!opts.hooks) return { said, wrote, left }
   for (const a of adaptersInUse(root, config.agents)) {
     const hook = a.sessionStart
     if (!hook) continue
+    if (!hook.installed(root) && !mayWrite(join(root, hook.file))) {
+      left.push(hookPart(a, hook.file))
+      continue
+    }
     const r = hook.install(root, programPath(root, tracker))
     if (r.done === "written") {
-      said.push(`installed ${a.name}'s session-start hook in ${hook.file}: it runs naima hello at the start of every session`)
+      said.push(
+        `Installed a ${a.name} session-start hook in ${hook.file}: every new conversation starts by running naima hello, so you see which Naima is active and whether a newer one exists.`,
+      )
       wrote.push(hook.file)
     } else if (r.done === "refused") said.push(`not written, ${r.why} — add ${a.name}'s session-start hook to ${hook.file} by hand: ${r.add}`)
   }
-  return { said, wrote: [...new Set(wrote)] }
+  return { said, wrote: [...new Set(wrote)], left }
+}
+
+/** What the session start lacks, each as what naima update writes: the pointer line, and each missing hook of a tool in use. */
+export function sessionStartLeft(root: string, tracker: string, config: SessionConfig): string[] {
+  const out: string[] = []
+  const p = agentPointer(root, tracker, config.entryFiles)
+  if (!p.current) out.push(pointerPart(p.file))
+  for (const a of adaptersInUse(root, config.agents)) {
+    if (a.sessionStart && !a.sessionStart.installed(root)) out.push(hookPart(a, a.sessionStart.file))
+  }
+  return out
+}
+
+/** The lock naima.json holds in the project's last commit; null when it holds none. */
+export function committedLock(root: string, data: string): string | null {
+  const r = runGit(root, ["show", `HEAD:${posixRelative(root, join(data, DATA_FILE))}`])
+  if (!r.ok) return null
+  try {
+    const commit = (JSON.parse(r.out) as { commit?: unknown }).commit
+    return typeof commit === "string" ? commit : null
+  } catch {
+    return null
+  }
+}
+
+/** What an update has still to do, said in one line: the move to `commit`, not yet committed, and `left` not yet written. */
+export const unfinishedLine = (commit: string, left: readonly string[]): string =>
+  `the update to ${short(commit)} is unfinished: run naima update once more to finish: ${left.join(" and ")}`
+
+/**
+ * An update that moved the lock to `lock` and left part of the session start unwritten, as `unfinishedLine` says
+ * it: the lock is not yet the one the project's last commit holds, and something is missing. Null otherwise.
+ */
+export function unfinishedUpdate(root: string, data: string, lock: string, config: SessionConfig): string | null {
+  const left = sessionStartLeft(root, trackerOf(data), config)
+  if (!left.length) return null
+  const committed = committedLock(root, data)
+  return committed !== null && committed !== lock ? unfinishedLine(lock, left) : null
 }
 
 /** The files `startSessions` may write, absolute: what the launcher lets init and update write outside the tracker folder. */

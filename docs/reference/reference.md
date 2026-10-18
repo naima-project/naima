@@ -661,7 +661,7 @@ naima runs --json
 | `layout` | every directory under the tracker root belongs to an item type or a plugin |
 | `duplicates` | items of one type with the same title are linked as duplicates, or reported |
 | `entry-pointers` | every agent-harness entry file naima.json configures (entryFiles; sensible defaults absent it) names no path or link, plain-text or markdown, that is missing from disk |
-| `session-start` | an agent is told to run naima hello at the start of every session: an entry file holds the pointer line, which says so, and each agent tool the project uses (naima.json's agents; absent it, those whose files the project holds) that has a session-start hook has it installed; each one missing is noted, with the naima update that adds it |
+| `session-start` | an agent is told to run naima hello at the start of every session: an entry file holds the pointer line, which says so, and each agent tool the project uses (naima.json's agents; absent it, those whose files the project holds) that has a session-start hook has it installed; each one missing is noted, with the naima update that adds it — or, after an update that moved the lock and could not write them, one note that the update is unfinished |
 | `unread-options` | every option naima.json's plugins table sets is one its loaded plugin declares: an option no plugin reads any more is noted, by name |
 | `one-format` | no item is still in a shape a format migration, the core's or a plugin's own, replaced: a tracker never mixes formats |
 

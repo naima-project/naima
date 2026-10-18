@@ -223,7 +223,11 @@ instead.
 
 `naima update` adds whatever is missing to a project set up before, as a
 mechanical fix: the line, or a new wording of an older line, and each hook.
-It says what it wrote, and the files go in the same commit as the update.
+`init` and `update` say each thing they write outside `naima-tracker/` in
+one sentence, what it is and why, and the files go in the same commit as
+the update. An update started by a version whose launcher doesn't allow
+these files asks to be run once more
+([update](update-naima.md#when-the-update-asks-to-be-run-once-more)).
 `naima check` notes a project where the line is missing or doesn't say to
 run `naima hello`, and each tool in use whose hook is missing.
 
