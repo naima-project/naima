@@ -5,9 +5,9 @@
 // against its budgets; `naima run clean` removes what it declared. A run on
 // another machine is a run of that host's own Naima, over ssh. A rule shipped
 // here makes these mandatory for agents, and the check `wait-loops` finds the
-// hand-written waits it forbids. A run declared in the `periodic` option is
-// started by `naima run periodic` whenever it is due, and one that ends
-// without succeeding is filed as a bug. Specification:
+// hand-written waits it forbids. Nothing runs unattended: a long run declared
+// in the `longRuns` option, or the full suite, is reported when it is due and
+// filed by `naima run due`, never started on its own (due.ts). Specification:
 // specs/long-work-naima-run-wait-run-list in Naima's own tracker; for people,
 // docs/guide/long-work.md.
 
@@ -21,33 +21,22 @@ import {
   type Command,
   type Context,
   CONTRACT,
-  createItem,
   EXIT,
   type Finding,
   gitOrNull,
   gitPath,
-  isOpen,
-  type Item,
-  joinProse,
-  label,
   NaimaError,
-  NOTES_HEADING,
   parse,
   type Plugin,
   positiveInt,
-  privateContext,
-  readReadme,
-  redactPrivate,
-  saveProse,
   showProgress,
-  splitProse,
   str,
   strs,
-  today,
   TRACKER_DIR,
   usageError,
 } from "../../core/api.ts"
 import { commandReports, findRuns, noProgressOf } from "./declared.ts"
+import { DUE_FIELD, dueSection, fileDue, type LongRun, readLongRuns, rememberSuccess, startArgs } from "./due.ts"
 import { ALLOW, findWaits, SCRIPT } from "./loops.ts"
 import {
   DEFAULTS,
@@ -440,6 +429,7 @@ function cleanRun(ctx: Context, hosts: Map<string, Host>, name: string): number 
   }
   const v = view(dir, Date.now())
   if (!v.over) throw refuse(`run ${name} is ${v.state} — naima run stop ${name}, then naima wait ${name}, then clean it`)
+  if (v.state === "succeeded" && spec) rememberSuccess(tracker(ctx), name, spec.started)
   const creates = spec?.creates ?? []
   for (const path of creates) {
     const why = unsafePath(ctx.root, path)
@@ -459,215 +449,6 @@ function cleanRun(ctx: Context, hosts: Map<string, Host>, name: string): number 
   )
   return EXIT.OK
 }
-
-/** One run declared in the `periodic` option: started by `naima run periodic` whenever its period has passed since the last one started. */
-export interface Periodic {
-  name: string
-  /** As declared, `<n>s|m|h|d`, and in milliseconds. */
-  every: string
-  everyMs: number
-  budgetTime: string
-  budgetDisk?: string
-  creates: string[]
-  host?: string
-  noProgress?: string
-  /** A command line for the shell (one element), or a program and its arguments. */
-  command: string[]
-}
-
-/** The periodic runs the `periodic` option declares, each checked whole: a run name, a period, a time budget, a command, a declared host. */
-export function readPeriodic(options: Record<string, unknown>, hosts: Map<string, Host>): Periodic[] {
-  const raw = options["periodic"] ?? {}
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    throw new Error('long-work: option periodic must be an object: run name → { "every", "budgetTime", "command", … }')
-  }
-  const out: Periodic[] = []
-  for (const [name, v] of Object.entries(raw as Record<string, unknown>)) {
-    const at = `long-work: periodic run "${name}"`
-    if (!NAME.test(name) || (SUBCOMMANDS as readonly string[]).includes(name)) {
-      throw new Error(`${at}: "${name}" is not a run name — lowercase letters, digits, ".", "_" and "-", and none of ${SUBCOMMANDS.join(", ")}`)
-    }
-    const d = (v && typeof v === "object" && !Array.isArray(v) ? v : {}) as Record<string, unknown>
-    const text = (k: string): string | undefined => {
-      const x = d[k]
-      if (x !== undefined && (typeof x !== "string" || !x.trim())) throw new Error(`${at}: ${k} must be text`)
-      return x as string | undefined
-    }
-    const every = text("every")
-    if (every === undefined) throw new Error(`${at} needs every, how often it runs: <n>s, <n>m, <n>h or <n>d`)
-    const everyMs = parseDuration(every)
-    if (everyMs === null) throw new Error(`${at}: every: "${every}" is not a duration — <n>s, <n>m, <n>h or <n>d`)
-    const budgetTime = text("budgetTime")
-    if (budgetTime === undefined) throw new Error(`${at} needs budgetTime, how long one run may last`)
-    if (parseDuration(budgetTime) === null) throw new Error(`${at}: budgetTime: "${budgetTime}" is not a duration`)
-    const budgetDisk = text("budgetDisk")
-    if (budgetDisk !== undefined && parseSize(budgetDisk) === null) throw new Error(`${at}: budgetDisk: "${budgetDisk}" is not a size`)
-    const creates = d["creates"] ?? []
-    if (!Array.isArray(creates) || !creates.every((c) => typeof c === "string" && c.trim())) throw new Error(`${at}: creates is a list of paths`)
-    if (budgetDisk !== undefined && !creates.length) throw new Error(`${at}: budgetDisk measures what it creates — declare creates`)
-    const host = text("host")
-    if (host !== undefined && !hosts.has(host)) throw new Error(`${at}: host "${host}" is not declared in hosts`)
-    const noProgress = text("noProgress")
-    const c = d["command"]
-    const command = typeof c === "string" ? [c] : c
-    if (!Array.isArray(command) || !command.length || !command.every((w) => typeof w === "string" && w.length) || !command[0]!.trim()) {
-      throw new Error(`${at} needs a command: a shell line, or a program and its arguments`)
-    }
-    out.push({
-      name,
-      every,
-      everyMs,
-      budgetTime,
-      ...(budgetDisk !== undefined ? { budgetDisk } : {}),
-      creates: creates as string[],
-      ...(host !== undefined ? { host } : {}),
-      ...(noProgress !== undefined ? { noProgress } : {}),
-      command: command as string[],
-    })
-  }
-  return out
-}
-
-/** What `naima run periodic` remembers, beside the records: for each periodic run, the bug its last failure was filed as, and that run's start. */
-const PERIODIC_FILE = "periodic.json"
-type Filed = Record<string, { bug: string; started: string }>
-
-/** Why a run that is over did not succeed, in a few words. */
-function endedHow(v: RunView): string {
-  if (v.changedTracked?.length) return `it changed tracked files: ${v.changedTracked.join(", ")}`
-  if (v.state === "lost") return "its supervisor stopped answering, so it was lost"
-  switch (v.reason) {
-    case "budget-time":
-      return `its time budget of ${showDuration(v.budgetTimeMs)} ran out`
-    case "budget-disk":
-      return "what it creates outgrew its disk budget"
-    case "stopped":
-      return "it was stopped"
-    case "start-failed":
-      return `it could not start${v.error ? `: ${v.error}` : ""}`
-  }
-  return v.exitCode !== undefined && v.exitCode !== null ? `exit ${v.exitCode}` : v.signal ? `signal ${v.signal}` : v.state
-}
-
-/**
- * File a periodic run that ended without succeeding: a bug the first time, a note on that bug while it is open when
- * it fails again, nothing when this run was already filed. What is written is redacted: the project's path and any
- * private name never reach the tracker.
- */
-function fileFailure(ctx: Context, d: Periodic, v: RunView, filed: Filed): void {
-  const was = filed[d.name]
-  const earlier = was ? ctx.repo.items.find((i) => i.meta.id === was.bug) : undefined
-  if (was && earlier && was.started === v.started) {
-    ctx.out(`periodic ${d.name}: ${v.state} — already filed as ${label(earlier)}`)
-    return
-  }
-  const how = endedHow(v)
-  const tail = (v.tail ?? []).join("\n").trim()
-  const command = d.command.join(" ")
-  const clean = (text: string): string => redactPrivate(text.split(ctx.root).join("<root>"), privateContext())
-  const log = tail ? `The end of its log:\n\n\`\`\`text\n${tail}\n\`\`\`` : "Its log is empty."
-  if (earlier && isOpen(ctx, earlier)) {
-    const note = clean(`The periodic run \`${d.name}\` failed again, started ${v.started}: ${how}.\n\n${log}`)
-    const prose = splitProse(readReadme(earlier))
-    const entry = `### ${today(ctx)} — naima run periodic\n\n${note}`
-    saveProse(ctx, earlier, joinProse({ ...prose, notes: [prose.notes || NOTES_HEADING, entry].join("\n\n") }))
-    filed[d.name] = { bug: was!.bug, started: v.started }
-    ctx.out(`periodic ${d.name}: ${v.state} again — noted on ${label(earlier)}`)
-    return
-  }
-  const type = ctx.registry.types.get("bugs")
-  if (!type) {
-    ctx.out(`periodic ${d.name}: ${v.state} (${how}) — no bugs type is loaded to file it in`)
-    return
-  }
-  const title = `Periodic run ${d.name} failed`
-  const bug: Item = createItem(ctx, type, title)
-  const description = clean(
-    `The periodic run \`${d.name}\`, started ${v.started}, ended ${v.state}: ${how}.\n\n` +
-      `It runs \`${command}\` every ${d.every}, with a time budget of ${d.budgetTime}, declared in the long-work plugin's \`periodic\` option.\n\n${log}\n\n` +
-      `Filed by \`naima run periodic\`. A later failure of this run is noted here while this bug is open.`,
-  )
-  saveProse(ctx, bug, joinProse({ ...splitProse(readReadme(bug)), description }))
-  filed[d.name] = { bug: String(bug.meta.id), started: v.started }
-  ctx.out(`periodic ${d.name}: ${v.state} — filed ${label(bug)}`)
-}
-
-/** `naima run periodic`: for each declared periodic run, file the last one if it failed, and start the next when it is due. */
-async function periodic(ctx: Context, hosts: Map<string, Host>, declared: Periodic[], cmd: Command): Promise<number> {
-  if (!declared.length) {
-    ctx.out('no periodic run declared — declare one in plugins.long-work.options.periodic: name → { "every", "budgetTime", "command" }')
-    return EXIT.OK
-  }
-  const file = join(ensureRunsDir(tracker(ctx)), PERIODIC_FILE)
-  let filed: Filed = {}
-  try {
-    filed = JSON.parse(readFileSync(file, "utf8")) as Filed
-  } catch {
-    // none filed yet
-  }
-  let code: number = EXIT.OK
-  try {
-    for (const d of declared) {
-      if (existsSync(recordOf(ctx, d.name))) {
-        const v = runView(ctx, hosts, d.name, DEFAULTS.tail)
-        if (!v.over) {
-          ctx.out(`periodic ${d.name}: ${v.state}, started ${v.started}`)
-          continue
-        }
-        if (v.state !== "succeeded") fileFailure(ctx, d, v, filed)
-        const due = Date.parse(v.started) + d.everyMs
-        if (Date.now() < due) {
-          ctx.out(`periodic ${d.name}: ${v.state}, started ${v.started}; not due until ${new Date(due).toISOString()} (every ${d.every})`)
-          continue
-        }
-        if (cleanRun(ctx, hosts, d.name) !== EXIT.OK) {
-          code = EXIT.FAILED
-          continue
-        }
-      }
-      const args = [
-        d.name,
-        "--budget-time",
-        d.budgetTime,
-        ...(d.budgetDisk !== undefined ? ["--budget-disk", d.budgetDisk] : []),
-        ...d.creates.flatMap((c) => ["--creates", c]),
-        ...(d.host !== undefined ? ["--host", d.host] : []),
-        ...(d.noProgress !== undefined ? ["--no-progress", d.noProgress] : []),
-        "--",
-        ...d.command,
-      ]
-      if ((await start(ctx, hosts, cmd, args)) !== EXIT.OK) code = EXIT.FAILED
-    }
-  } finally {
-    writeJsonAtomic(file, filed)
-  }
-  return code
-}
-
-/** A declared periodic run that has never run here, or whose last start is more than two periods old: nothing is driving the tier. */
-const periodicRuns = (declared: Periodic[]): Check => ({
-  name: "periodic-runs",
-  says:
-    "every run declared in the periodic option has run here, and its last one started within two of its periods; a note otherwise, since nothing starts a periodic run but naima run periodic",
-  run(ctx) {
-    const out: Finding[] = []
-    for (const d of declared) {
-      const spec = readSpec(recordOf(ctx, d.name))
-      if (!spec) {
-        out.push({ level: "note", message: `periodic run ${d.name} has never run here — naima run periodic starts what is due` })
-        continue
-      }
-      const late = Date.now() - Date.parse(spec.started) - 2 * d.everyMs
-      if (late > 0) {
-        out.push({
-          level: "note",
-          message: `periodic run ${d.name} is overdue: it last started ${spec.started}, and runs every ${d.every} — naima run periodic starts what is due`,
-        })
-      }
-    }
-    return out
-  },
-})
 
 /** `naima wait <name>`: block until the run is over or the timeout passes, then report it. */
 async function waitFor(ctx: Context, hosts: Map<string, Host>, cmd: Command, args: string[]): Promise<number> {
@@ -728,14 +509,14 @@ export function waitLine(v: RunView): string {
   return `run ${v.name}${v.host ? ` on ${v.host}` : ""}: ${v.state}, ${showDuration(v.elapsedMs)} · ${how}`
 }
 
-const runCommand = (hosts: Map<string, Host>, declared: Periodic[]): Command => ({
+const runCommand = (hosts: Map<string, Host>, declared: LongRun[]): Command => ({
   name: "run",
   says:
     "start a long command detached — locally, or on a declared host through its own Naima — with a log, a progress file, a time budget and, on what it declares it creates, a disk budget, ending itself when one runs out; list the runs against their budgets, show one, stop one, or remove what one created",
   enforces:
-    "every run has a time budget, and is ended, its whole process group with it, when it runs out or its declared paths outgrow the disk budget; a declared path is never the root, the home directory, the repository or above it, nor holds a tracked file; a run is never cleaned while it runs; a remote run is always guarded, failing when it changes a tracked file; a periodic run that ends without succeeding is filed as a bug, once, and a later failure is a note on it while it is open",
+    "every run has a time budget, and is ended, its whole process group with it, when it runs out or its declared paths outgrow the disk budget; a declared path is never the root, the home directory, the repository or above it, nor holds a tracked file; a run is never cleaned while it runs; a remote run is always guarded, failing when it changes a tracked file; nothing starts on its own: a due long run is reported and filed, and starts only when a person or an agent runs it",
   usage:
-    "run <name> --budget-time <duration> [--budget-disk <size>] [--creates <path>]... [--every <duration>] [--stale <duration>] [--host <host>] [--guard-tracked] [--no-progress <reason>] -- <command> [<arg>...] | run list [--json] | run status <name> [--tail <n>] [--json] | run stop <name> | run clean <name> | run periodic",
+    "run <name> --budget-time <duration> [--budget-disk <size>] [--creates <path>]... [--every <duration>] [--stale <duration>] [--host <host>] [--guard-tracked] [--no-progress <reason>] -- <command> [<arg>...] | run <long run> | run list [--json] | run status <name> [--tail <n>] [--json] | run stop <name> | run clean <name> | run due",
   options: [
     { name: "--budget-time", says: "how long the run may last, <n>s|m|h|d: past it, it is ended; required" },
     { name: "--budget-disk", says: "how large what it declares it creates may grow, <n>[K|M|G|T]: past it, it is ended; needs --creates" },
@@ -765,7 +546,8 @@ const runCommand = (hosts: Map<string, Host>, declared: Periodic[]): Command => 
     "run status bench --tail 50",
     "run stop bench",
     "run clean bench",
-    "run periodic",
+    "run due",
+    "run full-suite",
   ],
   run(args, ctx) {
     const [sub, ...rest] = args
@@ -783,9 +565,17 @@ const runCommand = (hosts: Map<string, Host>, declared: Periodic[]): Command => 
       else for (const l of describe(v)) ctx.out(l)
       return EXIT.OK
     }
-    if (sub === "periodic") {
+    if (sub === "due") {
       if (rest.length) throw usageError(this)
-      return periodic(ctx, hosts, declared, this)
+      return fileDue(ctx, declared, tracker(ctx))
+    }
+    const long = rest.length === 0 ? declared.find((r) => r.name === sub) : undefined
+    if (long) {
+      // A declared long run, started by a person or an agent with the owner's yes: its finished record cleaned first.
+      if (existsSync(recordOf(ctx, long.name)) && view(recordOf(ctx, long.name), Date.now()).over && cleanRun(ctx, hosts, long.name) !== EXIT.OK) {
+        return EXIT.FAILED
+      }
+      return start(ctx, hosts, this, startArgs(long))
     }
     if (sub === "stop" || sub === "clean") {
       const [name, ...extra] = rest
@@ -936,12 +726,12 @@ const waitLoops: Check = {
 
 export default function longWork(options: Record<string, unknown> = {}): Plugin {
   const hosts = readHosts(options)
-  const declared = readPeriodic(options, hosts)
+  const declared = readLongRuns(options, hosts)
   return {
     name: "long-work",
     contract: CONTRACT,
     says:
-      "long work, run and waited on by Naima: naima run starts a command detached, with budgets and a progress channel, locally or on a host; naima wait blocks on it by its record; naima run list, status, stop and clean; shipped rules make them mandatory for agents and make long work report its progress",
+      "long work, run and waited on by Naima: naima run starts a command detached, with budgets and a progress channel, locally or on a host; naima wait blocks on it by its record; naima run list, status, stop and clean; a long run that is due reported and filed, never started on its own; shipped rules make them mandatory for agents and make long work report its progress",
     about:
       "An agent left to wait for a long command improvises — a `sleep` loop, a `pgrep -f` that matches itself — and the wait outlives the work by hours. " +
       "`naima run <name> --budget-time <d> -- <command>` starts the command detached, under a supervisor of its own, with a log, a progress file (`$NAIMA_RUN_PROGRESS`) and a record in the tracker folder's `.runs/`, which ignores itself. " +
@@ -950,7 +740,7 @@ export default function longWork(options: Record<string, unknown> = {}): Plugin 
       "`naima run list` shows every run against its budgets, marking stale runs (no output for `--stale`) and lost ones (no heartbeat); `naima run clean` removes what a run declared, never a tracked file, never while it runs. " +
       "A host declared in the `hosts` option is reached over ssh, and a run there is a run of the host's own Naima, always `--guard-tracked`: a tracked file it changes fails it. " +
       "A run's progress is the last line of its progress file: a JSON object — `stage`, `done`, `total`, `unit`, `note`, `overall` — or free text. The supervisor keeps the first sample of each stage, and every reader shows the count with its rate and, when the total is known, its ETA; a run silent past `--stale` (2 minutes) is stale. A command that cannot report says so with `--no-progress \"<reason>\"`, and is shown with its elapsed time and the log's last line. " +
-      "A run declared in the `periodic` option — `every`, `budgetTime`, `command`, and optionally `budgetDisk` with `creates`, `host` and `noProgress` — is started, as any `naima run` of that name, by `naima run periodic` once its period has passed since its last start, its finished record cleaned first; nothing else starts it, so the owner's scheduler or a session runs `naima run periodic`, and the check `periodic-runs` notes one never run or overdue. When a periodic run has ended without succeeding, `naima run periodic` files it as a bug titled `Periodic run <name> failed`, with how it ended and the end of its log, the project's path and private names redacted; a later failure is a note on that bug while it is open. " +
+      "Nothing runs unattended: no run starts on a schedule, since a run nobody watches competes with the work on the same machine. A long run is declared in the `longRuns` option — `command` and `budgetTime`, optionally `budgetDisk` with `creates`, `host` and `noProgress` as `naima run` takes them — with what makes it due: `within`, a threshold its last success must be younger than; `fullSuite`, every gate of the full suite; `gates`, by name; `model`, every property verified on that model; `items`, by reference. The full suite is a long run named `full-suite` even when nothing declares it, whenever some gate is part of it. A long run is due when an item it covers is not current (a gate of the full suite names it, or it is open; one whose last verdict refutes it waits on a fix instead), when a gate it covers does not hold, or when it has not succeeded here within its threshold; a run of it in progress is not due. `naima summary` and `naima hello` say each due run in one line; `naima run due` files each as one todo, marked by the field `dueRun` and linked to the items it covers, leaves one already open as it is, marks it done once the run is current, and drops it when the run is no longer declared. `naima run <long run>` starts a declared one with its budgets, its finished record cleaned first; the agent asks the owner before running it. A run's success is remembered when its record is cleaned. " +
       "The plugin ships the rule that makes these mandatory for agents, enforced by the check `wait-loops`, and the rule that long work reports its progress, enforced by the check `progress-declared`.",
     options: [
       {
@@ -960,15 +750,16 @@ export default function longWork(options: Record<string, unknown> = {}): Plugin 
           'the machines a run may go to: name → { "ssh": the destination ssh is given, "dir": the project\'s checkout there, "naima": the command that runs its Naima from dir (default `deno run -A naima-tracker/naima/naima.ts`) }',
       },
       {
-        name: "periodic",
+        name: "longRuns",
         default: "{}",
         says:
-          'the runs started on a period by naima run periodic: name → { "every": how often, <n>s|m|h|d, "budgetTime": the time budget of one run, "command": a shell line or [program, ...args], "budgetDisk" with "creates", "host", "noProgress" as naima run takes them }',
+          'the long runs reported when due, never started on their own: name → { "command": a shell line or [program, ...args], "budgetTime": the time budget of one run, and what makes it due — "within": <n>s|m|h|d since its last success, "fullSuite": true, "gates": [gate names], "model": a model path, "items": [item references]; "budgetDisk" with "creates", "host", "noProgress" as naima run takes them }',
       },
     ],
     commands: [runCommand(hosts, declared), waitCommand(hosts)],
-    checks: [waitLoops, progressDeclared, periodicRuns(declared)],
-    contributes: { rules: [LONG_WORK_RULE, PROGRESS_RULE] },
+    checks: [waitLoops, progressDeclared],
+    fields: [DUE_FIELD],
+    contributes: { rules: [LONG_WORK_RULE, PROGRESS_RULE], summary: [dueSection(declared, tracker)] },
     optional: ["rules"],
   }
 }

@@ -131,15 +131,12 @@ check `property-evidence`. A property becomes `holds` only through
 
 A release waits for the whole project to be current: every property holding
 on a run of what the project has now, and every test suite passing on the
-current commit. Long suites run on a schedule instead, and a failure there
-is filed as a bug. Why: a release is the one moment nothing may be out of
-date, and a suite that takes a night can't run at every landing, so it runs
-on its own clock and its failures land in the tracker instead of being
-waited on. **Enforced by** a gate declared `--full-suite`
-([a release gate](read-the-board.md#a-release-gate-waits-for-the-full-suite)),
-and, for the periodic runs, `naima run periodic` and the check
-`periodic-runs`, as a note
-([run it on a schedule](long-work.md#run-it-on-a-schedule)).
+current commit. A suite too long for that is never started on a clock: it
+becomes a long run that is due, and runs when the owner says so
+([nothing runs unattended](#nothing-runs-unattended)). Why: a release is the
+one moment nothing may be out of date. **Enforced by** a gate declared
+`--full-suite`
+([a release gate](read-the-board.md#a-release-gate-waits-for-the-full-suite)).
 
 ### Evidence travels with the claim
 
@@ -168,8 +165,8 @@ then on the fix and passed. `redSeen` records the day it failed.
 
 A project's test suites are declared, and recorded with
 `naima metrics run --record` at the end of a phase of work, when a branch
-lands, and in the periodic and release runs of the full suite, never after
-every edit. Each run is kept per test, with the commit, a digest of what it
+lands, and in the release run of the full suite or a long run the owner
+starts, never after every edit. Each run is kept per test, with the commit, a digest of what it
 read and its log, and a test item gets its result from the run of the tests
 it names. A run whose inputs are unchanged is reused rather than repeated. A
 gate or a milestone that says the tests pass stands on the recorded run.
@@ -248,8 +245,8 @@ slows down work that is still being tried. **Enforced by** `naima land`: it
 refuses a branch when a property verified on a file the branch changed, or a
 test suite that reads one, has no current result on the branch, outside
 models in development. A proof that can't be made current before landing,
-such as a suite that runs for days, is left to the periodic run with
-`--stale-proofs "<reason>"`, and the reason stays in the landing commit
+such as a suite that runs for days, is left to a long run the owner starts,
+with `--stale-proofs "<reason>"`, and the reason stays in the landing commit
 ([when the rules apply](prove-and-close.md#when-the-rules-apply)).
 
 ### A page does not outlive its answer
@@ -428,6 +425,27 @@ nor a reason. It also notes a run here that stayed silent past its threshold
 and never wrote progress. The rest is **convention**
 ([saying how far it is](long-work.md#say-how-far-it-is),
 [long work, for agents](../agents/long-work.md)).
+
+### Nothing runs unattended
+
+Naima starts no work on its own, and a project sets none up: no scheduled or
+nightly runs. Long suites run at the moments that need them, for what a
+branch changed when it lands and for everything at the release gate, started
+by the owner or the coordinator, in view. Between those moments, a long run
+(the full suite, or one the project declares, such as the verification of a
+model) becomes due when something it covers is no longer current, or when it
+hasn't succeeded within the time the project allows. `naima hello` and
+`naima summary` say each due run in one line, and `naima run due` files it as
+a todo. An agent reports a due run and asks the owner before starting it.
+
+Why: a run nobody is watching competes with whatever else uses the same
+machine or host, for the processor, the disk and shared stores, and a model
+check can take hours. Only someone who knows what else is going on can pick
+the moment.
+
+**Convention**: Naima itself never starts a run, and `naima run due` keeps
+one todo per due run, marked done once the run is current
+([when a long run is due](long-work.md#when-a-long-run-is-due)).
 
 ### Use the state-of-the-art method for the job
 

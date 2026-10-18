@@ -257,7 +257,8 @@ test of the suite's last run, which usually means the test was renamed
 ### When to record
 
 Recording happens at the end of a phase of work, when a branch lands, and in
-the periodic and release runs of the full suite, never after every edit.
+the release run of the full suite or a long run the owner starts, never after
+every edit.
 While working, `naima metrics run` without `--record` is enough, and an
 unchanged suite costs nothing because its last recorded run is reused.
 

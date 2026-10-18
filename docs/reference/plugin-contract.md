@@ -218,6 +218,12 @@ a renderer prints: `naima view <name>` and `naima summary` print the text,
 `--json` the data itself, `--markdown` the markdown — the text, when the
 rendering has none of its own. No format derives the data again.
 
+A summary section marked `alongside: true` is also printed at the foot of
+`naima board` and `naima queue`, and one marked `hello: true` is printed by
+`naima hello`, its lines as they are, after the update check: what waits on
+the owner's decision, such as a long run that is due. `naima hello` prints
+nothing of a project that does not open.
+
 **What may be async.** A check's `run`, a view's and a summary section's
 `render`, a gate's `evaluate` and a command's `run` may return a promise; the
 core awaits each, so a check that shells out to an external tool needs no

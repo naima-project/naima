@@ -27,6 +27,16 @@ and [long work reports its progress](../guide/rules.md#long-work-reports-its-pro
 4. **Clean** with `naima run clean <name>` once the results are kept
    somewhere else. It removes exactly what was declared.
 
+Nothing runs unattended
+([the rule](../guide/rules.md#nothing-runs-unattended)). Never schedule a
+run, and never start a long run, such as the full suite or a model's
+verification, without the owner's yes. When `naima hello` or
+`naima summary` says a long run is due, pass the line on, run
+`naima run due` to file it as a todo (one per run; it marks the todo done
+once the run is current), and ask the owner. With their yes, start it by its
+name, `naima run <name>`, and follow the steps above
+([when a long run is due](../guide/long-work.md#when-a-long-run-is-due)).
+
 Don't wait with a `while`/`until` loop around `sleep`, with `pgrep -f`/`pkill -f`,
 with a bare `nohup ... &`, or by polling a remote file over ssh by hand.
 `naima check` flags waits like these in committed scripts (check

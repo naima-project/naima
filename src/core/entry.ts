@@ -71,8 +71,8 @@ export const cliCommands: Omit<Command, "run">[] = [
   {
     name: "hello",
     says:
-      `what an agent says first in a session: the banner (Naima is active in this repository, its version and commit); then, as naima.json's updates says, whether a newer Naima exists and, under update, what it changes and its rehearsal, as update --check says them; then what it offers on request: what Naima is and its documentation, an update check, an update after the owner's yes`,
-    enforces: "nothing: it never moves the lock nor writes the project; it asks the source only when updates is check or update",
+      `what an agent says first in a session: the banner (Naima is active in this repository, its version and commit); then, as naima.json's updates says, whether a newer Naima exists and, under update, what it changes and its rehearsal, as update --check says them; then, one line each, what waits on the owner's decision, such as a long run that is due, never started; then what it offers on request: what Naima is and its documentation, an update check, an update after the owner's yes`,
+    enforces: "nothing: it never moves the lock, writes the project nor starts a run; it asks the source only when updates is check or update",
     usage: "hello",
     examples: ["hello"],
   },

@@ -311,7 +311,7 @@ is and roughly how long is left. That way a slow run can be told apart from
 one that is stuck. Agents wait for a run by name and clean up after it.
 
 ```sh
-naima run nightly-benchmark --budget-time 2h -- sh bench.sh
+naima run benchmark --budget-time 2h -- sh bench.sh
 ```
 
 More in [long work](long-work.md).

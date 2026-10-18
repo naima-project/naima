@@ -199,6 +199,8 @@ export interface SummarySection {
   name: string
   /** True for a block also printed at the foot of `naima board` and `naima queue`, beside the work: the evidence the items stand on. */
   alongside?: boolean
+  /** True for a block also printed by `naima hello`, at the start of a session: what waits on the owner's decision, such as a long run that is due. */
+  hello?: boolean
   render(ctx: Context): Rendered | Promise<Rendered>
 }
 
