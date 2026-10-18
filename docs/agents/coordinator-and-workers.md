@@ -188,6 +188,24 @@ before trusting the rest of the report, by running
 missing phrases. If the line is wrong, the coordinator reports that to the
 owner rather than patching over it.
 
+A worker also says what it is doing while it works, not only when it
+finishes. At every change of step, and at least every few minutes during
+long work, it runs `naima claim --step "<what I am doing now>"`. The step is
+written in the branch's claim with the time it was posted. It replaces the
+previous one and needs no commit, because `naima claims` reads every
+worktree's files as they are on disk. Long commands, the gates included, go
+through `naima run`, so their progress is visible as well.
+
+While workers run, the coordinator reads `naima claims` at least every few
+minutes, and when the owner asks, it says what each worker is doing. Each
+claim shows its step and how long ago it was posted. A claim whose last sign
+of life is older than the coordination option `silentAfter` (15 minutes
+unless the project sets another number) is flagged "silent for N min —
+possibly stuck". The last sign of life is the later of the step and the
+branch's last commit. The coordinator checks that worker's run and worktree,
+then reports it to the owner as possibly stuck. The rule is shipped by the
+coordination plugin, so `naima rules` lists it.
+
 ## Safety rules
 
 - **A worker never merges.** Candidate property for a later model. Nothing

@@ -65,7 +65,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`open`](#naima-open) | coordination | start a piece of work: a worktree <worktrees>/<what> on a new branch <who>/<what> from the trunk, and its claim on the items, in one step | work happens on its own branch and worktree from the trunk, and its claim on the items is recorded in the same step |
 | [`claim`](#naima-claim) | coordination | record that this branch is working on items (writes one file on this branch) | a claim belongs to a branch, never to a detached HEAD, and is one file on that branch; it never locks anything: several branches may claim one item |
 | [`release`](#naima-release) | coordination | drop this branch's claim on items; the last one removes the file, unless the branch is being prepared (claim --preparing) | only this branch's own claim is dropped, and only on items it holds; while the branch is being prepared, the emptied file is kept |
-| [`claims`](#naima-claims) | coordination | who holds what, recombined from every branch | nothing: it only reads |
+| [`claims`](#naima-claims) | coordination | who holds what, recombined from every branch, with what each branch's worker is doing now | nothing: it only reads; a claim whose last sign of life (its step, or its branch's last commit) is more than silentAfter minutes old (15 here) is flagged possibly stuck |
 | [`land`](#naima-land) | coordination | land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor | runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item or an item open and not fixed, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, prints what every landing report says of the files the landing changed, never undoing it |
 | [`changes`](#naima-changes) | coordination | print the release notes a range of commits makes, assembled from the change notes it adds to changes/, as Markdown: breaking changes first, then those that need an action, then features, behaviour changes and fixes, each with its text and what to do; from the newest version tag (v…) to HEAD unless --from and --to say otherwise, in every repository of the project with a changes/config.json (the project itself, a submodule) unless --repo names one | nothing: it only prints; a change note that does not parse is named on stderr |
 | [`prune`](#naima-prune) | coordination | list (or with --write remove) claim files naming a branch git no longer has; one only another ref carries is listed with that ref, to be dropped there. With --branch, delete a branch and its worktree, refusing one with unmerged commits that no archive/<branch> tag holds | the trunk is never pruned, and a branch with unmerged commits that no archive/<branch> tag holds is refused; nothing is removed without --write |
@@ -872,6 +872,7 @@ Options, each with the default it takes when nothing sets it:
 | `worktrees` | `../<main worktree's folder>-worktrees` | the directory every worktree is a folder of, relative to the main worktree |
 | `exempt` | `[]` | branches the naming scheme does not apply to: names, or patterns with * |
 | `diaryPerDay` | `5` | how many diary entries a day may hold before the check diary-entries notes it: a positive whole number |
+| `silentAfter` | `15` | minutes without a sign of life (a step posted with naima claim --step, or a commit on the branch) after which naima claims and naima summary flag a claim with a step as possibly stuck: a positive whole number |
 
 **Extension points** it declares: `landing-reports`.
 
@@ -905,13 +906,14 @@ Record that this branch is working on items (writes one file on this branch).
 **Enforces**: A claim belongs to a branch, never to a detached HEAD, and is one file on that branch; it never locks anything: several branches may claim one item.
 
 ```sh
-naima claim <item>... [--note "why"] [--preparing
+naima claim <item>... [--note "why"] [--step "what I am doing now"] [--preparing
 naima --not-preparing]
 ```
 
 | Option | Default | What it does |
 |---|---|---|
 | `--note` |  | why this branch holds the items; replaces the previous note |
+| `--step` |  | what the branch's worker is doing now, recorded with the instant it was posted and replacing the previous step; naima claims and naima summary show it, and how long ago it was posted; items are optional once the branch holds a claim |
 | `--preparing` |  | mark the branch as being prepared to enter the trunk: from then on naima check notes every commit the trunk takes that the branch lacks, and every one committed on the trunk directly; items are optional |
 | `--not-preparing` |  | drop the mark |
 
@@ -920,6 +922,7 @@ Examples:
 ```sh
 naima claim export-drops export-keeps --note "alpha channel in the exporter"
 naima claim --preparing
+naima claim --step "running the gates"
 ```
 
 ### naima release
@@ -940,9 +943,9 @@ naima release export-drops
 
 ### naima claims
 
-Who holds what, recombined from every branch.
+Who holds what, recombined from every branch, with what each branch's worker is doing now.
 
-**Enforces**: Nothing: it only reads.
+**Enforces**: Nothing: it only reads; a claim whose last sign of life (its step, or its branch's last commit) is more than silentAfter minutes old (15 here) is flagged possibly stuck.
 
 ```sh
 naima claims [--branch <b>] [--json]
@@ -951,7 +954,7 @@ naima claims [--branch <b>] [--json]
 | Option | Default | What it does |
 |---|---|---|
 | `--branch` |  | only the claim of this branch |
-| `--json` |  | print the claims as JSON: each branch's items, note and marks, and the items more than one branch holds |
+| `--json` |  | print the claims as JSON: each branch's items, note, step, minutes since its last sign of life and marks, the items more than one branch holds, and the silentAfter threshold |
 
 Examples:
 
@@ -1153,6 +1156,7 @@ naima event 2026-10-05 "The plan was entered" --kind diary
 | Rule | Title | For | Strength | Enforced by | Ack |
 |---|---|---|---|---|---|
 | `agents-keep-the-diary` | Agents keep the diary: one entry per decision taken with the owner or notable turn, never a log of routine work | agents | must | `diary-entries` | `Diary mode on` |
+| `workers-post-their-step` | Workers post their current step; the coordinator reads them and reports a silent worker | agents | must |  |  |
 
 ## triage
 

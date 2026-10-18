@@ -674,6 +674,31 @@ Why: with a single writer nothing is contended, so a lock would only add
 state that can go stale. It also means that what is published is always what
 the trunk holds, never a branch that hasn't landed.
 
+### Workers post their current step
+
+A worker says what it is doing while it works, not only when it finishes. At
+every change of step, and at least every few minutes during long work, it
+runs `naima claim --step "<what I am doing now>"`, and it runs long commands
+through `naima run` so that their progress shows too. The coordinator reads
+`naima claims` at least every few minutes while workers run, and says what
+each one is doing when the owner asks. A claim with no step and no commit
+newer than the coordination plugin's `silentAfter` option (15 minutes by
+default) is marked "silent for N min — possibly stuck". The coordinator
+checks that worker's run and worktree, then reports it as possibly stuck.
+
+```sh
+naima claim --step "running the gates"
+```
+
+Why: until it reports, a worker that only reports at the end can't be told
+apart from one that is stuck. A worker eight minutes into the full test suite
+looked hung, because nothing it did was visible.
+
+This rule ships with Naima and is active for agents in every project, with no
+acknowledgement phrase. Flagging a silent claim is done by `naima claims`
+and `naima summary`; posting the step and reading the claims is
+**convention**.
+
 ### Claims are released, and a session note written, before merging
 
 **Convention**: [closing a worktree](../agents/closing-a-worktree.md).

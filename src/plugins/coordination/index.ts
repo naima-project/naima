@@ -71,6 +71,18 @@ export { type Timeline, type TimelineEvent, timelineOf } from "./timeline.ts"
 export { claimedInHistory, CLOSES, type Landing, type LandingReport, landingReportsPoint, markerMessage, moveTrunk, STALE_PROOFS } from "./land.ts"
 
 export const CLAIMS = "claims"
+
+/** The rule this plugin ships on workers' progress: listed by naima rules, with no acknowledgement phrase. */
+export const PROGRESS_RULE = {
+  name: "workers-post-their-step",
+  title: "Workers post their current step; the coordinator reads them and reports a silent worker",
+  audience: "agents" as const,
+  strength: "must" as const,
+  text:
+    'A worker posts what it is doing now with `naima claim --step "<what>"` at every change of step, and at least every few minutes during long work, which it runs through `naima run` so that its progress is visible too. The coordinator reads `naima claims` at least every few minutes while workers run, says what each one is doing when the owner asks, and reports a worker flagged "silent for N min — possibly stuck" (no step and no commit for longer than the coordination option `silentAfter`) as possibly stuck, after checking its run and its worktree.',
+  why:
+    "a worker that reports only when it finishes is indistinguishable, until then, from one that is stuck: a worker eight minutes into the full test suite looked hung, because nothing it did was visible to the coordinator or the owner.",
+}
 export const PASSES = "passes"
 
 export interface ClaimEntry {
@@ -79,10 +91,18 @@ export interface ClaimEntry {
   title: string
 }
 
+/** What a branch's worker is doing now, posted with `claim --step`: the coordinator reads it without a commit. */
+export interface Step {
+  what: string
+  /** The instant it was posted, ISO 8601. */
+  since: string
+}
+
 export interface Claim {
   branch: string
   claimedAt: string
   note?: string
+  step?: Step
   /** The branch is being prepared to enter the trunk: it is told when the trunk moves under it. */
   preparing?: true
   items: ClaimEntry[]
@@ -123,6 +143,7 @@ function parseClaim(f: BranchFile): Claim | null {
       branch: c.branch ?? f.ref,
       claimedAt: c.claimedAt ?? "",
       ...(c.note ? { note: c.note } : {}),
+      ...(typeof c.step?.what === "string" && typeof c.step.since === "string" ? { step: { what: c.step.what, since: c.step.since } } : {}),
       ...(c.preparing === true ? { preparing: true as const } : {}),
       items,
       file: f.name,
@@ -238,9 +259,14 @@ const claimCommand: Command = {
   says: "record that this branch is working on items (writes one file on this branch)",
   enforces:
     "a claim belongs to a branch, never to a detached HEAD, and is one file on that branch; it never locks anything: several branches may claim one item",
-  usage: 'claim <item>... [--note "why"] [--preparing | --not-preparing]',
+  usage: 'claim <item>... [--note "why"] [--step "what I am doing now"] [--preparing | --not-preparing]',
   options: [
     { name: "--note", says: "why this branch holds the items; replaces the previous note" },
+    {
+      name: "--step",
+      says:
+        "what the branch's worker is doing now, recorded with the instant it was posted and replacing the previous step; naima claims and naima summary show it, and how long ago it was posted; items are optional once the branch holds a claim",
+    },
     {
       name: "--preparing",
       says:
@@ -251,16 +277,20 @@ const claimCommand: Command = {
   examples: [
     'claim export-drops export-keeps --note "alpha channel in the exporter"',
     "claim --preparing",
+    'claim --step "running the gates"',
   ],
   run(args, ctx) {
     const p = parse(args, {
       note: { type: "string" },
+      step: { type: "string" },
       preparing: { type: "boolean" },
       "not-preparing": { type: "boolean" },
     })
     const preparing = bool(p, "preparing") ? true : bool(p, "not-preparing") ? false : undefined
     if (bool(p, "preparing") && bool(p, "not-preparing")) throw usageError(this)
-    if (!p.positionals.length && preparing === undefined) throw usageError(this)
+    const step = str(p, "step")?.trim()
+    if (step === "") throw new Error('claim --step needs what the branch is doing now: --step "<what>"')
+    if (!p.positionals.length && preparing === undefined && step === undefined) throw usageError(this)
     const items = p.positionals.map((r) => ctx.repo.resolve(r))
     const branch = currentBranch(ctx.root)
     if (branch === "HEAD") throw new Error("HEAD is detached: a claim belongs to a branch — git switch -c <branch>, then claim")
@@ -270,6 +300,10 @@ const claimCommand: Command = {
     const mine = held ?? freshClaim(ctx, branch)
     const note = str(p, "note")
     if (note) mine.note = note
+    if (step) {
+      mine.step = { what: step, since: ctx.now().toISOString() }
+      ctx.out(`${branch} is now: ${step}`)
+    }
     if (preparing === true) mine.preparing = true
     if (preparing === false) delete mine.preparing
     if (preparing !== undefined) ctx.out(`${branch} is ${preparing ? "" : "no longer "}being prepared to enter the trunk`)
@@ -331,49 +365,99 @@ export interface ClaimsData {
     local: boolean
     claimedAt: string
     note?: string
+    /** What the branch's worker posted it is doing now, and when. */
+    step?: Step
+    /** Whole minutes since the claim's last sign of life: the later of its step's instant and its branch's last commit; only with a step. */
+    quietFor?: number
+    /** The last sign of life is more than `silentAfter` minutes old: the worker is possibly stuck. */
+    silent?: true
     preparing?: true
     items: ClaimEntry[]
   }[]
   /** The items more than one branch claims — allowed, and worth knowing. */
   contested: { id: string; ref: string; branches: string[] }[]
+  /** Minutes without a sign of life after which a claim with a step is flagged silent: the coordination option `silentAfter`. */
+  silentAfter: number
 }
 
+const SILENT_AFTER = 15
+
+/** The coordination option `silentAfter`: minutes without a sign of life before a claim is flagged possibly stuck. */
+export function readSilentAfter(options: Record<string, unknown>): number {
+  const v = options["silentAfter"] ?? SILENT_AFTER
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 1) {
+    throw new Error(
+      `coordination: option silentAfter must be a positive whole number, the minutes without a sign of life before a claim is flagged possibly stuck; got ${
+        JSON.stringify(v)
+      }`,
+    )
+  }
+  return v
+}
+
+/** Whole minutes since a claim's last sign of life — the later of its step and its branch's last commit — or undefined without a step. */
+function quietFor(ctx: Context, c: Claim): number | undefined {
+  if (!c.step) return undefined
+  const stepAt = Date.parse(c.step.since)
+  const commit = gitOrNull(ctx.root, "log", "-1", "--format=%cI", `refs/heads/${c.branch}`)
+  const commitAt = commit ? Date.parse(commit) : NaN
+  const last = Math.max(...[stepAt, commitAt].filter((t) => !Number.isNaN(t)))
+  if (!Number.isFinite(last)) return undefined
+  return Math.max(0, Math.floor((ctx.now().getTime() - last) / 60_000))
+}
+
+/** A claim's step and its age, said in a line: what `claims` and the summary print. */
+const stepLine = (c: ClaimsData["claims"][number], posted: string): string =>
+  c.step ? `now: ${c.step.what} (${posted}${c.quietFor ?? 0} min ago)${c.silent ? ` — silent for ${c.quietFor} min — possibly stuck` : ""}` : ""
+
 /** Every claim, recombined from every branch now — only `only`'s when given — and the items more than one holds. */
-export function claimsData(ctx: Context, only?: string): ClaimsData {
+export function claimsData(ctx: Context, only?: string, silentAfter: number = SILENT_AFTER): ClaimsData {
   const here = currentBranch(ctx.root)
   const list = readClaims(ctx).filter((c) => !only || c.branch === only)
   const holders = new Map<string, Set<string>>()
   for (const c of list) for (const e of c.items) holders.set(e.id, (holders.get(e.id) ?? new Set()).add(c.branch))
   return {
-    claims: list.map((c) => ({
-      branch: c.branch,
-      here: c.branch === here,
-      local: c.local,
-      claimedAt: c.claimedAt,
-      ...(c.note ? { note: c.note } : {}),
-      ...(c.preparing ? { preparing: true as const } : {}),
-      items: c.items,
-    })),
+    claims: list.map((c) => {
+      const quiet = quietFor(ctx, c)
+      return {
+        branch: c.branch,
+        here: c.branch === here,
+        local: c.local,
+        claimedAt: c.claimedAt,
+        ...(c.note ? { note: c.note } : {}),
+        ...(c.step ? { step: c.step } : {}),
+        ...(quiet !== undefined ? { quietFor: quiet } : {}),
+        ...(quiet !== undefined && quiet > silentAfter ? { silent: true as const } : {}),
+        ...(c.preparing ? { preparing: true as const } : {}),
+        items: c.items,
+      }
+    }),
     contested: [...holders].filter(([, b]) => b.size > 1).map(([id, b]) => {
       const item = ctx.repo.byId.get(id)
       return { id, ref: item ? label(item) : id, branches: [...b] }
     }),
+    silentAfter,
   }
 }
 
-const claimsCommand: Command = {
+const claimsCommand = (silentAfter: number): Command => ({
   name: "claims",
-  says: "who holds what, recombined from every branch",
-  enforces: "nothing: it only reads",
+  says: "who holds what, recombined from every branch, with what each branch's worker is doing now",
+  enforces:
+    `nothing: it only reads; a claim whose last sign of life (its step, or its branch's last commit) is more than silentAfter minutes old (${silentAfter} here) is flagged possibly stuck`,
   usage: "claims [--branch <b>] [--json]",
   options: [
     { name: "--branch", says: "only the claim of this branch" },
-    { name: "--json", says: "print the claims as JSON: each branch's items, note and marks, and the items more than one branch holds" },
+    {
+      name: "--json",
+      says:
+        "print the claims as JSON: each branch's items, note, step, minutes since its last sign of life and marks, the items more than one branch holds, and the silentAfter threshold",
+    },
   ],
   examples: ["claims", "claims --branch fix/export-alpha", "claims --json"],
   run(args, ctx) {
     const p = parse(args, { branch: { type: "string" }, json: { type: "boolean" } })
-    const d = claimsData(ctx, str(p, "branch"))
+    const d = claimsData(ctx, str(p, "branch"), silentAfter)
     if (bool(p, "json")) {
       ctx.out(JSON.stringify(d, null, 2))
       return 0
@@ -381,6 +465,7 @@ const claimsCommand: Command = {
     if (!d.claims.some((c) => c.items.length)) ctx.out("no claims")
     for (const c of d.claims) {
       ctx.out(`${c.branch}${c.here ? "  ← here" : ""}${c.local ? "  (working tree)" : ""}${c.note ? `  — ${c.note}` : ""}`)
+      if (c.step) ctx.out(`  ${stepLine(c, "posted ")}`)
       for (const e of c.items) ctx.out(`  ${e.ref}  ${e.title}`)
     }
     if (d.contested.length) {
@@ -389,7 +474,7 @@ const claimsCommand: Command = {
     }
     return 0
   },
-}
+})
 
 /** The tag that keeps a branch's commits once the branch is deleted. */
 export const archiveTag = (branch: string): string => `archive/${branch}`
@@ -743,17 +828,24 @@ const whereWeWere: SummarySection = {
   },
 }
 
-const inHand: SummarySection = {
+const inHand = (silentAfter: number): SummarySection => ({
   name: "in hand",
   render(ctx) {
-    const data = readClaims(ctx).filter((c) => !empty(c)).map((c) => ({ branch: c.branch, items: c.items.map((e) => e.ref) }))
-    return rendered(data, (claims) => claims.map((c) => `  ${c.branch}: ${c.items.join(", ")}`))
+    const data = claimsData(ctx, undefined, silentAfter).claims.filter((c) => c.items.length).map((c) => ({
+      branch: c.branch,
+      items: c.items.map((e) => e.ref),
+      ...(c.step ? { step: c.step, line: stepLine(c, "") } : {}),
+      ...(c.quietFor !== undefined ? { quietFor: c.quietFor } : {}),
+      ...(c.silent ? { silent: true as const } : {}),
+    }))
+    return rendered(data, (claims) => claims.flatMap((c) => [`  ${c.branch}: ${c.items.join(", ")}`, ...(c.line ? [`    ${c.line}`] : [])]))
   },
-}
+})
 
 export default function coordination(options: Record<string, unknown> = {}): Plugin {
   const policy = readPolicy(options)
   const diaryPerDay = readDiaryPerDay(options)
+  const silentAfter = readSilentAfter(options)
   return {
     name: "coordination",
     contract: CONTRACT,
@@ -784,6 +876,12 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       },
       { name: "exempt", says: "branches the naming scheme does not apply to: names, or patterns with *", default: "[]" },
       { name: "diaryPerDay", says: "how many diary entries a day may hold before the check diary-entries notes it: a positive whole number", default: "5" },
+      {
+        name: "silentAfter",
+        says:
+          "minutes without a sign of life (a step posted with naima claim --step, or a commit on the branch) after which naima claims and naima summary flag a claim with a step as possibly stuck: a positive whole number",
+        default: String(SILENT_AFTER),
+      },
     ],
     dirs: [CLAIMS, PASSES, EVENTS],
     checks: [
@@ -796,14 +894,28 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       diaryCheck(readPasses, diaryPerDay),
       changeNotesCheck,
     ],
-    commands: [openCommand(policy), claimCommand, release, claimsCommand, land, changesCommand, prune, pass, eventCommand, diaryCommand(readPasses)],
+    commands: [
+      openCommand(policy),
+      claimCommand,
+      release,
+      claimsCommand(silentAfter),
+      land,
+      changesCommand,
+      prune,
+      pass,
+      eventCommand,
+      diaryCommand(readPasses),
+    ],
     views: [timelineView(readPasses)],
-    contributes: { "ui-views": [claimsUiView(claimsData), timelineUiView(readPasses), notesUiView(readPasses)], rules: [DIARY_RULE] },
+    contributes: {
+      "ui-views": [claimsUiView((ctx) => claimsData(ctx, undefined, silentAfter)), timelineUiView(readPasses), notesUiView(readPasses)],
+      rules: [DIARY_RULE, PROGRESS_RULE],
+    },
     // The claims are a panel of naima ui, the timeline and the session notes tabs, when the ui plugin is loaded; without it, still commands and a view.
     // The diary rule is listed by naima rules when the rules plugin is loaded; without it, the check still notes.
     optional: ["ui-views", "rules"],
     points: [landingReportsPoint],
-    summary: [whereWeWere, inHand],
+    summary: [whereWeWere, inHand(silentAfter)],
     hooks: [noClosingOwnWork],
   }
 }

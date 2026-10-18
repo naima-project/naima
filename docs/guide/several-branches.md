@@ -34,11 +34,19 @@ git add naima-tracker && git commit -m "Claim export-drops"
 ```sh
 naima claims        # every claim, from every local branch
 naima summary       # the same, with the last session notes
+naima claim --step "running the gates"    # say what this branch is doing now
 ```
 
 These views read every local branch and every worktree's folder, including
 uncommitted files. A branch that exists only on someone else's machine shows
 up once it has been fetched and checked out.
+
+`naima claim --step` writes what the branch is doing now into its claim,
+with the time, replacing the previous step. `naima claims` and
+`naima summary` show the step and how many minutes ago it was posted. When
+neither a step nor a commit on the branch is newer than the coordination
+option `silentAfter` (15 minutes by default), the claim is marked "silent
+for N min — possibly stuck".
 
 ## Finish a piece of work
 

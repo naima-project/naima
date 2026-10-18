@@ -28,6 +28,13 @@ export function claimsUiView(claimsData: (ctx: Context) => ClaimsData) {
             c.preparing ? ' <span class="tag">(being prepared)</span>' : ""
           }</h3>`,
           ...(c.note ? [`<p>${esc(c.note)}</p>`] : []),
+          ...(c.step
+            ? [
+              `<p>Now: ${esc(c.step.what)} <span class="tag">(${c.quietFor ?? 0} min ago)</span>${
+                c.silent ? ` <strong>silent for ${c.quietFor} min — possibly stuck</strong>` : ""
+              }</p>`,
+            ]
+            : []),
           c.items.length ? `<ul>${c.items.map((e) => `<li>${itemLink(e.id, e.ref)} ${esc(e.title)}</li>`).join("")}</ul>` : "<p>No items.</p>",
         ].join("\n")
       const contested = d.contested.length
