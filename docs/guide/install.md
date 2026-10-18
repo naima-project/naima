@@ -193,8 +193,10 @@ as a problem.
 entry file the project has if there is no `AGENTS.md`, or creates `AGENTS.md`
 if there is none. The line reads "Naima is in `naima-tracker/` (`naima/` the
 program, `naima-data/` the data); at the start of every session, run `deno
-run -A naima-tracker/naima/naima.ts hello` and pass on what it says; if you
-find it elsewhere, update this line". It is appended only if no entry file
+run -A naima-tracker/naima/naima.ts hello` and pass on what it says, unless
+its output is already in the conversation because a session-start hook ran
+it: then pass that on and do not run it again; if you find Naima elsewhere,
+update this line". It is appended only if no entry file
 holds it already. The versioned `naima-tracker/README.md` holds the two
 commands that restore a missing program
 ([below](#fresh-clones-and-worktrees)).

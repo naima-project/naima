@@ -51,3 +51,9 @@ todo per run and lets Naima close it.
 
 The release gate (`--full-suite`) and the landing's refusal of stale proofs
 are unchanged.
+
+The pointer line `naima init` writes, and the skill, now say to run
+`naima hello` at the start of every session unless its output is already in
+the conversation because a session-start hook ran it; then the agent passes
+that output on and doesn't run it again. `naima update` rewrites an earlier
+pointer line in place.

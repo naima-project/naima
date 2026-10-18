@@ -77,10 +77,10 @@ export function brokenEntryLinks(root: string, entryFiles: readonly string[]): B
 /** What every pointer says, wherever its tracker folder is: how an entry file is known to hold one. */
 const POINTER_MARK = "(naima/ the program, naima-data/ the data)"
 
-/** The one line that tells agents where Naima is, and to run naima hello at the start of every session. */
+/** The one line that tells agents where Naima is, and to run naima hello at the start of every session unless a session-start hook already did. */
 export function pointerLine(root: string, tracker: string): string {
   const where = posixRelative(root, tracker)
-  return `Naima is in ${where}/ ${POINTER_MARK}; at the start of every session, run \`deno run -A ${where}/${PROGRAM_DIR}/naima.ts hello\` and pass on what it says; if you find it elsewhere, update this line.`
+  return `Naima is in ${where}/ ${POINTER_MARK}; at the start of every session, run \`deno run -A ${where}/${PROGRAM_DIR}/naima.ts hello\` and pass on what it says, unless its output is already in the conversation because a session-start hook ran it: then pass that on and do not run it again; if you find Naima elsewhere, update this line.`
 }
 
 const textOf = (root: string, entryFile: string): string | null => {
