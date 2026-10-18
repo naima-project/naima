@@ -637,7 +637,25 @@ open`, `naima land`, `naima prune`) are shortcuts for what a person can do
 by hand, and `naima check` has the final word. **Enforced by** the check
 `landings-are-markers`, as a note. Starting from the first marker on the
 trunk's first-parent line, it names every commit on that line that isn't a
-marker and says why. History before the first marker isn't judged. Blocking
+marker and says why. History before the first marker isn't judged.
+
+One kind of commit may be made directly on the trunk: one that only adds to
+the tracker data. It may add new files in the data directory, such as a new
+item, a diary entry in `events/` or a session note in `passes/`, and it may
+add lines to an item's `README.md`, as a note does, while the item's
+`meta.json` stays as it was. The check accepts such a commit without a note.
+Filing what the owner says, at the moment it is said, shouldn't need a
+branch and a landing, and a commit that only adds can't change or hide
+anything that has landed. A commit that changes or deletes a file, or that
+touches `rules/`, `waivers/` or `naima.json`, still goes through a branch:
+a status, a rule, a waiver and the lock change what the project holds to,
+so they arrive as a marker like any other change.
+
+The check names each commit in a note of its own. History on a shared trunk
+is never rewritten, so a commit it names that the project accepts as it is
+gets a waiver, once, with its reason: `naima waive landings-are-markers
+<commit> --reason "<why>"`. From then on `naima check` lists the waiver
+instead of the note. Blocking
 such a commit with a git hook is
 [planned](../planned.md#blocking-a-landing-that-is-not-a-marker), as
 something a project could opt into but never the default

@@ -98,7 +98,8 @@ landing blocked rather than just noted. It would never be the default, so
 landing by hand or with a hosting platform's merge button stays allowed.
 **Today:** the check `landings-are-markers` looks at the trunk's
 first-parent line, starting from the first marker on it, and notes every
-commit there that is not a [marker](guide/glossary.md#marker)
+commit there that is not a [marker](guide/glossary.md#marker), except one
+made on the trunk that only adds to the tracker data
 ([the rule](guide/rules.md#every-landing-is-a-marker-naming-the-items-it-closes)).
 
 ## Item types for other work

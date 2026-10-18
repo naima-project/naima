@@ -297,7 +297,13 @@ with `git tag checkpoint/<date>-<what>`.
 - **Every landing is a marker naming the items it closes.** Enforced by
   `naima land`. A landing made by hand is checked by `landings-are-markers`,
   which notes every commit on the trunk's first-parent line, from the first
-  marker onwards, that isn't a marker
+  marker onwards, that isn't a marker. The exception is a commit made on the
+  trunk that only adds to the tracker data: new files in the data directory
+  outside `rules/`, `waivers/` and `naima.json`, and lines added to an
+  item's `README.md`. The coordinator may file an item, append a note, write
+  a diary entry or a session note that way, without a branch. A noted commit
+  the project accepts is waived once, `naima waive landings-are-markers
+  <commit> --reason "<why>"`
   ([the rule](../guide/rules.md#every-landing-is-a-marker-naming-the-items-it-closes)).
 - **No branch is deleted while it still holds work the trunk lacks.**
   Enforced by `naima prune`, which refuses without an `archive/<branch>` tag.

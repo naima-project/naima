@@ -38,7 +38,9 @@ git reset --keep <sha>^                 # the trunk goes back one; --keep, never
 The commit then lands with the branch, as a
 [marker](../guide/glossary.md#marker) (rule 3). Once the trunk's first-parent
 line contains a marker, `naima check` notes every commit made directly on the
-trunk after it (the check `landings-are-markers`).
+trunk after it (the check `landings-are-markers`), unless the commit only
+adds to the tracker data
+([the rule](../guide/rules.md#every-landing-is-a-marker-naming-the-items-it-closes)).
 
 Whether a project allows direct commits on the trunk at all is the
 [owner](../guide/glossary.md#owner)'s call. This rule is only about not doing
@@ -166,7 +168,8 @@ from under a process that is reading them at that moment.
   hasn't moved in the meantime. A landing made by hand is a convention that
   is checked afterwards. From the first marker on the trunk's first-parent
   line onwards, the check `landings-are-markers` notes every commit on that
-  line that isn't a marker. Nothing blocks such a commit yet, and a git hook
+  line that isn't a marker, except a commit made on the trunk that only adds
+  to the tracker data. Nothing blocks such a commit yet, and a git hook
   that a project can opt into is [planned](../planned.md#blocking-a-landing-that-is-not-a-marker).
 - **No shared mutable file.** Convention, kept by the one-file-per-session
   layout above. Nothing yet fails a hand-made shared log kept outside the

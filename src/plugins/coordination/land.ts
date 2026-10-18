@@ -12,6 +12,7 @@ import {
   type Command,
   type Context,
   currentBranch,
+  DATA_FILE,
   type ExtensionPoint,
   filesAt,
   type Finding,
@@ -29,6 +30,7 @@ import {
   textsAt,
   trunk,
   usageError,
+  WAIVERS,
   worktrees,
 } from "../../core/api.ts"
 import { changeNoteTrailers } from "./changes.ts"
@@ -390,6 +392,46 @@ function treesOf(root: string, commits: string[]): Map<string, string> {
   return new Map(commits.map((c, i) => [c, lines[i]?.trim() ?? ""]))
 }
 
+/** Each commit made on the trunk after `from`, merges left out, with the status and path of every file it changed, in one `git log`. */
+function directChanges(root: string, main: string, from: string): Map<string, { status: string; path: string }[]> {
+  const out =
+    gitOrNull(root, "log", "--first-parent", "--no-merges", "--no-renames", "--name-status", "-z", "--format=%x1e%H", `${from}..refs/heads/${main}`) ?? ""
+  const commits = new Map<string, { status: string; path: string }[]>()
+  for (const record of out.split("\x1e").filter(Boolean)) {
+    const [sha = "", ...rest] = record.split("\0")
+    const tokens = rest.map((t) => t.replace(/^\n/, "")).filter(Boolean)
+    const files: { status: string; path: string }[] = []
+    for (let i = 0; i + 1 < tokens.length; i += 2) files.push({ status: tokens[i] ?? "", path: tokens[i + 1] ?? "" })
+    commits.set(sha.trim(), files)
+  }
+  return commits
+}
+
+/**
+ * Whether a commit made on the trunk only adds to the tracker data: every file it changed is in the data directory,
+ * outside rules, waivers and naima.json, and is new, or is an item's README.md to which it only adds lines (its
+ * meta.json untouched, since a changed meta.json is a file that is not new). The READMEs are diffed only here.
+ */
+function onlyAddsTrackerData(ctx: Context, sha: string, files: { status: string; path: string }[]): boolean {
+  if (!files.length) return false
+  const data = `${ctx.trackerDir}/`
+  const kept = [ctx.registry.types.get("rules")?.dir ?? "rules", WAIVERS].map((d) => `${data}${d}/`)
+  const itemDirs = new Set([...ctx.registry.types.values()].map((t) => t.dir))
+  const readmes: string[] = []
+  for (const { status, path } of files) {
+    if (!path.startsWith(data) || path === `${data}${DATA_FILE}` || kept.some((k) => path.startsWith(k))) return false
+    if (status === "A") continue
+    const [dir = "", , name, ...more] = path.slice(data.length).split("/")
+    if (status !== "M" || name !== "README.md" || more.length || !itemDirs.has(dir)) return false
+    readmes.push(path)
+  }
+  if (!readmes.length) return true
+  const r = runGit(ctx.root, ["diff", "--numstat", "-z", `${sha}^`, sha, "--", ...readmes])
+  if (!r.ok) return false
+  const counts = r.out.split("\0").filter((l) => l.trim()).map((l) => l.replace(/^\n/, "").split("\t"))
+  return counts.length === readmes.length && counts.every(([, deleted]) => deleted === "0")
+}
+
 /** The item a `Closes:` value names in this checkout: by id, else as a path whose type may have changed since (closing moves it). */
 function closedItem(ctx: Context, value: string) {
   const byId = ctx.repo.byId.get(value)
@@ -425,7 +467,7 @@ function notAMarker(ctx: Context, c: FirstParent, trees: Map<string, string>): s
 export const landingsAreMarkers: Check = {
   name: "landings-are-markers",
   says:
-    "from the first landing marker on the trunk's first-parent line (a merge whose first parent the second contains, whose tree is the second's, with a Closes: trailer), every first-parent commit is a marker: a fast-forward, a commit made on the trunk, a merge not up to date, or one without a Closes: naming an item done or fixed is a note naming it. Before the first marker nothing is asked",
+    "from the first landing marker on the trunk's first-parent line (a merge whose first parent the second contains, whose tree is the second's, with a Closes: trailer), every first-parent commit is a marker: a fast-forward, a commit made on the trunk, a merge not up to date, or one without a Closes: naming an item done or fixed is a note naming it, one note per commit, with the commit as its subject so that a waiver can accept it. A commit made on the trunk that only adds to the tracker data — new files in the data directory outside rules/, waivers/ and naima.json, and lines added to an item's README.md, its meta.json untouched — is accepted without a note. Before the first marker nothing is asked",
   run(ctx) {
     const main = trunk(ctx.root)
     if (!main) return []
@@ -437,33 +479,30 @@ export const landingsAreMarkers: Check = {
       runGit(ctx.root, ["merge-base", "--is-ancestor", c.parents[0] ?? "", c.parents[1] ?? ""]).ok
     )
     if (start === -1) return []
+    const direct = directChanges(ctx.root, main, line[start]?.sha ?? "")
+    const waive = (sha: string) => `, or accept it once: naima waive landings-are-markers ${sha} --reason "<why>"`
     const out: Finding[] = []
-    let run: FirstParent[] = []
-    const flush = () => {
-      if (!run.length) return
-      const newest = run[run.length - 1]
-      const oldest = run[0]
-      if (!newest || !oldest) return
-      const which = run.length === 1
-        ? `${newest.sha.slice(0, 12)} "${newest.subject}"`
-        : `${plural(run.length, "commit")} ${oldest.sha.slice(0, 12)}..${newest.sha.slice(0, 12)} ("${newest.subject}")`
-      out.push({
-        level: "note",
-        message:
-          `${main} took ${which} without a landing marker — a fast-forward or a commit made on ${main}: land branches with naima land (or git merge --no-ff, the trunk an ancestor of the branch, with a ${CLOSES}: trailer)`,
-      })
-      run = []
-    }
     for (const c of line.slice(start + 1)) {
       if (c.parents.length !== 2) {
-        run.push(c)
+        if (onlyAddsTrackerData(ctx, c.sha, direct.get(c.sha) ?? [])) continue
+        out.push({
+          level: "note",
+          subject: c.sha,
+          message: `${main} took ${c.sha.slice(0, 12)} "${c.subject}" without a landing marker — a fast-forward, or a commit made on ${main} ` +
+            `that does more than add to the tracker data: land branches with naima land (or git merge --no-ff, the trunk an ancestor of the branch, ` +
+            `with a ${CLOSES}: trailer)${waive(c.sha)}`,
+        })
         continue
       }
-      flush()
       const why = notAMarker(ctx, c, trees)
-      if (why.length) out.push({ level: "note", message: `${main} took ${c.sha.slice(0, 12)} "${c.subject}", not a landing marker: ${why.join("; ")}` })
+      if (why.length) {
+        out.push({
+          level: "note",
+          subject: c.sha,
+          message: `${main} took ${c.sha.slice(0, 12)} "${c.subject}", not a landing marker: ${why.join("; ")}${waive(c.sha)}`,
+        })
+      }
     }
-    flush()
     return out
   },
 }

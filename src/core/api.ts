@@ -98,6 +98,7 @@ export {
   worktrees,
 } from "./git.ts"
 export { DATA_FILE, DEFAULT_DATA, TRACKER_DIR } from "./layout.ts"
+export { WAIVERS } from "./waivers.ts"
 export { askHost, DEFAULT_REMOTE_NAIMA, type Host, type HostAnswer, readHosts, shellQuote, sshArgs } from "./hosts.ts"
 export { installDirOf, installedProgram, type InstalledToolRef, platformKey, PLATFORMS, programFile, RECEIPT, toolsDir } from "./tools.ts"
 export { cell, code, sentence, table } from "./markdown.ts"
