@@ -15,19 +15,23 @@ What the agent itself reads is in [the pages for agents](../agents/README.md).
 https://vincenzoml.github.io/naima/llms.txt") and it runs the installer
 itself. It installs git and Deno if they are missing, starts a repository if
 the folder doesn't have one yet ([git, handled for you](../agents/git-for-the-owner.md)),
-and adds one line to the project's agent instruction file (`AGENTS.md`,
-`CLAUDE.md` or whichever one your agent reads), so that every later agent
-finds Naima.
+and adds one line to the project's agent instruction file (`AGENTS.md`, or
+whichever one your agent reads), so that every later agent finds Naima and
+runs `naima hello` when a session starts. For an agent tool that can run a
+command by itself at the start of a session, it also installs a hook that
+runs `naima hello` for the agent ([running naima hello at every session
+start](install.md#running-naima-hello-at-every-session-start)).
 
 **On a project with Naima**, point the agent's tool at the
-[skill](glossary.md#skill), which ships inside the program directory. For
-Claude Code you do this once, from the project's root:
+[skill](glossary.md#skill), which ships inside the program directory. How
+depends on the tool. With Claude Code, for example, you do this once, from
+the project's root:
 
 ```sh
 mkdir -p .claude/skills && ln -s ../../naima-tracker/naima/skills/naima .claude/skills/naima
 ```
 
-With other tools, tell the agent to read
+With a tool that doesn't load skills, tell the agent to read
 `naima-tracker/naima/skills/naima/SKILL.md` first. The skill teaches it to
 announce Naima at the start of a session with `naima hello` and to update it
 only once you've said yes, to change the tracker only through the commands, and to follow the [flows](glossary.md#flow) and

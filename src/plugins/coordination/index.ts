@@ -445,7 +445,7 @@ const prune: Command = {
     { name: "--branch", says: "the branch to delete, with the worktree standing on it" },
     { name: "--archive", says: "tag the branch's commits as archive/<branch> before deleting it, so none is lost" },
   ],
-  examples: ["prune", "prune --write", "prune --branch claude/old-idea --archive --write"],
+  examples: ["prune", "prune --write", "prune --branch agent/old-idea --archive --write"],
   run(args, ctx) {
     const p = parse(args, { write: { type: "boolean" }, branch: { type: "string" }, archive: { type: "boolean" } })
     const write = bool(p, "write")
@@ -557,7 +557,7 @@ function openCommand(policy: Policy): Command {
       { name: "--name", says: "what the work is: the branch's last segment and the worktree's folder", default: "the first item's slug" },
       { name: "--note", says: "why the branch holds the items, written in the claim" },
     ],
-    examples: ['open export-drops --as claude --note "alpha channel in the exporter"', "open export-drops export-keeps --as claude --name export-alpha"],
+    examples: ['open export-drops --as agent --note "alpha channel in the exporter"', "open export-drops export-keeps --as agent --name export-alpha"],
     run(args, ctx) {
       const p = parse(args, { as: { type: "string" }, name: { type: "string" }, note: { type: "string" } })
       if (!p.positionals.length) throw usageError(this)

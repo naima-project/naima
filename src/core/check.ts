@@ -9,7 +9,9 @@ import { formatCheck } from "./format.ts"
 import { appliesTo, fieldError, fieldsOf, isOpenList, offList } from "./fields.ts"
 import { isUuid, README, titleWords } from "./item.ts"
 import { label } from "./lifecycle.ts"
+import { trackerOf } from "./layout.ts"
 import { brokenEntryLinks } from "./pointer.ts"
+import { sessionStartGaps } from "./session-start.ts"
 import { storedLinks } from "./repo.ts"
 import type { Check, CheckOptions, Context, Finding, Item } from "./types.ts"
 import { unreadOptions } from "./updates.ts"
@@ -164,6 +166,13 @@ const entryPointers: Check = {
   run: (ctx) => brokenEntryLinks(ctx.root, ctx.config.entryFiles).map((b) => problem(`${b.file}: names ${JSON.stringify(b.target)}, which does not exist`)),
 }
 
+const sessionStart: Check = {
+  name: "session-start",
+  says:
+    "an agent is told to run naima hello at the start of every session: an entry file holds the pointer line, which says so, and each agent tool the project uses (naima.json's agents; absent it, those whose files the project holds) that has a session-start hook has it installed; each one missing is noted, with the naima update that adds it",
+  run: (ctx) => sessionStartGaps(ctx.root, trackerOf(ctx.trackerRoot), ctx.config).map(note),
+}
+
 const unreadOptionsCheck: Check = {
   name: "unread-options",
   says: "every option naima.json's plugins table sets is one its loaded plugin declares: an option no plugin reads any more is noted, by name",
@@ -173,7 +182,19 @@ const unreadOptionsCheck: Check = {
     ),
 }
 
-export const coreChecks: Check[] = [readable, identity, fields, values, links, layout, duplicates, entryPointers, unreadOptionsCheck, formatCheck()]
+export const coreChecks: Check[] = [
+  readable,
+  identity,
+  fields,
+  values,
+  links,
+  layout,
+  duplicates,
+  entryPointers,
+  sessionStart,
+  unreadOptionsCheck,
+  formatCheck(),
+]
 
 export interface CheckReport {
   problems: Finding[]

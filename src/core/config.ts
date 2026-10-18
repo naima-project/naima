@@ -10,6 +10,7 @@
 
 import { readFileSync } from "node:fs"
 import { isAbsolute, join, relative, resolve, sep } from "node:path"
+import { ADAPTERS } from "./adapters/index.ts"
 import { message } from "./errors.ts"
 import { writeFileAtomic } from "./files.ts"
 import { DATA_FILE, DEFAULT_PROGRAM } from "./layout.ts"
@@ -17,7 +18,7 @@ import { FORMAT, formatRefusal, formatsOf } from "./format.ts"
 import { DEFAULT_ENTRY_FILES } from "./pointer.ts"
 import type { Config, Extension, PluginConfig, PluginOptions, PluginSource, Severity } from "./types.ts"
 
-const KEYS = new Set(["format", "formats", "source", "commit", "verify", "program", "plugins", "rename", "extends", "entryFiles", "updates"])
+const KEYS = new Set(["format", "formats", "source", "commit", "verify", "program", "plugins", "rename", "extends", "agents", "entryFiles", "updates"])
 const COMMIT = /^[0-9a-f]{40}$/
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v)
@@ -111,6 +112,7 @@ export function parseConfig(raw: unknown, opts: { lenient?: boolean } = {}): Con
     rename: parseRename(raw["rename"]),
     extends: extensions as Extension[],
     entryFiles: parseEntryFiles(raw["entryFiles"]),
+    ...(raw["agents"] === undefined ? {} : { agents: parseAgents(raw["agents"]) }),
     updates: parseUpdates(raw["updates"]),
   }
 }
@@ -130,13 +132,22 @@ export function parseUpdates(value: unknown): UpdatePolicy {
   return value as UpdatePolicy
 }
 
-/** `entryFiles`: the agent-harness entry files `check` and `init --write-agent-pointer` act on, project root relative. Absent: sensible defaults. */
+/** `entryFiles`: the agent-harness entry files `check` and `init` act on, project root relative. Absent: sensible defaults. */
 function parseEntryFiles(value: unknown): string[] {
   if (value === undefined) return [...DEFAULT_ENTRY_FILES]
   if (!Array.isArray(value) || !value.every((v) => typeof v === "string" && v.trim())) {
     throw new Error(`${DATA_FILE}: entryFiles must be a list of paths, project-root relative`)
   }
   return value as string[]
+}
+
+/** `agents`: the agent tools the project uses, by their adapter's id; absent, those whose files the project holds. */
+function parseAgents(value: unknown): string[] {
+  const known = ADAPTERS.map((a) => a.id)
+  if (!Array.isArray(value) || !value.every((v) => typeof v === "string" && known.includes(v))) {
+    throw new Error(`${DATA_FILE}: agents is a list of the agent tools the project uses, each one of ${known.join(", ")}`)
+  }
+  return [...new Set(value as string[])]
 }
 
 /** The `rename` table: kind → qualified id → new short name. Which ids exist is the registry's to say. */

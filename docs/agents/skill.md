@@ -23,7 +23,9 @@ when to use it.
   copies `naima/` into `naima-tracker/naima/`
   ([bootstrap a project](../guide/install.md#bootstrap-a-project)). In a project with
   one, every run aligns the program itself.
-- **Announce Naima at the start of a session.** Run `naima hello` and show
+- **Announce Naima at the start of a session.** Run `naima hello`, unless a
+  session-start hook already ran it and its output is in front of the agent
+  ([running naima hello at every session start](../guide/install.md#running-naima-hello-at-every-session-start)), and show
   the user its first line as it is: Naima is active in this repository, with
   its version and commit. Then pass on what it found about newer versions,
   and offer to explain Naima, show its documentation, check for an update or
@@ -48,7 +50,8 @@ checked by `naima check` like every other markdown file in this repository.
 
 The skill is in the clone, so it is always the one of the Naima the
 project runs. Point the agent tool at it rather than copying the file, so its
-links keep resolving. For Claude Code, from the project:
+links keep resolving. How depends on the tool; for Claude Code, from the
+project:
 
 ```sh
 mkdir -p .claude/skills && ln -s ../../naima-tracker/naima/skills/naima .claude/skills/naima

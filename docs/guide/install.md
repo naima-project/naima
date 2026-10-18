@@ -74,8 +74,10 @@ git add naima-tracker && git commit -m "Track this project with Naima"
 `init` writes `naima-tracker/README.md`, `naima-tracker/.gitignore` (which
 ignores `naima/`) and `naima-tracker/naima-data/naima.json`, locked to the
 source and commit of the clone that ran it ([data discovery and
-self-init](#data-discovery-and-self-init)). It touches nothing else in the
-project ([unless asked](#the-hosts-own-tools)). What goes in the folder is
+self-init](#data-discovery-and-self-init)). Outside `naima-tracker/` it
+writes only what makes an agent run `naima hello` at the start of every
+session ([below](#the-agent-harness-entry-point)), and the lines that keep
+the program out of the host's own tools [when asked](#the-hosts-own-tools). What goes in the folder is
 described in [using Naima in your project](tracker-folder.md). If the project
 already keeps a `TODO.md` or an issue list, `naima adopt` brings it in
 ([adopt an existing board](adopt-an-existing-board.md)).
@@ -161,10 +163,10 @@ configuration. `init` prints one line for each configuration it finds:
 With `naima init --write-excludes`, it writes these lines itself, adding to
 the list a JSON file already has or creating a new one. A file with comments
 (JSONC) is left alone, and the line to add by hand is printed instead.
-Together with `--write-agent-pointer`
-([below](#the-agent-harness-entry-point)), this is the only way Naima ever
-writes outside `naima-tracker/`, and the launcher grants access to exactly
-these files, for that command only. Test runners need nothing, because the
+Together with the pointer line and the session-start hooks
+([below](#the-agent-harness-entry-point)), which `init` and `update` write,
+this is the only way Naima ever writes outside `naima-tracker/`, and the
+launcher grants access to exactly these files, for those commands only. Test runners need nothing, because the
 clone holds no tests.
 
 The full command is long, so an alias helps:
@@ -177,24 +179,51 @@ The rest of the documentation writes `naima <command>` for it.
 
 ## The agent-harness entry point
 
-Each agent tool reads its own always-on file, such as `CLAUDE.md`,
-`AGENTS.md` and the other sensible defaults that `DEFAULT_ENTRY_FILES` names,
-or a project's own `entryFiles` in `naima.json`. Mostly these files point at
-the project's own rulebook. If the pointer names a file that has been moved
-or deleted, nothing errors, and the agent is simply taught nothing. So
-`naima check` reports it. It resolves every plain-text path and markdown link
-in each configured entry file that exists, and reports one that names a
-missing file as a problem.
+Each agent tool reads its own always-on file: `AGENTS.md`, which many tools
+read, and the one each tool's adapter names (such as `CLAUDE.md` or
+`GEMINI.md`), which together make `DEFAULT_ENTRY_FILES`, or a project's own
+`entryFiles` in `naima.json`. Mostly these files point at the project's own
+rulebook. If the pointer names a file that has been moved or deleted,
+nothing errors, and the agent is simply taught nothing. So `naima check`
+reports it. It resolves every plain-text path and markdown link in each
+configured entry file that exists, and reports one that names a missing file
+as a problem.
 
-The installer, and `naima init --write-agent-pointer`, add one line to the
-host's `AGENTS.md`, or to `CLAUDE.md` if there is no `AGENTS.md`, or create
-`AGENTS.md` if neither exists. The line reads "Naima is in `naima-tracker/`
-(`naima/` the program, `naima-data/` the data); if you find it elsewhere,
-update this line", and it is appended only if the file doesn't already hold
-it. Without the flag, the line is only printed, in the same way
-`--write-excludes` prints its lines. The versioned `naima-tracker/README.md`
-holds the two commands that restore a missing program
+`naima init` adds one line to the host's `AGENTS.md`, or to the first other
+entry file the project has if there is no `AGENTS.md`, or creates `AGENTS.md`
+if there is none. The line reads "Naima is in `naima-tracker/` (`naima/` the
+program, `naima-data/` the data); at the start of every session, run `deno
+run -A naima-tracker/naima/naima.ts hello` and pass on what it says; if you
+find it elsewhere, update this line". It is appended only if no entry file
+holds it already. The versioned `naima-tracker/README.md` holds the two
+commands that restore a missing program
 ([below](#fresh-clones-and-worktrees)).
+
+### Running naima hello at every session start
+
+The line works with any agent that reads its entry file, but an agent may
+still skip it. Some agent tools can run a command by themselves when a
+session starts, and for those Naima has an adapter that installs a
+session-start hook running `naima hello`, so its output is in front of the
+agent before the first message. Naima itself works with any agent; an
+adapter only knows how one tool is configured.
+
+| Tool | Its id in `agents` | Hook | Where |
+|---|---|---|---|
+| Claude Code | `claude-code` | a `SessionStart` hook running `deno run -A "$CLAUDE_PROJECT_DIR/naima-tracker/naima/naima.ts" hello`, whose output Claude Code adds to the conversation | `.claude/settings.json`, merged into what the file holds: every other setting and hook stays |
+
+`naima init` installs the hook of each tool the project uses: the tools
+`naima.json`'s `agents` names, or, without it, the tools whose files the
+project holds (Claude Code's `CLAUDE.md` or `.claude/`). `naima init
+--no-session-hook` installs none and writes only the line. A settings file
+that is not plain JSON is left alone, and the hook to add by hand is printed
+instead.
+
+`naima update` adds whatever is missing to a project set up before, as a
+mechanical fix: the line, or a new wording of an older line, and each hook.
+It says what it wrote, and the files go in the same commit as the update.
+`naima check` notes a project where the line is missing or doesn't say to
+run `naima hello`, and each tool in use whose hook is missing.
 
 ## Fresh clones and worktrees
 
@@ -308,7 +337,7 @@ under Deno with only these permissions:
 | Permission | Granted | Why |
 |---|---|---|
 | read | the repository, the program wherever it is, the data directory of every other worktree of the project, and the [tools directory](tools.md#where-the-tools-go) | items, the project's markdown and source (the docs and beta-marker checks read them), git's view of branches, the commits the program is cloned from, and the uncommitted claims and notes of the other worktrees |
-| write | `naima-tracker/` only, and the data or program directory if moved out of it | items, claims, notes, the program's own alignment, the commits fetched for it; nothing else in the project |
+| write | `naima-tracker/`, and the data or program directory if moved out of it; for `init` and `update` only, the entry files and the session-start settings of the tools in use, and with `init --write-excludes` the host tools' configuration | items, claims, notes, the program's own alignment, the commits fetched for it; the pointer line, the session-start hooks and the exclusion lines; nothing else in the project |
 | run | `git`, and the programs the loaded contributions declare, by name or by their absolute path in the [tools directory](tools.md#where-the-tools-go) | alignment, update, and reading claims and notes across branches; a [verifier](glossary.md#verifier)'s model checker (its `runs`, [the contract](../reference/plugin-contract.md#the-verifier-contract)); a declared [metric](metrics-and-budgets.md)'s program, the first word of its `run` |
 | env | an allow-list: `HOME`, `PATH`, the user, shell, terminal, locale and temporary-directory variables, the proxy variables, Windows' system ones, and every `NAIMA_*`, `GIT_*`, `SSH_*`, `LC_*` and `DENO_*` | what git needs to reach a source, and Naima's own; nothing else of the environment reaches the program, nor the git it runs |
 | net | none, but the loopback interface for `naima ui` | the network is git's, in alignment and update; `naima ui` serves its window from this machine only |

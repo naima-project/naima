@@ -304,10 +304,10 @@ export const land: Command = {
     },
   ],
   examples: [
-    "land claude/export-alpha",
-    "land claude/export-alpha --closes export-drops",
-    'land claude/tidy-loader --no-change-note "a refactor of the loader: nothing a person or an agent sees changes"',
-    'land claude/scheduler --stale-proofs "the liveness property runs for two days: the nightly run checks it"',
+    "land agent/export-alpha",
+    "land agent/export-alpha --closes export-drops",
+    'land agent/tidy-loader --no-change-note "a refactor of the loader: nothing a person or an agent sees changes"',
+    'land agent/scheduler --stale-proofs "the liveness property runs for two days: the nightly run checks it"',
   ],
   async run(args, ctx) {
     const p = parse(args, { closes: { type: "string", multiple: true }, "no-change-note": { type: "string" }, "stale-proofs": { type: "string" } })
