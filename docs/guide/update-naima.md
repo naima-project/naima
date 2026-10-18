@@ -105,15 +105,46 @@ the update itself:
   value it held, so nothing disappears unseen;
 - it names the rules that changed, so the agents read them again and
   acknowledge them in their next session note;
+- it adds what makes every agent run `naima hello` at the start of a
+  session, if your project doesn't have it yet: a line in your entry file,
+  such as `AGENTS.md`, and the session-start hook of each agent tool you use
+  that has one ([the entry point](install.md#the-agent-harness-entry-point));
 - it runs `naima check`, and files a todo for each problem or note that is
   new since the version you had, so nothing it couldn't fix by itself is
   forgotten. A todo it has already filed isn't filed twice.
 
-Everything ends up in the tracker folder, as one change. You review it and
-commit it, like any other.
+Everything ends up in the tracker folder, apart from that line and those
+hooks. For each of them, the update prints one sentence saying what it
+installed and why, for example:
+
+```text
+Installed a <tool> session-start hook in <its settings file>: every new conversation starts by running naima hello, so you see which Naima is active and whether a newer one exists.
+```
+
+Its last line names every file to commit. You review the change and commit
+it as one, like any other.
 
 To move to a particular commit of the source's main branch rather than the
 newest one, use `naima update --to <commit>`.
+
+### When the update asks to be run once more
+
+The update starts in the version you had and finishes in the new one. The
+part that starts it, the [launcher](install.md#the-permissions), comes from
+the version you had, and it decides which files the update may write. A
+launcher from before the session-start hooks doesn't let the update write
+your entry file or a tool's settings. In that case the update moves the
+lock, migrates and checks everything else, and ends with a line like this
+one, exiting with 0:
+
+```text
+Naima moved to 0fde22566318; run naima update once more to finish: the line in AGENTS.md that tells agents to run naima hello and <tool>'s session-start hook in <its settings file>
+```
+
+Run `naima update` again. The second time the new version starts it, so it
+writes what was left and prints the usual last line with the files to
+commit. Until then, `naima hello` and `naima check` both say that the
+update is unfinished, and what is left.
 
 ## Going back to the previous version
 

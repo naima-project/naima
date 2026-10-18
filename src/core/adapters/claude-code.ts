@@ -56,7 +56,8 @@ function install(root: string, program: string): HookInstall {
   const start = hooks["SessionStart"] ?? []
   if (!Array.isArray(start)) return { done: "refused", why: "its hooks.SessionStart is not a list", add }
   const settings = { ...r.settings, hooks: { ...hooks, SessionStart: [...start, entry] } }
-  mkdirSync(dirname(path), { recursive: true })
+  // Only a missing folder is made: Deno asks write access to the folder for mkdir even when it exists, and the fence names the file alone.
+  if (!existsSync(dirname(path))) mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, JSON.stringify(settings, null, 2) + "\n")
   return { done: "written" }
 }

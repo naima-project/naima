@@ -5,6 +5,21 @@ import { randomUUID } from "node:crypto"
 import { existsSync, lstatSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { basename, dirname, join } from "node:path"
 
+/** What Deno answers when asked whether a path may be written. */
+type WriteQuery = { querySync(d: { name: "write"; path: string }): { state: string } }
+
+/**
+ * May this process write `path`, making its folder when it is missing? Under Deno, what the permissions it was
+ * started with grant: a program launched by an older launcher may lack a path the newer code writes. Under
+ * another runtime nothing fences the writes.
+ */
+export function mayWrite(path: string): boolean {
+  const permissions = (globalThis as { Deno?: { permissions?: WriteQuery } }).Deno?.permissions
+  if (!permissions) return true
+  const granted = (p: string) => permissions.querySync({ name: "write", path: p }).state === "granted"
+  return granted(path) && (existsSync(dirname(path)) || granted(dirname(path)))
+}
+
 /** Never a project's own source, wherever they sit: version control, dependencies, build output. */
 export const NEVER_SOURCE: ReadonlySet<string> = new Set([".git", "node_modules", "dist", "build"])
 

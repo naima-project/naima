@@ -69,7 +69,7 @@ import { asRendered, linesAs } from "./rendered.ts"
 import { shortOrId } from "./names.ts"
 import { apiFor } from "./plugins.ts"
 import { atSessionStart } from "./base.ts"
-import { type SessionConfig, startSessions } from "./session-start.ts"
+import { committedLock as lockOfLastCommit, type SessionConfig, sessionStartGaps, startSessions, unfinishedUpdate } from "./session-start.ts"
 
 export interface CliOptions extends OpenOptions {
   cwd: string
@@ -160,17 +160,33 @@ function excludeHost(root: string, program: string, write: boolean, io: IO): voi
   for (const x of exclusions(root, posixRelative(root, program))) {
     if (x.present) continue
     if (!write) io.out(`exclude from ${x.file}: ${x.line}   (naima init --write-excludes adds it)`)
-    else if (x.write()) io.out(`wrote ${x.file}: ${x.line}`)
-    else io.out(`not written, it is not plain JSON — add by hand to ${x.file}: ${x.line}`)
+    else if (x.write()) {
+      io.out(
+        `Added Naima's program to the excludes in ${x.file}, so ${
+          EXCLUDED_BY[x.file] ?? "the tool it configures"
+        } does not check it as part of your project: ${x.line}`,
+      )
+    } else io.out(`not written, it is not plain JSON — add by hand to ${x.file}: ${x.line}`)
   }
 }
 
-/** Write what makes an agent run naima hello at every session start — the pointer line, and with `hooks` each tool's hook — and say it. */
-function startAgents(root: string, tracker: string, config: SessionConfig, hooks: boolean, io: IO): string[] {
+/**
+ * Write what makes an agent run naima hello at every session start — the pointer line, and with `hooks` each tool's
+ * hook — and say each in a plain sentence. Returns the files written, and what this run was not allowed to write.
+ */
+function startAgents(root: string, tracker: string, config: SessionConfig, hooks: boolean, io: IO): { wrote: string[]; left: string[] } {
   const done = startSessions(root, tracker, config, { hooks })
   for (const line of done.said) io.out(line)
-  return done.wrote
+  return done
 }
+
+/** What init could not write, the permissions it runs with lacking it: each said, with the command that writes it. */
+function sayLeft(left: readonly string[], io: IO): void {
+  for (const part of left) io.out(`not written, this run may not write it: ${part} — naima update writes it`)
+}
+
+/** The tool each host file `init --write-excludes` writes configures. */
+const EXCLUDED_BY: Record<string, string> = { "deno.json": "Deno", "deno.jsonc": "Deno", "tsconfig.json": "tsc", ".prettierignore": "prettier" }
 
 /** The installer's refusal outside a git repository, said by init and by a first run alike. */
 const OUTSIDE = (where: string): string =>
@@ -242,7 +258,7 @@ async function init(args: string[], opts: CliOptions, data: string, io: IO): Pro
     io.out(`${posixRelative(found.root, join(found.data, DATA_FILE))} already exists — left as it is`)
     const config = parseConfig(found.raw, { lenient: true })
     excludeHost(found.root, found.program, write, io)
-    startAgents(found.root, trackerOf(found.data), config, hooks, io)
+    sayLeft(startAgents(found.root, trackerOf(found.data), config, hooks, io).left, io)
     io.out(await nextStep(found, opts, io))
     return 0
   }
@@ -254,7 +270,7 @@ async function init(args: string[], opts: CliOptions, data: string, io: IO): Pro
     : ""
   io.out(made.said + cloned)
   excludeHost(made.root, made.program, write, io)
-  startAgents(made.root, made.tracker, parseConfig(readRaw(place.data)), hooks, io)
+  sayLeft(startAgents(made.root, made.tracker, parseConfig(readRaw(place.data)), hooks, io).left, io)
   io.out(await nextStep(place, opts, io))
   return 0
 }
@@ -282,16 +298,7 @@ async function said(opts: CliOptions, place: Place, t: Target, raw: Record<strin
 }
 
 /** The lock naima.json holds in the project's last commit; null when it holds none. */
-function committedLock(place: Place): string | null {
-  const r = runGit(place.root, ["show", `HEAD:${posixRelative(place.root, join(place.data, DATA_FILE))}`])
-  if (!r.ok) return null
-  try {
-    const commit = (JSON.parse(r.out) as { commit?: unknown }).commit
-    return typeof commit === "string" ? commit : null
-  } catch {
-    return null
-  }
-}
+const committedLock = (place: Place): string | null => lockOfLastCommit(place.root, place.data)
 
 /** A finding as an item's title: its first words, short enough to read. */
 const titleOf = (finding: string): string => {
@@ -305,7 +312,8 @@ const titleOf = (finding: string): string => {
 }
 
 /** File an item for each finding the update left, in the type that carries the trait follow-up; one already open with its title is not filed again. */
-async function fileLeft(opts: CliOptions, place: Place, io: IO, commit: string, findings: readonly string[]): Promise<void> {
+async function fileLeft(opts: CliOptions, place: Place, io: IO, commit: string, all: readonly string[], pending: readonly string[]): Promise<void> {
+  const findings = all.filter((f) => !pending.includes(f))
   if (!findings.length) return
   const ctx = await openProject(place, opts, io)
   const type = [...ctx.registry.types.values()].find((t) => t.creatable !== false && t.traits?.includes(FOLLOW_UP))
@@ -335,9 +343,10 @@ async function fileLeft(opts: CliOptions, place: Place, io: IO, commit: string, 
 /**
  * How `naima update` ends, run by the Naima it moved to: the rules the move changed, for agents to acknowledge
  * again; naima check; and an item filed for each problem or note the check newly finds — newly against the
- * locked commit of the project's last commit, whose own check runs from a temporary copy.
+ * locked commit of the project's last commit, whose own check runs from a temporary copy. A finding in `pending` is
+ * what the next run of the update writes, and is not filed.
  */
-async function finish(opts: CliOptions, place: Place, lock: Lock, io: IO): Promise<void> {
+async function finish(opts: CliOptions, place: Place, lock: Lock, io: IO, pending: readonly string[] = []): Promise<void> {
   const program = place.program
   const was = committedLock(place)
   const moved = was !== null && was !== lock.commit && runGit(program, ["merge-base", "--is-ancestor", was, lock.commit]).ok
@@ -358,7 +367,7 @@ async function finish(opts: CliOptions, place: Place, lock: Lock, io: IO): Promi
   const now = await checkFrom(opts.programRoot, place)
   if (moved) {
     const left = baseline ? newly(baseline, now) : { problems: now.problems, notes: [] }
-    await fileLeft(opts, place, io, lock.commit, [...left.problems, ...left.notes])
+    await fileLeft(opts, place, io, lock.commit, [...left.problems, ...left.notes], pending)
   }
   io.out(`naima check: ${counted(now.problems.length, "problem")}, ${counted(now.notes.length, "note")}${now.problems.length ? ":" : ""}`)
   for (const p of now.problems) io.out(`  ✗ ${p}`)
@@ -502,8 +511,17 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
   const steps = migrate(place.data, MIGRATIONS, all.slice(1))
   for (const line of migrated(steps, from, all.slice(1))) io.out(line)
   // A mechanical fix, said: what makes agents run naima hello at every session start, where it is missing.
-  const wrote = startAgents(place.root, trackerOf(place.data), parseConfig(readRaw(place.data), { lenient: true }), true, io)
-  await finish(opts, place, lock, io)
+  const config = parseConfig(readRaw(place.data), { lenient: true })
+  const { wrote, left } = startAgents(place.root, trackerOf(place.data), config, true, io)
+  // Launched by an older launcher, whose fence predates these files, this run may not write them: the next run, under
+  // this Naima's own launcher, does. What its check notes about them is that run's to fix, not an item to file.
+  const unfinished = left.length ? unfinishedUpdate(place.root, place.data, target, config) : null
+  const pending = left.length ? [...(unfinished ? [unfinished] : []), ...sessionStartGaps(place.root, trackerOf(place.data), config)] : []
+  await finish(opts, place, lock, io, pending)
+  if (left.length) {
+    io.out(`Naima ${unfinished ? "moved to" : "is at"} ${short(target)}; run naima update once more to finish: ${left.join(" and ")}`)
+    return 0
+  }
   io.out(`${short(target)} is the lock — commit it as one change: git add ${[tracker, ...wrote].join(" ")} && git commit -m "Update Naima to ${short(target)}"`)
   return 0
 }
@@ -533,6 +551,13 @@ async function hello(opts: CliOptions, place: Place, lock: Lock, raw: Record<str
   const me = running(opts.programRoot)
   const policy = parseUpdates(raw["updates"])
   const lines: string[] = []
+  // An update an older launcher started, and could not finish: what the next naima update writes.
+  try {
+    const unfinished = unfinishedUpdate(place.root, place.data, lock.commit, parseConfig(raw, { lenient: true }))
+    if (unfinished) lines.push(`${unfinished.charAt(0).toUpperCase()}${unfinished.slice(1)}.`)
+  } catch {
+    // a naima.json this Naima cannot read: the next command says why
+  }
   if (policy === "off") lines.push(`Updates are not checked (${DATA_FILE}: "updates": "off"); naima update --check checks on request.`)
   else {
     const t = targetOf(place, lock, opts)
