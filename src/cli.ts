@@ -10,12 +10,16 @@ import { runCli } from "./core/internal.ts"
 /** The Naima that is running: the directory above src/. */
 const programRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const data = process.env["NAIMA_DATA"]
+// The launcher's mark is for this process alone: a command it starts, a test
+// suite under naima run among them, is not launched.
+const launched = process.env["NAIMA_LAUNCHED"] === "1"
+delete process.env["NAIMA_LAUNCHED"]
 
 process.exitCode = await runCli(process.argv.slice(2), {
   cwd: process.cwd(),
   programRoot,
   ...(data ? { data } : {}),
-  launched: process.env["NAIMA_LAUNCHED"] === "1",
+  launched,
   debug: process.env["NAIMA_DEBUG"] === "1",
   firstParty,
 })
