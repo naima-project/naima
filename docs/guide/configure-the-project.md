@@ -84,8 +84,7 @@ This does the same as editing the file by hand to say
 `{ "plugins": { "beta-markers": { "enabled": false } } }`. While the plugin
 is off, everything it declares (its types, fields, checks and commands) is
 gone, and `naima plugin enable beta-markers` turns it back on. An opt-in
-plugin that starts a program, such as `verifier-mcrl2` or
-`verifier-voxlogica`, stays off until it is enabled in the same way.
+plugin that starts a program, such as `verifier-mcrl2`, stays off until it is enabled in the same way.
 
 ## Give a plugin its options
 

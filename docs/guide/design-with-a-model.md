@@ -43,7 +43,7 @@ Any form that a tool can check is welcome. These three are the usual ones.
   the behaviour is a single thing moving through states.
 - An **mCRL2 specification**, for processes that run side by side and talk
   to each other. The mCRL2 verifier checks it
-  ([two model checkers](prove-and-close.md#two-model-checkers-mcrl2-and-voxlogica)).
+  ([the mCRL2 model checker](prove-and-close.md#the-mcrl2-model-checker)).
 - A **state machine encoded in mCRL2**, which reads like the table and can
   still be checked. The template below is one.
 

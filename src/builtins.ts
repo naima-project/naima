@@ -29,7 +29,6 @@ import triage from "./plugins/triage/index.ts"
 import ui from "./plugins/ui/index.ts"
 import verifier from "./plugins/verifier/index.ts"
 import verifierMcrl2 from "./plugins/verifier-mcrl2/index.ts"
-import verifierVoxlogica from "./plugins/verifier-voxlogica/index.ts"
 
 /** Every first-party plugin: its name, and the factory that makes it from its options. */
 export const firstParty: readonly FirstParty[] = [
@@ -46,7 +45,6 @@ export const firstParty: readonly FirstParty[] = [
   { name: "verifier", factory: verifier },
   { name: "tools", factory: tools },
   { name: "verifier-mcrl2", factory: verifierMcrl2, optIn: true },
-  { name: "verifier-voxlogica", factory: verifierVoxlogica, optIn: true },
   { name: "storm", factory: storm, optIn: true },
   { name: "pack-analyses", factory: packAnalyses, optIn: true },
   { name: "pack-papers", factory: packPapers, optIn: true },

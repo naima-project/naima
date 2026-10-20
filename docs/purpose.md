@@ -248,8 +248,8 @@ passed proof, properties, `naima verify`, `naima verifiers`, and expiry when
 the model changes. A test also names its place in the evidence ranking in
 `evidenceKind`, and a regression test's red run is recorded in `redSeen`,
 each with a check that notes when it is missing
-([prove and close](guide/prove-and-close.md)). The mCRL2 and VoxLogicA
-verifiers ship, while the mCRL2 model of the claims above is
+([prove and close](guide/prove-and-close.md)). The mCRL2
+verifier ships, while the mCRL2 model of the claims above is
 [planned](planned.md#model-checkers-and-the-strength-of-evidence).
 
 ### Metrics

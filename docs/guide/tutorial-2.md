@@ -121,7 +121,7 @@ The second is a [property](prove-and-close.md#properties-proven-by-a-tool),
 which a verifier checks instead of someone reading the code by eye. The
 example adapter that every project ships (`example-regex`) treats the script
 itself as the model and a regular expression as the property. A real project
-would name `mcrl2` or `voxlogica` here instead, working on its own model:
+would name `mcrl2` here instead, working on its own model:
 
 ```console
 $ naima new properties "greet.sh greets in Italian"

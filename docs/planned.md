@@ -25,8 +25,6 @@ ones come first.
 
 ## Model checkers and the strength of evidence
 
-- **VoxLogicA 2 as a verifier**: the VoxLogicA adapter that ships today runs
-  the 1.x releases.
 - **The mCRL2 model of Naima's own claims** ("no claim is ever lost") as a
   property in Naima's own tracker.
 - **Red-then-green shown by the run itself**: the failing run on the old work
@@ -37,8 +35,8 @@ ones come first.
   ([tools](guide/tools.md)), but no verifier runs it yet. On Windows, reaching
   it through a Linux environment isn't built either.
 - **Today:** properties, `naima verify` and expiring proofs work, with the
-  mCRL2 and VoxLogicA verifiers and an example one
-  ([prove and close](guide/prove-and-close.md#two-model-checkers-mcrl2-and-voxlogica)).
+  mCRL2 verifier and an example one
+  ([prove and close](guide/prove-and-close.md#the-mcrl2-model-checker)).
   The evidence ranking (`evidenceKind`) and the red-then-green record
   (`redSeen`) are tracker fields, and there are checks that note when they
   are missing

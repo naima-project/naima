@@ -9,7 +9,7 @@
 // every file it includes, so a change to an included file makes a verdict
 // stale, as a real tool's includes would.
 //
-// A real adapter (mCRL2, VoxLogicA) runs the tool, maps its exit status and
+// A real adapter (mCRL2) runs the tool, maps its exit status and
 // output to a verdict, and returns the trace it printed.
 
 import { existsSync, readFileSync } from "node:fs"

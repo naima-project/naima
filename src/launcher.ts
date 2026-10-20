@@ -193,7 +193,7 @@ function otherWorktrees(root: string, data: string | null): string[] {
 }
 
 /** The first-party plugins loaded only when the project's plugins table names them: each starts a program. Kept equal to builtins.ts's `optIn` by a test. */
-export const OPT_IN: readonly string[] = ["verifier-mcrl2", "verifier-voxlogica", "storm"]
+export const OPT_IN: readonly string[] = ["verifier-mcrl2", "storm"]
 
 /** An entry of the plugins table that switches its plugin on: present, and not `enabled: false`. */
 const isOn = (e: unknown): boolean => !!e && typeof e === "object" && (e as { enabled?: unknown }).enabled !== false

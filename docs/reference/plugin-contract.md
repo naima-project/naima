@@ -431,9 +431,9 @@ the core collects them from every point.
 The launcher allows the program exactly the declared programs, besides
 `git`: it asks the program about to run (`naima runs --json`, under read
 permission only) when the project loads a third-party plugin or a
-replacement, declares metrics, or switches on `verifier-mcrl2` or
-`verifier-voxlogica` — first-party plugins that are off until `naima.json`
-names them, since they start a model checker. Anything
+replacement, declares metrics, or switches on `verifier-mcrl2` — a
+first-party plugin that is off until `naima.json` names it, since it starts a
+model checker. Anything
 undeclared fails with Deno's own `Requires run access`.
 
 An adapter that throws is recorded as `error` with the message as output. So
@@ -452,10 +452,9 @@ counterexample as its own file. `naima check` fails when a property claims to
 hold and its property, verifier, model path, options, model contents, an
 input's contents, the set of inputs or the tool's version have changed since
 the run. The shipped adapter, `example-regex`, is a stand-in that
-reads `#include <path>` lines and declares them as inputs; the real ones,
-`mcrl2` and `voxlogica`, are separate opt-in plugins (`verifier-mcrl2`,
-`verifier-voxlogica`), each declaring the tool it starts, its inputs and its
-version.
+reads `#include <path>` lines and declares them as inputs; the real one,
+`mcrl2`, is the separate opt-in plugin `verifier-mcrl2`, declaring the tool it
+starts, its inputs and its version.
 
 ## Testing a plugin
 

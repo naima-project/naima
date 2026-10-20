@@ -233,18 +233,15 @@ naima verify <property> --force "the first run was cut short by a reboot"
 Every run stays in the property's `attachments/`, two runs made in the same
 instant included, so the earlier verdicts can always be read again.
 
-### Two model checkers: mCRL2 and VoxLogicA
+### The mCRL2 model checker
 
-Two verifiers come with Naima. Each is a separate plugin and needs its tool
-installed on the machine, and Naima doesn't fetch the tool for you, so it has
-to be installed first. Because a verifier starts a program, each one stays
-off until `naima.json` names it, so you switch on the one you use, with its
-options.
+A model-checking verifier comes with Naima: mCRL2, in a separate plugin that
+needs its tool installed on the machine. Because the verifier starts a
+program, it stays off until `naima.json` names it, with its options.
 
 ```json
 "plugins": {
-  "verifier-mcrl2": {},
-  "verifier-voxlogica": { "options": { "program": "/opt/VoxLogicA/VoxLogicA", "version": "1.3.3" } }
+  "verifier-mcrl2": {}
 }
 ```
 
@@ -301,32 +298,9 @@ naima set <property> 'verifierOptions={"route":"lts","threads":8}'
 - `threads` speeds up generating the state space. On macOS, more than one
   thread can crash on some models, as mCRL2 itself warns.
 
-**VoxLogicA** (`voxlogica`) is for properties of images, for example that
-one region lies inside another, that a lesion is found or that a structure is
-connected. The model is a VoxLogicA session (an `.imgql` file) that loads its
-images and prints a true-or-false value under a name, and the property is
-that name.
-
-```
-load img = "scan.png"
-let lesion = between(128, 255, intensity(img))
-print "lesion_found" volume(lesion) .>. 0
-```
-
-```sh
-naima set <property> verifier=voxlogica model=analysis/scan.imgql property=lesion_found
-```
-
-The property holds when the session prints `true`. When it prints `false`,
-every value the session printed becomes the counterexample. The images the
-session loads count as inputs of the run, so if one of them changes, the
-property is no longer current. The `program` option tells Naima where
-VoxLogicA is, and `version` records its release with each run, because Naima
-can't read it from outside the project.
-
-For both verifiers, a `verifierOptions` of `{ "timeoutSeconds": 600 }` stops
-a run that takes longer than that and records it as `error` (undecided). If
-the tool isn't installed, the run is recorded as an error whose output begins
+A `verifierOptions` of `{ "timeoutSeconds": 600 }` stops a run that takes
+longer than that and records it as `error` (undecided). If the tool isn't
+installed, the run is recorded as an error whose output begins
 with `tool missing:` and explains how to install it, and the property is
 never reported as holding.
 
@@ -410,7 +384,7 @@ The comparison is made modulo an equivalence, given with `--modulo`. mCRL2
 offers two. `bisim`, strong bisimilarity, is the default, and every property
 carries over under it. `dpbranching-bisim`, divergence-preserving branching
 bisimilarity, also accepts a model that takes different internal steps, and
-carries over only the properties the [LTS route](#two-model-checkers-mcrl2-and-voxlogica)
+carries over only the properties the [LTS route](#the-mcrl2-model-checker)
 accepts. A property it doesn't preserve is named, to verify again.
 
 Nothing carries over when the two versions are not equivalent: the command
