@@ -112,9 +112,9 @@ You don't need to know git, code or project management. You need an AI agent.
   [installing and updating](docs/guide/install.md).
 - For agents: [the skill](skills/naima/SKILL.md).
 - Contributing: Naima is built and tested in its workshop,
-  [naima-project/naima-workshop](https://github.com/naima-project/naima-workshop),
+  [naima-project/naima-lab](https://github.com/naima-project/naima-lab),
   which holds the tests, the site and the scripts; start from its
-  [CONTRIBUTING.md](https://github.com/naima-project/naima-workshop/blob/main/CONTRIBUTING.md).
+  [CONTRIBUTING.md](https://github.com/naima-project/naima-lab/blob/main/CONTRIBUTING.md).
 
 ## Licence
 
