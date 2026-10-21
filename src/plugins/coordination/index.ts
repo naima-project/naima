@@ -27,7 +27,9 @@ import {
   findPrivate,
   gitOrNull,
   guardPrivate,
+  isAncestor,
   isClone,
+  isOpen,
   label,
   mustGit,
   parse,
@@ -372,6 +374,8 @@ export interface ClaimsData {
     /** The last sign of life is more than `silentAfter` minutes old: the worker is possibly stuck. */
     silent?: true
     preparing?: true
+    /** Why the claim no longer stands for work in progress — its branch gone or merged into the trunk, or every item it claims closed — released by `naima prune --write`. */
+    stale?: string
     items: ClaimEntry[]
   }[]
   /** The items more than one branch claims — allowed, and worth knowing. */
@@ -410,16 +414,41 @@ function quietFor(ctx: Context, c: Claim): number | undefined {
 const stepLine = (c: ClaimsData["claims"][number], posted: string): string =>
   c.step ? `now: ${c.step.what} (${posted}${c.quietFor ?? 0} min ago)${c.silent ? ` — silent for ${c.quietFor} min — possibly stuck` : ""}` : ""
 
+/** An item no longer worked on: its status is a done one, or it sits in an archive type, where naima close moves it. */
+const closed = (ctx: Context, id: string): boolean => {
+  const item = ctx.repo.byId.get(id)
+  return item !== undefined && (!isOpen(ctx, item) || ctx.registry.types.get(item.type)?.creatable === false)
+}
+
+/**
+ * Why a claim no longer stands for work in progress, or undefined while it
+ * does: its branch is gone; or merged into the trunk, which carries the claim
+ * file the merge brought; or every item it claims is closed. A stale claim is
+ * released by `naima prune --write`, run where its file is.
+ */
+export function staleReason(ctx: Context, c: Claim, main: string | null = trunk(ctx.root), alive: Set<string> = allRefNames(ctx.root)): string | undefined {
+  if (!alive.has(c.branch)) return "its branch is gone"
+  if (
+    main && c.branch !== main && isAncestor(ctx.root, `refs/heads/${c.branch}`, main) &&
+    filesAt(ctx.root, main, rel(ctx, CLAIMS), ".json").some((f) => f.name === c.file)
+  ) return `its branch is merged into ${main}`
+  if (c.items.length && c.items.every((e) => closed(ctx, e.id))) return "every item it claims is closed"
+  return undefined
+}
+
 /** Every claim, recombined from every branch now — only `only`'s when given — and the items more than one holds. */
 export function claimsData(ctx: Context, only?: string, silentAfter: number = SILENT_AFTER): ClaimsData {
   const here = currentBranch(ctx.root)
-  const list = readClaims(ctx).filter((c) => !only || c.branch === only)
+  const main = trunk(ctx.root)
+  const alive = allRefNames(ctx.root)
+  const list = readClaims(ctx).filter((c) => !only || c.branch === only).map((c) => ({ c, stale: staleReason(ctx, c, main, alive) }))
   const holders = new Map<string, Set<string>>()
-  for (const c of list) for (const e of c.items) holders.set(e.id, (holders.get(e.id) ?? new Set()).add(c.branch))
+  for (const { c, stale } of list) if (!stale) { for (const e of c.items) holders.set(e.id, (holders.get(e.id) ?? new Set()).add(c.branch)) }
   return {
-    claims: list.map((c) => {
-      const quiet = quietFor(ctx, c)
+    claims: list.map(({ c, stale }) => {
+      const quiet = stale ? undefined : quietFor(ctx, c)
       return {
+        ...(stale ? { stale } : {}),
         branch: c.branch,
         here: c.branch === here,
         local: c.local,
@@ -444,7 +473,7 @@ const claimsCommand = (silentAfter: number): Command => ({
   name: "claims",
   says: "who holds what, recombined from every branch, with what each branch's worker is doing now",
   enforces:
-    `nothing: it only reads; a claim whose last sign of life (its step, or its branch's last commit) is more than silentAfter minutes old (${silentAfter} here) is flagged possibly stuck`,
+    `nothing: it only reads; a claim whose last sign of life (its step, or its branch's last commit) is more than silentAfter minutes old (${silentAfter} here) is flagged possibly stuck; a stale claim (branch gone or merged into the trunk, or every item closed) is listed apart, at the end, and released by naima prune --write`,
   usage: "claims [--branch <b>] [--json]",
   options: [
     { name: "--branch", says: "only the claim of this branch" },
@@ -462,11 +491,17 @@ const claimsCommand = (silentAfter: number): Command => ({
       ctx.out(JSON.stringify(d, null, 2))
       return 0
     }
-    if (!d.claims.some((c) => c.items.length)) ctx.out("no claims")
-    for (const c of d.claims) {
+    const live = d.claims.filter((c) => !c.stale)
+    const stale = d.claims.filter((c) => c.stale)
+    if (!live.some((c) => c.items.length)) ctx.out("no claims")
+    for (const c of live) {
       ctx.out(`${c.branch}${c.here ? "  ← here" : ""}${c.local ? "  (working tree)" : ""}${c.note ? `  — ${c.note}` : ""}`)
       if (c.step) ctx.out(`  ${stepLine(c, "posted ")}`)
       for (const e of c.items) ctx.out(`  ${e.ref}  ${e.title}`)
+    }
+    if (stale.length) {
+      ctx.out("\nstale, the work done (naima prune --write releases them):")
+      for (const c of stale) ctx.out(`  ${c.branch}  ${plural(c.items.length, "item")}  — ${c.stale}`)
     }
     if (d.contested.length) {
       ctx.out("\nclaimed by more than one branch (allowed):")
@@ -529,7 +564,7 @@ function pruneBranch(ctx: Context, branch: string, write: boolean, archive: bool
 const prune: Command = {
   name: "prune",
   says:
-    "list (or with --write remove) claim files naming a branch git no longer has; one only another ref carries is listed with that ref, to be dropped there. With --branch, delete a branch and its worktree, refusing one with unmerged commits that no archive/<branch> tag holds",
+    "list (or with --write remove) stale claim files: their branch is gone, or merged into the trunk that carries the file, or every item they claim is closed; one only another ref carries is listed with that ref, to be dropped there. With --branch, delete a branch and its worktree, refusing one with unmerged commits that no archive/<branch> tag holds",
   enforces:
     "the trunk is never pruned, and a branch with unmerged commits that no archive/<branch> tag holds is refused, and so is a worktree with anything uncommitted, inside its submodules too; a clean one is removed even when it holds a submodule; nothing is removed without --write",
   usage: "prune [--write] | prune --branch <b> [--archive] [--write]",
@@ -546,18 +581,20 @@ const prune: Command = {
     if (branch) return pruneBranch(ctx, branch, write, bool(p, "archive"))
     if (bool(p, "archive")) throw usageError(this)
     const alive = allRefNames(ctx.root)
-    const stale = readClaims(ctx).filter((c) => !alive.has(c.branch))
+    const main = trunk(ctx.root)
+    const stale = readClaims(ctx).map((c) => ({ c, why: staleReason(ctx, c, main, alive) })).filter((s) => s.why)
     if (!stale.length) {
-      ctx.out("every claim names a branch that exists")
+      ctx.out("no stale claim: every claim names a live branch with open work")
       return 0
     }
     // Only a file on this disk can be removed from here; one another ref carries is dropped on that ref.
-    const here = stale.filter((c) => c.local)
-    const elsewhere = stale.filter((c) => !c.local)
+    const here = stale.filter((s) => s.c.local).map((s) => s.c)
+    const elsewhere = stale.filter((s) => !s.c.local).map((s) => s.c)
+    const why = (c: Claim) => stale.find((s) => s.c === c)?.why
     const holds = (c: Claim) => `${c.items.length} items`
-    for (const c of here) ctx.out(`  ${c.branch}  ${holds(c)}  ${c.file}`)
+    for (const c of here) ctx.out(`  ${c.branch}  ${holds(c)}  ${c.file}  — ${why(c)}`)
     for (const c of elsewhere) {
-      ctx.out(`  ${c.branch}  ${holds(c)}  ${c.file}  on ${c.ref}: drop it there (git switch ${c.ref}, naima prune --write)`)
+      ctx.out(`  ${c.branch}  ${holds(c)}  ${c.file}  on ${c.ref}: drop it there (git switch ${c.ref}, naima prune --write) — ${why(c)}`)
     }
     if (!write) {
       ctx.out("nothing removed — run again with --write")
@@ -780,6 +817,23 @@ const noClosingOwnWork: WriteHook = {
  * state it protects is asserted here — nothing the branch you stand on claims
  * is archived.
  */
+/** Where a stale claim is released: `prune --write` in this worktree when its file is on this disk, else on the ref that carries it. */
+const releaseLine = (c: Claim): string => `naima prune --write${c.local ? "" : `, on ${c.ref}`}`
+
+const staleClaims: Check = {
+  name: "stale-claims",
+  says:
+    "a claim whose branch is gone, or merged into the trunk (which then carries its file), or whose items are all closed, no longer stands for work in progress: one note per stale claim, naming the command that releases it",
+  run(ctx) {
+    const main = trunk(ctx.root)
+    const alive = allRefNames(ctx.root)
+    return readClaims(ctx).flatMap((c): Finding[] => {
+      const why = staleReason(ctx, c, main, alive)
+      return why ? [{ level: "note", message: `claim of ${c.branch} (${c.file}) is stale: ${why} — release it: ${releaseLine(c)}` }] : []
+    })
+  },
+}
+
 const closedNotClaimed: Check = {
   name: "closed-not-claimed",
   says:
@@ -846,7 +900,7 @@ const whereWeWere: SummarySection = {
 const inHand = (silentAfter: number): SummarySection => ({
   name: "in hand",
   render(ctx) {
-    const data = claimsData(ctx, undefined, silentAfter).claims.filter((c) => c.items.length).map((c) => ({
+    const data = claimsData(ctx, undefined, silentAfter).claims.filter((c) => c.items.length && !c.stale).map((c) => ({
       branch: c.branch,
       items: c.items.map((e) => e.ref),
       ...(c.step ? { step: c.step, line: stepLine(c, "") } : {}),
@@ -873,7 +927,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       "Several branches may claim one item: `claim` says who else holds it rather than refusing. " +
       "There are no locks: a claim says who works on what and never excludes anyone. What one session at a time must touch — the trunk, the published site, the releases — is touched by one writer, the coordinator; workers only prepare on their own branches, and the owner decides what lands and when, when it matters. " +
       "Work happens by one scheme, checked: the worktree `<worktrees>/<what>` stands on the branch `<who>/<what>` and carries a claim; `open` makes all three in one step. " +
-      "A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. " +
+      "A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. A claim is stale when its branch is gone, or merged into the trunk that carries its file, or every item it claims is closed: `claims` lists it apart, `stale-claims` notes it, and `prune --write` releases it. " +
       "Landings are semi-linear: a branch the trunk is an ancestor of enters it as one marker commit, a merge whose tree is the branch tip's and whose message names the items it closes in `Closes:` trailers; `land` makes it from the main checkout, the shortcut for `git merge --no-ff`, and moves the trunk only from the commit it read. " +
       "From the first marker on the trunk's first-parent line every first-parent commit is a marker, or `landings-are-markers` notes it, one note per commit, which `naima waive landings-are-markers <commit>` accepts with a reason; before it nothing is asked, so a history of fast-forwards keeps working. " +
       "A commit made on the trunk that only adds to the tracker data is accepted without a note: new files in the data directory outside `rules/`, `waivers/` and `naima.json`, and lines added to an item's README.md with its meta.json untouched, so the coordinator files an item, appends a note or writes a diary entry or a session note without a branch; a status, a rule, a waiver or the lock still lands. " +
@@ -901,6 +955,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
     dirs: [CLAIMS, PASSES, EVENTS],
     checks: [
       claimsResolve,
+      staleClaims,
       worktreePolicy(policy),
       trunkMoved,
       closedNotClaimed,

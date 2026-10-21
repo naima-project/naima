@@ -103,13 +103,20 @@ another branch's claim only when both of these hold: nothing is being worked
 on there, and nothing there is unlanded. Neither test is enough on its own,
 because a [worktree](../guide/glossary.md#worktree) that is gone can still
 have an unmerged branch, and a merged branch can still have a live session
-working on it. The one case you can handle mechanically is a claim naming a
-branch that git no longer has:
+working on it. The cases you can handle mechanically are the stale claims:
+one naming a branch that git no longer has, one whose branch is merged into
+the trunk and whose file the merge brought to the trunk, and one whose items
+are all closed. `naima claims` lists them apart and `naima check` notes each
+one:
 
 ```sh
-naima prune            # list them
-naima prune --write    # remove them, then commit the deletions
+naima prune            # list them, with why each is stale
+naima prune --write    # remove the ones on this disk, then commit the deletions
 ```
+
+A stale file another branch carries is listed with that branch, and is
+removed by running `naima prune --write` there. A worker still busy on a
+merged branch makes its claim live again with its next commit.
 
 ## 4. Write the session note
 
