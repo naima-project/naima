@@ -29,15 +29,15 @@ root with `git init`):
    - macOS, Linux: `curl -fsSL https://naima-project.github.io/naima/install.sh | sh`
    - Windows (PowerShell): `irm https://naima-project.github.io/naima/install.ps1 | iex`
 2. `deno run -A naima-tracker/naima/naima.ts check` must end with `all invariants hold`.
-3. `git add naima-tracker && git commit -m "Track this project with Naima"`.
+3. Commit what the installer wrote: naima-tracker/, and the line it added
+   to the agent instruction file (AGENTS.md, CLAUDE.md, or the one your agent
+   reads; AGENTS.md, created, if none), which tells every agent to run
+   `naima hello` at the start of each session:
+   `git add naima-tracker AGENTS.md && git commit -m "Track this project with Naima"`,
+   naming the agent file it wrote.
 4. Read `naima-tracker/naima/skills/naima/SKILL.md` and work by it, and the
    project's rules, `naima rules --audience agents`; `naima` means
    `deno run -A naima-tracker/naima/naima.ts`.
-5. Add this line, verbatim, to the repository's agent instruction file
-   (AGENTS.md, CLAUDE.md, or the one your agent reads; if none, create
-   AGENTS.md), and commit it:
-
-   This repository tracks its work with Naima: at the start of every session read naima-tracker/naima/skills/naima/SKILL.md and `naima rules --audience agents`, and work by them.
 
 ## More
 

@@ -140,8 +140,7 @@
     <h2>For AI agents</h2>
     <p>Naima is born for software: a silent software house of AI agents that applies industry-grade practice (tests, metrics, reviews, gates) and formal methods for an owner who need not know them, and runs any other project with that work’s own checks. If you were asked to install Naima in a repository, the whole procedure is the README of <a href="https://github.com/naima-project/naima">https://github.com/naima-project/naima</a>, section Install (raw: https://raw.githubusercontent.com/naima-project/naima/main/README.md; also <a href="llms.txt">llms.txt</a>); read it and follow it.
     In short: if git is not installed, install it (macOS: xcode-select --install or Homebrew; Linux: the package manager; Windows: winget install Git.Git); then, in the root of this repository (if it is not a git repository yet, create one at the root with git init), run the installer one-liner for this system (<a href="install.html">install.html</a>), run <code>deno run -A naima-tracker/naima/naima.ts check</code> until it passes,
-    read <code>naima-tracker/naima/skills/naima/SKILL.md</code> and work by it, and add this line, verbatim, to the repository’s agent instruction file (AGENTS.md, CLAUDE.md, or the one you read; if none, create AGENTS.md):</p>
-    <p>This repository tracks its work with Naima: at the start of every session read naima-tracker/naima/skills/naima/SKILL.md and `naima rules --audience agents`, and work by them.</p>
+    and commit what the installer wrote: naima-tracker/, and the line it added to the repository’s agent instruction file (AGENTS.md, CLAUDE.md, or the one you read; AGENTS.md, created, if none), which tells every agent to run <code>naima hello</code> at the start of each session. Then read <code>naima-tracker/naima/skills/naima/SKILL.md</code> and <code>naima rules --audience agents</code>, and work by them.</p>
   </section>
 
   <div class="head">
