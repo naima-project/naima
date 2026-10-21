@@ -36,7 +36,7 @@ export function runtimeOf(program: string): string | null {
 }
 
 /** Naima's home, linked from every tracker's README. */
-export const HOME = "https://github.com/vincenzoml/naima"
+export const HOME = "https://github.com/naima-project/naima"
 /** What Naima is, in one sentence after its name: shared by Naima's README and every tracker's. */
 export const ABOUT = "is a silent software house of AI agents: it turns vibe coding into an exact science."
 /**

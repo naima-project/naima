@@ -89,7 +89,7 @@ person or agent running the stage says happened.
    fixed. A runbook that mostly worked doesn't get published.
 5. **Publish.** This means the tag, the public artefact, or making the draft
    public, whichever fits how the project is distributed. For Naima itself,
-   the tag goes on the product repository (`vincenzoml/naima`), never on the
+   the tag goes on the product repository (`naima-project/naima`), never on the
    workshop that develops it. This step can't be undone, so confirm with the
    owner first if the decision in step 2 of proposing didn't already cover it.
 6. **Post-release checks.** Fetch or install the public release from where a

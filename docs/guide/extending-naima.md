@@ -186,7 +186,7 @@ naima set <the analysis> status=confirmed
 An `analyses` item is proven in the same way as a requirement. `naima check`
 adds a note for one that is confirmed without a passing test, and for one
 that is already proven but still `proposed`. Reading its source
-([`naima/src/plugins/pack-analyses/index.ts`](https://github.com/vincenzoml/naima/blob/main/naima/src/plugins/pack-analyses/index.ts))
+([`naima/src/plugins/pack-analyses/index.ts`](https://github.com/naima-project/naima/blob/main/naima/src/plugins/pack-analyses/index.ts))
 is the quickest way to see how little a non-software pack needs to add: one
 type, one field, and a check that reuses `verifies`/`verified-by` instead of
 inventing its own way of proving things. A paper's sections and reviews are

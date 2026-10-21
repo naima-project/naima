@@ -38,12 +38,12 @@ The "Helo" is the bug you will track.
 
 Run this one line from the root of the repository (on Windows, use
 PowerShell and run
-`irm https://vincenzoml.github.io/naima/install.ps1 | iex` instead):
+`irm https://naima-project.github.io/naima/install.ps1 | iex` instead):
 
 ```console
-$ curl -fsSL https://vincenzoml.github.io/naima/install.sh | sh
-naima: cloning https://github.com/vincenzoml/naima.git (dist) into naima-tracker/naima
-wrote naima-tracker/: README.md, .gitignore, naima-data/naima.json — locked to https://github.com/vincenzoml/naima.git at 89530499e809
+$ curl -fsSL https://naima-project.github.io/naima/install.sh | sh
+naima: cloning https://github.com/naima-project/naima.git (dist) into naima-tracker/naima
+wrote naima-tracker/: README.md, .gitignore, naima-data/naima.json — locked to https://github.com/naima-project/naima.git at 89530499e809
 next: naima new bugs "<the first thing to do>"
 0 items, 31 checks
 

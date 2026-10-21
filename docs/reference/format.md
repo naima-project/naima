@@ -53,7 +53,7 @@ carries `format`.
 {
   "format": 3,
   "formats": { "gates": 2 },
-  "source": "https://github.com/vincenzoml/naima.git",
+  "source": "https://github.com/naima-project/naima.git",
   "commit": "0123456789abcdef0123456789abcdef01234567",
   "plugins": {
     "gates": { "options": { "gates": { "v1": { "title": "First release", "says": "What v1 needs.", "holdsOn": "code" } } } }

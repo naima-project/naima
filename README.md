@@ -1,6 +1,6 @@
 # Naima
 
-**Website: [vincenzoml.github.io/naima](https://vincenzoml.github.io/naima/)**
+**Website: [naima-project.github.io/naima](https://naima-project.github.io/naima/)**
 
 Naima is a silent software house of AI agents that turns vibe coding into an
 exact science — born for software, it manages any project.
@@ -10,13 +10,13 @@ exact science — born for software, it manages any project.
 In the root of a git repository, one line:
 
 ```sh
-curl -fsSL https://vincenzoml.github.io/naima/install.sh | sh     # macOS, Linux
-irm https://vincenzoml.github.io/naima/install.ps1 | iex          # Windows PowerShell
+curl -fsSL https://naima-project.github.io/naima/install.sh | sh     # macOS, Linux
+irm https://naima-project.github.io/naima/install.ps1 | iex          # Windows PowerShell
 ```
 
 Or ask your agent:
 
-> Please install https://github.com/vincenzoml/naima in this repository.
+> Please install https://github.com/naima-project/naima in this repository.
 
 The installer sets up [Deno](https://deno.com) when it is missing, clones
 Naima into `naima-tracker/naima/` and checks it.

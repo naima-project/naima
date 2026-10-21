@@ -12,7 +12,7 @@ What the agent itself reads is in [the pages for agents](../agents/README.md).
 
 **On a project without Naima**, give the agent the site's instructions
 ("install Naima in this repository, following
-https://vincenzoml.github.io/naima/llms.txt") and it runs the installer
+https://naima-project.github.io/naima/llms.txt") and it runs the installer
 itself. It installs git and Deno if they are missing, starts a repository if
 the folder doesn't have one yet ([git, handled for you](../agents/git-for-the-owner.md)),
 and adds one line to the project's agent instruction file (`AGENTS.md`, or

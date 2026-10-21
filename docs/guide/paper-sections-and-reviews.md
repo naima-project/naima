@@ -45,4 +45,4 @@ of building a parallel one. If a review later finds an objection still
 standing, its status is set to `status=standing`, and the check then says
 which section to move back to `disputed`.
 
-Source: [`naima/src/plugins/pack-papers/index.ts`](https://github.com/vincenzoml/naima/blob/main/naima/src/plugins/pack-papers/index.ts).
+Source: [`naima/src/plugins/pack-papers/index.ts`](https://github.com/naima-project/naima/blob/main/naima/src/plugins/pack-papers/index.ts).

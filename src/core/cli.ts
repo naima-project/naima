@@ -190,7 +190,7 @@ const EXCLUDED_BY: Record<string, string> = { "deno.json": "Deno", "deno.jsonc":
 
 /** The installer's refusal outside a git repository, said by init and by a first run alike. */
 const OUTSIDE = (where: string): string =>
-  `${where} is not in a git repository. Is its folder the root of your project? If so, ask your agent to create a repository there and install Naima from https://vincenzoml.github.io/naima/`
+  `${where} is not in a git repository. Is its folder the root of your project? If so, ask your agent to create a repository there and install Naima from https://naima-project.github.io/naima/`
 
 /** The nearest directory of `path`, or above it, that exists: what git can be asked about. */
 function existing(path: string): string {

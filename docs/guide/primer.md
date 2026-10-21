@@ -7,6 +7,11 @@
 hence "we put the AI in your main". But you never have to learn git: the
 agents do all of it, and you keep using the AI you like.
 
+Looking for something more technical? [How the project runs](how-the-project-runs.md)
+is the whole flow at once, [the tutorial](tutorial.md) shows every command
+with its real output, [concepts](concepts.md) explains the mechanics, and
+[the reference](../reference/reference.md) documents every command.
+
 ## About this page
 
 You don't need anything on this page to start using Naima. Once it is

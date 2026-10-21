@@ -39,11 +39,11 @@ system.
 ## Bootstrap a project
 
 In the root of a git repository, run one line from
-[the site](https://vincenzoml.github.io/naima/):
+[the site](https://naima-project.github.io/naima/):
 
 ```sh
-curl -fsSL https://vincenzoml.github.io/naima/install.sh | sh     # macOS, Linux
-irm https://vincenzoml.github.io/naima/install.ps1 | iex          # Windows PowerShell
+curl -fsSL https://naima-project.github.io/naima/install.sh | sh     # macOS, Linux
+irm https://naima-project.github.io/naima/install.ps1 | iex          # Windows PowerShell
 ```
 
 The installer (`site/install.sh`, `site/install.ps1`) works at the top of
@@ -66,7 +66,7 @@ disk, which is how the installer's own tests use them. For agents, the site's
 To do it by hand, in a git repository that doesn't use Naima yet:
 
 ```sh
-git clone https://github.com/vincenzoml/naima.git naima-tracker/naima
+git clone https://github.com/naima-project/naima.git naima-tracker/naima
 deno run -A naima-tracker/naima/naima.ts init
 git add naima-tracker && git commit -m "Track this project with Naima"
 ```
@@ -124,7 +124,7 @@ as the installer.
 
 `main` is the branch Naima is developed on. Its tests, its site, the rules
 for working on it and its own tracker live in the workshop, which is a
-separate, private repository. Cloning `vincenzoml/naima` gets you none of
+separate, private repository. Cloning `naima-project/naima` gets you none of
 that, only what runs Naima: `naima.ts`, `src/`, `docs/`, `skills/`,
 `README.md`, `LICENSE` and `NOTICE`, which is exactly what a project should
 carry. Tests make sure the clone stays that way. No test runner,

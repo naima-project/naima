@@ -85,7 +85,7 @@ The run clones the locked commit into the program by itself
 When there is none and the work is to be tracked here:
 
 ```sh
-git clone https://github.com/vincenzoml/naima.git naima-tracker/naima
+git clone https://github.com/naima-project/naima.git naima-tracker/naima
 deno run -A naima-tracker/naima/naima.ts init
 ```
 
