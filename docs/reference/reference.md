@@ -50,7 +50,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`note`](#naima-note) | core | append a dated, attributed note to an item's Notes section: the writer's own words, never a person's message pasted in; earlier notes are never rewritten | notes are append-only and attributed: the writer is named, earlier notes are never rewritten, and a note holds no heading of its own |
 | [`describe`](#naima-describe) | core | replace an item's description, keeping its title line and its Notes section | the title line and the Notes section stay as they are: a description holding a title or a Notes section is refused |
 | [`link`](#naima-link) | core | link two items; only this direction is stored, the inverse is derived | the relation is a declared one and an item never links to itself; only one direction is stored |
-| [`unlink`](#naima-unlink) | core | remove a stored link | only a stored link is removed: an inverse is derived, never stored |
+| [`unlink`](#naima-unlink) | core | remove a stored link; a target that no longer exists is named by its id | only a stored link is removed: an inverse is derived, never stored |
 | [`move`](#naima-move) | core | move an item to another type, keeping its id and links; refuses a status or field the new type does not declare | the id and links are kept; a status or field the new type does not declare is refused unless --force |
 | [`check`](#naima-check) | core | run every invariant; exit 1 on any problem | every invariant the loaded plugins declare (their checks): exit 1 on any problem; with --staged, the ones the pre-commit hook runs |
 | [`waive`](#naima-waive) | core | exempt one check's finding on one subject, a problem or a note, with the reason, as a recorded waiver: `naima check` no longer reports the finding, so a problem no longer fails it, and lists the waiver as a note instead | a waiver names a loaded check, a subject that check reports a finding on now, a reason and who waived it; it is one new file under waivers/, and one waiver per check and subject |
@@ -429,7 +429,7 @@ naima link export-drops blocked-by release-notes
 
 ### naima unlink
 
-Remove a stored link.
+Remove a stored link; a target that no longer exists is named by its id.
 
 **Enforces**: Only a stored link is removed: an inverse is derived, never stored.
 
@@ -441,6 +441,7 @@ Examples:
 
 ```sh
 naima unlink export-keeps verifies export-drops
+naima unlink export-keeps verifies 0b8e6c3a-5f1d-4c2e-9a7b-3d4e5f6a7b8c
 ```
 
 ### naima move

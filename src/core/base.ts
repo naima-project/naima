@@ -12,6 +12,7 @@ import { currentBranch, gitOrNull, isGitRepo } from "./git.ts"
 import {
   ATTACHMENTS,
   createItem,
+  isUuid,
   joinProse,
   moveItem,
   NOTES_HEADING,
@@ -302,21 +303,24 @@ const link: Command = {
 
 const unlink: Command = {
   name: "unlink",
-  says: "remove a stored link",
+  says: "remove a stored link; a target that no longer exists is named by its id",
   enforces: "only a stored link is removed: an inverse is derived, never stored",
   usage: "unlink <from> <relation> <to>",
-  examples: ["unlink export-keeps verifies export-drops"],
+  examples: ["unlink export-keeps verifies export-drops", "unlink export-keeps verifies 0b8e6c3a-5f1d-4c2e-9a7b-3d4e5f6a7b8c"],
   run(args, ctx) {
     const [from, rel, to] = parse(args).positionals
     if (!from || !rel || !to) throw usageError(this)
     const a = ctx.repo.resolve(from)
-    const b = ctx.repo.resolve(to)
+    // A link may outlive its target: a full id that no item has still names the stored link.
+    const b = isUuid(to) && !ctx.repo.items.some((i) => i.meta.id === to) ? null : ctx.repo.resolve(to)
+    const id = b ? b.meta.id : to
+    const target = b ? label(b) : to
     const stored = a.meta.links ?? []
-    const kept = stored.filter((l) => !(l.rel === rel && l.id === b.meta.id))
-    if (kept.length === stored.length) throw new Error(`${label(a)} stores no "${rel}" link to ${label(b)}`)
+    const kept = stored.filter((l) => !(l.rel === rel && l.id === id))
+    if (kept.length === stored.length) throw new Error(`${label(a)} stores no "${rel}" link to ${target}`)
     const { links: _links, ...rest } = a.meta
     saveMeta(ctx, { ...a, meta: kept.length ? { ...rest, links: kept } : rest })
-    ctx.out(`removed ${label(a)} ${rel} ${label(b)}`)
+    ctx.out(`removed ${label(a)} ${rel} ${target}`)
     return 0
   },
 }

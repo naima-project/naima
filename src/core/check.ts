@@ -114,8 +114,9 @@ const links: Check = {
         }
         if (!ctx.registry.relations.has(link.rel)) out.push(problem(`${where}: relation "${link.rel}" is not one of: ${relations.join(", ")}`, item))
         if (link.id === item.meta.id) out.push(problem(`${where}: links to itself`, item))
-        else if (!ctx.repo.byId.has(link.id)) out.push(problem(`${where}: ${link.rel} names ${link.id}, which is no item`, item))
-        else {
+        else if (!ctx.repo.byId.has(link.id)) {
+          out.push(problem(`${where}: ${link.rel} names ${link.id}, which is no item — naima unlink ${where} ${link.rel} ${link.id}`, item))
+        } else {
           // The other item also stores the inverse: one link, written twice. Reported once, from the lower id.
           const other = ctx.repo.byId.get(link.id) as Item
           const inverse = ctx.registry.relations.get(link.rel)?.inverse
