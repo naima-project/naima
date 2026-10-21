@@ -9,6 +9,7 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="alternate" type="text/plain" href="llms.txt" title="Naima, for AI agents: how to install it">
 <link rel="preload" href="fonts/inter-tight-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/inter-tight-italic-latin.woff" as="font" type="font/woff" crossorigin>
 <style>
   /* palette */
   :root {
@@ -23,8 +24,8 @@
   }
   /* end palette */
   /* Inter Tight, SIL Open Font License 1.1 (fonts/OFL.txt), served from this site. */
-  @font-face { font-family: "Inter Tight"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("fonts/inter-tight-latin.woff2") format("woff2"); }
-  @font-face { font-family: "Inter Tight"; font-style: italic; font-weight: 500; font-display: swap; src: url("fonts/inter-tight-italic-latin.woff") format("woff"); }
+  @font-face { font-family: "Inter Tight"; font-style: normal; font-weight: 100 900; font-display: block; src: url("fonts/inter-tight-latin.woff2") format("woff2"); }
+  @font-face { font-family: "Inter Tight"; font-style: italic; font-weight: 500; font-display: block; src: url("fonts/inter-tight-italic-latin.woff") format("woff"); }
 
   * { box-sizing: border-box; }
   html, body { margin: 0; }
@@ -80,7 +81,7 @@
   .star a { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
   .star a:hover { text-decoration-color: var(--accent); }
 
-  .credits { display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 8px 16px 32px; animation: fade .9s ease 1.35s both; }
+  .credits { display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 8px 16px 32px; animation: appear .9s ease 1.35s both; }
   .credits ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 16px 30px; }
   .credits a { display: block; border-radius: 10px; padding: 8px; transition: transform .25s cubic-bezier(.2, .7, .1, 1), box-shadow .25s ease, background-color .25s ease; }
   .credits img { display: block; height: 36px; width: auto; filter: grayscale(1); opacity: .7; transition: filter .3s ease, opacity .3s ease; }
@@ -91,9 +92,16 @@
   .credits a:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--accent) 5%, transparent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 7%, transparent); }
   .credits a:hover img, .credits a:focus-visible img { filter: none; opacity: 1; }
 
-  /* The intro: the letters of NAIMA rise into place one after another, then the line under it, then the rest. */
-  @keyframes rise { from { transform: translateY(105%); } to { transform: none; } }
-  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  /* The intro: the letters of NAIMA rise into place one after another, then the line under it, then the rest.
+     Each ends on translateY(0), not none, and the fonts block instead of swapping, so nothing shifts when it ends. */
+  @keyframes rise { from { transform: translateY(105%); } to { transform: translateY(0); } }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  /* A moving part must never reach past the page's bottom: while it is shifted it would make
+     the page a few pixels taller, Safari would show a scrollbar, and the page would jump
+     sideways when the scrollbar left at the end. So main clips what moves inside it, and
+     the credits, at the bottom, only fade. */
+  main { overflow: clip; }
+  @keyframes appear { from { opacity: 0; } to { opacity: 1; } }
   .mark i { animation: rise .9s cubic-bezier(.2, .7, .1, 1) both; }
   .mark i:nth-child(2) { animation-delay: .07s; }
   .mark i:nth-child(3) { animation-delay: .14s; }
