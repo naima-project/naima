@@ -39,6 +39,7 @@ import {
   EXCLUDE_FILES,
   findData,
   globalOptions,
+  launcherSet,
   message,
   privateEnv,
   programOf,
@@ -296,12 +297,13 @@ export async function launch(args: string[], cwd: string): Promise<number> {
   const tracker = given ? trackerOf(data) : dirname(own)
   const root = toplevel(existing(tracker)) ?? resolve(cwd)
   // The machine's name and the private word list, which the program may not ask for itself: what tracker text is checked against.
-  const env = {
-    ...allowedEnv(Deno.env.toObject()),
+  const marks = {
     ...privateEnv(Deno.env.toObject(), Deno.build.os),
     NAIMA_LAUNCHED: "1",
     ...(given ? { NAIMA_DATA: real(data) } : {}),
   }
+  // Which of them are the launcher's alone, so a command the program starts is handed the caller's environment without them.
+  const env = { ...allowedEnv(Deno.env.toObject()), ...marks, NAIMA_LAUNCHER_SET: launcherSet(marks, Deno.env.toObject()) }
   const others = otherWorktrees(root, data)
   const tools = toolsDir(Deno.env.toObject(), Deno.build.os)
   const ui = uiGrant(parsed.rest[0], Deno.build.os, Deno.execPath(), tools)

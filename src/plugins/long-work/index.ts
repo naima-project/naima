@@ -17,6 +17,7 @@ import { dirname, isAbsolute, join, parse as parsePath, relative, resolve, sep }
 import { fileURLToPath } from "node:url"
 import {
   bool,
+  callerEnv,
   type Check,
   type Command,
   type Context,
@@ -272,7 +273,13 @@ async function start(ctx: Context, hosts: Map<string, Host>, cmd: Command, args:
   }
   mkdirSync(dir)
   writeJsonAtomic(join(dir, RUN_FILE), spec)
-  const child = spawn(process.execPath, supervisorArgs("supervise", dir, [dir]), { cwd, detached: true, stdio: "ignore", windowsHide: true })
+  const child = spawn(process.execPath, supervisorArgs("supervise", dir, [dir]), {
+    cwd,
+    env: callerEnv(process.env),
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+  })
   child.unref()
   const until = Date.now() + DEFAULTS.startMs
   let v = view(dir, Date.now())
