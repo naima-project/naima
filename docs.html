@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Naima</title>
+<meta name="description" content="Naima's documentation, read from the product's repository and shown in the site's style.">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="alternate" type="text/plain" href="llms.txt" title="Naima, for AI agents: how to install it">
+<link rel="preload" href="fonts/inter-tight-latin.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+  /* palette */
+  :root {
+    color-scheme: light;
+    --bg:      #fbfaf7;
+    --fg:      #16181d;
+    --text:    #2f3238;
+    --muted:   #50535a;
+    --line:    #dcdad3;
+    --surface: #f2f0ea;
+    --accent:  #2a3f8f;
+    --sans: "Inter Tight", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  /* end palette */
+  /* Inter Tight, SIL Open Font License 1.1 (fonts/OFL.txt), served from this site. */
+  @font-face { font-family: "Inter Tight"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("fonts/inter-tight-latin.woff2") format("woff2"); }
+  @font-face { font-family: "Inter Tight"; font-style: italic; font-weight: 500; font-display: swap; src: url("fonts/inter-tight-italic-latin.woff") format("woff"); }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  ::selection { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  a { color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent); transition: color .2s ease, text-decoration-color .2s ease; }
+  a:hover { color: var(--fg); text-decoration-color: currentColor; }
+  a:focus-visible { outline: none; border-radius: 6px; box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px color-mix(in srgb, var(--accent) 55%, transparent); }
+
+  .top { max-width: 760px; margin: 0 auto; padding: 28px 16px 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 28px; }
+  .top .home { font-size: 26px; font-weight: 600; letter-spacing: -.5px; color: var(--fg); text-decoration: none; }
+  .top .home .ai { color: var(--accent); }
+  .top nav { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 16px; }
+  .top .home { transition: color .2s ease; }
+  .top .home:hover { color: var(--fg); }
+  .top nav a { color: var(--muted); text-decoration: none; background: linear-gradient(currentColor, currentColor) 0 100% / 0 1px no-repeat; padding-bottom: 2px; transition: color .2s ease, background-size .3s cubic-bezier(.2, .7, .1, 1); }
+  .top nav a:hover, .top nav a[aria-current="page"] { color: var(--fg); background-size: 100% 1px; }
+  article h2:target, article h3:target, article h4:target { color: var(--accent); }
+  @media (prefers-reduced-motion: reduce) { a, .top nav a { transition: none; } }
+
+  article { max-width: 760px; margin: 0 auto; padding: 40px 16px 96px; font-size: 18px; line-height: 1.65; color: var(--text); }
+  article > :first-child { margin-top: 0; }
+  article h1, article h2, article h3, article h4 { color: var(--fg); line-height: 1.2; scroll-margin-top: 24px; }
+  article h1 { font-size: 46px; font-weight: 500; letter-spacing: -1px; margin: 0 0 28px; }
+  article h2 { font-size: 30px; font-weight: 500; letter-spacing: -.5px; margin: 56px 0 16px; }
+  article h3 { font-size: 22px; font-weight: 600; margin: 36px 0 12px; }
+  article h4 { font-size: 18px; font-weight: 600; margin: 28px 0 8px; }
+  article p, article ul, article ol, article blockquote, article pre, article .table { margin: 0 0 18px; }
+  article ul, article ol { padding-left: 1.4em; }
+  article li { margin: 6px 0; }
+  article li > p { margin: 0 0 8px; }
+  article strong { color: var(--fg); font-weight: 600; }
+  article em { font-style: italic; }
+  article blockquote { margin-left: 0; padding: 4px 0 4px 20px; border-left: 2px solid var(--line); color: var(--muted); }
+  article code { font: .86em var(--mono); background: var(--surface); padding: .1em .35em; border-radius: 5px; }
+  article pre { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; overflow-x: auto; }
+  article pre code { background: none; padding: 0; font-size: 14px; line-height: 1.55; }
+  article .table { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; }
+  article table { border-collapse: collapse; width: 100%; font-size: 16px; line-height: 1.5; }
+  article th, article td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  article th { color: var(--fg); font-weight: 600; background: var(--surface); }
+  article tr:last-child td { border-bottom: 0; }
+  article hr { border: 0; border-top: 1px solid var(--line); margin: 40px 0; }
+  .status { color: var(--muted); }
+  .source { max-width: 760px; margin: -64px auto 0; padding: 0 16px 64px; font-size: 14px; color: var(--muted); }
+  .source a { color: var(--muted); }
+
+  @media (max-width: 640px) {
+    article { font-size: 17px; padding-top: 28px; }
+    article h1 { font-size: 34px; }
+    article h2 { font-size: 25px; margin-top: 44px; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="home" href="./" aria-label="Naima, home">N<span class="ai">AI</span>MA</a>
+  <nav aria-label="Documentation">
+    <a href="docs.html?p=guide/primer.md" data-doc="guide/primer.md">Primer</a>
+    <a href="docs.html?p=README.md" data-doc="README.md">All documentation</a>
+    <a href="install.html">Use it now</a>
+  </nav>
+</header>
+<main>
+  <article id="doc" aria-live="polite"><p class="status">Loading…</p></article>
+  <p class="source" id="source" hidden></p>
+</main>
+
+<script src="vendor/marked.umd.js"></script>
+<script>
+(() => {
+  // A page of the product's docs/, read from its main branch when the page is opened, so
+  // the site always shows the current text; rendered here in the site's own style.
+  const REPO = "https://github.com/vincenzoml/naima"
+  const RAW = "https://raw.githubusercontent.com/vincenzoml/naima/main/docs/"
+  // A preview on this machine may read the docs from a local server instead (docs.html?local):
+  // only on localhost, so the published site always reads the product's main.
+  const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname) && new URLSearchParams(location.search).has("local")
+  const SOURCE = LOCAL ? "http://localhost:8766/" : RAW
+  const BLOB = REPO + "/blob/main/docs/"
+  const DEFAULT = "guide/primer.md"
+
+  const asked = new URLSearchParams(location.search).get("p") || DEFAULT
+  // Only a markdown file under docs/: no scheme, no climbing out.
+  const path = /^[\w-]+(\/[\w-]+)*\.md$/.test(asked) ? asked : DEFAULT
+  const doc = document.getElementById("doc")
+  const source = document.getElementById("source")
+  for (const a of document.querySelectorAll("nav a[data-doc]")) if (a.dataset.doc === path) a.setAttribute("aria-current", "page")
+
+  const escape = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c])
+  // Raw HTML in a doc is shown as text, never run.
+  marked.use({ gfm: true, renderer: { html: (token) => escape(token.text) } })
+
+  // GitHub's heading anchors, so links to #a-heading keep working.
+  const slug = (text, seen) => {
+    let s = text.toLowerCase().trim().replace(/[^\p{L}\p{N}\s_-]/gu, "").replace(/\s/g, "-")
+    const n = seen.get(s) ?? 0
+    seen.set(s, n + 1)
+    return n ? `${s}-${n}` : s
+  }
+
+  // A link in the doc: another doc opens here; anything else in the repository opens on GitHub.
+  const relink = (a) => {
+    const href = a.getAttribute("href") || ""
+    if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("#")) return
+    const u = new URL(href, BLOB + path)
+    const rel = u.href.startsWith(BLOB) ? decodeURIComponent(u.pathname.slice(new URL(BLOB).pathname.length)) : ""
+    a.href = /^[\w-]+(\/[\w-]+)*\.md$/.test(rel) ? `docs.html?p=${rel}${LOCAL ? "&local" : ""}${u.hash}` : u.href
+  }
+
+  fetch(SOURCE + path)
+    .then((r) => {
+      if (!r.ok) throw new Error(String(r.status))
+      return r.text()
+    })
+    .then((md) => {
+      doc.innerHTML = marked.parse(md)
+      const seen = new Map()
+      for (const h of doc.querySelectorAll("h1, h2, h3, h4, h5, h6")) h.id = slug(h.textContent, seen)
+      for (const a of doc.querySelectorAll("a[href]")) relink(a)
+      for (const t of doc.querySelectorAll("table")) {
+        const box = document.createElement("div")
+        box.className = "table"
+        t.replaceWith(box)
+        box.append(t)
+      }
+      const h1 = doc.querySelector("h1")
+      if (h1) document.title = `${h1.textContent} · Naima`
+      source.innerHTML = `Read from <a href="${BLOB + path}">docs/${escape(path)}</a> on GitHub.`
+      source.hidden = false
+      // Scroll to the heading once the fonts have set the page, so it lands exactly.
+      if (location.hash) document.fonts.ready.then(() => document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView())
+    })
+    .catch(() => {
+      doc.innerHTML = `<p class="status">This page could not be loaded. Read it on GitHub: <a href="${BLOB + path}">docs/${escape(path)}</a>.</p>`
+    })
+})()
+</script>
+</body>
+</html>

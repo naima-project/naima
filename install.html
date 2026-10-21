@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Use Naima now</title>
+<meta name="description" content="Install Naima: give your AI agent one line, or run one command in the root of your repository.">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="alternate" type="text/plain" href="llms.txt" title="Naima, for AI agents: how to install it">
+<link rel="preload" href="fonts/inter-tight-latin.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+  /* palette */
+  :root {
+    color-scheme: light;
+    --bg:     #fbfaf7;
+    --fg:     #16181d;
+    --text:   #3a3d44;
+    --muted:  #50535a;
+    --line:   #dcdad3;
+    --surface: #f2f0ea;
+    --accent: #2a3f8f;
+    --on-accent: #ffffff;
+    --sans: "Inter Tight", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  /* end palette */
+  /* Inter Tight, SIL Open Font License 1.1 (fonts/OFL.txt), served from this site. */
+  @font-face { font-family: "Inter Tight"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("fonts/inter-tight-latin.woff2") format("woff2"); }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  ::selection { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  a { color: var(--fg); transition: color .2s ease; }
+  a:hover { color: var(--accent); }
+  a:focus-visible, button:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px color-mix(in srgb, var(--accent) 55%, transparent); }
+  a:focus-visible { border-radius: 6px; }
+
+  main { max-width: 680px; margin: 0 auto; padding: 64px 16px 80px; display: flex; flex-direction: column; gap: 40px; }
+  .home { font-size: 15px; color: var(--muted); text-decoration: none; }
+  .home b { font-weight: 600; color: var(--fg); }
+  h1 { margin: 0; font-size: 52px; font-weight: 500; letter-spacing: -1px; }
+  .lead { margin: 0; font-size: 21px; line-height: 1.5; color: var(--text); }
+  h2 { margin: 0 0 14px; font-size: 22px; font-weight: 600; letter-spacing: -.3px; }
+  section p { margin: 0 0 14px; font-size: 17px; line-height: 1.55; color: var(--text); }
+
+  .box { display: flex; align-items: flex-start; gap: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 14px 14px 14px 18px; }
+  .box[hidden] { display: none; }
+  .box pre { flex: 1; min-width: 0; margin: 0; padding-top: 7px; font: 14px/1.55 var(--mono); }
+  .box.agent pre { font-family: var(--sans); font-size: 17px; }
+  .box pre code { display: block; }
+  .one-line code { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .box.agent pre:not(.one-line) code { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .box:not(.agent) pre { overflow-x: auto; }
+  .box:not(.agent) pre code { white-space: pre; }
+  .tools { display: flex; gap: 8px; flex: none; }
+  .copy, .toggle, .os button {
+    font: 500 14px/1 var(--sans); color: var(--fg); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 999px; padding: 10px 16px; cursor: pointer;
+  }
+  .copy, .toggle { transition: color .2s ease, border-color .2s ease, box-shadow .2s ease, transform .2s cubic-bezier(.2, .7, .1, 1); }
+  .copy:hover, .toggle:hover { color: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 10%, transparent); }
+  .copy:active, .toggle:active { transform: scale(.97); }
+  .copy[data-done] { color: var(--accent); border-color: var(--accent); }
+  .box { transition: border-color .2s ease, box-shadow .2s ease; }
+  .box:hover { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 5%, transparent); }
+  .os button { transition: color .2s ease, background-color .2s ease, border-color .2s ease; }
+  .os button:hover { color: var(--fg); }
+  .home { transition: color .2s ease; }
+  .home:hover b { color: var(--accent); }
+  @media (prefers-reduced-motion: reduce) { .copy, .toggle, .box, .os button, a { transition: none; } .copy:active, .toggle:active { transform: none; } }
+  .os { display: flex; gap: 6px; margin: 0 0 12px; }
+  .os button { background: none; border-color: transparent; color: var(--muted); }
+  .os button[aria-pressed="true"] { color: var(--fg); border-color: var(--line); background: var(--surface); }
+  .note { font-size: 15px !important; color: var(--muted) !important; }
+  .note code { font: .95em var(--mono); }
+
+  @media (max-width: 640px) {
+    main { padding: 40px 16px 64px; gap: 32px; }
+    h1 { font-size: 36px; }
+    .lead { font-size: 18px; }
+    .box { flex-direction: column; align-items: stretch; }
+    .tools { align-self: flex-end; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <a class="home" href="./">← <b>Naima</b></a>
+
+  <div>
+    <h1>Use it now</h1>
+  </div>
+  <p class="lead">Naima lives in a git repository: the folder that keeps your project and all its history. You don’t need to know git: your AI agent creates the repository if there is none yet, and installs Naima in it.</p>
+
+  <section aria-labelledby="agent">
+    <h2 id="agent">Ask your agent</h2>
+    <p>Open your AI agent in your project’s folder, or in a new empty one, and give it this:</p>
+    <div class="box agent">
+      <pre class="one-line" id="prompt-box"><code id="prompt">Please install https://github.com/vincenzoml/naima in the root of this repository; create a repository at the root if missing.</code></pre>
+      <div class="tools">
+        <button type="button" class="toggle" aria-expanded="false" aria-controls="prompt-box">Show more</button>
+        <button type="button" class="copy" data-copy="prompt">Copy</button>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="advanced">
+    <h2 id="advanced">For advanced users</h2>
+    <p>Run this in the root of your git repository:</p>
+    <div class="os" role="group" aria-label="Your system">
+      <button type="button" data-os="mac" aria-pressed="true">macOS</button>
+      <button type="button" data-os="linux" aria-pressed="false">Linux</button>
+      <button type="button" data-os="windows" aria-pressed="false">Windows</button>
+    </div>
+    <div class="box" data-for="mac linux">
+      <pre><code id="sh">curl -fsSL https://vincenzoml.github.io/naima/install.sh | sh</code></pre>
+      <div class="tools"><button type="button" class="copy" data-copy="sh">Copy</button></div>
+    </div>
+    <div class="box" data-for="windows" hidden>
+      <pre><code id="ps">irm https://vincenzoml.github.io/naima/install.ps1 | iex</code></pre>
+      <div class="tools"><button type="button" class="copy" data-copy="ps">Copy</button></div>
+    </div>
+    <p class="note" style="margin-top: 14px">Then your agent runs <code>deno run -A naima-tracker/naima/naima.ts check</code> and works by Naima from the next session on.</p>
+  </section>
+</main>
+
+<script>
+(() => {
+  // The OS switch: preselect the visitor's, show its one-liner.
+  const buttons = [...document.querySelectorAll(".os button")]
+  const choose = (os) => {
+    for (const b of buttons) b.setAttribute("aria-pressed", String(b.dataset.os === os))
+    for (const box of document.querySelectorAll(".box[data-for]")) box.hidden = !box.dataset.for.split(" ").includes(os)
+  }
+  const ua = (navigator.userAgentData?.platform || navigator.platform || navigator.userAgent).toLowerCase()
+  choose(ua.includes("win") ? "windows" : ua.includes("linux") || ua.includes("android") ? "linux" : "mac")
+  for (const b of buttons) b.addEventListener("click", () => choose(b.dataset.os))
+
+  // The text for the agent: one line ending in "...", whole on "Show more".
+  const toggle = document.querySelector(".toggle"), box = document.getElementById("prompt-box")
+  toggle.addEventListener("click", () => {
+    const open = box.classList.toggle("one-line") === false
+    toggle.setAttribute("aria-expanded", String(open))
+    toggle.textContent = open ? "Show less" : "Show more"
+  })
+
+  // Copy buttons: always the whole text.
+  for (const b of document.querySelectorAll(".copy")) {
+    b.addEventListener("click", async () => {
+      const text = document.getElementById(b.dataset.copy).textContent
+      try {
+        await navigator.clipboard.writeText(text)
+      } catch {
+        const t = Object.assign(document.createElement("textarea"), { value: text })
+        document.body.append(t); t.select(); document.execCommand("copy"); t.remove()
+      }
+      b.textContent = "Copied"; b.dataset.done = ""
+      setTimeout(() => { b.textContent = "Copy"; delete b.dataset.done }, 1600)
+    })
+  }
+})()
+</script>
+</body>
+</html>

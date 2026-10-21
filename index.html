@@ -4,177 +4,101 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Naima</title>
-<meta name="description" content="Naima, born for software: a silent software house of AI agents that turns vibe coding into an exact science, with tests, metrics, reviews, gates and formal methods applied for you. Then any project. We put the AI in your main. AI agents: the install procedure is the README of https://github.com/vincenzoml/naima">
-<meta name="color-scheme" content="dark light">
+<meta name="description" content="Naima, the No-guesswork Artificial Intelligence Meta-Agent. Planned, tested, safe: definitely not vibe-coding. Add it to any project, new or existing, and keep using your favourite AI; it takes care of the project management and the software engineering. AI agents: the install procedure is the README of https://github.com/vincenzoml/naima">
+<meta name="color-scheme" content="light">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="alternate" type="text/plain" href="llms.txt" title="Naima, for AI agents: how to install it">
-<script>
-  // Decided before the first paint, so the final logo never flashes before its own animation.
-  if (!matchMedia("(prefers-reduced-motion: reduce)").matches && "animate" in document.documentElement) {
-    document.documentElement.classList.add("intro")
-  }
-</script>
+<link rel="preload" href="fonts/inter-tight-latin.woff2" as="font" type="font/woff2" crossorigin>
 <style>
-  /* One palette: every colour is a token, defined once, light and dark through light-dark().
-     Text contrast (WCAG 2.1), on --bg and on --surface: --fg 16.4 / 14.9, --muted 5.8 / 5.2 light
-     and 7.4 / 6.7 dark, --accent 5.5 / 5.0 light and 11.0 / 9.9 dark; AA everywhere. */
   /* palette */
   :root {
-    color-scheme: light dark;
-    --bg:          light-dark(#f7f6f2, #0c0d10);
-    --surface:     light-dark(#edebe5, #17191e);
-    --fg:          light-dark(#16181c, #eeece6);
-    --muted:       light-dark(#5c616a, #9aa0aa);
-    --line:        light-dark(#dcd9d0, #262930);
-    --accent:      light-dark(#08715f, #45d9b5);
-    --accent-line: light-dark(#a9d3c8, #1f5a4c);
-    --glow:        light-dark(transparent, rgba(69, 217, 181, .14));
-
-    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-
-    /* Type scale (about 1.25) and spacing (a 4 px grid). */
-    --t-sm: 14px;
-    --t-code: 13.5px;
-    --t-base: 16px;
-    --t-lead: clamp(20px, 4.6vw, 26px);
-    --t-mark: clamp(44px, 11vw, 68px);
-    --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --s-6: 32px; --s-7: 48px;
-    --radius: 12px;
+    color-scheme: light;
+    --bg:     #fbfaf7;
+    --fg:     #16181d;
+    --text:   #3a3d44;
+    --muted:  #50535a;
+    --accent: #2a3f8f;
+    --on-accent: #ffffff;
+    --sans: "Inter Tight", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   }
-  :root[data-theme="light"] { color-scheme: light; }
-  :root[data-theme="dark"] { color-scheme: dark; }
   /* end palette */
+  /* Inter Tight, SIL Open Font License 1.1 (fonts/OFL.txt), served from this site. */
+  @font-face { font-family: "Inter Tight"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("fonts/inter-tight-latin.woff2") format("woff2"); }
+  @font-face { font-family: "Inter Tight"; font-style: italic; font-weight: 500; font-display: swap; src: url("fonts/inter-tight-italic-latin.woff") format("woff"); }
+
   * { box-sizing: border-box; }
   html, body { margin: 0; }
   body {
     background: var(--bg);
     color: var(--fg);
-    font: var(--t-base)/1.5 var(--sans);
-    min-height: 100vh;
-    min-height: 100svh;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    place-items: center;
-    padding: var(--s-7) var(--s-4);
+    font-family: var(--sans);
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
   }
-  main { width: 100%; max-width: 680px; min-width: 0; }
+  ::selection { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  a { color: var(--fg); transition: color .2s ease, text-decoration-color .2s ease, text-underline-offset .2s ease; }
+  a:hover { color: var(--accent); }
+  a:focus-visible { outline: none; border-radius: 6px; box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px color-mix(in srgb, var(--accent) 55%, transparent); }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-  /* The logo: NAIMA on one line, the AI inside it lit. */
-  .stage { position: relative; display: flex; justify-content: center; margin: 0 0 var(--s-5); }
+  main {
+    min-height: 100vh; min-height: 100svh;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    gap: 40px; padding: 80px 16px;
+  }
+  .head { display: flex; flex-direction: column; align-items: center; gap: 14px; }
   h1 { margin: 0; font-weight: inherit; }
-  .mark {
-    display: inline-flex; align-items: baseline;
-    font: 850 var(--t-mark)/1 var(--sans);
-    letter-spacing: -.045em;
-  }
+  .mark { display: inline-flex; overflow: hidden; padding-bottom: 6px; font-size: 112px; font-weight: 600; letter-spacing: -2px; line-height: 1; }
   .mark i { font-style: normal; display: inline-block; }
-  .mark .ai { color: var(--accent); text-shadow: 0 0 .35em var(--glow); }
+  .mark .ai { color: var(--accent); }
+  .tag { margin: 0; font-size: 20px; color: var(--text); text-align: center; }
+  .tag a { font-style: italic; font-weight: 500; color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+  .tag a:hover { text-decoration-color: var(--accent); text-underline-offset: 6px; }
 
-  /* A branch: the chip the intro starts from, and the one in the tagline. */
-  .branch {
-    display: inline-flex; align-items: center; gap: .35em;
-    font-family: var(--mono); font-weight: 500; line-height: 1;
-    border: 1px solid var(--accent-line); border-radius: 999px; background: var(--surface);
-    white-space: nowrap;
+  .rest { display: flex; flex-direction: column; align-items: center; gap: 32px; }
+  .slogan { margin: 0; font-size: 52px; font-weight: 500; letter-spacing: -1px; text-align: center; }
+  .about { margin: 0; max-width: 640px; text-align: center; font-size: 21px; line-height: 1.5; color: var(--text); }
+  .about strong { display: block; margin-top: 10px; font-weight: 600; color: var(--fg); }
+  .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; align-items: center; }
+  .button {
+    text-decoration: none; border-radius: 999px; font-size: 18px; font-weight: 500; line-height: normal;
+    transition: transform .25s cubic-bezier(.2, .7, .1, 1), box-shadow .25s ease, background-color .25s ease, border-color .25s ease, color .25s ease;
   }
-  .branch svg { flex: none; width: .8em; height: .8em; color: var(--accent); }
-  .branch .ai { color: var(--accent); }
+  .button:hover { transform: translateY(-1px); }
+  .button:active { transform: translateY(0) scale(.98); transition-duration: .08s; }
+  .button.secondary { border: 1px solid var(--fg); padding: 14px 30px; }
+  .button.secondary:hover { color: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 9%, transparent); }
+  .button.primary { background: var(--accent); color: var(--on-accent); padding: 15px 34px; }
+  .button.primary:hover {
+    color: var(--on-accent); background: color-mix(in srgb, var(--accent) 88%, var(--fg));
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 13%, transparent), 0 10px 26px -10px color-mix(in srgb, var(--accent) 70%, transparent);
+  }
+  .star { margin: 0; max-width: 560px; text-align: center; font-size: 15px; line-height: 1.5; color: var(--muted); }
+  .star a { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
+  .star a:hover { text-decoration-color: var(--accent); }
 
-  /* The word the logo comes from: the branch main. */
-  .word {
-    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    display: none;
-    font-size: clamp(24px, 6.4vw, 38px);
-    padding: .3em .6em .34em .5em;
-  }
-  .intro .word { display: inline-flex; }
-  .word .letters { display: inline-flex; }
-  .word i { font-style: normal; display: inline-block; }
-  .intro .mark i, .intro .rest > * { opacity: 0; }
+  /* The intro: the letters of NAIMA rise into place one after another, then the line under it, then the rest. */
+  @keyframes rise { from { transform: translateY(105%); } to { transform: none; } }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .mark i { animation: rise .9s cubic-bezier(.2, .7, .1, 1) both; }
+  .mark i:nth-child(2) { animation-delay: .07s; }
+  .mark i:nth-child(3) { animation-delay: .14s; }
+  .mark i:nth-child(4) { animation-delay: .21s; }
+  .mark i:nth-child(5) { animation-delay: .28s; }
+  .tag { animation: fade .8s ease .75s both; }
+  .rest { animation: fade .9s ease 1.05s both; }
+  @media (prefers-reduced-motion: reduce) { .mark i, .tag, .rest { animation: none; } .button, .button:hover, .button:active { transition: none; transform: none; } }
 
-  /* The tagline, the install, the prompt. */
-  .rest { display: grid; gap: var(--s-6); }
-  .rest > * { min-width: 0; }
-  .hero { display: grid; gap: var(--s-3); justify-items: center; }
-  .need { margin: var(--s-2) 0 0; max-width: 30em; text-align: center; font-size: 15px; font-weight: 600; line-height: 1.5; text-wrap: balance; }
-  .about { margin: 0; max-width: 46em; text-wrap: balance; text-align: center; font-size: 17px; line-height: 1.6; color: var(--muted); text-wrap: pretty; }
-  .more-toggle { font: inherit; color: inherit; opacity: .55; background: none; border: 0; padding: 0; margin-left: .2em; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); }
-  .more-toggle:hover { opacity: .85; }
-  .more-toggle:focus { outline: none; }
-  .more-toggle:focus-visible { outline: 1px solid color-mix(in srgb, currentColor 50%, transparent); outline-offset: 3px; border-radius: 3px; }
-  .more { max-width: 36em; margin: .2em auto 0; color: var(--muted); font-size: 16px; }
-  .more ul { list-style: none; margin: 0; padding: 0; text-align: left; display: grid; gap: .7em; line-height: 1.55; }
-  .more li { display: grid; grid-template-columns: 1.6em 1fr; gap: .4em; }
-  .tagline { margin: 0; text-align: center; font-size: var(--t-lead); font-weight: 650; letter-spacing: -.015em; line-height: 1.35; }
-  /* The tagline is all one colour: the only green on the page is the AI in the logo. */
-  .tagline .ai { color: inherit; }
-  .tagline .branch { font-size: .82em; padding: .28em .6em; vertical-align: .08em; justify-content: center; border-color: color-mix(in srgb, currentColor 40%, transparent); }
-  .tagline .branch, .tagline .branch svg { color: inherit; }
-
-  .os { display: flex; justify-content: center; gap: var(--s-1); margin: 0 0 var(--s-3); }
-  .os button {
-    font: 500 var(--t-sm)/1 var(--sans); color: var(--muted); background: none;
-    border: 1px solid transparent; border-radius: 999px; padding: var(--s-2) var(--s-3); cursor: pointer;
+  /* A phone: the same page, scaled down. */
+  @media (max-width: 640px) {
+    main { gap: 32px; padding: 48px 16px; }
+    .mark { font-size: 72px; letter-spacing: -1.5px; }
+    .tag { font-size: 17px; }
+    .rest { gap: 24px; }
+    .slogan { font-size: 34px; letter-spacing: -.5px; }
+    .about { font-size: 18px; }
+    .button { font-size: 17px; }
   }
-  .os button:hover { color: var(--fg); }
-  .os button[aria-pressed="true"] { color: var(--fg); border-color: var(--line); background: var(--surface); }
-  .os button:focus-visible, .copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-  .box { position: relative; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
-  .box pre {
-    margin: 0; padding: var(--s-4) 84px var(--s-4) var(--s-4); overflow-x: auto;
-    font: var(--t-code)/1.6 var(--mono); white-space: pre;
-  }
-  .box.prompt pre { white-space: pre-wrap; overflow-wrap: anywhere; }
-  .box.prompt pre code { color: var(--fg); }
-  @media (max-width: 520px) {
-    .box pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 48px var(--s-4) var(--s-4); font-size: 12.5px; }
-    .box pre .p { display: none; }
-  }
-  .box pre .p { color: var(--muted); user-select: none; }
-  .copy {
-    position: absolute; top: var(--s-2); right: var(--s-2);
-    font: 500 12.5px/1 var(--sans); color: var(--fg); background: var(--bg);
-    border: 1px solid var(--line); border-radius: var(--s-2); padding: var(--s-2) var(--s-3); cursor: pointer;
-  }
-  .copy[data-done] { color: var(--accent); border-color: var(--accent-line); }
-  .hint, .label { margin: 0; text-align: center; font-size: var(--t-sm); color: var(--muted); }
-  .hint { margin-top: var(--s-3); }
-  .label { margin-bottom: var(--s-3); }
-  .hint code, .label code { font: .95em var(--mono); }
-
-  .links { display: flex; justify-content: center; flex-wrap: wrap; gap: var(--s-3); }
-  .link {
-    display: inline-flex; align-items: center; gap: var(--s-2);
-    font: 500 var(--t-sm)/1 var(--sans); color: var(--fg); text-decoration: none;
-    border: 1px solid var(--line); border-radius: 999px; padding: var(--s-2) var(--s-4); background: var(--surface);
-  }
-  .link:hover { border-color: var(--accent-line); }
-  .link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .link svg { width: 14px; height: 14px; color: var(--accent); }
-  .stars { font-family: var(--mono); color: var(--muted); padding-left: var(--s-2); border-left: 1px solid var(--line); }
-
-  /* The primer: the one call to read, under the tagline. Accent only in its icon and its ring. */
-  .primer {
-    display: inline-flex; align-items: center; gap: var(--s-3); margin-top: var(--s-3); max-width: 100%;
-    font: 600 var(--t-base)/1.2 var(--sans); color: var(--fg); text-decoration: none;
-    border: 1px solid var(--accent-line); border-radius: 999px; padding: var(--s-3) var(--s-5) var(--s-3) var(--s-4);
-    background: var(--surface);
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-line) 22%, transparent), 0 0 28px var(--glow);
-    transition: border-color .15s, box-shadow .15s, transform .15s;
-  }
-  .primer svg { flex: none; width: 18px; height: 18px; color: var(--accent); }
-  .primer .sub { font: 500 var(--t-sm)/1.2 var(--sans); color: var(--muted); padding-left: var(--s-3); border-left: 1px solid var(--line); }
-  .primer .go { color: var(--muted); transition: transform .15s, color .15s; }
-  .primer:hover { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-line) 40%, transparent), 0 0 32px var(--glow); transform: translateY(-1px); }
-  .primer:hover .go { color: var(--accent); transform: translateX(3px); }
-  .primer:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
-  @media (max-width: 420px) { .primer .sub { display: none; } }
-  @media (prefers-reduced-motion: reduce) { .primer, .primer .go { transition: none; } .primer:hover, .primer:hover .go { transform: none; } }
 </style>
 </head>
 <body>
@@ -182,183 +106,28 @@
   <section class="sr" aria-label="For AI agents">
     <h2>For AI agents</h2>
     <p>Naima is born for software: a silent software house of AI agents that applies industry-grade practice (tests, metrics, reviews, gates) and formal methods for an owner who need not know them, and runs any other project with that work’s own checks. If you were asked to install Naima in a repository, the whole procedure is the README of <a href="https://github.com/vincenzoml/naima">https://github.com/vincenzoml/naima</a>, section Install (raw: https://raw.githubusercontent.com/vincenzoml/naima/main/README.md; also <a href="llms.txt">llms.txt</a>); read it and follow it.
-    In short: if git is not installed, install it (macOS: xcode-select --install or Homebrew; Linux: the package manager; Windows: winget install Git.Git); then, in the root of this repository (if it is not a git repository yet, create one at the root with git init), run the installer one-liner for this system (below), run <code>deno run -A naima-tracker/naima/naima.ts check</code> until it passes,
+    In short: if git is not installed, install it (macOS: xcode-select --install or Homebrew; Linux: the package manager; Windows: winget install Git.Git); then, in the root of this repository (if it is not a git repository yet, create one at the root with git init), run the installer one-liner for this system (<a href="install.html">install.html</a>), run <code>deno run -A naima-tracker/naima/naima.ts check</code> until it passes,
     read <code>naima-tracker/naima/skills/naima/SKILL.md</code> and work by it, and add this line, verbatim, to the repository’s agent instruction file (AGENTS.md, CLAUDE.md, or the one you read; if none, create AGENTS.md):</p>
     <p>This repository tracks its work with Naima: at the start of every session read naima-tracker/naima/skills/naima/SKILL.md and `naima rules --audience agents`, and work by them.</p>
   </section>
-  <!-- The logo. A vertical variant, N / AI / MA stacked, is kept at the git tag
-       site/vertical-logo; it was replaced by this one-line mark because it was too
-       big: the logo is a mark, and the tagline is the page's message. The intro
-       main → maain → NAIMA, which inserted an a, is kept at site/horizontal-maain;
-       it was replaced by main → naim → naima, letters rearranged, then the last a. -->
-  <div class="stage">
+
+  <div class="head">
     <h1>
       <span class="sr">Naima</span>
-      <span class="mark" aria-hidden="true"><i data-k="n">N</i><i data-k="a2" class="ai">A</i><i data-k="i" class="ai">I</i><i data-k="m">M</i><i data-k="a1">A</i></span>
+      <span class="mark" aria-hidden="true"><i>N</i><i class="ai">A</i><i class="ai">I</i><i>M</i><i>A</i></span>
     </h1>
-    <span class="word branch" aria-hidden="true">
-      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.493 2.493 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25Zm-6 0a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Zm8.25-.75a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg>
-      <span class="letters"><i data-k="m">m</i><i data-k="a2" class="ai">a</i><i data-k="i" class="ai">i</i><i data-k="n">n</i></span>
-    </span>
+    <p class="tag">We put the AI in your <a href="docs.html?p=guide/primer.md#the-name-of-the-game">main</a>.</p>
   </div>
 
   <div class="rest">
-    <div class="hero">
-      <p class="tagline">We put the <span class="ai">AI</span> in your <span class="branch"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.493 2.493 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25Zm-6 0a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Zm8.25-.75a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg><span class="sr">branch </span>main</span>.</p>
-      <p class="about">State-of-the-art project management and <br>software engineering, seamless, automatic, transparent. <button type="button" class="more-toggle" aria-expanded="false" aria-controls="more">more</button></p>
-      <div class="more" id="more" hidden>
-        <ul>
-          <li><span aria-hidden="true">🙂</span> You don’t need to know git, code or project management. Naima and your LLM agent become your software house in-a-box.</li>
-          <li><span aria-hidden="true">🤖</span> You talk to your AI agent as usual. Naima gives it a method: every request becomes an item, every item a plan, every plan a change that is tested before it lands.</li>
-          <li><span aria-hidden="true">🧪</span> Nothing is “done” until it’s proven. A fix counts only when a test has seen it fail and then pass. Where it matters, a model checker proves it.</li>
-          <li><span aria-hidden="true">👥</span> Many agents, no chaos. Each one works in its own space and hands back finished work.</li>
-          <li><span aria-hidden="true">🗂️</span> It all lives in your repo. Plain files, versioned with your code. No server, no account.</li>
-        </ul>
-      </div>
-      <a class="primer" href="https://github.com/vincenzoml/naima/blob/main/docs/guide/primer.md"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M0 1.75A.75.75 0 0 1 .75 1h4.253c1.227 0 2.317.59 3 1.501A3.743 3.743 0 0 1 11.006 1h4.245a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75.75h-4.507a2.25 2.25 0 0 0-1.591.659l-.622.621a.75.75 0 0 1-1.06 0l-.622-.621A2.25 2.25 0 0 0 5.258 13H.75a.75.75 0 0 1-.75-.75Zm7.251 10.324.004-5.073-.002-2.253A2.25 2.25 0 0 0 5.003 2.5H1.5v9h3.757a3.75 3.75 0 0 1 1.994.574ZM8.755 4.75l-.004 7.322a3.752 3.752 0 0 1 1.992-.572H14.5v-9h-3.495a2.25 2.25 0 0 0-2.25 2.25Z"/></svg>Learn the concepts<span class="sub">the primer, 15 minutes</span><span class="go" aria-hidden="true">→</span></a>
+    <p class="slogan">Planned, tested, safe.</p>
+    <p class="about">Naima is the No-guesswork Artificial Intelligence Meta-Agent. Definitely not vibe-coding. Add it to any project, new or existing, from programs to papers, and keep using your favourite AI.<strong>Naima takes care of the project management and the software engineering, without you ever noticing.</strong></p>
+    <div class="actions">
+      <a class="button secondary" href="docs.html?p=guide/primer.md">Tell me more</a>
+      <a class="button primary" href="install.html">Use it now</a>
     </div>
-
-    <section aria-label="Install">
-      <div class="os" role="group" aria-label="Your system">
-        <button type="button" data-os="mac" aria-pressed="true">macOS</button>
-        <button type="button" data-os="linux" aria-pressed="false">Linux</button>
-        <button type="button" data-os="windows" aria-pressed="false">Windows</button>
-      </div>
-      <div class="box" data-for="mac linux">
-        <pre><span class="p">$ </span><code id="sh">curl -fsSL https://vincenzoml.github.io/naima/install.sh | sh</code></pre>
-        <button type="button" class="copy" data-copy="sh">Copy</button>
-      </div>
-      <div class="box" data-for="windows" hidden>
-        <pre><span class="p">&gt; </span><code id="ps">irm https://vincenzoml.github.io/naima/install.ps1 | iex</code></pre>
-        <button type="button" class="copy" data-copy="ps">Copy</button>
-      </div>      
-    </section>
-
-    <section aria-label="Or ask your agent">
-      <p class="label">Or ask your agent:</p>
-      <div class="box prompt">
-        <pre><code id="prompt">Please install https://github.com/vincenzoml/naima in the root of this repository; create a repository at the root if missing.</code></pre>
-        <button type="button" class="copy" data-copy="prompt">Copy</button>
-      </div>
-    </section>
-
-    <nav class="links" aria-label="More">
-      <a class="link" href="https://github.com/vincenzoml/naima/tree/main/docs">Documentation</a>
-      <a class="link star" href="https://github.com/vincenzoml/naima"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>Star on GitHub<span class="stars">0</span></a>
-    </nav>
+    <p class="star">Naima is new and free. Please <a href="https://github.com/vincenzoml/naima">star it on GitHub</a>: one click helps us a lot.</p>
   </div>
 </main>
-
-<script>
-(() => {
-  // The OS switch: preselect the visitor's, show its one-liner.
-  const buttons = [...document.querySelectorAll(".os button")]
-  const choose = (os) => {
-    for (const b of buttons) b.setAttribute("aria-pressed", String(b.dataset.os === os))
-    for (const box of document.querySelectorAll(".box[data-for]")) box.hidden = !box.dataset.for.split(" ").includes(os)
-  }
-  const ua = (navigator.userAgentData?.platform || navigator.platform || navigator.userAgent).toLowerCase()
-  choose(ua.includes("win") ? "windows" : ua.includes("linux") || ua.includes("android") ? "linux" : "mac")
-  for (const b of buttons) b.addEventListener("click", () => choose(b.dataset.os))
-
-  // Copy buttons.
-  for (const b of document.querySelectorAll(".copy")) {
-    b.addEventListener("click", async () => {
-      const text = document.getElementById(b.dataset.copy).textContent
-      try {
-        await navigator.clipboard.writeText(text)
-      } catch {
-        const t = Object.assign(document.createElement("textarea"), { value: text })
-        document.body.append(t); t.select(); document.execCommand("copy"); t.remove()
-      }
-      b.textContent = "Copied"; b.dataset.done = ""
-      setTimeout(() => { b.textContent = "Copy"; delete b.dataset.done }, 1600)
-    })
-  }
-
-  // The intro: main → naim by FLIP, then the last A and the rest of the page together, then still.
-  const root = document.documentElement
-  if (!root.classList.contains("intro")) return
-  const word = document.querySelector(".word")
-  const letters = [...word.querySelectorAll("i")]
-  const marks = Object.fromEntries([...document.querySelectorAll(".mark i")].map((e) => [e.dataset.k, e]))
-  const rest = [...document.querySelectorAll(".rest > *")]
-  const out = "cubic-bezier(.16, 1, .3, 1)"
-  const inOut = "cubic-bezier(.76, 0, .24, 1)"
-  const done = (a) => a.finished.catch(() => {})
-  const wait = (ms) => new Promise((r) => setTimeout(r, ms))
-  const box = (e) => e.getBoundingClientRect()
-
-  let over = false
-  const play = async () => {
-    // 1. The branch: main, the "ai" in it lit.
-    await done(word.animate([{ opacity: 0, transform: "translate(-50%, -38%) scale(.96)", filter: "blur(6px)" }, { opacity: 1, transform: "translate(-50%, -50%)", filter: "blur(0)" }], { duration: 440, easing: out, fill: "both" }))
-    await wait(260)
-    if (over) return
-
-    // 2. Its letters travel into N A I M: those moving left arc over, those moving right dip under,
-    //    so no two cross on the same path.
-    word.animate([{ borderColor: "var(--accent-line)", backgroundColor: "var(--surface)" }, { borderColor: "transparent", backgroundColor: "transparent" }], { duration: 360, easing: "ease-out", fill: "forwards" })
-    word.querySelector("svg").animate([{ opacity: 1 }, { opacity: 0, transform: "scale(.5)" }], { duration: 260, easing: "ease-in", fill: "forwards" })
-    const order = { n: 0, a2: 1, i: 2, m: 3 }
-    const flights = letters.map((from) => {
-      const to = marks[from.dataset.k]
-      const a = box(from), b = box(to)
-      const s = a.height / b.height
-      const dx = a.left + a.width / 2 - (b.left + b.width / 2)
-      const dy = a.top + a.height / 2 - (b.top + b.height / 2)
-      const arc = Math.sign(dx) * -Math.min(Math.abs(dx) * .3, b.height * .7)
-      const timing = { duration: 950, delay: 40 + order[from.dataset.k] * 60, easing: inOut, fill: "both" }
-      // The capital flies from where the small letter is (FLIP: first, last, invert, play) and fades in;
-      // the small letter flies with it and fades out, so the two read as one letter changing case.
-      to.animate([
-        { offset: 0, opacity: 0, transform: `translate(${dx}px, ${dy}px) scale(${s})` },
-        { offset: .2, opacity: 0 },
-        { offset: .5, transform: `translate(${dx / 2}px, ${dy / 2 + arc}px) scale(${(s + 1) / 2})` },
-        { offset: .55, opacity: 1 },
-        { offset: 1, opacity: 1, transform: "none" },
-      ], timing)
-      return done(from.animate([
-        { offset: 0, opacity: 1, transform: "none" },
-        { offset: .2, opacity: 1 },
-        { offset: .5, opacity: 0, transform: `translate(${-dx / 2}px, ${-dy / 2 + arc}px) scale(${(1 / s + 1) / 2})` },
-        { offset: 1, opacity: 0, transform: `translate(${-dx}px, ${-dy}px) scale(${1 / s})` },
-      ], timing))
-    })
-    // 3. naima: as the letters land, the last A fades in, and the rest of the page with it; then stillness.
-    const landing = 40 + Math.max(...Object.values(order)) * 60 + 950
-    await wait(landing - 520)
-    if (over) return
-    const last = done(marks.a1.animate([{ opacity: 0, transform: "translateX(-.12em)", filter: "blur(4px)" }, { opacity: 1, transform: "none", filter: "blur(0)" }], { duration: 520, easing: out, fill: "both" }))
-    const page = [...rest.map((e, i) => done(e.animate([{ opacity: 0, transform: "translateY(10px)" }, { opacity: 1, transform: "none" }], { duration: 520, delay: i * 50, easing: out, fill: "both" })))]
-    await Promise.all(flights)
-    word.remove()
-    await Promise.all([last, ...page])
-  }
-
-  const finish = () => {
-    if (over) return
-    over = true
-    root.classList.remove("intro")
-    word.remove()
-    for (const a of document.getAnimations()) a.cancel()
-  }
-  play().then(finish, finish)
-  // A page that cannot animate (no frames: a hidden tab, a headless capture) still ends on the logo.
-  setTimeout(finish, 6000)
-})()
-</script>
-  <script>
-    // The "more" link under the tagline: unfolds the longer description, and reads "less" while open.
-    (() => {
-      const button = document.querySelector(".more-toggle"), region = document.getElementById("more")
-      button.addEventListener("click", () => {
-        const open = region.hidden
-        region.hidden = !open
-        button.setAttribute("aria-expanded", String(open))
-        button.textContent = open ? "less" : "more"
-      })
-    })()
-  </script>
 </body>
 </html>

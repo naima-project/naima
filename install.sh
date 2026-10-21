@@ -4,10 +4,12 @@
 #   curl -fsSL https://vincenzoml.github.io/naima/install.sh | sh
 #
 # It clones Naima into naima-tracker/naima/ (a branch or a tag, no temporary
-# clone), and runs its `naima init --write-agent-pointer`: that records the
+# clone), and runs its `naima init`: that records the
 # clone's origin and commit in naima-tracker/naima-data/naima.json, beside it,
 # writes the tracker folder's README.md and .gitignore, and points the
-# project's agent file at Naima's own. Then it runs `naima check`. Nothing is
+# project's agent file at Naima's own, saying to run naima hello at the start
+# of every session, with a session-start hook for each agent tool in use that
+# has one. Then it runs `naima check`. Nothing is
 # installed globally for Naima; Deno, the one thing Naima needs on the
 # machine, is installed with its official installer when it is missing. Run
 # again, it says Naima is installed and checks it, cloning the program again
@@ -144,7 +146,7 @@ main() {
   fi
 
   [ -e "$PROGRAM" ] || clone_naima
-  naima init --write-agent-pointer
+  naima init
   naima check
   next_steps
 }
