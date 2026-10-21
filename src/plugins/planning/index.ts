@@ -235,10 +235,13 @@ const spec: Command = {
     const [sub, ref, ...extra] = p.positionals
     if (sub === "revise") {
       if (!ref || extra.length) throw usageError(this)
-      const old = ctx.repo.resolve(ref)
-      if (!isSpec(old)) throw new Error(`${label(old)} is not a spec — open one: naima new specs "<name>"`)
-      const name = specName(old)
-      const next = Math.max(...specsOf(ctx).filter((s) => specName(s) === name).map(versionOf)) + 1
+      const given = ctx.repo.resolve(ref)
+      if (!isSpec(given)) throw new Error(`${label(given)} is not a spec — open one: naima new specs "<name>"`)
+      const name = specName(given)
+      const all = specsOf(ctx).filter((s) => specName(s) === name).sort((a, b) => versionOf(a) - versionOf(b))
+      // The revision starts from the current version of that name, whichever version was named; with none current, from the one named.
+      const old = all.filter((s) => s.meta.status === "current").at(-1) ?? given
+      const next = versionOf(all.at(-1) ?? given) + 1
       const title = `${String(old.meta.title ?? name).replace(VERSIONED, "")} v${next}`
       const made = createItem(ctx, typeOrThrow(ctx, specsType.id), title, {
         [SPEC.name]: name,

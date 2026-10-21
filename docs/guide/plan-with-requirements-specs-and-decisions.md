@@ -108,8 +108,10 @@ naima spec revise specs/export-format
 This opens `export-format-v2` as a draft, starting from the page of version
 1 for editing, with a link saying that it replaces version 1. Once the new
 version is agreed, it becomes current and the old one is marked superseded.
-The work is then built to the new version and checked against it before it
-closes. `naima spec` lists every specification with its current version and
+A later revision always starts from the current version, whichever version
+you name: `naima spec revise specs/export-format` after version 2 is current
+opens version 3 from the page of version 2. The work is then built to the new
+version and checked against it before it closes. `naima spec` lists every specification with its current version and
 the open work that follows it. `naima check` refuses two current versions of
 the same specification, and reminds you of work that still follows an old
 version.
