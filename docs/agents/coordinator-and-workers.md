@@ -123,7 +123,9 @@ someone else performed, and those are exactly where work gets lost.
    ([closing a worktree](closing-a-worktree.md)).
 3. **The landing train.** Finished branches are landed in order with
    `naima land`, with the gates run between them, and each landing is a
-   [marker](../guide/glossary.md#marker) naming the items it closes. If
+   [marker](../guide/glossary.md#marker) naming the items it closes,
+   followed by the commit that adds the marker to those items' `commits`,
+   so `naima close` needs no `naima set` first. If
    `naima land` refuses, stop. When it lists properties that are not
    current after a landing, the coordinator runs `naima verify` on them on
    the trunk before the next landing, or files a bug for one that is now
