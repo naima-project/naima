@@ -98,7 +98,7 @@
     <h2 id="agent">Ask your agent</h2>
     <p>Open your AI agent in your project’s folder, or in a new empty one, and give it this:</p>
     <div class="box agent">
-      <pre class="one-line" id="prompt-box"><code id="prompt">Please install https://github.com/vincenzoml/naima in the root of this repository; create a repository at the root if missing.</code></pre>
+      <pre class="one-line" id="prompt-box"><code id="prompt">Please install https://github.com/naima-project/naima in the root of this repository; create a repository at the root if missing.</code></pre>
       <div class="tools">
         <button type="button" class="toggle" aria-expanded="false" aria-controls="prompt-box">Show more</button>
         <button type="button" class="copy" data-copy="prompt">Copy</button>
@@ -115,11 +115,11 @@
       <button type="button" data-os="windows" aria-pressed="false">Windows</button>
     </div>
     <div class="box" data-for="mac linux">
-      <pre><code id="sh">curl -fsSL https://vincenzoml.github.io/naima/install.sh | sh</code></pre>
+      <pre><code id="sh">curl -fsSL https://naima-project.github.io/naima/install.sh | sh</code></pre>
       <div class="tools"><button type="button" class="copy" data-copy="sh">Copy</button></div>
     </div>
     <div class="box" data-for="windows" hidden>
-      <pre><code id="ps">irm https://vincenzoml.github.io/naima/install.ps1 | iex</code></pre>
+      <pre><code id="ps">irm https://naima-project.github.io/naima/install.ps1 | iex</code></pre>
       <div class="tools"><button type="button" class="copy" data-copy="ps">Copy</button></div>
     </div>
     <p class="note" style="margin-top: 14px">Then your agent runs <code>deno run -A naima-tracker/naima/naima.ts check</code> and works by Naima from the next session on.</p>

@@ -1,6 +1,6 @@
 # Install Naima in the git repository you are standing in (Windows PowerShell).
 #
-#   irm https://vincenzoml.github.io/naima/install.ps1 | iex
+#   irm https://naima-project.github.io/naima/install.ps1 | iex
 #
 # It clones Naima into naima-tracker\naima\ (a branch or a tag, no temporary
 # clone), and runs its `naima init`: that records the
@@ -30,7 +30,7 @@
 
 function Install-Naima {
   $ErrorActionPreference = 'Stop'
-  $Source = if ($env:NAIMA_SOURCE) { $env:NAIMA_SOURCE } else { 'https://github.com/vincenzoml/naima.git' }
+  $Source = if ($env:NAIMA_SOURCE) { $env:NAIMA_SOURCE } else { 'https://github.com/naima-project/naima.git' }
   $Ref = if ($env:NAIMA_REF) { $env:NAIMA_REF } else { 'main' }
   $Program = 'naima-tracker/naima'
   $Lock = 'naima-tracker/naima-data/naima.json'
@@ -49,7 +49,7 @@ function Install-Naima {
   $Root = & git rev-parse --show-toplevel 2>$null
   $ErrorActionPreference = 'Stop'
   if ($LASTEXITCODE -ne 0 -or -not $Root) {
-    throw 'naima: this is not a git repository. Is this the root of your project? If so, ask your agent to create a repository here and install Naima from https://vincenzoml.github.io/naima/'
+    throw 'naima: this is not a git repository. Is this the root of your project? If so, ask your agent to create a repository here and install Naima from https://naima-project.github.io/naima/'
   }
   $Root = (Resolve-Path $Root).Path
   if ($Root -ne (Get-Location).Path) { Say "installing at the top of this repository: $Root" }

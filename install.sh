@@ -1,7 +1,7 @@
 #!/bin/sh
 # Install Naima in the git repository you are standing in (macOS, Linux).
 #
-#   curl -fsSL https://vincenzoml.github.io/naima/install.sh | sh
+#   curl -fsSL https://naima-project.github.io/naima/install.sh | sh
 #
 # It clones Naima into naima-tracker/naima/ (a branch or a tag, no temporary
 # clone), and runs its `naima init`: that records the
@@ -28,7 +28,7 @@
 
 set -eu
 
-SOURCE=${NAIMA_SOURCE:-https://github.com/vincenzoml/naima.git}
+SOURCE=${NAIMA_SOURCE:-https://github.com/naima-project/naima.git}
 REF=${NAIMA_REF:-main}
 PROGRAM=naima-tracker/naima
 LOCK=naima-tracker/naima-data/naima.json
@@ -124,7 +124,7 @@ EOF
 main() {
   need_git
   ROOT=$(git rev-parse --show-toplevel 2>/dev/null) ||
-    die "this is not a git repository. Is this the root of your project? If so, ask your agent to create a repository here and install Naima from https://vincenzoml.github.io/naima/"
+    die "this is not a git repository. Is this the root of your project? If so, ask your agent to create a repository here and install Naima from https://naima-project.github.io/naima/"
   if [ "$(cd "$ROOT" && pwd -P)" != "$(pwd -P)" ]; then say "installing at the top of this repository: $ROOT"; fi
   cd "$ROOT"
   need_deno

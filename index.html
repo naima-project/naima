@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Naima</title>
-<meta name="description" content="Naima, the No-guesswork Artificial Intelligence Meta-Agent. Planned, tested, safe: definitely not vibe-coding. Add it to any project, new or existing, and keep using your favourite AI; it takes care of the project management and the software engineering. AI agents: the install procedure is the README of https://github.com/vincenzoml/naima">
+<meta name="description" content="Naima, the No-guesswork Artificial Intelligence Meta-Agent. Planned, tested, safe: definitely not vibe-coding. Add it to any project, new or existing, and keep using your favourite AI; it takes care of the project management and the software engineering. AI agents: the install procedure is the README of https://github.com/naima-project/naima">
 <meta name="color-scheme" content="light">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="alternate" type="text/plain" href="llms.txt" title="Naima, for AI agents: how to install it">
@@ -58,6 +58,7 @@
   .rest { display: flex; flex-direction: column; align-items: center; gap: 32px; }
   .slogan { margin: 0; font-size: 52px; font-weight: 500; letter-spacing: -1px; text-align: center; }
   .about { margin: 0; max-width: 640px; text-align: center; font-size: 21px; line-height: 1.5; color: var(--text); }
+  .about .lead { display: block; margin-bottom: 10px; }
   .about strong { display: block; margin-top: 10px; font-weight: 600; color: var(--fg); }
   .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; align-items: center; }
   .button {
@@ -77,6 +78,16 @@
   .star a { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
   .star a:hover { text-decoration-color: var(--accent); }
 
+  .credits { display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 8px 16px 56px; animation: fade .9s ease 1.35s both; }
+  .credits p { margin: 0; font-size: 14px; color: var(--muted); text-align: center; }
+  .credits ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 20px 44px; }
+  .credits a { display: block; border-radius: 10px; padding: 8px; transition: transform .25s cubic-bezier(.2, .7, .1, 1), box-shadow .25s ease, background-color .25s ease; }
+  .credits img { display: block; height: 36px; width: auto; filter: grayscale(1); opacity: .7; transition: filter .3s ease, opacity .3s ease; }
+  .credits img[src$="fmt.svg"] { height: 40px; }
+  .credits img[src$="cnr.svg"] { height: 24px; }
+  .credits a:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--accent) 5%, transparent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 7%, transparent); }
+  .credits a:hover img, .credits a:focus-visible img { filter: none; opacity: 1; }
+
   /* The intro: the letters of NAIMA rise into place one after another, then the line under it, then the rest. */
   @keyframes rise { from { transform: translateY(105%); } to { transform: none; } }
   @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
@@ -87,7 +98,7 @@
   .mark i:nth-child(5) { animation-delay: .28s; }
   .tag { animation: fade .8s ease .75s both; }
   .rest { animation: fade .9s ease 1.05s both; }
-  @media (prefers-reduced-motion: reduce) { .mark i, .tag, .rest { animation: none; } .button, .button:hover, .button:active { transition: none; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .mark i, .tag, .rest, .credits { animation: none; } .credits a, .credits img { transition: none; } .button, .button:hover, .button:active { transition: none; transform: none; } }
 
   /* A phone: the same page, scaled down. */
   @media (max-width: 640px) {
@@ -105,7 +116,7 @@
 <main>
   <section class="sr" aria-label="For AI agents">
     <h2>For AI agents</h2>
-    <p>Naima is born for software: a silent software house of AI agents that applies industry-grade practice (tests, metrics, reviews, gates) and formal methods for an owner who need not know them, and runs any other project with that work’s own checks. If you were asked to install Naima in a repository, the whole procedure is the README of <a href="https://github.com/vincenzoml/naima">https://github.com/vincenzoml/naima</a>, section Install (raw: https://raw.githubusercontent.com/vincenzoml/naima/main/README.md; also <a href="llms.txt">llms.txt</a>); read it and follow it.
+    <p>Naima is born for software: a silent software house of AI agents that applies industry-grade practice (tests, metrics, reviews, gates) and formal methods for an owner who need not know them, and runs any other project with that work’s own checks. If you were asked to install Naima in a repository, the whole procedure is the README of <a href="https://github.com/naima-project/naima">https://github.com/naima-project/naima</a>, section Install (raw: https://raw.githubusercontent.com/naima-project/naima/main/README.md; also <a href="llms.txt">llms.txt</a>); read it and follow it.
     In short: if git is not installed, install it (macOS: xcode-select --install or Homebrew; Linux: the package manager; Windows: winget install Git.Git); then, in the root of this repository (if it is not a git repository yet, create one at the root with git init), run the installer one-liner for this system (<a href="install.html">install.html</a>), run <code>deno run -A naima-tracker/naima/naima.ts check</code> until it passes,
     read <code>naima-tracker/naima/skills/naima/SKILL.md</code> and work by it, and add this line, verbatim, to the repository’s agent instruction file (AGENTS.md, CLAUDE.md, or the one you read; if none, create AGENTS.md):</p>
     <p>This repository tracks its work with Naima: at the start of every session read naima-tracker/naima/skills/naima/SKILL.md and `naima rules --audience agents`, and work by them.</p>
@@ -121,13 +132,21 @@
 
   <div class="rest">
     <p class="slogan">Planned, tested, safe.</p>
-    <p class="about">Naima is the No-guesswork Artificial Intelligence Meta-Agent. Definitely not vibe-coding. Add it to any project, new or existing, from programs to papers, and keep using your favourite AI.<strong>Naima takes care of the project management and the software engineering, without you ever noticing.</strong></p>
+    <p class="about"><span class="lead">Naima is the No-guesswork Artificial Intelligence Meta-Agent.</span>Definitely not vibe-coding. Add it to any project, new or existing, from programs to papers, and keep using your favourite AI.<strong>Naima takes care of the project management and the software engineering, without you ever noticing.</strong></p>
     <div class="actions">
       <a class="button secondary" href="docs.html?p=guide/primer.md">Tell me more</a>
       <a class="button primary" href="install.html">Use it now</a>
     </div>
-    <p class="star">Naima is new and free. Please <a href="https://github.com/vincenzoml/naima">star it on GitHub</a>: one click helps us a lot.</p>
+    <p class="star">Naima is new and free. Please <a href="https://github.com/naima-project/naima">star it on GitHub</a>: one click helps us a lot.</p>
   </div>
 </main>
+<footer class="credits">
+  <p>Naima is developed at the Formal Methods and Tools lab of ISTI, the Institute of Information Science and Technologies of the Italian National Research Council.</p>
+  <ul>
+    <li><a href="https://fmt.isti.cnr.it/"><img src="logos/fmt.svg" alt="Formal Methods and Tools lab (FMT)"></a></li>
+    <li><a href="https://www.isti.cnr.it/"><img src="logos/isti-cnr.png" alt="ISTI-CNR, Institute of Information Science and Technologies"></a></li>
+    <li><a href="https://www.cnr.it/"><img src="logos/cnr.svg" alt="CNR, Italian National Research Council"></a></li>
+  </ul>
+</footer>
 </body>
 </html>

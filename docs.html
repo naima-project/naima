@@ -100,8 +100,8 @@
 (() => {
   // A page of the product's docs/, read from its main branch when the page is opened, so
   // the site always shows the current text; rendered here in the site's own style.
-  const REPO = "https://github.com/vincenzoml/naima"
-  const RAW = "https://raw.githubusercontent.com/vincenzoml/naima/main/docs/"
+  const REPO = "https://github.com/naima-project/naima"
+  const RAW = "https://raw.githubusercontent.com/naima-project/naima/main/docs/"
   // A preview on this machine may read the docs from a local server instead (docs.html?local):
   // only on localhost, so the published site always reads the product's main.
   const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname) && new URLSearchParams(location.search).has("local")
