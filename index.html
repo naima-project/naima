@@ -84,7 +84,9 @@
   .credits a { display: block; border-radius: 10px; padding: 8px; transition: transform .25s cubic-bezier(.2, .7, .1, 1), box-shadow .25s ease, background-color .25s ease; }
   .credits img { display: block; height: 36px; width: auto; filter: grayscale(1); opacity: .7; transition: filter .3s ease, opacity .3s ease; }
   .credits img[src$="fmt.svg"] { height: 40px; }
-  .credits img[src$="cnr.svg"] { height: 24px; }
+  .credits img[src$="/cnr.svg"] { height: 24px; }
+  .credits img[src$="make-become.svg"] { height: 30px; }
+  .credits img[src$="uva.svg"] { height: 30px; }
   .credits a:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--accent) 5%, transparent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 7%, transparent); }
   .credits a:hover img, .credits a:focus-visible img { filter: none; opacity: 1; }
 
@@ -141,11 +143,13 @@
   </div>
 </main>
 <footer class="credits">
-  <p>Naima is developed at the Formal Methods and Tools lab of ISTI, the Institute of Information Science and Technologies of the Italian National Research Council.</p>
+  <p>Naima is developed at the Formal Methods and Tools lab of ISTI, the Institute of Information Science and Technologies of the Italian National Research Council, with make become and the University of Amsterdam.</p>
   <ul>
+    <li><a href="https://make-become.github.io/"><img src="logos/make-become.svg" alt="make become, an artware studio"></a></li>
     <li><a href="https://fmt.isti.cnr.it/"><img src="logos/fmt.svg" alt="Formal Methods and Tools lab (FMT)"></a></li>
     <li><a href="https://www.isti.cnr.it/"><img src="logos/isti-cnr.png" alt="ISTI-CNR, Institute of Information Science and Technologies"></a></li>
     <li><a href="https://www.cnr.it/"><img src="logos/cnr.svg" alt="CNR, Italian National Research Council"></a></li>
+    <li><a href="https://www.uva.nl/en"><img src="logos/uva.svg" alt="University of Amsterdam"></a></li>
   </ul>
 </footer>
 </body>
