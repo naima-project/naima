@@ -47,21 +47,19 @@
 
   .box { display: flex; align-items: flex-start; gap: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 14px 14px 14px 18px; }
   .box[hidden] { display: none; }
-  .box pre { flex: 1; min-width: 0; margin: 0; padding-top: 7px; font: 14px/1.55 var(--mono); }
+  .box pre { flex: 1; min-width: 0; margin: 0; padding-top: 7px; font: 13.5px/1.6 var(--mono); }
   .box.agent pre { font-family: var(--sans); font-size: 17px; }
-  .box pre code { display: block; }
-  .one-line code { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .box.agent pre:not(.one-line) code { white-space: pre-wrap; overflow-wrap: anywhere; }
-  .box:not(.agent) pre { overflow-x: auto; }
-  .box:not(.agent) pre code { white-space: pre; }
+  .box pre code { display: block; font: inherit; }
+  /* Both wrap, never scroll: the agent text between words, a command anywhere it must. */
+  .box pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
   .tools { display: flex; gap: 8px; flex: none; }
-  .copy, .toggle, .os button {
+  .copy, .os button {
     font: 500 14px/1 var(--sans); color: var(--fg); background: var(--bg);
     border: 1px solid var(--line); border-radius: 999px; padding: 10px 16px; cursor: pointer;
   }
-  .copy, .toggle { transition: color .2s ease, border-color .2s ease, box-shadow .2s ease, transform .2s cubic-bezier(.2, .7, .1, 1); }
-  .copy:hover, .toggle:hover { color: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 10%, transparent); }
-  .copy:active, .toggle:active { transform: scale(.97); }
+  .copy { transition: color .2s ease, border-color .2s ease, box-shadow .2s ease, transform .2s cubic-bezier(.2, .7, .1, 1); }
+  .copy:hover { color: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 10%, transparent); }
+  .copy:active { transform: scale(.97); }
   .copy[data-done] { color: var(--accent); border-color: var(--accent); }
   .box { transition: border-color .2s ease, box-shadow .2s ease; }
   .box:hover { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 5%, transparent); }
@@ -69,7 +67,7 @@
   .os button:hover { color: var(--fg); }
   .home { transition: color .2s ease; }
   .home:hover b { color: var(--accent); }
-  @media (prefers-reduced-motion: reduce) { .copy, .toggle, .box, .os button, a { transition: none; } .copy:active, .toggle:active { transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .copy, .box, .os button, a { transition: none; } .copy:active { transform: none; } }
   .os { display: flex; gap: 6px; margin: 0 0 12px; }
   .os button { background: none; border-color: transparent; color: var(--muted); }
   .os button[aria-pressed="true"] { color: var(--fg); border-color: var(--line); background: var(--surface); }
@@ -98,9 +96,8 @@
     <h2 id="agent">Ask your agent</h2>
     <p>Open your AI agent in your project’s folder, or in a new empty one, and give it this:</p>
     <div class="box agent">
-      <pre class="one-line" id="prompt-box"><code id="prompt">Please install https://github.com/naima-project/naima in the root of this repository; create a repository at the root if missing.</code></pre>
+      <pre><code id="prompt">Please install https://github.com/naima-project/naima in the root of this repository; create a repository at the root if missing.</code></pre>
       <div class="tools">
-        <button type="button" class="toggle" aria-expanded="false" aria-controls="prompt-box">Show more</button>
         <button type="button" class="copy" data-copy="prompt">Copy</button>
       </div>
     </div>
@@ -138,13 +135,6 @@
   choose(ua.includes("win") ? "windows" : ua.includes("linux") || ua.includes("android") ? "linux" : "mac")
   for (const b of buttons) b.addEventListener("click", () => choose(b.dataset.os))
 
-  // The text for the agent: one line ending in "...", whole on "Show more".
-  const toggle = document.querySelector(".toggle"), box = document.getElementById("prompt-box")
-  toggle.addEventListener("click", () => {
-    const open = box.classList.toggle("one-line") === false
-    toggle.setAttribute("aria-expanded", String(open))
-    toggle.textContent = open ? "Show less" : "Show more"
-  })
 
   // Copy buttons: always the whole text.
   for (const b of document.querySelectorAll(".copy")) {
