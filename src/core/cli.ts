@@ -3,7 +3,7 @@
 // program itself — init, update, rollback, hello, plugin, guide, help — are answered here,
 // before any plugin is loaded.
 
-import { existsSync, mkdirSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join, relative, resolve } from "node:path"
 import {
   carryRefusal,
@@ -40,6 +40,7 @@ import {
   remoteHead,
   short,
   SOURCE_CHANGED,
+  sourceMoved,
   type Target,
   verifySigned,
   withoutCredentials,
@@ -477,8 +478,21 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
     throw new Error(usage("update"))
   }
   if (bool(p, "accept-source")) {
-    // The entry point has aligned the program to the new source already: accepting it is all this asks.
-    io.out(`trusted ${lock.source} at the locked commit ${short(lock.commit)}; nothing else moved`)
+    // The entry point has aligned the program to the new source already: accepting it is all this asks,
+    // with the tracker's README, which names the source to clone, rewritten for it when Naima wrote it.
+    const tracker = trackerOf(place.data)
+    const readme = join(tracker, "README.md")
+    const fresh = trackerReadme(posixRelative(place.root, tracker) || ".", lock.source)
+    const ours = existsSync(readme) && readFileSync(readme, "utf8").startsWith("[Naima](")
+    if (ours && readFileSync(readme, "utf8") !== fresh) {
+      writeFileSync(readme, fresh)
+      const shown = posixRelative(place.root, readme)
+      io.out(
+        `trusted ${lock.source} at the locked commit ${
+          short(lock.commit)
+        }; rewrote ${shown} for it — commit it: git add ${shown} && git commit -m "Naima's source: ${lock.source}"`,
+      )
+    } else io.out(`trusted ${lock.source} at the locked commit ${short(lock.commit)}; nothing else moved`)
     return 0
   }
   const tracker = posixRelative(place.root, trackerOf(place.data))
@@ -491,6 +505,7 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
   const t = targetOf(place, lock, opts)
   if (check) {
     const head = remoteHead(t)
+    if (head.movedTo) io.out(sourceMoved(lock.source, head.movedTo))
     if (head.commit === lock.commit) io.out(`current: the source's ${head.branch} is the locked commit ${short(head.commit)}`)
     else {
       io.out(`the source's ${head.branch} moved: ${short(lock.commit)} → ${short(head.commit)} — naima update`)
@@ -505,7 +520,9 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
   }
   const carried = carryRefusal(raw, posixRelative(place.root, place.program))
   if (carried) throw new Error(carried)
-  const target = to !== undefined ? resolveCommit(t, to) : fetchHead(t).commit
+  const head = to !== undefined ? undefined : fetchHead(t)
+  if (head?.movedTo) io.out(sourceMoved(lock.source, head.movedTo))
+  const target = head ? head.commit : resolveCommit(t, to as string)
   if (target !== lock.commit) return await moveLock(opts, place, lock, raw, io, target)
   const from = raw["format"]
   const { all } = await owed(raw, place, opts)
@@ -565,6 +582,7 @@ async function hello(opts: CliOptions, place: Place, lock: Lock, raw: Record<str
     try {
       // Launched, the program may fetch into its own clone, tags too; the development build only reads the source.
       const head = opts.launched ? fetchHead(t) : remoteHead(t)
+      if (head.movedTo) lines.push(`${sourceMoved(lock.source, head.movedTo)}.`)
       if (head.commit === lock.commit) lines.push(`Naima is current: the source's ${head.branch} is the locked commit.`)
       else {
         const count = runGit(t.program, ["rev-list", "--count", `${lock.commit}..${head.commit}`])

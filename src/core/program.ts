@@ -308,7 +308,19 @@ export function align(t: Target): Moved | null {
 export interface Head {
   branch: string
   commit: string
+  /** Where the source answered from, when its host redirected it there: the repository moved. */
+  movedTo?: string
 }
+
+/** The address git says it was redirected to, when the source's host redirects it (a moved repository). */
+export function redirectedTo(err: string): string | undefined {
+  const m = /redirecting to (\S+)/.exec(err)
+  return m ? (m[1] as string).replace(/\/$/, "") : undefined
+}
+
+/** What to say when the source has moved: the new address, and how to adopt it. */
+export const sourceMoved = (from: string, to: string): string =>
+  `the source moved: ${from} now answers from ${to} — set source in naima.json to ${to}, then run naima update --accept-source`
 
 /** The head `naima update --check` compares with: the source's main. Reads the source; changes nothing. */
 export function remoteHead(t: Target): Head {
@@ -316,14 +328,16 @@ export function remoteHead(t: Target): Head {
   if (!r.ok) throw new Error(`cannot read main from ${t.source}: ${gitReason(r)}`)
   const commit = r.out.split(/\s+/)[0]
   if (!commit) throw new Error(`cannot read main from ${t.source}: it has no main branch`)
-  return { branch: "main", commit }
+  const movedTo = redirectedTo(r.err)
+  return { branch: "main", commit, ...(movedTo ? { movedTo } : {}) }
 }
 
 /** `git fetch origin main` in the program, with the source's tags, which name versions: the head `naima update` moves the lock to. */
 export function fetchHead(t: Target): Head {
   const r = runGit(t.program, ["fetch", "--quiet", "--tags", "origin", "+refs/heads/main:refs/remotes/origin/main"])
   if (!r.ok) throw new Error(`cannot fetch main from ${t.source}: ${gitReason(r)}`)
-  return { branch: "main", commit: mustGit(t.program, "rev-parse", "refs/remotes/origin/main") }
+  const movedTo = redirectedTo(r.err)
+  return { branch: "main", commit: mustGit(t.program, "rev-parse", "refs/remotes/origin/main"), ...(movedTo ? { movedTo } : {}) }
 }
 
 const IGNORE = ".gitignore"

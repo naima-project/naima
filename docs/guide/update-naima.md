@@ -223,6 +223,17 @@ then:
 naima update --accept-source
 ```
 
+It also rewrites `naima-tracker/README.md`, which names the source a fresh
+clone restores the program from, when Naima wrote that file; commit it with
+`naima.json`.
+
+## When the repository has moved
+
+A repository that moved, say to another GitHub organization, still answers
+at its old address, which redirects. `naima update`, `naima update --check`
+and `naima hello` say so when they reach the source, with the new address:
+set `source` in `naima.json` to it, then run `naima update --accept-source`.
+
 ## What can go wrong
 
 | Naima says | Do |
