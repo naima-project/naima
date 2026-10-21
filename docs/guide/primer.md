@@ -1,5 +1,14 @@
 # The Naima primer
 
+## The name of the game
+
+`main` is where your project's finished, checked work lives, in
+[git](https://en.wikipedia.org/wiki/Git). Naima keeps your project in git,
+hence "we put the AI in your main". But you never have to learn git: the
+agents do all of it, and you keep using the AI you like.
+
+## About this page
+
 You don't need anything on this page to start using Naima. Once it is
 installed, the agents handle all of it for you: they file what you report,
 keep track of the work, prove it and close it, and they ask you only about
