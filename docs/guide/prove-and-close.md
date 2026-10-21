@@ -263,7 +263,10 @@ is attached as the counterexample. The tools (`mcrl22lps`, `lps2pbes`,
 `lts2pbes`) are taken from the directory given as
 `plugins.verifier-mcrl2.options.bin`. If that isn't set, they come from the
 mCRL2 202607.0 that `naima tools install mcrl2` installed on this machine
-([tools](tools.md)), and failing that from `PATH`.
+([tools](tools.md)), and failing that from `PATH`. `naima.json` is shared by
+every clone of the project, so a `bin` written on one machine may not exist on
+another. There it is not used: the verifier says once that the directory is
+missing on this machine and takes the installed mCRL2, then `PATH`, instead.
 
 Some models have few states but heavy data, and mCRL2's standard route can
 spend hours rewriting that data. For such models, a property can take the

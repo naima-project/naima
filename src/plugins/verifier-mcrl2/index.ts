@@ -250,11 +250,12 @@ export function readLtsInfo(text: string): { states: number; transitions: number
 }
 
 /**
- * Where a tool is: in `bin` when it is given; otherwise the mCRL2 `naima tools install mcrl2` installed on this
- * machine; otherwise its name, looked up on PATH.
+ * Where a tool is: in `bin` when it is given and exists on this machine; otherwise the mCRL2 `naima tools install
+ * mcrl2` installed on this machine; otherwise its name, looked up on PATH. A `bin` kept in a shared naima.json may be
+ * one machine's path: elsewhere it is absent, and the installed tool is used instead.
  */
 export function toolPath(tool: string, bin?: string): string {
-  return bin ? join(bin, tool) : installedProgram(MCRL2, tool) ?? tool
+  return bin && existsSync(bin) ? join(bin, tool) : installedProgram(MCRL2, tool) ?? tool
 }
 
 /** A route's answer: a result with the details of how it was reached. */
@@ -264,8 +265,20 @@ type Outcome = VerifyResult & { details: Record<string, unknown> }
 export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Verifier {
   const run = config.run ?? realRun
   const path = (tool: Tool): string => toolPath(tool, config.bin)
+  const absent = (): boolean => !!config.bin && !existsSync(config.bin)
+  let said = false
+  /** A configured bin absent on this machine, said once, when a tool is first started. */
+  const sayAbsent = (): void => {
+    if (said || !absent()) return
+    said = true
+    console.error(
+      `verifier-mcrl2: bin ${config.bin} does not exist on this machine; using the mCRL2 installed by naima tools, otherwise PATH`,
+    )
+  }
   const missing = (tool: Tool): string =>
-    `tool missing: ${tool} is not ${config.bin ? `in ${config.bin}` : "installed by naima tools, nor on PATH"} — ${INSTALL}`
+    `tool missing: ${tool} is not ${
+      config.bin && !absent() ? `in ${config.bin}` : `${config.bin ? `in ${config.bin} (absent on this machine), ` : ""}installed by naima tools, nor on PATH`
+    } — ${INSTALL}`
 
   /**
    * The steps of one route: each tool's output kept in the log, the tools it started remembered for their versions.
@@ -292,6 +305,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
           }
         }
         : undefined
+      sayAbsent()
       const raw = await run(path(tool), args, at, seconds ? seconds * 1000 : undefined, onStderr)
       const r = counting ? { ...raw, stderr: withoutCounting(tool, raw.stderr) } : raw
       if (r.missing) return { stop: { verdict: "error", output: [missing(tool), ...log].join("\n") } }
@@ -609,12 +623,13 @@ export function mcrl2Plugin(options: Record<string, unknown> = {}, run: Runner =
       "A property chooses its route in `verifierOptions.route`. `lps`, the default, is the standard route: `mcrl22lps`, `lps2pbes --counter-example`, and `pbessolve` with an evidence file: `true` holds; `false` is violated, and the evidence, printed by `lps2lts` as an `.aut` labelled transition system, is the counterexample; any other answer, or `verifierOptions.timeoutSeconds` reached by a step, is unknown. " +
       "`lts`, the LTS route, is for a model whose state space is small but whose data makes the standard route slow. The formula is first checked to be in the fragment that divergence-preserving branching bisimilarity preserves — every visible step right after a star over an action formula that includes tau, no single step that includes tau, fixpoints only as the four inevitability patterns — and refused otherwise, as an error run whose output begins `LTS route refused:`. Then `mcrl22lps` and `lps2lts` (with `--threads` from `verifierOptions.threads`) make the LTS once per model version, kept in the run work folder under a key over the model's contents, the toolset's version and the recipe, and shared by every property of that model; per formula, `ltsconvert` hides every action the formula does not mention and reduces modulo `dpbranching-bisim`; on the reduced LTS, `lts2pbes --counter-example` and one `pbessolve` with an evidence file decide; on false, the evidence, printed by `ltsconvert` as an `.aut` labelled transition system, is the counterexample, over the reduced LTS, where the hidden actions appear as tau. " +
       "`cross-check` runs both routes and gives a verdict only when they agree; a disagreement is an error whose output begins `the routes disagree:`. Each run records in its `details` the route, the version of every tool it started, and for the LTS route the LTS's key, reuse and size, the mentioned and hidden actions, the reduced size, and on false that the counterexample comes from the reduced LTS. " +
-      "The tools are taken from `bin` when it is given, otherwise from the mCRL2 202607.0 that `naima tools install mcrl2` installed on this machine, otherwise from PATH; the plugin declares that tool, so `naima tools` reports it. A tool that is not there is an error run whose output begins `tool missing:`; a tool that fails is an error with its output. The version recorded is the first line of `mcrl22lps --version`. " +
+      "The tools are taken from `bin` when it is given and exists on this machine, otherwise from the mCRL2 202607.0 that `naima tools install mcrl2` installed on this machine, otherwise from PATH; a `bin` that does not exist on this machine, as when a shared `naima.json` names another machine's path, is said once and passed over. The plugin declares that tool, so `naima tools` reports it. A tool that is not there is an error run whose output begins `tool missing:`; a tool that fails is an error with its output. The version recorded is the first line of `mcrl22lps --version`. " +
       "For `naima equivalent`, it compares two versions of a model modulo `bisim` (strong bisimilarity, the default, which preserves every formula) or `dpbranching-bisim` (divergence-preserving branching bisimilarity, which preserves the formulas the LTS route accepts): `mcrl22lps`, `lps2lts` and `ltsinfo` for each version, the new one through the LTS cache, then `ltscompare --counter-example`; on false, the distinguishing formula it writes is what tells them apart.",
     options: [
       {
         name: "bin",
-        says: "the absolute directory holding the mCRL2 tools; absent, the mCRL2 naima tools installed on this machine, then PATH",
+        says:
+          "the absolute directory holding the mCRL2 tools; not given, or not existing on this machine (said once), the mCRL2 naima tools installed on this machine, then PATH",
         default: "installed, then PATH",
       },
     ],
