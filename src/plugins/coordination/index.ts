@@ -503,6 +503,13 @@ function pruneBranch(ctx: Context, branch: string, write: boolean, archive: bool
       ctx.out(`${why}: --archive tags them first`)
     }
   }
+  // Git removes a worktree holding a submodule only when forced: forced only once it is known clean, submodules included.
+  const status = tree ? gitOrNull(tree.path, "status", "--porcelain", "--untracked-files=all", "--ignore-submodules=none") : ""
+  if (status) {
+    const why = `the worktree ${tree!.path} has changes not committed: ${status.split("\n").map((l) => l.replace(/^\s*\S{1,2}\s+/, "")).join(", ")}`
+    if (write) throw new Error(`${why} — commit or discard them first`)
+    ctx.out(`${why}: commit or discard them before --write`)
+  }
   const plan = [
     ...(unkept && archive ? [`tag ${tag} at ${branch}`] : []),
     ...(tree ? [`remove the worktree ${tree.path}`] : []),
@@ -513,7 +520,7 @@ function pruneBranch(ctx: Context, branch: string, write: boolean, archive: bool
     return 0
   }
   if (unkept && archive) mustGit(ctx.root, "tag", tag, branch)
-  if (tree) mustGit(ctx.root, "worktree", "remove", tree.path)
+  if (tree) mustGit(ctx.root, "worktree", "remove", ...(status === "" ? ["--force"] : []), tree.path)
   mustGit(ctx.root, "branch", "-D", branch)
   ctx.out(`did ${plan.join(", ")}${kept || (unkept && archive) ? ` — its commits stay on ${tag}` : ""}`)
   return 0
@@ -523,7 +530,8 @@ const prune: Command = {
   name: "prune",
   says:
     "list (or with --write remove) claim files naming a branch git no longer has; one only another ref carries is listed with that ref, to be dropped there. With --branch, delete a branch and its worktree, refusing one with unmerged commits that no archive/<branch> tag holds",
-  enforces: "the trunk is never pruned, and a branch with unmerged commits that no archive/<branch> tag holds is refused; nothing is removed without --write",
+  enforces:
+    "the trunk is never pruned, and a branch with unmerged commits that no archive/<branch> tag holds is refused, and so is a worktree with anything uncommitted, inside its submodules too; a clean one is removed even when it holds a submodule; nothing is removed without --write",
   usage: "prune [--write] | prune --branch <b> [--archive] [--write]",
   options: [
     { name: "--write", says: "remove the stale claim files, or the branch and its worktree, instead of listing what would go" },
@@ -635,7 +643,8 @@ function openCommand(policy: Policy): Command {
   return {
     name: "open",
     says: "start a piece of work: a worktree <worktrees>/<what> on a new branch <who>/<what> from the trunk, and its claim on the items, in one step",
-    enforces: "work happens on its own branch and worktree from the trunk, and its claim on the items is recorded in the same step",
+    enforces:
+      "work happens on its own branch and worktree from the trunk, and its claim on the items is recorded in the same step; a branch that already exists is never reused, and the refusal says whether it is merged into the trunk",
     usage: 'open <item>... [--as <who>] [--name <what>] [--note "why"]',
     options: [
       { name: "--as", says: "who works: the branch's first segment", ...(policy.who ? { default: policy.who } : {}) },
@@ -656,11 +665,17 @@ function openCommand(policy: Policy): Command {
       const branch = `${who}/${what}`
       const trees = worktrees(ctx.root)
       const path = join(worktreesDir(policy, home(ctx.root, trees)), what)
+      const base = trunk(ctx.root) ?? "HEAD"
+      // An existing branch is never reused: it may be an old one, landed and behind the trunk.
       if (gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`) !== null) {
-        throw new Error(`branch ${branch} already exists: pick another --name, or work in it where it stands`)
+        const n = ahead(ctx.root, base, branch)
+        throw new Error(
+          n === 0
+            ? `branch ${branch} already exists and is merged into ${base}: delete it with naima prune --branch ${branch} --write, or pick another --name`
+            : `branch ${branch} already exists with ${plural(n, "commit")} not on ${base}: pick another --name, or work in it where it stands`,
+        )
       }
       if (exists(path)) throw new Error(`${path} already exists: pick another --name`)
-      const base = trunk(ctx.root) ?? "HEAD"
       mustGit(ctx.root, "worktree", "add", "-q", "-b", branch, path, base)
       const newProgram = join(path, posixRelative(ctx.root, ctx.program))
       if (!isClone(ctx.program)) {
