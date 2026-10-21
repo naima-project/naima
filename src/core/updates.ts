@@ -36,8 +36,11 @@ export function versionOf(repo: string, commit: string): string {
   return past === 0 ? `version ${m[1]}` : `version ${m[1]} and ${counted(past, "commit")} after it`
 }
 
+/** How Naima introduces itself: the name the acronym stands for. */
+export const INTRODUCTION = "I'm Naima, the No-guesswork Artificial Intelligence Meta-Agent"
+
 /** The line every session starts with. */
-export const banner = (version: string, commit: string): string => `Naima is active in this repository: ${version}, commit ${short(commit)}.`
+export const banner = (version: string, commit: string): string => `${INTRODUCTION}, active in this repository: ${version}, commit ${short(commit)}.`
 
 /** What an agent offers after the banner. */
 export const OFFERS =

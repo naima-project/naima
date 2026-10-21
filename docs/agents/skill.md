@@ -26,8 +26,9 @@ when to use it.
 - **Announce Naima at the start of a session.** Run `naima hello`, unless a
   session-start hook already ran it and its output is in front of the agent
   ([running naima hello at every session start](../guide/install.md#running-naima-hello-at-every-session-start)), and show
-  the user its first line as it is: Naima is active in this repository, with
-  its version and commit. Then pass on what it found about newer versions
+  the user its first line as it is: Naima introducing itself by its full
+  name, the No-guesswork Artificial Intelligence Meta-Agent, active in this
+  repository, with its version and commit. Then pass on what it found about newer versions
   and any long run it says is due, which is started only with the owner's
   yes, and offer to explain Naima, show its documentation, check for an update or
   update. An update is applied only after the owner says yes, followed by

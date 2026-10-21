@@ -53,6 +53,7 @@ import {
   describe,
   type Findings,
   FOLLOW_UP,
+  INTRODUCTION,
   newly,
   OFFERS,
   pageRules,
@@ -589,7 +590,9 @@ async function hello(opts: CliOptions, place: Place, lock: Lock, raw: Record<str
   }
   // The banner first, read after the check: a fetch brings the tags that name the version.
   io.out(
-    me ? banner(versionOf(me.repo, me.commit), me.commit) : `Naima is active in this repository: a development build, its lock commit ${short(lock.commit)}.`,
+    me
+      ? banner(versionOf(me.repo, me.commit), me.commit)
+      : `${INTRODUCTION}, active in this repository: a development build, its lock commit ${short(lock.commit)}.`,
   )
   for (const line of lines) io.out(line)
   io.out(OFFERS)

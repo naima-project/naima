@@ -109,8 +109,9 @@ naima hello
 
 Run it at the start of every session, unless its output is already in the
 conversation because a session-start hook ran it: then pass that output on
-and don't run it again. Show the user its first line exactly as printed, for example `Naima is
-active in this repository: version 1.0.0, commit 45ba22c1134c.` Then pass on
+and don't run it again. Show the user its first line exactly as printed, for example `I'm Naima, the
+No-guesswork Artificial Intelligence Meta-Agent, active in this repository:
+version 1.0.0, commit 45ba22c1134c.` Then pass on
 what it says about newer versions and any long run it says is due, and offer
 the three things it lists: explaining Naima and showing its documentation
 (`naima guide`), checking for an update, and updating.

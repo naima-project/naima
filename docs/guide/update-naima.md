@@ -17,7 +17,7 @@ naima hello
 ```
 
 The first line it prints is the one the agent shows you, for example
-`Naima is active in this repository: version 1.0.0, commit 45ba22c1134c.`
+`I'm Naima, the No-guesswork Artificial Intelligence Meta-Agent, active in this repository: version 1.0.0, commit 45ba22c1134c.`
 The version is the latest release tag at or before the locked commit. After
 that comes what Naima found about newer versions, then one line for each
 long run that is due ([long work](long-work.md#when-a-long-run-is-due)), and
