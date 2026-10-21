@@ -96,7 +96,10 @@ reason in a `Stale-proofs:` trailer
 
 `prune --branch` deletes a branch only when its commits are held by the
 trunk or by an `archive/<branch>` tag. `--archive` makes that tag, for work
-that is set aside rather than merged.
+that is set aside rather than merged. It removes the worktree only when
+nothing in it is uncommitted, inside its submodules too; a clean worktree
+that holds a submodule, which git removes only when forced, is then removed
+with `git worktree remove --force`.
 
 If `naima land` refuses because the trunk is not an ancestor of the branch,
 stop, because the trunk has moved. Merge it into the branch again, on the

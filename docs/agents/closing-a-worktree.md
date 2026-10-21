@@ -263,7 +263,9 @@ naima prune --branch <who>/<what> --write     # remove the worktree, delete the 
 ```
 
 Run this from the main checkout. It refuses a branch that has commits the
-trunk lacks, unless an `archive/<branch>` tag holds them. `--archive` makes
+trunk lacks, unless an `archive/<branch>` tag holds them. It refuses a worktree
+with anything uncommitted, inside its submodules too, and removes a clean one
+even when it holds a submodule. `--archive` makes
 that tag first, so abandoned work can still be recovered
 (`git switch -c <branch> archive/<branch>`). Never `git branch -D` a branch
 whose work isn't on the trunk. Before a bulk sweep of the tracker, where many

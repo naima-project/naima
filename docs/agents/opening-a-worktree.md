@@ -35,7 +35,10 @@ the folder `<what>` inside the worktrees directory, which is
 `worktrees` option says otherwise. The branch starts from the
 [trunk](../guide/glossary.md#trunk). Before it touches anything, `open`
 refuses a name that doesn't follow the scheme, a branch that already exists
-and a folder that already exists. The check `worktree-policy` fails any
+and a folder that already exists. An existing branch is never reused: one
+already merged into the trunk is named with the command that deletes it,
+`naima prune --branch <who>/<what> --write`, and one with commits the trunk
+lacks is named with how many. The check `worktree-policy` fails any
 worktree or branch that doesn't follow this scheme
 ([the rule](../guide/rules.md#worktrees-and-branches-are-named-by-one-scheme-and-every-worktree-carries-a-claim)).
 
