@@ -104,7 +104,10 @@ export interface Holders {
  * branch but the trunk is `<who>/<what>`; and every worktree carries a claim.
  * One with commits the trunk has not and nothing holding it (no claim now,
  * none added by those commits, no session note) is a problem;
- * one with nothing on it yet is a note.
+ * one with nothing on it yet is a note. A worktree outside the worktrees
+ * directory that nothing holds is not Naima's (made before Naima was
+ * installed, or by plain git): one note says where Naima puts its own, and
+ * nothing more is asked of it.
  *
  * A gate judges its own tree: a sibling worktree's missing claim is a note
  * naming it, never a problem, so one worker's missing claim cannot fail
@@ -121,14 +124,22 @@ export function policyFindings(root: string, policy: Policy, holders: Holders, o
   for (const w of trees.slice(1)) {
     if (!w.branch || isExempt(policy, w.branch)) continue
     const last = w.branch.split("/").pop() ?? w.branch
+    const n = main ? ahead(root, main, w.branch) : 0
+    const held = holders.claimed.has(w.branch) || holders.noted.has(w.branch) ||
+      !!(n && gitOrNull(root, "log", "-1", "--format=%H", "--diff-filter=A", `${main}..${w.branch}`, "--", holders.claims))
     if (!same(dirname(w.path), dir)) {
+      if (!held) {
+        out.push({
+          level: "note",
+          message: `worktree ${w.path} is outside ${dir}, where Naima puts the worktrees it makes (naima open): it carries no claim, so Naima leaves it alone`,
+        })
+        continue
+      }
       out.push({ level: "problem", message: `worktree ${w.path} is outside ${dir}: a worktree is ${dir}/<what>, on <who>/<what> (naima open)` })
     } else if (basename(w.path) !== last) {
       out.push({ level: "problem", message: `worktree ${w.path} is on ${w.branch}: its folder must be named ${last}, the branch's last segment` })
     }
-    if (holders.claimed.has(w.branch) || holders.noted.has(w.branch)) continue
-    const n = main ? ahead(root, main, w.branch) : 0
-    if (n && gitOrNull(root, "log", "-1", "--format=%H", "--diff-filter=A", `${main}..${w.branch}`, "--", holders.claims)) continue
+    if (held) continue
     const level = w.self || options.allWorktrees ? (n ? "problem" : "note") : "note"
     out.push(
       n
