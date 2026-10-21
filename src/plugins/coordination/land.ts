@@ -6,7 +6,10 @@
 // command is a shortcut for `git merge --no-ff` after `git merge-base
 // --is-ancestor`: the check, not the command, is the authority.
 
+import { join, relative } from "node:path"
+import { isDeepStrictEqual } from "node:util"
 import {
+  appliesTo,
   type Check,
   code,
   type Command,
@@ -21,9 +24,11 @@ import {
   isUuid,
   label,
   message,
+  META,
   mustGit,
   parse,
   runGit,
+  saveMeta,
   str,
   strs,
   table,
@@ -285,12 +290,77 @@ function preconditions(ctx: Context, branch: string, closes: string[]): { main: 
   return { main, old, tip, items }
 }
 
+/** The field an item names the commits that fixed it in, when a plugin declares it: a list of hashes. */
+const COMMITS = "commits"
+
+/** The subject of the commit that records a marker in the items it closes. */
+const recordSubject = (marker: string): string => `Record ${marker.slice(0, 12)} in the items it closes`
+
+/**
+ * Add the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right
+ * after the marker: the marker cannot name itself, and close asks for a commit reachable from the trunk. A failure
+ * leaves the landing standing and says the hand step.
+ */
+function recordMarker(ctx: Context, marker: string, ids: string[]): void {
+  const def = ctx.registry.fields.get(COMMITS)
+  if (!def || def.kind !== "strings") return
+  ctx.reload()
+  const files: string[] = []
+  const refs: string[] = []
+  try {
+    for (const id of ids) {
+      const item = ctx.repo.byId.get(id)
+      if (!item || !appliesTo(def, item.type)) continue
+      const had = Array.isArray(item.meta[COMMITS]) ? (item.meta[COMMITS] as unknown[]).filter((h): h is string => typeof h === "string") : []
+      if (had.includes(marker)) continue
+      saveMeta(ctx, { ...item, meta: { ...item.meta, [COMMITS]: [...had, marker] } })
+      files.push(relative(ctx.root, join(item.dir, META)))
+      refs.push(label(item))
+    }
+    if (!files.length) return
+    const r = runGit(ctx.root, ["commit", "-q", "-m", recordSubject(marker), "--", ...files])
+    if (!r.ok) throw new Error(`git commit: ${gitReason(r)}`)
+    ctx.out(`recorded ${marker.slice(0, 12)} in the commits of ${refs.join(", ")}`)
+  } catch (e) {
+    ctx.err(`could not record ${marker.slice(0, 12)} in the items it closes (${message(e)}): naima set <item> commits=${marker}, and commit it`)
+  } finally {
+    ctx.reload()
+  }
+}
+
+/**
+ * Whether a commit made on the trunk right after `marker` is the record land makes: it changes only the meta.json of
+ * items the marker closes, and in each only adds the marker to commits.
+ */
+function recordsMarker(ctx: Context, sha: string, files: { status: string; path: string }[], marker: FirstParent): boolean {
+  if (!files.length) return false
+  const data = `${ctx.trackerDir}/`
+  for (const { status, path } of files) {
+    if (status !== "M" || !path.startsWith(data) || !path.endsWith(`/${META}`)) return false
+    const [before, after] = textsAt(ctx.root, [`${sha}^:${path}`, `${sha}:${path}`])
+    let a: Record<string, unknown>, b: Record<string, unknown>
+    try {
+      a = JSON.parse(before ?? "") as Record<string, unknown>
+      b = JSON.parse(after ?? "") as Record<string, unknown>
+    } catch {
+      return false
+    }
+    if (typeof b["id"] !== "string" || !marker.closes.includes(b["id"])) return false
+    const had = Array.isArray(a[COMMITS]) ? a[COMMITS] as unknown[] : []
+    if (!isDeepStrictEqual(b[COMMITS], [...had, marker.sha])) return false
+    const { [COMMITS]: _a, ...restA } = a
+    const { [COMMITS]: _b, ...restB } = b
+    if (!isDeepStrictEqual(restA, restB)) return false
+  }
+  return true
+}
+
 export const land: Command = {
   name: "land",
   says:
     "land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor",
   enforces:
-    "runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item or an item open and not fixed, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, prints what every landing report says of the files the landing changed, never undoing it",
+    "runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item or an item open and not fixed, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, adds the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right after the marker, so that naima close finds a commit reachable from the trunk; then prints what every landing report says of the files the landing changed, never undoing it",
   usage: 'land <branch> [--closes <item>]... [--no-change-note "<reason>"] [--stale-proofs "<reason>"]',
   options: [
     { name: "--closes", says: "an item the landing closes, instead of those the branch claimed in its commits; repeat for several" },
@@ -352,6 +422,7 @@ export const land: Command = {
       throw e
     }
     ctx.out(`landed ${branch} on ${main}: ${marker.slice(0, 12)}, closing ${items.map((i) => i.ref).join(", ")}`)
+    recordMarker(ctx, marker, items.map((i) => i.id))
     await reportLanding(ctx, { branch, from: old, to: marker, changed })
     const subs = (gitOrNull(ctx.root, "diff-tree", "-r", "--no-commit-id", old, marker) ?? "").split("\n").filter((l) => /^:\d+ 160000 /.test(l))
     if (subs.length) ctx.out(`${plural(subs.length, "submodule")} moved: git submodule update --init`)
@@ -467,7 +538,7 @@ function notAMarker(ctx: Context, c: FirstParent, trees: Map<string, string>): s
 export const landingsAreMarkers: Check = {
   name: "landings-are-markers",
   says:
-    "from the first landing marker on the trunk's first-parent line (a merge whose first parent the second contains, whose tree is the second's, with a Closes: trailer), every first-parent commit is a marker: a fast-forward, a commit made on the trunk, a merge not up to date, or one without a Closes: naming an item done or fixed is a note naming it, one note per commit, with the commit as its subject so that a waiver can accept it. A commit made on the trunk that only adds to the tracker data — new files in the data directory outside rules/, waivers/ and naima.json, and lines added to an item's README.md, its meta.json untouched — is accepted without a note. Before the first marker nothing is asked",
+    "from the first landing marker on the trunk's first-parent line (a merge whose first parent the second contains, whose tree is the second's, with a Closes: trailer), every first-parent commit is a marker: a fast-forward, a commit made on the trunk, a merge not up to date, or one without a Closes: naming an item done or fixed is a note naming it, one note per commit, with the commit as its subject so that a waiver can accept it. A commit made on the trunk that only adds to the tracker data — new files in the data directory outside rules/, waivers/ and naima.json, and lines added to an item's README.md, its meta.json untouched — is accepted without a note, and so is the commit right after a marker that only adds the marker to the commits of items it closes, the record naima land makes. Before the first marker nothing is asked",
   run(ctx) {
     const main = trunk(ctx.root)
     if (!main) return []
@@ -482,9 +553,13 @@ export const landingsAreMarkers: Check = {
     const direct = directChanges(ctx.root, main, line[start]?.sha ?? "")
     const waive = (sha: string) => `, or accept it once: naima waive landings-are-markers ${sha} --reason "<why>"`
     const out: Finding[] = []
-    for (const c of line.slice(start + 1)) {
+    for (const [i, c] of line.entries()) {
+      if (i <= start) continue
       if (c.parents.length !== 2) {
-        if (onlyAddsTrackerData(ctx, c.sha, direct.get(c.sha) ?? [])) continue
+        const files = direct.get(c.sha) ?? []
+        if (onlyAddsTrackerData(ctx, c.sha, files)) continue
+        const prev = line[i - 1]
+        if (prev && prev.parents.length === 2 && prev.closes.length && recordsMarker(ctx, c.sha, files, prev)) continue
         out.push({
           level: "note",
           subject: c.sha,

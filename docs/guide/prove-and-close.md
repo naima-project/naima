@@ -159,7 +159,8 @@ naima set export-drops commits=3f2c1a9
 `commits` is a list of git commit hashes for the code on the trunk that
 fixed the item. Hashes are never filled in afterwards by guessing. If the fix
 is older than this field, the item is grandfathered (see below) instead of
-being given a guessed hash.
+being given a guessed hash. When the item lands with `naima land`, the
+landing adds its marker here on its own, and this step is already done.
 
 ## 5. Close it
 

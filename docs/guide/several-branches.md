@@ -83,6 +83,13 @@ trailer. To do the same by hand, run this:
 merge --no-ff ada/export-alpha -m "Land ada/export-alpha" -m "Closes: <item
 id>"`.
 
+Right after the marker, `naima land` makes one more commit on the trunk. It
+adds the marker's hash to the `commits` field of each item the marker closes,
+keeping the hashes already there, so `naima close` finds a commit reachable
+from the trunk with no hand step. The check that reads the trunk accepts that
+commit as part of the landing. A landing made by hand needs
+`naima set <item> commits=<marker>` instead.
+
 Before the trunk moves, `naima land` checks the proofs of what the branch
 changed. A property verified on a file the branch changed has to hold on a
 current run, and a test suite that reads one has to have a passing recorded
