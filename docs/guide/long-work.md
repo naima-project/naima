@@ -27,7 +27,10 @@ naima run bench --budget-time 2h --budget-disk 20G --creates /tmp/bench-stores -
   a program and its arguments, and run exactly as given.
 
 The command runs detached, in the folder you start it from and with your
-environment, so closing the session doesn't stop it. Its output goes to a
+environment, so closing the session doesn't stop it. The variables the
+launcher sets for Naima alone, such as `NAIMA_LAUNCHED` or a `NAIMA_DATA`
+you did not set yourself, are left out, so a Naima the command starts
+behaves as if you had started it from your shell. Its output goes to a
 log, and it reports how far along it is in the file named by
 `$NAIMA_RUN_PROGRESS` (see below).
 
