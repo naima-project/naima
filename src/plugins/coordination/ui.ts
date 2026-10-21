@@ -21,7 +21,7 @@ export function claimsUiView(claimsData: (ctx: Context) => ClaimsData) {
     panel: true,
     render(_params: Record<string, string[]>, ctx: Context) {
       const d = claimsData(ctx)
-      const held = d.claims.filter((c) => c.items.length || c.preparing)
+      const held = d.claims.filter((c) => !c.stale && (c.items.length || c.preparing))
       const branch = (c: ClaimsData["claims"][number]) =>
         [
           `<h3><code>${esc(c.branch)}</code>${c.here ? ' <span class="tag">(here)</span>' : ""}${

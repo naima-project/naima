@@ -136,9 +136,14 @@ git reports it at the merge.
 ## Claims left behind
 
 ```sh
-naima prune            # claims naming a branch git no longer has
+naima prune            # stale claims, and why each is stale
 naima prune --write    # remove them; commit the deletions
 ```
+
+A claim is stale when its branch is gone, when its branch is merged into the
+trunk and the merge brought its file there, or when every item it claims is
+closed. `naima claims` lists stale claims apart, at the end, and `naima
+check` adds a note for each one.
 
 Only release someone else's claim by hand when nothing is being worked on
 there and nothing on that branch is left unmerged.

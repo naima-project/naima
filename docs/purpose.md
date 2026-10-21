@@ -157,8 +157,9 @@ memory.
   left"` writes `naima-data/passes/<date>-<id>.md`.
 - **Claim files:** `naima claim <item> --note "why"` writes
   `naima-data/claims/<id>.json`, and `naima release <item>` removes it.
-  `naima prune` finds [claim files](guide/glossary.md#claim-file) whose
-  branch is gone.
+  `naima prune` finds stale [claim files](guide/glossary.md#claim-file):
+  their branch is gone or merged into the trunk, or their items are all
+  closed.
 - **Worktrees:** there is one per piece of work, on its own branch
   ([opening a worktree](agents/opening-a-worktree.md)).
 

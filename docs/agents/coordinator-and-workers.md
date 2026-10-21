@@ -206,6 +206,14 @@ branch's last commit. The coordinator checks that worker's run and worktree,
 then reports it to the owner as possibly stuck. The rule is shipped by the
 coordination plugin, so `naima rules` lists it.
 
+A claim whose work is done is listed apart, at the end of `naima claims`, as
+stale, and is not counted as work in hand. A claim is stale when its branch
+is gone, when its branch is merged into the trunk and the trunk carries the
+claim file the merge brought, or when every item it claims is closed.
+`naima check` adds one note per stale claim with the command that releases
+it, `naima prune --write`, and the branch to run it on when the file is not
+on the trunk's disk.
+
 ## Safety rules
 
 - **A worker never merges.** Candidate property for a later model. Nothing
