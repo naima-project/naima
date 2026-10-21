@@ -57,9 +57,9 @@
 
   .rest { display: flex; flex-direction: column; align-items: center; gap: 32px; }
   .slogan { margin: 0; font-size: 52px; font-weight: 500; letter-spacing: -1px; text-align: center; }
-  .about { margin: 0; max-width: 640px; text-align: center; font-size: 21px; line-height: 1.5; color: var(--text); }
-  .about .lead { display: block; margin-bottom: 10px; }
-  .about strong { display: block; margin-top: 10px; font-weight: 600; color: var(--fg); }
+  .about { margin: 0; max-width: 580px; text-align: center; font-size: 18px; line-height: 1.6; color: var(--text); text-wrap: balance; }
+  .about .lead { display: block; margin-bottom: 6px; }
+  .about strong { display: block; margin-top: 8px; font-weight: 600; color: var(--fg); }
   .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; align-items: center; }
   .button {
     text-decoration: none; border-radius: 999px; font-size: 18px; font-weight: 500; line-height: normal;
@@ -79,13 +79,13 @@
   .star a:hover { text-decoration-color: var(--accent); }
 
   .credits { display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 8px 16px 56px; animation: fade .9s ease 1.35s both; }
-  .credits p { margin: 0; font-size: 14px; color: var(--muted); text-align: center; }
   .credits ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 20px 44px; }
   .credits a { display: block; border-radius: 10px; padding: 8px; transition: transform .25s cubic-bezier(.2, .7, .1, 1), box-shadow .25s ease, background-color .25s ease; }
   .credits img { display: block; height: 36px; width: auto; filter: grayscale(1); opacity: .7; transition: filter .3s ease, opacity .3s ease; }
+  .credits a.text { font-size: 15px; font-weight: 500; color: var(--muted); text-decoration: none; }
+  .credits a.text:hover { color: var(--accent); }
   .credits img[src$="fmt.svg"] { height: 40px; }
   .credits img[src$="/cnr.svg"] { height: 24px; }
-  .credits img[src$="make-become.svg"] { height: 30px; }
   .credits img[src$="uva.svg"] { height: 30px; }
   .credits a:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--accent) 5%, transparent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 7%, transparent); }
   .credits a:hover img, .credits a:focus-visible img { filter: none; opacity: 1; }
@@ -105,12 +105,15 @@
   /* A phone: the same page, scaled down. */
   @media (max-width: 640px) {
     main { gap: 32px; padding: 48px 16px; }
-    .mark { font-size: 72px; letter-spacing: -1.5px; }
     .tag { font-size: 17px; }
-    .rest { gap: 24px; }
-    .slogan { font-size: 34px; letter-spacing: -.5px; }
-    .about { font-size: 18px; }
-    .button { font-size: 17px; }
+    .rest { gap: 22px; }
+    .mark { font-size: 64px; letter-spacing: -1.2px; }
+    .slogan { font-size: 30px; letter-spacing: -.5px; }
+    .about { font-size: 15.5px; line-height: 1.55; }
+    .button { font-size: 16px; }
+    .button.secondary { padding: 12px 24px; }
+    .button.primary { padding: 13px 28px; }
+    .star { font-size: 14px; }
   }
 </style>
 </head>
@@ -142,10 +145,9 @@
     <p class="star">Naima is new and free. Please <a href="https://github.com/naima-project/naima">star it on GitHub</a>: one click helps us a lot.</p>
   </div>
 </main>
-<footer class="credits">
-  <p>Naima is developed at the Formal Methods and Tools lab of ISTI, the Institute of Information Science and Technologies of the Italian National Research Council, with make become and the University of Amsterdam.</p>
+<footer class="credits" aria-label="Made with">
   <ul>
-    <li><a href="https://make-become.github.io/"><img src="logos/make-become.svg" alt="make become, an artware studio"></a></li>
+    <li><a class="text" href="https://make-become.github.io/">make become</a></li>
     <li><a href="https://fmt.isti.cnr.it/"><img src="logos/fmt.svg" alt="Formal Methods and Tools lab (FMT)"></a></li>
     <li><a href="https://www.isti.cnr.it/"><img src="logos/isti-cnr.png" alt="ISTI-CNR, Institute of Information Science and Technologies"></a></li>
     <li><a href="https://www.cnr.it/"><img src="logos/cnr.svg" alt="CNR, Italian National Research Council"></a></li>
