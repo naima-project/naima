@@ -85,6 +85,7 @@ import {
   commitSource,
   type Language,
   selectFiles,
+  selectSource,
   STATISTICS,
   workingTreeSource,
 } from "./code.ts"
@@ -714,7 +715,7 @@ export function measure(ctx: Context, m: MetricDef, site: Site = workingSite(ctx
     try {
       const source = site.source()
       const files = selectFiles(source, languagesOf(ctx), m)
-      const read = cm.measure({ files, source }, m)
+      const read = cm.measure({ files, source: selectSource(source, m) }, m)
       return typeof read === "number" ? { value: read, exit: 0 } : { value: null, exit: 0, error: read.error }
     } catch (e) {
       return { value: null, exit: -1, error: (e as Error).message }

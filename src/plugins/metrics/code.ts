@@ -790,7 +790,8 @@ export function commitSource(root: string, commit: string, leaveOut: string[] = 
 export interface MeasureInput {
   /** The files the metric selects, with their language. */
   files: AnalysedFile[]
-  /** Every file of the tree, for a measure that reads files no language claims (a manifest). */
+  /** The files of the tree the metric's include and exclude select, whatever their language: for a measure that reads
+   * files no language claims (a manifest). */
   source: CodeSource
 }
 
@@ -973,6 +974,14 @@ export const builtinMeasures: CodeMeasure[] = [
 export const matches = pathMatches
 
 const cacheOf = new WeakMap<CodeSource, Map<string, AnalysedFile | null>>()
+
+/** `source` narrowed to the paths a metric's include and exclude select, of any language. */
+export function selectSource(source: CodeSource, select: { include?: string[]; exclude?: string[] }): CodeSource {
+  const files = source.files.filter((path) =>
+    !(select.include?.length && !select.include.some((p) => matches(path, p))) && !select.exclude?.some((p) => matches(path, p))
+  )
+  return { files, read: (path) => source.read(path) }
+}
 
 /** The files of `source` a metric selects, analysed once per source and shared by every metric that reads them. */
 export function selectFiles(
