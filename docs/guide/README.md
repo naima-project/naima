@@ -45,6 +45,7 @@ own checks taking the place of tests.
 | run the first-commit checklist on a new project (language, modularity, data out of code) | [Structuring a project from the start](structuring-a-project.md) |
 | say what must hold, how it must behave, and what I decided | [Plan with requirements, specifications and decisions](plan-with-requirements-specs-and-decisions.md) |
 | plan an analysis, a report or a figure, deliver it, and know when it is out of date | [Make and keep artifacts](artifacts.md) |
+| keep what the project knows (facts, findings, hypotheses, lessons) with what each one rests on | [Keep what the project knows](knowledge.md) |
 | have behaviour with states (a lifecycle, a protocol, a retry loop) designed from a model and checked over every order of events | [Design with a model](design-with-a-model.md) |
 | leave agents working and come back to only my part | [What happens while you are away](while-you-are-away.md) |
 | run a benchmark or a batch that takes hours, here or on another machine, and clean up after it | [Long work: run it, wait for it, clean up after it](long-work.md) |

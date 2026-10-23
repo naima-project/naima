@@ -14,6 +14,7 @@ Every contribution below has a qualified id, `<plugin>/<name>`, and goes by its 
 - [gates](#gates) — named release conditions backed by items
 - [epics](#epics) — epics: bodies of work that group items, their status and progress derived from them
 - [planning](#planning) — requirements proven by tests, specifications versioned name-vN, the owner's decisions recorded once, and the artifacts the project makes and keeps
+- [knowledge](#knowledge) — knowledge entries: facts, hypotheses, findings and lessons, each with its basis — a source, evidence, or other entries — and its kind
 - [roles](#roles) — the roles of the company of agents as data: what each owns and refuses, and the kinds of work on its queue
 - [announce](#announce) — announceability, computed: a feature may be announced only once user-facing, shipped, documented and checked by a person or end to end
 - [loop](#loop) — the non-stop loop: work on an explicit target until only the owner's work is left, then hand him the ordered list
@@ -82,6 +83,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`epic`](#naima-epic) | epics | each epic with its progress — n of m closed, what it waits for and whose hands — or put items in an epic and take them out | only an epic groups items and never itself, and its status follows its items: setting it against them is refused |
 | [`spec`](#naima-spec) | planning | each specification: its current version, its drafts, and the open items that follow it; or revise one into its next version | a revision is a new spec item, its next version, that supersedes the old one; the old version is kept as it was |
 | [`decisions`](#naima-decisions) | planning | search the owner's decisions before asking: the settled ones whose title or page hold every word given, newest first | nothing: it only searches, so a settled question is looked up before it is asked again |
+| [`knowledge`](#naima-knowledge) | knowledge | print the established knowledge entries by kind, each with its source or evidence | nothing: it reads the knowledge entries and prints them; `naima check` holds what an entry must stand on |
 | [`roles`](#naima-roles) | roles | every role: what it owns, what it refuses, the kinds and types on its queue, and how many open items are on it | nothing: it only reads; a role that refuses nothing is refused when the plugin loads |
 | [`announce`](#naima-announce) | announce | the features that may be announced — user-facing, shipped, documented and checked by a person or end to end — major first: the source of release notes | nothing: it only lists, and only features user-facing, shipped, documented and checked by a person or end to end |
 | [`loop`](#naima-loop) | loop | the non-stop loop on a target chosen before starting — a work list, an epic or a gate: done or not, the next agent work, the stop verdict, and once stopped the owner's ordered action list, each line saying why it is his | the loop runs only on a target chosen before starting — a work list, an epic or a gate —; with --check, exit 1 while it is not stopped |
@@ -106,18 +108,18 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 
 | Point | Declared by | What it is | Contributed by |
 |---|---|---|---|
-| `commands` | core | `naima <name>`: a command, with its usage, options and examples | core, trackers, coordination, triage, gates, epics, planning, roles, announce, loop, beta-markers, verifier, tools, ui, metrics, rules, long-work, commit-hooks, privacy, adopt, docs |
-| `types` | core | item types: a directory of items, their statuses, and the status a new one starts in | trackers, epics, planning, verifier, rules |
-| `fields` | core | typed fields of an item's meta.json, and the types they apply to | core, trackers, triage, gates, planning, roles, announce, verifier, rules, long-work, privacy, adopt, docs |
-| `relations` | core | link relations between items, each naming its inverse | core, trackers, epics, planning, verifier |
-| `checks` | core | invariants `naima check` holds: a problem fails it, a note does not | core, trackers, coordination, triage, gates, epics, planning, announce, beta-markers, verifier, metrics, rules, long-work, commit-hooks, privacy, docs |
+| `commands` | core | `naima <name>`: a command, with its usage, options and examples | core, trackers, coordination, triage, gates, epics, planning, knowledge, roles, announce, loop, beta-markers, verifier, tools, ui, metrics, rules, long-work, commit-hooks, privacy, adopt, docs |
+| `types` | core | item types: a directory of items, their statuses, and the status a new one starts in | trackers, epics, planning, knowledge, verifier, rules |
+| `fields` | core | typed fields of an item's meta.json, and the types they apply to | core, trackers, triage, gates, planning, knowledge, roles, announce, verifier, rules, long-work, privacy, adopt, docs |
+| `relations` | core | link relations between items, each naming its inverse | core, trackers, epics, planning, knowledge, verifier |
+| `checks` | core | invariants `naima check` holds: a problem fails it, a note does not | core, trackers, coordination, triage, gates, epics, planning, knowledge, announce, beta-markers, verifier, metrics, rules, long-work, commit-hooks, privacy, docs |
 | `views` | core | `naima view <name>`: a named rendering of derived state | coordination, triage, planning |
 | `dirs` | core | directories under the tracker root a plugin owns that are not item types | core, coordination, metrics, commit-hooks, adopt |
 | `summary` | core | a block of `naima summary` | core, trackers, coordination, triage, gates, epics, beta-markers, metrics, long-work |
 | `guide` | core | a block `naima guide` prints first, inside a project, before the documentation pages | triage, rules |
 | `rank` | core | an additive term of every item's urgency; lower is more urgent | triage, gates |
-| `extends` | core | additive changes to another plugin's type — statuses (an existing one only with its category), traits, transitions — or field — enum values, more types or traits it applies to | roles |
-| `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done | core, coordination, triage, epics, planning, verifier |
+| `extends` | core | additive changes to another plugin's type — statuses (an existing one only with its category), traits, transitions — or field — enum values, more types or traits it applies to | knowledge, roles |
+| `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done | core, coordination, triage, epics, planning, knowledge, verifier |
 | `migrations` | core | a plugin's own data migrations, in order from its format 1, run by `naima update` after the core's | gates |
 | `landing-reports` | coordination | what `naima land` checks before a branch lands and reports once it has: `name`, `says`, and `blocks(ctx, { branch, from, to, changed }) → lines`, what the landing changed whose proofs are not current, any line refusing the landing unless --stale-proofs gives the reason, or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root | verifier |
 | `gates` | gates | a named release or merge condition, backed by items: `title`, `says`, `decides`, `evaluate(ctx) → { holds, blocking, owed }`; `inFullSuite` makes it part of the full suite a release gate (`fullSuite`) requires | verifier |
@@ -1693,6 +1695,96 @@ Artifacts: something the project makes and keeps — an analysis, a profile, a r
 |---|---|---|---|---|---|
 | `requirements-elicited-at-every-prompt` | Requirements are elicited at every prompt, each with how it is checked or measured | agents | must | `requirements-proven` | `Elicitation mode on` |
 | `behaviour-designed-from-a-model` | Behaviour with states or concurrency is designed from a model first, kept in step with the code | everyone | should |  | `Model first mode on` |
+
+## knowledge
+
+Knowledge entries: facts, hypotheses, findings and lessons, each with its basis — a source, evidence, or other entries — and its kind.
+
+Its contributions' qualified ids are `knowledge/<name>`.
+
+A project's lasting knowledge as items: what is known, and on what basis. A **knowledge entry** (`naima new knowledge`) is one statement. Its `basis` says why it is believed: `given` — known without investigation, a premise named by its `givenBy` (the owner, a datasheet, a contract), which starts `established` and can still be `retracted`; `evidence` — established by experiments, analyses, tests or proofs, which starts as a `hypothesis` and carries its falsifier on its page; `derived` — following from other entries, linked `derives-from`. Evidence is any item — a test, an analysis, an artifact, a property — linked `supports` or `contradicts` the entry; it counts while its status proves (a passed test, a property that holds), or, for a type with no proving status, once it is done. Its `kind` says what sort of statement it is: built in, `fact`, `hypothesis`, `finding` and `lesson` (what experience taught, whose page holds What happened, The lesson and How to apply it); a project declares its own kinds, each with the sections and fields its entries require, under this plugin's `kinds` option. A kind adds requirements, never statuses. A lesson is **codified** once a rule, a test or a property that holds it links `codifies` to it: `naima show` lists it as `codified-by`, and `naima knowledge` says it. `naima check` fails on an established entry with nothing passing behind it (or a given one that names no `givenBy`) and on an entry missing what its kind requires; it notes an entry both supported and refuted by current evidence, one derived from a refuted or retracted entry, and, with the `lessonsCodified` option, an established lesson nothing codifies. `naima knowledge` prints the established entries by kind, each with its source or evidence.
+
+Options, each with the default it takes when nothing sets it:
+
+| Option | Default | What it does |
+|---|---|---|
+| `kinds` | `{} (the built-in fact, hypothesis, finding, lesson)` | the project's own kinds of entry, by name: `says`, and the `sections` and `fields` its entries require, such as { "incident": { "says": "something that went wrong in production", "sections": ["Timeline"] } }; a built-in kind named here gains the requirements |
+| `lessonsCodified` | `false` | true to note an established lesson that no rule, test or property codifies |
+
+**Uses**, declared by other plugins: fields `kind`.
+
+### naima knowledge
+
+Print the established knowledge entries by kind, each with its source or evidence.
+
+**Enforces**: Nothing: it reads the knowledge entries and prints them; `naima check` holds what an entry must stand on.
+
+```sh
+naima knowledge [--kind <k>] [--all]
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--kind` |  | only the entries of this kind |
+| `--all` |  | every entry, whatever its status: hypotheses, refuted, retracted and superseded ones too |
+
+Examples:
+
+```sh
+naima knowledge
+naima knowledge --kind lesson
+naima knowledge --all
+```
+
+### type: knowledge
+
+Knowledge: one statement the project knows, or is finding out, with its basis — given by a source, established by evidence, or derived from other entries — and its kind. Items live in `naima-tracker/naima-data/knowledge/`; a new one starts as `hypothesis`.
+
+| Status | Category | Flags | Meaning |
+|---|---|---|---|
+| `hypothesis` | open |  | under investigation: the evidence is not in yet |
+| `established` | done |  | holds: given by its source, supported by passing evidence, or derived from established entries |
+| `refuted` | done |  | the evidence went against it; kept as history |
+| `inconclusive` | open |  | investigated, and the evidence settles nothing yet |
+| `retracted` | done |  | a given that no longer holds |
+| `superseded` | done |  | replaced by a later entry, linked `supersedes` when the planning plugin is loaded |
+
+**Fields**
+
+| Field | Kind | Applies to | Meaning | Values |
+|---|---|---|---|---|
+| `basis` | enum | knowledge | why the entry is believed | `given` known without investigation: a premise, named by its `givenBy`; a given entry starts established; `evidence` established by experiments, analyses, tests or proofs linked `supports`; an evidence entry starts as a hypothesis; `derived` follows from other entries, linked `derives-from` |
+| `givenBy` | string | knowledge | who or what gives a given entry: the owner, a datasheet, a contract |  |
+
+**Link relations** — only the direction written is stored; the inverse is derived when read.
+
+| Relation | Inverse | Reads as |
+|---|---|---|
+| `supports` | `supported-by` | is evidence for the knowledge entry |
+| `supported-by` | `supports` | is supported by the evidence |
+| `contradicts` | `contradicted-by` | is evidence against the knowledge entry: it refutes it |
+| `contradicted-by` | `contradicts` | is refuted by the evidence |
+| `derives-from` | `derived-into` | follows from the knowledge entry |
+| `derived-into` | `derives-from` | is a premise of the knowledge entry |
+| `codifies` | `codified-by` | holds the lesson from now on: a rule, a test or a property |
+| `codified-by` | `codifies` | is held from now on by the rule, test or property |
+
+**Checks**, run by `naima check`
+
+| Check | What it holds |
+|---|---|
+| `knowledge-basis` | an established entry stands on its basis: a given one names its source, one on evidence has passing evidence linked `supports`; an entry both supported and refuted by current evidence, or derived from a refuted or retracted one, is noted |
+| `knowledge-kinds` | an entry of a kind carries the sections and fields its kind requires; a kind not declared is noted |
+
+**Extensions** of other plugins' types and fields
+
+- field `kind`: values `fact` a knowledge entry: a statement about the world taken as true: given by a source, or established; `hypothesis` a knowledge entry: a statement under investigation, with what would refute it; `finding` a knowledge entry: what an investigation found: established, or refuted, by its evidence; `lesson` a knowledge entry: what experience taught: what happened, the lesson, how to apply it; codified once a rule or a check holds it
+
+**Write hooks**, run on every item write
+
+| Hook | What it does |
+|---|---|
+| `knowledge-starts-by-basis` | a new knowledge entry whose basis is given starts established; any other starts as a hypothesis |
 
 ## roles
 

@@ -427,6 +427,8 @@ This list has been checked against the commands of this version
   `naima queue --human`.
 - Long-running work: claim files, session notes, worktree flows, `naima prune`.
 - Rules as items: `naima rules`, `naima guide`, `naima check`.
+- Knowledge entries, each fact, finding, hypothesis or lesson with its basis
+  and evidence: `naima knowledge` ([knowledge](guide/knowledge.md)).
 - Properties and verifiers with expiring proofs; only an example verifier.
 - The roles from Owner to Business, written in
   [the pages for agents](agents/README.md) and also kept as data:

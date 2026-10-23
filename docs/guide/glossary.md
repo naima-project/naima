@@ -186,6 +186,29 @@ consists of. When it is delivered, Naima records the commit and the inputs it
 was made from, so `naima check` can tell you when it is out of date
 ([artifacts](artifacts.md)). *Everyday example:* "the monthly sales report".
 
+### Knowledge entry
+
+An item of type `knowledge`, for one statement the project knows or is
+finding out, kept with what it rests on: its [basis](#basis), its
+[kind](#kind), and the evidence linked `supports` or `contradicts`. It goes
+from `hypothesis` to `established` or `refuted`; a given that stops holding
+is `retracted` ([knowledge](knowledge.md)). *Everyday example:* "the oven
+runs 20 degrees hot, measured with a thermometer".
+
+### Basis
+
+The field `basis` of a [knowledge entry](#knowledge-entry), saying why it
+is believed: `given` (known without investigation, from the source named in
+`givenBy`), `evidence` (established by tests, analyses or proofs linked to
+it) or `derived` (following from other entries, linked `derives-from`).
+
+### Lesson
+
+A [knowledge entry](#knowledge-entry) of kind `lesson`: what experience
+taught, its page in three sections, What happened, The lesson and How to
+apply it. It is codified once a rule, a test or a property that holds it
+from then on is linked `codifies` to it.
+
 ### Status
 
 Where an item is in its life, for example `open`, `partial`, `passed` or
@@ -231,6 +254,11 @@ A field saying what kind of work an item demands, such as code, decision,
 research or writing. The kinds are the ones the [roles](#role) take, and
 each one puts the item on that role's queue. Any other value is kept as a
 note and is never refused.
+
+On a [knowledge entry](#knowledge-entry) the same field says what sort of
+statement it is: `fact`, `hypothesis`, `finding`, `lesson`, or a kind the
+project declares under the knowledge plugin's `kinds` option, with the page
+sections and fields its entries must have ([kinds](knowledge.md#kinds)).
 
 ### Announceable
 

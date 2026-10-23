@@ -100,6 +100,26 @@ commit there that is not a [marker](guide/glossary.md#marker), except one
 made on the trunk that only adds to the tracker data
 ([the rule](guide/rules.md#every-landing-is-a-marker-naming-the-items-it-closes)).
 
+## Knowledge entries
+
+- **Provenance as Datalog**: the entries, their basis, status and links
+  exported as Datalog facts, with recursive rules that answer which
+  established entries rest, at any depth, on a retracted given or a refuted
+  hypothesis. The same export would cover every item of the tracker.
+- **Experiment runs as evidence**: `naima metrics run --explore` writing its
+  trials as an evidence item (commit, settings, values, marked as one trial),
+  linkable to an entry, and `naima show` rendering an entry's evidence table.
+- **A formal statement per entry**, with rules, so that a derived entry is
+  computed rather than asserted, and a checker command whose proof is one
+  more kind of evidence.
+- **Today:** `knowledge` entries with a basis, a kind (four built in, more
+  declared in `naima.json`), evidence linked `supports` or `contradicts`,
+  derivations linked `derives-from`, the checks on each, and
+  `naima knowledge` ([keep what the project knows](guide/knowledge.md)).
+  For example, `naima knowledge --all` lists every entry with its evidence,
+  and a direct derivation from a refuted entry is a note in `naima check`;
+  one several steps away is not found yet.
+
 ## Item types for other work
 
 Naima was born for software. These would be packs of item types for other

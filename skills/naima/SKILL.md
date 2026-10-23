@@ -47,6 +47,9 @@ The same holds for requirements: check every prompt for a requirement it
 adds or changes, file or revise it, and settle how it is checked — a test, a
 property of a model, or a metric with a budget
 ([elicit](../../docs/agents/reporting-and-triage.md#elicit-the-requirements-it-carries)).
+A fact the owner gives, a finding an investigation reaches, and a lesson a
+mistake teaches are each a `knowledge` entry with its basis and its evidence
+linked, a lesson with kind `lesson` ([knowledge](../../docs/guide/knowledge.md)).
 Behaviour with states or concurrency is designed from a model first
 ([design with a model](../../docs/guide/design-with-a-model.md)). A decision
 taken with the owner, a change of direction or a notable event outside the
