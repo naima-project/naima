@@ -172,6 +172,8 @@ export interface Command {
    * what it reports instead (rule long-work/long-work-reports-progress, checked by `progress-declared`).
    */
   long?: { reports: string } | { cannot: string; instead: string }
+  /** True for a command still provisional: it runs when called, but `naima --help` and the reference do not list it. */
+  hidden?: boolean
   run(args: string[], ctx: Context): number | Promise<number>
 }
 

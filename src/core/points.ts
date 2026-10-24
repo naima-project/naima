@@ -222,7 +222,7 @@ export const commandsPoint: ExtensionPoint<Command> = {
   renamed: (c, name) => ({ ...c, name, usage: c.usage.replace(c.name, name) }),
   validate: (v) => shape(v, (c) => text(c, "name"), (c) => text(c, "usage"), (c) => fn(c, "run")),
   gaps: commandGaps,
-  document: (commands) => commands.flatMap(commandSection),
+  document: (commands) => commands.filter((c) => !c.hidden).flatMap(commandSection),
 }
 
 export const viewsPoint: ExtensionPoint<View> = {
