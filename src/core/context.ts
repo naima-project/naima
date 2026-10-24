@@ -4,6 +4,7 @@ import { posixRelative } from "./config.ts"
 import { deepFreeze } from "./collections.ts"
 import { writes } from "./item.ts"
 import { loadRepo } from "./repo.ts"
+import { trackerGitOf } from "./repos.ts"
 import type { Config, Context, Registry, Repo } from "./types.ts"
 
 export interface IO {
@@ -50,12 +51,16 @@ export interface Place {
 
 export function createContext(place: Place, config: Config, registry: Registry, io: IO = consoleIO): Context {
   const trackerRoot = place.data
+  const trackerGit = trackerGitOf(place.root, trackerRoot)
   let repo: Repo | null = null
   let readAt = -1
   return {
     root: place.root,
     trackerRoot,
     trackerDir: posixRelative(place.root, trackerRoot),
+    trackerGit,
+    trackerPrefix: trackerGit === place.root ? posixRelative(place.root, trackerRoot) : "",
+    sibling: trackerGit !== place.root,
     program: place.program,
     config: deepFreeze(config),
     registry,

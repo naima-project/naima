@@ -7,7 +7,7 @@
 
 import { spawnSync } from "node:child_process"
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs"
-import { join, relative, sep } from "node:path"
+import { join, relative, resolve, sep } from "node:path"
 import { isRegularFile, walkFiles } from "./files.ts"
 
 let calls = 0
@@ -31,13 +31,51 @@ export interface GitOptions {
   env?: Record<string, string>
 }
 
+/** The variables a git hook runs with that bind git to one repository. */
+const REPO_ENV = ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_PREFIX", "GIT_OBJECT_DIRECTORY"]
+const ownGitDirs = new Map<string, boolean>()
+
+const realOrSelf = (path: string): string => {
+  try {
+    return realpathSync(path)
+  } catch {
+    return path
+  }
+}
+
+/**
+ * The environment git runs with in `cwd`. Run from a hook, Naima inherits
+ * GIT_DIR or GIT_INDEX_FILE of the repository being committed; a call into the
+ * other repository of a project whose tracker is a repository of its own must
+ * not use them, so they are dropped there — kept only where they belong, the
+ * repository whose git directory holds them. Undefined (the process's own)
+ * outside a hook.
+ */
+function envFor(cwd: string, extra?: Record<string, string>): NodeJS.ProcessEnv | undefined {
+  const env = process.env
+  if (!env["GIT_INDEX_FILE"] && !env["GIT_DIR"]) return extra ? { ...env, ...extra } : undefined
+  const clean: NodeJS.ProcessEnv = { ...env }
+  for (const k of REPO_ENV) delete clean[k]
+  let own = ownGitDirs.get(cwd)
+  if (own === undefined) {
+    const r = spawnSync("git", ["rev-parse", "--absolute-git-dir"], { cwd, env: clean, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })
+    const dir = r.status === 0 ? realOrSelf(String(r.stdout).trim()) : null
+    const inside = (v: string | undefined) => !v || (dir !== null && (realOrSelf(resolve(v)) === dir || realOrSelf(resolve(v)).startsWith(dir + sep)))
+    own = dir !== null && inside(env["GIT_INDEX_FILE"]) && inside(env["GIT_DIR"])
+    ownGitDirs.set(cwd, own)
+  }
+  const base = own ? env : clean
+  return extra ? { ...base, ...extra } : own ? undefined : base
+}
+
 function spawnGit(cwd: string, args: string[], opts: GitOptions, encoding: "utf8" | "buffer") {
   calls++
+  const env = envFor(cwd, opts.env)
   return spawnSync("git", args, {
     cwd,
     ...(encoding === "utf8" ? { encoding } : {}), // no encoding: bytes (Node refuses an explicit "buffer")
     ...(opts.input !== undefined ? { input: opts.input } : {}),
-    ...(opts.env ? { env: { ...process.env, ...opts.env } } : {}),
+    ...(env ? { env } : {}),
     stdio: [opts.input !== undefined ? "pipe" : "ignore", "pipe", "pipe"],
     maxBuffer: 1 << 28,
   })

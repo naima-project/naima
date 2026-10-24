@@ -40,6 +40,7 @@ import {
   setFields,
   type SummarySection,
   today,
+  trackerPath,
   usageError,
   type View,
   type WriteHook,
@@ -120,7 +121,7 @@ function ageDays(ctx: Context, item: Item): number {
  */
 function claimedItemIds(ctx: Context): Set<string> {
   const ids = new Set<string>()
-  for (const f of readAcrossBranches(ctx.root, `${ctx.trackerDir}/claims`, ".json")) {
+  for (const f of readAcrossBranches(ctx.trackerGit, trackerPath(ctx.trackerPrefix, "claims"), ".json")) {
     try {
       const items = (JSON.parse(f.text) as { items?: { id?: unknown }[] }).items ?? []
       for (const e of items) if (typeof e?.id === "string") ids.add(e.id)

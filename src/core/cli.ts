@@ -3,7 +3,7 @@
 // program itself — init, update, rollback, hello, plugin, guide, help — are answered here,
 // before any plugin is loaded.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join, relative, resolve } from "node:path"
 import {
   carryRefusal,
@@ -24,10 +24,22 @@ import { cliCommands } from "./entry.ts"
 import { FORMAT, formatRefusal, isFormat, migrate, MIGRATIONS, type Step } from "./format.ts"
 import { formatsFor, type OpenOptions, openProject, owed } from "./project.ts"
 import { bool, pairs, parse, str } from "./args.ts"
-import { gitOrNull, nativePath, runGit, toplevel } from "./git.ts"
+import { gitOrNull, nativePath, runGit, toplevel, trunk } from "./git.ts"
+import { remoteVisibility, type Visibility } from "./visibility.ts"
+import {
+  installTrailerHooks,
+  missingTracker,
+  pairTracker,
+  projectRootOf,
+  readSiblingMarker,
+  SIBLING_FILE,
+  TRACKER_URL_KEY,
+  trackerGitOf,
+  writeSiblingMarker,
+} from "./repos.ts"
 import { exclusions } from "./excludes.ts"
 import { ALLOW_PRIVATE, allowPrivateOption } from "./private.ts"
-import { DATA_DIR, DATA_FILE, findData, globalOptions, PROGRAM_DIR, real, RELAUNCH, runtimeOf, trackerOf, trackerReadme } from "./layout.ts"
+import { DATA_DIR, DATA_FILE, DEFAULT_DATA, findData, globalOptions, PROGRAM_DIR, real, RELAUNCH, runtimeOf, trackerOf, trackerReadme } from "./layout.ts"
 import {
   align,
   checkoutWork,
@@ -84,6 +96,8 @@ export interface CliOptions extends OpenOptions {
   io?: IO
   /** Print the stack of an internal error (NAIMA_DEBUG=1). */
   debug?: boolean
+  /** How init asks whether a remote URL is public: GitHub's public API, unless a test gives its own. */
+  visibility?: (url: string) => Promise<Visibility>
 }
 
 const usage = (name: string): string => `usage: naima ${cliCommands.find((c) => c.name === name)?.usage ?? name}`
@@ -126,7 +140,7 @@ function locate(found: string): Located | null {
   const raw = readRaw(data)
   if (!isFormat(raw["format"])) throw new Error(`${DATA_FILE} ${formatRefusal(raw["format"])}`)
   const lock = parseLock(raw)
-  return { root: toplevel(data) ?? dirname(dirname(data)), data, program: programDir(data, lock), lock, raw }
+  return { root: projectRootOf(data) ?? dirname(dirname(data)), data, program: programDir(data, lock), lock, raw }
 }
 
 function targetOf(place: Place, lock: Lock, opts: CliOptions): Target {
@@ -212,6 +226,8 @@ function createData(data: string, opts: CliOptions): { root: string; tracker: st
   const top = toplevel(existing(tracker))
   if (!top) throw new Error(OUTSIDE(tracker))
   const root = nativePath(top)
+  // A tracker kept in a repository of its own is cloned, never made afresh beside the code: that would be a second tracker.
+  if (readSiblingMarker(tracker) && !existsSync(join(data, ".git"))) throw new Error(missingTracker(root, tracker))
   const me = running(opts.programRoot)
   if (!me?.source) {
     throw new Error(
@@ -250,14 +266,102 @@ function createData(data: string, opts: CliOptions): { root: string; tracker: st
   return { root, tracker, program, said: `wrote ${parent}/: README.md, .gitignore, ${DATA_DIR}/${DATA_FILE} — locked to ${source} at ${short(me.commit)}` }
 }
 
+/**
+ * `init --tracker <url>`: the data directory becomes a git clone of the tracker repository at `url`, ignored by the
+ * code's git, and the tracker folder's committed `tracker.json` says so — naming `url` unless `privateUrl`, which keeps
+ * it in this clone's git config instead. A data directory committed with the code is refused: moving it out is a
+ * migration, by hand (docs/guide/private-tracker.md).
+ */
+function siblingTracker(data: string, url: string | null, privateUrl: boolean, io: IO): void {
+  const tracker = dirname(data)
+  const top = toplevel(existing(tracker))
+  if (!top) throw new Error(OUTSIDE(tracker))
+  const root = nativePath(top)
+  const shown = posixRelative(root, data)
+  if (!existsSync(join(data, ".git"))) {
+    if (existsSync(join(data, DATA_FILE))) {
+      throw new Error(
+        `${shown}/${DATA_FILE} is committed with the code: moving a tracker into a repository of its own is a migration, by hand — docs/guide/private-tracker.md`,
+      )
+    }
+    if (existsSync(data) && readdirSync(data).length) throw new Error(`${shown} exists and is not a git clone: move it away, then run naima init again`)
+    if (url === null) {
+      // A local repository: no remote, works offline, stays on this machine until pushed to a private one.
+      mkdirSync(data, { recursive: true })
+      const r = runGit(data, ["init", "--quiet", "-b", trunk(root) ?? "main"])
+      if (!r.ok) throw new Error(`cannot create the tracker repository in ${shown}: ${r.err.split("\n").find((l) => l.trim()) ?? "git failed"}`)
+      io.out(`created a git repository of its own for the tracker in ${shown}, on this machine only: no remote, nothing public`)
+    } else {
+      const r = runGit(root, ["clone", "--quiet", "--", url, data])
+      if (!r.ok) throw new Error(`cannot clone the tracker repository into ${shown}: ${r.err.split("\n").find((l) => l.trim()) ?? "git failed"}`)
+      io.out(`cloned the tracker repository into ${shown}`)
+    }
+  } else if (trackerGitOf(root, data) === root) {
+    throw new Error(`${shown} is part of the code's repository, not a clone of its own`)
+  }
+  mkdirSync(tracker, { recursive: true })
+  writeSiblingMarker(tracker, privateUrl || url === null ? {} : { repository: withoutCredentials(url) })
+  if (privateUrl && url !== null) runGit(root, ["config", TRACKER_URL_KEY, url])
+  ignoreProgram({ tracker, program: data })
+  io.out(
+    `wrote ${posixRelative(root, join(tracker, SIBLING_FILE))}${
+      privateUrl ? `, and the tracker's address in this clone's git config (${TRACKER_URL_KEY})` : ""
+    }; ${posixRelative(root, tracker)}/.gitignore ignores ${DATA_DIR}/ — commit both in the code's repository`,
+  )
+}
+
+/** The question init asks, through the agent, of a project that looks public: where its tracker lives. */
+function looksPublic(visibility: Visibility, url: string | null): string {
+  const why = visibility === "public"
+    ? `its remote${url ? ` ${withoutCredentials(url)}` : ""} is public`
+    : `the visibility of its remote${url ? ` ${withoutCredentials(url)}` : ""} cannot be told`
+  return `this project looks public (${why}): keep the tracker private beside it? Ask the owner once, recommending yes — ` +
+    `yes: naima init --private-tracker (a git repository of its own in ${DEFAULT_DATA}, ignored by the project, on this machine only); ` +
+    `no: naima init --tracker-inside (committed with the code, readable by anyone who can read it) — docs/guide/private-tracker.md`
+}
+
+/** What init says of a tracker already committed in a project that looks public. */
+const MOVE_OUT = (visibility: Visibility): string =>
+  `this project looks ${
+    visibility === "public" ? "public" : "public, or its visibility cannot be told"
+  }, and its tracker is committed in it: it can move out, into a repository of its own beside the code (docs/guide/private-tracker.md#move-an-existing-tracker-out) — the old tracker stays in the public history unless that history is rewritten`
+
 async function init(args: string[], opts: CliOptions, data: string, io: IO): Promise<number> {
   // --write-agent-pointer is accepted and changes nothing: the pointer is always written.
-  const p = parse(args, { "write-excludes": { type: "boolean" }, "write-agent-pointer": { type: "boolean" }, "no-session-hook": { type: "boolean" } })
+  const p = parse(args, {
+    "write-excludes": { type: "boolean" },
+    "write-agent-pointer": { type: "boolean" },
+    "no-session-hook": { type: "boolean" },
+    tracker: { type: "string" },
+    "private-url": { type: "boolean" },
+    "private-tracker": { type: "boolean" },
+    "tracker-inside": { type: "boolean" },
+  })
   const write = bool(p, "write-excludes")
   const hooks = !bool(p, "no-session-hook")
+  const given = str(p, "tracker")
+  const local = bool(p, "private-tracker")
+  const inside = bool(p, "tracker-inside")
+  if ((bool(p, "private-url") && given === undefined) || [given !== undefined, local, inside].filter(Boolean).length > 1) throw new Error(usage("init"))
+  const sibling = given !== undefined || local
+  const url = given ?? null
+  // Where the tracker lives, asked once of a project that looks public and has none yet.
+  if (!sibling && !inside && !locate(data) && !existsSync(join(data, ".git")) && !readSiblingMarker(dirname(resolve(data)))) {
+    const top = toplevel(existing(dirname(resolve(data))))
+    if (top) {
+      const seen = await remoteVisibility(nativePath(top), opts.visibility)
+      if (seen.visibility === "public" || seen.visibility === "unknown") throw new Error(looksPublic(seen.visibility, seen.url))
+    }
+  }
+  if (sibling) siblingTracker(resolve(data), url, bool(p, "private-url"), io)
   const found = locate(data)
   if (found) {
     io.out(`${posixRelative(found.root, join(found.data, DATA_FILE))} already exists — left as it is`)
+    if (sibling) { for (const line of installTrailerHooks(found.root, found.data)) io.out(line) }
+    else if (trackerGitOf(found.root, found.data) === found.root) {
+      const seen = await remoteVisibility(found.root, opts.visibility)
+      if (seen.visibility === "public" || seen.visibility === "unknown") io.out(MOVE_OUT(seen.visibility))
+    }
     const config = parseConfig(found.raw, { lenient: true })
     excludeHost(found.root, found.program, write, io)
     sayLeft(startAgents(found.root, trackerOf(found.data), config, hooks, io).left, io)
@@ -271,6 +375,10 @@ async function init(args: string[], opts: CliOptions, data: string, io: IO): Pro
     ? (align({ ...targetOf(place, parseLock(readRaw(place.data)), opts) }), `, and cloned ${PROGRAM_DIR}/`)
     : ""
   io.out(made.said + cloned)
+  if (sibling) {
+    for (const line of installTrailerHooks(made.root, place.data)) io.out(line)
+    io.out(`commit ${posixRelative(made.root, place.data)}/ in the tracker repository first, then ${posixRelative(made.root, made.tracker)}/ in the code's`)
+  }
   excludeHost(made.root, made.program, write, io)
   sayLeft(startAgents(made.root, made.tracker, parseConfig(readRaw(place.data)), hooks, io).left, io)
   io.out(await nextStep(place, opts, io))
@@ -377,10 +485,11 @@ async function finish(opts: CliOptions, place: Place, lock: Lock, io: IO, pendin
 
 /** The commit `naima.json` named before the current lock, in its git history (the uncommitted file first), and the commit that recorded the current one. */
 function previousLock(place: Place, current: string): string {
-  const rel = posixRelative(place.root, join(place.data, DATA_FILE))
-  const log = runGit(place.root, ["log", "--format=%H", "--", rel])
+  const repo = trackerGitOf(place.root, place.data)
+  const rel = posixRelative(repo, join(place.data, DATA_FILE))
+  const log = runGit(repo, ["log", "--format=%H", "--", rel])
   for (const c of log.ok ? log.out.split("\n").filter((l) => l) : []) {
-    const text = runGit(place.root, ["show", `${c}:${rel}`])
+    const text = runGit(repo, ["show", `${c}:${rel}`])
     let commit: unknown
     try {
       commit = (JSON.parse(text.out) as { commit?: unknown }).commit
@@ -394,15 +503,16 @@ function previousLock(place: Place, current: string): string {
 
 /** The commit of the project that recorded the data's current formats: the one to revert to have the data as it was before. */
 function migratedBy(place: Place, raw: Record<string, unknown>): string | null {
-  const rel = posixRelative(place.root, join(place.data, DATA_FILE))
+  const repo = trackerGitOf(place.root, place.data)
+  const rel = posixRelative(repo, join(place.data, DATA_FILE))
   const formats = (o: Record<string, unknown>) => JSON.stringify([o["format"], o["formats"] ?? {}])
   const now = formats(raw)
-  const log = runGit(place.root, ["log", "--format=%H", "--", rel])
+  const log = runGit(repo, ["log", "--format=%H", "--", rel])
   let last: string | null = null
   for (const c of log.ok ? log.out.split("\n").filter((l) => l) : []) {
     let then: Record<string, unknown>
     try {
-      then = JSON.parse(runGit(place.root, ["show", `${c}:${rel}`]).out) as Record<string, unknown>
+      then = JSON.parse(runGit(repo, ["show", `${c}:${rel}`]).out) as Record<string, unknown>
     } catch {
       break
     }
@@ -846,7 +956,10 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     const given = opts.launched && opts.data ? opts.data : flag ?? opts.data
     const data = findData(opts.cwd, real(opts.programRoot), given)
     if (command === "init") {
-      if (args.some((a) => !["--write-excludes", "--write-agent-pointer", "--no-session-hook"].includes(a))) throw new Error(usage("init"))
+      const known = ["--write-excludes", "--write-agent-pointer", "--no-session-hook", "--private-url", "--private-tracker", "--tracker-inside"]
+      const at = args.indexOf("--tracker")
+      const rest = at === -1 ? args : args.filter((_, i) => i !== at && i !== at + 1)
+      if ((at !== -1 && !args[at + 1]) || rest.some((a) => !known.includes(a))) throw new Error(usage("init"))
       return await init(args, opts, data, io)
     }
     if (command === "guide") return await guide(opts, data, io)
@@ -858,6 +971,9 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     }
     if (!place) {
       if (isHelp(command)) return help(null, data, io)
+      const folder = trackerOf(data)
+      const top = readSiblingMarker(folder) ? toplevel(existing(folder)) : null
+      if (top) throw new Error(missingTracker(nativePath(top), folder))
       throw new Error(`no ${DATA_FILE} in ${data} — run naima init, or name the data with --data <dir>`)
     }
     if (opts.launched) {
@@ -892,6 +1008,18 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     if (command === "plugin") return pluginCommand(args, opts, place, place.raw, io)
     const ctx = await openProject(place, opts, io)
     if (isHelp(command)) return help(ctx, data, io)
+    if (ctx.sibling) {
+      // Work on code branch X writes to tracker branch X: paired before any command reads or writes the tracker.
+      try {
+        const moved = pairTracker(ctx.root, ctx.trackerGit, gitOrNull(ctx.root, "rev-parse", "--abbrev-ref", "HEAD") ?? "HEAD")
+        if (moved) {
+          io.err(`naima: ${moved}`)
+          ctx.reload()
+        }
+      } catch (e) {
+        io.err(`naima: ${message(e)}`)
+      }
+    }
     const { reason, rest: commandArgs } = allowPrivateOption(args)
     if (reason !== undefined) ctx.allowPrivate = reason
     const cmd = ctx.registry.find<Command>("commands", command as string)?.value

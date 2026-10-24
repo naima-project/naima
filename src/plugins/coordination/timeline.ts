@@ -49,6 +49,7 @@ import {
   readReadme,
   rendered,
   str,
+  trackerPath,
   usageError,
   type View,
   writeFileAtomic,
@@ -166,7 +167,7 @@ function parseRecord(f: BranchFile): RecordFile | null {
 
 /** The records of what nothing derives, on every branch. */
 export const readRecords = (ctx: Context): RecordFile[] =>
-  readAcrossBranches(ctx.root, `${ctx.trackerDir}/${EVENTS}`, ".md").map(parseRecord).filter((r): r is RecordFile => r !== null)
+  readAcrossBranches(ctx.trackerGit, trackerPath(ctx.trackerPrefix, EVENTS), ".md").map(parseRecord).filter((r): r is RecordFile => r !== null)
 
 /** The version tags, each with the day of the commit it names. */
 function releases(ctx: Context): { tag: string; date: string }[] {

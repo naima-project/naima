@@ -54,6 +54,7 @@ import {
   toolsDir,
   toplevel,
   trackerOf,
+  VISIBILITY_HOST,
   worktrees,
 } from "./core/internal.ts"
 
@@ -157,6 +158,8 @@ export function permissions(
     ui?: UiGrant | null
     /** The tools directory, which every command may read: null when there is none. */
     tools?: string | null
+    /** Hosts the command may reach besides: init asks GitHub whether the project is public. */
+    net?: string[]
   },
 ): string[] {
   const list = (paths: (string | null)[]) => {
@@ -178,7 +181,11 @@ export function permissions(
     `--allow-write=${list([p.tracker, p.data, p.program, ...(p.hostFiles ?? []), ...(p.ui?.write ?? []).filter((w) => tools.includes(w))])}`,
     p.ui?.runAll ? "--allow-run" : `--allow-run=${[...new Set(["git", ...(p.runs ?? []), ...(p.ui?.runs ?? [])])].join(",")}`,
     "--allow-env",
-    ...(p.ui?.netAll ? ["--allow-net"] : p.ui?.net.length ? [`--allow-net=${p.ui.net.join(",")}`] : []),
+    ...(p.ui?.netAll
+      ? ["--allow-net"]
+      : p.ui?.net.length || p.net?.length
+      ? [`--allow-net=${[...new Set([...(p.ui?.net ?? []), ...(p.net ?? [])])].join(",")}`]
+      : []),
   ]
 }
 
@@ -316,7 +323,17 @@ export async function launch(args: string[], cwd: string): Promise<number> {
   for (let run = 0; run < MAX_RUNS; run++) {
     let flags: string[]
     try {
-      const fence = { root, tracker, data, program, entry, hostFiles: hostFiles(parsed.rest, root, data), worktrees: others, tools }
+      const fence = {
+        root,
+        tracker,
+        data,
+        program,
+        entry,
+        hostFiles: hostFiles(parsed.rest, root, data),
+        worktrees: others,
+        tools,
+        net: parsed.rest[0] === "init" ? [VISIBILITY_HOST] : [],
+      }
       const read = permissions(fence)[0] ?? ""
       flags = permissions({ ...fence, runs: mayRun(data) ? declaredRuns(entry, cwd, read, env) : [], ui })
     } catch (e) {
