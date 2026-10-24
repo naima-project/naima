@@ -101,6 +101,14 @@ option. `naima plugin show <name>` prints what a plugin's options are and
 what the project has set, and every plugin's options, with their defaults,
 are also in the [reference](../reference/reference.md).
 
+One option changes what every agent must do. By default each write of free
+text or a file to the tracker has to be signed against the no-leaks
+checklist with `--revised`
+([the rule](rules.md#free-text-and-files-are-signed-against-the-no-leaks-checklist)).
+A project that doesn't want this, for example one whose tracker never leaves
+a single machine, turns it off with `naima plugin set privacy signed=false`,
+and turns it back on by removing the option with `naima plugin set privacy signed=`.
+
 ## Keep Naima out of your own tools
 
 Some tools, such as `deno check`, `tsc` and `prettier`, read every file in

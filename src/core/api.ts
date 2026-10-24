@@ -18,6 +18,7 @@ export { bool, type Flags, pairs, parse, type Parsed, positiveInt, str, strs, us
 export { appliesTo, enumRank, fieldError, type FieldRef, fieldsOf, fieldValue, fieldValues, parseFieldValue, setFieldValue, type ValueOf } from "./fields.ts"
 export {
   ATTACHMENTS,
+  beforeTextWrite,
   createItem,
   isUuid,
   joinProse,
