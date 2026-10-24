@@ -63,7 +63,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`runs`](#naima-runs) | core | list the external programs the loaded contributions declare they start (a model checker, say), which the launcher allows besides git | nothing: it lists the programs the launcher allows besides git; the launcher refuses any other |
 | [`close`](#naima-close) | trackers | archive a resolved item: fixed, and proven by an item that has passed | an item is archived only when fixed and proven: fixedOn set and a verified-by item that has passed, with every write hook agreeing; --force takes a hook's refusal on, for the one who owns the evidence |
 | [`bugs`](#naima-bugs) | trackers | how many bugs have no code written, and how many are fixed but unproven | nothing: it only counts |
-| [`open`](#naima-open) | coordination | start a piece of work: a worktree <worktrees>/<what> on a new branch <who>/<what> from the trunk, and its claim on the items, in one step | work happens on its own branch and worktree from the trunk, and its claim on the items is recorded in the same step; a branch that already exists is never reused, and the refusal says whether it is merged into the trunk |
+| [`open`](#naima-open) | coordination | start a piece of work: a worktree <worktrees>/<what> on a new branch <who>/<what> from the trunk, and its claim on the items, in one step | work happens on its own branch and worktree from the trunk, and its claim on the items is recorded in the same step; a branch that already exists is never reused, and the refusal says whether it is merged into the trunk; no worker worktree is opened beyond the option maxWorkers, and the refusal names the open ones and how to raise the bound |
 | [`claim`](#naima-claim) | coordination | record that this branch is working on items (writes one file on this branch) | a claim belongs to a branch, never to a detached HEAD, and is one file on that branch; it never locks anything: several branches may claim one item |
 | [`release`](#naima-release) | coordination | drop this branch's claim on items; the last one removes the file, unless the branch is being prepared (claim --preparing) | only this branch's own claim is dropped, and only on items it holds; while the branch is being prepared, the emptied file is kept |
 | [`claims`](#naima-claims) | coordination | who holds what, recombined from every branch, with what each branch's worker is doing now | nothing: it only reads; a claim whose last sign of life (its step, or its branch's last commit) is more than silentAfter minutes old (15 here) is flagged possibly stuck; a stale claim (branch gone or merged into the trunk, or every item closed) is listed apart, at the end, and released by naima prune --write |
@@ -881,6 +881,7 @@ Options, each with the default it takes when nothing sets it:
 | `who` |  | who works, when `naima open` is given no `--as`: the branch's first segment |
 | `worktrees` | `../<main worktree's folder>-worktrees` | the directory every worktree is a folder of, relative to the main worktree |
 | `exempt` | `[]` | branches the naming scheme does not apply to: names, or patterns with * |
+| `maxWorkers` | `3` | how many worker worktrees (folders of the worktrees directory, on a branch the scheme applies to) may be open at once: naima open refuses another, naming the open ones; a positive whole number |
 | `diaryPerDay` | `5` | how many diary entries a day may hold before the check diary-entries notes it: a positive whole number |
 | `silentAfter` | `15` | minutes without a sign of life (a step posted with naima claim --step, or a commit on the branch) after which naima claims and naima summary flag a claim with a step as possibly stuck: a positive whole number |
 
@@ -890,7 +891,7 @@ Options, each with the default it takes when nothing sets it:
 
 Start a piece of work: a worktree <worktrees>/<what> on a new branch <who>/<what> from the trunk, and its claim on the items, in one step.
 
-**Enforces**: Work happens on its own branch and worktree from the trunk, and its claim on the items is recorded in the same step; a branch that already exists is never reused, and the refusal says whether it is merged into the trunk.
+**Enforces**: Work happens on its own branch and worktree from the trunk, and its claim on the items is recorded in the same step; a branch that already exists is never reused, and the refusal says whether it is merged into the trunk; no worker worktree is opened beyond the option maxWorkers, and the refusal names the open ones and how to raise the bound.
 
 ```sh
 naima open <item>... [--as <who>] [--name <what>] [--note "why"]
