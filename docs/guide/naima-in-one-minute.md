@@ -13,7 +13,8 @@ kept, so you are never asked the same question twice. Different agents build
 and check the work, so nobody judges their own. When there is something only
 you can decide, you are asked, one question at a time.
 
-Everything lives in a folder of your project, as plain files kept in git. There
+Everything lives in a folder of your project, kept tidy and versioned with
+state-of-the-art tools such as git, without you even having to know them. There
 is no account, no server and no subscription, and you can change agent or model
 whenever you like. Naima is free and open source.
 
@@ -24,5 +25,6 @@ To start, open an agent that can run commands in your project's folder and ask
 it to install Naima ([how](install.md)).
 
 **Next:** [Naima in ten minutes](naima-in-ten-minutes.md) explains what it
-does in more depth, including the advanced parts. The
-[full documentation](../README.md) covers everything else.
+does in more depth, including the advanced parts. [The primer](primer.md)
+introduces every concept with an example, the [glossary](glossary.md) defines
+every term, and the [full documentation](../README.md) covers everything else.
