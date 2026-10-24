@@ -152,7 +152,7 @@ and nothing in these pages describes them as if they already existed.
 
 ## Where to go next
 
-- [Install](install.md), or simply ask your agent to install Naima in your
+- [Install it](https://naima-project.github.io/naima/install.html), or simply ask your agent to install Naima in your
   project.
 - [The primer](primer.md) introduces every concept with an example.
 - [The tutorial](tutorial.md) follows one bug from report to closing, with

@@ -22,7 +22,7 @@ It was born for software, and it works for other long-lived work too, such as
 a data analysis or a paper written with colleagues.
 
 To start, open an agent that can run commands in your project's folder and ask
-it to install Naima ([how](install.md)).
+it to install Naima ([how](https://naima-project.github.io/naima/install.html)).
 
 **Next:** [Naima in ten minutes](naima-in-ten-minutes.md) explains what it
 does in more depth, including the advanced parts. [The primer](primer.md)
