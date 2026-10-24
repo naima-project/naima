@@ -86,6 +86,9 @@ target=aarch64-unknown-linux-gnu     # Linux, arm64
 version="$(curl -s https://dl.deno.land/release-latest.txt)"
 mkdir -p "$HOME/.deno/bin"
 curl --fail --location --output "$HOME/.deno/bin/deno.zip" "https://dl.deno.land/release/$version/deno-$target.zip"
+expected="$(curl --fail --silent "https://dl.deno.land/release/$version/deno-$target.zip.sha256sum" | grep -Eo '[0-9a-fA-F]{64}' | head -n 1 | tr 'A-F' 'a-f')"
+actual="$( (shasum -a 256 "$HOME/.deno/bin/deno.zip" 2>/dev/null || sha256sum "$HOME/.deno/bin/deno.zip") | cut -d ' ' -f 1)"
+[ -n "$expected" ] && [ "$expected" = "$actual" ] || { echo "deno.zip does not match its published sha256: stopping" >&2; rm -f "$HOME/.deno/bin/deno.zip"; exit 1; }
 unzip -d "$HOME/.deno/bin" -o "$HOME/.deno/bin/deno.zip"
 chmod +x "$HOME/.deno/bin/deno"
 rm "$HOME/.deno/bin/deno.zip"
@@ -106,16 +109,30 @@ export PATH="$HOME/.deno/bin:$PATH"
 Windows on ARM runs emulated:
 
 ```powershell
+$ErrorActionPreference = 'Stop'
 $BinDir = "$Home\.deno\bin"
 $Version = curl.exe --ssl-revoke-best-effort -s "https://dl.deno.land/release-latest.txt"
+$Zip = "deno-x86_64-pc-windows-msvc.zip"
 New-Item $BinDir -ItemType Directory -Force | Out-Null
-curl.exe --ssl-revoke-best-effort -Lo "$BinDir\deno.zip" "https://dl.deno.land/release/$Version/deno-x86_64-pc-windows-msvc.zip"
+curl.exe --ssl-revoke-best-effort -Lo "$BinDir\deno.zip" "https://dl.deno.land/release/$Version/$Zip"
+$Expected = ((curl.exe --ssl-revoke-best-effort -s "https://dl.deno.land/release/$Version/$Zip.sha256sum") -join ' ' |
+  Select-String -Pattern '[0-9A-Fa-f]{64}').Matches[0].Value
+if ((Get-FileHash "$BinDir\deno.zip" -Algorithm SHA256).Hash -ne $Expected) {
+  Remove-Item "$BinDir\deno.zip"
+  throw "deno.zip does not match its published sha256: stopping"
+}
 tar.exe xf "$BinDir\deno.zip" -C $BinDir
 Remove-Item "$BinDir\deno.zip"
 $Path = [Environment]::GetEnvironmentVariable('Path', 'User')
-[Environment]::SetEnvironmentVariable('Path', "$Path;$BinDir", 'User')
-$Env:Path += ";$BinDir"
+if (($Path -split ';') -notcontains $BinDir) {
+  [Environment]::SetEnvironmentVariable('Path', "$Path;$BinDir", 'User')
+}
+if (($Env:Path -split ';') -notcontains $BinDir) { $Env:Path += ";$BinDir" }
 ```
+
+Saved as a `.ps1` file and run rather than pasted, the script needs
+`powershell -ExecutionPolicy Bypass -File <file>`. Run twice, it adds nothing
+to the `PATH` the second time.
 
 **Check it**, in a new terminal:
 
@@ -126,10 +143,9 @@ deno --version
 It prints `deno 2.x.y` and the versions of V8 and TypeScript. If it says
 `command not found`, the new `PATH` is not read yet: open a new terminal, or
 run `~/.deno/bin/deno --version` (`& "$Home\.deno\bin\deno.exe" --version` on
-Windows) to see that Deno itself works. To check the download before
-unpacking it, compare its sha256 — `shasum -a 256 ~/.deno/bin/deno.zip` on
-macOS and Linux, `Get-FileHash $BinDir\deno.zip` on Windows — with the one in
-`https://dl.deno.land/release/<version>/deno-<target>.zip.sha256sum`.
+Windows) to see that Deno itself works. The steps above already compare the download with the sha256 Deno publishes in
+`https://dl.deno.land/release/<version>/deno-<target>.zip.sha256sum` before
+unpacking it, and stop if they differ.
 
 ## Documentation
 
