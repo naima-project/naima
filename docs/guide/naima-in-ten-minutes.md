@@ -157,4 +157,5 @@ and nothing in these pages describes them as if they already existed.
 - [The primer](primer.md) introduces every concept with an example.
 - [The tutorial](tutorial.md) follows one bug from report to closing, with
   the real commands and their output.
+- [The glossary](glossary.md) defines every term used in these pages.
 - [The full documentation](../README.md) covers everything else.
