@@ -110,7 +110,7 @@ This opens `export-format-v2` as a draft, starting from the page of version
 version is agreed, it becomes current and the old one is marked superseded.
 A later revision always starts from the current version, whichever version
 you name: `naima spec revise specs/export-format` after version 2 is current
-opens version 3 from the page of version 2. The work is then built to the new
+opens version 3 from the page of version 2. A specification still in development, at version 0.3 (`naima set specs/export-format version=0.3`), is revised to 0.4: the last component is raised, and the new item's title and directory are named after the new version, `Export format v0.4`. The work is then built to the new
 version and checked against it before it closes. `naima spec` lists every specification with its current version and
 the open work that follows it. `naima check` refuses two current versions of
 the same specification, and reminds you of work that still follows an old
