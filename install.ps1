@@ -93,6 +93,8 @@ function Install-Naima {
   function Test-Legacy {
     if (Test-Path (Join-Path $Program '.naima-copy.json')) { return $true }
     if (-not (Test-Path (Join-Path $Program '.git'))) { return $false }
+    # On a current clone the path is absent and git says so on stderr: see the root check above.
+    $ErrorActionPreference = 'Continue'
     & git -C $Program cat-file -e 'HEAD:naima/src/cli.ts' 2>$null
     return $LASTEXITCODE -eq 0
   }
