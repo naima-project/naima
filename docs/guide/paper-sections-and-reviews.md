@@ -31,7 +31,7 @@ reading the prose, never a program running.
 
 ```sh
 naima new sections "Related work"
-naima new reviews "Laura reviews related work" --set reviewer="Laura"
+naima new reviews "Ada reviews related work" --set reviewer="Ada"
 naima link <the review> verifies <the section>
 naima set <the review> status=answered       # every objection addressed
 naima set <the section> status=confirmed
