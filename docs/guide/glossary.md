@@ -520,6 +520,17 @@ example a branch closing items it has claimed itself, or a property set to
 write hook that protects a state of the tracker has a matching
 [check](#check) that `naima check` runs on the tracker as it is.
 
+### No-leaks checklist
+
+A short list, shipped with Naima in `docs/agents/NOLEAKS.md`, of what must
+not go into the tracker: the owner's words quoted, other private projects,
+unpublished papers, business, money, clients and other people, machine
+names and home paths, and logs or files nobody has read line by line. An
+agent signs each write of free text or a file by passing the checklist's
+path with `--revised`, and Naima refuses the write without it and records
+the checklist's hash with the write
+([the rule](rules.md#free-text-and-files-are-signed-against-the-no-leaks-checklist)).
+
 ### Event
 
 Something that happened which Naima can't work out from the items and git,

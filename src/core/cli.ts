@@ -38,7 +38,7 @@ import {
   writeSiblingMarker,
 } from "./repos.ts"
 import { exclusions } from "./excludes.ts"
-import { ALLOW_PRIVATE, allowPrivateOption } from "./private.ts"
+import { ALLOW_PRIVATE, allowPrivateOption, REVISED, revisedOption } from "./private.ts"
 import { DATA_DIR, DATA_FILE, DEFAULT_DATA, findData, globalOptions, PROGRAM_DIR, real, RELAUNCH, runtimeOf, trackerOf, trackerReadme } from "./layout.ts"
 import {
   align,
@@ -914,7 +914,7 @@ async function guide(opts: CliOptions, data: string, io: IO): Promise<number> {
 }
 
 function help(ctx: Context | null, data: string, io: IO): number {
-  io.out(`usage: naima [--data <dir>] <command> [args] [${ALLOW_PRIVATE} "<reason>"]\n`)
+  io.out(`usage: naima [--data <dir>] <command> [args] [${ALLOW_PRIVATE} "<reason>"] [${REVISED} <checklist>]\n`)
   const entry = cliCommands.filter((c) => c.name !== "help")
   for (const c of entry) io.out(`  ${c.name.padEnd(10)} ${c.says}\n  ${"".padEnd(10)} naima ${c.usage}`)
   if (!ctx) {
@@ -1021,8 +1021,10 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
         io.err(`naima: ${message(e)}`)
       }
     }
-    const { reason, rest: commandArgs } = allowPrivateOption(args)
+    const { reason, rest: unsigned } = allowPrivateOption(args)
     if (reason !== undefined) ctx.allowPrivate = reason
+    const { path: revised, rest: commandArgs } = revisedOption(unsigned)
+    if (revised !== undefined) ctx.revised = resolve(opts.cwd, revised)
     const cmd = ctx.registry.find<Command>("commands", command as string)?.value
     if (!cmd) throw new Error(`unknown command "${command}" — naima help`)
     if (args.includes("--help") || args.includes("-h")) return commandHelp(cmd, io)

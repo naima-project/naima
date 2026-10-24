@@ -217,6 +217,16 @@ naima note <item> "Reproduced on 16-bit PNGs only; 8-bit keeps alpha." --by "tri
   `<path>` and `<user>` and runs the command again. `--allow-private
   "<reason>"` lets a deliberate mention through and records why
   ([the rule](../guide/rules.md#no-machine-names-or-private-infrastructure-in-a-repository)).
+- Every one of these writes is also signed. Before running the command, the
+  agent reads the text, and any file it attaches line by line, against
+  [the no-leaks checklist](NOLEAKS.md), and then adds
+  `--revised naima-tracker/naima/docs/agents/NOLEAKS.md`. Without it, or
+  with any file that differs from the checklist the program ships, the
+  command refuses and says where the checklist is. The item's field
+  `revised`, or the front matter of a session note or event, records the
+  checklist's hash. A worker files only what it saw itself; what the owner
+  said is written down by the agent talking to the owner
+  ([the rule](../guide/rules.md#free-text-and-files-are-signed-against-the-no-leaks-checklist)).
 - `naima check` enforces both of these. The check `attachment-consent` fails
   on an attachment that a branch adds with no record (because it was copied
   in by hand), on a record whose file is gone, and on a file of the owner's

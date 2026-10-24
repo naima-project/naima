@@ -27,6 +27,7 @@ import { randomUUID } from "node:crypto"
 import { mkdirSync } from "node:fs"
 import { join } from "node:path"
 import {
+  beforeTextWrite,
   type BranchFile,
   type Check,
   type Command,
@@ -164,6 +165,10 @@ function parseRecord(f: BranchFile): RecordFile | null {
   if (!isDate(date) || !title) return null
   return { date, ...(isMoment(at) ? { at } : {}), kind: field("kind") || "fact", title, text, file: f.name }
 }
+
+/** What the write hooks add to a record, as front-matter lines: a string as it is, anything else as one line of JSON. */
+export const frontLines = (record: Record<string, unknown>): string =>
+  Object.entries(record).map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}\n`).join("")
 
 /** The records of what nothing derives, on every branch. */
 export const readRecords = (ctx: Context): RecordFile[] =>
@@ -346,7 +351,11 @@ export const eventCommand: Command = {
     mkdirSync(dir, { recursive: true })
     const name = `${date}-${randomUUID()}.md`
     const allowance = guardPrivate("the event", findPrivate(text, privateContext()), ctx.allowPrivate)
-    writeFileAtomic(join(dir, name), `---\ndate: ${date}\n${at ? `at: ${at}\n` : ""}kind: ${kind}\n---\n\n${[text, allowance].filter(Boolean).join("\n\n")}\n`)
+    const record = frontLines(beforeTextWrite(ctx, "the event"))
+    writeFileAtomic(
+      join(dir, name),
+      `---\ndate: ${date}\n${at ? `at: ${at}\n` : ""}kind: ${kind}\n${record}---\n\n${[text, allowance].filter(Boolean).join("\n\n")}\n`,
+    )
     ctx.out(`wrote ${ctx.trackerDir}/${EVENTS}/${name} — commit it on ${currentBranch(ctx.root)}`)
     return 0
   },

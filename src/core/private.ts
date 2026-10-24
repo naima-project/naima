@@ -239,23 +239,38 @@ export const ALLOW_PRIVATE = "--allow-private"
 
 /** The arguments without `--allow-private <reason>` (or `--allow-private=<reason>`), and the reason; nothing after `--` is read. */
 export function allowPrivateOption(args: string[]): { reason?: string | undefined; rest: string[] } {
+  const { value, rest } = globalOption(args, ALLOW_PRIVATE, `${ALLOW_PRIVATE} needs a reason: ${ALLOW_PRIVATE} "<why this mention is deliberate>"`)
+  return { reason: value, rest }
+}
+
+/** The flag that signs a write of free text or a file against the no-leaks checklist, with the checklist's path. */
+export const REVISED = "--revised"
+
+/** The arguments without `--revised <path>` (or `--revised=<path>`), and the path; nothing after `--` is read. */
+export function revisedOption(args: string[]): { path?: string | undefined; rest: string[] } {
+  const { value, rest } = globalOption(args, REVISED, `${REVISED} needs a path: ${REVISED} <the no-leaks checklist the program ships>`)
+  return { path: value, rest }
+}
+
+/** The arguments without `<flag> <value>` (or `<flag>=<value>`), and the value, trimmed; an empty value is refused with `empty`. */
+function globalOption(args: string[], flag: string, empty: string): { value?: string | undefined; rest: string[] } {
   const rest: string[] = []
-  let reason: string | undefined
+  let value: string | undefined
   for (let i = 0; i < args.length; i++) {
     const a = args[i] as string
     if (a === "--") {
       rest.push(...args.slice(i))
       break
     }
-    if (a === ALLOW_PRIVATE || a.startsWith(`${ALLOW_PRIVATE}=`)) {
-      const value = a === ALLOW_PRIVATE ? args[++i] : a.slice(ALLOW_PRIVATE.length + 1)
-      if (!value?.trim()) throw new NaimaError(`${ALLOW_PRIVATE} needs a reason: ${ALLOW_PRIVATE} "<why this mention is deliberate>"`, "usage")
-      reason = value.trim()
+    if (a === flag || a.startsWith(`${flag}=`)) {
+      const v = a === flag ? args[++i] : a.slice(flag.length + 1)
+      if (!v?.trim()) throw new NaimaError(empty, "usage")
+      value = v.trim()
       continue
     }
     rest.push(a)
   }
-  return { reason, rest }
+  return { value, rest }
 }
 
 /** Counts by kind, never the values: "2 machine names, 1 IP address". */
