@@ -74,6 +74,11 @@ Whichever flow applies, the owner's chat is private. Nothing from it goes
 into the repository word for word, and a file the owner shared becomes an
 attachment only if they explicitly say yes
 ([the rule](../guide/rules.md#the-owners-chat-stays-private)).
+Before any write of free text or a file to the tracker, read the text
+against [the no-leaks checklist](NOLEAKS.md) and sign the write with
+`--revised` and the checklist's path, or the CLI refuses it. Only the agent
+talking to the owner writes text taken from what the owner said
+([the rule](../guide/rules.md#free-text-and-files-are-signed-against-the-no-leaks-checklist)).
 
 Two words are used throughout these pages. The
 [owner](../guide/glossary.md#owner) is the person the project answers to, and

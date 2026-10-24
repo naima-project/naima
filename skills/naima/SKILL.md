@@ -29,6 +29,13 @@ session note, event, description or attachment: no machine name, IP
 address, URI with a port, home-directory path or user name — write `<host>`,
 `<ip>`, `<path>`, `<user>`; the CLI refuses such a write
 ([the rule](../../docs/guide/rules.md#no-machine-names-or-private-infrastructure-in-a-repository)).
+Before every write of free text or a file to the tracker (`new`, `describe`,
+`note`, `set` of a title or text field, `pass`, `event`, `attach`), read the
+text against the [no-leaks checklist](../../docs/agents/NOLEAKS.md) and then
+sign it by adding `--revised naima-tracker/naima/docs/agents/NOLEAKS.md`;
+without it the CLI refuses the write. Only the agent talking to the owner
+writes text taken from the owner's words; a worker writes its own observations
+([the rule](../../docs/guide/rules.md#free-text-and-files-are-signed-against-the-no-leaks-checklist)).
 
 **Capture now, act later — always, not only on `/flow:report`.** Whenever
 the owner, in chat, asks for a feature, reports a problem, makes a decision

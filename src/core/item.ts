@@ -6,7 +6,7 @@ import { join, relative } from "node:path"
 import { NaimaError } from "./errors.ts"
 import { writeFileAtomic } from "./files.ts"
 import { dirsAcrossBranches } from "./git.ts"
-import type { Context, Item, Meta, TypeDef, Write } from "./types.ts"
+import type { Context, Item, Meta, TextWrite, TypeDef, Write } from "./types.ts"
 
 export const META = "meta.json"
 export const README = "README.md"
@@ -97,7 +97,12 @@ export function readReadme(item: Item): string {
 /** What a write helper is asked on top of the item: `force`, a command's `--force` (Write.force). */
 export interface WriteOptions {
   force?: boolean
+  /** The write carries text its writer authored (Write.authored). */
+  authored?: boolean
 }
+
+/** The flags of a write, from its options. */
+const flags = (opts: WriteOptions): { force: boolean; authored?: true } => ({ force: opts.force === true, ...(opts.authored ? { authored: true } : {}) })
 
 /** The fields an item has on disk: what a write hook compares against. Null when there is no readable object. */
 function onDisk(dir: string): Meta | null {
@@ -127,6 +132,24 @@ function beforeWrite(ctx: Context, write: Write): void {
 
 function afterWrite(ctx: Context, write: Write): void {
   for (const hook of ctx.registry.hooks) hook.afterWrite?.(write, ctx)
+}
+
+/**
+ * Every plugin's `beforeText` on a write of free text or a file that is not an item's — a session note, an event,
+ * an attachment — before anything is on disk. The first refusal stops it; the record the hooks filled is returned,
+ * for the writer to store with the text.
+ */
+export function beforeTextWrite(ctx: Context, what: string): Record<string, unknown> {
+  const text: TextWrite = { what, record: {} }
+  for (const hook of ctx.registry.hooks) {
+    const refusal = hook.beforeText?.(text, ctx)
+    if (refusal === undefined) continue
+    if (typeof refusal !== "string" || !refusal.trim()) {
+      throw new TypeError(`write hook "${hook.name}" refused a write of ${what} without saying why — a refusal is a sentence`)
+    }
+    throw new NaimaError(`${refusal} (refused by ${hook.name})`, "vetoed")
+  }
+  return text.record
 }
 
 /**
@@ -175,7 +198,7 @@ export const joinProse = (p: Prose): string => [p.title, p.description, p.notes]
  * it. Its fields are written too when a hook changed them.
  */
 export function saveProse(ctx: Context, item: Item, prose: string, opts: WriteOptions = {}): void {
-  const write: Write = { kind: "update", item: { ...item, meta: { ...item.meta } }, before: onDisk(item.dir), force: opts.force === true, prose }
+  const write: Write = { kind: "update", item: { ...item, meta: { ...item.meta } }, before: onDisk(item.dir), ...flags(opts), prose }
   beforeWrite(ctx, write)
   writeFileAtomic(join(item.dir, README), write.prose ?? prose)
   generation++
@@ -186,7 +209,7 @@ export function saveProse(ctx: Context, item: Item, prose: string, opts: WriteOp
 
 /** Write an item's fields, through every plugin's write hooks. */
 export function saveMeta(ctx: Context, item: Item, opts: WriteOptions = {}): void {
-  const write: Write = { kind: "update", item, before: onDisk(item.dir), force: opts.force === true }
+  const write: Write = { kind: "update", item, before: onDisk(item.dir), ...flags(opts) }
   beforeWrite(ctx, write)
   writeJson(join(item.dir, META), item.meta)
   afterWrite(ctx, write)
@@ -222,7 +245,7 @@ export function createItem(ctx: Context, type: TypeDef, title: string, fields: R
   const id = randomUUID()
   const { wanted, elsewhere } = slugFor(ctx, base, title, id)
   const meta: Meta = { id, title, status: type.initialStatus, created: today(ctx), ...fields }
-  const write: Write = { kind: "create", item: { type: type.id, slug: wanted, dir: join(base, wanted), meta }, before: null, force: opts.force === true }
+  const write: Write = { kind: "create", item: { type: type.id, slug: wanted, dir: join(base, wanted), meta }, before: null, ...flags(opts) }
   beforeWrite(ctx, write)
   const slug = claimDir(base, wanted, elsewhere)
   const dir = join(base, slug)

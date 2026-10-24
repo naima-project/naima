@@ -286,14 +286,16 @@ export const migrationsPoint: ExtensionPoint<Migration> = {
 
 export const hooksPoint: ExtensionPoint<WriteHook> = {
   id: "hooks",
-  says: "hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done",
+  says:
+    "hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done; `beforeText(text, ctx)` may refuse a write of free text or a file that is not an item's (a session note, an event, an attachment) or add to its record",
   noun: "write hook",
   key: (h) => h.name,
   renamed: (h, name) => ({ ...h, name }),
   validate: (v) =>
     shape(v, (h) => text(h, "name"), (h) => {
-      const { beforeWrite, afterWrite } = h as WriteHook
+      const { beforeWrite, afterWrite, beforeText } = h as WriteHook
       if (beforeWrite !== undefined && typeof beforeWrite !== "function") return "has a beforeWrite that is not a function"
+      if (beforeText !== undefined && typeof beforeText !== "function") return "has a beforeText that is not a function"
       return afterWrite !== undefined && typeof afterWrite !== "function" ? "has an afterWrite that is not a function" : null
     }),
   gaps: (h) => says(h, "does"),

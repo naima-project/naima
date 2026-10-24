@@ -151,7 +151,7 @@ const newCommand: Command = {
         for (const item of likely) ctx.out(line(item))
       }
     }
-    const item = createItem(ctx, type, title.trim(), fields)
+    const item = createItem(ctx, type, title.trim(), fields, { authored: true })
     ctx.out(`${ctx.trackerDir}/${type.dir}/${item.slug}/  ${item.meta.id}`)
     return 0
   },
@@ -279,7 +279,7 @@ const set: Command = {
     const [ref, ...rest] = parse(args).positionals
     if (!ref?.trim() || !rest.length) throw usageError(this)
     const item = ctx.repo.resolve(ref)
-    setFields(ctx, item, pairs(rest))
+    setFields(ctx, item, pairs(rest), { authored: true })
     ctx.out(`${label(item)}: ${rest.join(" ")}`)
     return 0
   },
@@ -371,7 +371,7 @@ const note: Command = {
     const branch = isGitRepo(ctx.root) ? currentBranch(ctx.root) : "HEAD"
     const entry = `### ${today(ctx)} — ${who}${branch === "HEAD" ? "" : `, on ${branch}`}\n\n${text}`
     const prose = splitProse(readReadme(item))
-    saveProse(ctx, item, joinProse({ ...prose, notes: [prose.notes || NOTES_HEADING, entry].join("\n\n") }))
+    saveProse(ctx, item, joinProse({ ...prose, notes: [prose.notes || NOTES_HEADING, entry].join("\n\n") }), { authored: true })
     ctx.out(`${label(item)}: note added`)
     return 0
   },
@@ -394,7 +394,7 @@ const describe: Command = {
     if (hs.some((h) => h.trimEnd() === NOTES_HEADING)) throw new Error(`a description holds no ${NOTES_HEADING} section: notes are added with naima note`)
     const item = ctx.repo.resolve(ref)
     const prose = splitProse(readReadme(item))
-    saveProse(ctx, item, joinProse({ ...prose, title: prose.title || `# ${item.meta.title}`, description: text }))
+    saveProse(ctx, item, joinProse({ ...prose, title: prose.title || `# ${item.meta.title}`, description: text }), { authored: true })
     ctx.out(`${label(item)}: description replaced`)
     return 0
   },

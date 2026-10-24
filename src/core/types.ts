@@ -270,6 +270,22 @@ export interface Write {
   prose?: string
   /** The command's `--force`: whoever gave it takes on what a hook would otherwise refuse. A hook decides whether it lets it through. */
   force: boolean
+  /**
+   * The write carries text its writer authored on the command line — a title, a description, a note, a free-text field
+   * (naima new, describe, note, set) — rather than a record Naima fills or generates: what a no-leaks signature covers.
+   */
+  authored?: boolean
+}
+
+/**
+ * A write of free text or a file that is not an item's: a session note, an event, an attachment. A hook's
+ * `beforeText` may refuse it, or add to `record` what the writer stores with it (a session note's front matter, an
+ * attachment's record).
+ */
+export interface TextWrite {
+  /** What is written, as a refusal names it: "the session note", "attachment proof.out". */
+  what: string
+  record: Record<string, unknown>
 }
 
 /** A hook on every item write the core's helpers make, run in plugin load order. */
@@ -283,6 +299,8 @@ export interface WriteHook {
   beforeWrite?(write: Write, ctx: Context): string | undefined | void
   /** After the write, with the item as written (for a move, where it now is). */
   afterWrite?(write: Write, ctx: Context): void
+  /** Before a write of free text or a file that is not an item's (TextWrite): refuse it as `beforeWrite` does, or add to its `record`. */
+  beforeText?(text: TextWrite, ctx: Context): string | undefined | void
 }
 
 /** What a plugin declares. Every contribution is optional. */
@@ -502,4 +520,9 @@ export interface Context {
    * the reason is recorded; without it such a write is refused (core/private.ts).
    */
   allowPrivate?: string
+  /**
+   * The path given with `--revised` for this command: the no-leaks checklist the writer signs to have followed before
+   * a write of free text or a file (the privacy plugin's hook `signed-writes`).
+   */
+  revised?: string
 }

@@ -13,6 +13,7 @@ import { dirname, join } from "node:path"
 import {
   allRefNames,
   appliesTo,
+  beforeTextWrite,
   bool,
   type BranchFile,
   type Check,
@@ -74,7 +75,7 @@ import {
 import { claimsUiView, notesUiView } from "./ui.ts"
 import { changeNotesCheck, changesCommand } from "./changes.ts"
 import { land, landingReportsPoint, landingsAreMarkers, landingsPaired } from "./land.ts"
-import { DIARY_RULE, diaryCheck, diaryCommand, eventCommand, EVENTS, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
+import { DIARY_RULE, diaryCheck, diaryCommand, eventCommand, EVENTS, frontLines, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
 
 export { type Timeline, type TimelineEvent, timelineOf } from "./timeline.ts"
 export { claimedInHistory, CLOSES, type Landing, type LandingReport, landingReportsPoint, markerMessage, moveTrunk, STALE_PROOFS } from "./land.ts"
@@ -711,10 +712,11 @@ const pass: Command = {
     mkdirSync(dir, { recursive: true })
     const name = `${date}-${randomUUID()}.md`
     const allowance = guardPrivate("the session note", findPrivate(text, privateContext()), ctx.allowPrivate)
+    const record = frontLines(beforeTextWrite(ctx, "the session note"))
     const body = [ack, text, allowance].filter(Boolean).join("\n\n")
     writeFileAtomic(
       join(dir, name),
-      `---\ndate: ${date}\nat: ${now.toISOString()}\nbranch: ${branch}${ack ? `\nack: ${ack}` : ""}\n---\n\n${body}\n`,
+      `---\ndate: ${date}\nat: ${now.toISOString()}\nbranch: ${branch}${ack ? `\nack: ${ack}` : ""}\n${record}---\n\n${body}\n`,
     )
     ctx.out(`wrote ${join(rel(ctx, PASSES), name)} — commit it on ${branch} with the work it describes`)
     return 0
