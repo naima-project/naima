@@ -94,7 +94,7 @@
 
   <section aria-labelledby="agent">
     <h2 id="agent">Ask your agent</h2>
-    <p>Open your AI agent in your project’s folder, or in a new empty one, and give it this:</p>
+    <p>You need an AI agent that can run commands in a folder, such as the Code tab of the Claude desktop app, Claude Code, Codex or Cursor. Open it in your project’s folder, or in a new empty one, and give it this:</p>
     <div class="box agent">
       <pre><code id="prompt">Please install https://github.com/naima-project/naima in the root of this repository; create a repository at the root if missing.</code></pre>
       <div class="tools">
@@ -119,7 +119,7 @@
       <pre><code id="ps">irm https://naima-project.github.io/naima/install.ps1 | iex</code></pre>
       <div class="tools"><button type="button" class="copy" data-copy="ps">Copy</button></div>
     </div>
-    <p class="note" style="margin-top: 14px">Then your agent runs <code>deno run -A naima-tracker/naima/naima.ts check</code> and works by Naima from the next session on.</p>
+    <p class="note" style="margin-top: 14px">Then your agent runs <code>deno run -A naima-tracker/naima/naima.ts check</code> and works by Naima from the next session on. Naima writes only in its own folder, <code>naima-tracker/</code>, and one line in your agent’s instruction file, so everything it does is in git and can be undone.</p>
   </section>
 </main>
 

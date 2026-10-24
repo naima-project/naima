@@ -24,6 +24,11 @@
 #   NAIMA_SOURCE           the repository to clone (default: Naima's on GitHub)
 #   NAIMA_REF              the branch or tag to install (default: main)
 #   NAIMA_NO_DENO_INSTALL  when set, never install Deno: say how, and stop
+#   NAIMA_TRACKER          where the tracker lives: private (a git repository of its
+#                          own beside the code, on this machine only), inside (committed
+#                          with the code), or the URL of a tracker repository to clone;
+#                          unset, init keeps it inside a project with no remote or a
+#                          private one, and stops with the question for a public one
 #
 # Run with `irm | iex` it runs in your session, so it never calls `exit`: a
 # refusal is an error, and your window stays open.
@@ -123,7 +128,13 @@ function Install-Naima {
       return
     }
     if (-not (Test-Path $Program)) { Get-Naima }
-    Invoke-Naima @('init')
+    $Tracker = switch ($env:NAIMA_TRACKER) {
+      { -not $_ } { @(); break }
+      'private' { @('--private-tracker'); break }
+      'inside' { @('--tracker-inside'); break }
+      default { @('--tracker', $env:NAIMA_TRACKER) }
+    }
+    Invoke-Naima (@('init') + $Tracker)
     Invoke-Naima @('check')
     Write-Host @"
 

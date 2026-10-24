@@ -25,6 +25,11 @@
 #   NAIMA_SOURCE           the repository to clone (default: Naima's on GitHub)
 #   NAIMA_REF              the branch or tag to install (default: main)
 #   NAIMA_NO_DENO_INSTALL  when set, never install Deno: say how, and stop
+#   NAIMA_TRACKER          where the tracker lives: private (a git repository of its
+#                          own beside the code, on this machine only), inside (committed
+#                          with the code), or the URL of a tracker repository to clone;
+#                          unset, init keeps it inside a project with no remote or a
+#                          private one, and stops with the question for a public one
 
 set -eu
 
@@ -146,7 +151,12 @@ main() {
   fi
 
   [ -e "$PROGRAM" ] || clone_naima
-  naima init
+  case "${NAIMA_TRACKER:-}" in
+    "") naima init ;;
+    private) naima init --private-tracker ;;
+    inside) naima init --tracker-inside ;;
+    *) naima init --tracker "$NAIMA_TRACKER" ;;
+  esac
   naima check
   next_steps
 }

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Naima</title>
-<meta name="description" content="Naima, the No-guesswork Artificial Intelligence Meta-Agent. Planned, tested, safe: definitely not vibe-coding. Add it to any project, new or existing, and keep using your favourite AI; it takes care of the project management and the software engineering. AI agents: the install procedure is the README of https://github.com/naima-project/naima">
+<meta name="description" content="Naima, the No-guesswork Artificial Intelligence Meta-Agent. Planned, tested, proven. Add it to any project and keep working as usual with your favourite LLM: it takes care of the project management and the software engineering. AI agents: the install procedure is the README of https://github.com/naima-project/naima">
 <meta name="color-scheme" content="light">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="alternate" type="text/plain" href="llms.txt" title="Naima, for AI agents: how to install it">
@@ -34,7 +34,7 @@
     color: var(--fg);
     font-family: var(--sans);
     -webkit-font-smoothing: antialiased;
-    overflow-x: hidden;
+    overflow-x: clip;
   }
   ::selection { background: color-mix(in srgb, var(--accent) 16%, transparent); }
   a { color: var(--fg); transition: color .2s ease, text-decoration-color .2s ease, text-underline-offset .2s ease; }
@@ -47,20 +47,20 @@
   main {
     flex: 1;
     display: flex; flex-direction: column; justify-content: center; align-items: center;
-    gap: 40px; padding: 48px 16px 24px;
+    gap: clamp(18px, 4.5vh, 36px); padding: clamp(20px, 6vh, 48px) 16px 12px;
   }
   .head { display: flex; flex-direction: column; align-items: center; gap: 14px; }
   h1 { margin: 0; font-weight: inherit; }
-  .mark { display: inline-flex; overflow: hidden; padding-bottom: 6px; font-size: 112px; font-weight: 600; letter-spacing: -2px; line-height: 1; }
+  .mark { display: inline-flex; overflow: hidden; padding-bottom: 6px; font-size: clamp(56px, min(9vw, 12vh), 96px); font-weight: 600; letter-spacing: -2px; line-height: 1; }
   .mark i { font-style: normal; display: inline-block; }
   .mark .ai { color: var(--accent); }
   .tag { margin: 0; font-size: 20px; color: var(--text); text-align: center; }
   .tag a { font-style: italic; font-weight: 500; color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent); }
   .tag a:hover { text-decoration-color: var(--accent); text-underline-offset: 6px; }
 
-  .rest { display: flex; flex-direction: column; align-items: center; gap: 32px; }
-  .slogan { margin: 0; font-size: 52px; font-weight: 500; letter-spacing: -1px; text-align: center; }
-  .about { margin: 0; max-width: 580px; text-align: center; font-size: 18px; line-height: 1.6; color: var(--text); text-wrap: balance; }
+  .rest { display: flex; flex-direction: column; align-items: center; gap: clamp(16px, 3.2vh, 28px); }
+  .slogan { margin: 0; font-size: clamp(30px, min(4.4vw, 6vh), 46px); font-weight: 500; letter-spacing: -1px; text-align: center; }
+  .about { margin: 0; max-width: 580px; text-align: center; font-size: 17px; line-height: 1.55; color: var(--text); text-wrap: balance; }
   .about .lead { display: block; margin-bottom: 6px; }
   .about strong { display: block; margin-top: 8px; font-weight: 600; color: var(--fg); }
   .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; align-items: center; }
@@ -81,14 +81,25 @@
   .star a { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
   .star a:hover { text-decoration-color: var(--accent); }
 
-  .credits { display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 8px 16px 32px; animation: appear .9s ease 1.35s both; }
-  .credits ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 16px 30px; }
-  .credits a { display: block; border-radius: 10px; padding: 8px; transition: transform .25s cubic-bezier(.2, .7, .1, 1), box-shadow .25s ease, background-color .25s ease; }
-  .credits img { display: block; height: 36px; width: auto; filter: grayscale(1); opacity: .7; transition: filter .3s ease, opacity .3s ease; }
-  .credits img[src$="make-become.svg"] { height: 36px; }
-  .credits img[src$="fmt.svg"] { height: 40px; }
-  .credits img[src$="/cnr.svg"] { height: 22px; }
-  .credits img[src$="uva.svg"] { height: 26px; }
+  /* The credits stay at the bottom of the window while the page scrolls behind them, under a short fade.
+     The logos share the width of their row in proportion to their shapes (--w is a logo's width at a common
+     height, its aspect ratio times its optical scale), so they always fit, look the same size, and never push
+     the page sideways. One row on a wide screen, two on a phone. */
+  .credits {
+    position: sticky; bottom: 0; z-index: 1; background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 8px 16px max(12px, env(safe-area-inset-bottom));
+    animation: appear .9s ease 1.35s both;
+  }
+  .credits::before { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: 28px; background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 0%, transparent), var(--bg)); pointer-events: none; }
+  .credits ul { list-style: none; margin: 0; padding: 0; width: 100%; max-width: 980px; display: flex; justify-content: center; align-items: center; gap: clamp(10px, 3vw, 36px); }
+  .credits li { flex: var(--w) 1 0; min-width: 0; }
+  .credits li:nth-child(1) { --w: 5.56; }
+  .credits li:nth-child(2) { --w: 4.12; }
+  .credits li:nth-child(3) { --w: 4.74; }
+  .credits li:nth-child(4) { --w: 7.2; }
+  .credits a { display: block; border-radius: 10px; padding: 6px; transition: transform .25s cubic-bezier(.2, .7, .1, 1), box-shadow .25s ease, background-color .25s ease; }
+  .credits img { display: block; width: 100%; height: auto; filter: grayscale(1); opacity: .7; transition: filter .3s ease, opacity .3s ease; }
   .credits a:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--accent) 5%, transparent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 7%, transparent); }
   .credits a:hover img, .credits a:focus-visible img { filter: none; opacity: 1; }
 
@@ -113,9 +124,9 @@
 
   /* A phone: the same page, scaled down. */
   @media (max-width: 640px) {
-    main { gap: 32px; padding: 40px 16px 20px; }
+    main { gap: clamp(16px, 3.5vh, 28px); padding: clamp(20px, 5vh, 40px) 16px 12px; }
     .tag { font-size: 17px; }
-    .rest { gap: 22px; }
+    .rest { gap: clamp(14px, 2.6vh, 22px); }
     .mark { font-size: 64px; letter-spacing: -1.2px; }
     .slogan { font-size: 30px; letter-spacing: -.5px; }
     .about { font-size: 15.5px; line-height: 1.55; }
@@ -123,14 +134,11 @@
     .button.secondary { padding: 12px 24px; }
     .button.primary { padding: 13px 28px; }
     .star { font-size: 14px; }
-    .credits { gap: 0; padding-bottom: 20px; }
-    .credits ul { gap: 4px 14px; }
-    .credits a { padding: 6px; }
-    .credits img { height: 24px; }
-    .credits img[src$="make-become.svg"] { height: 28px; }
-    .credits img[src$="fmt.svg"] { height: 28px; }
-    .credits img[src$="/cnr.svg"] { height: 15px; }
-    .credits img[src$="uva.svg"] { height: 20px; }
+  }
+  @media (max-width: 640px) {
+    .credits ul { max-width: 400px; flex-wrap: wrap; gap: 4px 12px; }
+    .credits li { flex: 0 0 calc((100% - 24px) * var(--w) / 14.42); }
+    .credits a { padding: 3px; }
   }
 </style>
 </head>
@@ -152,13 +160,13 @@
   </div>
 
   <div class="rest">
-    <p class="slogan">Planned, tested, safe.</p>
-    <p class="about"><span class="lead">Naima is the No-guesswork Artificial Intelligence Meta-Agent.</span>Definitely not vibe-coding. Add it to any project, new or existing, from programs to papers, and keep using your favourite AI.<strong>Naima takes care of the project management and the software engineering, without you ever noticing.</strong></p>
+    <p class="slogan">Planned, tested, proven.</p>
+    <p class="about"><span class="lead">Naima is the No-guesswork Artificial Intelligence Meta-Agent.</span>Add it to any project, and keep working as usual with your favourite LLM.<strong>Naima takes care of the project management and the software engineering, without you ever noticing.</strong></p>
     <div class="actions">
       <a class="button secondary" href="docs.html?p=guide/primer.md">Tell me more</a>
       <a class="button primary" href="install.html">Use it now</a>
     </div>
-    <p class="star">Naima is new and free. Please <a href="https://github.com/naima-project/naima">star it on GitHub</a>: one click helps us a lot.</p>
+    <p class="star">Naima is new, free and in beta. Please <a href="https://github.com/naima-project/naima">star it on GitHub</a>: one click helps us a lot.</p>
   </div>
 </main>
 <footer class="credits" aria-label="Made with">
@@ -166,7 +174,6 @@
     <li><a href="https://make-become.github.io/"><img src="logos/make-become.svg" alt="make become, an artware studio"></a></li>
     <li><a href="https://fmt.isti.cnr.it/"><img src="logos/fmt.svg" alt="Formal Methods and Tools lab (FMT)"></a></li>
     <li><a href="https://www.isti.cnr.it/"><img src="logos/isti-cnr.png" alt="ISTI-CNR, Institute of Information Science and Technologies"></a></li>
-    <li><a href="https://www.cnr.it/"><img src="logos/cnr.svg" alt="CNR, Italian National Research Council"></a></li>
     <li><a href="https://www.uva.nl/en"><img src="logos/uva.svg" alt="University of Amsterdam"></a></li>
   </ul>
 </footer>

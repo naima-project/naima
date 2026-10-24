@@ -28,6 +28,12 @@ root with `git init`):
 1. Run the installer for this system:
    - macOS, Linux: `curl -fsSL https://naima-project.github.io/naima/install.sh | sh`
    - Windows (PowerShell): `irm https://naima-project.github.io/naima/install.ps1 | iex`
+   If the installer stops saying "this project looks public", ask the owner
+   once whether to keep the tracker private beside the code, recommending
+   yes, and run it again with `NAIMA_TRACKER=private` (yes) or
+   `NAIMA_TRACKER=inside` (no) in its environment. With a private tracker,
+   naima-tracker/naima-data/ is a git repository of its own: commit it there,
+   and naima-tracker/ in the project.
 2. `deno run -A naima-tracker/naima/naima.ts check` must end with `all invariants hold`.
 3. Commit what the installer wrote: naima-tracker/, and the line it added
    to the agent instruction file (AGENTS.md, CLAUDE.md, or the one your agent
