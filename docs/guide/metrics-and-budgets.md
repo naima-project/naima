@@ -362,26 +362,7 @@ its tests differently, for instance with `["deno", "task", "test"]`, change
 
 ## See how your code's quality moves over time
 
-To see your project's metrics, run `naima ui`. It opens a window titled
-Naima, and its **Metrics** tab holds the chart and the table of every metric.
-Tick the metrics you want, pick the first and the last commit, then press
-**Show**. The window reads the records each time it shows them, so a metric
-recorded while the window is open appears the next time you press **Show**.
-Closing the window ends it.
-
-```sh
-naima ui              # a window
-naima ui --browser    # the same page in your browser; Ctrl-C ends it
-```
-
-The window needs Deno. The first time it runs, it fetches the small library
-that draws it, so it needs the network once. If the window can't open,
-because Naima is run by Node or Bun or there is no network on that first run,
-your browser opens instead and `naima ui` says why in one line. The page is
-served from your machine only, and only to the window or browser it opened,
-so anyone else who tries the address is refused.
-
-Every recorded run is a point on the commit timeline. You can also read them
+Every recorded run is a point on the commit timeline. You can read them
 in the terminal, in four ways.
 
 ```sh

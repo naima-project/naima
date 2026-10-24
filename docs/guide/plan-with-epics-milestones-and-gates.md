@@ -70,7 +70,7 @@ gate still doesn't hold, `naima check` warns about it (the check `milestone-over
 something to know about, not a sign that the project is broken.
 
 `naima gates --json` prints the same information as data: each gate's name, title and timing, whether it holds, and the items that block it or only still owe a
-proof. The gates also have a panel on the first screen of `naima ui`.
+proof.
 
 ## See when things happened: the timeline
 
@@ -97,7 +97,7 @@ You only need to write down what the tracker can't know, such as a decision take
 naima event 2026-09-14 "Build 3 handed to the testers" --kind build
 ```
 
-Each event is one file in `naima-tracker/naima-data/events/`. The timeline is also a tab in the window that `naima ui` opens.
+Each event is one file in `naima-tracker/naima-data/events/`.
 
 ## Say what waits on what: the order of the work
 
@@ -197,8 +197,7 @@ paid — the paid features: 2 of 3 covered
 ```
 
 `naima coverage --check` exits 1 as long as any entry has NO TEST. A gate can require a list, as in `naima gate new launch "Launch" --coverage paid`, and it is
-then blocked by each entry with NO TEST. `naima check` notes a test whose `covers` names an entry that is no longer on the list. Coverage is also a tab in
-`naima ui`.
+then blocked by each entry with NO TEST. `naima check` notes a test whose `covers` names an entry that is no longer on the list.
 
 ## Where it lives
 

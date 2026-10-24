@@ -25,10 +25,8 @@ them. Packs of item types for other kinds of work are
 
 No, because Naima has no server and no account. The board is
 `naima board <type>`, and `naima summary --markdown` prints the state of the
-project as markdown you can paste anywhere. `naima ui` opens a window on your
-machine. Its first screen shows the summary, the gates, what is next and who
-holds what, and its tabs show the boards, the session notes and each item
-with its evidence. A visual design of its own for that window is
+project as markdown you can paste anywhere. A window on your machine with the
+summary, the gates and the boards is
 [planned](../planned.md#design-skills-and-a-dashboard).
 
 ## Where is my data? Does anything leave my machine?

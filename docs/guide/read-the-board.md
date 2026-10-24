@@ -159,30 +159,6 @@ are `next`, which shows open items with the most urgent first, and
 with each release and session, all derived from the items and git.
 `naima view next --json` gives the data behind a view.
 
-## The window
-
-`naima ui` opens a window. Its first screen, **Home**, shows four panels.
-They are the summary (what `naima summary` prints), the gates with whether
-each one holds and the items blocking it (what `naima gates` prints), what is
-next (what `naima view next` ranks), and the claims, showing who holds what
-on every branch (what `naima claims` prints). The other views are tabs.
-
-- **Boards**: one type's board, picked from a list, with the done items when
-  you tick the box (what `naima board <type>` prints).
-- **Session notes**: the newest notes, from every branch (what
-  `naima pass --list` prints).
-- **Item**: one item, picked by its reference. It shows the evidence first,
-  meaning the files attached to the item and the tests that can prove it,
-  each marked proves, refutes or not yet. After that come its fields, its
-  other links and its page (what `naima show <item>` prints). Every item
-  reference elsewhere in the window links here.
-- The metrics, the timeline, the coverage of the project's declared lists,
-  and any tabs a plugin adds.
-
-Each tab shows the same data its command prints, read from the files every
-time the page loads, so the window and the terminal always agree. Every
-command is documented in the [reference](../reference/reference.md).
-
 ## How long a `now` item has waited
 
 `naima view next` has an age column, which gives the number of whole days
