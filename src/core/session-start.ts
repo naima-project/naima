@@ -15,6 +15,7 @@ import { adapter, ADAPTERS, type AgentAdapter } from "./adapters/index.ts"
 import { posixRelative } from "./config.ts"
 import { mayWrite } from "./files.ts"
 import { runGit } from "./git.ts"
+import { trackerGitOf } from "./repos.ts"
 import { DATA_FILE, PROGRAM_DIR, trackerOf } from "./layout.ts"
 import { short } from "./program.ts"
 import { agentPointer, AGENTS_FILE, upgradePointer, writePointer } from "./pointer.ts"
@@ -122,7 +123,8 @@ export function sessionStartLeft(root: string, tracker: string, config: SessionC
 
 /** The lock naima.json holds in the project's last commit; null when it holds none. */
 export function committedLock(root: string, data: string): string | null {
-  const r = runGit(root, ["show", `HEAD:${posixRelative(root, join(data, DATA_FILE))}`])
+  const repo = trackerGitOf(root, data)
+  const r = runGit(repo, ["show", `HEAD:${posixRelative(repo, join(data, DATA_FILE))}`])
   if (!r.ok) return null
   try {
     const commit = (JSON.parse(r.out) as { commit?: unknown }).commit

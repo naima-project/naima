@@ -474,6 +474,15 @@ export interface Context {
   trackerRoot: string
   /** The data directory from the project root, with forward slashes: what paths are printed from. */
   trackerDir: string
+  /**
+   * Absolute top of the git repository that holds the data: `root` when the tracker is committed with the code, the
+   * data directory itself when it is a repository of its own (sibling mode). Every git call about tracker files goes here.
+   */
+  trackerGit: string
+  /** The data directory from `trackerGit`, with forward slashes: `trackerDir` with one repository, empty in sibling mode. */
+  trackerPrefix: string
+  /** The tracker is a repository of its own beside the code's: its commits pair with the code's by trailers and branch names. */
+  sibling: boolean
   /** Absolute program directory: the Naima that runs. Never part of the project's own files. */
   program: string
   /** Frozen, like the registry. */

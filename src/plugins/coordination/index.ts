@@ -7,7 +7,7 @@
 // Both are written on the writer's own branch, never staged, never committed
 // by the tool. The collections are recombined at read time from every branch.
 
-import { randomUUID } from "node:crypto"
+import { randomBytes, randomUUID } from "node:crypto"
 import { mkdirSync, readFileSync, unlinkSync } from "node:fs"
 import { dirname, join } from "node:path"
 import {
@@ -17,6 +17,7 @@ import {
   type BranchFile,
   type Check,
   cloneIntoNewWorktree,
+  CODE_TRAILER,
   type Command,
   type Context,
   CONTRACT,
@@ -32,6 +33,7 @@ import {
   isOpen,
   label,
   mustGit,
+  pairedBranch,
   parse,
   type Plugin,
   positiveInt,
@@ -43,6 +45,9 @@ import {
   str,
   type SummarySection,
   today,
+  TRACKER_TRAILER,
+  trackerPath,
+  trailerHookCurrent,
   trunk,
   usageError,
   worktrees,
@@ -66,7 +71,7 @@ import {
 } from "./worktrees.ts"
 import { claimsUiView, notesUiView } from "./ui.ts"
 import { changeNotesCheck, changesCommand } from "./changes.ts"
-import { land, landingReportsPoint, landingsAreMarkers } from "./land.ts"
+import { land, landingReportsPoint, landingsAreMarkers, landingsPaired } from "./land.ts"
 import { DIARY_RULE, diaryCheck, diaryCommand, eventCommand, EVENTS, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
 
 export { type Timeline, type TimelineEvent, timelineOf } from "./timeline.ts"
@@ -135,6 +140,8 @@ export const ACK_REQUIRED_FROM = "2026-10-02"
 
 /** A coordination directory, from the project root, with forward slashes: it is also a path in git. */
 const rel = (ctx: Context, dir: string): string => `${ctx.trackerDir}/${dir}`
+/** A coordination directory as git names it in the tracker's repository. */
+const inGit = (ctx: Context, dir: string): string => trackerPath(ctx.trackerPrefix, dir)
 
 function parseClaim(f: BranchFile): Claim | null {
   try {
@@ -168,7 +175,7 @@ function claimBranch(f: BranchFile): string | undefined {
 }
 
 export function readClaims(ctx: Context): Claim[] {
-  return readAcrossBranches(ctx.root, rel(ctx, CLAIMS), ".json", { owner: claimBranch })
+  return readAcrossBranches(ctx.trackerGit, inGit(ctx, CLAIMS), ".json", { owner: claimBranch })
     .map(parseClaim)
     .filter((c): c is Claim => c !== null)
 }
@@ -196,7 +203,7 @@ function parsePass(f: BranchFile): Pass | null {
 /** Every session note on every branch, newest first by instant. */
 export function readPasses(ctx: Context): Pass[] {
   const key = (p: Pass) => p.at || p.date
-  return readAcrossBranches(ctx.root, rel(ctx, PASSES), ".md")
+  return readAcrossBranches(ctx.trackerGit, inGit(ctx, PASSES), ".md")
     .map(parsePass)
     .filter((p): p is Pass => p !== null)
     .sort((a, b) => (key(a) < key(b) ? 1 : key(a) > key(b) ? -1 : a.file < b.file ? 1 : -1))
@@ -231,7 +238,7 @@ function expectedAcks(ctx: Context): string[] {
 }
 
 function writeClaim(ctx: Context, claim: Claim): string {
-  const dir = join(ctx.root, rel(ctx, CLAIMS))
+  const dir = join(ctx.trackerRoot, CLAIMS)
   mkdirSync(dir, { recursive: true })
   const { file, ref: _ref, local: _local, ...body } = claim
   writeJson(join(dir, file), body)
@@ -249,7 +256,7 @@ function myClaim(ctx: Context, branch: string, all: Claim[] = readClaims(ctx)): 
  * same file is written again rather than a second one beside it.
  */
 function freshClaim(ctx: Context, branch: string): Claim {
-  const committed = filesAt(ctx.root, "HEAD", rel(ctx, CLAIMS), ".json").map(parseClaim).find((c) => c?.branch === branch)
+  const committed = filesAt(ctx.trackerGit, "HEAD", inGit(ctx, CLAIMS), ".json").map(parseClaim).find((c) => c?.branch === branch)
   return { branch, claimedAt: today(ctx), items: [], file: committed?.file ?? `${randomUUID()}.json`, ref: branch, local: true }
 }
 
@@ -310,7 +317,7 @@ const claimCommand: Command = {
     if (preparing === false) delete mine.preparing
     if (preparing !== undefined) ctx.out(`${branch} is ${preparing ? "" : "no longer "}being prepared to enter the trunk`)
     if (preparing === false && !items.length && empty(mine) && mine.local) {
-      unlinkSync(join(ctx.root, rel(ctx, CLAIMS), mine.file))
+      unlinkSync(join(ctx.trackerRoot, CLAIMS, mine.file))
       ctx.out(`removed ${join(rel(ctx, CLAIMS), mine.file)}, which held only the mark — commit the deletion on ${branch}`)
       return 0
     }
@@ -347,7 +354,7 @@ const release: Command = {
     if (kept.length === mine.items.length) throw new Error(`none of ${refs.join(", ")} is claimed on ${branch}; nothing changed`)
     ctx.out(`released ${mine.items.length - kept.length} on ${branch}`)
     if (kept.length === 0 && mine.local && !mine.preparing) {
-      unlinkSync(join(ctx.root, rel(ctx, CLAIMS), mine.file))
+      unlinkSync(join(ctx.trackerRoot, CLAIMS, mine.file))
       ctx.out(`removed ${join(rel(ctx, CLAIMS), mine.file)} — commit the deletion on ${branch}`)
     } else {
       // A claim read from another ref cannot be deleted from here: an emptied copy on this branch overrides it.
@@ -426,11 +433,16 @@ const closed = (ctx: Context, id: string): boolean => {
  * file the merge brought; or every item it claims is closed. A stale claim is
  * released by `naima prune --write`, run where its file is.
  */
-export function staleReason(ctx: Context, c: Claim, main: string | null = trunk(ctx.root), alive: Set<string> = allRefNames(ctx.root)): string | undefined {
+export function staleReason(
+  ctx: Context,
+  c: Claim,
+  main: string | null = trunk(ctx.trackerGit),
+  alive: Set<string> = allRefNames(ctx.trackerGit),
+): string | undefined {
   if (!alive.has(c.branch)) return "its branch is gone"
   if (
-    main && c.branch !== main && isAncestor(ctx.root, `refs/heads/${c.branch}`, main) &&
-    filesAt(ctx.root, main, rel(ctx, CLAIMS), ".json").some((f) => f.name === c.file)
+    main && c.branch !== main && isAncestor(ctx.trackerGit, `refs/heads/${c.branch}`, main) &&
+    filesAt(ctx.trackerGit, main, inGit(ctx, CLAIMS), ".json").some((f) => f.name === c.file)
   ) return `its branch is merged into ${main}`
   if (c.items.length && c.items.every((e) => closed(ctx, e.id))) return "every item it claims is closed"
   return undefined
@@ -439,8 +451,8 @@ export function staleReason(ctx: Context, c: Claim, main: string | null = trunk(
 /** Every claim, recombined from every branch now — only `only`'s when given — and the items more than one holds. */
 export function claimsData(ctx: Context, only?: string, silentAfter: number = SILENT_AFTER): ClaimsData {
   const here = currentBranch(ctx.root)
-  const main = trunk(ctx.root)
-  const alive = allRefNames(ctx.root)
+  const main = trunk(ctx.trackerGit)
+  const alive = allRefNames(ctx.trackerGit)
   const list = readClaims(ctx).filter((c) => !only || c.branch === only).map((c) => ({ c, stale: staleReason(ctx, c, main, alive) }))
   const holders = new Map<string, Set<string>>()
   for (const { c, stale } of list) if (!stale) { for (const e of c.items) holders.set(e.id, (holders.get(e.id) ?? new Set()).add(c.branch)) }
@@ -514,25 +526,30 @@ const claimsCommand = (silentAfter: number): Command => ({
 /** The tag that keeps a branch's commits once the branch is deleted. */
 export const archiveTag = (branch: string): string => `archive/${branch}`
 
+/** What deleting a branch does in one repository: the steps it would take, and runs them once every side may. */
+interface PruneSide {
+  plan: string[]
+  kept: boolean
+  run(): void
+}
+
 /**
- * Delete a branch and the worktree standing on it. A branch with commits the
- * trunk has not is deleted only when its archive tag holds them: `--archive`
- * makes the tag first.
+ * One repository's side of deleting `branch`: refused when it has commits the trunk lacks and no archive tag holds
+ * them (unless `archive`), or when its worktree holds anything uncommitted. `name` says which repository, when there
+ * are two.
  */
-function pruneBranch(ctx: Context, branch: string, write: boolean, archive: boolean): number {
-  const main = trunk(ctx.root)
-  if (!main) throw new Error("no trunk (main, master, or origin's HEAD): nothing to measure the branch against")
-  if (branch === main) throw new Error(`${branch} is the trunk: it is never pruned`)
-  if (gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`) === null) throw new Error(`no branch ${branch}`)
-  const tree = worktrees(ctx.root).find((w) => w.branch === branch)
+function pruneSide(ctx: Context, repo: string, branch: string, write: boolean, archive: boolean, name: string): PruneSide {
+  const main = trunk(repo)
+  if (!main) throw new Error(`no trunk (main, master, or origin's HEAD)${name}: nothing to measure the branch against`)
+  const tree = worktrees(repo).find((w) => w.branch === branch)
   if (tree?.self) throw new Error(`${branch} is the worktree you stand in: prune it from another one`)
   const tag = archiveTag(branch)
-  const n = ahead(ctx.root, main, branch)
-  const kept = gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `refs/tags/${tag}`) !== null &&
-    gitOrNull(ctx.root, "merge-base", "--is-ancestor", branch, `refs/tags/${tag}`) !== null
+  const n = ahead(repo, main, branch)
+  const kept = gitOrNull(repo, "rev-parse", "--verify", "--quiet", `refs/tags/${tag}`) !== null &&
+    gitOrNull(repo, "merge-base", "--is-ancestor", branch, `refs/tags/${tag}`) !== null
   const unkept = n > 0 && !kept
   if (unkept) {
-    const why = `${branch} has ${plural(n, "commit")} not on ${main} and no ${tag} tag holding them`
+    const why = `${branch} has ${plural(n, "commit")} not on ${main}${name} and no ${tag} tag holding them`
     if (!archive) {
       if (write) throw new Error(`${why}: deleting it would lose them — pass --archive to tag them as ${tag} first`)
       ctx.out(`${why}: --archive tags them first`)
@@ -545,19 +562,46 @@ function pruneBranch(ctx: Context, branch: string, write: boolean, archive: bool
     if (write) throw new Error(`${why} — commit or discard them first`)
     ctx.out(`${why}: commit or discard them before --write`)
   }
-  const plan = [
-    ...(unkept && archive ? [`tag ${tag} at ${branch}`] : []),
-    ...(tree ? [`remove the worktree ${tree.path}`] : []),
-    `delete the branch ${branch}`,
+  return {
+    plan: [
+      ...(unkept && archive ? [`tag ${tag} at ${branch}${name}`] : []),
+      ...(tree ? [`remove the worktree ${tree.path}`] : []),
+      `delete the branch ${branch}${name}`,
+    ],
+    kept: kept || (unkept && archive),
+    run() {
+      if (unkept && archive) mustGit(repo, "tag", tag, branch)
+      if (tree) mustGit(repo, "worktree", "remove", ...(status === "" ? ["--force"] : []), tree.path)
+      mustGit(repo, "branch", "-D", branch)
+    },
+  }
+}
+
+/**
+ * Delete a branch and the worktree standing on it. A branch with commits the
+ * trunk has not is deleted only when its archive tag holds them: `--archive`
+ * makes the tag first. With the tracker in a repository of its own, the
+ * tracker's branch of the same name goes too, by the same rules, first: its
+ * worktree is inside the code's.
+ */
+function pruneBranch(ctx: Context, branch: string, write: boolean, archive: boolean): number {
+  const main = trunk(ctx.root)
+  if (!main) throw new Error("no trunk (main, master, or origin's HEAD): nothing to measure the branch against")
+  if (branch === main) throw new Error(`${branch} is the trunk: it is never pruned`)
+  if (gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`) === null) throw new Error(`no branch ${branch}`)
+  const paired = ctx.sibling && branch !== trunk(ctx.trackerGit) &&
+    gitOrNull(ctx.trackerGit, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`) !== null
+  const sides = [
+    ...(paired ? [pruneSide(ctx, ctx.trackerGit, branch, write, archive, " in the tracker")] : []),
+    pruneSide(ctx, ctx.root, branch, write, archive, ""),
   ]
+  const plan = sides.flatMap((s) => s.plan)
   if (!write) {
     ctx.out(`would ${plan.join(", ")} — run again with --write`)
     return 0
   }
-  if (unkept && archive) mustGit(ctx.root, "tag", tag, branch)
-  if (tree) mustGit(ctx.root, "worktree", "remove", ...(status === "" ? ["--force"] : []), tree.path)
-  mustGit(ctx.root, "branch", "-D", branch)
-  ctx.out(`did ${plan.join(", ")}${kept || (unkept && archive) ? ` — its commits stay on ${tag}` : ""}`)
+  for (const s of sides) s.run()
+  ctx.out(`did ${plan.join(", ")}${sides.some((s) => s.kept) ? ` — its commits stay on ${archiveTag(branch)}` : ""}`)
   return 0
 }
 
@@ -580,8 +624,8 @@ const prune: Command = {
     const branch = str(p, "branch")
     if (branch) return pruneBranch(ctx, branch, write, bool(p, "archive"))
     if (bool(p, "archive")) throw usageError(this)
-    const alive = allRefNames(ctx.root)
-    const main = trunk(ctx.root)
+    const alive = allRefNames(ctx.trackerGit)
+    const main = trunk(ctx.trackerGit)
     const stale = readClaims(ctx).map((c) => ({ c, why: staleReason(ctx, c, main, alive) })).filter((s) => s.why)
     if (!stale.length) {
       ctx.out("no stale claim: every claim names a live branch with open work")
@@ -600,7 +644,7 @@ const prune: Command = {
       ctx.out("nothing removed — run again with --write")
       return 0
     }
-    for (const c of here) unlinkSync(join(ctx.root, rel(ctx, CLAIMS), c.file))
+    for (const c of here) unlinkSync(join(ctx.trackerRoot, CLAIMS, c.file))
     ctx.out(
       `removed ${here.length} here${elsewhere.length ? `; ${elsewhere.length} must be dropped on its ref` : ""} — commit the deletions on ${
         currentBranch(ctx.root)
@@ -661,7 +705,7 @@ const pass: Command = {
     const now = ctx.now()
     const date = now.toISOString().slice(0, 10)
     const branch = currentBranch(ctx.root)
-    const dir = join(ctx.root, rel(ctx, PASSES))
+    const dir = join(ctx.trackerRoot, PASSES)
     mkdirSync(dir, { recursive: true })
     const name = `${date}-${randomUUID()}.md`
     const allowance = guardPrivate("the session note", findPrivate(text, privateContext()), ctx.allowPrivate)
@@ -695,7 +739,8 @@ function openCommand(policy: Policy): Command {
       const who = str(p, "as") ?? policy.who
       if (!who) throw new Error("open needs --as <who>, the branch's first segment, or the coordination plugin's who option")
       const items = p.positionals.map((r) => ctx.repo.resolve(r))
-      const what = str(p, "name") ?? items[0]?.slug ?? ""
+      // A public code repository learns nothing of the tracker from a branch name: in sibling mode the default is opaque.
+      const what = str(p, "name") ?? (ctx.sibling ? randomBytes(3).toString("hex") : items[0]?.slug ?? "")
       for (const [flag, value] of [["--as", who], ["--name", what]] as const) {
         if (!SEGMENT.test(value)) throw new Error(`${flag} ${value}: each part of a branch name is a ${SEGMENT_SAYS}`)
       }
@@ -713,7 +758,17 @@ function openCommand(policy: Policy): Command {
         )
       }
       if (exists(path)) throw new Error(`${path} already exists: pick another --name`)
+      const trackerBase = ctx.sibling ? trunk(ctx.trackerGit) : null
+      if (ctx.sibling) {
+        if (!trackerBase) throw new Error("the tracker repository has no trunk (main, master, or origin's HEAD): commit the tracker first")
+        if (gitOrNull(ctx.trackerGit, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`) !== null) {
+          throw new Error(`branch ${branch} already exists in the tracker repository: pick another --name, or prune it there`)
+        }
+      }
       mustGit(ctx.root, "worktree", "add", "-q", "-b", branch, path, base)
+      // The tracker's own worktree, on the branch of the same name, where the code's worktree keeps its data.
+      const trackerTree = join(path, ctx.trackerDir)
+      if (trackerBase) mustGit(ctx.trackerGit, "worktree", "add", "-q", "-b", branch, trackerTree, trackerBase)
       const newProgram = join(path, posixRelative(ctx.root, ctx.program))
       if (!isClone(ctx.program)) {
         ctx.out(`${posixRelative(ctx.root, ctx.program)} is not a program clone yet: ${path} will align its own on its first run (naima check)`)
@@ -743,8 +798,9 @@ function openCommand(policy: Policy): Command {
       // The new worktree is outside what this run may write: git writes the claim there.
       const { file: name, ref: _ref, local: _local, ...body } = claim
       const file = `${rel(ctx, CLAIMS)}/${name}`
-      writeThroughGit(path, file, JSON.stringify(body, null, 2) + "\n")
-      ctx.out(`opened ${path} on ${branch}, from ${base}`)
+      if (trackerBase) writeThroughGit(trackerTree, `${inGit(ctx, CLAIMS)}/${name}`, JSON.stringify(body, null, 2) + "\n")
+      else writeThroughGit(path, file, JSON.stringify(body, null, 2) + "\n")
+      ctx.out(`opened ${path} on ${branch}, from ${base}${trackerBase ? `, and its tracker on ${branch}, from the tracker's ${trackerBase}` : ""}`)
       ctx.out(`claimed ${claim.items.map((e) => e.ref).join(", ")} in ${file} — commit it on ${branch} with the work`)
       ctx.out(`next: cd ${path}, and install the dependencies a fresh checkout lacks`)
       return 0
@@ -756,7 +812,8 @@ function openCommand(policy: Policy): Command {
 const holders = (ctx: Context) => ({
   claimed: new Set(readClaims(ctx).filter((c) => !empty(c)).map((c) => c.branch)),
   noted: new Set(readPasses(ctx).map((p) => p.branch)),
-  claims: rel(ctx, CLAIMS),
+  claims: inGit(ctx, CLAIMS),
+  repo: ctx.trackerGit,
 })
 
 function worktreePolicy(policy: Policy): Check {
@@ -773,6 +830,55 @@ const trunkMoved: Check = {
   says:
     "a branch whose claim is marked preparing is told every commit the trunk took that it lacks, and which of them the trunk's reflog records as committed on the trunk directly",
   run: (ctx) => readClaims(ctx).filter((c) => c.preparing).flatMap((c) => preparingFindings(ctx.root, c.branch)),
+}
+
+/** The commits of `repo` on its branch that its trunk lacks, with the value each gives the trailer `key`: empty on the trunk or without one. */
+function ownCommits(repo: string, key: string): { sha: string; subject: string; value: string }[] {
+  const main = trunk(repo)
+  const here = currentBranch(repo)
+  if (!main || here === "HEAD" || here === main) return []
+  const out = gitOrNull(repo, "log", `--format=%H%x1f%s%x1f%(trailers:key=${key},valueonly,separator=%x1d)%x1e`, `${main}..HEAD`) ?? ""
+  return out.split("\x1e").map((r) => r.replace(/^\n/, "")).filter(Boolean).map((r) => {
+    const [sha = "", subject = "", value = ""] = r.split("\x1f")
+    return { sha, subject, value: value.split("\x1d")[0]?.trim() ?? "" }
+  })
+}
+
+/**
+ * Sibling mode: the code's branch and the tracker's are the same, and every commit of each names the other's.
+ * A branch out of pair is a problem (tracker writes would land on the wrong branch); a commit without its trailer, a
+ * note naming the hook that adds it.
+ */
+const branchesPaired: Check = {
+  name: "branches-paired",
+  says:
+    "with the tracker in a repository of its own, the tracker stands on the branch of the code's name (its trunk on the code's trunk), so work on code branch X writes to tracker branch X — any naima command pairs them, creating the tracker's branch from its trunk; a commit of the branch, in either repository, that does not name the other repository's commit in its Tracker: or Code: trailer is a note, and so is a missing trailer hook",
+  run(ctx) {
+    if (!ctx.sibling) return []
+    const out: Finding[] = []
+    const codeBranch = currentBranch(ctx.root)
+    const trackerBranch = currentBranch(ctx.trackerGit)
+    const want = codeBranch === "HEAD" ? trackerBranch : pairedBranch(ctx.root, ctx.trackerGit, codeBranch)
+    if (trackerBranch !== want) {
+      out.push({
+        level: "problem",
+        message:
+          `the tracker is on ${trackerBranch} while the code is on ${codeBranch}: its writes would go to the wrong branch — commit or set aside what the tracker holds, then any naima command moves it to ${want}`,
+      })
+    }
+    if (!trailerHookCurrent(ctx.root, ctx.trackerRoot)) {
+      out.push({ level: "note", message: `the trailer hook that pairs the two repositories' commits is missing or out of date: naima hooks install writes it` })
+    }
+    for (const [repo, key, other] of [[ctx.root, TRACKER_TRAILER, "tracker"], [ctx.trackerGit, CODE_TRAILER, "code"]] as const) {
+      for (const c of ownCommits(repo, key).filter((c) => !c.value)) {
+        out.push({
+          level: "note",
+          message: `${c.sha.slice(0, 12)} "${c.subject}"${repo === ctx.root ? "" : " in the tracker"} names no ${other} commit in a ${key}: trailer`,
+        })
+      }
+    }
+    return out
+  },
 }
 
 const claimsResolve: Check = {
@@ -825,8 +931,8 @@ const staleClaims: Check = {
   says:
     "a claim whose branch is gone, or merged into the trunk (which then carries its file), or whose items are all closed, no longer stands for work in progress: one note per stale claim, naming the command that releases it",
   run(ctx) {
-    const main = trunk(ctx.root)
-    const alive = allRefNames(ctx.root)
+    const main = trunk(ctx.trackerGit)
+    const alive = allRefNames(ctx.trackerGit)
     return readClaims(ctx).flatMap((c): Finding[] => {
       const why = staleReason(ctx, c, main, alive)
       return why ? [{ level: "note", message: `claim of ${c.branch} (${c.file}) is stale: ${why} — release it: ${releaseLine(c)}` }] : []
@@ -961,6 +1067,8 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       closedNotClaimed,
       sessionNoteAck,
       landingsAreMarkers,
+      landingsPaired,
+      branchesPaired,
       diaryCheck(readPasses, diaryPerDay),
       changeNotesCheck,
     ],

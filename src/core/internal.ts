@@ -26,6 +26,8 @@ export {
   trackerReadme,
 } from "./layout.ts"
 export { consoleIO, createContext, type IO, type Place } from "./context.ts"
+export { githubRepo, isLocalRemote, remoteVisibility, type Visibility, VISIBILITY_HOST } from "./visibility.ts"
+export { installTrailerHooks, pairTracker, projectRootOf, readSiblingMarker, trackerGitOf } from "./repos.ts"
 export { launcherSet } from "./launched.ts"
 export { PRIVATE_ENV, privateEnv, privateWordsFile } from "./private.ts"
 export { buildRegistry, type RegistryOptions } from "./registry.ts"

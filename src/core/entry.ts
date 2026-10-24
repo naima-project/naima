@@ -13,8 +13,20 @@ export const cliCommands: Omit<Command, "run">[] = [
       `make the git repository around the program a Naima project, as its first run does by itself: beside the program, a git clone of Naima at ${TRACKER_DIR}/${PROGRAM_DIR}/, create ${DATA_DIR}/${DATA_FILE}, locked to the clone's origin and its HEAD, which must be on the origin's main, and the tracker folder's README.md and .gitignore; print the line that keeps the program out of each host tool configuration it finds (deno.json, tsconfig.json, .prettierignore); and write what makes an agent run naima hello at the start of every session: the line that tells agents where Naima is and to run it, into the host's AGENTS.md, else the first entry file it has, else a new AGENTS.md, and the session-start hook of each agent tool the project uses that has one (naima.json's agents; absent it, those whose files the project holds); nothing else outside ${TRACKER_DIR}/ is touched unless --write-excludes is given`,
     enforces:
       "the program is locked to a commit of its source's main, with nothing uncommitted; outside the tracker folder, only the pointer line, the session-start hooks and, with --write-excludes, the exclusion lines are written",
-    usage: "init [--write-excludes] [--no-session-hook]",
+    usage: "init [--private-tracker | --tracker <url> [--private-url] | --tracker-inside] [--write-excludes] [--no-session-hook]",
     options: [
+      {
+        name: "--private-tracker",
+        says:
+          `keep the tracker private beside the code: ${DATA_DIR}/ becomes a git repository of its own, created on this machine with no remote, ignored by the project's git, and ${TRACKER_DIR}/tracker.json, committed with the code, says so; the two repositories' commits are paired by Tracker: and Code: trailers (a commit-msg hook in both) and their branches by name. Without any of these three options, init keeps the tracker inside a project with no remote, or a private one, and stops with the question to ask the owner when the remote is public or its visibility cannot be told (GitHub's public API, asked without credentials)`,
+      },
+      {
+        name: "--tracker",
+        says:
+          `like --private-tracker, from an existing tracker repository: ${DATA_DIR}/ becomes a git clone of the one at <url>, whose address tracker.json records`,
+      },
+      { name: "--private-url", says: "with --tracker: keep the tracker's address out of tracker.json, in this clone's git config (naima.tracker)" },
+      { name: "--tracker-inside", says: "commit the tracker with the code even though the project looks public: the owner's answer to init's question" },
       {
         name: "--write-excludes",
         says:
@@ -25,7 +37,13 @@ export const cliCommands: Omit<Command, "run">[] = [
         says: "install no agent tool's session-start hook: only the pointer line is written; naima check notes the hook missing, and naima update installs it",
       },
     ],
-    examples: ["init", "init --write-excludes", "init --no-session-hook"],
+    examples: [
+      "init",
+      "init --private-tracker",
+      "init --tracker git@example.invalid:me/tracker.git --private-url",
+      "init --write-excludes",
+      "init --no-session-hook",
+    ],
   },
   {
     name: "update",

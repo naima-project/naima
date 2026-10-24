@@ -212,7 +212,7 @@ const defaultTemplate = (title: string): string => `# ${title}\n\nDescribe it he
  */
 function slugFor(ctx: Context, base: string, title: string, id: string): { wanted: string; elsewhere: Set<string> } {
   const slug = slugify(title)
-  const elsewhere = dirsAcrossBranches(ctx.root, relative(ctx.root, base))
+  const elsewhere = dirsAcrossBranches(ctx.trackerGit, relative(ctx.trackerGit, base))
   return elsewhere ? { wanted: slug, elsewhere } : { wanted: `${slug}-${id.slice(0, 8)}`, elsewhere: new Set() }
 }
 

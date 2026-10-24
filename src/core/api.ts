@@ -99,6 +99,17 @@ export {
   worktrees,
 } from "./git.ts"
 export { DATA_FILE, DEFAULT_DATA, TRACKER_DIR } from "./layout.ts"
+export {
+  CODE_TRAILER,
+  installTrailerHooks,
+  pairedBranch,
+  pairTracker,
+  SIBLING_FILE,
+  TRACKER_TRAILER,
+  trackerPath,
+  trailerHookCurrent,
+  trailerOf,
+} from "./repos.ts"
 export { WAIVERS } from "./waivers.ts"
 export { askHost, DEFAULT_REMOTE_NAIMA, type Host, type HostAnswer, readHosts, shellQuote, sshArgs } from "./hosts.ts"
 export { installDirOf, installedProgram, type InstalledToolRef, platformKey, PLATFORMS, programFile, RECEIPT, toolsDir } from "./tools.ts"

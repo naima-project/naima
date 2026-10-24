@@ -94,8 +94,10 @@ export const ahead = (root: string, base: string, ref: string): number => Number
 export interface Holders {
   claimed: Set<string>
   noted: Set<string>
-  /** The claims directory, as git names it: where a released claim's history is looked for. */
+  /** The claims directory, as git names it in `repo`: where a released claim's history is looked for. */
   claims: string
+  /** The repository the claims are committed in: the project's, or the tracker's own in sibling mode, on the branch of the same name. */
+  repo?: string
 }
 
 /**
@@ -121,12 +123,14 @@ export function policyFindings(root: string, policy: Policy, holders: Holders, o
   const main = trunk(root)
   const trees = worktrees(root)
   const dir = worktreesDir(policy, home(root, trees))
+  const claimsRepo = holders.repo ?? root
+  const claimsMain = claimsRepo === root ? main : trunk(claimsRepo)
   for (const w of trees.slice(1)) {
     if (!w.branch || isExempt(policy, w.branch)) continue
     const last = w.branch.split("/").pop() ?? w.branch
     const n = main ? ahead(root, main, w.branch) : 0
     const held = holders.claimed.has(w.branch) || holders.noted.has(w.branch) ||
-      !!(n && gitOrNull(root, "log", "-1", "--format=%H", "--diff-filter=A", `${main}..${w.branch}`, "--", holders.claims))
+      !!(n && gitOrNull(claimsRepo, "log", "-1", "--format=%H", "--diff-filter=A", `${claimsMain}..${w.branch}`, "--", holders.claims || "."))
     if (!same(dirname(w.path), dir)) {
       if (!held) {
         out.push({

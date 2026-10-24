@@ -36,6 +36,7 @@ import {
   splitProse,
   str,
   today,
+  trackerPath,
   trunk,
   usageError,
   walkFiles,
@@ -141,10 +142,10 @@ function attachmentsOf(item: Item): string[] {
  * branch keeps attachments the trunk already has.
  */
 function trunkBlobs(ctx: Context, dir: string): Set<string> | null {
-  if (!isGitRepo(ctx.root)) return null
-  const name = trunk(ctx.root)
+  if (!isGitRepo(ctx.trackerGit)) return null
+  const name = trunk(ctx.trackerGit)
   if (!name) return null
-  const listed = gitOrNull(ctx.root, "ls-tree", "-r", "-z", name, "--", dir) ?? ""
+  const listed = gitOrNull(ctx.trackerGit, "ls-tree", "-r", "-z", name, "--", dir || ".") ?? ""
   return new Set(listed.split("\0").flatMap((l) => l.split("\t")[0]?.split(" ")[2] ?? []))
 }
 
@@ -247,7 +248,7 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
       "every attachment a branch adds has a record of whose it is (naima attach), every record names a file that is there, and the owner's carry their yes; what the trunk already holds, and what a tool writes itself, is not asked",
     run(ctx) {
       const out: Finding[] = []
-      const onTrunk = trunkBlobs(ctx, ctx.trackerDir)
+      const onTrunk = trunkBlobs(ctx, ctx.trackerPrefix)
       const unrecorded: { item: Item; name: string; path: string }[] = []
       for (const item of ctx.repo.items) {
         const records = recordsOf(item)
@@ -348,10 +349,10 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
 
   /** The exception paths in the trunk's configuration, or null when there is no trunk to compare with. */
   function trunkExceptions(ctx: Context): { name: string; paths: Set<string> } | null {
-    if (!isGitRepo(ctx.root)) return null
-    const name = trunk(ctx.root)
+    if (!isGitRepo(ctx.trackerGit)) return null
+    const name = trunk(ctx.trackerGit)
     if (!name) return null
-    const text = gitOrNull(ctx.root, "show", `${name}:${ctx.trackerDir}/naima.json`)
+    const text = gitOrNull(ctx.trackerGit, "show", `${name}:${trackerPath(ctx.trackerPrefix, "naima.json")}`)
     let list: unknown = []
     try {
       const raw: unknown = text ? JSON.parse(text) : {}

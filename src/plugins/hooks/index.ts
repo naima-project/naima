@@ -23,9 +23,11 @@ import {
   type Command,
   type Context,
   CONTRACT,
+  DATA_FILE,
   type Finding,
   gitPath,
   gitReason,
+  installTrailerHooks,
   isGitRepo,
   type Item,
   label,
@@ -34,6 +36,7 @@ import {
   parse,
   type Plugin,
   type PluginOptions,
+  posixRelative,
   runGit,
   stagedChanges,
   textsAt,
@@ -180,10 +183,11 @@ const parseMeta = (text: string | null): Meta | null => {
 
 /** The staged change of the project, read from git: empty outside git or with nothing staged. */
 export function readStaged(ctx: Context): Staged {
-  if (!isGitRepo(ctx.root)) return { paths: [], items: [] }
-  const changes = stagedChanges(ctx.root)
+  // The items are staged in the tracker's repository: the project's own, or one of its own in sibling mode.
+  if (!isGitRepo(ctx.trackerGit)) return { paths: [], items: [] }
+  const changes = stagedChanges(ctx.trackerGit)
   const dirs = new Map([...ctx.registry.types.values()].map((t) => [t.dir, t.id]))
-  const prefix = ctx.trackerDir + "/"
+  const prefix = ctx.trackerPrefix ? ctx.trackerPrefix + "/" : ""
   // Each path under an item's directory, grouped by that directory.
   const byDir = new Map<string, { type: string; changes: typeof changes }>()
   for (const c of changes) {
@@ -197,7 +201,7 @@ export function readStaged(ctx: Context): Staged {
     byDir.set(key, entry)
   }
   const keys = [...byDir.keys()]
-  const metas = textsAt(ctx.root, keys.flatMap((k) => [`HEAD:${k}/meta.json`, `:${k}/meta.json`]))
+  const metas = textsAt(ctx.trackerGit, keys.flatMap((k) => [`HEAD:${k}/meta.json`, `:${k}/meta.json`]))
   const byId = new Map<string, Touched>()
   keys.forEach((key, i) => {
     const before = parseMeta(metas[2 * i] ?? null)
@@ -221,7 +225,11 @@ export function readStaged(ctx: Context): Staged {
       paths: [...seen.paths, ...paths],
     })
   })
-  return { paths: changes.map((c) => c.path), items: [...byId.values()] }
+  // Paths are from the project root: in sibling mode the code's staged paths, and the tracker's under the data directory.
+  const paths = ctx.sibling
+    ? [...(isGitRepo(ctx.root) ? stagedChanges(ctx.root) : []).map((c) => c.path), ...changes.map((c) => `${ctx.trackerDir}/${c.path}`)]
+    : changes.map((c) => c.path)
+  return { paths, items: [...byId.values()] }
 }
 
 // ── evaluating the rules ─────────────────────────────────────────────────────
@@ -285,7 +293,7 @@ export function companionFindings(ctx: Context, rules: Companion[], staged: Stag
       const why = missing(ctx, staged, rule, t)
       if (!why) continue
       const item: Item | undefined = ctx.repo.byId.get(t.id)
-      const where = item ? label(item) : t.dir.slice(ctx.trackerDir.length + 1)
+      const where = item ? label(item) : t.dir.slice(ctx.trackerPrefix ? ctx.trackerPrefix.length + 1 : 0)
       out.push({ level: "problem", message: `${where}: ${why} — companion rule ${rule.name}: ${rule.says}`, ...(item ? { item } : {}) })
     }
   }
@@ -328,6 +336,14 @@ export function preCommit(ctx: Context, opts: HooksOptions): string {
     'legacy="$(git rev-parse --git-common-dir)/hooks/pre-commit"',
     'if [ -x "$legacy" ]; then "$legacy" "$@" || exit $?; fi',
     "",
+    ...(ctx.sibling
+      ? [
+        "# The tracker is a repository of its own: every commit of it is checked, from the code's root.",
+        `if [ -f "$(git rev-parse --show-toplevel)/${DATA_FILE}" ]; then cd "$(git rev-parse --show-toplevel)/${
+          posixRelative(ctx.trackerRoot, ctx.root) || "."
+        }" && exec ${hookCommand(ctx, opts)}; fi`,
+      ]
+      : []),
     `git -c core.quotePath=false diff --cached --name-only --no-renames | grep -qE ${quote(pattern)} || exit 0`,
     `exec ${hookCommand(ctx, opts)}`,
     "",
@@ -356,6 +372,8 @@ function install(ctx: Context, opts: HooksOptions, force: boolean): number {
     if (!r.ok) throw new Error(`git config core.hooksPath: ${gitReason(r)}`)
   }
   ctx.out(`wrote ${fromRoot(ctx, file)} — commit it; core.hooksPath is ${mine}, for this clone and every worktree of it`)
+  // Sibling mode: the tracker's repository runs the same hooks, and both run the trailer hook that pairs their commits.
+  if (ctx.sibling) { for (const line of installTrailerHooks(ctx.root, ctx.trackerRoot)) ctx.out(line) }
   return 0
 }
 

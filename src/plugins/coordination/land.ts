@@ -10,8 +10,10 @@ import { join, relative } from "node:path"
 import { isDeepStrictEqual } from "node:util"
 import {
   appliesTo,
+  bool,
   type Check,
   code,
+  CODE_TRAILER,
   type Command,
   type Context,
   currentBranch,
@@ -21,6 +23,7 @@ import {
   type Finding,
   gitOrNull,
   gitReason,
+  isAncestor,
   isUuid,
   label,
   message,
@@ -33,6 +36,8 @@ import {
   strs,
   table,
   textsAt,
+  TRACKER_TRAILER,
+  trackerPath,
   trunk,
   usageError,
   WAIVERS,
@@ -138,8 +143,8 @@ interface Landed {
   status: string
 }
 
-/** The claims directory, as git names it. */
-const claimsDir = (ctx: Context): string => `${ctx.trackerDir}/claims`
+/** The claims directory, as git names it in the tracker's repository. */
+const claimsDir = (ctx: Context): string => trackerPath(ctx.trackerPrefix, "claims")
 
 /** The branch a claim file's text records, and its items' ids and refs; null for one that does not parse. */
 function claimOf(text: string): { branch?: string; items: { id: string; ref?: string }[] } | null {
@@ -158,7 +163,7 @@ function claimOf(text: string): { branch?: string; items: { id: string; ref?: st
  * held just before it was released. One `git log` and one batch read.
  */
 export function claimedInHistory(ctx: Context, base: string, branch: string): { id: string; ref?: string }[] {
-  const log = gitOrNull(ctx.root, "log", "--format=%x1e%H", "--name-status", "--no-renames", `${base}..${branch}`, "--", claimsDir(ctx)) ?? ""
+  const log = gitOrNull(ctx.trackerGit, "log", "--format=%x1e%H", "--name-status", "--no-renames", `${base}..${branch}`, "--", claimsDir(ctx)) ?? ""
   const names: string[] = []
   const paths: string[] = []
   for (const block of log.split("\x1e").filter((b) => b.trim())) {
@@ -170,7 +175,7 @@ export function claimedInHistory(ctx: Context, base: string, branch: string): { 
       paths.push(path)
     }
   }
-  const texts = textsAt(ctx.root, names)
+  const texts = textsAt(ctx.trackerGit, names)
   const done = new Set<string>()
   const out = new Map<string, { id: string; ref?: string }>()
   texts.forEach((text, i) => {
@@ -186,16 +191,16 @@ export function claimedInHistory(ctx: Context, base: string, branch: string): { 
 
 /** The meta.json paths under the tracker, `<data>/<dir>/<slug>/meta.json`, at `rev` that contain `needle`. */
 function metaPathsWith(ctx: Context, rev: string, needle: string): string[] {
-  const r = runGit(ctx.root, ["grep", "-l", "-F", "-e", needle, rev, "--", ctx.trackerDir])
+  const r = runGit(ctx.trackerGit, ["grep", "-l", "-F", "-e", needle, rev, "--", ctx.trackerPrefix || "."])
   if (!r.ok) return []
-  const depth = ctx.trackerDir.split("/").length + 3
+  const depth = (ctx.trackerPrefix ? ctx.trackerPrefix.split("/").length : 0) + 3
   return r.out.split("\n").map((l) => l.slice(rev.length + 1)).filter((p) => p.endsWith("/meta.json") && p.split("/").length === depth)
 }
 
 /** An item's state as `rev` has it, found by its id. */
 function itemAt(ctx: Context, rev: string, id: string): Landed | null {
   const paths = metaPathsWith(ctx, rev, id)
-  const texts = textsAt(ctx.root, paths.map((p) => `${rev}:${p}`))
+  const texts = textsAt(ctx.trackerGit, paths.map((p) => `${rev}:${p}`))
   for (const [i, text] of texts.entries()) {
     if (text === null) continue
     let meta: Record<string, unknown>
@@ -205,7 +210,7 @@ function itemAt(ctx: Context, rev: string, id: string): Landed | null {
       continue
     }
     if (meta["id"] !== id) continue
-    const [dir = "", slug = ""] = (paths[i] ?? "").slice(ctx.trackerDir.length + 1).split("/")
+    const [dir = "", slug = ""] = (paths[i] ?? "").slice(ctx.trackerPrefix ? ctx.trackerPrefix.length + 1 : 0).split("/")
     const type = [...ctx.registry.types.values()].find((t) => t.dir === dir)
     const status = typeof meta["status"] === "string" ? meta["status"] : ""
     const def = type?.statuses && Object.hasOwn(type.statuses, status) ? type.statuses[status] : undefined
@@ -225,7 +230,7 @@ function idOf(ctx: Context, rev: string, ref: string): string {
   }
   const [head = "", slug = ""] = ref.split("/")
   const dir = ctx.registry.types.get(head)?.dir ?? head
-  const text = slug ? textsAt(ctx.root, [`${rev}:${ctx.trackerDir}/${dir}/${slug}/meta.json`])[0] : null
+  const text = slug ? textsAt(ctx.trackerGit, [`${rev}:${trackerPath(ctx.trackerPrefix, `${dir}/${slug}/meta.json`)}`])[0] : null
   try {
     const id = text ? (JSON.parse(text) as { id?: unknown }).id : undefined
     if (typeof id === "string") return id
@@ -246,25 +251,53 @@ export function moveTrunk(root: string, trunkName: string, marker: string, old: 
   }
 }
 
+/** One repository's side of a landing: its trunk, the commit the trunk is at, and the branch tip (the trunk's commit when the branch is absent). */
+interface Side {
+  repo: string
+  main: string
+  old: string
+  tip: string
+}
+
+/**
+ * A repository's side of landing `branch`, refused unless run from its main checkout on its trunk, clean in tracked
+ * files, with the trunk an ancestor of the branch. `name` says which repository when there are two; an `optional`
+ * side may lack the branch: it then lands nothing.
+ */
+function sideOf(repo: string, branch: string, name: string, optional: boolean): Side {
+  const main = trunk(repo)
+  if (!main) throw new Error(`no trunk (main, master, or origin's HEAD)${name}: nothing to land on`)
+  if (branch === main) throw new Error(`${branch} is the trunk: land a branch on it, not the trunk itself`)
+  const trees = worktrees(repo)
+  if (!trees[0]?.self || currentBranch(repo) !== main) {
+    throw new Error(`land runs from the main checkout, on ${main}${name}: ${trees[0]?.path ?? "the main worktree"} — only the coordinator lands`)
+  }
+  const old = mustGit(repo, "rev-parse", `refs/heads/${main}`)
+  const tip = gitOrNull(repo, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}^{commit}`) ?? (optional ? old : null)
+  if (!tip) throw new Error(`no branch ${branch}`)
+  if (runGit(repo, ["merge-base", "--is-ancestor", old, tip]).ok === false) {
+    throw new Error(
+      `${main}${name} is not an ancestor of ${branch}: merge ${main} into the branch (git merge ${main}, on the branch${name}) and run its gates again`,
+    )
+  }
+  const dirty = gitOrNull(repo, "status", "--porcelain", "--untracked-files=no") ?? ""
+  if (dirty) throw new Error(`the main checkout${name} has uncommitted changes to tracked files: commit or set them aside first\n${dirty}`)
+  return { repo, main, old, tip }
+}
+
 /** Every refusal `land` makes, in order, before anything is written; the trunk, its tip and the items when none applies. */
 function preconditions(ctx: Context, branch: string, closes: string[]): { main: string; old: string; tip: string; items: Landed[] } {
-  const main = trunk(ctx.root)
-  if (!main) throw new Error("no trunk (main, master, or origin's HEAD): nothing to land on")
-  if (branch === main) throw new Error(`${branch} is the trunk: land a branch on it, not the trunk itself`)
-  const trees = worktrees(ctx.root)
-  if (!trees[0]?.self || currentBranch(ctx.root) !== main) {
-    throw new Error(`land runs from the main checkout, on ${main}: ${trees[0]?.path ?? "the main worktree"} — only the coordinator lands`)
-  }
-  const tip = gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}^{commit}`)
-  if (!tip) throw new Error(`no branch ${branch}`)
-  const old = mustGit(ctx.root, "rev-parse", `refs/heads/${main}`)
-  if (runGit(ctx.root, ["merge-base", "--is-ancestor", old, tip]).ok === false) {
-    throw new Error(`${main} is not an ancestor of ${branch}: merge ${main} into the branch (git merge ${main}, on the branch) and run its gates again`)
-  }
+  const { main, old, tip } = sideOf(ctx.root, branch, "", false)
   if (old === tip) throw new Error(`${branch} has nothing ${main} lacks: nothing to land`)
-  const dirty = gitOrNull(ctx.root, "status", "--porcelain", "--untracked-files=no") ?? ""
-  if (dirty) throw new Error(`the main checkout has uncommitted changes to tracked files: commit or set them aside first\n${dirty}`)
-  const held = filesAt(ctx.root, tip, claimsDir(ctx), ".json").filter((f) => claimOf(f.text)?.branch === branch)
+  return { main, old, tip, items: landedItems(ctx, branch, closes, old, tip) }
+}
+
+/**
+ * The items a landing closes, read in the tracker's repository between its trunk `old` and the branch tip `tip`:
+ * refused while the branch still holds its claim, when it names no item, or one open and not fixed.
+ */
+function landedItems(ctx: Context, branch: string, closes: string[], old: string, tip: string): Landed[] {
+  const held = filesAt(ctx.trackerGit, tip, claimsDir(ctx), ".json").filter((f) => claimOf(f.text)?.branch === branch)
   if (held.length) {
     throw new Error(
       `${branch} still holds its claim (${
@@ -287,7 +320,7 @@ function preconditions(ctx: Context, branch: string, closes: string[]): { main: 
       } is open and not fixed on ${branch}: a landing closes what it names — set its fixedOn on the branch, or split off what is left (naima new)`,
     )
   }
-  return { main, old, tip, items }
+  return items
 }
 
 /** The field an item names the commits that fixed it in, when a plugin declares it: a list of hashes. */
@@ -314,11 +347,13 @@ function recordMarker(ctx: Context, marker: string, ids: string[]): void {
       const had = Array.isArray(item.meta[COMMITS]) ? (item.meta[COMMITS] as unknown[]).filter((h): h is string => typeof h === "string") : []
       if (had.includes(marker)) continue
       saveMeta(ctx, { ...item, meta: { ...item.meta, [COMMITS]: [...had, marker] } })
-      files.push(relative(ctx.root, join(item.dir, META)))
+      files.push(relative(ctx.trackerGit, join(item.dir, META)))
       refs.push(label(item))
     }
     if (!files.length) return
-    const r = runGit(ctx.root, ["commit", "-q", "-m", recordSubject(marker), "--", ...files])
+    // In sibling mode the record is a tracker commit: it names the code marker it records, as every tracker commit does.
+    const text = ctx.sibling ? `${recordSubject(marker)}\n\n${CODE_TRAILER}: ${marker}\n` : recordSubject(marker)
+    const r = runGit(ctx.trackerGit, ["commit", "-q", "-m", text, "--", ...files])
     if (!r.ok) throw new Error(`git commit: ${gitReason(r)}`)
     ctx.out(`recorded ${marker.slice(0, 12)} in the commits of ${refs.join(", ")}`)
   } catch (e) {
@@ -332,12 +367,12 @@ function recordMarker(ctx: Context, marker: string, ids: string[]): void {
  * Whether a commit made on the trunk right after `marker` is the record land makes: it changes only the meta.json of
  * items the marker closes, and in each only adds the marker to commits.
  */
-function recordsMarker(ctx: Context, sha: string, files: { status: string; path: string }[], marker: FirstParent): boolean {
+function recordsMarker(ctx: Context, sha: string, files: { status: string; path: string }[], marker: { sha: string; closes: string[] }): boolean {
   if (!files.length) return false
-  const data = `${ctx.trackerDir}/`
+  const data = ctx.trackerPrefix ? `${ctx.trackerPrefix}/` : ""
   for (const { status, path } of files) {
     if (status !== "M" || !path.startsWith(data) || !path.endsWith(`/${META}`)) return false
-    const [before, after] = textsAt(ctx.root, [`${sha}^:${path}`, `${sha}:${path}`])
+    const [before, after] = textsAt(ctx.trackerGit, [`${sha}^:${path}`, `${sha}:${path}`])
     let a: Record<string, unknown>, b: Record<string, unknown>
     try {
       a = JSON.parse(before ?? "") as Record<string, unknown>
@@ -355,14 +390,276 @@ function recordsMarker(ctx: Context, sha: string, files: { status: string; path:
   return true
 }
 
+/** The message of the code marker landing `branch` in sibling mode: no item, only the tracker commit it pairs with, and the code's own trailers. */
+export const codeMarkerMessage = (branch: string, tracker: string, trailers: string[] = []): string =>
+  `Land ${branch}\n\n${[`${TRACKER_TRAILER}: ${tracker}`, ...trailers].join("\n")}\n`
+
+/** A first-parent commit of a trunk carrying the trailer asked for: its subject, its parents and the trailer's value. */
+interface Paired {
+  sha: string
+  parents: string[]
+  subject: string
+  value: string
+  closes: string[]
+}
+
+/** The newest `limit` first-parent commits of `main` in `repo` that carry the trailer `key`, newest first. */
+function pairedOn(repo: string, main: string, key: string, limit = 500): Paired[] {
+  const format = `%H%x1f%P%x1f%s%x1f%(trailers:key=${key},valueonly,separator=%x1d)%x1f%(trailers:key=${CLOSES},valueonly,separator=%x1d)%x1e`
+  const out = gitOrNull(repo, "log", "--first-parent", `-n${limit}`, `--format=${format}`, `refs/heads/${main}`) ?? ""
+  return out.split("\x1e").map((r) => r.replace(/^\n/, "")).filter(Boolean).flatMap((r) => {
+    const [sha = "", parents = "", subject = "", value = "", closes = ""] = r.split("\x1f")
+    const v = value.split("\x1d")[0]?.trim() ?? ""
+    return v ? [{ sha, parents: parents.split(" ").filter(Boolean), subject, value: v, closes: closes.split("\x1d").map((c) => c.trim()).filter(Boolean) }] : []
+  })
+}
+
+/** The branch a marker lands, from its subject `Land <branch>`. */
+const landedBranch = (subject: string): string | null => subject.match(/^Land (\S+)$/)?.[1] ?? null
+
+/** Read a branch tip's tree into a main checkout standing at `from`, refusing to overwrite an untracked file. */
+const takeTree = (repo: string, from: string, tree: string) => runGit(repo, ["read-tree", "-m", "-u", from, tree])
+
+/**
+ * Land `branch` in sibling mode, both sides. The tracker's trunk takes a marker first — the items it closes in
+ * `Closes:`, the code tip in `Code:` — then the code's trunk takes one naming that tracker marker in `Tracker:` and
+ * nothing of the tracker else; last, the tracker records the code marker in the items it closes, in a commit whose
+ * `Code:` names it. Two repositories cannot move at once: a failure after the tracker moved says the command that
+ * finishes the landing, `land --repair`, and `landings-paired` notes it until then.
+ */
+async function landBoth(ctx: Context, branch: string, closes: string[], noChangeNote: string | undefined, stale: string | undefined): Promise<number> {
+  const code = sideOf(ctx.root, branch, "", false)
+  const trk = sideOf(ctx.trackerGit, branch, " in the tracker", true)
+  if (code.old === code.tip && trk.old === trk.tip) throw new Error(`${branch} has nothing ${code.main} lacks, in the code or in the tracker: nothing to land`)
+  const items = landedItems(ctx, branch, closes, trk.old, trk.tip)
+  const ids = items.map((i) => i.id)
+  const codeMoves = code.old !== code.tip
+  const trailers = codeMoves ? changeNoteTrailers(ctx, branch, code.old, code.tip, noChangeNote) : []
+  const codeTree = mustGit(ctx.root, "rev-parse", `${code.tip}^{tree}`)
+  const trkTree = mustGit(ctx.trackerGit, "rev-parse", `${trk.tip}^{tree}`)
+  const changed = [
+    ...changedFiles(ctx.root, code.old, code.tip),
+    ...changedFiles(ctx.trackerGit, trk.old, trk.tip).map((f) => `${ctx.trackerDir}/${f}`),
+  ]
+  // Both checkouts take the branch tips' files, the trunks still where they were: the landing checks read them there.
+  const synced = takeTree(ctx.root, code.old, codeTree)
+  if (!synced.ok) throw new Error(`the main checkout could not take ${branch}'s files (${gitReason(synced)}): nothing landed`)
+  const backCode = (): void => {
+    const r = takeTree(ctx.root, codeTree, code.old)
+    if (!r.ok) ctx.err(`the main checkout could not go back to ${code.main}'s files (${gitReason(r)}): git checkout -f ${code.main}`)
+  }
+  const backTracker = (): void => {
+    const r = takeTree(ctx.trackerGit, trkTree, trk.old)
+    if (!r.ok) ctx.err(`the tracker could not go back to its ${trk.main}'s files (${gitReason(r)}): git -C ${ctx.trackerDir} checkout -f ${trk.main}`)
+  }
+  const trkSynced = takeTree(ctx.trackerGit, trk.old, trkTree)
+  if (!trkSynced.ok) {
+    backCode()
+    throw new Error(`the tracker could not take ${branch}'s files (${gitReason(trkSynced)}): nothing landed`)
+  }
+  let tm: string
+  try {
+    const notCurrent = await blockingLanding(ctx, { branch, from: code.old, to: code.tip, changed })
+    const own: string[] = []
+    if (notCurrent.length && stale === undefined) {
+      throw new Error(
+        `${branch} changes what has proofs not current:\n${notCurrent.map((l) => `  ${l}`).join("\n")}\n` +
+          `run them on the branch and commit their runs (naima verify, naima metrics run --record), or land with --stale-proofs "<reason>" when they cannot be made current before landing: nothing landed`,
+      )
+    }
+    if (notCurrent.length) {
+      // The reason may name tracker content: it is recorded in the tracker's marker only.
+      own.push(`${STALE_PROOFS}: ${stale!.trim()}`)
+      for (const l of notCurrent) ctx.out(`${l} — landed anyway: ${stale!.trim()}`)
+    }
+    const parents = trk.tip === trk.old ? ["-p", trk.old] : ["-p", trk.old, "-p", trk.tip]
+    const made = runGit(ctx.trackerGit, ["commit-tree", trkTree, ...parents, "-F", "-"], {
+      input: markerMessage(branch, ids, [`${CODE_TRAILER}: ${code.tip}`, ...own]),
+    })
+    if (!made.ok) throw new Error(`git commit-tree: ${gitReason(made)}`)
+    tm = made.out.trim()
+    moveTrunk(ctx.trackerGit, trk.main, tm, trk.old, `land: ${branch}`)
+  } catch (e) {
+    backCode()
+    backTracker()
+    ctx.reload()
+    throw e
+  }
+  ctx.out(`landed ${branch} on the tracker's ${trk.main}: ${tm.slice(0, 12)}, closing ${items.map((i) => i.ref).join(", ")}`)
+  let cm: string | null = null
+  if (codeMoves) {
+    try {
+      const made = runGit(ctx.root, ["commit-tree", codeTree, "-p", code.old, "-p", code.tip, "-F", "-"], { input: codeMarkerMessage(branch, tm, trailers) })
+      if (!made.ok) throw new Error(`git commit-tree: ${gitReason(made)}`)
+      cm = made.out.trim()
+      const r = runGit(ctx.root, ["update-ref", "-m", `land: ${branch}`, `refs/heads/${code.main}`, cm, code.old])
+      if (!r.ok) throw new Error(`${code.main} moved while landing (it is no longer ${code.old.slice(0, 12)}): ${gitReason(r)}`)
+    } catch (e) {
+      backCode()
+      ctx.reload()
+      throw new Error(`${message(e)} — the tracker has landed ${branch} and the code has not: naima land ${branch} --repair finishes it`)
+    }
+    ctx.out(`landed ${branch} on ${code.main}: ${cm.slice(0, 12)}, naming tracker commit ${tm.slice(0, 12)} and nothing else of the tracker`)
+  } else {
+    ctx.out(`${branch} changes no code: ${code.main} stays at ${code.old.slice(0, 12)}, which the tracker's marker names`)
+  }
+  recordMarker(ctx, cm ?? code.tip, ids)
+  await reportLanding(ctx, { branch, from: code.old, to: cm ?? code.old, changed })
+  const subs = cm ? (gitOrNull(ctx.root, "diff-tree", "-r", "--no-commit-id", code.old, cm) ?? "").split("\n").filter((l) => /^:\d+ 160000 /.test(l)) : []
+  if (subs.length) ctx.out(`${plural(subs.length, "submodule")} moved: git submodule update --init`)
+  ctx.out(`next: naima close each item once its proof is checked, then naima prune --branch ${branch} --write`)
+  return 0
+}
+
+/** The ids of the items a tracker marker closes whose type records commits and that do not record `commit` yet. */
+function unrecorded(ctx: Context, ids: string[], commit: string): string[] {
+  const def = ctx.registry.fields.get(COMMITS)
+  if (!def || def.kind !== "strings") return []
+  ctx.reload()
+  return ids.filter((id) => {
+    const item = ctx.repo.byId.get(id)
+    if (!item || !appliesTo(def, item.type)) return false
+    const had = Array.isArray(item.meta[COMMITS]) ? item.meta[COMMITS] as unknown[] : []
+    return !had.includes(commit)
+  })
+}
+
+/**
+ * `land <branch> --repair`: finish a landing that moved one repository and not the other. From the newest tracker
+ * marker of `branch`: the code marker it lacks is made from the code commit its `Code:` trailer names, and the record
+ * of the code marker in the items it closes is made when missing. Idempotent: a landing paired on both sides is left
+ * as it is, and said.
+ */
+function repairLanding(ctx: Context, branch: string): number {
+  const cmain = trunk(ctx.root)
+  const tmain = trunk(ctx.trackerGit)
+  if (!cmain || !tmain) throw new Error("no trunk (main, master, or origin's HEAD) in the code or in the tracker: nothing to repair")
+  for (const [repo, main, name] of [[ctx.root, cmain, ""], [ctx.trackerGit, tmain, " in the tracker"]] as const) {
+    const trees = worktrees(repo)
+    if (!trees[0]?.self || currentBranch(repo) !== main) {
+      throw new Error(`land --repair runs from the main checkout, on ${main}${name}: ${trees[0]?.path ?? "the main worktree"} — only the coordinator lands`)
+    }
+    const dirty = gitOrNull(repo, "status", "--porcelain", "--untracked-files=no") ?? ""
+    if (dirty) throw new Error(`the main checkout${name} has uncommitted changes to tracked files: commit or set them aside first\n${dirty}`)
+  }
+  const tm = pairedOn(ctx.trackerGit, tmain, CODE_TRAILER).find((m) => landedBranch(m.subject) === branch && m.closes.length)
+  if (!tm) throw new Error(`${branch} has no landing on the tracker's ${tmain}: naima land ${branch}`)
+  let cm = pairedOn(ctx.root, cmain, TRACKER_TRAILER).find((m) => m.value === tm.sha)?.sha ?? null
+  let did = false
+  if (!cm && !isAncestor(ctx.root, tm.value, cmain)) {
+    const old = mustGit(ctx.root, "rev-parse", `refs/heads/${cmain}`)
+    if (!isAncestor(ctx.root, old, tm.value)) {
+      throw new Error(
+        `${cmain} moved past where the tracker landed ${branch}: ${
+          tm.value.slice(0, 12)
+        } does not contain it — merge ${cmain} into the branch and land it again`,
+      )
+    }
+    const tree = mustGit(ctx.root, "rev-parse", `${tm.value}^{tree}`)
+    const synced = takeTree(ctx.root, old, tree)
+    if (!synced.ok) throw new Error(`the main checkout could not take ${branch}'s files (${gitReason(synced)}): nothing repaired`)
+    try {
+      const made = runGit(ctx.root, ["commit-tree", tree, "-p", old, "-p", tm.value, "-F", "-"], { input: codeMarkerMessage(branch, tm.sha) })
+      if (!made.ok) throw new Error(`git commit-tree: ${gitReason(made)}`)
+      cm = made.out.trim()
+      moveTrunk(ctx.root, cmain, cm, old, `land --repair: ${branch}`)
+    } catch (e) {
+      takeTree(ctx.root, tree, old)
+      throw e
+    }
+    ctx.out(`landed ${branch} on ${cmain}: ${cm.slice(0, 12)}, naming tracker commit ${tm.sha.slice(0, 12)} — the landing is paired`)
+    did = true
+  }
+  const recorded = cm ?? tm.value
+  const missing = unrecorded(ctx, tm.closes, recorded)
+  if (missing.length) {
+    recordMarker(ctx, recorded, missing)
+    did = true
+  }
+  if (!did) ctx.out(`nothing to repair: ${branch} is landed on both sides, paired (tracker ${tm.sha.slice(0, 12)}, code ${recorded.slice(0, 12)})`)
+  return 0
+}
+
+/**
+ * Sibling mode: every landing is paired. A tracker marker whose `Code:` commit the code's trunk lacks is a landing
+ * the code has not taken; a code marker whose `Tracker:` commit is not a marker on the tracker's trunk naming the code
+ * tip it merged, a pairing that does not hold; and a landing whose record is missing, a note. Each names
+ * `naima land <branch> --repair`. The newest 50 markers of each side are read.
+ */
+export const landingsPaired: Check = {
+  name: "landings-paired",
+  says:
+    "with the tracker in a repository of its own, every landing is made on both sides and their trailers match: a tracker marker (Closes:, Code:) whose code commit the code's trunk does not hold, or a code marker (Tracker:) whose tracker commit is not a marker on the tracker's trunk naming the code it merged, is a problem naming naima land <branch> --repair, which finishes it; a landing whose code marker is not recorded in the commits of the items it closes is a note naming the same command",
+  run(ctx) {
+    if (!ctx.sibling) return []
+    const cmain = trunk(ctx.root)
+    const tmain = trunk(ctx.trackerGit)
+    if (!cmain || !tmain) return []
+    const tms = pairedOn(ctx.trackerGit, tmain, CODE_TRAILER, 50).filter((m) => landedBranch(m.subject) && m.closes.length)
+    const cms = pairedOn(ctx.root, cmain, TRACKER_TRAILER, 50).filter((m) => landedBranch(m.subject))
+    const out: Finding[] = []
+    const repair = (b: string) => `naima land ${b} --repair`
+    for (const tm of tms) {
+      const b = landedBranch(tm.subject) ?? ""
+      if (!isAncestor(ctx.root, tm.value, cmain)) {
+        out.push({
+          level: "problem",
+          subject: tm.sha,
+          message: `the tracker landed ${b} (${tm.sha.slice(0, 12)}) and the code did not: ${cmain} lacks ${
+            tm.value.slice(0, 12)
+          }, the code its Code: trailer names — ${repair(b)}`,
+        })
+        continue
+      }
+      const cm = cms.find((m) => m.value === tm.sha)
+      const missing = unrecorded(ctx, tm.closes, cm?.sha ?? tm.value)
+      if (missing.length) {
+        out.push({
+          level: "note",
+          subject: tm.sha,
+          message: `the landing of ${b} is not recorded in the commits of ${missing.length} item(s) it closes, so naima close cannot find it — ${repair(b)}`,
+        })
+      }
+    }
+    for (const cm of cms) {
+      const b = landedBranch(cm.subject) ?? ""
+      const tm = tms.find((m) => m.sha === cm.value)
+      const onTrunk = tm !== undefined || isAncestor(ctx.trackerGit, cm.value, tmain)
+      if (!onTrunk) {
+        out.push({
+          level: "problem",
+          subject: cm.sha,
+          message: `the code landed ${b} (${cm.sha.slice(0, 12)}) naming tracker commit ${cm.value.slice(0, 12)}, which is not on the tracker's ${tmain} — ${
+            repair(b)
+          }`,
+        })
+      } else if (tm && cm.parents[1] && tm.value !== cm.parents[1]) {
+        out.push({
+          level: "problem",
+          subject: cm.sha,
+          message: `the code marker of ${b} (${cm.sha.slice(0, 12)}) merged ${cm.parents[1].slice(0, 12)}, but its tracker marker names ${
+            tm.value.slice(0, 12)
+          } in Code: — the trailers do not match`,
+        })
+      }
+    }
+    return out
+  },
+}
+
 export const land: Command = {
   name: "land",
   says:
     "land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor",
   enforces:
     "runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item or an item open and not fixed, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, adds the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right after the marker, so that naima close finds a commit reachable from the trunk; then prints what every landing report says of the files the landing changed, never undoing it",
-  usage: 'land <branch> [--closes <item>]... [--no-change-note "<reason>"] [--stale-proofs "<reason>"]',
+  usage: 'land <branch> [--closes <item>]... [--no-change-note "<reason>"] [--stale-proofs "<reason>"] | land <branch> --repair',
   options: [
+    {
+      name: "--repair",
+      says:
+        "with the tracker in a repository of its own: finish a landing that moved one repository and not the other — make the code marker the tracker's marker names, and record it in the items it closes; does nothing to a landing already paired",
+    },
     { name: "--closes", says: "an item the landing closes, instead of those the branch claimed in its commits; repeat for several" },
     {
       name: "--no-change-note",
@@ -382,11 +679,23 @@ export const land: Command = {
     'land agent/scheduler --stale-proofs "the liveness property runs for two days: it is due as a long run, and the owner will start it"',
   ],
   async run(args, ctx) {
-    const p = parse(args, { closes: { type: "string", multiple: true }, "no-change-note": { type: "string" }, "stale-proofs": { type: "string" } })
+    const p = parse(args, {
+      closes: { type: "string", multiple: true },
+      "no-change-note": { type: "string" },
+      "stale-proofs": { type: "string" },
+      repair: { type: "boolean" },
+    })
     const branch = p.positionals[0]
     if (!branch || p.positionals.length > 1) throw usageError(this)
     const stale = str(p, "stale-proofs")
     if (stale !== undefined && (!stale.trim() || stale.includes("\n"))) throw new Error("--stale-proofs takes the reason, on one line")
+    if (bool(p, "repair")) {
+      if (!ctx.sibling) {
+        throw new Error("land --repair finishes a landing of a tracker kept in a repository of its own: this project's tracker is committed with its code")
+      }
+      return repairLanding(ctx, branch)
+    }
+    if (ctx.sibling) return await landBoth(ctx, branch, strs(p, "closes"), str(p, "no-change-note"), stale)
     const { main, old, tip, items } = preconditions(ctx, branch, strs(p, "closes"))
     const trailers = changeNoteTrailers(ctx, branch, old, tip, str(p, "no-change-note"))
     const tree = mustGit(ctx.root, "rev-parse", `${tip}^{tree}`)
@@ -437,20 +746,23 @@ interface FirstParent {
   tree: string
   subject: string
   closes: string[]
+  /** The code commit a tracker commit names in its `Code:` trailer, in sibling mode; empty otherwise. */
+  code: string
 }
 
 /** The trunk's first-parent line, oldest first, in one `git log`. */
 function firstParentLine(root: string, main: string): FirstParent[] {
-  const format = `%H%x1f%P%x1f%T%x1f%s%x1f%(trailers:key=${CLOSES},valueonly,separator=%x1d)%x1e`
+  const format = `%H%x1f%P%x1f%T%x1f%s%x1f%(trailers:key=${CLOSES},valueonly,separator=%x1d)%x1f%(trailers:key=${CODE_TRAILER},valueonly,separator=%x1d)%x1e`
   const out = gitOrNull(root, "log", "--first-parent", "--reverse", `--format=${format}`, `refs/heads/${main}`) ?? ""
   return out.split("\x1e").map((r) => r.replace(/^\n/, "")).filter(Boolean).map((r) => {
-    const [sha = "", parents = "", tree = "", subject = "", closes = ""] = r.split("\x1f")
+    const [sha = "", parents = "", tree = "", subject = "", closes = "", code = ""] = r.split("\x1f")
     return {
       sha,
       parents: parents.split(" ").filter(Boolean),
       tree,
       subject,
       closes: closes.split("\x1d").map((c) => c.trim()).filter(Boolean),
+      code: code.split("\x1d")[0]?.trim() ?? "",
     }
   })
 }
@@ -485,7 +797,7 @@ function directChanges(root: string, main: string, from: string): Map<string, { 
  */
 function onlyAddsTrackerData(ctx: Context, sha: string, files: { status: string; path: string }[]): boolean {
   if (!files.length) return false
-  const data = `${ctx.trackerDir}/`
+  const data = ctx.trackerPrefix ? `${ctx.trackerPrefix}/` : ""
   const kept = [ctx.registry.types.get("rules")?.dir ?? "rules", WAIVERS].map((d) => `${data}${d}/`)
   const itemDirs = new Set([...ctx.registry.types.values()].map((t) => t.dir))
   const readmes: string[] = []
@@ -497,7 +809,7 @@ function onlyAddsTrackerData(ctx: Context, sha: string, files: { status: string;
     readmes.push(path)
   }
   if (!readmes.length) return true
-  const r = runGit(ctx.root, ["diff", "--numstat", "-z", `${sha}^`, sha, "--", ...readmes])
+  const r = runGit(ctx.trackerGit, ["diff", "--numstat", "-z", `${sha}^`, sha, "--", ...readmes])
   if (!r.ok) return false
   const counts = r.out.split("\0").filter((l) => l.trim()).map((l) => l.replace(/^\n/, "").split("\t"))
   return counts.length === readmes.length && counts.every(([, deleted]) => deleted === "0")
@@ -522,7 +834,7 @@ function notAMarker(ctx: Context, c: FirstParent, trees: Map<string, string>): s
   if (c.parents.length !== 2) return []
   const [first = "", second = ""] = c.parents
   const why: string[] = []
-  if (!runGit(ctx.root, ["merge-base", "--is-ancestor", first, second]).ok) why.push("a merge not up to date: the branch did not contain the trunk")
+  if (!runGit(ctx.trackerGit, ["merge-base", "--is-ancestor", first, second]).ok) why.push("a merge not up to date: the branch did not contain the trunk")
   if (trees.get(second) !== c.tree) why.push("its tree is not the branch tip's")
   if (!c.closes.length) why.push(`it has no ${CLOSES}: trailer naming the item it closes`)
   for (const value of c.closes) {
@@ -540,26 +852,33 @@ export const landingsAreMarkers: Check = {
   says:
     "from the first landing marker on the trunk's first-parent line (a merge whose first parent the second contains, whose tree is the second's, with a Closes: trailer), every first-parent commit is a marker: a fast-forward, a commit made on the trunk, a merge not up to date, or one without a Closes: naming an item done or fixed is a note naming it, one note per commit, with the commit as its subject so that a waiver can accept it. A commit made on the trunk that only adds to the tracker data — new files in the data directory outside rules/, waivers/ and naima.json, and lines added to an item's README.md, its meta.json untouched — is accepted without a note, and so is the commit right after a marker that only adds the marker to the commits of items it closes, the record naima land makes. Before the first marker nothing is asked",
   run(ctx) {
-    const main = trunk(ctx.root)
+    // The markers that close items are the tracker's: the project's trunk, or the tracker's own in sibling mode.
+    const repo = ctx.trackerGit
+    const main = trunk(repo)
     if (!main) return []
-    const line = firstParentLine(ctx.root, main)
+    const line = firstParentLine(repo, main)
     const merges = line.filter((c) => c.parents.length === 2)
-    const trees = treesOf(ctx.root, merges.map((c) => c.parents[1] ?? ""))
+    const trees = treesOf(repo, merges.map((c) => c.parents[1] ?? ""))
     const start = line.findIndex((c) =>
       c.parents.length === 2 && c.closes.length > 0 && trees.get(c.parents[1] ?? "") === c.tree &&
-      runGit(ctx.root, ["merge-base", "--is-ancestor", c.parents[0] ?? "", c.parents[1] ?? ""]).ok
+      runGit(repo, ["merge-base", "--is-ancestor", c.parents[0] ?? "", c.parents[1] ?? ""]).ok
     )
     if (start === -1) return []
-    const direct = directChanges(ctx.root, main, line[start]?.sha ?? "")
+    const direct = directChanges(repo, main, line[start]?.sha ?? "")
     const waive = (sha: string) => `, or accept it once: naima waive landings-are-markers ${sha} --reason "<why>"`
     const out: Finding[] = []
+    /** A tracker marker of a branch that changed no tracker file: one parent, no change, Closes: and Code: trailers. */
+    const emptyMarker = (c: FirstParent | undefined) => !!c && ctx.sibling && c.parents.length === 1 && c.closes.length > 0 && !!c.code
     for (const [i, c] of line.entries()) {
       if (i <= start) continue
       if (c.parents.length !== 2) {
         const files = direct.get(c.sha) ?? []
+        if (emptyMarker(c) && !files.length) continue
         if (onlyAddsTrackerData(ctx, c.sha, files)) continue
         const prev = line[i - 1]
-        if (prev && prev.parents.length === 2 && prev.closes.length && recordsMarker(ctx, c.sha, files, prev)) continue
+        const afterMarker = prev && prev.closes.length && (prev.parents.length === 2 || emptyMarker(prev))
+        // In sibling mode the record names the code marker, in its Code: trailer; otherwise the marker just before it.
+        if (afterMarker && recordsMarker(ctx, c.sha, files, { sha: ctx.sibling ? c.code : prev.sha, closes: prev.closes })) continue
         out.push({
           level: "note",
           subject: c.sha,
