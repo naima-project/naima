@@ -152,6 +152,8 @@ unpacking it, and stop if they differ.
 - [Naima in one minute](docs/guide/naima-in-one-minute.md), then
   [Naima in ten minutes](docs/guide/naima-in-ten-minutes.md): what it does,
   from the everyday parts to the advanced ones.
+- [What Naima is for](docs/purpose.md): what it is, what it manages, what
+  exists and what is planned.
 - [The primer](docs/guide/primer.md): every concept of Naima, in the order
   you meet it.
 - [The documentation](docs/README.md), starting with
