@@ -432,6 +432,17 @@ waiver, once, with its reason: `naima waive landings-are-markers
 Blocking such a commit with a git hook is [planned](../planned.md#blocking-a-landing-that-is-not-a-marker), as something a project could opt into but never the
 default ([closing a worktree](../agents/closing-a-worktree.md#7-hand-it-over)).
 
+### Public commits name nothing of a private tracker
+
+When the tracker is kept in a repository of its own beside a public code repository ([sibling mode](private-tracker.md#sibling-mode)), nothing committed
+to the code names tracker content: no item id, title or slug, no tracker path, no claim or session note. A code commit names the tracker only by the opaque
+hash in its `Tracker:` trailer. **Enforced by** Naima for what it writes itself: the code's landing marker carries only `Land <branch>` and `Tracker:`, and
+`naima open` names branches `<who>/<random>` rather than after the item. **Convention** for commit messages written by people and agents, branch names given
+with `--name`, and the reason given to `land --no-change-note`.
+
+Why: the tracker is private because what it holds is; a title or a path copied into a public commit message is published for good, since history on a shared
+trunk is never rewritten.
+
 ### No locks: the coordinator is the single writer
 
 Naima has no locks. Only the [coordinator](../agents/coordinator-and-workers.md) lands branches on the trunk, pushes it, publishes the site and makes releases,

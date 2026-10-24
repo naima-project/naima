@@ -53,6 +53,7 @@ own checks taking the place of tests.
 | know what may be announced, and keep the README true | [Announce only what is true](announce.md) |
 | measure the work (test time, coverage, warnings, complexity), hold it to a budget, and see how the code's quality changes over time | [Metrics and budgets](metrics-and-budgets.md) |
 | work on several things at once | [Work on several branches at once](several-branches.md) |
+| keep the tracker private while the code is public | [Keep the tracker private](private-tracker.md) |
 | make sure a fix doesn't land without its test, or a change without its note | [Commit hooks and companion records](commit-hooks.md) |
 | move to a newer Naima | [Update Naima](update-naima.md) |
 | add a gate, weigh a check, switch a plugin off | [Configure the project](configure-the-project.md) |

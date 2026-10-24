@@ -148,11 +148,17 @@ Make the git repository around the program a Naima project, as its first run doe
 **Enforces**: The program is locked to a commit of its source's main, with nothing uncommitted; outside the tracker folder, only the pointer line, the session-start hooks and, with --write-excludes, the exclusion lines are written.
 
 ```sh
-naima init [--write-excludes] [--no-session-hook]
+naima init [--private-tracker
+naima --tracker <url> [--private-url]
+naima --tracker-inside] [--write-excludes] [--no-session-hook]
 ```
 
 | Option | Default | What it does |
 |---|---|---|
+| `--private-tracker` |  | keep the tracker private beside the code: naima-data/ becomes a git repository of its own, created on this machine with no remote, ignored by the project's git, and naima-tracker/tracker.json, committed with the code, says so; the two repositories' commits are paired by Tracker: and Code: trailers (a commit-msg hook in both) and their branches by name. Without any of these three options, init keeps the tracker inside a project with no remote, or a private one, and stops with the question to ask the owner when the remote is public or its visibility cannot be told (GitHub's public API, asked without credentials) |
+| `--tracker` |  | like --private-tracker, from an existing tracker repository: naima-data/ becomes a git clone of the one at <url>, whose address tracker.json records |
+| `--private-url` |  | with --tracker: keep the tracker's address out of tracker.json, in this clone's git config (naima.tracker) |
+| `--tracker-inside` |  | commit the tracker with the code even though the project looks public: the owner's answer to init's question |
 | `--write-excludes` |  | also write those lines into the host's own files: deno.json and tsconfig.json when they are plain JSON, .prettierignore; a file with comments is left to be edited by hand |
 | `--no-session-hook` |  | install no agent tool's session-start hook: only the pointer line is written; naima check notes the hook missing, and naima update installs it |
 
@@ -160,6 +166,8 @@ Examples:
 
 ```sh
 naima init
+naima init --private-tracker
+naima init --tracker git@example.invalid:me/tracker.git --private-url
 naima init --write-excludes
 naima init --no-session-hook
 ```
@@ -973,10 +981,12 @@ Land a branch on the trunk as one marker commit: a merge whose tree is the branc
 
 ```sh
 naima land <branch> [--closes <item>]... [--no-change-note "<reason>"] [--stale-proofs "<reason>"]
+naima land <branch> --repair
 ```
 
 | Option | Default | What it does |
 |---|---|---|
+| `--repair` |  | with the tracker in a repository of its own: finish a landing that moved one repository and not the other — make the code marker the tracker's marker names, and record it in the items it closes; does nothing to a landing already paired |
 | `--closes` |  | an item the landing closes, instead of those the branch claimed in its commits; repeat for several |
 | `--no-change-note` |  | why the branch changes behaviour paths with no change note — a refactor, a test, nothing a person or an agent sees; recorded in the marker as a No-change-note: trailer |
 | `--stale-proofs` |  | why the branch lands although proofs of what it changed are not current — a suite that runs for days, due as a long run the owner starts; recorded in the marker as a Stale-proofs: trailer |
@@ -1126,6 +1136,8 @@ naima event 2026-10-05 "The plan was entered" --kind diary
 | `closed-not-claimed` | no archived item (one in a type that is not creatable, where naima close moves it) is claimed by the branch you stand on: what no-closing-own-claims refuses on a write, asserted on the tracker as it is, hand edits included |
 | `session-note-ack` | a session note dated after 2026-10-02 carries the acknowledgement line it was written with (naima pass --ack), and its body still begins with it — a rule change afterwards never invalidates a note already written, since what was asked of it then is what it recorded |
 | `landings-are-markers` | from the first landing marker on the trunk's first-parent line (a merge whose first parent the second contains, whose tree is the second's, with a Closes: trailer), every first-parent commit is a marker: a fast-forward, a commit made on the trunk, a merge not up to date, or one without a Closes: naming an item done or fixed is a note naming it, one note per commit, with the commit as its subject so that a waiver can accept it. A commit made on the trunk that only adds to the tracker data — new files in the data directory outside rules/, waivers/ and naima.json, and lines added to an item's README.md, its meta.json untouched — is accepted without a note, and so is the commit right after a marker that only adds the marker to the commits of items it closes, the record naima land makes. Before the first marker nothing is asked |
+| `landings-paired` | with the tracker in a repository of its own, every landing is made on both sides and their trailers match: a tracker marker (Closes:, Code:) whose code commit the code's trunk does not hold, or a code marker (Tracker:) whose tracker commit is not a marker on the tracker's trunk naming the code it merged, is a problem naming naima land <branch> --repair, which finishes it; a landing whose code marker is not recorded in the commits of the items it closes is a note naming the same command |
+| `branches-paired` | with the tracker in a repository of its own, the tracker stands on the branch of the code's name (its trunk on the code's trunk), so work on code branch X writes to tracker branch X — any naima command pairs them, creating the tracker's branch from its trunk; a commit of the branch, in either repository, that does not name the other repository's commit in its Tracker: or Code: trailer is a note, and so is a missing trailer hook |
 | `diary-entries` | as notes, never failing: a day with more diary entries than the coordination option diaryPerDay (5 by default), and a diary entry that only restates a session note of its day or a decision taken that day, which naima diary already shows |
 | `change-notes` | every file of a changes/ directory that has a changes/config.json — the project's own, or a submodule's — is a change note that parses; on a branch other than the trunk, one whose commits change a behaviour path that file names with no change note added is a note, as naima land would refuse it |
 

@@ -21,6 +21,15 @@ Or ask your agent:
 The installer sets up [Deno](https://deno.com) when it is missing, clones
 Naima into `naima-tracker/naima/` and checks it.
 
+The tracker, `naima-tracker/naima-data/`, is committed with the code when the
+repository has no remote or a private one. When the remote is public, or its
+visibility can't be told, the installer stops and asks (through your agent)
+whether to keep the tracker private beside the code, recommending yes: run it
+again with `NAIMA_TRACKER=private` for a git repository of its own, on this
+machine only and ignored by the code, or `NAIMA_TRACKER=inside` to commit it
+with the code anyway
+([keep the tracker private](docs/guide/private-tracker.md)).
+
 ### Deno by hand
 
 Naima runs on Deno, one program. To install it yourself, for your user only
