@@ -59,14 +59,8 @@ metric and whether the change is better or worse according to the metric's
 work with themselves, give them the CSV.
 
 If the owner wants to look at the metrics themselves rather than at a file,
-tell them about `naima ui`. It opens a native window with every metric, a
-picker and a commit range, read live from the records. It holds the terminal
-until the window is closed, so don't run it on their behalf in a session that
-has to go on. To check something yourself, `naima ui --no-open --log` prints
-the address with its token and one line per request, and
-`/data/metrics?metric=…&from=…&to=…` returns the same view as JSON. Where
-the window can't open, it falls back to the browser and gives the reason in
-one line. Report that line, because it is the diagnosis.
+`naima metrics plot --html --out <file>` writes a chart and a table they can
+open in a browser.
 
 The window's first screen shows the summary, the gates, what is next and the
 claims. Its other views include the boards, the session notes, and a single

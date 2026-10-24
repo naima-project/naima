@@ -292,7 +292,6 @@ you see is always current.
 | `naima board bugs` | one type's open items, grouped, most urgent first ([board](glossary.md#board)) |
 | `naima queue launch --human` | the items on a gate that need a person, and why ([queue](glossary.md#queue)) |
 | `naima view timeline` | what happened when |
-| `naima ui` | all of the above in a window: summary, gates, boards, metrics, evidence |
 
 More in [read the board, the queue and the gates](read-the-board.md).
 
