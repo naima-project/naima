@@ -18,6 +18,9 @@ git add naima-tracker && git commit -m "Claim export-drops"
   no claim, such as one made before Naima was installed, is left alone with a note
   ([the rule](rules.md#worktrees-and-branches-are-named-by-one-scheme-and-every-worktree-carries-a-claim)). Install the project's dependencies there before
   running anything.
+- `naima open` refuses a new worktree once as many worker worktrees are open as the coordination option `maxWorkers` allows (3 by default), because
+  every worker is paid for while it runs. The refusal lists the open ones; remove one that has landed with `naima prune --branch <branch> --write`, give
+  related items to one worker, or raise the bound in `naima.json`: `"plugins": { "coordination": { "options": { "maxWorkers": 4 } } }`.
 - The first `naima` command run in the new worktree fetches its own copy of Naima from the main checkout's copy, at the same locked commit.
 - The claim is a single file belonging to this branch, saying what it works on, and `naima claim` adds items to it. Others see it straight away, but nobody is
   locked out. Several branches may claim the same [item](glossary.md#item), and `claim` tells you who else holds it.
