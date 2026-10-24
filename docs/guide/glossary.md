@@ -190,7 +190,10 @@ was made from, so `naima check` can tell you when it is out of date
 
 An item of type `knowledge`, for one statement the project knows or is
 finding out, kept with what it rests on: its [basis](#basis), its
-[kind](#kind), and the evidence linked `supports` or `contradicts`. It goes
+[kind](#kind), and the evidence linked `supports` or `contradicts`. Only
+evidence that succeeded counts: a passed test, a property that holds, a
+confirmed analysis. An artifact is material, linked `relates-to`, and never
+establishes an entry. It goes
 from `hypothesis` to `established` or `refuted`; a given that stops holding
 is `retracted` ([knowledge](knowledge.md)). *Everyday example:* "the oven
 runs 20 degrees hot, measured with a thermometer".

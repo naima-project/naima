@@ -24,3 +24,7 @@ requires). Evidence is linked `supports` or `contradicts`, a derivation
 `naima check` fails on an established entry with nothing behind it and on an
 entry missing what its kind requires. `naima knowledge` prints the
 established entries by kind with what each one rests on.
+Only evidence that succeeded establishes an entry: a passed test, a property
+that holds, or an analysis that is confirmed, a status `pack-analyses` now
+marks with the flag `positive`. An artifact is material, linked
+`relates-to`, and never establishes an entry.

@@ -31,7 +31,7 @@ const analysesType: TypeDef = {
     "a step of a data analysis that produces a result from the project's own data: proven, like a feature, by the tests that verify it — here, a run of the same command on the same data",
   statuses: {
     proposed: { category: "open", says: "described, not yet run" },
-    confirmed: { category: "done", says: "run, and a test verifying it has passed: reproducible" },
+    confirmed: { category: "done", flags: ["positive"], says: "run, and a test verifying it has passed: reproducible" },
     refuted: { category: "done", says: "run, and a test verifying it failed: not reproducible, or wrong" },
     dropped: { category: "done", says: "no longer needed; the page says why" },
   },

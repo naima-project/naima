@@ -4,8 +4,8 @@
 // source, established by evidence, derived from other entries) and whose
 // `kind` says what sort of statement it is: built in (fact, hypothesis,
 // finding, lesson) or declared by the project, each kind with the sections and
-// fields its entries require. Evidence is any item, linked `supports` or
-// `contradicts`; a passed test, a property that holds, a confirmed analysis.
+// fields its entries require. Evidence is an item that succeeded, linked `supports` or
+// `contradicts`: a passed test, a property that holds, a confirmed analysis.
 
 import {
   bool,
@@ -15,8 +15,7 @@ import {
   type FieldDef,
   fieldValue,
   type Finding,
-  isEvidenceType,
-  isOpen,
+  hasFlag,
   type Item,
   label,
   linked,
@@ -127,8 +126,14 @@ export function readOptions(options: Record<string, unknown>): { kinds: Record<s
 
 const entriesOf = (ctx: Context): Item[] => ctx.repo.items.filter((i) => i.type === TYPE)
 
-/** Evidence that holds now: an item whose status proves; one whose type has no proving status counts once it is done. */
-const current = (ctx: Context, e: Item): boolean => isEvidenceType(ctx, e.type) ? proves(ctx, e) : !isOpen(ctx, e)
+/** The flag a type gives the status of a step that succeeded without proving a change, such as a confirmed analysis. */
+export const POSITIVE = "positive"
+
+/** The type whose items are material, never proof: an artifact supports an entry as something to read, and establishes nothing. */
+const MATERIAL = "artifacts"
+
+/** Evidence that succeeded: an item whose status proves (a passed test, a property that holds) or is positive (a confirmed analysis). A type with neither, and an artifact, never counts. */
+const current = (ctx: Context, e: Item): boolean => e.type !== MATERIAL && (proves(ctx, e) || hasFlag(ctx, e, POSITIVE))
 
 const supportOf = (ctx: Context, entry: Item): Item[] => linked(ctx, entry, "supported-by")
 const refutationOf = (ctx: Context, entry: Item): Item[] => linked(ctx, entry, "contradicted-by")
@@ -162,7 +167,7 @@ function basisCheck(): Check {
   return {
     name: "knowledge-basis",
     says:
-      "an established entry stands on its basis: a given one names its source, one on evidence has passing evidence linked `supports`; an entry both supported and refuted by current evidence, or derived from a refuted or retracted one, is noted",
+      "an established entry stands on its basis: a given one names its source, one on evidence has evidence that succeeded linked `supports` (a passed test, a property that holds, a confirmed analysis), never an artifact alone; an entry both supported and refuted by current evidence, or derived from a refuted or retracted one, is noted",
     run(ctx) {
       const out: Finding[] = []
       for (const e of entriesOf(ctx)) {
@@ -171,14 +176,26 @@ function basisCheck(): Check {
         if (established && basis === "given" && !hasValue(e, SOURCE.name)) {
           out.push({ level: "problem", item: e, message: `${label(e)} is given, but names no source — naima set ${label(e)} givenBy="<who or what gives it>"` })
         }
-        const support = supportOf(ctx, e).filter((s) => current(ctx, s))
-        if (established && basis === "evidence" && !support.length) {
+        const linkedSupport = supportOf(ctx, e)
+        const support = linkedSupport.filter((s) => current(ctx, s))
+        const material = linkedSupport.filter((s) => s.type === MATERIAL)
+        if (established && basis === "evidence" && !support.length && material.length && material.length === linkedSupport.length) {
           out.push({
             level: "problem",
             item: e,
-            message: `${label(e)} is established on evidence, but nothing passing supports it — naima link <evidence> supports ${label(e)}, or naima set ${
+            message: `${label(e)} is established on evidence, but its only support is ${
+              material.map(label).join(", ")
+            }, and an artifact is material, never proof — link it relates-to instead, and link a passed test, a property that holds or a confirmed analysis that supports ${
               label(e)
-            } status=hypothesis`,
+            }, or naima set ${label(e)} status=hypothesis`,
+          })
+        } else if (established && basis === "evidence" && !support.length) {
+          out.push({
+            level: "problem",
+            item: e,
+            message: `${label(e)} is established on evidence, but nothing that succeeded supports it — naima link <evidence> supports ${
+              label(e)
+            }, or naima set ${label(e)} status=hypothesis`,
           })
         }
         const against = refutationOf(ctx, e).filter((r) => current(ctx, r))
@@ -296,7 +313,7 @@ export default function knowledge(options: Record<string, unknown> = {}): Plugin
     says: "knowledge entries: facts, hypotheses, findings and lessons, each with its basis — a source, evidence, or other entries — and its kind",
     about: "A project's lasting knowledge as items: what is known, and on what basis. " +
       "A **knowledge entry** (`naima new knowledge`) is one statement. Its `basis` says why it is believed: `given` — known without investigation, a premise named by its `givenBy` (the owner, a datasheet, a contract), which starts `established` and can still be `retracted`; `evidence` — established by experiments, analyses, tests or proofs, which starts as a `hypothesis` and carries its falsifier on its page; `derived` — following from other entries, linked `derives-from`. " +
-      "Evidence is any item — a test, an analysis, an artifact, a property — linked `supports` or `contradicts` the entry; it counts while its status proves (a passed test, a property that holds), or, for a type with no proving status, once it is done. " +
+      "Evidence is any item — a test, an analysis, an artifact, a property — linked `supports` or `contradicts` the entry; it counts only once it succeeded: a status that proves (a passed test, a property that holds) or that its type marks positive (a confirmed analysis). An artifact never counts: it is material, linked `relates-to`, and an entry whose only support is an artifact is a problem. " +
       "Its `kind` says what sort of statement it is: built in, `fact`, `hypothesis`, `finding` and `lesson` (what experience taught, whose page holds What happened, The lesson and How to apply it); a project declares its own kinds, each with the sections and fields its entries require, under this plugin's `kinds` option. A kind adds requirements, never statuses. " +
       "A lesson is **codified** once a rule, a test or a property that holds it links `codifies` to it: `naima show` lists it as `codified-by`, and `naima knowledge` says it. " +
       "`naima check` fails on an established entry with nothing passing behind it (or a given one that names no `givenBy`) and on an entry missing what its kind requires; it notes an entry both supported and refuted by current evidence, one derived from a refuted or retracted entry, and, with the `lessonsCodified` option, an established lesson nothing codifies. " +

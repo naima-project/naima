@@ -42,8 +42,8 @@ kept, so the history of what was believed stays in the tracker.
 ## Back it with evidence
 
 Evidence is any other item, linked to the entry with `supports` or with
-`contradicts`. It can be a test, a property, an analysis, an artifact, or the
-test that reran a benchmark.
+`contradicts`. It can be a test, a property or an analysis, such as the test
+that reran a benchmark.
 
 ```sh
 naima new tests "Cap table at 4 and 8 threads, ITK default, 1 and 3"
@@ -52,14 +52,24 @@ naima set tests/cap-table-at-4-8-threads-itk status=passed
 naima set knowledge/oversubscribing-itk-threads-slows-run status=refuted
 ```
 
-A piece of evidence counts while its status proves something, as a passed
-test or a property that holds does. An item whose type has no such status,
-such as an analysis or an artifact, counts once it is done.
+Only evidence that succeeded establishes an entry: a test that passed, a
+property that holds, or an analysis that is confirmed. An item whose type has
+no such positive status doesn't count, whatever its status, and neither does
+a refuted or dropped analysis.
+
+An artifact, such as a profile or a report, is never proof. It is material
+you can read, so link it to the entry with `relates-to`, and `naima show`
+lists it there. If an established entry's only support is an artifact,
+`naima check` reports it and says so.
+
+```sh
+naima link artifacts/profile-eviction-run relates-to knowledge/oversubscribing-itk-threads-slows-run
+```
 
 `naima check` holds the entries to their basis:
 
-- An established entry on evidence with nothing passing that supports it is
-  a problem, and so is an established given entry with no `givenBy`.
+- An established entry on evidence with nothing that succeeded supporting
+  it is a problem, and so is an established given entry with no `givenBy`.
 - An entry that current evidence both supports and contradicts is a note.
   You settle it, usually by setting it `inconclusive` until another run
   decides.
