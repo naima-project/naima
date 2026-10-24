@@ -13,9 +13,13 @@ Flow: [the coordinator and the workers](../../../../docs/agents/coordinator-and-
 - **Each worker gets**: its own worktree and branch, the item already filed,
   what is already measured, the gates, the constraints, no sub-agents, and
   the acknowledgement line to give back.
-- **Model by the job**: strongest for diagnosis and design, cheaper for
-  filing, triage, merges and gates. Two workers standing, four only for short
-  cheap work.
+- **Cheapest capable model per task**: a smaller model for mechanical or
+  read-only work (filing, triage, merges, searches, gates, edits already
+  decided); the strongest only for diagnosis and design. Never the strongest
+  for all. Say in one line each what you started: worker, branch, model, why.
+- **Two workers standing, three at most** (`naima open` refuses beyond the
+  coordination option `maxWorkers`, 3 by default); group related small items
+  into one worker with `naima open <item> <item>`.
 - **Set a timer**; the owner is never the reason work resumes
   ([the non-stop loop](../../../../docs/agents/the-non-stop-loop.md), `/flow:loop`).
 - **Land** only with `naima land <branch>` (or its by-hand equivalent), on a
