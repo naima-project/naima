@@ -30,7 +30,11 @@ which tells the agent to run `naima hello`. Nothing else in your project is
 touched. Inside that folder, `naima-tracker/naima/` holds the program and is
 ignored by git, while `naima-tracker/naima-data/` holds your items and is
 committed like any other file, so every change Naima makes can be seen and
-undone. If [Deno](https://deno.com), the one program Naima runs on, is
+undone. For a project that looks public, the agent first asks whether to keep
+the tracker private: then `naima-tracker/naima-data/` is a separate local git
+repository that your project ignores, and only a small file,
+`naima-tracker/tracker.json`, is committed with your code
+([a private tracker](private-tracker.md)). If [Deno](https://deno.com), the one program Naima runs on, is
 missing, the installer sets it up for your user, without administrator
 rights ([install](install.md)).
 
