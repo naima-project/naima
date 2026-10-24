@@ -140,7 +140,7 @@ export function renderReference(ctx: Context): string {
     "| Command | Plugin | What it does | What it enforces |",
     "|---|---|---|---|",
     ...cliCommands.map((c) => `| [${code(c.name)}](#${anchor("naima " + c.name)}) | core | ${cell(c.says)} | ${cell(c.enforces ?? "")} |`),
-    ...r.contributions("commands").map((c) => {
+    ...r.contributions("commands").filter((c) => !(c.value as Command).hidden).map((c) => {
       const cmd = c.value as Command
       return `| [${code(cmd.name)}](#${anchor("naima " + cmd.name)}) | ${c.plugin} | ${cell(cmd.says)} | ${cell(cmd.enforces ?? "")} |`
     }),

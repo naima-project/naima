@@ -38,11 +38,11 @@ export { HOST, serve } from "./server.ts"
 
 const blank = (s: unknown): boolean => typeof s !== "string" || !s.trim()
 
-/** The point this plugin declares: every plugin's views, which `naima ui` shows as tabs. */
+/** The point this plugin declares: every plugin's views, which the provisional window shows as tabs. */
 export const viewsPoint: ExtensionPoint<UiView> = {
   id: "ui-views",
   says:
-    "a view `naima ui` shows as a tab, or as a panel of its first screen: `name` (its path), `title`, `says`, `order` (lower first, 0 when absent), `panel` (true: on the first screen, not a tab), `render(params, ctx) → { data, html, css? }`, rendered at each request",
+    "a view the provisional window shows as a tab, or as a panel of its first screen: `name` (its path), `title`, `says`, `order` (lower first, 0 when absent), `panel` (true: on the first screen, not a tab), `render(params, ctx) → { data, html, css? }`, rendered at each request",
   noun: "ui view",
   key: (v) => v.name,
   validate: (v) => {
@@ -58,7 +58,7 @@ export const viewsPoint: ExtensionPoint<UiView> = {
     vs,
   ) => [
     "",
-    "**UI views**, the tabs of `naima ui`",
+    "**UI views**, the tabs of the provisional window",
     ...table(["View", "Title", "Where", "What it shows"], vs.map((v) => [`\`${v.name}\``, v.title, v.panel ? "first screen" : "tab", v.says])),
   ],
 }
@@ -262,6 +262,7 @@ const uiCommand: Command = {
   says:
     "show the views the plugins contribute — first the summary, the gates, what is next and the claims, then the boards, the metrics, the session notes, each item with its evidence and the other tabs — in a native window titled Naima, served from this machine only, live from the files; closing the window stops it",
   enforces: "the views are served only on the loopback interface, and every request without this run's token is refused",
+  hidden: true,
   usage: "ui [--browser | --no-open] [--log]",
   options: [
     { name: "--browser", says: "show it in the default browser instead of the window; Ctrl-C stops the server" },
@@ -280,17 +281,17 @@ export default function ui(): Plugin {
   return {
     name: "ui",
     contract: CONTRACT,
-    says: "the views plugins contribute, shown by `naima ui` in a native window, or the browser, from a server on this machine only",
+    says:
+      "the views plugins contribute, a provisional window onto the project, shown in a native window or the browser from a server on this machine only, until the new UI replaces it",
     about:
-      "`naima ui` starts a server bound to the loopback interface, on a free port, that refuses every request without the token of its run, and opens it in a native window titled Naima. " +
+      "The provisional window starts a server bound to the loopback interface, on a free port, that refuses every request without the token of its run, and opens it in a native window titled Naima. " +
       "Each view is one a plugin contributes to `ui-views`, rendered from the files at each request, so the window shows what the files hold now. " +
       "The first screen holds the views that are panels — the summary, which this plugin renders from every plugin's summary section exactly as `naima summary` does; the gates, from the gates plugin, as `naima gates` reports them; what is next, from the triage plugin, as `naima view next` ranks it; the claims, from the coordination plugin, as `naima claims` recombines them — and every other view is a tab: " +
       "the boards, which this plugin renders as `naima board` does, one type at a time; the session notes across branches, from the coordination plugin, as `naima pass --list`; " +
       "one item, which this plugin renders as `naima show` does, its evidence first — its attachments and the items of a type that can prove it, each marked proves, refutes or not yet — and to which every item reference of the window links; the metrics and the others. " +
       "`/data/<view>` answers the same view's data as JSON, the same data the command prints with `--json`. Closing the window stops the server. " +
-      "The window is a webview, loaded from JSR at a pinned version, only by `naima ui`, and in a process of its own: the rest of Naima has no dependency. " +
-      "Where it cannot open — on Node or Bun, on a system it does not run on, offline on its first run, when it fetches its library — the default browser opens instead, and `naima ui` says so in one line; " +
-      "`--browser` asks for the browser. Only `ui` is granted, by the launcher, the loopback network and the programs that show it.",
+      "The window is a webview, loaded from JSR at a pinned version, only by it, and in a process of its own: the rest of Naima has no dependency. " +
+      "Where it cannot open — on Node or Bun, on a system it does not run on, offline on its first run, when it fetches its library — the default browser opens instead, and it says so in one line.",
     points: [viewsPoint],
     contributes: { "ui-views": [summaryView, boardView, itemView] },
     commands: [uiCommand],

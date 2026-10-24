@@ -22,7 +22,7 @@ Every contribution below has a qualified id, `<plugin>/<name>`, and goes by its 
 - [verifier](#verifier) — properties checked by formal-methods tools, with each run attached as evidence
 - [tools](#tools) — the tools plugins need, installed by Naima into its own directory on the machine it runs on: naima tools reports them, installs one with consent, removes one
 - [verifier-mcrl2](#verifier-mcrl2) — the mCRL2 adapter: a property is a modal mu-calculus formula over an mCRL2 specification
-- [ui](#ui) — the views plugins contribute, shown by `naima ui` in a native window, or the browser, from a server on this machine only
+- [ui](#ui) — the views plugins contribute, a provisional window onto the project, shown in a native window or the browser from a server on this machine only, until the new UI replaces it
 - [metrics](#metrics) — named measurements — a command's number, a code-quality number taken in process, a test suite's results — recorded per commit, held to a budget, a floor or a baseline, and read back along the commit timeline
 - [rules](#rules) — the project's own rules, kept as items: shown to agents first by naima guide, listed by naima rules
 - [long-work](#long-work) — long work, run and waited on by Naima: naima run starts a command detached, with budgets and a progress channel, locally or on a host; naima wait blocks on it by its record; naima run list, status, stop and clean; a long run that is due reported and filed, never started on its own; shipped rules make them mandatory for agents and make long work report its progress
@@ -92,7 +92,6 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`verifiers`](#naima-verifiers) | verifier | list the verifier adapters every plugin contributes | nothing: it only reads |
 | [`equivalent`](#naima-equivalent) | verifier | compare a model with the earlier version its properties were verified on, modulo an equivalence, and carry each result over to the model as it is now when the two are equivalent: a refactoring proved without running its properties again | a result carries over only from a conclusive run on an earlier version of the model, with everything else it read unchanged — the property, the options, every other input, the tool's version — when the verifier finds the two versions equivalent and says the equivalence preserves the property; the carried run is recorded as such, naming the run it came from, the earlier version and the comparison |
 | [`tools`](#naima-tools) | tools | the tools the loaded plugins declare, on this machine or a declared host: what is installed, missing or unavailable; show what an install would fetch; install one with consent into Naima's own directory, its download checked and the tool verified, never touching PATH or the system; remove one; print an installed program's path | an install fetches only the declared source, refuses a size or sha256 that differs, keeps nothing that fails its verification, and goes on only with consent — a yes on a terminal, or --consent with --by, recorded in the receipt; nothing is written outside the tools directory; a tool another installed tool needs is not removed |
-| [`ui`](#naima-ui) | ui | show the views the plugins contribute — first the summary, the gates, what is next and the claims, then the boards, the metrics, the session notes, each item with its evidence and the other tabs — in a native window titled Naima, served from this machine only, live from the files; closing the window stops it | the views are served only on the loopback interface, and every request without this run's token is refused |
 | [`metrics`](#naima-metrics) | metrics | the project's metrics — each a name and the command or code measure that takes it — run, recorded per commit, held to a budget, a floor or a baseline, and read back along the commit timeline as a trend, a table or a chart; every number with the one it is compared to | numbers are recorded with the commit they measure; a ratcheted bound only tightens, and loosening one is refused without --because naming the item that says why |
 | [`rules`](#naima-rules) | rules | print the project's active rules, must before should, each with its text and reason, ending with the line an agent must acknowledge back; or check that text carries every one (rules check-ack) | nothing: it only reads |
 | [`run`](#naima-run) | long-work | start a long command detached — locally, or on a declared host through its own Naima — with a log, a progress file, a time budget and, on what it declares it creates, a disk budget, ending itself when one runs out; list the runs against their budgets, show one, stop one, or remove what one created | every run has a time budget, and is ended, its whole process group with it, when it runs out or its declared paths outgrow the disk budget; a declared path is never the root, the home directory, the repository or above it, nor holds a tracked file; a run is never cleaned while it runs; a remote run is always guarded, failing when it changes a tracked file; nothing starts on its own: a due long run is reported and filed, and starts only when a person or an agent runs it |
@@ -126,7 +125,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `roles` | roles | a role of the company of agents: `title`, what it `owns`, what it `refuses` (never empty), the `kinds` and `types` on its queue, and `queue(ctx)`, its open items most urgent first | roles |
 | `verifiers` | verifier | an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest; and `equivalences` with `compare({ before, after, equivalence }, ctx) → { verdict, output, counterexample?, details? }` and `preserves({ property, options, equivalence }, ctx)`, for `naima equivalent` | verifier, verifier-mcrl2 |
 | `tools` | tools | a tool a plugin needs, which `naima tools install` installs into Naima's own directory: name, exact version, licence, programs, how an install is verified, and per platform a source (url, size, sha256, format) or the answer saying why there is none | verifier-mcrl2 |
-| `ui-views` | ui | a view `naima ui` shows as a tab, or as a panel of its first screen: `name` (its path), `title`, `says`, `order` (lower first, 0 when absent), `panel` (true: on the first screen, not a tab), `render(params, ctx) → { data, html, css? }`, rendered at each request | coordination, triage, gates, ui, metrics |
+| `ui-views` | ui | a view the provisional window shows as a tab, or as a panel of its first screen: `name` (its path), `title`, `says`, `order` (lower first, 0 when absent), `panel` (true: on the first screen, not a tab), `render(params, ctx) → { data, html, css? }`, rendered at each request | coordination, triage, gates, ui, metrics |
 | `metric-kinds` | metrics | how a metric's number is read from its run: `read({ exit, stdout, stderr, seconds }, metric) → number \| { error }`, `readsExit` | metrics |
 | `metrics` | metrics | a named measurement: `run` (a program and its arguments) and `kind`, a code `measure`, a test `suite`'s number or a `file`'s; a bound — `atMost`, `atLeast` or `equals` — and `better` |  |
 | `code-measures` | metrics | a code-quality number taken in process from the files: `measure({ files, source }, metric) → number \| { error }`, with its `unit` and `better` | metrics |
@@ -1159,7 +1158,7 @@ naima event 2026-10-05 "The plan was entered" --kind diary
 |---|---|
 | `no-closing-own-claims` | archiving an item (a move to a type that is not creatable, as naima close does) that the branch you stand on claims is refused unless --force: a branch does not close its own items on the strength of its own tests |
 
-**UI views**, the tabs of `naima ui`
+**UI views**, the tabs of the provisional window
 
 | View | Title | Where | What it shows |
 |---|---|---|---|
@@ -1257,7 +1256,7 @@ naima triage derive --write
 |---|---|
 | `triage-stamps-its-date` | a change to priority, impact, effort or confidence — by naima set, triage set, or any command — stamps triagedOn with today and drops triagedBy: derived; a write triage derive marks derived stamps nothing |
 
-**UI views**, the tabs of `naima ui`
+**UI views**, the tabs of the provisional window
 
 | View | Title | Where | What it shows |
 |---|---|---|---|
@@ -1450,7 +1449,7 @@ naima order first-public
 
 - format 1 → 2: the top-level gates key of naima.json moves to plugins.gates.options.gates
 
-**UI views**, the tabs of `naima ui`
+**UI views**, the tabs of the provisional window
 
 | View | Title | Where | What it shows |
 |---|---|---|---|
@@ -2232,39 +2231,15 @@ Options, each with the default it takes when nothing sets it:
 
 ## ui
 
-The views plugins contribute, shown by `naima ui` in a native window, or the browser, from a server on this machine only.
+The views plugins contribute, a provisional window onto the project, shown in a native window or the browser from a server on this machine only, until the new UI replaces it.
 
 Its contributions' qualified ids are `ui/<name>`.
 
-`naima ui` starts a server bound to the loopback interface, on a free port, that refuses every request without the token of its run, and opens it in a native window titled Naima. Each view is one a plugin contributes to `ui-views`, rendered from the files at each request, so the window shows what the files hold now. The first screen holds the views that are panels — the summary, which this plugin renders from every plugin's summary section exactly as `naima summary` does; the gates, from the gates plugin, as `naima gates` reports them; what is next, from the triage plugin, as `naima view next` ranks it; the claims, from the coordination plugin, as `naima claims` recombines them — and every other view is a tab: the boards, which this plugin renders as `naima board` does, one type at a time; the session notes across branches, from the coordination plugin, as `naima pass --list`; one item, which this plugin renders as `naima show` does, its evidence first — its attachments and the items of a type that can prove it, each marked proves, refutes or not yet — and to which every item reference of the window links; the metrics and the others. `/data/<view>` answers the same view's data as JSON, the same data the command prints with `--json`. Closing the window stops the server. The window is a webview, loaded from JSR at a pinned version, only by `naima ui`, and in a process of its own: the rest of Naima has no dependency. Where it cannot open — on Node or Bun, on a system it does not run on, offline on its first run, when it fetches its library — the default browser opens instead, and `naima ui` says so in one line; `--browser` asks for the browser. Only `ui` is granted, by the launcher, the loopback network and the programs that show it.
+The provisional window starts a server bound to the loopback interface, on a free port, that refuses every request without the token of its run, and opens it in a native window titled Naima. Each view is one a plugin contributes to `ui-views`, rendered from the files at each request, so the window shows what the files hold now. The first screen holds the views that are panels — the summary, which this plugin renders from every plugin's summary section exactly as `naima summary` does; the gates, from the gates plugin, as `naima gates` reports them; what is next, from the triage plugin, as `naima view next` ranks it; the claims, from the coordination plugin, as `naima claims` recombines them — and every other view is a tab: the boards, which this plugin renders as `naima board` does, one type at a time; the session notes across branches, from the coordination plugin, as `naima pass --list`; one item, which this plugin renders as `naima show` does, its evidence first — its attachments and the items of a type that can prove it, each marked proves, refutes or not yet — and to which every item reference of the window links; the metrics and the others. `/data/<view>` answers the same view's data as JSON, the same data the command prints with `--json`. Closing the window stops the server. The window is a webview, loaded from JSR at a pinned version, only by it, and in a process of its own: the rest of Naima has no dependency. Where it cannot open — on Node or Bun, on a system it does not run on, offline on its first run, when it fetches its library — the default browser opens instead, and it says so in one line.
 
 **Extension points** it declares: `ui-views`.
 
-### naima ui
-
-Show the views the plugins contribute — first the summary, the gates, what is next and the claims, then the boards, the metrics, the session notes, each item with its evidence and the other tabs — in a native window titled Naima, served from this machine only, live from the files; closing the window stops it.
-
-**Enforces**: The views are served only on the loopback interface, and every request without this run's token is refused.
-
-```sh
-naima ui [--browser
-naima --no-open] [--log]
-```
-
-| Option | Default | What it does |
-|---|---|---|
-| `--browser` |  | show it in the default browser instead of the window; Ctrl-C stops the server |
-| `--no-open` |  | show it nowhere: print the address, with its token, and serve until Ctrl-C |
-| `--log` |  | print one line per request on stderr: its status, method, path and user agent |
-
-Examples:
-
-```sh
-naima ui
-naima ui --browser
-```
-
-**UI views**, the tabs of `naima ui`
+**UI views**, the tabs of the provisional window
 
 | View | Title | Where | What it shows |
 |---|---|---|---|
@@ -2354,7 +2329,7 @@ naima metrics presets
 
 **Summary sections**: `metrics`.
 
-**UI views**, the tabs of `naima ui`
+**UI views**, the tabs of the provisional window
 
 | View | Title | Where | What it shows |
 |---|---|---|---|
