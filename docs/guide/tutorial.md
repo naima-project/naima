@@ -1,17 +1,18 @@
 # Tutorial: from an empty repository to a closed bug
 
+**In everyday use an agent types these commands for you
+([how the project runs](how-the-project-runs.md)).** You don't need this
+tutorial to use Naima. Follow it if you want to learn how Naima works
+underneath, or if you plan to run the commands by hand yourself. The project
+here is a tiny script, but the same steps work for any software, and for
+other kinds of project such as a data analysis or a paper.
+
 This tutorial takes about twenty minutes from start to finish. You will
 install Naima in a small project, file a bug, rank it, look at where the
 project stands, fix the bug, prove the fix, and close it. You type every
 command yourself, and the only code you touch is one word in a one-line
 script. If you'd like the overview of the ideas first, read
 [the primer](primer.md).
-
-In everyday use an agent types these commands for you
-([how the project runs](how-the-project-runs.md)). Doing them once by hand
-shows you what it does. The project here is a tiny script, but the same steps
-work for any software, and for other kinds of project such as a data analysis
-or a paper.
 
 Every output below is what the commands printed when this tutorial was run.
 Yours will differ only in the item ids, the dates, the commit and the folder.
