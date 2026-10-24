@@ -669,9 +669,8 @@ work and never pulls.
 
 What a project's program directory is, namely a git clone of Naima's own
 repository checked out at the locked commit. It doesn't include Naima's tests
-or its own tracker, which live in a separate repository, the workshop: its
-public copy is [naima-lab](https://github.com/naima-project/naima-lab), and
-the tracker itself stays private ([the clone](install.md#the-clone)).
+or its own tracker, which live in a separate repository, the workshop, which is private for now
+([the clone](install.md#the-clone)).
 
 ### Update
 

@@ -145,8 +145,7 @@ as the installer.
 
 `main` is the branch Naima is developed on. Its tests, its site, the rules
 for working on it and its own tracker live in the workshop, a separate
-repository published as [naima-lab](https://github.com/naima-project/naima-lab),
-without the tracker, which stays private. Cloning `naima-project/naima` gets you none of
+repository that is private for now. Cloning `naima-project/naima` gets you none of
 that, only what runs Naima: `naima.ts`, `src/`, `docs/`, `skills/`,
 `README.md`, `LICENSE` and `NOTICE`, which is exactly what a project should
 carry. Tests make sure the clone stays that way. No test runner,
