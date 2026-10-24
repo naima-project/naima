@@ -15,14 +15,24 @@ export interface Policy {
   worktrees?: string
   /** Branches the scheme does not apply to: names, or patterns with `*`. */
   exempt: string[]
+  /** How many worker worktrees may be open at once before `open` refuses another: the option `maxWorkers`. */
+  maxWorkers: number
 }
 
+/** The default bound on worker worktrees open at once. */
+export const MAX_WORKERS = 3
+
 export function readPolicy(options: Record<string, unknown>): Policy {
-  const { who, worktrees: dir, exempt = [] } = options
+  const { who, worktrees: dir, exempt = [], maxWorkers = MAX_WORKERS } = options
   if (who !== undefined && (typeof who !== "string" || !SEGMENT.test(who))) throw new Error(`coordination: option who must be a ${SEGMENT_SAYS}`)
   if (dir !== undefined && (typeof dir !== "string" || !dir)) throw new Error("coordination: option worktrees must be a path")
   if (!Array.isArray(exempt) || !exempt.every((e) => typeof e === "string")) throw new Error("coordination: option exempt must be a list of branch names")
-  return { ...(who ? { who } : {}), ...(dir ? { worktrees: dir } : {}), exempt }
+  if (typeof maxWorkers !== "number" || !Number.isInteger(maxWorkers) || maxWorkers < 1) {
+    throw new Error(
+      `coordination: option maxWorkers must be a positive whole number, how many worker worktrees may be open at once; got ${JSON.stringify(maxWorkers)}`,
+    )
+  }
+  return { ...(who ? { who } : {}), ...(dir ? { worktrees: dir } : {}), exempt, maxWorkers }
 }
 
 /** One segment of a branch name: what `<who>` and `<what>` each are. */
@@ -54,6 +64,30 @@ export function worktreesDir(policy: Policy, main: string): string {
 
 /** One directory, whether or not either path can be resolved here: the program may not read outside its project. */
 const same = (a: string, b: string): boolean => a === b || realOr(a) === realOr(b)
+
+/** The worker worktrees open now: every worktree but the main one that is a folder of the worktrees directory, on a branch the scheme applies to. */
+export function workerTrees(root: string, policy: Policy, trees: Worktree[] = worktrees(root)): Worktree[] {
+  const dir = worktreesDir(policy, home(root, trees))
+  return trees.slice(1).filter((w) => !!w.branch && !isExempt(policy, w.branch) && same(dirname(w.path), dir))
+}
+
+/**
+ * Why `open` may not add a worker worktree: as many as the option
+ * `maxWorkers` are open already. The refusal names each, and says how to free
+ * one or raise the bound; null while there is room.
+ */
+export function workerBoundReason(root: string, policy: Policy, trees: Worktree[] = worktrees(root)): string | null {
+  const open = workerTrees(root, policy, trees)
+  if (open.length < policy.maxWorkers) return null
+  return [
+    `${plural(open.length, "worker worktree")} ${
+      open.length === 1 ? "is" : "are"
+    } open, the coordination option maxWorkers (${policy.maxWorkers}): open no more until one is done`,
+    ...open.map((w) => `  ${w.branch}  ${w.path}`),
+    "free one that has landed with naima prune --branch <branch> --write, or give two small items to one worker (naima open <item> <item>);",
+    `raise the bound only on purpose, in naima.json: "plugins": { "coordination": { "options": { "maxWorkers": ${policy.maxWorkers + 1} } } }`,
+  ].join("\n")
+}
 
 /** Whether a path exists, false when this run may not look: what git is then asked to refuse. */
 export const exists = (path: string): boolean => {

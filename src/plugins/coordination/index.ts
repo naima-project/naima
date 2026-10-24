@@ -59,6 +59,7 @@ import {
   ahead,
   exists,
   home,
+  MAX_WORKERS,
   plural,
   type Policy,
   policyFindings,
@@ -66,6 +67,7 @@ import {
   readPolicy,
   SEGMENT,
   SEGMENT_SAYS,
+  workerBoundReason,
   worktreesDir,
   writeThroughGit,
 } from "./worktrees.ts"
@@ -725,7 +727,7 @@ function openCommand(policy: Policy): Command {
     name: "open",
     says: "start a piece of work: a worktree <worktrees>/<what> on a new branch <who>/<what> from the trunk, and its claim on the items, in one step",
     enforces:
-      "work happens on its own branch and worktree from the trunk, and its claim on the items is recorded in the same step; a branch that already exists is never reused, and the refusal says whether it is merged into the trunk",
+      "work happens on its own branch and worktree from the trunk, and its claim on the items is recorded in the same step; a branch that already exists is never reused, and the refusal says whether it is merged into the trunk; no worker worktree is opened beyond the option maxWorkers, and the refusal names the open ones and how to raise the bound",
     usage: 'open <item>... [--as <who>] [--name <what>] [--note "why"]',
     options: [
       { name: "--as", says: "who works: the branch's first segment", ...(policy.who ? { default: policy.who } : {}) },
@@ -758,6 +760,8 @@ function openCommand(policy: Policy): Command {
         )
       }
       if (exists(path)) throw new Error(`${path} already exists: pick another --name`)
+      const bound = workerBoundReason(ctx.root, policy, trees)
+      if (bound) throw new Error(bound)
       const trackerBase = ctx.sibling ? trunk(ctx.trackerGit) : null
       if (ctx.sibling) {
         if (!trackerBase) throw new Error("the tracker repository has no trunk (main, master, or origin's HEAD): commit the tracker first")
@@ -1050,6 +1054,12 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
         default: "../<main worktree's folder>-worktrees",
       },
       { name: "exempt", says: "branches the naming scheme does not apply to: names, or patterns with *", default: "[]" },
+      {
+        name: "maxWorkers",
+        says:
+          "how many worker worktrees (folders of the worktrees directory, on a branch the scheme applies to) may be open at once: naima open refuses another, naming the open ones; a positive whole number",
+        default: String(MAX_WORKERS),
+      },
       { name: "diaryPerDay", says: "how many diary entries a day may hold before the check diary-entries notes it: a positive whole number", default: "5" },
       {
         name: "silentAfter",

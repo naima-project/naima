@@ -146,16 +146,31 @@ judges it.
 ## Choosing the model
 
 A worker's model is a parameter, and choosing it well saves more than
-anything else. Use the strongest model for diagnosis and design, where being
-wrong can cost a day. Use a faster, cheaper one for filing, triage,
-classification, merges, audits and running gates.
+anything else. Give each task the cheapest model that can do it. Mechanical
+or read-only work goes to a smaller, faster model: filing, triage,
+classification, merges, audits, searches, running gates, and edits whose
+shape is already decided. Keep the strongest model for diagnosis and design,
+where being wrong can cost a day. Never put every worker on the strongest
+model by default.
+
+When you start workers, say in one line each what you started: the worker,
+its branch, its model and why that model. The owner sees what is being
+spent without asking.
 
 ## How many at once
 
-Two workers at once is the standing number, and up to four only for short,
-cheap work that can run in parallel. The budget limits concurrency as much as
-the load does, because too many expensive workers at once use it up and die
-in the middle of their tasks.
+Two workers at once is the standing number, and three only for short, cheap
+work that can run in parallel. The budget limits concurrency as much as the
+load does, because too many expensive workers at once use it up and die in
+the middle of their tasks. Group related small items into one unit before
+staffing: one worker, one worktree, one branch, opened with
+`naima open <item> <item>`.
+
+`naima open` enforces the bound: it refuses a new worker worktree once as
+many are open as the coordination option `maxWorkers` allows (3 by
+default), and names the open ones. Free one that has landed with
+`naima prune --branch <branch> --write`. Raise the bound only when the
+owner asks for it, in `naima.json`.
 
 When a worker dies, the coordinator salvages its work before spawning a
 replacement. The dead worker's worktree still holds everything it hadn't
