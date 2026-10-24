@@ -73,13 +73,10 @@ commit.
   project.
 - **A dashboard**: a visual page of the project's state, with a look of its
   own, showing the boards, the gates, the ranked queue, claims and notes
-  across branches, and the evidence attached to each item. **Today:**
-  `naima ui` opens a window. Its first screen shows the summary, the gates,
-  what is next and the claims across branches. The boards, the metrics, the
-  timeline, the coverage, the session notes across branches, and each item
-  with its evidence are tabs, and plugins can add panels and tabs beside them.
-  The look is plain. `naima summary --markdown` also prints the state as text
-  you can paste anywhere.
+  across branches, and the evidence attached to each item. **Today:** the
+  same views are commands (`naima summary`, `naima board`, `naima gates`,
+  `naima view`), and `naima summary --markdown` prints the state as text you
+  can paste anywhere.
 
 ## A pointer in the agent's instruction file
 

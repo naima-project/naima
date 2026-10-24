@@ -12,6 +12,37 @@ words and make the decisions that are yours to make
 in [the guide](README.md) can also be done by hand, with `naima` commands and
 plain text on an [item](glossary.md#item)'s page.
 
+## Which AI agent do I need?
+
+One that can run commands in your project's folder, because that is how it
+installs Naima and works with it. The Code tab of the Claude desktop app,
+Claude Code, Codex and Cursor all can. A chat window that only answers in
+text can't, and neither can an app builder that runs in the browser, though
+a project you started in one of those can be brought into a folder and
+continued with an agent once it is on GitHub. Naima isn't tied to any one
+agent or model, so you can change agent later without losing anything.
+
+## What does installing Naima change in my project?
+
+It adds one folder, `naima-tracker/`, and one line in the file your agent
+reads at the start of each session (`AGENTS.md`, `CLAUDE.md` or similar),
+which tells the agent to run `naima hello`. Nothing else in your project is
+touched. Inside that folder, `naima-tracker/naima/` holds the program and is
+ignored by git, while `naima-tracker/naima-data/` holds your items and is
+committed like any other file, so every change Naima makes can be seen and
+undone. If [Deno](https://deno.com), the one program Naima runs on, is
+missing, the installer sets it up for your user, without administrator
+rights ([install](install.md)).
+
+## Does Naima use more of my AI plan?
+
+Usually yes. Writing a test that fails before a fix and passes after it,
+recording what was decided, and having a second agent check the work all
+take more steps than a quick "fixed", and each step uses some of your
+agent's allowance. What you get for it is work that is shown to be done and
+a project that remembers. On a plan with tight limits, ask the agent to keep
+to one piece of work at a time.
+
 ## Is Naima only for software?
 
 No. It works for anything that benefits from keeping every version, such as
@@ -25,10 +56,8 @@ them. Packs of item types for other kinds of work are
 
 No, because Naima has no server and no account. The board is
 `naima board <type>`, and `naima summary --markdown` prints the state of the
-project as markdown you can paste anywhere. `naima ui` opens a window on your
-machine. Its first screen shows the summary, the gates, what is next and who
-holds what, and its tabs show the boards, the session notes and each item
-with its evidence. A visual design of its own for that window is
+project as markdown you can paste anywhere. A window on your machine with the
+summary, the gates and the boards is
 [planned](../planned.md#design-skills-and-a-dashboard).
 
 ## Where is my data? Does anything leave my machine?

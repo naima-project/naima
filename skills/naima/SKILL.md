@@ -180,8 +180,8 @@ files in the clone; `naima guide` prints where:
 - [the format](../../docs/reference/format.md): every file and field
 - [reference](../../docs/reference/reference.md): every command, type, status, field and gate
 - [metrics and budgets](../../docs/guide/metrics-and-budgets.md): code-quality
-  metrics (complexity, duplication, coverage and more) per commit, seen in a
-  native window with `naima ui`
+  metrics (complexity, duplication, coverage and more) per commit, read back
+  as a trend, a table or a chart
 - [glossary](../../docs/guide/glossary.md): every term, defined once
 
 `naima help` lists the commands of the Naima in use; `naima summary` says where
