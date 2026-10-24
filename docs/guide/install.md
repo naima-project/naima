@@ -368,22 +368,7 @@ under Deno with only these permissions:
 | write | `naima-tracker/`, and the data or program directory if moved out of it; for `init` and `update` only, the entry files and the session-start settings of the tools in use, and with `init --write-excludes` the host tools' configuration | items, claims, notes, the program's own alignment, the commits fetched for it; the pointer line, the session-start hooks and the exclusion lines; nothing else in the project |
 | run | `git`, and the programs the loaded contributions declare, by name or by their absolute path in the [tools directory](tools.md#where-the-tools-go) | alignment, update, and reading claims and notes across branches; a [verifier](glossary.md#verifier)'s model checker (its `runs`, [the contract](../reference/plugin-contract.md#the-verifier-contract)); a declared [metric](metrics-and-budgets.md)'s program, the first word of its `run` |
 | env | an allow-list: `HOME`, `PATH`, the user, shell, terminal, locale and temporary-directory variables, the proxy variables, Windows' system ones, and every `NAIMA_*`, `GIT_*`, `SSH_*`, `LC_*` and `DENO_*` | what git needs to reach a source, and Naima's own; nothing else of the environment reaches the program, nor the git it runs |
-| net | none, but the loopback interface for `naima ui`, and `api.github.com` for `naima init` | the network is git's, in alignment and update; `naima ui` serves its window from this machine only; `init` asks GitHub whether the project is public ([where the tracker lives](#where-the-tracker-lives)) |
-
-**`naima ui`, and no other command,** gets three more permissions. It may
-listen on the loopback interface (`127.0.0.1`) for its server, read and run
-the Deno that runs it so that it can open its window, and run the program
-that opens the default browser (`open`, `xdg-open` or `rundll32`) as a
-fallback. The window is a separate process, `src/plugins/ui/window.ts`, which
-the program starts with only what the webview needs. The webview is the
-embedded browser component that draws the window, and it needs native code
-from the webview's cache (`plug/` in Deno's directory) and write access
-there, read access to Deno's directory, network access to GitHub to fetch
-the webview's library on its first run, and the environment. The program
-itself never calls native code or loads code over the network. Being allowed
-to run Deno is a wide grant, because Deno can be asked for any permission,
-and that is why only `ui` has it. The grant is `uiGrant` in
-`src/launcher.ts`.
+| net | none, but `api.github.com` for `naima init` | the network is git's, in alignment and update; `init` asks GitHub whether the project is public ([where the tracker lives](#where-the-tracker-lives)) |
 
 **`naima tools`, and no other command,** may also write to the tools
 directory, reach any host and run any program. An install downloads from
