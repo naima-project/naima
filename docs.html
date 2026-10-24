@@ -85,7 +85,8 @@
 <header class="top">
   <a class="home" href="./" aria-label="Naima, home">N<span class="ai">AI</span>MA</a>
   <nav aria-label="Documentation">
-    <a href="docs.html?p=guide/primer.md" data-doc="guide/primer.md">Primer</a>
+    <a href="docs.html?p=guide/naima-in-one-minute.md" data-doc="guide/naima-in-one-minute.md">In one minute</a>
+    <a href="docs.html?p=guide/naima-in-ten-minutes.md" data-doc="guide/naima-in-ten-minutes.md">In ten minutes</a>
     <a href="docs.html?p=README.md" data-doc="README.md">All documentation</a>
     <a href="install.html">Use it now</a>
   </nav>
@@ -107,7 +108,7 @@
   const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname) && new URLSearchParams(location.search).has("local")
   const SOURCE = LOCAL ? "http://localhost:8766/" : RAW
   const BLOB = REPO + "/blob/main/docs/"
-  const DEFAULT = "guide/primer.md"
+  const DEFAULT = "guide/naima-in-one-minute.md"
 
   const asked = new URLSearchParams(location.search).get("p") || DEFAULT
   // Only a markdown file under docs/: no scheme, no climbing out.
