@@ -2,24 +2,59 @@
 
 **Website: [naima-project.github.io/naima](https://naima-project.github.io/naima/)**
 
-Naima is a silent software house of AI agents that turns vibe coding into an
-exact science — born for software, it manages any project.
+Naima is for people who build software by asking an AI, and want what they
+built to keep working. You keep using the AI you already have. Naima gives it
+a way of working: it writes down what you asked for, tests every change before
+calling it done, remembers what was decided from one session to the next, and
+asks you only the questions that are yours to answer.
+
+It is free and open source, with no account and no server. It lives in a
+folder of your project, as plain files kept in git, and it works for programs,
+data analyses and papers alike.
+
+Naima is in beta while version 1.1 is stabilized for its first public release.
+
+## What you get
+
+- **You say what you want, and agents build it**, with written requirements,
+  tests and reviews before anything ships.
+- **Nothing counts as done until a test shows it works.** When a fix breaks
+  something that used to work, the tests catch it, and the agent can't close
+  the work without a passing proof.
+- **The project remembers.** Decisions, open problems and what each session
+  did are kept as files, so the next session starts where the last one
+  stopped and doesn't ask you the same question twice.
+- **Formal methods where they help**: properties of the design checked by a
+  model checker, without your needing to know how it works.
+- **Code-quality measures on every commit** (complexity, duplication,
+  coverage) recorded beside the tests.
+- **Not only software**: a data analysis checked by reproducible runs, a paper
+  checked by reviews.
+
+You don't need to know git, code or project management. You need an AI agent
+that can run commands in your project's folder, such as the Code tab of the
+Claude desktop app, Claude Code, Codex or Cursor. Chat-only assistants and
+browser app builders can't install it.
 
 ## Install
 
-In the root of a git repository, one line:
+Open your AI agent in your project's folder, or in a new empty one, and ask
+it:
+
+> Please install https://github.com/naima-project/naima in the root of this repository; create a repository at the root if missing.
+
+The agent sets up what is needed. If you prefer to run the installer yourself, it is one line in the
+root of a git repository:
 
 ```sh
 curl -fsSL https://naima-project.github.io/naima/install.sh | sh     # macOS, Linux
 irm https://naima-project.github.io/naima/install.ps1 | iex          # Windows PowerShell
 ```
 
-Or ask your agent:
-
-> Please install https://github.com/naima-project/naima in this repository.
-
-The installer sets up [Deno](https://deno.com) when it is missing, clones
-Naima into `naima-tracker/naima/` and checks it.
+The installer sets up [Deno](https://deno.com), the one program Naima runs on,
+when it is missing. It clones Naima into `naima-tracker/naima/`, writes the
+rest of `naima-tracker/` and a line in your agent's instruction file, and
+changes nothing else in your project. It needs no administrator rights.
 
 The tracker, `naima-tracker/naima-data/`, is committed with the code when the
 repository has no remote or a private one. When the remote is public, or its
@@ -95,23 +130,6 @@ Windows) to see that Deno itself works. To check the download before
 unpacking it, compare its sha256 — `shasum -a 256 ~/.deno/bin/deno.zip` on
 macOS and Linux, `Get-FileHash $BinDir\deno.zip` on Windows — with the one in
 `https://dl.deno.land/release/<version>/deno-<target>.zip.sha256sum`.
-
-## What you get
-
-- **You say what you want, agents build it**, with written requirements,
-  tests, reviews and gates before anything ships.
-- **Every claim comes with its evidence**: nothing counts as done until it is
-  shown to be.
-- **Formal methods applied for you**: properties of the design proven by
-  tools, without your needing to know them.
-- **Code-quality metrics per commit** — complexity, duplication, coverage —
-  beside the tests, in a native window with `naima ui`.
-- **A tracker in your repository**, plain files under git: items, decisions,
-  plans and their proofs, managed for you.
-- **Any project, not only software**: a data analysis checked by reproducible
-  runs, a paper checked by reviews.
-
-You don't need to know git, code or project management. You need an AI agent.
 
 ## Documentation
 
