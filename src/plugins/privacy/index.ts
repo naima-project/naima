@@ -2,12 +2,17 @@
 // attachments through `naima attach`, which records whose it is — the owner's,
 // with the owner's yes restated, or the writer's own — and refuses one holding
 // a secret; `naima check` flags an attachment a branch adds with no such
-// record, and any secret in the project's files or attachments.
+// record, and any secret in the project's files or attachments. Every write of
+// free text or a file is signed against the no-leaks checklist the program
+// ships (docs/agents/NOLEAKS.md): `--revised <its path>`, or it is refused.
 
+import { createHash } from "node:crypto"
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs"
 import { basename, join, relative, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 import {
   ATTACHMENTS,
+  beforeTextWrite,
   bool,
   type Check,
   type Command,
@@ -28,6 +33,7 @@ import {
   parse,
   type Plugin,
   type PluginApi,
+  posixRelative,
   privateContext,
   projectFiles,
   readReadme,
@@ -40,6 +46,8 @@ import {
   trunk,
   usageError,
   walkFiles,
+  type Write,
+  type WriteHook,
 } from "../../core/api.ts"
 
 /** One secret shape: its name, said after an article, and how it is found. */
@@ -108,8 +116,44 @@ interface Provenance {
   consent?: string
   by: string
   on: string
+  revised?: unknown
 }
 
+/** The no-leaks checklist, from the program directory: the file `--revised` must name. */
+export const CHECKLIST = "docs/agents/NOLEAKS.md"
+
+/** The program's own copy of the checklist, next to this code. */
+const SHIPPED = fileURLToPath(new URL(`../../../${CHECKLIST}`, import.meta.url))
+
+/** A signature as a signed write records it: the checklist's hash (the first 16 hex digits of its SHA-256), who if known, the day. */
+export interface Signature {
+  checklist: string
+  by?: string
+  on: string
+}
+
+const hashOf = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex").slice(0, 16)
+
+const SIGNED: FieldDef = {
+  name: "revised",
+  kind: "object",
+  says:
+    "the last no-leaks signature on the item's free text, which naima fills on a signed write: { checklist: the first 16 hex digits of the checklist's SHA-256, by: who, when git says, on: the day }; git's history holds the earlier ones",
+}
+
+/** Fields that hold free text: the title, a string field with no list of values, and any string field no plugin declares. */
+function freeText(write: Write, ctx: Context): boolean {
+  if (write.kind === "create") return true
+  const before: { [k: string]: unknown } = write.before ?? {}
+  if (write.prose !== undefined && write.prose !== readReadme(write.item)) return true
+  for (const [name, value] of Object.entries(write.item.meta)) {
+    if (name === "id" || name === "status" || name === "links" || name === SIGNED.name) continue
+    if (typeof value !== "string" || value === before[name]) continue
+    const def = ctx.registry.fields.get(name)
+    if (name === "title" || !def || (def.kind === "string" && !Object.keys(def.values ?? {}).length)) return true
+  }
+  return false
+}
 const ATTACHED: FieldDef = {
   name: "attached",
   kind: "object",
@@ -172,6 +216,49 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
   const self = api?.plugin ?? "privacy"
   const generated = (Array.isArray(options["generated"]) ? options["generated"].map(String) : GENERATED).map(glob)
   const exceptions: unknown[] = Array.isArray(options["exceptions"]) ? options["exceptions"] : []
+  const signing = options["signed"] !== false
+
+  /** The checklist's path as the project names it: under its program directory. */
+  const checklistPath = (ctx: Context): string => posixRelative(ctx.root, join(ctx.program, CHECKLIST)) || CHECKLIST
+
+  /** The signature of this command's write, or the refusal: no --revised, or a file that is not the shipped checklist. */
+  function sign(ctx: Context, what: string): Signature | string {
+    const path = checklistPath(ctx)
+    const how = `read ${path}, check the text against every point of it, and run the command again with --revised ${path}`
+    if (ctx.revised === undefined) {
+      return `nothing written: ${what} is free text, which enters the tracker only signed against the no-leaks checklist — ${how}`
+    }
+    let given: Uint8Array
+    try {
+      given = readFileSync(ctx.revised)
+    } catch {
+      return `nothing written: --revised names ${ctx.revised}, which cannot be read — ${how}`
+    }
+    const shipped = hashOf(readFileSync(SHIPPED))
+    if (hashOf(given) !== shipped) {
+      return `nothing written: --revised names a file that is not the no-leaks checklist this Naima ships, so it signs nothing — ${how}`
+    }
+    const by = isGitRepo(ctx.root) ? gitOrNull(ctx.root, "config", "user.name")?.trim() : undefined
+    return { checklist: shipped, ...(by ? { by } : {}), on: today(ctx) }
+  }
+
+  const signedWrites: WriteHook = {
+    name: "signed-writes",
+    says:
+      "a write of free text the writer authored (naima new, describe, note, a free-text field with naima set) is refused unless --revised names the no-leaks checklist the program ships, byte for byte; the signature (the checklist's hash, who, the day) goes in the item's field revised. Session notes, events and attachments are held the same way and carry it in their own record. Statuses, links, claims and what Naima fills or generates need none; the option signed: false turns it off",
+    beforeWrite(write, ctx) {
+      if (!signing || !write.authored || !freeText(write, ctx)) return
+      const s = sign(ctx, `the text of ${label(write.item)}`)
+      if (typeof s === "string") return s
+      write.item.meta = { ...write.item.meta, [SIGNED.name]: s }
+    },
+    beforeText(text, ctx) {
+      if (!signing) return
+      const s = sign(ctx, text.what)
+      if (typeof s === "string") return s
+      text.record[SIGNED.name] = s
+    },
+  }
 
   const attach: Command = {
     name: "attach",
@@ -213,15 +300,19 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
         throw new Error(`${file}:${secret.line} holds ${article(secret.shape)}: redact it before attaching — an attachment is permanent once committed`)
       }
       const allowance = text === null ? undefined : guardPrivate(`attachment ${name}`, findPrivate(text, privateContext()), ctx.allowPrivate)
+      const signature = beforeTextWrite(ctx, `attachment ${name}`)
       const dest = join(item.dir, ATTACHMENTS, name)
       const records = recordsOf(item)
       const inPlace = src === resolve(dest)
       if (Object.hasOwn(records, name) || (existsSync(dest) && !inPlace)) {
         throw new Error(`${label(item)} already holds ${name}: attach it under another name with --as`)
       }
-      const record: Provenance = consent
-        ? { from: "owner", consent, by: author(ctx, str(p, "by")), on: today(ctx) }
-        : { from: "agent", by: author(ctx, str(p, "by")), on: today(ctx) }
+      const record: Provenance = {
+        ...(consent ? { from: "owner", consent } : { from: "agent" }),
+        by: author(ctx, str(p, "by")),
+        on: today(ctx),
+        ...signature,
+      } as Provenance
       if (!inPlace) {
         mkdirSync(join(item.dir, ATTACHMENTS), { recursive: true })
         copyFileSync(src, dest)
@@ -371,7 +462,10 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
       "A file enters an item's `attachments/` through `naima attach`, which records on the item, in the field `attached`, whose it is: the owner's (`--consent`, their yes restated) or the writer's own (`--own`). " +
       "The check `attachment-consent` flags an attachment with no record — one copied in by hand — unless the trunk already holds it, or a tool of the program writes it itself (a property's run records). " +
       "The check `secrets` reads every project file and every attachment for six shapes of secret: a private key with its body (a header alone is not one), and AWS, GitHub, Slack, API-secret and Google keys; `naima attach` refuses a file holding one. " +
-      "A file that must keep one is an exception in the plugin's options, with a reason and the item that tracks it; an exception the trunk's configuration does not hold is refused, so the list only shrinks.",
+      "A file that must keep one is an exception in the plugin's options, with a reason and the item that tracks it; an exception the trunk's configuration does not hold is refused, so the list only shrinks. " +
+      "Every write of free text or a file — a title, a description, a note, a free-text field, a session note, an event, an attachment — is signed against the no-leaks checklist the program ships, `docs/agents/NOLEAKS.md`: the writer passes its path with `--revised`, and the write hook `signed-writes` compares the file with the program's own copy, byte for byte, and refuses the write without it or with any other file. " +
+      "The signature, the checklist's hash with who signed and the day, goes in the item's field `revised`, in a session note's or an event's front matter, and in an attachment's record, so every write shows which version of the checklist it was checked against. " +
+      "Statuses, enums, dates, links, claims, the fields Naima fills and the records it generates need no signature. The option `signed: false` turns the requirement off for a project.",
     options: [
       {
         name: "exceptions",
@@ -379,8 +473,14 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
         default: "[]",
       },
       { name: "generated", says: "attachment names a tool writes itself, which need no record: shell-style patterns", default: JSON.stringify(GENERATED) },
+      {
+        name: "signed",
+        says: "every write of free text or a file needs --revised naming the no-leaks checklist the program ships; false lets unsigned writes through",
+        default: "true",
+      },
     ],
-    fields: [ATTACHED],
+    fields: [ATTACHED, SIGNED],
+    hooks: [signedWrites],
     commands: [attach],
     checks: [consentCheck, secretsCheck],
   }

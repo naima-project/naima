@@ -238,6 +238,27 @@ together with the counts by kind but never the values. The private list holds on
 `$XDG_CONFIG_HOME/naima/private-words`, or else `~/.config/naima/private-words`, or `%APPDATA%\naima\private-words` on Windows. That is outside every
 repository, so the names it holds are never committed. What the CLI doesn't write (code, docs, commit messages) is **convention**.
 
+### Free text and files are signed against the no-leaks checklist
+
+Before an agent writes free text or a file into the tracker (a title, a description, a note, a free-text field, a session note, an event or an attachment), it
+reads the text against the [no-leaks checklist](../agents/NOLEAKS.md) that the program ships and fixes what the checklist rules out. The owner is paraphrased and
+never quoted. Nothing goes in about the owner's other private projects, unpublished papers or venues, business, money or clients, or about any person other than
+the owner. Machine names, addresses, home paths and user names are replaced by placeholders, and every log or file is read line by line, its metadata included,
+before it is attached. When in doubt, the agent leaves it out and asks the owner. Only the agent talking to the owner writes text taken from what the owner
+said. A worker writes its own observations, because it never heard the owner and can't judge what in a relayed message is private.
+
+Why: the private-infrastructure check catches the shapes a machine can recognise, but a client's name, an unpublished venue or a quoted sentence of the owner's
+has no shape. Signing makes the agent stop and check before every write, and the recorded hash shows afterwards which version of the checklist each write was
+checked against. It does not make a write perfect, and the private-infrastructure check stays as a second net.
+
+**Enforced by** the write hook `signed-writes` of the `privacy` plugin, for `naima new`, `describe`, `note`, `set` of a free-text field (the title, or a text
+field with no list of values), `pass`, `event` and `attach`. Each of them refuses the write unless `--revised` names the checklist, as in
+`naima note export-drops "..." --revised naima-tracker/naima/docs/agents/NOLEAKS.md`, and the file it names is byte for byte the one the running program ships.
+The refusal names the checklist's path. A signed write records the checklist's hash, who signed (git's `user.name`) and the day: in the item's field
+`revised`, in the front matter of a session note or an event, and in an attachment's record. Statuses, enums, dates, links, claims, the fields Naima fills and
+the records it generates need no signature. A project can turn the requirement off with the plugin's option `signed: false`
+([configure the project](configure-the-project.md)). Reading the text against the checklist, and who writes the owner's words, are **convention**.
+
 ### Git is the agent's job, done safely
 
 The owner never has to learn git. Agents install it when it's missing, start a repository when there isn't one, keep secrets and private data out of it with a

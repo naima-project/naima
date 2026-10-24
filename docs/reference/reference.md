@@ -118,7 +118,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `guide` | core | a block `naima guide` prints first, inside a project, before the documentation pages | triage, rules |
 | `rank` | core | an additive term of every item's urgency; lower is more urgent | triage, gates |
 | `extends` | core | additive changes to another plugin's type — statuses (an existing one only with its category), traits, transitions — or field — enum values, more types or traits it applies to | knowledge, roles |
-| `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done | core, coordination, triage, epics, planning, knowledge, verifier |
+| `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done; `beforeText(text, ctx)` may refuse a write of free text or a file that is not an item's (a session note, an event, an attachment) or add to its record | core, coordination, triage, epics, planning, knowledge, verifier, privacy |
 | `migrations` | core | a plugin's own data migrations, in order from its format 1, run by `naima update` after the core's | gates |
 | `landing-reports` | coordination | what `naima land` checks before a branch lands and reports once it has: `name`, `says`, and `blocks(ctx, { branch, from, to, changed }) → lines`, what the landing changed whose proofs are not current, any line refusing the landing unless --stale-proofs gives the reason, or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root | verifier |
 | `gates` | gates | a named release or merge condition, backed by items: `title`, `says`, `decides`, `evaluate(ctx) → { holds, blocking, owed }`; `inFullSuite` makes it part of the full suite a release gate (`fullSuite`) requires | verifier |
@@ -2629,7 +2629,7 @@ The owner's material enters the repository only with their recorded yes, and no 
 
 Its contributions' qualified ids are `privacy/<name>`.
 
-The conversation between the owner and an agent is private: nothing from it is copied into the repository without the owner's explicit yes. A file enters an item's `attachments/` through `naima attach`, which records on the item, in the field `attached`, whose it is: the owner's (`--consent`, their yes restated) or the writer's own (`--own`). The check `attachment-consent` flags an attachment with no record — one copied in by hand — unless the trunk already holds it, or a tool of the program writes it itself (a property's run records). The check `secrets` reads every project file and every attachment for six shapes of secret: a private key with its body (a header alone is not one), and AWS, GitHub, Slack, API-secret and Google keys; `naima attach` refuses a file holding one. A file that must keep one is an exception in the plugin's options, with a reason and the item that tracks it; an exception the trunk's configuration does not hold is refused, so the list only shrinks.
+The conversation between the owner and an agent is private: nothing from it is copied into the repository without the owner's explicit yes. A file enters an item's `attachments/` through `naima attach`, which records on the item, in the field `attached`, whose it is: the owner's (`--consent`, their yes restated) or the writer's own (`--own`). The check `attachment-consent` flags an attachment with no record — one copied in by hand — unless the trunk already holds it, or a tool of the program writes it itself (a property's run records). The check `secrets` reads every project file and every attachment for six shapes of secret: a private key with its body (a header alone is not one), and AWS, GitHub, Slack, API-secret and Google keys; `naima attach` refuses a file holding one. A file that must keep one is an exception in the plugin's options, with a reason and the item that tracks it; an exception the trunk's configuration does not hold is refused, so the list only shrinks. Every write of free text or a file — a title, a description, a note, a free-text field, a session note, an event, an attachment — is signed against the no-leaks checklist the program ships, `docs/agents/NOLEAKS.md`: the writer passes its path with `--revised`, and the write hook `signed-writes` compares the file with the program's own copy, byte for byte, and refuses the write without it or with any other file. The signature, the checklist's hash with who signed and the day, goes in the item's field `revised`, in a session note's or an event's front matter, and in an attachment's record, so every write shows which version of the checklist it was checked against. Statuses, enums, dates, links, claims, the fields Naima fills and the records it generates need no signature. The option `signed: false` turns the requirement off for a project.
 
 Options, each with the default it takes when nothing sets it:
 
@@ -2637,6 +2637,7 @@ Options, each with the default it takes when nothing sets it:
 |---|---|---|
 | `exceptions` | `[]` | files allowed to hold a secret: a list of { path, reason, item }, path from the project root; one not on the trunk is refused |
 | `generated` | `["run-*.json","counterexample-*.txt"]` | attachment names a tool writes itself, which need no record: shell-style patterns |
+| `signed` | `true` | every write of free text or a file needs --revised naming the no-leaks checklist the program ships; false lets unsigned writes through |
 
 ### naima attach
 
@@ -2668,6 +2669,7 @@ naima attach export-drops test-run.out --own --as proof.out
 | Field | Kind | Applies to | Meaning | Values |
 |---|---|---|---|---|
 | `attached` | object | every type | whose each attachment is, as naima attach records it: file name → { from: owner or agent, consent: the owner's yes restated (for the owner's), by, on } |  |
+| `revised` | object | every type | the last no-leaks signature on the item's free text, which naima fills on a signed write: { checklist: the first 16 hex digits of the checklist's SHA-256, by: who, when git says, on: the day }; git's history holds the earlier ones |  |
 
 **Checks**, run by `naima check`
 
@@ -2675,6 +2677,12 @@ naima attach export-drops test-run.out --own --as proof.out
 |---|---|
 | `attachment-consent` | every attachment a branch adds has a record of whose it is (naima attach), every record names a file that is there, and the owner's carry their yes; what the trunk already holds, and what a tool writes itself, is not asked |
 | `secrets` | no project file or attachment holds a private key with its body, or an AWS, GitHub, Slack, API-secret or Google key; an exception names its file, a reason and an item, and the list of exceptions only shrinks |
+
+**Write hooks**, run on every item write
+
+| Hook | What it does |
+|---|---|
+| `signed-writes` | a write of free text the writer authored (naima new, describe, note, a free-text field with naima set) is refused unless --revised names the no-leaks checklist the program ships, byte for byte; the signature (the checklist's hash, who, the day) goes in the item's field revised. Session notes, events and attachments are held the same way and carry it in their own record. Statuses, links, claims and what Naima fills or generates need none; the option signed: false turns it off |
 
 ## adopt
 
