@@ -923,6 +923,7 @@ function help(ctx: Context | null, data: string, io: IO): number {
   }
   for (const c of ctx.registry.contributions("commands")) {
     const cmd = c.value as Command
+    if (cmd.hidden) continue
     const name = shortOrId(ctx, "commands", c)
     io.out(`  ${name.padEnd(10)} ${cmd.says}\n  ${"".padEnd(10)} naima ${name === c.name ? cmd.usage : cmd.usage.replace(c.name, name)}`)
   }
