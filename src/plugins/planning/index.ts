@@ -189,9 +189,18 @@ const VERSION: FieldDef = {
   appliesTo: ["specs"],
 }
 
-const VERSIONED = /\s+v(\d+)$/i
+const VERSIONED = /\s+v(\d+(?:\.\d+)?)$/i
 const specName = (s: Item): string => fieldValue(s, { name: SPEC.name, kind: "string" }) ?? s.slug
 const versionOf = (s: Item): number => fieldValue(s, { name: VERSION.name, kind: "number" }) ?? 1
+/**
+ * The version after `v`: a whole number is raised by one; a 0.x version (Semantic Versioning's development
+ * versions, 0.3) has its last component raised (0.4), reaching 1 after 0.9 since the number cannot tell 0.10 from 0.1.
+ */
+export function nextVersion(v: number): number {
+  if (v >= 1) return v + 1
+  const minor = Math.round(v * 10)
+  return minor >= 9 ? 1 : (minor + 1) / 10
+}
 /** A spec's versioned name, `name-vN`. */
 export const versioned = (s: Item): string => `${specName(s)}-v${versionOf(s)}`
 const isSpec = (i: Item): boolean => i.type === specsType.id
@@ -241,7 +250,7 @@ const spec: Command = {
       const all = specsOf(ctx).filter((s) => specName(s) === name).sort((a, b) => versionOf(a) - versionOf(b))
       // The revision starts from the current version of that name, whichever version was named; with none current, from the one named.
       const old = all.filter((s) => s.meta.status === "current").at(-1) ?? given
-      const next = versionOf(all.at(-1) ?? given) + 1
+      const next = nextVersion(versionOf(all.at(-1) ?? given))
       const title = `${String(old.meta.title ?? name).replace(VERSIONED, "")} v${next}`
       const made = createItem(ctx, typeOrThrow(ctx, specsType.id), title, {
         [SPEC.name]: name,
