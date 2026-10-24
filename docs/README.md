@@ -1,18 +1,15 @@
 # Documentation
 
-Start with [what Naima is for](purpose.md). Naima is a silent software house
-of AI agents. It was born for software, and it turns vibe coding into an
-exact science by applying tests, metrics, reviews, gates and formal methods
-for an owner who only decides and doesn't need to be a programmer. It then
-works for any project, such as a data analysis or a paper written with
-colleagues, each with its own checks in place of tests. Once you have read
-that page, [the primer](guide/primer.md) gives the overview of every idea
-Naima uses. After that, pick your starting point from the table below,
+If you are new, read [Naima in one minute](guide/naima-in-one-minute.md),
+then [Naima in ten minutes](guide/naima-in-ten-minutes.md), which explains
+what Naima does, including the advanced parts. [What Naima is for](purpose.md)
+gives the full picture, and [the primer](guide/primer.md) introduces every
+idea Naima uses. After that, pick your starting point from the table below,
 according to who you are.
 
 | You are… | Start at | Then |
 |---|---|---|
-| **new to Naima** | [What Naima is for](purpose.md): what it is, what it manages, what exists and what is planned | [the primer](guide/primer.md): every concept in the order you meet it, then [how the project runs](guide/how-the-project-runs.md) and [the tutorial](guide/tutorial.md) |
+| **new to Naima** | [Naima in one minute](guide/naima-in-one-minute.md), then [in ten minutes](guide/naima-in-ten-minutes.md), then [what Naima is for](purpose.md): what it is, what it manages, what exists and what is planned | [the primer](guide/primer.md): every concept in the order you meet it, then [how the project runs](guide/how-the-project-runs.md) and [the tutorial](guide/tutorial.md) |
 | **a person whose project Naima runs** | [the guide](guide/README.md): how the project runs first, then a page per task | [questions](guide/faq.md), [glossary](guide/glossary.md) |
 | **an AI agent working on a project** | [the pages for agents](agents/README.md): the skill, the flows | [the rules](guide/rules.md) |
 | **looking something up** | [the reference](reference/reference.md): every command, type, field, check, gate, generated from the code | [the format](reference/format.md): every file and field on disk |

@@ -133,6 +133,9 @@ macOS and Linux, `Get-FileHash $BinDir\deno.zip` on Windows — with the one in
 
 ## Documentation
 
+- [Naima in one minute](docs/guide/naima-in-one-minute.md), then
+  [Naima in ten minutes](docs/guide/naima-in-ten-minutes.md): what it does,
+  from the everyday parts to the advanced ones.
 - [The primer](docs/guide/primer.md): every concept of Naima, in the order
   you meet it.
 - [The documentation](docs/README.md), starting with
