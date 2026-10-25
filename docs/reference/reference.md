@@ -1410,7 +1410,8 @@ Declare a gate — a milestone, with a date and a version — put items on it or
 
 ```sh
 naima gate new <name> "<title>" [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite]
-naima gate set <name> [--title <t>] [--says <s>] [--due YYYY-MM-DD] [--version <v>]
+naima gate set <name> [--title <t>] [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite
+naima --no-full-suite]
 naima gate add <gate> <item>...
 naima gate remove <gate> <item>...
 naima gate show <gate>
@@ -1422,9 +1423,10 @@ naima gate show <gate>
 | `--says` |  | gate new and set: what the gate is for, in one sentence |
 | `--due` |  | gate new and set: the date it is due, YYYY-MM-DD, which makes it a milestone; with set, "" takes the date off |
 | `--version` |  | gate new and set: the version it ships as; with set, "" takes it off |
-| `--holds-on` |  | gate new: "code" (the default) waits for code and lets proof be owed; "proof" waits for every proof too |
-| `--coverage` |  | gate new: the coverage lists it requires, comma-separated: each entry with NO TEST blocks it |
-| `--full-suite` |  | gate new: a release gate, which holds only when every gate that is part of the full suite holds too: every property current, every test suite passing |
+| `--holds-on` |  | gate new and set: "code" (the default) waits for code and lets proof be owed; "proof" waits for every proof too |
+| `--coverage` |  | gate new and set: the coverage lists it requires, comma-separated: each entry with NO TEST blocks it; with set, "" takes them off |
+| `--full-suite` |  | gate new and set: a release gate, which holds only when every gate that is part of the full suite holds too: every property current, every test suite passing |
+| `--no-full-suite` |  | gate set: no longer a release gate that waits for the full suite |
 
 Examples:
 

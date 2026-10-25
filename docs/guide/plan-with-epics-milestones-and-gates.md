@@ -71,7 +71,9 @@ something to know about, not a sign that the project is broken.
 
 A date moves, or comes off, with `naima gate set`: `naima gate set beta --due
 2026-12-15` changes it, and `naima gate set beta --due ""` takes it off. The
-same command changes a gate's title, what it says and its version.
+same command changes a gate's title, what it says, its version, what it
+holds on and its coverage lists, and makes it a release gate that waits for
+the full suite (`--full-suite`), or no longer (`--no-full-suite`).
 
 `naima gates --json` prints the same information as data: each gate's name, title and timing, whether it holds, and the items that block it or only still owe a
 proof.
