@@ -150,6 +150,8 @@ const newCommand: Command = {
       if (likely.length) {
         ctx.out("possible duplicates — link instead of refiling, or file anyway:")
         for (const item of likely) ctx.out(line(item))
+        // Said apart from the list, so the new item is never read as one of its own duplicates.
+        ctx.out("filed anyway, as a new item:")
       }
     }
     const item = createItem(ctx, type, title.trim(), fields, { authored: true })

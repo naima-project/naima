@@ -173,7 +173,7 @@ const ATTACHED: FieldDef = {
     "whose each attachment is, as naima attach records it: file name → { from: owner or agent, consent: the owner's yes restated (for the owner's), by, on }",
 }
 
-const GENERATED = ["run-*.json", "counterexample-*.txt"]
+const GENERATED = ["run-*.json", "test-run-*.json", "counterexample-*.txt"]
 
 const glob = (pattern: string): RegExp => new RegExp(`^${pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*").replace(/\?/g, "[^/]")}$`)
 

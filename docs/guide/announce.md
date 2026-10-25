@@ -33,9 +33,8 @@ keeps those on a [gate](glossary.md#gate), which is what a release made from
 that gate announces. `--json` prints the same list as data.
 
 A feature closed with `naima close` is still announced: closing takes it
-fixed and proven, so it counts as shipped. Closing keeps its fields but a
-closed item can't be changed, so set `facing`, `docs` and `gate` while the
-feature is open.
+fixed and proven, so it counts as shipped. Closing keeps its fields, and
+`facing`, `major` and `docs` can still be set on it in the archive.
 
 ## The changelog
 

@@ -331,7 +331,7 @@ const close: Command = {
     // A closed item can't be changed: a feature closed without saying whom it is for is never announced.
     const facing = ctx.registry.fields.get("facing")
     if (facing && appliesTo(facing, item.type) && item.meta["facing"] === undefined) {
-      ctx.out(`  it was closed without facing, so naima announce never lists it: set facing (and docs) before closing the next one`)
+      ctx.out(`  it was closed without facing, so naima announce does not list it until you set it: naima set ${label(moved)} facing=user`)
     }
     return 0
   },
@@ -455,7 +455,8 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
         statuses: { closed: { category: "done", says: "fixed, proven, archived" } },
         initialStatus: "closed",
         creatable: false,
-        traits: [FIXABLE],
+        // archive: fields that describe what an item was (whom a feature is for, where it is documented) may apply here too.
+        traits: [FIXABLE, "archive"],
       },
     ],
     fields: [

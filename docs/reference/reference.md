@@ -894,7 +894,7 @@ Tests: a gesture that proves something, and its result. Items live in `naima-tra
 
 Closed: the archive: resolved items, each with its proof. Items live in `naima-tracker/naima-data/closed/`; a new one starts as `closed`; it is an archive: items arrive by being moved there, never by being opened.
 
-Traits: `fixable`.
+Traits: `fixable`, `archive`.
 
 | Status | Category | Flags | Meaning |
 |---|---|---|---|
@@ -2012,8 +2012,8 @@ naima announce --json
 
 | Field | Kind | Applies to | Meaning | Values |
 |---|---|---|---|---|
-| `facing` | enum | features | whom the feature is for: only a user-facing one is ever announced | `user` someone using the software sees it; `internal` only who works on the software sees it |
-| `major` | boolean | features | a feature an announcement leads with |  |
+| `facing` | enum | features, any type tagged `archive` | whom the feature is for: only a user-facing one is ever announced | `user` someone using the software sees it; `internal` only who works on the software sees it |
+| `major` | boolean | features, any type tagged `archive` | a feature an announcement leads with |  |
 
 **Checks**, run by `naima check`
 
@@ -2739,7 +2739,7 @@ Options, each with the default it takes when nothing sets it:
 | Option | Default | What it does |
 |---|---|---|
 | `exceptions` | `[]` | files allowed to hold a secret: a list of { path, reason, item }, path from the project root; one not on the trunk is refused |
-| `generated` | `["run-*.json","counterexample-*.txt"]` | attachment names a tool writes itself, which need no record: shell-style patterns |
+| `generated` | `["run-*.json","test-run-*.json","counterexample-*.txt"]` | attachment names a tool writes itself, which need no record: shell-style patterns |
 | `signed` | `true` | every write of free text or a file needs --revised naming the no-leaks checklist the program ships; false lets unsigned writes through |
 
 ### naima attach
@@ -2873,7 +2873,7 @@ naima docs --check docs/reference.md
 
 | Field | Kind | Applies to | Meaning | Values |
 |---|---|---|---|---|
-| `docs` | strings | features | where the feature is documented: path or path#heading, from the project root |  |
+| `docs` | strings | features, any type tagged `archive` | where the feature is documented: path or path#heading, from the project root |  |
 
 **Checks**, run by `naima check`
 
