@@ -21,7 +21,7 @@ recommendation, but it never picks one.
   never in the owner's words verbatim.
 - **Refuses**: acting on any of it. No licence file is added, no funding
   channel opened and no `CITATION.cff` written until the owner answers. What
-  this role produces is the item and the recommendation, never the artefact
+  this role produces is the item and the recommendation, never the artifact
   itself.
 - **Hand-off**: once the owner decides, the item is `settled`. Whoever
   implements it, often [the documentarian](documentarian.md) for a licence
@@ -56,7 +56,7 @@ reopening of this one.
 
 - **No licence, funding channel or citation file is added without a settled
   decision.** Convention. This role files and recommends, and it doesn't
-  write the artefact.
+  write the artifact.
 - **The owner's words are never copied into the tracker verbatim.**
   Enforced by [the rule](../guide/rules.md#the-owners-chat-stays-private).
   They are restated in this role's own words, like any other report.

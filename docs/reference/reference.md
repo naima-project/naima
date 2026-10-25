@@ -907,7 +907,7 @@ Traits: `fixable`, `archive`.
 | `fixedOn` | date | any type tagged `fixable` | when the code landed; absent means unfixed |  |
 | `closedOn` | date | closed | when the item was archived |  |
 | `closedFrom` | string | closed | the type the item was archived from |  |
-| `runBy` | enum | tests, bugs, todos | who can perform the proving gesture — the instrument, not the effort | `agent` settled by a command: a unit test, a grep, an API call; `agent-hands` settled by an agent driving the running software; `human` needs a person: a judgement of how it looks, a physical act, a reserved decision; `build` needs an artefact nobody here makes: a signed build, a second machine |
+| `runBy` | enum | tests, bugs, todos | who can perform the proving gesture — the instrument, not the effort | `agent` settled by a command: a unit test, a grep, an API call; `agent-hands` settled by an agent driving the running software; `human` needs a person: a judgement of how it looks, a physical act, a reserved decision; `build` needs an artifact nobody here makes: a signed build, a second machine |
 | `humanBecause` | enum | tests, bugs, todos | why only a person can perform the proof, when runBy is human | `judgement` how it looks, sounds or feels: no instrument can settle it; `decision` a decision reserved to the owner; `credential` a secret, an account or a signature only a person holds; `physical` a physical act or a machine only a person has at hand |
 | `evidenceKind` | enum | tests | what the test's evidence is, from the ranking: strongest first | `owner-gesture` the owner performed the gesture and saw the result; `observation` a screenshot, a log line or a number, kept with the item; `live-read` the live state, read by tooling: a query, an API call, the running program's own answer; `diff` a before-and-after comparison: counts, sizes, outputs; `inspection` the code looks right — which proves nothing |
 | `redSeen` | date | tests | the day a regression test was seen failing on the code before the fix: red, then green |  |
@@ -2197,7 +2197,7 @@ Properties: a property of the software, proven or refuted by a verifier. Items l
 
 ### type: models
 
-Models: a model, or another artefact properties are verified on, named by its path in model: whether it is in development. Items live in `naima-tracker/naima-data/models/`; a new one starts as `development`.
+Models: a model, or another artifact properties are verified on, named by its path in model: whether it is in development. Items live in `naima-tracker/naima-data/models/`; a new one starts as `development`.
 
 | Status | Category | Flags | Meaning |
 |---|---|---|---|

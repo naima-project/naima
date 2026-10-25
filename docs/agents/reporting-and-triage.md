@@ -284,7 +284,7 @@ needs:
 - `agent-hands` means an agent driving the running software settles it;
 - `human` means only a person can do it, and `humanBecause` says why
   ([asking the human](asking-the-human.md));
-- `build` means it needs an artefact that nobody here makes.
+- `build` means it needs an artifact that nobody here makes.
 
 This field deserves more care than any other, because it decides who picks
 the gesture up, and a mistake in either direction is expensive.

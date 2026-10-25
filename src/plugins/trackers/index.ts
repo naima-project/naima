@@ -471,7 +471,7 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
           agent: "settled by a command: a unit test, a grep, an API call",
           "agent-hands": "settled by an agent driving the running software",
           human: "needs a person: a judgement of how it looks, a physical act, a reserved decision",
-          build: "needs an artefact nobody here makes: a signed build, a second machine",
+          build: "needs an artifact nobody here makes: a signed build, a second machine",
         },
         appliesTo: ["tests", "bugs", "todos"],
       },

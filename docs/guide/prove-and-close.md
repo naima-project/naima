@@ -38,7 +38,7 @@ test.
 | a command: a unit test, a script, a search | `agent` |
 | driving the running software: clicking, a screenshot | `agent-hands` |
 | only a person: how it looks or feels, a decision, a credential, a physical act | `human`, and `humanBecause` (`judgement`, `decision`, `credential`, `physical`) |
-| an artefact nobody here can make: a signed build, a second machine | `build` |
+| an artifact nobody here can make: a signed build, a second machine | `build` |
 
 ```sh
 naima new tests "Export looks right on a phone" --set runBy=human --set humanBecause=judgement

@@ -24,7 +24,9 @@ import {
   gitOrNull,
   gitReason,
   isAncestor,
+  isOpen,
   isUuid,
+  type Item,
   label,
   message,
   META,
@@ -507,8 +509,17 @@ async function landBoth(ctx: Context, branch: string, closes: string[], noChange
   await reportLanding(ctx, { branch, from: code.old, to: cm ?? code.old, changed })
   const subs = cm ? (gitOrNull(ctx.root, "diff-tree", "-r", "--no-commit-id", code.old, cm) ?? "").split("\n").filter((l) => /^:\d+ 160000 /.test(l)) : []
   if (subs.length) ctx.out(`${plural(subs.length, "submodule")} moved: git submodule update --init`)
-  ctx.out(`next: naima close each item once its proof is checked, then naima prune --branch ${branch} --write`)
+  ctx.out(nextAfterLanding(ctx, ids, branch))
   return 0
+}
+
+/** What follows a landing: closing those of its items that are closed with a proof (a release, say, is not), then the prune. */
+function nextAfterLanding(ctx: Context, ids: readonly string[], branch: string): string {
+  ctx.reload()
+  const fixable = ctx.registry.fields.get("fixedOn")
+  const closable = ids.map((id) => ctx.repo.byId.get(id)).filter((i): i is Item => !!i && !!fixable && appliesTo(fixable, i.type) && isOpen(ctx, i))
+  const prune = `naima prune --branch ${branch} --write`
+  return closable.length ? `next: naima close ${closable.map(label).join(", ")} once each one's proof is checked, then ${prune}` : `next: ${prune}`
 }
 
 /** The ids of the items a tracker marker closes whose type records commits and that do not record `commit` yet. */
@@ -735,7 +746,7 @@ export const land: Command = {
     await reportLanding(ctx, { branch, from: old, to: marker, changed })
     const subs = (gitOrNull(ctx.root, "diff-tree", "-r", "--no-commit-id", old, marker) ?? "").split("\n").filter((l) => /^:\d+ 160000 /.test(l))
     if (subs.length) ctx.out(`${plural(subs.length, "submodule")} moved: git submodule update --init`)
-    ctx.out(`next: naima close each item once its proof is checked, then naima prune --branch ${branch} --write`)
+    ctx.out(nextAfterLanding(ctx, items.map((i) => i.id), branch))
     return 0
   },
 }

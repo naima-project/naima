@@ -1029,7 +1029,7 @@ export default function verifier(): Plugin {
         id: MODELS,
         dir: "models",
         title: "Models",
-        says: "a model, or another artefact properties are verified on, named by its path in model: whether it is in development",
+        says: "a model, or another artifact properties are verified on, named by its path in model: whether it is in development",
         statuses: {
           [DEVELOPMENT]: {
             category: "open",

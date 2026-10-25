@@ -6,7 +6,7 @@ world seeing the result, and it describes the role that runs it: what is in
 its queue, what it owns, what it refuses, and where it hands off. Releases are
 made from the trunk, so this is the coordinator's work.
 
-A release is a tag, an artefact and an announcement, and the runbook below
+A release is a tag, an artifact and an announcement, and the runbook below
 makes sure none of them happens before the one before it is true.
 
 ## Queue, owns, refuses, hand-off
@@ -29,7 +29,11 @@ makes sure none of them happens before the one before it is true.
 1. Find a gate that holds with `naima gates --check`, or with
    `naima gate show <name>` for a particular one. Don't propose a gate that
    doesn't hold.
-2. Build the changelog. Where the project keeps change notes (a `changes/`
+2. Build the changelog. The features it names are those `naima announce
+   --gate <gate>` lists: user-facing, documented, and checked by a person or
+   by an agent running the software as a user would (`runBy` `human` or
+   `agent-hands`); unit tests alone don't make a feature announceable, so
+   plan that check with the feature. Where the project keeps change notes (a `changes/`
    folder with a `config.json`; Naima does), start from them:
    `naima changes --from <previous tag> > changelog.md` lists every change of
    behaviour since the last release, breaking changes and those that need an
@@ -76,10 +80,10 @@ person or agent running the stage says happened.
    `naima metrics run --record`, which reuse every result whose inputs
    haven't changed
    ([a release gate](../guide/read-the-board.md#a-release-gate-waits-for-the-full-suite)).
-2. **Private draft.** The artefact is built and put somewhere only the
+2. **Private draft.** The artifact is built and put somewhere only the
    release role can see it, such as a draft release or an unlisted build, and
    not yet in the public location.
-3. **Test the artefact, not the code.** Install or run the thing that was
+3. **Test the artifact, not the code.** Install or run the thing that was
    built rather than the source it came from, because a build step can
    quietly drop a file the tests never touched. Write down the gesture as you
    would for any [proof](../guide/glossary.md#proof): what was run, on what,
@@ -87,7 +91,7 @@ person or agent running the stage says happened.
 4. **Issues found → stop.** If any of the three stages above finds a problem,
    the runbook ends there. Open the bug, and go back to stage 1 once it is
    fixed. A runbook that mostly worked doesn't get published.
-5. **Publish.** This means the tag, the public artefact, or making the draft
+5. **Publish.** This means the tag, the public artifact, or making the draft
    public, whichever fits how the project is distributed. For Naima itself,
    the tag goes on the product repository (`naima-project/naima`), never on the
    workshop that develops it. This step can't be undone, so confirm with the

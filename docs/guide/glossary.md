@@ -440,7 +440,7 @@ with its counterexample kept, and holds on the changed one.
 The field `runBy`, which says who has to carry out the proving gesture.
 The values are `agent` (a command settles it), `agent-hands` (an agent
 driving the running software), `human` (only a person can) and `build` (an
-artefact nobody here makes).
+artifact nobody here makes).
 
 ### Human because
 
