@@ -32,6 +32,16 @@ turn and tell you what to say. Say it in your reply, then end the turn. The
 hook does this at most once in a row and at most once an hour for the same
 message, so it never keeps you going.
 
+The same hook checks capture. When a turn changed the project's files and
+nothing in the tracker changed, it stops the turn once with a reminder.
+Judge what the owner said since the last turn. A request, a decision, a
+report or a deferral that is settled is filed now, deduplicated and in your
+own words. Something the owner is still thinking aloud about gets one
+question at the end, asking whether to file it. If nothing was settled, end
+the turn without mentioning it
+([capture now](reporting-and-triage.md)). Committing changes nothing: it
+compares the files' content, with git alone, and starts no Deno.
+
 ## At the start of a session
 
 `naima hello` lists the urgent messages after what it says about updates and

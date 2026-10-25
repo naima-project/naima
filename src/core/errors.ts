@@ -41,9 +41,11 @@ function fenced(e: Error): string | undefined {
   if (kind === "read" || kind === "write") {
     return kind === "read"
       ? `${what} is outside the project: Naima reads only inside it — copy the file into the project first`
-      : `${what} is outside the project: Naima writes only inside it — give a path inside the project`
+      : `${what} may not be written: Naima writes only in its tracker folder and the few files it manages — give a path there`
   }
-  return `Naima may not ${kind === "run" ? "run" : `use ${kind} for`} ${what} here: the launcher grants only what the project needs`
+  return kind === "run"
+    ? `running ${what} is not allowed: the launcher lets Naima run only git and the programs its plugins declare`
+    : `${kind} access to ${what} is not allowed: the launcher grants only what the project needs`
 }
 
 /**
