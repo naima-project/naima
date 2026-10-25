@@ -39,8 +39,12 @@ export const DEFAULTS = {
   reportMs: 30_000,
   /** How long an ended run's group is given between SIGTERM and SIGKILL. */
   graceMs: 10_000,
-  /** How long `naima run` waits for the supervisor to report the command started. */
-  startMs: 10_000,
+  /**
+   * How long `naima run` waits for the supervisor to report the command started, and how long a
+   * record with no report yet stays starting: on a busy machine a runtime can take tens of seconds
+   * to launch (macOS checks the binary before it runs).
+   */
+  startMs: 60_000,
 } as const
 
 /** What `naima run` asked for: written once, before the supervisor starts. */
@@ -289,7 +293,7 @@ export function view(dir: string, now: number, tail = 0): RunView {
   }
   if (!status) {
     const age = now - Date.parse(spec.started)
-    return age > lostAfterMs(spec.everyMs)
+    return age > Math.max(lostAfterMs(spec.everyMs), DEFAULTS.startMs)
       ? { ...withFacts, state: "lost", over: true, error: "the supervisor never reported" }
       : { ...withFacts, state: "starting" }
   }
