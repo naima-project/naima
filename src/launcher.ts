@@ -36,6 +36,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
+  ADAPTERS,
   DATA_FILE,
   DEFAULT_ENTRY_FILES,
   EXCLUDE_FILES,
@@ -112,7 +113,8 @@ export const ENV = {
 
 /** The variables of `env` the program may see: ENV's names and prefixes, compared as Windows does, without case. */
 export function allowedEnv(env: Record<string, string>): Record<string, string> {
-  const names = new Set<string>(ENV.names)
+  // And the variables that tell which agent tool the program runs inside, so init installs that tool's hooks.
+  const names = new Set<string>([...ENV.names, ...ADAPTERS.flatMap((a) => a.env ?? [])])
   const keep = (name: string): boolean => names.has(name.toUpperCase()) || ENV.prefixes.some((p) => name.toUpperCase().startsWith(p))
   return Object.fromEntries(Object.entries(env).filter(([name]) => keep(name)))
 }

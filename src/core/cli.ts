@@ -206,7 +206,9 @@ export { withoutCredentials }
 async function nextStep(place: Place, opts: CliOptions, io: IO): Promise<string> {
   try {
     const ctx = await openProject(place, opts, io)
-    const type = [...ctx.registry.types.values()].find((t) => t.creatable !== false)
+    const creatable = [...ctx.registry.types.values()].filter((t) => t.creatable !== false)
+    // A thing to do is a todo where the project has them; a bug is not the first thing anyone files.
+    const type = creatable.find((t) => t.id === "todos") ?? creatable.find((t) => t.id !== "bugs") ?? creatable[0]
     return type ? `next: naima new ${type.id} "<the first thing to do>"` : "next: naima help"
   } catch {
     return "next: naima check" // it says what is wrong with the project

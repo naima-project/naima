@@ -43,6 +43,8 @@ export interface AgentAdapter {
   footprint: readonly string[]
   /** Whether a command runs inside the tool, told by the environment the tool gives the commands it runs. */
   runningIn?(env: Record<string, string | undefined>): boolean
+  /** The variables `runningIn` reads: the launcher hands them to the program, which sees no others but its own list. */
+  env?: readonly string[]
   /** Its session-start hook, when the tool has one: it runs naima hello. */
   sessionStart?: AgentHook
   /** Its turn-end hook, when the tool has one: it runs the tick, cheaply, and has the agent tell the owner what is due. */
