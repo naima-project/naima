@@ -555,6 +555,27 @@ function declareGate(ctx: Context, name: string, gate: GateConfig): void {
   writeJson(DATA_PATH(ctx), { ...raw, plugins: { ...plugins, gates: { ...entry, options: next } } })
 }
 
+/** Change a declared gate's fields in naima.json: each given value set, an empty one removed. */
+function updateGate(ctx: Context, name: string, changes: Record<string, string>): void {
+  const raw = JSON.parse(readFileSync(DATA_PATH(ctx), "utf8")) as Record<string, unknown>
+  const plugins = isObject(raw["plugins"]) ? raw["plugins"] : {}
+  const entry = isObject(plugins["gates"]) ? plugins["gates"] : {}
+  const options = isObject(entry["options"]) ? entry["options"] : {}
+  const current = isObject(options["gates"]) ? options["gates"] : {}
+  const gate = current[name]
+  if (!isObject(gate)) throw new Error(`gate ${name} is not declared in ${ctx.trackerDir}/${DATA_FILE}, so it cannot be changed here — a plugin declares it`)
+  const next: Record<string, unknown> = { ...gate }
+  for (const [key, value] of Object.entries(changes)) {
+    if (value === "") {
+      if (key === "title") throw new Error("a gate keeps its title: give a new one")
+      delete next[key]
+    } else next[key] = value
+  }
+  const all = { ...options, gates: { ...current, [name]: next } }
+  readOptions(all)
+  writeJson(DATA_PATH(ctx), { ...raw, plugins: { ...plugins, gates: { ...entry, options: all } } })
+}
+
 const findGate = (ctx: Context, name: string | undefined): GateDef => {
   const gate = name === undefined ? undefined : ctx.registry.find<GateDef>("gates", name)?.value
   if (!gate) throw new Error(`no gate "${name}" — gates: ${gatesOf(ctx).map((g) => g.name).join(", ") || 'none yet: naima gate new <name> "<title>"'}`)
@@ -567,11 +588,12 @@ const gateCommand: Command = {
     "declare a gate — a milestone, with a date and a version — put items on it or take them off, and show one; writes go to naima.json and to the items, validated, through the write hooks",
   enforces: "writes to naima.json and to the items are validated and pass the write hooks",
   usage:
-    'gate new <name> "<title>" [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite] | gate add <gate> <item>... | gate remove <gate> <item>... | gate show <gate>',
+    'gate new <name> "<title>" [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite] | gate set <name> [--title <t>] [--says <s>] [--due YYYY-MM-DD] [--version <v>] | gate add <gate> <item>... | gate remove <gate> <item>... | gate show <gate>',
   options: [
-    { name: "--says", says: "gate new: what the gate is for, in one sentence" },
-    { name: "--due", says: "gate new: the date it is due, YYYY-MM-DD, which makes it a milestone" },
-    { name: "--version", says: "gate new: the version it ships as" },
+    { name: "--title", says: "gate set: its new title" },
+    { name: "--says", says: "gate new and set: what the gate is for, in one sentence" },
+    { name: "--due", says: 'gate new and set: the date it is due, YYYY-MM-DD, which makes it a milestone; with set, "" takes the date off' },
+    { name: "--version", says: 'gate new and set: the version it ships as; with set, "" takes it off' },
     { name: "--holds-on", says: 'gate new: "code" (the default) waits for code and lets proof be owed; "proof" waits for every proof too' },
     { name: "--coverage", says: "gate new: the coverage lists it requires, comma-separated: each entry with NO TEST blocks it" },
     {
@@ -586,9 +608,12 @@ const gateCommand: Command = {
     "gate remove beta bugs/export-drops-alpha",
     "gate show beta",
     'gate new v1 "First release" --version 1.0 --full-suite',
+    'gate set beta --due ""',
+    "gate set beta --due 2026-12-15",
   ],
   async run(args, ctx) {
     const p = parse(args, {
+      title: { type: "string" },
       says: { type: "string" },
       due: { type: "string" },
       version: { type: "string" },
@@ -613,6 +638,16 @@ const gateCommand: Command = {
       } as GateConfig
       declareGate(ctx, name, gate)
       ctx.out(`gate ${name} declared in ${ctx.trackerDir}/${DATA_FILE} — put items on it: naima gate add ${name} <item>...`)
+      return 0
+    }
+    if (sub === "set") {
+      if (!name || rest.length) throw usageError(this)
+      const changes = Object.fromEntries(
+        (["title", "says", "due", "version"] as const).flatMap((k) => (str(p, k) !== undefined ? [[k, (str(p, k) ?? "").trim()]] : [])),
+      )
+      if (!Object.keys(changes).length) throw usageError(this)
+      updateGate(ctx, name, changes)
+      ctx.out(`gate ${name}: ${Object.entries(changes).map(([k, v]) => (v === "" ? `${k} removed` : `${k} ${v}`)).join(", ")}`)
       return 0
     }
     if (sub === "add" || sub === "remove") {
