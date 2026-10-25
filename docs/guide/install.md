@@ -247,7 +247,10 @@ configured.
 
 `naima init` installs the hooks of each tool the project uses: the tools
 `naima.json`'s `agents` names, or, without it, the tools whose files the
-project holds (Claude Code's `CLAUDE.md` or `.claude/`). `naima init
+project holds (Claude Code's `CLAUDE.md` or `.claude/`) and the tool Naima is
+running inside, so an agent installing Naima in an empty folder gets its own
+hooks. The `Stop` hook also reminds the agent, once, to file what you settled
+when a turn changed the project and nothing in the tracker. `naima init
 --no-session-hook` installs none and writes only the line. A settings file
 that is not plain JSON is left alone, and the hook to add by hand is printed
 instead.

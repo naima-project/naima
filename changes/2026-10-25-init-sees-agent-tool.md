@@ -11,3 +11,7 @@ init` still installed no hooks in a fresh project. Each adapter now names the
 variables it reads, and the launcher passes those on. After init, the next
 step it suggests is a todo, `naima new todos "<the first thing to do>"`,
 rather than a bug.
+
+When the source Naima was cloned from is a folder on this machine, init now
+says that the path is committed in `naima.json` and that nobody else can
+fetch from it.

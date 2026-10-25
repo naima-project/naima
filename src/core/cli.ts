@@ -307,7 +307,17 @@ function createData(data: string, opts: CliOptions): { root: string; tracker: st
   writeRaw(data, { format: FORMAT, ...(Object.keys(formats).length ? { formats } : {}), source, commit: me.commit })
   const program = join(tracker, PROGRAM_DIR)
   ignoreProgram({ tracker, program })
-  return { root, tracker, program, said: `wrote ${parent}/: README.md, .gitignore, ${DATA_DIR}/${DATA_FILE} — locked to ${source} at ${short(me.commit)}` }
+  // A source on this machine's disk goes into the repository with the lock: say so, since it names a private path.
+  const local = !/^[a-z][a-z0-9+.-]*:\/\//i.test(source) && !/^[^/\\]+@[^/\\]+:/.test(source)
+  const warn = local
+    ? `\n${source} is a folder on this machine: it is committed in ${DATA_DIR}/${DATA_FILE} as the lock's source, and nobody else can fetch from it — clone Naima from its public address instead, unless this is a test`
+    : ""
+  return {
+    root,
+    tracker,
+    program,
+    said: `wrote ${parent}/: README.md, .gitignore, ${DATA_DIR}/${DATA_FILE} — locked to ${source} at ${short(me.commit)}${warn}`,
+  }
 }
 
 /**
