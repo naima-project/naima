@@ -53,7 +53,7 @@ import {
   writeSiblingMarker,
 } from "./repos.ts"
 import { exclusions } from "./excludes.ts"
-import { ALLOW_PRIVATE, allowPrivateOption, REVISED, revisedOption } from "./private.ts"
+import { ALLOW_PRIVATE, allowPrivateOption, findPrivate, guardPrivate, privateContext, REVISED, revisedOption } from "./private.ts"
 import { DATA_DIR, DATA_FILE, DEFAULT_DATA, findData, globalOptions, PROGRAM_DIR, real, RELAUNCH, runtimeOf, trackerOf, trackerReadme } from "./layout.ts"
 import {
   align,
@@ -1106,7 +1106,9 @@ function showOnePlugin(name: string, opts: CliOptions, raw: Record<string, unkno
 }
 
 function pluginCommand(args: string[], opts: CliOptions, place: Place, raw: Record<string, unknown>, io: IO): number {
-  const [sub, name, ...rest] = parse(args).positionals
+  // Taken as every write takes them: a value is text that goes into the repository, checked for private names.
+  const { reason, rest: unsigned } = allowPrivateOption(args)
+  const [sub, name, ...rest] = parse(revisedOption(unsigned).rest).positionals
   if (sub === "show") {
     if (rest.length) throw new Error(usage("plugin"))
     return name ? showOnePlugin(name, opts, raw, io) : showAllPlugins(opts, raw, io)
@@ -1131,6 +1133,7 @@ function pluginCommand(args: string[], opts: CliOptions, place: Place, raw: Reco
   const refusal = pluginRefusal(name, opts, raw)
   if (refusal) throw new Error(refusal)
   const assigns = pairs(rest)
+  guardPrivate(`the options of ${name}`, findPrivate(assigns.map(([, v]) => v).join("\n"), privateContext()), reason)
   const known = declaredOptions(name, opts)
   for (const [key, value] of assigns) {
     // Removing one is allowed: an option no plugin reads is what naima check notes, to be removed.
@@ -1294,6 +1297,9 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
       const target = runtimeOf(place.program)
       if (moved || (target && real(opts.programRoot) !== real(target))) return RELAUNCH
     }
+    // The commands the entry point runs itself answer --help as every other command does.
+    const own = cliCommands.find((c) => c.name === command)
+    if (own && (args.includes("--help") || args.includes("-h"))) return commandHelp(own as Command, io)
     if (command === "update") {
       if (!opts.launched) throw new Error(`naima update moves the program, so it runs through the launcher: deno run -A <the program>/naima.ts update`)
       return await update(args, opts, place, place.lock, place.raw, io)

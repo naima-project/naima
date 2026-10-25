@@ -190,7 +190,12 @@ export interface SessionNote {
   at?: string
   branch: string
   body: string
+  /** The acknowledgement line the note begins with, when it carries one: not what the session did. */
+  ack?: string
 }
+
+/** What a session note says the session did: its body, without the acknowledgement line it begins with. */
+const told = (p: SessionNote): string => (p.ack && p.body.startsWith(p.ack) ? p.body.slice(p.ack.length) : p.body).trim()
 
 /** Oldest first: by day, then by moment within the day -- one with no moment first -- the sort being stable. */
 const byMoment = (a: { date: string; at?: string }, b: { date: string; at?: string }): number =>
@@ -213,7 +218,7 @@ export function timelineOf(ctx: Context, passes: SessionNote[]): Timeline {
   }
   for (const r of releases(ctx)) out.events.push({ date: r.date, kind: "release", subject: r.tag, says: `version tag ${r.tag}` })
   for (const p of passes) {
-    const first = p.body.split("\n").find((l) => l.trim())?.trim() ?? ""
+    const first = told(p).split("\n").find((l) => l.trim())?.trim() ?? ""
     out.events.push({
       date: p.date,
       ...(p.at && isMoment(p.at) ? { at: p.at } : {}),
@@ -415,7 +420,7 @@ export function diaryOf(ctx: Context, passes: SessionNote[]): DiaryEntry[] {
     out.push({ date: r.date, ...(r.at ? { at: r.at } : {}), kind: "diary", text: r.text.replace(/\s+/g, " ") })
   }
   for (const p of passes) {
-    const body = p.body.trim().replace(/\s+/g, " ")
+    const body = told(p).replace(/\s+/g, " ")
     if (body) out.push({ date: p.date, ...(p.at && isMoment(p.at) ? { at: p.at } : {}), kind: "session", text: `${p.branch}: ${body}` })
   }
   return out.sort(byMoment)
