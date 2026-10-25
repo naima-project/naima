@@ -83,8 +83,20 @@ let generation = 0
  */
 export const writes = (): number => generation
 
-/** Write a value as JSON, atomically (writeFileAtomic). */
+let guard: ((path?: string) => void) | null = null
+
+/**
+ * Set the guard every write through this module's helpers calls first, with the path it writes when it has one:
+ * it throws to refuse the write (the entry point sets the tracker's privacy guard, core/exposure.ts, for the
+ * command it runs); null removes it.
+ */
+export function setWriteGuard(g: ((path?: string) => void) | null): void {
+  guard = g
+}
+
+/** Write a value as JSON, atomically (writeFileAtomic), after the write guard. */
 export function writeJson(path: string, value: unknown): void {
+  guard?.(path)
   writeFileAtomic(path, JSON.stringify(value, null, 2) + "\n")
   generation++
 }
@@ -120,6 +132,7 @@ function onDisk(dir: string): Meta | null {
  * a bug in that hook, reported as one.
  */
 function beforeWrite(ctx: Context, write: Write): void {
+  guard?.(write.item.dir)
   for (const hook of ctx.registry.hooks) {
     const refusal = hook.beforeWrite?.(write, ctx)
     if (refusal === undefined) continue
@@ -140,6 +153,7 @@ function afterWrite(ctx: Context, write: Write): void {
  * for the writer to store with the text.
  */
 export function beforeTextWrite(ctx: Context, what: string): Record<string, unknown> {
+  guard?.(ctx.trackerRoot)
   const text: TextWrite = { what, record: {} }
   for (const hook of ctx.registry.hooks) {
     const refusal = hook.beforeText?.(text, ctx)

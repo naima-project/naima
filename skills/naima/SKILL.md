@@ -36,6 +36,10 @@ sign it by adding `--revised naima-tracker/naima/docs/agents/NOLEAKS.md`;
 without it the CLI refuses the write. Only the agent talking to the owner
 writes text taken from the owner's words; a worker writes its own observations
 ([the rule](../../docs/guide/rules.md#free-text-and-files-are-signed-against-the-no-leaks-checklist)).
+A write refused because the tracker is exposed, or a line saying Naima cannot
+tell whether a remote is public, is the owner's to hear: relay it as it says,
+then run the fix it names once the owner answers, and never work around it
+([the rule](../../docs/guide/rules.md#the-tracker-is-never-exposed)).
 
 **Capture now, act later — always, not only on `/flow:report`.** Whenever
 the owner, in chat, asks for a feature, reports a problem, makes a decision

@@ -24,6 +24,14 @@ import type { FirstParty, Plugin } from "./types.ts"
 /** The trait of the type naima update files what it leaves in: a finding of the new Naima's check it could not fix by itself. */
 export const FOLLOW_UP = "follow-up"
 
+/** The options of naima.json an older Naima may not know: dropped, and said, when the lock moves back to one. */
+export const OPTIONAL_KEYS = ["updates", "privateRemotes"] as const
+
+/** A naima.json without the options of OPTIONAL_KEYS. */
+export function withoutOptional<T extends Record<string, unknown>>(raw: T): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(raw).filter(([k]) => !(OPTIONAL_KEYS as readonly string[]).includes(k)))
+}
+
 /** `n` of `noun`, its plural made with an s. */
 export const counted = (n: number, noun: string): string => `${n} ${noun}${n === 1 ? "" : "s"}`
 
@@ -109,7 +117,7 @@ export interface Change {
   unread: string[]
   /** `to`'s refusal of naima.json as it is, lock aside; null when it reads it, or when the formats differ and a migration will rewrite it. */
   config: string | null
-  /** `to`'s refusal of naima.json without `updates`, an option older Naimas do not know; null when it reads it. */
+  /** `to`'s refusal of naima.json without the options older Naimas may not know (OPTIONAL_KEYS); null when it reads it. */
   configWithoutUpdates: string | null
   /** Why `to`'s own code could not be read: then formats, unread options and config are unknown. */
   unknown: string | null
@@ -251,9 +259,8 @@ export async function changeOf(program: string, raw: Record<string, unknown>, fr
   if (!change.formats.length) {
     const lock = { ...change.rewritten, commit: to }
     change.config = refusalOf(theirs.parse, lock)
-    if (change.config && "updates" in lock) {
-      const { updates: _dropped, ...without } = lock
-      change.configWithoutUpdates = refusalOf(theirs.parse, without)
+    if (change.config && OPTIONAL_KEYS.some((k) => k in lock)) {
+      change.configWithoutUpdates = refusalOf(theirs.parse, withoutOptional(lock))
     }
   }
   return change

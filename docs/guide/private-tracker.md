@@ -23,7 +23,8 @@ has no tracker yet, it looks at the code repository's `origin`:
 |---|---|
 | has no remote, or its remote is a path on this disk | keeps the tracker inside, as always |
 | has a remote that is private | keeps the tracker inside |
-| has a remote that is public, or whose visibility can't be told | stops, and asks you, through the agent, whether to keep the tracker private beside it; the recommended answer is yes |
+| has a remote that is public | stops, and says the tracker has to be kept private beside it |
+| has a remote whose visibility can't be told | stops, and asks you, through the agent, whether the remote is private |
 
 Visibility is asked of GitHub's public API, without credentials: if it
 answers that the repository exists, the repository is public, and if it
@@ -35,17 +36,57 @@ published.
 The answer is given back to init as an option:
 
 ```sh
-naima init --private-tracker      # yes: a repository of its own, beside the code
-naima init --tracker-inside       # no: committed with the code, readable by anyone who can read it
+naima init --private-tracker      # a repository of its own, beside the code
+naima init --tracker-inside       # the remote is private: committed with the code, and the answer recorded
 ```
 
 With the installer, set `NAIMA_TRACKER` to `private` or `inside` (or to the
 URL of an existing tracker repository) before running the one line, for
 example `curl -fsSL https://naima-project.github.io/naima/install.sh | NAIMA_TRACKER=private sh`.
 
-If the project already has a tracker committed inside and looks public,
-init leaves it as it is and says it can be moved out: see
+If the project already has a tracker committed inside and is public, init
+leaves it as it is and says how to move it out: see
 [moving an existing tracker out](#move-an-existing-tracker-out).
+
+## The tracker is never exposed
+
+Choosing well at the start is not enough: a private repository can be made
+public later, and a tracker kept beside the code can be given a public
+remote. So Naima checks before it writes. Every command that writes to the
+tracker (a new item, a note, a claim, an event, an attachment) is refused
+while the tracker is exposed, which means one of two things:
+
+- the tracker is committed in a repository whose `origin` is public;
+- the tracker is a repository of its own and one of its remotes is public.
+
+A repository with no remote, or whose remote is a path on this disk, is
+private. The refusal says what to tell you and the command that fixes it.
+For a tracker committed in a public repository the fix is
+`naima init --private-tracker`, which moves it out (see below). For a
+public remote of the tracker's own repository, it is to make that
+repository private or to remove the remote. Reading is never refused, and
+`naima check` reports the same problem as `tracker-private`, so a project
+that updates Naima has it filed as a todo the first time.
+
+Naima doesn't ask GitHub on every write. It remembers each remote's answer
+with its time, in the tracker repository's own git configuration, which is
+never committed, and asks again at most once a day, waiting five seconds at
+most. When GitHub doesn't answer, the last answer known is kept and the
+write goes ahead.
+
+When the visibility of a remote can't be told, because it isn't on GitHub or
+GitHub was never reached, writes go ahead, and Naima asks you once, through
+the agent, whether that remote is private. If it is, the agent records your
+answer:
+
+```sh
+naima init --remote-private
+```
+
+The answer goes into `naima.json` as `privateRemotes`, by a hash of the
+remote's address rather than the address itself, and the question is not
+asked again. If the remote is public, the fix is the one for an exposed
+tracker.
 
 ## Sibling mode
 
@@ -153,22 +194,35 @@ give `--name`. What remains up to you:
 
 ### Move an existing tracker out
 
-A tracker committed in a public repository can move into a repository of its
-own. The steps are by hand, and they don't remove the tracker from the code's
-history: every earlier commit still holds it, and anyone who cloned the
-repository has it. Removing it from history means rewriting the history (with
-`git filter-repo` on a fresh copy, then a force-push that everyone must
-follow), which is the owner's decision.
+A tracker committed with the code moves into a repository of its own with
+one command, run in the main checkout, on the trunk, with the tracker's
+changes committed:
 
-1. Copy the data out with its history:
-   `git clone <the code repository> /tmp/tracker && cd /tmp/tracker && git filter-repo --subdirectory-filter naima-tracker/naima-data`.
-2. In the code repository, remove it from the index and ignore it:
-   `git rm -r --cached naima-tracker/naima-data`, then add `/naima-data/` to
-   `naima-tracker/.gitignore` and commit.
-3. Put the new repository in place: move the folder away, then
-   `naima init --tracker /tmp/tracker` (or the address of a private remote
-   you pushed it to).
-4. Commit `naima-tracker/tracker.json` in the code repository.
+```sh
+naima init --private-tracker
+```
+
+It copies the tracker's history out of the code's repository: every commit
+that touched `naima-tracker/naima-data/` is kept, with its author, date and
+message, and the copy is checked to end in exactly the files last
+committed. That copy becomes `naima-tracker/naima-data/.git`, a repository
+on this machine with no remote. In the code's repository one commit stops
+tracking the folder, ignores it and adds `naima-tracker/tracker.json`; the
+files stay where they are, and nothing is deleted. Other branches that
+still change the tracker should be landed or closed first.
+
+The move doesn't remove the tracker from the code's history: every earlier
+commit still holds it, and anyone who cloned the repository has it.
+Removing it from history means rewriting that history (with
+`git filter-repo` on a fresh copy, then a force-push that everyone must
+follow), which is your decision.
+
+Because the tracker was readable by anyone, the move also files a todo, once,
+at the highest priority the project has: read every item, note and
+attachment of the tracker, paraphrase or remove through the CLI anything
+private, strategic or confidential, and then consider the history. The same
+todo is filed when a tracker stops being exposed in some other way, such as
+a public remote made private.
 
 ## The workshop layout
 

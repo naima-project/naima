@@ -18,7 +18,9 @@ import { FORMAT, formatRefusal, formatsOf } from "./format.ts"
 import { DEFAULT_ENTRY_FILES } from "./pointer.ts"
 import type { Config, Extension, PluginConfig, PluginOptions, PluginSource, Severity } from "./types.ts"
 
-const KEYS = new Set(["format", "formats", "source", "commit", "verify", "program", "plugins", "rename", "extends", "agents", "entryFiles", "updates"])
+const CORE_KEYS = ["format", "formats", "source", "commit", "verify", "program", "plugins", "rename", "extends", "agents", "entryFiles", "updates"]
+/** Every key naima.json may hold: the core's, and the owner's answers about the tracker's remotes (core/exposure.ts). */
+const KEYS = new Set([...CORE_KEYS, "privateRemotes"])
 const COMMIT = /^[0-9a-f]{40}$/
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v)
@@ -98,6 +100,7 @@ export function parseConfig(raw: unknown, opts: { lenient?: boolean } = {}): Con
     }
   }
   const lock = parseLock(raw)
+  parsePrivateRemotes(raw["privateRemotes"])
   const extensions = raw["extends"] ?? []
   if (!Array.isArray(extensions) || !extensions.every(isObject)) {
     throw new Error(
@@ -114,6 +117,17 @@ export function parseConfig(raw: unknown, opts: { lenient?: boolean } = {}): Con
     entryFiles: parseEntryFiles(raw["entryFiles"]),
     ...(raw["agents"] === undefined ? {} : { agents: parseAgents(raw["agents"]) }),
     updates: parseUpdates(raw["updates"]),
+  }
+}
+
+/**
+ * `privateRemotes`: the remotes the owner said are private when their visibility cannot be told, each by its key —
+ * 16 hex digits of a hash of its address, never the address (core/exposure.ts).
+ */
+function parsePrivateRemotes(value: unknown): void {
+  if (value === undefined) return
+  if (!Array.isArray(value) || !value.every((v) => typeof v === "string" && /^[0-9a-f]{16}$/.test(v))) {
+    throw new Error(`${DATA_FILE}: privateRemotes is a list of remote keys, 16 hex digits each, that naima init --remote-private records`)
   }
 }
 

@@ -6,6 +6,7 @@ import { join } from "node:path"
 import { groupBy } from "./collections.ts"
 import { message } from "./errors.ts"
 import { formatCheck } from "./format.ts"
+import { trackerExposure } from "./exposure.ts"
 import { appliesTo, fieldError, fieldsOf, isOpenList, offList } from "./fields.ts"
 import { isUuid, README, titleWords } from "./item.ts"
 import { label } from "./lifecycle.ts"
@@ -186,6 +187,17 @@ const unreadOptionsCheck: Check = {
     ),
 }
 
+const trackerPrivate: Check = {
+  name: "tracker-private",
+  says:
+    "the tracker is not exposed: when it is committed with the code, the code repository's origin is not public; when it is a repository of its own, none of its remotes is public — a remote on this disk, or none, is private; a GitHub remote is asked of GitHub's public API at most once a day, the answer remembered in the tracker repository's git config; one whose visibility cannot be told is noted with the question for the owner, until the owner's answer is recorded (naima init --remote-private)",
+  run: async (ctx) => {
+    const exposure = await trackerExposure(ctx)
+    if (exposure.state === "exposed") return [problem(exposure.message)]
+    return exposure.state === "unknown" ? [note(exposure.message)] : []
+  },
+}
+
 export const coreChecks: Check[] = [
   readable,
   identity,
@@ -197,6 +209,7 @@ export const coreChecks: Check[] = [
   entryPointers,
   sessionStart,
   unreadOptionsCheck,
+  trackerPrivate,
   formatCheck(),
 ]
 

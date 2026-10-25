@@ -27,6 +27,21 @@ import { bool, pairs, parse, str } from "./args.ts"
 import { gitOrNull, nativePath, runGit, toplevel, trunk } from "./git.ts"
 import { remoteVisibility, type Visibility } from "./visibility.ts"
 import {
+  clearExposed,
+  exposureOf,
+  fileSweepTodo,
+  ownerPrivate,
+  PRIVATE_REMOTES,
+  refreshVisibility,
+  setVisibilityProbe,
+  trackerExposure,
+  wasExposed,
+  type Where,
+  writeGuard,
+} from "./exposure.ts"
+import { moveTrackerOut } from "./move-tracker.ts"
+import { setWriteGuard } from "./item.ts"
+import {
   installTrailerHooks,
   missingTracker,
   pairTracker,
@@ -69,10 +84,12 @@ import {
   INTRODUCTION,
   newly,
   OFFERS,
+  OPTIONAL_KEYS,
   pageRules,
   rehearse,
   versionOf,
   withCommit,
+  withoutOptional,
 } from "./updates.ts"
 import { changedRules, notesBetween } from "./changes.ts"
 import { createItem, saveProse } from "./item.ts"
@@ -272,7 +289,7 @@ function createData(data: string, opts: CliOptions): { root: string; tracker: st
  * it in this clone's git config instead. A data directory committed with the code is refused: moving it out is a
  * migration, by hand (docs/guide/private-tracker.md).
  */
-function siblingTracker(data: string, url: string | null, privateUrl: boolean, io: IO): void {
+function siblingTracker(data: string, url: string | null, privateUrl: boolean, io: IO): boolean {
   const tracker = dirname(data)
   const top = toplevel(existing(tracker))
   if (!top) throw new Error(OUTSIDE(tracker))
@@ -280,9 +297,13 @@ function siblingTracker(data: string, url: string | null, privateUrl: boolean, i
   const shown = posixRelative(root, data)
   if (!existsSync(join(data, ".git"))) {
     if (existsSync(join(data, DATA_FILE))) {
-      throw new Error(
-        `${shown}/${DATA_FILE} is committed with the code: moving a tracker into a repository of its own is a migration, by hand — docs/guide/private-tracker.md`,
-      )
+      if (url !== null) {
+        throw new Error(
+          `${shown}/${DATA_FILE} is committed with the code: move it into a repository of its own first, with its history, by naima init --private-tracker — docs/guide/private-tracker.md`,
+        )
+      }
+      moveTrackerOut(root, data, io.out)
+      return true
     }
     if (existsSync(data) && readdirSync(data).length) throw new Error(`${shown} exists and is not a git clone: move it away, then run naima init again`)
     if (url === null) {
@@ -308,23 +329,58 @@ function siblingTracker(data: string, url: string | null, privateUrl: boolean, i
       privateUrl ? `, and the tracker's address in this clone's git config (${TRACKER_URL_KEY})` : ""
     }; ${posixRelative(root, tracker)}/.gitignore ignores ${DATA_DIR}/ — commit both in the code's repository`,
   )
+  return false
 }
 
-/** The question init asks, through the agent, of a project that looks public: where its tracker lives. */
+const PRIVATE_TRACKER = `naima init --private-tracker (a git repository of its own in ${DEFAULT_DATA}, ignored by the project, on this machine only)`
+
+/** What init says, through the agent, of a project that is public or may be: where its tracker lives. */
 function looksPublic(visibility: Visibility, url: string | null): string {
-  const why = visibility === "public"
-    ? `its remote${url ? ` ${withoutCredentials(url)}` : ""} is public`
-    : `the visibility of its remote${url ? ` ${withoutCredentials(url)}` : ""} cannot be told`
-  return `this project looks public (${why}): keep the tracker private beside it? Ask the owner once, recommending yes — ` +
-    `yes: naima init --private-tracker (a git repository of its own in ${DEFAULT_DATA}, ignored by the project, on this machine only); ` +
-    `no: naima init --tracker-inside (committed with the code, readable by anyone who can read it) — docs/guide/private-tracker.md`
+  const remote = url ? ` ${withoutCredentials(url)}` : ""
+  if (visibility === "public") {
+    return `this project is public (its remote${remote} is public): its tracker must be private, so it is kept beside it — tell the owner, then run ${PRIVATE_TRACKER} — docs/guide/private-tracker.md`
+  }
+  return `this project may be public (the visibility of its remote${remote} cannot be told): is that remote private? Ask the owner once — ` +
+    `yes: naima init --tracker-inside (committed with the code, and the answer recorded); no, or not sure: ${PRIVATE_TRACKER} — docs/guide/private-tracker.md`
 }
 
-/** What init says of a tracker already committed in a project that looks public. */
-const MOVE_OUT = (visibility: Visibility): string =>
-  `this project looks ${
-    visibility === "public" ? "public" : "public, or its visibility cannot be told"
-  }, and its tracker is committed in it: it can move out, into a repository of its own beside the code (docs/guide/private-tracker.md#move-an-existing-tracker-out) — the old tracker stays in the public history unless that history is rewritten`
+/** Where a project's tracker privacy is read from, outside a command: its places and a clock. */
+function whereOf(root: string, data: string, io: IO): Where {
+  const trackerGit = trackerGitOf(root, data)
+  return { root, trackerRoot: data, trackerGit, sibling: trackerGit !== root, now: io.now }
+}
+
+/**
+ * Record the owner's answer that the tracker's remotes whose visibility cannot be told are private: their keys
+ * in naima.json's privateRemotes. A remote GitHub says is public is refused: the answer cannot make it private.
+ */
+async function recordPrivate(root: string, data: string, io: IO): Promise<void> {
+  const w = whereOf(root, data, io)
+  const seen = await refreshVisibility(w)
+  const exposure = exposureOf(w, seen)
+  if (exposure.state === "exposed") throw new Error(exposure.message)
+  const known = ownerPrivate(data)
+  const add = seen.filter((r) => r.visibility === "unknown" && !known.includes(r.key))
+  if (!add.length) {
+    io.out(`nothing to record: no remote of the tracker has a visibility that cannot be told`)
+    return
+  }
+  const raw = readRaw(data)
+  writeValidatedRaw(data, { ...raw, [PRIVATE_REMOTES]: [...known, ...add.map((r) => r.key)] })
+  io.out(
+    `recorded in ${posixRelative(root, join(data, DATA_FILE))}, by a hash of its address: the owner says ${
+      add.map((r) => r.url).join(", ")
+    } is private — commit it`,
+  )
+}
+
+/** After a tracker moved out of a public repository: the sweep todo, filed once. */
+async function sweepAfter(place: Place, opts: CliOptions, io: IO): Promise<void> {
+  const ctx = await openProject(place, opts, io)
+  io.out(fileSweepTodo(ctx))
+  clearExposed(ctx.trackerGit)
+  clearExposed(ctx.root)
+}
 
 async function init(args: string[], opts: CliOptions, data: string, io: IO): Promise<number> {
   // --write-agent-pointer is accepted and changes nothing: the pointer is always written.
@@ -336,31 +392,49 @@ async function init(args: string[], opts: CliOptions, data: string, io: IO): Pro
     "private-url": { type: "boolean" },
     "private-tracker": { type: "boolean" },
     "tracker-inside": { type: "boolean" },
+    "remote-private": { type: "boolean" },
   })
   const write = bool(p, "write-excludes")
   const hooks = !bool(p, "no-session-hook")
   const given = str(p, "tracker")
   const local = bool(p, "private-tracker")
   const inside = bool(p, "tracker-inside")
-  if ((bool(p, "private-url") && given === undefined) || [given !== undefined, local, inside].filter(Boolean).length > 1) throw new Error(usage("init"))
+  const remotePrivate = bool(p, "remote-private")
+  if ((bool(p, "private-url") && given === undefined) || [given !== undefined, local, inside, remotePrivate].filter(Boolean).length > 1) {
+    throw new Error(usage("init"))
+  }
+  if (remotePrivate) {
+    const found = locate(data)
+    if (!found) {
+      throw new Error(
+        `no ${DATA_FILE} in ${data}: --remote-private answers for a project that has its tracker — naima init --tracker-inside answers it at the start`,
+      )
+    }
+    await recordPrivate(found.root, found.data, io)
+    return 0
+  }
   const sibling = given !== undefined || local
   const url = given ?? null
   // Where the tracker lives, asked once of a project that looks public and has none yet.
-  if (!sibling && !inside && !locate(data) && !existsSync(join(data, ".git")) && !readSiblingMarker(dirname(resolve(data)))) {
+  let answeredInside = false
+  if (!sibling && !locate(data) && !existsSync(join(data, ".git")) && !readSiblingMarker(dirname(resolve(data)))) {
     const top = toplevel(existing(dirname(resolve(data))))
     if (top) {
       const seen = await remoteVisibility(nativePath(top), opts.visibility)
-      if (seen.visibility === "public" || seen.visibility === "unknown") throw new Error(looksPublic(seen.visibility, seen.url))
+      if (seen.visibility === "public" || (seen.visibility === "unknown" && !inside)) throw new Error(looksPublic(seen.visibility, seen.url))
+      answeredInside = inside && seen.visibility === "unknown"
     }
   }
-  if (sibling) siblingTracker(resolve(data), url, bool(p, "private-url"), io)
+  const moved = sibling ? siblingTracker(resolve(data), url, bool(p, "private-url"), io) : false
   const found = locate(data)
   if (found) {
     io.out(`${posixRelative(found.root, join(found.data, DATA_FILE))} already exists — left as it is`)
-    if (sibling) { for (const line of installTrailerHooks(found.root, found.data)) io.out(line) }
+    if (moved) await sweepAfter(found, opts, io)
+    else if (sibling) { for (const line of installTrailerHooks(found.root, found.data)) io.out(line) }
     else if (trackerGitOf(found.root, found.data) === found.root) {
-      const seen = await remoteVisibility(found.root, opts.visibility)
-      if (seen.visibility === "public" || seen.visibility === "unknown") io.out(MOVE_OUT(seen.visibility))
+      const w = whereOf(found.root, found.data, io)
+      const exposure = exposureOf(w, await refreshVisibility(w))
+      if (exposure.state !== "private") io.out(exposure.message)
     }
     const config = parseConfig(found.raw, { lenient: true })
     excludeHost(found.root, found.program, write, io)
@@ -370,6 +444,7 @@ async function init(args: string[], opts: CliOptions, data: string, io: IO): Pro
   }
   const made = createData(resolve(data), opts)
   const place: Place = { root: made.root, data: real(data), program: made.program }
+  if (answeredInside) await recordPrivate(made.root, place.data, io)
   // Launched from a Naima elsewhere, init clones the program beside the data; run directly, as a test, the first launched run does.
   const cloned = opts.launched && real(opts.programRoot) !== real(made.program)
     ? (align({ ...targetOf(place, parseLock(readRaw(place.data)), opts) }), `, and cloned ${PROGRAM_DIR}/`)
@@ -559,10 +634,12 @@ async function moveLock(opts: CliOptions, place: Place, lock: Lock, raw: Record<
   let next: Record<string, unknown> = { ...change.rewritten, commit: to }
   const notes: string[] = []
   if (change.config) {
-    if ("updates" in next && change.configWithoutUpdates === null) {
-      const { updates: _dropped, ...without } = next
-      next = without
-      notes.push(`${short(to)} does not know the option updates: removed from ${DATA_FILE}; it is set again after an update to a Naima that knows it`)
+    const dropped = OPTIONAL_KEYS.filter((k) => k in next)
+    if (dropped.length && change.configWithoutUpdates === null) {
+      next = withoutOptional(next)
+      for (const key of dropped) {
+        notes.push(`${short(to)} does not know the option ${key}: removed from ${DATA_FILE}; it is set again after an update to a Naima that knows it`)
+      }
     } else throw new Error(`${short(to)} does not read this ${DATA_FILE}: ${change.config}`)
   }
   for (const line of describe(change)) io.out(line)
@@ -950,6 +1027,8 @@ function commandHelp(cmd: Command, io: IO): number {
 
 export async function runCli(argv: string[], opts: CliOptions): Promise<number> {
   const io = opts.io ?? consoleIO
+  setWriteGuard(null)
+  setVisibilityProbe(opts.visibility ?? null)
   try {
     const { data: flag, rest } = globalOptions(argv)
     const [command, ...args] = rest
@@ -957,7 +1036,15 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     const given = opts.launched && opts.data ? opts.data : flag ?? opts.data
     const data = findData(opts.cwd, real(opts.programRoot), given)
     if (command === "init") {
-      const known = ["--write-excludes", "--write-agent-pointer", "--no-session-hook", "--private-url", "--private-tracker", "--tracker-inside"]
+      const known = [
+        "--write-excludes",
+        "--write-agent-pointer",
+        "--no-session-hook",
+        "--private-url",
+        "--private-tracker",
+        "--tracker-inside",
+        "--remote-private",
+      ]
       const at = args.indexOf("--tracker")
       const rest = at === -1 ? args : args.filter((_, i) => i !== at && i !== at + 1)
       if ((at !== -1 && !args[at + 1]) || rest.some((a) => !known.includes(a))) throw new Error(usage("init"))
@@ -1028,6 +1115,13 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     const cmd = ctx.registry.find<Command>("commands", command as string)?.value
     if (!cmd) throw new Error(`unknown command "${command}" — naima help`)
     if (args.includes("--help") || args.includes("-h")) return commandHelp(cmd, io)
+    // The tracker's privacy, an invariant: every write through the core's helpers is refused while it is exposed.
+    const exposure = await trackerExposure(ctx)
+    if (exposure.state === "private" && wasExposed(ctx.trackerGit)) {
+      io.err(`naima: the tracker was exposed and is private now: ${fileSweepTodo(ctx)}`)
+      clearExposed(ctx.trackerGit)
+    }
+    setWriteGuard(writeGuard(ctx.trackerRoot, exposure, io.err))
     const code = await cmd.run(commandArgs, ctx)
     if (code !== RELAUNCH) return code
     // Only the entry point asks for a relaunch; a command's 75 would make the launcher run it again.
@@ -1042,5 +1136,8 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     io.err(`naima: internal error: ${name}${message(e)} — a bug in Naima or a plugin; NAIMA_DEBUG=1 prints where`)
     if (opts.debug && e instanceof Error && e.stack) io.err(e.stack)
     return EXIT.INTERNAL
+  } finally {
+    setWriteGuard(null)
+    setVisibilityProbe(null)
   }
 }

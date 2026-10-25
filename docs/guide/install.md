@@ -88,18 +88,21 @@ Before it writes the data, `init` decides whether the tracker is committed
 with the code. A repository with no remote, a remote that is a path on this
 disk, or a private remote keeps it inside, as above. A repository whose
 remote is public, or whose visibility can't be told, gets a question
-instead: `init` stops, writing nothing, and says to ask the owner once
-whether to keep the tracker private beside the code, recommending yes. The
-answer comes back as `naima init --private-tracker` (a git repository of its
-own in `naima-tracker/naima-data/`, created on this machine with no remote,
-which the code repository ignores) or `naima init --tracker-inside`. With
-the installer, set `NAIMA_TRACKER` to `private`, `inside`, or the URL of an
-existing tracker repository, which `init --tracker <url>` clones. Whether a
-remote is public is asked of GitHub's public API without credentials, the
-only network call `init` makes, which is why the launcher lets `init` reach
-`api.github.com`. A project that already has a tracker committed inside is
-left as it is; if it looks public, `init` says the tracker can move out, and
-that the old tracker stays in the public history unless it is rewritten.
+instead. When the remote is public, `init` stops, writing nothing, and says
+the tracker has to be kept private beside the code, with
+`naima init --private-tracker` (a git repository of its own in
+`naima-tracker/naima-data/`, created on this machine with no remote, which
+the code repository ignores). When its visibility can't be told, `init`
+asks the owner once whether the remote is private: yes is
+`naima init --tracker-inside`, which records the answer, and no is
+`naima init --private-tracker`. With the installer, set `NAIMA_TRACKER` to
+`private`, `inside`, or the URL of an existing tracker repository, which
+`init --tracker <url>` clones. Whether a remote is public is asked of
+GitHub's public API without credentials, which is why the launcher lets
+every command reach `api.github.com`: after `init`, Naima asks again at
+most once a day, so that a repository made public later is noticed before
+the next write. A project that already has a tracker committed inside a
+public repository is left as it is by `init`, which says how to move it out.
 How the two repositories are kept in step, and how to move an existing
 tracker out, is in [keep the tracker private](private-tracker.md).
 
@@ -367,7 +370,7 @@ under Deno with only these permissions:
 | write | `naima-tracker/`, and the data or program directory if moved out of it; for `init` and `update` only, the entry files and the session-start settings of the tools in use, and with `init --write-excludes` the host tools' configuration | items, claims, notes, the program's own alignment, the commits fetched for it; the pointer line, the session-start hooks and the exclusion lines; nothing else in the project |
 | run | `git`, and the programs the loaded contributions declare, by name or by their absolute path in the [tools directory](tools.md#where-the-tools-go) | alignment, update, and reading claims and notes across branches; a [verifier](glossary.md#verifier)'s model checker (its `runs`, [the contract](../reference/plugin-contract.md#the-verifier-contract)); a declared [metric](metrics-and-budgets.md)'s program, the first word of its `run` |
 | env | an allow-list: `HOME`, `PATH`, the user, shell, terminal, locale and temporary-directory variables, the proxy variables, Windows' system ones, and every `NAIMA_*`, `GIT_*`, `SSH_*`, `LC_*` and `DENO_*` | what git needs to reach a source, and Naima's own; nothing else of the environment reaches the program, nor the git it runs |
-| net | none, but `api.github.com` for `naima init` | the network is git's, in alignment and update; `init` asks GitHub whether the project is public ([where the tracker lives](#where-the-tracker-lives)) |
+| net | none, but `api.github.com` | the network is git's, in alignment and update; GitHub is asked whether the tracker's remotes are public, by `init` and then at most once a day ([where the tracker lives](#where-the-tracker-lives)) |
 
 **`naima tools`, and no other command,** may also write to the tools
 directory, reach any host and run any program. An install downloads from

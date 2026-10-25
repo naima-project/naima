@@ -8,7 +8,8 @@
 //   run     git, and the programs the loaded contributions declare (`runs`: a verifier's tool, a metric's command), nothing else
 //   env     an allow-list of the environment (ENV below): what git needs, and Naima's own,
 //           plus the machine's name and the private word list (core/private.ts), read here
-//   net     none: the network is git's, for alignment and update — except for `naima ui` (UI below)
+//   net     GitHub's API host alone, to ask whether the tracker's remotes are public (at most once a day);
+//           otherwise the network is git's, for alignment and update — except for `naima ui` (UI below)
 //
 // `naima ui`, and no other command, may also listen on the loopback interface,
 // read and run the Deno that runs it — to open its window, a process of its
@@ -332,7 +333,8 @@ export async function launch(args: string[], cwd: string): Promise<number> {
         hostFiles: hostFiles(parsed.rest, root, data),
         worktrees: others,
         tools,
-        net: parsed.rest[0] === "init" ? [VISIBILITY_HOST] : [],
+        // Every command: the tracker's privacy is asked of GitHub at most once a day, before the first write (core/exposure.ts).
+        net: [VISIBILITY_HOST],
       }
       const read = permissions(fence)[0] ?? ""
       flags = permissions({ ...fence, runs: mayRun(data) ? declaredRuns(entry, cwd, read, env) : [], ui })

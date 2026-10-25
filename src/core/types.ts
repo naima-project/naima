@@ -217,6 +217,11 @@ export interface GuideSection {
 export interface RankTerm {
   name: string
   score(item: Item, ctx: Context): number
+  /**
+   * For a term named after an enum field: the value of that field that makes an item as urgent as the project's
+   * schema allows. What the core sets on an item it files as urgent (the sweep todo of an exposed tracker).
+   */
+  urgent?: string
 }
 
 /**
