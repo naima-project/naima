@@ -1461,15 +1461,22 @@ const suitesGate: Gate = {
   title: "Every test suite passes",
   says: "every declared test suite passed on HEAD's commit, by a recorded run",
   decides:
-    "holds when the latest record of HEAD's commit (naima metrics run --record) names, for every declared suite, a recorded run — made on it, or reused because its inputs are unchanged — with no failing test and no error. It blocks on no item: it says which suite failed and how, and names each run it stands on.",
+    "holds when the latest record of HEAD's commit (naima metrics run --record) names, for every declared suite, a recorded run — made on it, or reused because its inputs are unchanged — with no failing test and no error; with no record of HEAD, a suite's latest recorded run on its inputs as they are now stands for it, so a commit that changed none of them needs no new run. It blocks on no item: it says which suite failed and how, and names each run it stands on.",
   evaluate(ctx) {
     const suites = suitesOf(ctx)
     const head = git(ctx, "rev-parse", "HEAD")
     const latest = recordFiles(ctx).filter((r) => r.record.commit === head && r.record.runs).sort((a, b) => (a.record.at < b.record.at ? 1 : -1))
     const reasons: string[] = []
     const backedBy: string[] = []
+    // A commit that left a suite's inputs as they were, such as one that only writes the tracker, needs no new run.
+    let files: string[] | undefined
+    const sameInputs = (suite: SuiteDef): string | undefined => {
+      files ??= workingTreeSource(ctx.root, [ctx.trackerDir]).files
+      const digest = suiteDigest(suite, ctx.root, files).sha256
+      return recordedRuns(ctx, suite.name).filter((r) => r.run.inputsSha256 === digest).at(-1)?.path
+    }
     for (const s of suites) {
-      const path = latest.map((r) => r.record.runs?.[s.name]).find((x): x is string => typeof x === "string")
+      const path = latest.map((r) => r.record.runs?.[s.name]).find((x): x is string => typeof x === "string") ?? sameInputs(s)
       const run = path ? readSuiteRun(ctx, path) : null
       if (!path || !run) {
         reasons.push(`suite ${s.name}: no recorded run for ${head?.slice(0, 12) ?? "HEAD"} — naima metrics run ${s.name} --record`)
