@@ -97,7 +97,8 @@ Agents forget everything between [sessions](glossary.md#session), but the
 project doesn't, because everything is written down in files:
 
 - **A session note** is written at the end of every session with
-  `naima pass "what changed, what is proven, what is left"`. The next agent
+  `naima pass "what changed, what is proven, what is left" --ack "<line>"`,
+  the line acknowledging the project's rules. The next agent
   reads it in `naima summary`.
 - **A claim file** exists for every piece of work in progress. It is made
   with `naima claim` and removed with `naima release` when the work is done.

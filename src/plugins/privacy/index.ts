@@ -7,7 +7,7 @@
 // ships (docs/agents/NOLEAKS.md): `--revised <its path>`, or it is refused.
 
 import { createHash } from "node:crypto"
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs"
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs"
 import { basename, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
@@ -91,6 +91,18 @@ const article = (shape: string): string => `${/^[AEIOU]/.test(shape) ? "an" : "a
 
 /** Larger files are not read: no secret is pasted into a file this size by hand. */
 const MAX_BYTES = 2 * 1024 * 1024
+
+/** Why `file` cannot be attached: missing, not a plain file, or outside what Naima may read. */
+function unreadable(file: string, src: string): string {
+  try {
+    lstatSync(src)
+  } catch (e) {
+    const code = (e as { code?: string; name?: string }).code ?? (e as { name?: string }).name
+    if (code === "ENOENT" || code === "NotFound") return `${file} does not exist`
+    return `${file} cannot be read: Naima reads only inside the project — copy the file into the project first, then attach the copy`
+  }
+  return `${file} is not a plain file`
+}
 
 /** A file's text, or null for one too large or binary (a NUL in its first 8 KiB). */
 function textOf(path: string): string | null {
@@ -293,7 +305,7 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
       const name = str(p, "as") ?? basename(file)
       if (!name || /[/\\]/.test(name) || name.startsWith(".")) throw new Error(`"${name}" is no attachment name: a plain file name, not hidden`)
       const src = resolve(file)
-      if (!isRegularFile(src)) throw new Error(`${file} is not a file`)
+      if (!isRegularFile(src)) throw new Error(unreadable(file, src))
       const text = textOf(src)
       const secret = text === null ? undefined : findSecrets(text)[0]
       if (secret) {

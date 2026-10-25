@@ -10,7 +10,7 @@ the sequence, not the reasoning; where the two disagree, the page wins.
    (and `humanBecause` if a person's).
 2. **Triage what is left**: `naima triage missing`; set `effort` where you know it.
 3. **Release claims from the worktree**: `naima release <item>...`; commit the deletion.
-4. **Session note**: `naima pass "what changed, what is proven, what is left"`,
+4. **Session note**: `naima pass "what changed, what is proven, what is left" --ack "<line>"` (the last line of `naima rules --audience agents`),
    redacted first: `<host>`, `<ip>`, `<path>`, `<user>`, never the real ones
    ([the rule](../../../../docs/guide/rules.md#no-machine-names-or-private-infrastructure-in-a-repository)).
    A branch that changes behaviour (a path `changes/config.json` lists, here or

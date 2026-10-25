@@ -815,6 +815,34 @@ function onlyAddsTrackerData(ctx: Context, sha: string, files: { status: string;
   return counts.length === readmes.length && counts.every(([, deleted]) => deleted === "0")
 }
 
+/**
+ * Whether a commit made on the trunk only closes items, as `naima close` does: every file it changed is in the data
+ * directory, each item it removes from its type's folder is added under the closed archive with the same files, and
+ * nothing else is added outside those items' archived folders.
+ */
+function onlyClosesItems(ctx: Context, files: { status: string; path: string }[]): boolean {
+  if (!files.length) return false
+  const data = ctx.trackerPrefix ? `${ctx.trackerPrefix}/` : ""
+  const closed = ctx.registry.types.get("closed")?.dir
+  if (!closed) return false
+  const itemDirs = new Set([...ctx.registry.types.values()].map((t) => t.dir).filter((d) => d !== closed))
+  const removed = new Set<string>()
+  const added = new Set<string>()
+  const slugs = new Set<string>()
+  for (const { status, path } of files) {
+    if (!path.startsWith(data)) return false
+    const [dir = "", slug = "", ...rest] = path.slice(data.length).split("/")
+    if (!slug || !rest.length) return false
+    if (status === "D" && itemDirs.has(dir)) {
+      removed.add(`${slug}/${rest.join("/")}`)
+      slugs.add(slug)
+    } else if (status === "A" && dir === closed) added.add(`${slug}/${rest.join("/")}`)
+    else return false
+  }
+  if (!removed.size) return false
+  return [...removed].every((f) => added.has(f)) && [...added].every((f) => slugs.has(f.split("/")[0] ?? ""))
+}
+
 /** The item a `Closes:` value names in this checkout: by id, else as a path whose type may have changed since (closing moves it). */
 function closedItem(ctx: Context, value: string) {
   const byId = ctx.repo.byId.get(value)
@@ -850,7 +878,7 @@ function notAMarker(ctx: Context, c: FirstParent, trees: Map<string, string>): s
 export const landingsAreMarkers: Check = {
   name: "landings-are-markers",
   says:
-    "from the first landing marker on the trunk's first-parent line (a merge whose first parent the second contains, whose tree is the second's, with a Closes: trailer), every first-parent commit is a marker: a fast-forward, a commit made on the trunk, a merge not up to date, or one without a Closes: naming an item done or fixed is a note naming it, one note per commit, with the commit as its subject so that a waiver can accept it. A commit made on the trunk that only adds to the tracker data — new files in the data directory outside rules/, waivers/ and naima.json, and lines added to an item's README.md, its meta.json untouched — is accepted without a note, and so is the commit right after a marker that only adds the marker to the commits of items it closes, the record naima land makes. Before the first marker nothing is asked",
+    "from the first landing marker on the trunk's first-parent line (a merge whose first parent the second contains, whose tree is the second's, with a Closes: trailer), every first-parent commit is a marker: a fast-forward, a commit made on the trunk, a merge not up to date, or one without a Closes: naming an item done or fixed is a note naming it, one note per commit, with the commit as its subject so that a waiver can accept it. A commit made on the trunk that only adds to the tracker data — new files in the data directory outside rules/, waivers/ and naima.json, and lines added to an item's README.md, its meta.json untouched — is accepted without a note, and so is a commit that only closes items as naima close does (each moved whole from its type's folder to the closed archive), and the commit right after a marker that only adds the marker to the commits of items it closes, the record naima land makes. Before the first marker nothing is asked",
   run(ctx) {
     // The markers that close items are the tracker's: the project's trunk, or the tracker's own in sibling mode.
     const repo = ctx.trackerGit
@@ -874,7 +902,7 @@ export const landingsAreMarkers: Check = {
       if (c.parents.length !== 2) {
         const files = direct.get(c.sha) ?? []
         if (emptyMarker(c) && !files.length) continue
-        if (onlyAddsTrackerData(ctx, c.sha, files)) continue
+        if (onlyAddsTrackerData(ctx, c.sha, files) || onlyClosesItems(ctx, files)) continue
         const prev = line[i - 1]
         const afterMarker = prev && prev.closes.length && (prev.parents.length === 2 || emptyMarker(prev))
         // In sibling mode the record names the code marker, in its Code: trailer; otherwise the marker just before it.

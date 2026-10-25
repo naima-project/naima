@@ -47,7 +47,7 @@ From inside the worktree:
 ```sh
 naima claim --preparing     # told when the trunk moves under the branch
 naima release export-drops
-naima pass "Fixed export of the alpha channel; proven by tests/export-keeps-alpha; layered PSD files not tried"
+naima pass "Fixed export of the alpha channel; proven by tests/export-keeps-alpha; layered PSD files not tried" --ack "<line>"
 naima check
 git add -A && git commit -m "Release the claim; session note"
 git merge --no-edit main

@@ -663,7 +663,7 @@ const pass: Command = {
   name: "pass",
   says: "write this session's note (one new file), or list the newest",
   enforces:
-    "a session note is one new file: earlier ones are never rewritten; --ack is refused unless it carries every phrase the project's active rules ask an agent to acknowledge",
+    "a session note is one new file: earlier ones are never rewritten; a note is refused without --ack when the project's active rules ask for an acknowledgement, and --ack is refused unless it carries every phrase they ask for",
   usage: 'pass "<what changed, what is proven, what is left>" [--ack "<line>"] | pass --file <f> [--ack "<line>"] | pass --list [n] [--json]',
   options: [
     { name: "--file", says: "read the note from a file instead of the arguments" },
@@ -699,8 +699,17 @@ const pass: Command = {
     const text = (file ? readFileSync(file, "utf8") : p.positionals.join(" ")).trim()
     if (!text) throw usageError(this)
     const ack = str(p, "ack")
+    const asked = expectedAcks(ctx)
+    // Refused now rather than flagged by naima check later: a note written without it cannot be rewritten.
+    if (ack === undefined && asked.length) {
+      throw new Error(
+        `pass needs --ack "<line>": the project's rules ask a session note to acknowledge ${
+          asked.join(" · ")
+        } — naima rules --audience agents prints the line to give back`,
+      )
+    }
     if (ack !== undefined) {
-      const missing = expectedAcks(ctx).filter((phrase) => !ack.includes(phrase))
+      const missing = asked.filter((phrase) => !ack.includes(phrase))
       if (missing.length) {
         throw new Error(
           `pass --ack is missing: ${missing.join(" · ")} — naima rules --audience agents prints the line to give back`,
@@ -1001,9 +1010,11 @@ const sessionNoteAck: Check = {
   says:
     `a session note dated after ${ACK_REQUIRED_FROM} carries the acknowledgement line it was written with (naima pass --ack), and its body still begins with it — a rule change afterwards never invalidates a note already written, since what was asked of it then is what it recorded`,
   run(ctx) {
+    const asked = expectedAcks(ctx).length > 0
     return readPasses(ctx)
       .filter((p) => p.date > ACK_REQUIRED_FROM)
       .flatMap((p): Finding[] => {
+        if (!p.ack && !asked) return [] // nothing to acknowledge in a project whose rules ask for none
         if (!p.ack) {
           return [{
             level: "problem",

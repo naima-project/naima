@@ -127,10 +127,12 @@ decision, and never remove a worktree that has uncommitted files.
 ## 4. Write the session note
 
 ```sh
-naima pass "what changed, what is proven, what is left"
+naima pass "what changed, what is proven, what is left" --ack "<line>"
 ```
 
-The note is one file of your own, on your own branch, committed with the
+The `--ack` line is the last line `naima rules --audience agents` prints:
+the acknowledgement the project's rules ask for. Without it the note is
+refused, because a note cannot be rewritten afterwards. The note is one file of your own, on your own branch, committed with the
 work. Someone who reads only that note must be able to tell what landed, what
 is still unproven, and what to pick up next. Say what was **not** verified,
 because that is worth more to the next reader than the list of what was.
