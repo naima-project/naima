@@ -18,6 +18,7 @@ own checks taking the place of tests.
 | Page | What it gives you |
 |---|---|
 | [Naima in one minute](naima-in-one-minute.md) | what Naima is and why you would use it, in a minute |
+| [The basics](the-basics.md) | the three things to start with: set a goal, reach it in steps, publish |
 | [Naima in ten minutes](naima-in-ten-minutes.md) | what it does and how, from the everyday parts to the advanced ones, with no commands |
 | [The primer](primer.md) | every concept (item, bug, todo, feature, epic, gate, milestone, evidence, the diary, claims) in the order you meet it, each with one example; read it first |
 | [How the project runs](how-the-project-runs.md) | the [flow](glossary.md#flow) every piece of work follows (report, file, [triage](glossary.md#triage), claim, work, prove, close), then planning, [gates](glossary.md#gate), long work across sessions, and decisions |

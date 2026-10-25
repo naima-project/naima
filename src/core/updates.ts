@@ -47,6 +47,20 @@ export function versionOf(repo: string, commit: string): string {
 /** How Naima introduces itself: the name the acronym stands for. */
 export const INTRODUCTION = "I'm Naima, the No-guesswork Artificial Intelligence Meta-Agent"
 
+/** The introduction where bold renders, as an agent says it in its first reply: the name in bold, then what it stands for. */
+export const INTRODUCTION_BOLD = "**I'm Naima**, the No-guesswork Artificial Intelligence Meta-Agent"
+
+/** What `naima hello` says when nothing waits on the owner's decision. */
+export const NOTHING_WAITS = "Nothing needs your decision."
+
+/** The greeting's last line: the offer to explain what Naima can do, from the basics. */
+export const BASICS_OFFER =
+  "If you like, I can explain what Naima can do, starting from the basics: set a goal, reach it in steps, publish (the basics page, listed by naima guide)."
+
+/** What an agent does when the owner takes up that offer: the basics, in order, and nothing more unless asked. */
+export const BASICS_INSTRUCTION =
+  "If the owner asks what Naima can do, start from the basics, in this order, in plain words: set a goal (a gate); reach it in steps (milestones, smaller gates with dates, each showing what is still missing: naima gates); publish (a release, a gate with a version; when it holds, the artifact follows: the tag, the release notes made from the change notes by naima changes, and the published site where the project has one). Point to the basics page (naima guide lists it). Everything else, such as tests, proofs, workers and models, only when the owner asks further."
+
 /** The line every session starts with. */
 export const banner = (version: string, commit: string): string => `${INTRODUCTION}, active in this repository: ${version}, commit ${short(commit)}.`
 

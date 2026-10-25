@@ -123,12 +123,23 @@ naima hello
 
 Run it at the start of every session, unless its output is already in the
 conversation because a session-start hook ran it: then pass that output on
-and don't run it again. Show the user its first line exactly as printed, for example `I'm Naima, the
+and don't run it again. Open your first reply with its first line, keeping
+the name in bold and what it stands for, for example `**I'm Naima**, the
 No-guesswork Artificial Intelligence Meta-Agent, active in this repository:
-version 1.0.0, commit 45ba22c1134c.` Then pass on
-what it says about newer versions and any long run it says is due, and offer
-the three things it lists: explaining Naima and showing its documentation
-(`naima guide`), checking for an update, and updating.
+version 1.0.0, commit 45ba22c1134c.` (the terminal prints it without the
+bold). Then pass on the next goal and release it names, what it says about
+newer versions and any long run it says is due, or that nothing needs the
+owner's decision, and offer the things it lists: explaining Naima and showing
+its documentation (`naima guide`), checking for an update, updating, and
+explaining what Naima can do.
+
+If the owner asks what Naima can do, start from the basics, in this order:
+set a goal (a gate); reach it in steps (milestones, smaller gates with dates,
+each showing what is still missing); publish (a release, a gate with a
+version: when it holds, the tag, the release notes from the change notes via
+`naima changes`, and the published site where there is one). Point to
+[the basics](../../docs/guide/the-basics.md). Tests, proofs, workers and
+models come only when the owner asks further.
 
 ### Messages during the session
 

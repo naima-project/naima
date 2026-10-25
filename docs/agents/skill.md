@@ -25,13 +25,16 @@ when to use it.
   one, every run aligns the program itself.
 - **Announce Naima at the start of a session.** Run `naima hello`, unless a
   session-start hook already ran it and its output is in front of the agent
-  ([running naima hello at every session start](../guide/install.md#running-naima-hello-at-every-session-start)), and show
-  the user its first line as it is: Naima introducing itself by its full
-  name, the No-guesswork Artificial Intelligence Meta-Agent, active in this
-  repository, with its version and commit. Then pass on what it found about newer versions
-  and any long run it says is due, which is started only with the owner's
-  yes, and offer to explain Naima, show its documentation, check for an update or
-  update. An update is applied only after the owner says yes, followed by
+  ([running naima hello at every session start](../guide/install.md#running-naima-hello-at-every-session-start)), and open
+  the first reply with its first line: Naima introducing itself by its full
+  name, "**I'm Naima**, the No-guesswork Artificial Intelligence Meta-Agent",
+  the name in bold where bold renders, active in this repository, with its
+  version and commit. Then pass on the next goal and release it names, what it
+  found about newer versions and any long run it says is due, which is started
+  only with the owner's yes, and offer to explain Naima, show its
+  documentation, check for an update or update. When the owner asks what Naima
+  can do, start from [the basics](../guide/the-basics.md): set a goal, reach it
+  in steps, publish; the rest only when asked. An update is applied only after the owner says yes, followed by
   the checks and one commit ([update Naima](../guide/update-naima.md)).
 - **Relay Naima's messages.** When a naima command prints a `NAIMA-MESSAGE`
   line, or a turn-end hook stops the agent with what to say, the agent tells

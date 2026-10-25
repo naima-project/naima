@@ -526,6 +526,16 @@ export async function alongside(ctx: Context): Promise<string[]> {
   return out
 }
 
+/** What the summary sections say of where the project is going (their `goals`), rendered now: what `naima hello` says after the update check, before what waits on the owner. */
+export async function goalsAtSessionStart(ctx: Context): Promise<string[]> {
+  const out: string[] = []
+  for (const c of ctx.registry.contributions("summary")) {
+    const section = c.value as SummarySection
+    if (section.goals) out.push(...asRendered(await section.goals(ctx), `summary section "${c.name}" goals`).text())
+  }
+  return out
+}
+
 /** The summary sections marked `hello: true`, rendered now, their lines as they are: what `naima hello` says after the update check. */
 export async function atSessionStart(ctx: Context): Promise<string[]> {
   const out: string[] = []

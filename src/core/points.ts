@@ -240,11 +240,13 @@ export const viewsPoint: ExtensionPoint<View> = {
 
 export const summaryPoint: ExtensionPoint<SummarySection> = {
   id: "summary",
-  says: "a block of `naima summary`",
+  says:
+    "a block of `naima summary`; one marked `hello` is said by `naima hello` among what waits on the owner, and one with `goals(ctx)` says there where the project is going",
   noun: "summary section",
   key: (s) => s.name,
   renamed: (s, name) => ({ ...s, name }),
-  validate: (v) => shape(v, (c) => text(c, "name"), (c) => fn(c, "render")),
+  validate: (v) =>
+    shape(v, (c) => text(c, "name"), (c) => fn(c, "render"), (c) => ((c as Record<string, unknown>)["goals"] === undefined ? null : fn(c, "goals"))),
   document: (sections) => ["", `**Summary sections**: ${sections.map((s) => code(s.name)).join(", ")}.`],
 }
 

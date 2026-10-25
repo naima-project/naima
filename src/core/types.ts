@@ -204,6 +204,8 @@ export interface SummarySection {
   alongside?: boolean
   /** True for a block also printed by `naima hello`, at the start of a session: what waits on the owner's decision, such as a long run that is due. */
   hello?: boolean
+  /** Where the project is going, in two or three lines, as `naima hello` says it after the update check and before what waits on the owner: the next goal and the next release, each with its status. A block with nothing to say renders no lines. */
+  goals?(ctx: Context): Rendered | Promise<Rendered>
   render(ctx: Context): Rendered | Promise<Rendered>
 }
 

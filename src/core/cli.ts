@@ -75,6 +75,8 @@ import {
 import {
   backwardFormats,
   banner,
+  BASICS_INSTRUCTION,
+  BASICS_OFFER,
   changeOf,
   checkFrom,
   counted,
@@ -82,7 +84,9 @@ import {
   type Findings,
   FOLLOW_UP,
   INTRODUCTION,
+  INTRODUCTION_BOLD,
   newly,
+  NOTHING_WAITS,
   OFFERS,
   OPTIONAL_KEYS,
   pageRules,
@@ -99,7 +103,7 @@ import type { Command, Context, GuideSection, Plugin } from "./types.ts"
 import { asRendered, linesAs } from "./rendered.ts"
 import { shortOrId } from "./names.ts"
 import { apiFor } from "./plugins.ts"
-import { atSessionStart } from "./base.ts"
+import { atSessionStart, goalsAtSessionStart } from "./base.ts"
 import { committedLock as lockOfLastCommit, type SessionConfig, sessionStartGaps, startSessions, unfinishedUpdate } from "./session-start.ts"
 import { adapter, ADAPTERS } from "./adapters/index.ts"
 import { itemStore } from "./messages.ts"
@@ -896,7 +900,9 @@ export const greetingContext = (shown: string): string =>
     "",
     shown,
     "",
-    "In your first reply, say in one line that Naima is active and which version, and pass on, in plain words, anything above that waits on the owner's decision — a newer Naima, a long run that is due, an urgent message — asking before acting on it. Do not run naima hello again in this session.",
+    `In your first reply, open with the banner's first words as "${INTRODUCTION_BOLD}", keeping the bold and the expansion, and say in the same line which version is active; pass on the next goal and release, if the greeting names them, and, in plain words, anything above that waits on the owner's decision — a newer Naima, a long run that is due, an urgent message — asking before acting on it. Do not run naima hello again in this session.`,
+    "",
+    BASICS_INSTRUCTION,
   ].join("\n")
 
 /**
@@ -912,6 +918,8 @@ async function hello(args: string[], opts: CliOptions, place: Located, io: IO): 
   const me = running(opts.programRoot)
   const policy = parseUpdates(raw["updates"])
   const lines: string[] = []
+  /** Whether something the lines say waits on the owner's decision: a newer Naima, an unfinished update, a due run, an urgent message. */
+  let waits = false
   const now = opts.tick?.clock ?? (() => new Date())
   const dir = ticks(opts) ? tickDir(place.root) : null
   /** The day's update check, done here: recorded, so the tick does not ask the source again today. */
@@ -925,7 +933,10 @@ async function hello(args: string[], opts: CliOptions, place: Located, io: IO): 
   // An update an older launcher started, and could not finish: what the next naima update writes.
   try {
     const unfinished = unfinishedUpdate(place.root, place.data, lock.commit, parseConfig(raw, { lenient: true }))
-    if (unfinished) lines.push(`${unfinished.charAt(0).toUpperCase()}${unfinished.slice(1)}.`)
+    if (unfinished) {
+      waits = true
+      lines.push(`${unfinished.charAt(0).toUpperCase()}${unfinished.slice(1)}.`)
+    }
   } catch {
     // a naima.json this Naima cannot read: the next command says why
   }
@@ -940,6 +951,7 @@ async function hello(args: string[], opts: CliOptions, place: Located, io: IO): 
       if (head.commit === lock.commit) lines.push(`Naima is current: the source's ${head.branch} is the locked commit.`)
       else {
         const count = runGit(t.program, ["rev-list", "--count", `${lock.commit}..${head.commit}`])
+        waits = true
         const n = count.ok ? Number(count.out) : null
         const commits = n === null ? "" : `, ${counted(n, "commit")}`
         lines.push(`A newer Naima is available: ${short(lock.commit)} → ${short(head.commit)}${commits}.`)
@@ -957,14 +969,24 @@ async function hello(args: string[], opts: CliOptions, place: Located, io: IO): 
   // What waits on the owner's decision, such as a long run that is due: said, never started. A project that does not
   // open says why on its next command; the greeting goes on without these lines. Then the tick: what it shows here is
   // said by the lines above, except the urgent messages, said after them.
+  // Where the project is going comes first: the goals the plugins say (the next milestone and release, with what
+  // stops them). Then what waits on the owner, or that nothing does.
+  const decisions: string[] = []
   try {
     const ctx = await openProject(place, opts, { ...io, err: () => {} })
-    lines.push(...await atSessionStart(ctx))
+    try {
+      lines.push(...await goalsAtSessionStart(ctx))
+    } catch {
+      // a goal that cannot be evaluated here: naima gates says why
+    }
+    decisions.push(...await atSessionStart(ctx))
     const { shown } = await endTick(beginTick(opts, place, ctx))
-    for (const n of shown) if (n.level === "urgent") lines.push(`URGENT: ${n.text}${n.ack ? ` Only the owner acknowledges it: ${n.ack}.` : ""}`)
+    for (const n of shown) if (n.level === "urgent") decisions.push(`URGENT: ${n.text}${n.ack ? ` Only the owner acknowledges it: ${n.ack}.` : ""}`)
   } catch {
     // nothing to add
   }
+  lines.push(...decisions)
+  if (!waits && !decisions.length) lines.push(NOTHING_WAITS)
   // The banner first, read after the check: a fetch brings the tags that name the version.
   const all = [
     me
@@ -972,6 +994,7 @@ async function hello(args: string[], opts: CliOptions, place: Located, io: IO): 
       : `${INTRODUCTION}, active in this repository: a development build, its lock commit ${short(lock.commit)}.`,
     ...lines,
     OFFERS,
+    BASICS_OFFER,
   ]
   if (tool?.greeting) io.out(tool.greeting(all.join("\n"), greetingContext(all.join("\n"))))
   else for (const line of all) io.out(line)
@@ -1133,6 +1156,7 @@ export const GUIDE_PAGES: readonly (readonly [string, string])[] = [
   ["agents", "docs/agents/README.md"],
   ["format", "docs/reference/format.md"],
   ["install", "docs/guide/install.md"],
+  ["basics", "docs/guide/the-basics.md"],
 ]
 
 /** The guide sections the project's plugins contribute, as lines; none outside a project, and none when it does not open (`naima check` says why). */

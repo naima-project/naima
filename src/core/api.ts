@@ -52,6 +52,7 @@ export {
   type BoardData,
   boardData,
   type BoardRow,
+  goalsAtSessionStart,
   type ItemData,
   itemData,
   type ItemLink,

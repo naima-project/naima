@@ -272,6 +272,48 @@ async function withFullSuite(ctx: Context, own: GateResult): Promise<GateResult>
   }
 }
 
+/** A gate `naima hello` names as a goal, with its verdict: the one `naima gates` gives. */
+interface Goal {
+  gate: GateDef
+  result: GateResult
+}
+
+/** At most this many items are named in a goal's line; past it, only their number. */
+const NAMED_LEFT = 2
+
+/** A goal's status in words: it holds, or what stops it — its last one or two items named, else how many. */
+function goalStatus(r: GateResult): string {
+  if (r.holds) return "holds"
+  const n = r.blocking.length
+  if (!n) return `does not hold: ${(r.reasons ?? []).join("; ") || "no reason given"}`
+  const first = r.blocking[0]!
+  const items = `${n} item${n === 1 ? "" : "s"}`
+  return n <= NAMED_LEFT ? `${items} left, next ${label(first)} (${first.meta.title})` : `blocked by ${items}`
+}
+
+/**
+ * Where the project is going, as `naima hello` says it: the nearest gate(s) with a due date, and the next release
+ * (a gate with a version), each in one line with its verdict. A gate past its date that holds is behind the project,
+ * not ahead of it. Nothing when the project has no such gate.
+ */
+export async function goals(ctx: Context): Promise<string[]> {
+  const ahead = (g: GateDef, r: GateResult): boolean => !(g.due && daysLeft(ctx, g.due) < 0 && r.holds)
+  const all: Goal[] = []
+  for (const { value: gate } of gatesOf(ctx)) if (gate.due || gate.version) all.push({ gate, result: await gate.evaluate(ctx) })
+  const live = all.filter((g) => ahead(g.gate, g.result))
+  const byDate = (a: Goal, b: Goal): number => (a.gate.due ?? "9999-99-99").localeCompare(b.gate.due ?? "9999-99-99")
+  const dated = live.filter((g) => g.gate.due).sort(byDate)
+  const nearest = dated.filter((g) => g.gate.due === dated[0]?.gate.due).slice(0, 2)
+  const release = live.filter((g) => g.gate.version).sort(byDate)[0]
+  const line = (what: string, g: Goal): string => {
+    const when = timing(ctx, g.gate)
+    return `${what}: ${g.gate.name} — ${g.gate.title}${when ? ` (${when})` : ""}: ${goalStatus(g.result)}.`
+  }
+  const out = nearest.map((g) => line(g === release ? "Next goal, a release" : "Next goal", g))
+  if (release && !nearest.includes(release)) out.push(line("Next release", release))
+  return out
+}
+
 export function evaluateGate(ctx: Context, name: string, holdsOn: "code" | "proof"): GateResult {
   const open = gatedItems(ctx, name).filter((i) => isOpen(ctx, i))
   const blocking = holdsOn === "proof" ? open : open.filter((i) => !owesOnlyProof(ctx, i))
@@ -690,6 +732,7 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
   }))
   const status: SummarySection = {
     name: "gates",
+    goals: async (ctx) => rendered(await goals(ctx), (lines) => lines),
     async render(ctx) {
       const data = await Promise.all(
         gatesOf(ctx).map(async ({ value: g }) => {
