@@ -433,6 +433,10 @@ const verify: Command = {
   async run(args, ctx) {
     const p = parse(args, { all: { type: "boolean" }, force: { type: "string" } })
     const items = bool(p, "all") ? properties(ctx) : p.positionals.map((r) => ctx.repo.resolve(r))
+    if (!items.length && bool(p, "all")) {
+      ctx.out("no properties to verify: nothing ran")
+      return 0
+    }
     if (!items.length) throw usageError(this)
     const given = str(p, "force")
     const force = given === undefined ? undefined : given.trim()
