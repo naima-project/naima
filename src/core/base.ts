@@ -2,7 +2,7 @@
 // plugin: the generic fields and relations, the invariants, and the commands
 // that work on any item type.
 
-import { existsSync, readdirSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { bool, pairs, parse, str, strs, usageError } from "./args.ts"
 import { coreChecks, runChecks } from "./check.ts"
@@ -28,7 +28,7 @@ import {
 import { byUrgency, isEvidenceType, isOpen, label, proves, refutes } from "./lifecycle.ts"
 import { CONTRACT } from "./contract.ts"
 import { shortOrId } from "./names.ts"
-import { writeFileAtomic } from "./files.ts"
+import { readText, writeFileAtomic } from "./files.ts"
 import { addedPrivate, allowanceLine, privateContext, type PrivateFinding, privateRefusal } from "./private.ts"
 import { asRendered, type Format, linesAs, rendered } from "./rendered.ts"
 import { flagsOf } from "./vocabulary.ts"
@@ -330,7 +330,7 @@ const unlink: Command = {
 
 /** The text a prose command writes: its `--file`, else its arguments after the item, trimmed; a usage error when empty. */
 function proseText(cmd: Command, file: string | undefined, words: string[]): string {
-  const text = (file ? readFileSync(file, "utf8") : words.join(" ")).trim()
+  const text = (file ? readText(file) : words.join(" ")).trim()
   if (!text) throw usageError(cmd)
   return text
 }
@@ -360,7 +360,7 @@ const note: Command = {
   usage: 'note <item> "<text>" [--by <who>] | note <item> --file <f> [--by <who>]',
   options: [
     { name: "--by", says: "who writes the note; without it, git's user.name" },
-    { name: "--file", says: "read the note from a file instead of the arguments" },
+    { name: "--file", says: "read the note from a file instead of the arguments; - reads standard input" },
   ],
   examples: ['note export-drops "Reproduced on a 16-bit PNG; 8-bit keeps alpha." --by "triage agent"', "note export-drops --file finding.md"],
   run(args, ctx) {
@@ -385,7 +385,7 @@ const describe: Command = {
   says: "replace an item's description, keeping its title line and its Notes section",
   enforces: "the title line and the Notes section stay as they are: a description holding a title or a Notes section is refused",
   usage: 'describe <item> "<text>" | describe <item> --file <f>',
-  options: [{ name: "--file", says: "read the description from a file instead of the arguments" }],
+  options: [{ name: "--file", says: "read the description from a file instead of the arguments; - reads standard input" }],
   examples: ['describe export-drops "Export to PNG loses the alpha channel; done when every bit depth keeps it."', "describe export-drops --file triaged.md"],
   run(args, ctx) {
     const p = parse(args, { file: { type: "string" } })

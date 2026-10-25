@@ -8,7 +8,7 @@
 // by the tool. The collections are recombined at read time from every branch.
 
 import { randomBytes, randomUUID } from "node:crypto"
-import { mkdirSync, readFileSync, unlinkSync } from "node:fs"
+import { mkdirSync, unlinkSync } from "node:fs"
 import { dirname, join } from "node:path"
 import {
   allRefNames,
@@ -41,6 +41,7 @@ import {
   posixRelative,
   privateContext,
   readAcrossBranches,
+  readText,
   rendered,
   short,
   str,
@@ -666,7 +667,7 @@ const pass: Command = {
     "a session note is one new file: earlier ones are never rewritten; a note is refused without --ack when the project's active rules ask for an acknowledgement, and --ack is refused unless it carries every phrase they ask for",
   usage: 'pass "<what changed, what is proven, what is left>" [--ack "<line>"] | pass --file <f> [--ack "<line>"] | pass --list [n] [--json]',
   options: [
-    { name: "--file", says: "read the note from a file instead of the arguments" },
+    { name: "--file", says: "read the note from a file instead of the arguments; - reads standard input" },
     {
       name: "--ack",
       says:
@@ -696,7 +697,7 @@ const pass: Command = {
       return 0
     }
     const file = str(p, "file")
-    const text = (file ? readFileSync(file, "utf8") : p.positionals.join(" ")).trim()
+    const text = (file ? readText(file) : p.positionals.join(" ")).trim()
     if (!text) throw usageError(this)
     const ack = str(p, "ack")
     const asked = expectedAcks(ctx)

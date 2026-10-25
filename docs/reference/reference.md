@@ -423,7 +423,7 @@ naima note <item> --file <f> [--by <who>]
 | Option | Default | What it does |
 |---|---|---|
 | `--by` |  | who writes the note; without it, git's user.name |
-| `--file` |  | read the note from a file instead of the arguments |
+| `--file` |  | read the note from a file instead of the arguments; - reads standard input |
 
 Examples:
 
@@ -445,7 +445,7 @@ naima describe <item> --file <f>
 
 | Option | Default | What it does |
 |---|---|---|
-| `--file` |  | read the description from a file instead of the arguments |
+| `--file` |  | read the description from a file instead of the arguments; - reads standard input |
 
 Examples:
 
@@ -1161,7 +1161,7 @@ naima pass --list [n] [--json]
 
 | Option | Default | What it does |
 |---|---|---|
-| `--file` |  | read the note from a file instead of the arguments |
+| `--file` |  | read the note from a file instead of the arguments; - reads standard input |
 | `--ack` |  | the acknowledgement line the project's rules ask for (naima rules --audience agents, last line) — written first, and refused if a phrase is missing from it |
 | `--list` | `5` | print the newest n notes across every branch instead of writing one |
 | `--json` |  | with --list, print the notes as JSON: each one's date, instant, branch, ack, file and text |

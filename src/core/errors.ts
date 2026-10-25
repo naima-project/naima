@@ -38,6 +38,7 @@ function fenced(e: Error): string | undefined {
   const m = /Requires (read|write|run|env|net) access to "?([^",]+)"?/.exec(e.message)
   if (!m) return undefined
   const [, kind, what] = m
+  if (kind === "read" && /^\/dev\/(stdin|fd\/0)$/.test(what ?? "")) return `${what} cannot be read by path: give --file - to read standard input`
   if (kind === "read" || kind === "write") {
     return kind === "read"
       ? `${what} is outside the project: Naima reads only inside it — copy the file into the project first`
