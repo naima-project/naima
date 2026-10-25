@@ -87,7 +87,9 @@ never rewrite history, never commit a secret
 
 Run `deno --version`. If it is missing, install it with its official
 installer, once per machine: `curl -fsSL https://deno.land/install.sh | sh`
-([installing](../../docs/guide/install.md#deno-once-per-machine)).
+([installing](../../docs/guide/install.md#deno-once-per-machine)). The
+README's "Deno by hand" does the same steps one by one, checking the download,
+for an owner who prefers to see each of them; either way is right.
 
 ## 2. Have a project
 
