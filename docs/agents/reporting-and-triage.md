@@ -36,6 +36,7 @@ gets lost, and then the owner has to say it again.
 | "it must always hold that Z" — a condition the result must meet | `requirements`, proven by a test linked `verifies` |
 | "the behaviour must be Z" — exactly how something behaves | `specs`: a new one, or the next version of the current one (`naima spec revise`) |
 | "yes, do that" / "we go with X" — the owner decides or permits | `decisions`, linked `settles` to the items that waited on it |
+| a choice the agent made because the owner left it open (a language, a default, something left out) | `decisions`, saying it was the agent's and that the owner may change it |
 | "I need an analysis / a report / a figure by Friday" — something made and kept | `artifacts` with `due`, made by a todo linked `produces`, delivered with `naima set <artifact> status=delivered` ([artifacts](../guide/artifacts.md)) |
 | "the screens are all 4k" / "so it was the eviction" — a fact, a finding, a hypothesis | `knowledge`, with its `basis` (`given` and `givenBy`, or `evidence` and the items linked `supports` or `contradicts`) and its `kind` ([knowledge](../guide/knowledge.md)) |
 | "next time, do it this way" — what a mistake or a success taught | `knowledge` with `kind=lesson`, its page in the sections What happened, The lesson, How to apply it; the rule or test that holds it afterwards is linked `codifies` |

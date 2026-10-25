@@ -49,7 +49,9 @@ duplicates searched first (`naima list`, or `naima new --dedupe`, which
 prints likely duplicates of the same type before writing and still writes)
 and linked instead of refiled; triaged on the spot (impact, priority,
 confidence); a decision recorded with `naima new decisions`, a deferral with
-its reason. "I already told you" means a report was lost: file it now and
+its reason. A choice you make yourself because the owner left it open (a
+language, a default, leaving something out) is a decision too: record it,
+and tell the owner they can change it. "I already told you" means a report was lost: file it now and
 say so — never argue that it was already said. The full shape of a report
 is [reporting and triage](../../docs/agents/reporting-and-triage.md); this
 line is so it happens even when nobody typed `/flow:report`.

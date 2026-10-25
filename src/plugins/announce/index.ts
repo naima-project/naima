@@ -58,6 +58,8 @@ const RUN_BY = { name: "runBy", kind: "enum" } as const
 const EVIDENCE_KIND = { name: "evidenceKind", kind: "enum" } as const
 const FIXED_ON = { name: "fixedOn", kind: "date" } as const
 const GATE = { name: "gate", kind: "enum" } as const
+/** The archive `naima close` moves an item to, keeping its fields and naming its former type in `closedFrom`. */
+const CLOSED = "closed"
 
 /** One feature, as `naima announce --json` prints it: whether it may be announced, and what it lacks if not. */
 export interface Announceability {
@@ -76,7 +78,9 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/
 
 export default function announce(options: Record<string, unknown> = {}): Plugin {
   const opts = readOptions(options)
-  const isFeature = (i: Item): boolean => opts.featureTypes.includes(i.type)
+  /** A feature closed into the archive: shipped, since closing takes it fixed and proven. */
+  const archived = (i: Item): boolean => i.type === CLOSED && opts.featureTypes.includes(String(i.meta["closedFrom"] ?? ""))
+  const isFeature = (i: Item): boolean => opts.featureTypes.includes(i.type) || archived(i)
 
   /** Whether a proof counts: it proves now, and a person or the running software performed it. */
   const checks = (ctx: Context, proof: Item): boolean =>
@@ -86,7 +90,7 @@ export default function announce(options: Record<string, unknown> = {}): Plugin 
   function announceability(ctx: Context, item: Item): Announceability {
     const lacks: string[] = []
     if (fieldValue(item, FACING) !== "user") lacks.push("not user-facing: set facing=user")
-    if (!opts.shippedStatuses.includes(item.meta.status)) lacks.push(`not shipped: it is ${item.meta.status}`)
+    if (!opts.shippedStatuses.includes(item.meta.status) && !archived(item)) lacks.push(`not shipped: it is ${item.meta.status}`)
     if (!(fieldValue(item, DOCS) ?? []).length) lacks.push("not documented: set docs=<path>[#heading]")
     const proofs = linked(ctx, item, "verified-by")
     const by = proofs.filter((p) => checks(ctx, p))
@@ -170,7 +174,7 @@ export default function announce(options: Record<string, unknown> = {}): Plugin 
     contract: CONTRACT,
     says: "announceability, computed: a feature may be announced only once user-facing, shipped, documented and checked by a person or end to end",
     about:
-      "What may be announced is computed, never declared. A feature is **announceable** when it is user-facing (`facing: user`), shipped (a status in `shippedStatuses`), documented (its `docs` field names a page) and checked: a passed item verifies it whose `runBy` is in `checkedBy` — a person, or an agent driving the running software, end to end — or whose `evidenceKind` is in `checkedEvidence`. A refuting proof outweighs any that proves. " +
+      "What may be announced is computed, never declared. A feature is **announceable** when it is user-facing (`facing: user`), shipped (a status in `shippedStatuses`, or closed into the archive), documented (its `docs` field names a page) and checked: a passed item verifies it whose `runBy` is in `checkedBy` — a person, or an agent driving the running software, end to end — or whose `evidenceKind` is in `checkedEvidence`. A refuting proof outweighs any that proves. " +
       "`naima announce` lists the announceable features, major ones (`major: true`) first, since a date or on a gate: the only source of release notes, changelog entries and announcements. With `--all` it adds every user-facing feature that is not announceable, with what it lacks. " +
       "The check `copy-names-only-announceable` fails when a file of the `copy` option names, by its label or its full title, a feature that is not announceable, so the README and the site never promise what is not true.",
     options: [

@@ -25,8 +25,26 @@ export class NaimaError extends Error {
   }
 }
 
-/** The message of anything thrown: an Error's, or the value itself as text. */
-export const message = (e: unknown): string => (e instanceof Error ? e.message : String(e))
+/** The message of anything thrown: an Error's, or the value itself as text; a refused access said in the user's terms. */
+export const message = (e: unknown): string => (e instanceof Error ? fenced(e) ?? e.message : String(e))
+
+/**
+ * The launcher runs the program fenced to the project, its tracker and git: a read or write outside is refused
+ * by the runtime with advice about its own flags, which a user can't act on. Said instead: what was refused, and
+ * what to do.
+ */
+function fenced(e: Error): string | undefined {
+  if (e.name !== "NotCapable" && e.name !== "PermissionDenied") return undefined
+  const m = /Requires (read|write|run|env|net) access to "?([^",]+)"?/.exec(e.message)
+  if (!m) return undefined
+  const [, kind, what] = m
+  if (kind === "read" || kind === "write") {
+    return kind === "read"
+      ? `${what} is outside the project: Naima reads only inside it — copy the file into the project first`
+      : `${what} is outside the project: Naima writes only inside it — give a path inside the project`
+  }
+  return `Naima may not ${kind === "run" ? "run" : `use ${kind} for`} ${what} here: the launcher grants only what the project needs`
+}
 
 /**
  * Is this a bug rather than a refusal? The engine's own errors (a TypeError

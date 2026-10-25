@@ -6,6 +6,7 @@
 //   closed    resolved, and moved to the archive with its proof.
 
 import {
+  appliesTo,
   bool,
   type Check,
   type Command,
@@ -327,6 +328,11 @@ const close: Command = {
     setFieldValue(archived, CLOSED_ON, today(ctx))
     const moved = moveItem(ctx, archived, typeOrThrow(ctx, "closed"), { force: bool(p, "force") })
     ctx.out(`closed → ${label(moved)}`)
+    // A closed item can't be changed: a feature closed without saying whom it is for is never announced.
+    const facing = ctx.registry.fields.get("facing")
+    if (facing && appliesTo(facing, item.type) && item.meta["facing"] === undefined) {
+      ctx.out(`  it was closed without facing, so naima announce never lists it: set facing (and docs) before closing the next one`)
+    }
     return 0
   },
 }

@@ -32,6 +32,11 @@ features shipped (`fixedOn`) since that date, and `naima announce --gate v1`
 keeps those on a [gate](glossary.md#gate), which is what a release made from
 that gate announces. `--json` prints the same list as data.
 
+A feature closed with `naima close` is still announced: closing takes it
+fixed and proven, so it counts as shipped. Closing keeps its fields but a
+closed item can't be changed, so set `facing`, `docs` and `gate` while the
+feature is open.
+
 ## The changelog
 
 When the project keeps change notes, one file for each change of behaviour in
