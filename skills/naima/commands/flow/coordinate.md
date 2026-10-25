@@ -25,6 +25,9 @@ Flow: [the coordinator and the workers](../../../../docs/agents/coordinator-and-
 - **Land** only with `naima land <branch>` (or its by-hand equivalent), on a
   branch the trunk is an ancestor of, after the gates over the combined
   result; each landing closes at least one item. `naima check` is the authority.
+- **Work left behind**: `naima stale` at the start of every session and
+  before ending one; each entry names its next step (resume, land, archive,
+  drop) and the command; a worktree with uncommitted files is never discarded.
 - **After each landing**: what changed, then `naima queue`, then one question or none.
 - **Every report starts with the acknowledgement line**; check it with
   `naima rules check-ack <file|->` and report a breach to the owner.

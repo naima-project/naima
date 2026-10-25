@@ -159,7 +159,8 @@ memory.
   `naima-data/claims/<id>.json`, and `naima release <item>` removes it.
   `naima prune` finds stale [claim files](guide/glossary.md#claim-file):
   their branch is gone or merged into the trunk, or their items are all
-  closed.
+  closed. `naima stale` lists the work left behind, per branch, worktree and
+  claim, with the next step for each: resume, land, archive or drop.
 - **Worktrees:** there is one per piece of work, on its own branch
   ([opening a worktree](agents/opening-a-worktree.md)).
 
