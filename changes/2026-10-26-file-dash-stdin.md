@@ -1,5 +1,5 @@
 ---
-title: --file - reads standard input
+title: "--file - reads standard input"
 kind: feature
 affects:
   - usage
