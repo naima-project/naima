@@ -769,12 +769,17 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
       (c.coverage?.length
         ? ` Blocked too by every entry with NO TEST of the coverage list${c.coverage.length === 1 ? "" : "s"} ${c.coverage.join(", ")}.`
         : "") +
+      (c.version ? " A release gate, having a version, does not hold while no item is on it." : "") +
       (c.fullSuite
         ? " A release gate: it holds only when every gate that is part of the full suite holds too (naima gates marks them), their blocking items, owed items and reasons joining its own."
         : ""),
     evaluate: (ctx) => {
       const r = evaluateGate(ctx, name, c.holdsOn ?? "code")
       const reasons = c.coverage?.length ? coverageReasons(ctx, lists, c.coverage) : []
+      // A release with nothing on it is not ready: holding vacuously would announce an empty release.
+      if (c.version && !ctx.repo.items.some((i) => onGates(i).includes(name))) {
+        reasons.push(`nothing is on it yet — naima gate add ${name} <item>...`)
+      }
       const own = reasons.length ? { ...r, holds: false, reasons } : r
       // A gate that is not a release gate answers at once, as it always has; a release gate awaits its parts.
       return c.fullSuite ? withFullSuite(ctx, own) : own
