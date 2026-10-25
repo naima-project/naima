@@ -126,6 +126,19 @@ what it says about newer versions and any long run it says is due, and offer
 the three things it lists: explaining Naima and showing its documentation
 (`naima guide`), checking for an update, and updating.
 
+### Messages during the session
+
+Every naima command starts with the tick, which runs what is due (the daily
+update check, the hourly look for due long runs) and prints what the owner
+should know as lines on standard error that start with `NAIMA-MESSAGE`,
+followed by JSON with `id`, `level`, `text` and `ack`. When you see one,
+tell the owner what its text says at once, in plain words, before going on.
+An urgent one says so. Never run its `ack` command yourself: only the owner
+acknowledges a message (`naima messages ack <id>`), and you run it only when
+the owner tells you to. A turn-end hook may stop you at the end of a turn
+with the same messages; say them, then end the turn. `naima messages` lists
+what is waiting ([messages](../../docs/agents/messages.md)).
+
 How much it checks depends on `updates` in `naima.json`, which is `off`,
 `check` (the default) or `update`. If the owner asks you to change it, run
 `naima update --mode <value>`.

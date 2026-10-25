@@ -142,3 +142,4 @@ export {
   showProgress,
   showRate,
 } from "./progress.ts"
+export { type JobOutcome, type Level, messageId, type Notice } from "./tick.ts"

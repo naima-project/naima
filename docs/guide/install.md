@@ -216,8 +216,10 @@ if there is none. The line reads "Naima is in `naima-tracker/` (`naima/` the
 program, `naima-data/` the data); at the start of every session, run `deno
 run -A naima-tracker/naima/naima.ts hello` and pass on what it says, unless
 its output is already in the conversation because a session-start hook ran
-it: then pass that on and do not run it again; if you find Naima elsewhere,
-update this line". It is appended only if no entry file
+it: then pass that on and do not run it again; when a naima command prints a
+NAIMA-MESSAGE line, tell the owner what it says at once, and never
+acknowledge a message for them; if you find Naima elsewhere, update this
+line". It is appended only if no entry file
 holds it already. The versioned `naima-tracker/README.md` holds the two
 commands that restore a missing program
 ([below](#fresh-clones-and-worktrees)).
@@ -227,15 +229,20 @@ commands that restore a missing program
 The line works with any agent that reads its entry file, but an agent may
 still skip it. Some agent tools can run a command by themselves when a
 session starts, and for those Naima has an adapter that installs a
-session-start hook running `naima hello`, so its output is in front of the
-agent before the first message. Naima itself works with any agent; an
-adapter only knows how one tool is configured.
+session-start hook running `naima hello`, so its greeting is in front of you
+and the agent before the first message. A tool that can also run a command
+when the agent ends its turn gets a turn-end hook too: it runs Naima's tick,
+so what Naima has for you during a long session (a newer Naima, a long run
+that is due, an urgent message) is said even when the agent runs no naima
+command for hours ([what Naima tells you while you work](messages.md)).
+Naima itself works with any agent; an adapter only knows how one tool is
+configured.
 
-| Tool | Its id in `agents` | Hook | Where |
+| Tool | Its id in `agents` | Hooks | Where |
 |---|---|---|---|
-| Claude Code | `claude-code` | a `SessionStart` hook running `deno run -A "$CLAUDE_PROJECT_DIR/naima-tracker/naima/naima.ts" hello`, whose output Claude Code adds to the conversation | `.claude/settings.json`, merged into what the file holds: every other setting and hook stays |
+| Claude Code | `claude-code` | a `SessionStart` hook running `deno run -A "$CLAUDE_PROJECT_DIR/naima-tracker/naima/naima.ts" hello --hook claude-code`, whose greeting Claude Code shows you directly, with what the agent is to say first; and a `Stop` hook running a small shell script shipped with Naima, which starts Naima only when something can be due and then has the agent tell you what it is | `.claude/settings.json`, merged into what the file holds: every other setting and hook stays |
 
-`naima init` installs the hook of each tool the project uses: the tools
+`naima init` installs the hooks of each tool the project uses: the tools
 `naima.json`'s `agents` names, or, without it, the tools whose files the
 project holds (Claude Code's `CLAUDE.md` or `.claude/`). `naima init
 --no-session-hook` installs none and writes only the line. A settings file
@@ -243,14 +250,16 @@ that is not plain JSON is left alone, and the hook to add by hand is printed
 instead.
 
 `naima update` adds whatever is missing to a project set up before, as a
-mechanical fix: the line, or a new wording of an older line, and each hook.
+mechanical fix: the line, or a new wording of an older line, and each hook,
+or a new form of an older one, rewritten where it stands.
 `init` and `update` say each thing they write outside `naima-tracker/` in
 one sentence, what it is and why, and the files go in the same commit as
 the update. An update started by a version whose launcher doesn't allow
 these files asks to be run once more
 ([update](update-naima.md#when-the-update-asks-to-be-run-once-more)).
 `naima check` notes a project where the line is missing or doesn't say to
-run `naima hello`, and each tool in use whose hook is missing.
+run `naima hello`, and each tool in use whose hooks are missing or out of
+date.
 
 ## Fresh clones and worktrees
 
@@ -364,7 +373,7 @@ under Deno with only these permissions:
 | Permission | Granted | Why |
 |---|---|---|
 | read | the repository, the program wherever it is, the data directory of every other worktree of the project, and the [tools directory](tools.md#where-the-tools-go) | items, the project's markdown and source (the docs and beta-marker checks read them), git's view of branches, the commits the program is cloned from, and the uncommitted claims and notes of the other worktrees |
-| write | `naima-tracker/`, and the data or program directory if moved out of it; for `init` and `update` only, the entry files and the session-start settings of the tools in use, and with `init --write-excludes` the host tools' configuration | items, claims, notes, the program's own alignment, the commits fetched for it; the pointer line, the session-start hooks and the exclusion lines; nothing else in the project |
+| write | `naima-tracker/`, and the data or program directory if moved out of it; the tick's state, `naima/` in the clone's git directory; for `init` and `update` only, the entry files and the session-start settings of the tools in use, and with `init --write-excludes` the host tools' configuration | items, claims, notes, the program's own alignment, the commits fetched for it; when each job of the tick last ran, and which messages were shown; the pointer line, the session-start hooks and the exclusion lines; nothing else in the project |
 | run | `git`, and the programs the loaded contributions declare, by name or by their absolute path in the [tools directory](tools.md#where-the-tools-go) | alignment, update, and reading claims and notes across branches; a [verifier](glossary.md#verifier)'s model checker (its `runs`, [the contract](../reference/plugin-contract.md#the-verifier-contract)); a declared [metric](metrics-and-budgets.md)'s program, the first word of its `run` |
 | env | an allow-list: `HOME`, `PATH`, the user, shell, terminal, locale and temporary-directory variables, the proxy variables, Windows' system ones, and every `NAIMA_*`, `GIT_*`, `SSH_*`, `LC_*` and `DENO_*` | what git needs to reach a source, and Naima's own; nothing else of the environment reaches the program, nor the git it runs |
 | net | none, but `api.github.com` for `naima init` | the network is git's, in alignment and update; `init` asks GitHub whether the project is public ([where the tracker lives](#where-the-tracker-lives)) |

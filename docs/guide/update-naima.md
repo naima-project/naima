@@ -22,9 +22,20 @@ The version is the latest release tag at or before the locked commit. After
 that comes what Naima found about newer versions, then one line for each
 long run that is due ([long work](long-work.md#when-a-long-run-is-due)), and
 a reminder of what you can ask for: an explanation of Naima and its
-documentation, a check for an update, or an update. `naima hello` never
-changes the lock, never writes anything in your project and never starts a
-run.
+documentation, a check for an update, or an update. With an agent tool
+that has a session-start hook, you see this greeting directly. `naima hello`
+never changes the lock and never starts a run. Its check for a newer Naima
+counts as the day's update check.
+
+## During a long session
+
+The session start is not the only time Naima looks. Once a day, the first
+naima command to run asks the source again, and if a newer Naima has come
+out, the agent tells you, once. When the check keeps failing for a week, you
+get an urgent message that repeats every hour until you acknowledge it. How
+this works, and how to acknowledge a message, is in
+[what Naima tells you while you work](messages.md). The `updates` setting
+below applies there too: with `off`, nothing is asked.
 
 How much it looks for updates depends on the `updates` setting in
 `naima.json`. You can ask the agent to change it, and it runs this:
@@ -107,8 +118,8 @@ the update itself:
   acknowledge them in their next session note;
 - it adds what makes every agent run `naima hello` at the start of a
   session, if your project doesn't have it yet: a line in your entry file,
-  such as `AGENTS.md`, and the session-start hook of each agent tool you use
-  that has one ([the entry point](install.md#the-agent-harness-entry-point));
+  such as `AGENTS.md`, and the session-start and turn-end hooks of each agent
+  tool you use that has them, or a newer form of hooks installed before ([the entry point](install.md#the-agent-harness-entry-point));
 - it runs `naima check`, and files a todo for each problem or note that is
   new since the version you had, so nothing it couldn't fix by itself is
   forgotten. A todo it has already filed isn't filed twice.
@@ -118,7 +129,7 @@ hooks. For each of them, the update prints one sentence saying what it
 installed and why, for example:
 
 ```text
-Installed a <tool> session-start hook in <its settings file>: every new conversation starts by running naima hello, so you see which Naima is active and whether a newer one exists.
+Installed a <tool> session-start hook in <its settings file>: every new conversation starts by running naima hello, and you see its greeting directly: which Naima is active, whether a newer one exists, what waits on your decision.
 ```
 
 Its last line names every file to commit. You review the change and commit

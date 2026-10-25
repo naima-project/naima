@@ -5,6 +5,7 @@
 import { code, sentence, table } from "./markdown.ts"
 import { DEFAULT_DATA } from "./layout.ts"
 import { flagsOf } from "./vocabulary.ts"
+import { TICK_FOLDERS } from "./tick.ts"
 import type {
   Check,
   Command,
@@ -18,6 +19,7 @@ import type {
   RankTerm,
   RelationDef,
   SummarySection,
+  TickJob,
   TypeDef,
   ValueDef,
   View,
@@ -259,6 +261,21 @@ export const guidePoint: ExtensionPoint<GuideSection> = {
   ) => ["", "**Guide sections**, printed first by `naima guide`", ...table(["Section", "What it shows"], sections.map((s) => [code(s.name), s.says]))],
 }
 
+export const jobsPoint: ExtensionPoint<TickJob> = {
+  id: "jobs",
+  says: "a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it; what it finds is shown to the owner as messages",
+  noun: "job",
+  key: (j) => j.name,
+  validate: (v) =>
+    shape(v, (j) => text(j, "name"), (j) => fn(j, "run"), (j) => {
+      const { name, every } = j as TickJob
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(name) || TICK_FOLDERS.includes(name)) return `has a name the tick cannot keep its state under: ${name}`
+      return every === "hour" || every === "day" ? null : "runs neither every hour nor every day"
+    }),
+  gaps: (j) => says(j, "does"),
+  document: (jobs) => ["", "**Jobs** the tick runs when due", ...table(["Job", "Every", "What it does"], jobs.map((j) => [code(j.name), j.every, j.says]))],
+}
+
 export const rankPoint: ExtensionPoint<RankTerm> = {
   id: "rank",
   says: "an additive term of every item's urgency; lower is more urgent",
@@ -353,6 +370,7 @@ export const CORE_POINTS: readonly ExtensionPoint[] = [
   summaryPoint,
   guidePoint,
   rankPoint,
+  jobsPoint,
   extendsPoint,
   hooksPoint,
   migrationsPoint,

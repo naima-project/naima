@@ -37,10 +37,11 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 
 | Command | Plugin | What it does | What it enforces |
 |---|---|---|---|
-| [`init`](#naima-init) | core | make the git repository around the program a Naima project, as its first run does by itself: beside the program, a git clone of Naima at naima-tracker/naima/, create naima-data/naima.json, locked to the clone's origin and its HEAD, which must be on the origin's main, and the tracker folder's README.md and .gitignore; print the line that keeps the program out of each host tool configuration it finds (deno.json, tsconfig.json, .prettierignore); and write what makes an agent run naima hello at the start of every session: the line that tells agents where Naima is and to run it, into the host's AGENTS.md, else the first entry file it has, else a new AGENTS.md, and the session-start hook of each agent tool the project uses that has one (naima.json's agents; absent it, those whose files the project holds); nothing else outside naima-tracker/ is touched unless --write-excludes is given | the program is locked to a commit of its source's main, with nothing uncommitted; outside the tracker folder, only the pointer line, the session-start hooks and, with --write-excludes, the exclusion lines are written |
+| [`init`](#naima-init) | core | make the git repository around the program a Naima project, as its first run does by itself: beside the program, a git clone of Naima at naima-tracker/naima/, create naima-data/naima.json, locked to the clone's origin and its HEAD, which must be on the origin's main, and the tracker folder's README.md and .gitignore; print the line that keeps the program out of each host tool configuration it finds (deno.json, tsconfig.json, .prettierignore); and write what makes an agent run naima hello at the start of every session: the line that tells agents where Naima is and to run it, into the host's AGENTS.md, else the first entry file it has, else a new AGENTS.md, and the hooks of each agent tool the project uses that has them (naima.json's agents; absent it, those whose files the project holds): a session-start hook that runs naima hello, and a turn-end hook that runs the tick when the agent ends its turn; nothing else outside naima-tracker/ is touched unless --write-excludes is given | the program is locked to a commit of its source's main, with nothing uncommitted; outside the tracker folder, only the pointer line, the session-start hooks and, with --write-excludes, the exclusion lines are written |
 | [`update`](#naima-update) | core | move the lock to the head of the source's main, or to the commit --to names: say what changes (the commits, the change notes they add — breaking first, then those that ask an action —, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, rename and remove options in naima.json as the change notes say and remove those it reads nowhere, each said with its value, and record the new commit; moving forward, the new Naima finishes: it migrates the data if its format moved, names the rules agents acknowledge again, runs naima check, and files an item in the type with the trait follow-up for each problem or note that is new since the commit before; writes, and says, what makes agents run naima hello at every session start where it is missing — the pointer line, rewritten when it does not say so, and each session-start hook as naima init installs them; all as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima | the lock moves only to a commit of the source's main, with the data migrated forward in the same change; never back past a migration, which runs forward only; a source naima.json names other than the program's origin is refused, by every command, until --accept-source |
 | [`rollback`](#naima-rollback) | core | move the lock back to the one naima.json recorded before it, found in its git history, as one change to commit: what update --to does with that commit | the lock goes back only to a commit that reads the data's formats: a migration is undone by reverting its commit, never by running an older Naima on newer data |
-| [`hello`](#naima-hello) | core | what an agent says first in a session: the banner (I'm Naima, the No-guesswork Artificial Intelligence Meta-Agent, active in this repository, with its version and commit); then, as naima.json's updates says, whether a newer Naima exists and, under update, what it changes and its rehearsal, as update --check says them; then, one line each, what waits on the owner's decision, such as a long run that is due, never started; then what it offers on request: what Naima is and its documentation, an update check, an update after the owner's yes | nothing: it never moves the lock, writes the project nor starts a run; it asks the source only when updates is check or update |
+| [`hello`](#naima-hello) | core | what an agent says first in a session: the banner (I'm Naima, the No-guesswork Artificial Intelligence Meta-Agent, active in this repository, with its version and commit); then, as naima.json's updates says, whether a newer Naima exists and, under update, what it changes and its rehearsal, as update --check says them; then, one line each, what waits on the owner's decision, such as a long run that is due, never started; then what it offers on request: what Naima is and its documentation, an update check, an update after the owner's yes | it never moves the lock nor starts a run; it asks the source only when updates is check or update, and records that check as the day's, in the tick's state outside the repository; the only thing it may write in the project is an urgent message the tick raises |
+| [`tick`](#naima-tick) | core | run the tick now, as every command does before its own work: each job that is due — the update check once a day, unless updates is off; the jobs plugins contribute, such as the due long runs once an hour — run by whichever naima process wins it, a failed one retried an hour later, a week of failed update checks raising an urgent message; then say what is due to the owner, each message once, an urgent one once an hour until the owner acknowledges it (naima messages). Every other command says them after its own output, on standard error, one line each: NAIMA-MESSAGE, a space, and the message as a JSON object with the keys id, level (info, warning or urgent), text and ack, where ack is the command that acknowledges it, or null for a message said once | no lock: every decision is a file created only if it does not exist, kept outside the repository in the clone's git directory, so any number of naima processes, in any worktree of the clone, run each due job once; nothing is applied and no long work starts: it finds and says |
 | [`plugin`](#naima-plugin) | core | turn a plugin on or off, or set one of its options, in naima.json's plugins table — validated the way the project is validated on every load, instead of a hand-edit of the file | a name must be a first-party plugin (loaded or opt-in) or one the table already names with its own source; an option set on one whose options are known here must be one it declares; the whole file is re-validated before it is written, so nothing a later load would refuse ever reaches disk |
 | [`guide`](#naima-guide) | core | inside a project, first print what its plugins contribute to the guide, such as the project's active rules for agents; then where the running Naima's documentation is: the skill, the docs map, the guide for people, the rules, the pages for agents, the format, installing; read them as files | nothing: it only prints |
 | [`help`](#naima-help) | core | list every command the loaded plugins provide, with its usage | nothing: it only prints |
@@ -61,6 +62,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`plugins`](#naima-plugins) | core | list loaded plugins, the extension points each declares, what each uses of the others, and what each contributes to every point; a contribution's qualified id is <plugin>/<name>, shown when its short name is shared or renamed | nothing: it only reads |
 | [`types`](#naima-types) | core | list item types, their statuses and fields, then every field's list of values with how many items hold each | nothing: it only reads |
 | [`runs`](#naima-runs) | core | list the external programs the loaded contributions declare they start (a model checker, say), which the launcher allows besides git | nothing: it lists the programs the launcher allows besides git; the launcher refuses any other |
+| [`messages`](#naima-messages) | core | list what Naima has to tell the owner: the urgent messages not yet acknowledged, which the tick shows at most once an hour, then what it said once, such as a newer Naima; with ack, the owner acknowledges a message, which stops it being shown, in every worktree and, once the tracker is committed, on every machine | a message is acknowledged only by the owner's command, never on their behalf; an acknowledgement is never undone |
 | [`close`](#naima-close) | trackers | archive a resolved item: fixed, and proven by an item that has passed | an item is archived only when fixed and proven: fixedOn set and a verified-by item that has passed, with every write hook agreeing; --force takes a hook's refusal on, for the one who owns the evidence |
 | [`bugs`](#naima-bugs) | trackers | how many bugs have no code written, and how many are fixed but unproven | nothing: it only counts |
 | [`open`](#naima-open) | coordination | start a piece of work: a worktree <worktrees>/<what> on a new branch <who>/<what> from the trunk, and its claim on the items, in one step | work happens on its own branch and worktree from the trunk, and its claim on the items is recorded in the same step; a branch that already exists is never reused, and the refusal says whether it is merged into the trunk; no worker worktree is opened beyond the option maxWorkers, and the refusal names the open ones and how to raise the bound |
@@ -109,7 +111,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | Point | Declared by | What it is | Contributed by |
 |---|---|---|---|
 | `commands` | core | `naima <name>`: a command, with its usage, options and examples | core, trackers, coordination, triage, gates, epics, planning, knowledge, roles, announce, loop, beta-markers, verifier, tools, ui, metrics, rules, long-work, commit-hooks, privacy, adopt, docs |
-| `types` | core | item types: a directory of items, their statuses, and the status a new one starts in | trackers, epics, planning, knowledge, verifier, rules |
+| `types` | core | item types: a directory of items, their statuses, and the status a new one starts in | core, trackers, epics, planning, knowledge, verifier, rules |
 | `fields` | core | typed fields of an item's meta.json, and the types they apply to | core, trackers, triage, gates, planning, knowledge, roles, announce, verifier, rules, long-work, privacy, adopt, docs |
 | `relations` | core | link relations between items, each naming its inverse | core, trackers, epics, planning, knowledge, verifier |
 | `checks` | core | invariants `naima check` holds: a problem fails it, a note does not | core, trackers, coordination, triage, gates, epics, planning, knowledge, announce, beta-markers, verifier, metrics, rules, long-work, commit-hooks, privacy, docs |
@@ -118,6 +120,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `summary` | core | a block of `naima summary` | core, trackers, coordination, triage, gates, epics, beta-markers, metrics, long-work |
 | `guide` | core | a block `naima guide` prints first, inside a project, before the documentation pages | triage, rules |
 | `rank` | core | an additive term of every item's urgency; lower is more urgent | triage, gates |
+| `jobs` | core | a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it; what it finds is shown to the owner as messages | long-work |
 | `extends` | core | additive changes to another plugin's type — statuses (an existing one only with its category), traits, transitions — or field — enum values, more types or traits it applies to | knowledge, roles |
 | `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done; `beforeText(text, ctx)` may refuse a write of free text or a file that is not an item's (a session note, an event, an attachment) or add to its record | core, coordination, triage, epics, planning, knowledge, verifier, privacy |
 | `migrations` | core | a plugin's own data migrations, in order from its format 1, run by `naima update` after the core's | gates |
@@ -145,7 +148,7 @@ An item is a directory under `<tracker>/<TYPE>/<slug>/`: `README.md` for the pro
 
 ### naima init
 
-Make the git repository around the program a Naima project, as its first run does by itself: beside the program, a git clone of Naima at naima-tracker/naima/, create naima-data/naima.json, locked to the clone's origin and its HEAD, which must be on the origin's main, and the tracker folder's README.md and .gitignore; print the line that keeps the program out of each host tool configuration it finds (deno.json, tsconfig.json, .prettierignore); and write what makes an agent run naima hello at the start of every session: the line that tells agents where Naima is and to run it, into the host's AGENTS.md, else the first entry file it has, else a new AGENTS.md, and the session-start hook of each agent tool the project uses that has one (naima.json's agents; absent it, those whose files the project holds); nothing else outside naima-tracker/ is touched unless --write-excludes is given.
+Make the git repository around the program a Naima project, as its first run does by itself: beside the program, a git clone of Naima at naima-tracker/naima/, create naima-data/naima.json, locked to the clone's origin and its HEAD, which must be on the origin's main, and the tracker folder's README.md and .gitignore; print the line that keeps the program out of each host tool configuration it finds (deno.json, tsconfig.json, .prettierignore); and write what makes an agent run naima hello at the start of every session: the line that tells agents where Naima is and to run it, into the host's AGENTS.md, else the first entry file it has, else a new AGENTS.md, and the hooks of each agent tool the project uses that has them (naima.json's agents; absent it, those whose files the project holds): a session-start hook that runs naima hello, and a turn-end hook that runs the tick when the agent ends its turn; nothing else outside naima-tracker/ is touched unless --write-excludes is given.
 
 **Enforces**: The program is locked to a commit of its source's main, with nothing uncommitted; outside the tracker folder, only the pointer line, the session-start hooks and, with --write-excludes, the exclusion lines are written.
 
@@ -224,16 +227,44 @@ naima rollback
 
 What an agent says first in a session: the banner (I'm Naima, the No-guesswork Artificial Intelligence Meta-Agent, active in this repository, with its version and commit); then, as naima.json's updates says, whether a newer Naima exists and, under update, what it changes and its rehearsal, as update --check says them; then, one line each, what waits on the owner's decision, such as a long run that is due, never started; then what it offers on request: what Naima is and its documentation, an update check, an update after the owner's yes.
 
-**Enforces**: Nothing: it never moves the lock, writes the project nor starts a run; it asks the source only when updates is check or update.
+**Enforces**: It never moves the lock nor starts a run; it asks the source only when updates is check or update, and records that check as the day's, in the tick's state outside the repository; the only thing it may write in the project is an urgent message the tick raises.
 
 ```sh
-naima hello
+naima hello [--hook <tool>]
 ```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--hook` |  | print the greeting as the session-start hook of that agent tool wants it, named as naima.json's agents names it: the greeting for the owner to see directly, and what the agent is to say first, in the form the tool's adapter gives (src/core/adapters/) |
 
 Examples:
 
 ```sh
 naima hello
+naima hello --hook <tool>
+```
+
+### naima tick
+
+Run the tick now, as every command does before its own work: each job that is due — the update check once a day, unless updates is off; the jobs plugins contribute, such as the due long runs once an hour — run by whichever naima process wins it, a failed one retried an hour later, a week of failed update checks raising an urgent message; then say what is due to the owner, each message once, an urgent one once an hour until the owner acknowledges it (naima messages). Every other command says them after its own output, on standard error, one line each: NAIMA-MESSAGE, a space, and the message as a JSON object with the keys id, level (info, warning or urgent), text and ack, where ack is the command that acknowledges it, or null for a message said once.
+
+**Enforces**: No lock: every decision is a file created only if it does not exist, kept outside the repository in the clone's git directory, so any number of naima processes, in any worktree of the clone, run each due job once; nothing is applied and no long work starts: it finds and says.
+
+```sh
+naima tick [--json] [--hook <tool>]
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--json` |  | print the jobs run here and the messages to show as JSON |
+| `--hook` |  | run as the turn-end hook of that agent tool, named as naima.json's agents names it: when a message is due, print what keeps the agent from ending its turn and tells it what to tell or ask the owner, in the form the tool's adapter gives; nothing otherwise; it never fails |
+
+Examples:
+
+```sh
+naima tick
+naima tick --json
+naima tick --hook <tool>
 ```
 
 ### naima plugin
@@ -643,6 +674,43 @@ naima runs
 naima runs --json
 ```
 
+### naima messages
+
+List what Naima has to tell the owner: the urgent messages not yet acknowledged, which the tick shows at most once an hour, then what it said once, such as a newer Naima; with ack, the owner acknowledges a message, which stops it being shown, in every worktree and, once the tracker is committed, on every machine.
+
+**Enforces**: A message is acknowledged only by the owner's command, never on their behalf; an acknowledgement is never undone.
+
+```sh
+naima messages [--all] [--json]
+naima messages ack <id>
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--all` |  | also list the messages already acknowledged |
+| `--json` |  | print the messages as JSON: id, level, text, status, and the command that acknowledges each |
+
+Examples:
+
+```sh
+naima messages
+naima messages --all
+naima messages ack update-check-failing-since-2026-10-18
+```
+
+### type: messages
+
+Messages: what Naima has to tell the owner and waits on them to read, such as an update check failing for days: created by the tick, acknowledged by the owner. Items live in `naima-tracker/naima-data/messages/`; a new one starts as `unread`; it is an archive: items arrive by being moved there, never by being opened.
+
+Traits: `messages`.
+
+| Status | Category | Flags | Meaning |
+|---|---|---|---|
+| `unread` | open |  | raised, and not yet acknowledged by the owner: an urgent one is shown at most once an hour |
+| `acknowledged` | done |  | the owner has read it: naima messages ack <id> |
+
+Moves allowed: `acknowledged` → ; a status not named moves to any.
+
 **Fields**
 
 | Field | Kind | Applies to | Meaning | Values |
@@ -650,6 +718,7 @@ naima runs --json
 | `section` | string | every type | the heading the item is grouped under on its board |  |
 | `created` | date | every type | when the item was opened |  |
 | `tags` | strings | every type | free labels a person puts on an item |  |
+| `level` | enum | any type tagged `messages` | how much a message weighs: info and warning are said once, urgent is shown once an hour until acknowledged | `info` worth knowing; `warning` worth acting on; `urgent` the owner should know now: shown once an hour until acknowledged |
 
 **Link relations** — only the direction written is stored; the inverse is derived when read.
 
@@ -2588,6 +2657,12 @@ naima wait models --json
 | `progress-declared` | long work is declared with its progress or with why it cannot report one: a command declared long says how it reports or why it cannot and what instead; a naima run in a tracked shell script has --no-progress with a reason, or a command that writes $NAIMA_RUN_PROGRESS or runs a Naima command that reports; a run recorded here silent past its threshold without ever writing progress is noted |
 
 **Summary sections**: `due-runs`.
+
+**Jobs** the tick runs when due
+
+| Job | Every | What it does |
+|---|---|---|
+| `due-runs` | hour | find the long runs that are due and tell the owner, once a day each, that they wait on their decision; starts none |
 
 **Shipped rules**, active in every project that loads the plugin, listed by `naima rules`
 

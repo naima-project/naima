@@ -4,6 +4,7 @@
 //
 //   read    the repository, the program wherever it is, and the data directory of every other worktree
 //   write   the tracker folder (naima-tracker/, the parent of the program), and the data and program if moved out of it;
+//           the tick's state, naima/ in the clone's git directory (core/tick.ts), which it reads too;
 //           for init and update, the entry files and the session-start settings of the agent tools in use (session-start.ts)
 //   run     git, and the programs the loaded contributions declare (`runs`: a verifier's tool, a metric's command), nothing else
 //   env     an allow-list of the environment (ENV below): what git needs, and Naima's own,
@@ -51,6 +52,7 @@ import {
   runtimeOf,
   type SessionConfig,
   sessionStartPaths,
+  tickDir,
   toolsDir,
   toplevel,
   trackerOf,
@@ -160,6 +162,8 @@ export function permissions(
     tools?: string | null
     /** Hosts the command may reach besides: init asks GitHub whether the project is public. */
     net?: string[]
+    /** The tick's state folder in the clone's git directory, read and written by every command: null outside git. */
+    tick?: string | null
   },
 ): string[] {
   const list = (paths: (string | null)[]) => {
@@ -174,11 +178,13 @@ export function permissions(
   }
   // A tools directory Deno cannot name is left out: no command reads it, and `naima tools` says why.
   const tools = p.tools && !real(p.tools).includes(",") ? [p.tools] : []
+  // So is a tick folder: the commands then run without a tick.
+  const tick = p.tick && !real(p.tick).includes(",") ? [p.tick] : []
   return [
     `--allow-read=${
-      list([p.root, p.data, p.program, p.entry, ...(p.worktrees ?? []).map(real).filter((x) => !x.includes(",")), ...(p.ui?.read ?? []), ...tools])
+      list([p.root, p.data, p.program, p.entry, ...(p.worktrees ?? []).map(real).filter((x) => !x.includes(",")), ...(p.ui?.read ?? []), ...tools, ...tick])
     }`,
-    `--allow-write=${list([p.tracker, p.data, p.program, ...(p.hostFiles ?? []), ...(p.ui?.write ?? []).filter((w) => tools.includes(w))])}`,
+    `--allow-write=${list([p.tracker, p.data, p.program, ...tick, ...(p.hostFiles ?? []), ...(p.ui?.write ?? []).filter((w) => tools.includes(w))])}`,
     p.ui?.runAll ? "--allow-run" : `--allow-run=${[...new Set(["git", ...(p.runs ?? []), ...(p.ui?.runs ?? [])])].join(",")}`,
     "--allow-env",
     ...(p.ui?.netAll
@@ -281,6 +287,16 @@ function hostFiles(rest: string[], root: string, data: string | null): string[] 
   ]
 }
 
+/** The tick's state folder, naima/ in the clone's git directory: null outside git. */
+function tickFolder(root: string): string | null {
+  try {
+    const dir = tickDir(root)
+    return dir ? dirname(dir) : null
+  } catch {
+    return null
+  }
+}
+
 /** The nearest directory of `path`, or above it, that exists: what git can be asked about. */
 function existing(path: string): string {
   let dir = resolve(path)
@@ -313,6 +329,8 @@ export async function launch(args: string[], cwd: string): Promise<number> {
   const env = { ...allowedEnv(Deno.env.toObject()), ...marks, NAIMA_LAUNCHER_SET: launcherSet(marks, Deno.env.toObject()) }
   const others = otherWorktrees(root, data)
   const tools = toolsDir(Deno.env.toObject(), Deno.build.os)
+  // The tick's state, naima/ in the clone's git directory, shared by its worktrees; the program is told its tick/ folder.
+  const tickState = tickFolder(root)
   const ui = uiGrant(parsed.rest[0], Deno.build.os, Deno.execPath(), tools)
   // A program whose own entry is gone cannot repair itself: when files deleted from its clone are all that differs, git restores them.
   if (!runtimeOf(program)) {
@@ -332,6 +350,7 @@ export async function launch(args: string[], cwd: string): Promise<number> {
         hostFiles: hostFiles(parsed.rest, root, data),
         worktrees: others,
         tools,
+        tick: tickState,
         net: parsed.rest[0] === "init" ? [VISIBILITY_HOST] : [],
       }
       const read = permissions(fence)[0] ?? ""
@@ -344,7 +363,7 @@ export async function launch(args: string[], cwd: string): Promise<number> {
       args: ["run", "--no-prompt", "--no-config", "--no-lock", ...flags, join(entry, "src", "cli.ts"), ...args],
       cwd,
       clearEnv: true,
-      env: ui?.wholeEnv ? { ...Deno.env.toObject(), ...env } : env,
+      env: { ...(ui?.wholeEnv ? { ...Deno.env.toObject(), ...env } : env), ...(tickState ? { NAIMA_TICK_DIR: join(tickState, "tick") } : {}) },
       stdin: "inherit",
       stdout: "inherit",
       stderr: "inherit",

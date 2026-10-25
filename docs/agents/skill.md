@@ -33,6 +33,10 @@ when to use it.
   yes, and offer to explain Naima, show its documentation, check for an update or
   update. An update is applied only after the owner says yes, followed by
   the checks and one commit ([update Naima](../guide/update-naima.md)).
+- **Relay Naima's messages.** When a naima command prints a `NAIMA-MESSAGE`
+  line, or a turn-end hook stops the agent with what to say, the agent tells
+  the owner at once, says when it is urgent, and never acknowledges a
+  message itself ([messages to the owner](messages.md)).
 - **Read the project's rules.** `naima rules --audience agents`, before
   anything else: the project's own rules, kept as [items](../guide/glossary.md#item) of its tracker
   ([read the project's rules](read-the-project-rules.md)).

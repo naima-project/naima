@@ -1,7 +1,8 @@
 // What makes an agent run naima hello at the start of every session: for
 // every tool, the pointer line in an entry file, which says so; and for each
 // tool the project uses that has a session-start hook, the hook, installed
-// by the tool's adapter (adapters/). `naima init` installs both, `naima
+// by the tool's adapter (adapters/), and its turn-end hook, which runs the
+// tick when the agent ends a turn, where the tool has one. `naima init` installs both, `naima
 // update` adds what an older project lacks and says so, and `naima check`
 // notes what is missing (features/naima-hello-runs-at-start-every-agent).
 // Each write is said in one plain sentence: what was installed, and why.
@@ -11,7 +12,7 @@
 
 import { existsSync } from "node:fs"
 import { dirname, join } from "node:path"
-import { adapter, ADAPTERS, type AgentAdapter } from "./adapters/index.ts"
+import { adapter, ADAPTERS, type AgentAdapter, type AgentHook } from "./adapters/index.ts"
 import { posixRelative } from "./config.ts"
 import { mayWrite } from "./files.ts"
 import { runGit } from "./git.ts"
@@ -32,6 +33,9 @@ export function adaptersInUse(root: string, agents: readonly string[] | undefine
   return ADAPTERS.filter((a) => a.footprint.some((f) => existsSync(join(root, f))))
 }
 
+/** A tool's hooks that run Naima: its session-start hook, then its turn-end hook, those it has. */
+export const hooksOf = (a: AgentAdapter): AgentHook[] => [a.sessionStart, a.turnEnd].filter((h): h is AgentHook => h !== undefined)
+
 /** The program's launcher, from the project root, as a hook names it. */
 const programPath = (root: string, tracker: string): string => posixRelative(root, join(tracker, PROGRAM_DIR, "naima.ts"))
 
@@ -46,9 +50,8 @@ export function sessionStartGaps(root: string, tracker: string, config: SessionC
     )
   }
   for (const a of adaptersInUse(root, config.agents)) {
-    const hook = a.sessionStart
-    if (hook && !hook.installed(root)) {
-      out.push(`${a.name} is used here, and its session-start hook, which runs naima hello, is missing from ${hook.file}: naima update installs it`)
+    for (const hook of hooksOf(a)) {
+      if (!hook.installed(root)) out.push(`${a.name} is used here, and its ${hook.kind} is missing from ${hook.file}, or out of date: naima update installs it`)
     }
   }
   return out
@@ -58,7 +61,7 @@ export function sessionStartGaps(root: string, tracker: string, config: SessionC
 const pointerPart = (file: string): string => `the line in ${file} that tells agents to run naima hello`
 
 /** A tool's session-start hook, as what is left to install. */
-const hookPart = (a: AgentAdapter, file: string): string => `${a.name}'s session-start hook in ${file}`
+const hookPart = (a: AgentAdapter, hook: AgentHook): string => `${a.name}'s ${hook.kind} in ${hook.file}`
 
 /** Why the pointer line is there, said after what was written. */
 const POINTER_WHY = "it tells every agent where Naima is and to run naima hello at the start of a session, so each session starts knowing which Naima is active"
@@ -93,19 +96,17 @@ export function startSessions(
   }
   if (!opts.hooks) return { said, wrote, left }
   for (const a of adaptersInUse(root, config.agents)) {
-    const hook = a.sessionStart
-    if (!hook) continue
-    if (!hook.installed(root) && !mayWrite(join(root, hook.file))) {
-      left.push(hookPart(a, hook.file))
-      continue
+    for (const hook of hooksOf(a)) {
+      if (!hook.installed(root) && !mayWrite(join(root, hook.file))) {
+        left.push(hookPart(a, hook))
+        continue
+      }
+      const r = hook.install(root, programPath(root, tracker))
+      if (r.done === "written") said.push(`Installed a ${a.name} ${hook.kind} in ${hook.file}: ${hook.why}.`)
+      else if (r.done === "updated") said.push(`Brought the ${a.name} ${hook.kind} in ${hook.file} up to date: ${hook.why}.`)
+      else if (r.done === "refused") said.push(`not written, ${r.why} — add ${a.name}'s ${hook.kind} to ${hook.file} by hand: ${r.add}`)
+      if (r.done === "written" || r.done === "updated") wrote.push(hook.file)
     }
-    const r = hook.install(root, programPath(root, tracker))
-    if (r.done === "written") {
-      said.push(
-        `Installed a ${a.name} session-start hook in ${hook.file}: every new conversation starts by running naima hello, so you see which Naima is active and whether a newer one exists.`,
-      )
-      wrote.push(hook.file)
-    } else if (r.done === "refused") said.push(`not written, ${r.why} — add ${a.name}'s session-start hook to ${hook.file} by hand: ${r.add}`)
   }
   return { said, wrote: [...new Set(wrote)], left }
 }
@@ -116,7 +117,7 @@ export function sessionStartLeft(root: string, tracker: string, config: SessionC
   const p = agentPointer(root, tracker, config.entryFiles)
   if (!p.current) out.push(pointerPart(p.file))
   for (const a of adaptersInUse(root, config.agents)) {
-    if (a.sessionStart && !a.sessionStart.installed(root)) out.push(hookPart(a, a.sessionStart.file))
+    for (const hook of hooksOf(a)) if (!hook.installed(root)) out.push(hookPart(a, hook))
   }
   return out
 }
@@ -154,10 +155,11 @@ export function sessionStartPaths(root: string, config: SessionConfig, opts: { h
   const out = [...new Set([AGENTS_FILE, ...config.entryFiles])].map((f) => join(root, f))
   if (!opts.hooks) return out
   for (const a of adaptersInUse(root, config.agents)) {
-    if (!a.sessionStart) continue
-    const file = join(root, a.sessionStart.file)
-    out.push(file)
-    if (!existsSync(dirname(file))) out.push(dirname(file)) // a folder to create: Deno asks write access to it
+    for (const hook of hooksOf(a)) {
+      const file = join(root, hook.file)
+      out.push(file)
+      if (!existsSync(dirname(file))) out.push(dirname(file)) // a folder to create: Deno asks write access to it
+    }
   }
-  return out
+  return [...new Set(out)]
 }
