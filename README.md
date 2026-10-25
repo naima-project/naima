@@ -159,9 +159,8 @@ unpacking it, and stop if they differ.
 - [The documentation](docs/README.md), starting with
   [installing and updating](docs/guide/install.md).
 - For agents: [the skill](skills/naima/SKILL.md).
-- Contributing: Naima is built and tested in a private workshop, which holds
-  the tests, the site and the scripts. Open an issue or a pull request on
-  this repository.
+- [Contributing](docs/CONTRIBUTING.md): how to report a problem, ask for a
+  feature or send a fix, as an issue or a pull request on this repository.
 
 ## Licence
 

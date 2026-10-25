@@ -221,3 +221,12 @@ files in the clone; `naima guide` prints where:
 
 `naima help` lists the commands of the Naima in use; `naima summary` says where
 the project stands.
+
+## 6. Report to Naima itself
+
+When you find a problem in Naima, or the owner wants something Naima does
+not do, read the contributing page live, from
+`https://raw.githubusercontent.com/naima-project/naima/main/docs/CONTRIBUTING.md`,
+and follow it; the local [copy](../../docs/CONTRIBUTING.md) is only the
+fallback when it cannot be fetched. Nothing is sent to the public repository
+without the owner's yes on the exact text.
