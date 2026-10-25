@@ -155,15 +155,17 @@ Make the git repository around the program a Naima project, as its first run doe
 ```sh
 naima init [--private-tracker
 naima --tracker <url> [--private-url]
-naima --tracker-inside] [--write-excludes] [--no-session-hook]
+naima --tracker-inside
+naima --remote-private] [--write-excludes] [--no-session-hook]
 ```
 
 | Option | Default | What it does |
 |---|---|---|
-| `--private-tracker` |  | keep the tracker private beside the code: naima-data/ becomes a git repository of its own, created on this machine with no remote, ignored by the project's git, and naima-tracker/tracker.json, committed with the code, says so; the two repositories' commits are paired by Tracker: and Code: trailers (a commit-msg hook in both) and their branches by name. Without any of these three options, init keeps the tracker inside a project with no remote, or a private one, and stops with the question to ask the owner when the remote is public or its visibility cannot be told (GitHub's public API, asked without credentials) |
+| `--private-tracker` |  | keep the tracker private beside the code: naima-data/ becomes a git repository of its own, created on this machine with no remote, ignored by the project's git, and naima-tracker/tracker.json, committed with the code, says so; the two repositories' commits are paired by Tracker: and Code: trailers (a commit-msg hook in both) and their branches by name. A tracker already committed with the code is moved there with its history (git filter-branch of the code's trunk to naima-data/; the code's repository stops tracking it in one commit, its files left in place, nothing deleted), and a todo is filed, once, at the highest priority, to sweep the tracker for private and confidential information. Without any of these options, init keeps the tracker inside a project with no remote, or a private one; it stops when the remote is public, saying the tracker must be private, and with the question to ask the owner when its visibility cannot be told (GitHub's public API, asked without credentials) |
 | `--tracker` |  | like --private-tracker, from an existing tracker repository: naima-data/ becomes a git clone of the one at <url>, whose address tracker.json records |
 | `--private-url` |  | with --tracker: keep the tracker's address out of tracker.json, in this clone's git config (naima.tracker) |
-| `--tracker-inside` |  | commit the tracker with the code even though the project looks public: the owner's answer to init's question |
+| `--tracker-inside` |  | commit the tracker with the code when the visibility of its remote cannot be told: the owner's answer to init's question that the remote is private, recorded as --remote-private records it; refused when the remote is public |
+| `--remote-private` |  | in a project that has its tracker: record the owner's answer that the tracker's remotes whose visibility cannot be told are private, in naima-data/naima.json's privateRemotes, by a hash of each address, so the question is not asked again; refused for a remote GitHub says is public |
 | `--write-excludes` |  | also write those lines into the host's own files: deno.json and tsconfig.json when they are plain JSON, .prettierignore; a file with comments is left to be edited by hand |
 | `--no-session-hook` |  | install no agent tool's session-start hook: only the pointer line is written; naima check notes the hook missing, and naima update installs it |
 
@@ -172,6 +174,7 @@ Examples:
 ```sh
 naima init
 naima init --private-tracker
+naima init --remote-private
 naima init --tracker git@example.invalid:me/tracker.git --private-url
 naima init --write-excludes
 naima init --no-session-hook
@@ -743,6 +746,7 @@ Moves allowed: `acknowledged` → ; a status not named moves to any.
 | `entry-pointers` | every agent-harness entry file naima.json configures (entryFiles; sensible defaults absent it) names no path or link, plain-text or markdown, that is missing from disk |
 | `session-start` | an agent is told to run naima hello at the start of every session: an entry file holds the pointer line, which says so, and each agent tool the project uses (naima.json's agents; absent it, those whose files the project holds) that has a session-start hook has it installed; each one missing is noted, with the naima update that adds it — or, after an update that moved the lock and could not write them, one note that the update is unfinished |
 | `unread-options` | every option naima.json's plugins table sets is one its loaded plugin declares: an option no plugin reads any more is noted, by name |
+| `tracker-private` | the tracker is not exposed: when it is committed with the code, the code repository's origin is not public; when it is a repository of its own, none of its remotes is public — a remote on this disk, or none, is private; a GitHub remote is asked of GitHub's public API at most once a day, the answer remembered in the tracker repository's git config; one whose visibility cannot be told is noted with the question for the owner, until the owner's answer is recorded (naima init --remote-private) |
 | `one-format` | no item is still in a shape a format migration, the core's or a plugin's own, replaced: a tracker never mixes formats |
 
 **Directories** it owns under the tracker root: `waivers/`.
@@ -1342,7 +1346,7 @@ naima triage derive --write
 |---|---|
 | `authoritative-documents` | which documents are authoritative, and which are retired |
 
-**Rank terms**, added to every item's urgency: `impact`, `priority`, `effort`.
+**Rank terms**, added to every item's urgency: `impact`, `priority` (urgent: `now`), `effort`.
 
 **Write hooks**, run on every item write
 

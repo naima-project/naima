@@ -212,7 +212,7 @@ export function fallbackRank(name: string, as: "middle" | "worst"): number {
 // counts as the largest size, so an item nobody has sized sinks instead of passing every sized L and XL.
 const rank: RankTerm[] = [
   { name: "impact", score: (i) => enumRank(field("impact"), fieldValue(i, IMPACT), fallbackRank("impact", "middle")) * 1.5 },
-  { name: "priority", score: (i) => enumRank(field("priority"), fieldValue(i, PRIORITY), fallbackRank("priority", "middle")) * 1.2 },
+  { name: "priority", score: (i) => enumRank(field("priority"), fieldValue(i, PRIORITY), fallbackRank("priority", "middle")) * 1.2, urgent: "now" },
   { name: "effort", score: (i) => enumRank(field("effort"), fieldValue(i, EFFORT), fallbackRank("effort", "worst")) * 0.3 },
 ]
 

@@ -81,6 +81,21 @@ against [the no-leaks checklist](NOLEAKS.md) and sign the write with
 talking to the owner writes text taken from what the owner said
 ([the rule](../guide/rules.md#free-text-and-files-are-signed-against-the-no-leaks-checklist)).
 
+The tracker itself is never readable by people outside the project, and the
+CLI refuses every write while it is
+([the rule](../guide/rules.md#the-tracker-is-never-exposed)). When a write is
+refused because the tracker is exposed, tell the owner what the refusal says,
+and run the fix it names: for a tracker committed in a public repository
+that is `naima init --private-tracker`, which moves it into a repository of
+its own with its history. When Naima says it cannot tell whether a remote is
+public, ask the owner once, as it says; if the owner says the remote is
+private, record it with `naima init --remote-private`. After a move, a todo
+at the highest priority asks for a sweep of the tracker: read every item,
+note and attachment, paraphrase or remove through the CLI whatever is
+private, strategic or confidential, and bring the question of rewriting the
+public history to the owner
+([keep the tracker private](../guide/private-tracker.md#the-tracker-is-never-exposed)).
+
 Two words are used throughout these pages. The
 [owner](../guide/glossary.md#owner) is the person the project answers to, and
 the [trunk](../guide/glossary.md#trunk) is the branch releases come from.

@@ -28,6 +28,13 @@ counterpart (`property-evidence` for `holds-only-by-verify` and `property-reopen
 `epic-status`), so a hand edit that a command would have refused fails `naima check`. The hooks that guard a move rather than a state (`status-moves`,
 `notes-append-only`) and the ones that only fill in a value (`triage-stamps-its-date`, `planning-stamps`) have no counterpart. The rest is convention.
 
+### The tracker is never exposed
+
+The tracker holds what a project does not publish, so nobody outside it may read it: it is not committed in a repository whose origin is public, and its own
+repository, when it has one, has no public remote. **Enforced by** every write through Naima's helpers, which is refused while the tracker is exposed, with
+the command that fixes it, and by the check `tracker-private`, which `naima update` files as a todo in a project where it newly fails
+([keep the tracker private](private-tracker.md#the-tracker-is-never-exposed)).
+
 ### Run `naima check` before every commit
 
 **Convention**, kept by the project's own CI when it runs `naima check`.

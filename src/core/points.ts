@@ -283,7 +283,10 @@ export const rankPoint: ExtensionPoint<RankTerm> = {
   key: (t) => t.name,
   renamed: (t, name) => ({ ...t, name }),
   validate: (v) => shape(v, (c) => text(c, "name"), (c) => fn(c, "score")),
-  document: (terms) => ["", `**Rank terms**, added to every item's urgency: ${terms.map((t) => code(t.name)).join(", ")}.`],
+  document: (terms) => [
+    "",
+    `**Rank terms**, added to every item's urgency: ${terms.map((t) => (t.urgent ? `${code(t.name)} (urgent: ${code(t.urgent)})` : code(t.name))).join(", ")}.`,
+  ],
 }
 
 export const migrationsPoint: ExtensionPoint<Migration> = {
