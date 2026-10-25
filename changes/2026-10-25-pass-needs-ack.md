@@ -1,6 +1,6 @@
 ---
 title: naima pass refuses a note without --ack when the rules ask for one
-kind: behaviour
+kind: behaviour-change
 affects:
   - usage
   - workflow

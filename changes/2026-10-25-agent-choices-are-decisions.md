@@ -1,6 +1,6 @@
 ---
 title: A choice an agent makes for the owner is recorded as a decision
-kind: behaviour
+kind: behaviour-change
 affects:
   - workflow
 ---
