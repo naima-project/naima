@@ -114,7 +114,8 @@ notes can be raised to a problem, or switched off, under
 When the gesture is an automated test in one of the project's
 [test suites](metrics-and-budgets.md#record-the-test-suites-test-by-test),
 nobody has to attach its output or set its status by hand. The test item
-names the tests it stands for.
+names the tests it stands for. The field that does it, `testNames`, exists
+once the project declares a suite, so declare the suite first.
 
 ```sh
 naima set export-keeps testNames="export > keeps the alpha channel"
