@@ -148,7 +148,7 @@ const newCommand: Command = {
     if (bool(p, "dedupe")) {
       const likely = likelyDuplicatesOf(ctx, type.id, title.trim())
       if (likely.length) {
-        ctx.out("possible duplicates — link instead of refiling, or file anyway:")
+        ctx.out("similar titles, which may be the same thing or only related — link one if it is the same, or file anyway:")
         for (const item of likely) ctx.out(line(item))
         // Said apart from the list, so the new item is never read as one of its own duplicates.
         ctx.out("filed anyway, as a new item:")
