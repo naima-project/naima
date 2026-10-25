@@ -19,6 +19,8 @@ according to who you are.
 
 - **[purpose](purpose.md)** says what Naima is, and **[planned](planned.md)**
   lists in one place everything it doesn't do yet.
+- **[contributing](CONTRIBUTING.md)** says how to report a problem, ask for
+  a feature or send a fix to Naima, for people and agents.
 - **[guide/](guide/README.md)** is for people and assumes no code. It covers
   how the project runs, the tutorial, a page per everyday task, concepts, the
   [rules](guide/rules.md) (the only page that states them), a project's own
