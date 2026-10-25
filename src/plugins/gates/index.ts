@@ -45,6 +45,7 @@ import {
   fieldValue,
   fieldValues,
   type Finding,
+  gitOrNull,
   groupBy,
   isEvidenceType,
   isOpen,
@@ -300,7 +301,10 @@ export async function goals(ctx: Context): Promise<string[]> {
   const ahead = (g: GateDef, r: GateResult): boolean => !(g.due && daysLeft(ctx, g.due) < 0 && r.holds)
   const all: Goal[] = []
   for (const { value: gate } of gatesOf(ctx)) if (gate.due || gate.version) all.push({ gate, result: await gate.evaluate(ctx) })
-  const live = all.filter((g) => ahead(g.gate, g.result))
+  // A release already tagged is behind the project too: its version names a tag in git.
+  const tags = new Set((gitOrNull(ctx.root, "tag", "--list") ?? "").split("\n").map((t) => t.trim()).filter(Boolean))
+  const released = (g: GateDef): boolean => !!g.version && (tags.has(`v${g.version}`) || tags.has(g.version))
+  const live = all.filter((g) => ahead(g.gate, g.result) && !released(g.gate))
   const byDate = (a: Goal, b: Goal): number => (a.gate.due ?? "9999-99-99").localeCompare(b.gate.due ?? "9999-99-99")
   const dated = live.filter((g) => g.gate.due).sort(byDate)
   const nearest = dated.filter((g) => g.gate.due === dated[0]?.gate.due).slice(0, 2)
