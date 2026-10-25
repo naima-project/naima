@@ -118,6 +118,12 @@ A stale file another branch carries is listed with that branch, and is
 removed by running `naima prune --write` there. A worker still busy on a
 merged branch makes its claim live again with its next commit.
 
+Before ending the session, run `naima stale`. It lists every branch,
+worktree and claim nobody has touched for `staleAfter` hours, or whose claim
+is stale, with what it holds and the next step: resume, land, archive or
+drop, and the command for each. Leave nothing on that list without a
+decision, and never remove a worktree that has uncommitted files.
+
 ## 4. Write the session note
 
 ```sh

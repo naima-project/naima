@@ -119,7 +119,44 @@ naima prune --write    # remove them; commit the deletions
 A claim is stale when its branch is gone, when its branch is merged into the
 trunk and the merge brought its file there, or when every item it claims is
 closed. `naima claims` lists stale claims apart, at the end, and `naima
-check` adds a note for each one.
+check` adds a note for each one. A claim that still names an item already
+closed, next to items that are still open, gets a note of its own with the
+`naima release` that drops the closed item.
+
+## Work left behind
+
+```sh
+naima stale            # every branch, worktree and claim left behind, with the next step
+naima stale --json     # the same, as data
+```
+
+Workers stop without warning: a session ends, an agent crashes. `naima stale`
+lists what they leave behind. A branch counts as stale when its claim is
+stale, or when nothing has happened on it for `staleAfter` hours (24 unless
+the project sets another number in the coordination plugin's options).
+Something happening means a commit, a step posted with `naima claim --step`,
+a session note written on the branch, or a file changed in its worktree and
+not yet committed.
+
+For each one it shows the worktree, the last commit, the files not committed,
+how many commits the trunk lacks and whether the branch is up to date with
+the trunk, and the items its claim holds with their status. Then it suggests
+what to do next, and the command for it:
+
+- **resume** when anything is not committed, or the branch is behind the
+  trunk with open items: hand the worktree to a new worker, who looks at
+  `git status` first and never throws away what is there;
+- **land** when the branch is ahead of the trunk, up to date with it and
+  holds open items: run its gates, then `naima land <branch>`;
+- **archive** when it has commits the trunk lacks but no open item claimed:
+  `naima prune --branch <branch> --archive --write` keeps them under an
+  `archive/<branch>` tag;
+- **drop** when the trunk already has everything, or the branch is gone:
+  `naima prune --branch <branch> --write`, then `naima prune --write` for the
+  claim.
+
+`naima summary` has a "stale work" section with one line per entry, so the
+leftovers show up at the start of a session without asking.
 
 Only release someone else's claim by hand when nothing is being worked on
 there and nothing on that branch is left unmerged.

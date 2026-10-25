@@ -229,7 +229,20 @@ is gone, when its branch is merged into the trunk and the trunk carries the
 claim file the merge brought, or when every item it claims is closed.
 `naima check` adds one note per stale claim with the command that releases
 it, `naima prune --write`, and the branch to run it on when the file is not
-on the trunk's disk.
+on the trunk's disk. A live claim that still names a closed item is noted
+too, with the `naima release` that drops it.
+
+The coordinator runs `naima stale` at the start of every session and again
+before ending one. It lists every branch, worktree and claim left behind by a
+worker that stopped: those whose claim is stale, and those with no commit,
+step, session note or uncommitted change for `staleAfter` hours (24 unless
+the project sets another number). Each entry comes with its facts and a next
+step. Resume means handing the worktree to a new worker, who reads
+`git status` there first and never discards anything. Land means running the
+branch's gates and landing it. Archive means tagging its commits and removing
+it. Drop means removing a branch the trunk already holds, or a claim whose
+branch is gone. `naima summary` shows the same list in its "stale work"
+section.
 
 ## Safety rules
 

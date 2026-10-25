@@ -73,10 +73,12 @@ import {
   writeThroughGit,
 } from "./worktrees.ts"
 import { claimsUiView, notesUiView } from "./ui.ts"
+import { readStaleAfter, staleCommand, type StaleData, staleData, staleSection } from "./stale.ts"
 import { changeNotesCheck, changesCommand } from "./changes.ts"
 import { land, landingReportsPoint, landingsAreMarkers, landingsPaired } from "./land.ts"
 import { DIARY_RULE, diaryCheck, diaryCommand, eventCommand, EVENTS, frontLines, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
 
+export { type NextStep, type StaleData, type StaleEntry } from "./stale.ts"
 export { type Timeline, type TimelineEvent, timelineOf } from "./timeline.ts"
 export { claimedInHistory, CLOSES, type Landing, type LandingReport, landingReportsPoint, markerMessage, moveTrunk, STALE_PROOFS } from "./land.ts"
 
@@ -946,6 +948,34 @@ const staleClaims: Check = {
   },
 }
 
+const claimsOnClosedItems: Check = {
+  name: "claims-on-closed-items",
+  says:
+    "a claim that still names an item already closed, while the claim stands for other open work, is a note naming the command that releases the item; a claim whose items are all closed is stale-claims' note, and a closed item the branch you stand on claims is closed-not-claimed's problem",
+  run(ctx) {
+    const here = currentBranch(ctx.root)
+    const main = trunk(ctx.trackerGit)
+    const alive = allRefNames(ctx.trackerGit)
+    return readClaims(ctx)
+      .filter((c) => !staleReason(ctx, c, main, alive))
+      .flatMap((c) =>
+        c.items
+          .filter((e) => closed(ctx, e.id))
+          .filter((e) => !(c.branch === here && ctx.registry.types.get(ctx.repo.byId.get(e.id)!.type)?.creatable === false))
+          .map((e): Finding => {
+            const item = ctx.repo.byId.get(e.id)!
+            return {
+              level: "note",
+              item,
+              message: `claim of ${c.branch} (${c.file}) still names ${label(item)}, already closed — release it: naima release ${item.slug}${
+                c.local ? "" : `, on ${c.ref}`
+              }`,
+            }
+          })
+      )
+  },
+}
+
 const closedNotClaimed: Check = {
   name: "closed-not-claimed",
   says:
@@ -1027,6 +1057,16 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
   const policy = readPolicy(options)
   const diaryPerDay = readDiaryPerDay(options)
   const silentAfter = readSilentAfter(options)
+  const staleAfter = readStaleAfter(options)
+  const stale = (ctx: Context): StaleData =>
+    staleData(ctx, {
+      claims: readClaims(ctx),
+      notes: readPasses(ctx),
+      staleReason: (c) => staleReason(ctx, c),
+      closed: (id) => closed(ctx, id),
+      releaseLine,
+      staleAfter,
+    })
   return {
     name: "coordination",
     contract: CONTRACT,
@@ -1039,7 +1079,8 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       "Several branches may claim one item: `claim` says who else holds it rather than refusing. " +
       "There are no locks: a claim says who works on what and never excludes anyone. What one session at a time must touch — the trunk, the published site, the releases — is touched by one writer, the coordinator; workers only prepare on their own branches, and the owner decides what lands and when, when it matters. " +
       "Work happens by one scheme, checked: the worktree `<worktrees>/<what>` stands on the branch `<who>/<what>` and carries a claim; `open` makes all three in one step. " +
-      "A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. A claim is stale when its branch is gone, or merged into the trunk that carries its file, or every item it claims is closed: `claims` lists it apart, `stale-claims` notes it, and `prune --write` releases it. " +
+      "A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. A claim is stale when its branch is gone, or merged into the trunk that carries its file, or every item it claims is closed: `claims` lists it apart, `stale-claims` notes it, and `prune --write` releases it; a claim that still names a closed item among open ones is noted by `claims-on-closed-items`. " +
+      "Work left behind is listed by `stale` and in the summary: every branch, worktree and claim whose claim is stale, or with no sign of life (commit, step, session note, file not committed) for `staleAfter` hours, with its facts — last commit, files not committed, commits ahead of the trunk, whether it is up to date with it, items held and their status — and the next step: resume, land, archive or drop. " +
       "Landings are semi-linear: a branch the trunk is an ancestor of enters it as one marker commit, a merge whose tree is the branch tip's and whose message names the items it closes in `Closes:` trailers; `land` makes it from the main checkout, the shortcut for `git merge --no-ff`, and moves the trunk only from the commit it read. " +
       "From the first marker on the trunk's first-parent line every first-parent commit is a marker, or `landings-are-markers` notes it, one note per commit, which `naima waive landings-are-markers <commit>` accepts with a reason; before it nothing is asked, so a history of fast-forwards keeps working. " +
       "A commit made on the trunk that only adds to the tracker data is accepted without a note: new files in the data directory outside `rules/`, `waivers/` and `naima.json`, and lines added to an item's README.md with its meta.json untouched, so the coordinator files an item, appends a note or writes a diary entry or a session note without a branch; a status, a rule, a waiver or the lock still lands. " +
@@ -1069,11 +1110,18 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
           "minutes without a sign of life (a step posted with naima claim --step, or a commit on the branch) after which naima claims and naima summary flag a claim with a step as possibly stuck: a positive whole number",
         default: String(SILENT_AFTER),
       },
+      {
+        name: "staleAfter",
+        says:
+          "hours without a sign of life (a commit, a step, a session note, a file changed and not committed) after which naima stale and naima summary list a branch as stale work: a positive whole number",
+        default: "24",
+      },
     ],
     dirs: [CLAIMS, PASSES, EVENTS],
     checks: [
       claimsResolve,
       staleClaims,
+      claimsOnClosedItems,
       worktreePolicy(policy),
       trunkMoved,
       closedNotClaimed,
@@ -1092,6 +1140,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       land,
       changesCommand,
       prune,
+      staleCommand(stale, staleAfter),
       pass,
       eventCommand,
       diaryCommand(readPasses),
@@ -1105,7 +1154,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
     // The diary rule is listed by naima rules when the rules plugin is loaded; without it, the check still notes.
     optional: ["ui-views", "rules"],
     points: [landingReportsPoint],
-    summary: [whereWeWere, inHand(silentAfter)],
+    summary: [whereWeWere, inHand(silentAfter), staleSection(stale)],
     hooks: [noClosingOwnWork],
   }
 }
