@@ -171,7 +171,7 @@ const entryPointers: Check = {
 const sessionStart: Check = {
   name: "session-start",
   says:
-    "an agent is told to run naima hello at the start of every session: an entry file holds the pointer line, which says so, and each agent tool the project uses (naima.json's agents; absent it, those whose files the project holds) that has a session-start hook has it installed; each one missing is noted, with the naima update that adds it — or, after an update that moved the lock and could not write them, one note that the update is unfinished",
+    "an agent is told to run naima hello at the start of every session: an entry file holds the pointer line, which says so, and each agent tool the project uses (naima.json's agents; absent it, those whose files the project holds and the one Naima runs inside) that has a session-start hook has it installed; each one missing is noted, with the naima update that adds it — or, after an update that moved the lock and could not write them, one note that the update is unfinished",
   run: (ctx) => {
     const unfinished = unfinishedUpdate(ctx.root, ctx.trackerRoot, ctx.config.commit, ctx.config)
     return unfinished ? [note(unfinished)] : sessionStartGaps(ctx.root, trackerOf(ctx.trackerRoot), ctx.config).map(note)

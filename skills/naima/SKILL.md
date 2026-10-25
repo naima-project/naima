@@ -103,8 +103,10 @@ git clone https://github.com/naima-project/naima.git naima-tracker/naima
 deno run -A naima-tracker/naima/naima.ts init
 ```
 
-`init` writes the rest of `naima-tracker/` and touches nothing else. Commit
-`naima-tracker/` with the work; git never shows `naima-tracker/naima/`, which
+`init` writes the rest of `naima-tracker/`, the line in `AGENTS.md` (or the
+first agent entry file the project has) that tells agents to run `naima
+hello`, and the session hooks of the agent tools the project uses; nothing
+else. Commit `naima-tracker/` and that file with the work; git never shows `naima-tracker/naima/`, which
 is ignored ([bootstrap a project](../../docs/guide/install.md#bootstrap-a-project)).
 
 When the project already keeps a TODO.md, a notes file or an issue list,

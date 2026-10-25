@@ -155,7 +155,7 @@ function parseEntryFiles(value: unknown): string[] {
   return value as string[]
 }
 
-/** `agents`: the agent tools the project uses, by their adapter's id; absent, those whose files the project holds. */
+/** `agents`: the agent tools the project uses, by their adapter's id; absent, those whose files the project holds and the one Naima runs inside. */
 function parseAgents(value: unknown): string[] {
   const known = ADAPTERS.map((a) => a.id)
   if (!Array.isArray(value) || !value.every((v) => typeof v === "string" && known.includes(v))) {

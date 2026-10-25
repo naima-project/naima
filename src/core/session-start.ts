@@ -27,10 +27,17 @@ export interface SessionConfig {
   agents?: readonly string[]
 }
 
-/** The tools the project uses: those naima.json's `agents` names; absent it, those whose files the project holds. */
-export function adaptersInUse(root: string, agents: readonly string[] | undefined): AgentAdapter[] {
+/**
+ * The tools the project uses: those naima.json's `agents` names; absent it, those whose files the project holds,
+ * and the tool Naima is running inside now, which a fresh project shows no file of yet.
+ */
+export function adaptersInUse(
+  root: string,
+  agents: readonly string[] | undefined,
+  env: Record<string, string | undefined> = process.env,
+): AgentAdapter[] {
   if (agents) return agents.map(adapter).filter((a): a is AgentAdapter => a !== undefined)
-  return ADAPTERS.filter((a) => a.footprint.some((f) => existsSync(join(root, f))))
+  return ADAPTERS.filter((a) => a.footprint.some((f) => existsSync(join(root, f))) || a.runningIn?.(env) === true)
 }
 
 /** A tool's hooks that run Naima: its session-start hook, then its turn-end hook, those it has. */
