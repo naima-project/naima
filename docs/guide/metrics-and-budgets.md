@@ -348,11 +348,19 @@ like.
 Naima measures the `code.*` metrics itself by reading the files, so there
 is no program to install and nothing to configure. Lines and files work for
 every language Naima knows (TypeScript, JavaScript, Python, Rust, Go, Java,
-C, C++, shell and more). Functions and complexity are found only in
-TypeScript and JavaScript, by a small estimator that counts each function's
-decisions (`if`, loops, `case`, `catch`, `&&`, `||`, `??` and `? :`) and adds
-one. It's an estimate rather than a parser, and it's good for watching a
-trend. A plugin can add a function finder for another language
+C, C++, shell and more). Functions and complexity are found in TypeScript,
+JavaScript and Rust, by a small estimator that counts each function's
+decisions and adds one. In TypeScript and JavaScript the decisions are `if`,
+loops, `case`, `catch`, `&&`, `||`, `??` and `? :`. In Rust they are `if`
+(match guards included), `while` and `for`, each `match` arm after the first,
+`?`, `let … else`, `&&` and `||`; a bare `loop` counts nothing, because it
+only leaves through a `break` that usually sits under an `if` already counted.
+Rust functions are `fn` items and methods, in `impl` and `trait` blocks and
+nested modules alike, and closures, each counted on its own; a trait method
+with no body is not a function. Comments, nested block comments, strings, raw
+strings, char literals and lifetimes are read as such, so a brace or an `if`
+inside them changes nothing, and no Rust compiler is needed. It's an estimate
+rather than a parser, and it's good for watching a trend. A plugin can add a function finder for another language
 (`code-languages`) or a new measure (`code-measures`), as described in the
 [reference](../reference/reference.md).
 

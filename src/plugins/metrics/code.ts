@@ -5,15 +5,17 @@
 // functions, function size, cyclomatic complexity, duplication, TODO markers,
 // dependencies. How a file's comments are told from its code, and how its
 // functions are found, is its language: a contribution to the
-// `code-languages` point. TypeScript and JavaScript come with a small
+// `code-languages` point. TypeScript, JavaScript and Rust come with a small
 // function finder and complexity estimator; any plugin may add another
 // language's.
 //
-// The estimator is a token scan, not a parser: it finds function
-// declarations and expressions, arrow functions and methods, skips strings,
-// comments, regular expressions and type annotations, and counts the
-// decisions in each body — if, for, while, case, catch, &&, ||, ?? and the
-// ternary — plus one. Good enough to see a trend; not a type checker.
+// The estimator is a token scan, not a parser. For TypeScript and JavaScript
+// it finds function declarations and expressions, arrow functions and
+// methods, skips strings, comments, regular expressions and type annotations,
+// and counts the decisions in each body — if, for, while, case, catch, &&,
+// ||, ?? and the ternary — plus one. For Rust it finds `fn` items, methods and
+// closures, and counts if, while, for, each match arm after the first, ?,
+// let-else, && and ||. Good enough to see a trend; not a type checker.
 
 import { spawnSync } from "node:child_process"
 import { existsSync, readFileSync, statSync } from "node:fs"
@@ -45,6 +47,8 @@ export interface Language {
   quotes?: string[]
   /** True when `/…/` after an operator is a regular expression, as in JavaScript: its quotes and slashes are not strings or comments. */
   regex?: boolean
+  /** Blank the comments itself, keeping every newline and every string: for a language the generic scan cannot read, such as Rust's nested comments, raw strings and lifetimes. */
+  strip?(text: string): string
   /** The functions in a file's text, comments already blanked. Without it, function measures skip the language. */
   functions?(stripped: string): FunctionInfo[]
 }
@@ -599,11 +603,349 @@ export function jsFunctions(stripped: string): FunctionInfo[] {
     .sort((a, b) => a.line - b.line)
 }
 
+// ---- Rust ------------------------------------------------------------------------
+
+type RustKind = "ws" | "comment" | "str" | "char" | "life" | "ident" | "num" | "punct"
+interface RustSegment {
+  kind: RustKind
+  start: number
+  end: number
+}
+
+const RUST_PUNCT3 = ["<<=", ">>=", "...", "..="]
+const RUST_PUNCT2 = ["::", "->", "=>", "&&", "||", "==", "!=", "<=", ">=", "+=", "-=", "*=", "/=", "%=", "^=", "&=", "|=", "<<", ">>", ".."]
+const RUST_IDENT_START = /[A-Za-z_\u0080-￿]/
+const RUST_IDENT = /[\w\u0080-￿]/
+
+/** A Rust text cut into its pieces: comments (nested block comments too), strings (raw, byte and C strings too), char literals, lifetimes, words, numbers and punctuation. */
+function rustSegments(src: string): RustSegment[] {
+  const out: RustSegment[] = []
+  const n = src.length
+  let i = 0
+  const push = (kind: RustKind, end: number) => {
+    out.push({ kind, start: i, end })
+    i = end
+  }
+  /** The end of a string whose body starts at j: escapes skipped, newlines kept. */
+  const quoted = (j: number): number => {
+    while (j < n && src[j] !== '"') j += src[j] === "\\" ? 2 : 1
+    return Math.min(n, j + 1)
+  }
+  while (i < n) {
+    const c = src[i] as string
+    if (/\s/.test(c)) {
+      let j = i + 1
+      while (j < n && /\s/.test(src[j] as string)) j++
+      push("ws", j)
+      continue
+    }
+    if (c === "/" && src[i + 1] === "/") {
+      const e = src.indexOf("\n", i)
+      push("comment", e < 0 ? n : e)
+      continue
+    }
+    if (c === "/" && src[i + 1] === "*") {
+      let depth = 1
+      let j = i + 2
+      while (j < n && depth > 0) {
+        if (src.startsWith("/*", j)) depth++, j += 2
+        else if (src.startsWith("*/", j)) depth--, j += 2
+        else j++
+      }
+      push("comment", j)
+      continue
+    }
+    if (c === '"') {
+      push("str", quoted(i + 1))
+      continue
+    }
+    // r"…", r#"…"#, br"…", cr"…": no escapes, closed by the quote and as many hashes as opened it
+    const raw = /(?:b|c)?r(#*)"/y
+    raw.lastIndex = i
+    const r = raw.exec(src)
+    if (r) {
+      const close = '"' + (r[1] ?? "")
+      const e = src.indexOf(close, i + r[0].length)
+      push("str", e < 0 ? n : e + close.length)
+      continue
+    }
+    if ((c === "b" || c === "c") && src[i + 1] === '"') {
+      push("str", quoted(i + 2))
+      continue
+    }
+    if (c === "r" && src[i + 1] === "#" && RUST_IDENT_START.test(src[i + 2] ?? "")) {
+      // a raw identifier: r#type
+      let j = i + 3
+      while (j < n && RUST_IDENT.test(src[j] as string)) j++
+      push("ident", j)
+      continue
+    }
+    const q = c === "b" && src[i + 1] === "'" ? i + 1 : c === "'" ? i : -1
+    if (q >= 0) {
+      if (src[q + 1] === "\\") {
+        let j = q + 3
+        while (j < n && src[j] !== "'" && src[j] !== "\n") j++
+        push("char", j + 1)
+        continue
+      }
+      const cp = src.codePointAt(q + 1)
+      const w = cp !== undefined && cp > 0xffff ? 2 : 1
+      if (cp !== undefined && src[q + 1 + w] === "'") {
+        push("char", q + 2 + w)
+        continue
+      }
+      if (c === "'") {
+        // a lifetime or a loop label: 'a, 'static, 'outer
+        let j = i + 1
+        while (j < n && RUST_IDENT.test(src[j] as string)) j++
+        push("life", j)
+        continue
+      }
+    }
+    if (RUST_IDENT_START.test(c)) {
+      let j = i + 1
+      while (j < n && RUST_IDENT.test(src[j] as string)) j++
+      push("ident", j)
+      continue
+    }
+    if (/\d/.test(c)) {
+      let j = i + 1
+      for (;;) {
+        while (j < n && /\w/.test(src[j] as string)) j++
+        // 1.5 is one number; 0..n is a range
+        if (src[j] === "." && /\d/.test(src[j + 1] ?? "")) j++
+        else break
+      }
+      push("num", j)
+      continue
+    }
+    const p = RUST_PUNCT3.find((x) => src.startsWith(x, i)) ?? RUST_PUNCT2.find((x) => src.startsWith(x, i)) ?? c
+    push("punct", i + p.length)
+  }
+  return out
+}
+
+/** Blank a Rust text's comments, keeping every newline and every string, char literal and lifetime. */
+export function stripRust(text: string): string {
+  return rustSegments(text).map((s) => {
+    const piece = text.slice(s.start, s.end)
+    return s.kind === "comment" ? piece.replace(/[^\n]/g, " ") : piece
+  }).join("")
+}
+
+/** The tokens of a Rust text: strings and char literals become STR, numbers NUM, lifetimes LIFE. */
+function rustTokens(src: string): Token[] {
+  const out: Token[] = []
+  let line = 1
+  let nl = false
+  for (const s of rustSegments(src)) {
+    const piece = src.slice(s.start, s.end)
+    if (s.kind === "ws" || s.kind === "comment") {
+      const breaks = piece.split("\n").length - 1
+      if (breaks) line += breaks, nl = true
+      continue
+    }
+    const t = s.kind === "str" || s.kind === "char" ? "STR" : s.kind === "num" ? "NUM" : s.kind === "life" ? "LIFE" : piece
+    out.push({ t, line, nl })
+    nl = false
+    line += piece.split("\n").length - 1
+  }
+  return out
+}
+
+const RUST_KEYWORDS = new Set([
+  "as",
+  "async",
+  "break",
+  "const",
+  "continue",
+  "dyn",
+  "else",
+  "enum",
+  "extern",
+  "fn",
+  "for",
+  "if",
+  "impl",
+  "in",
+  "let",
+  "loop",
+  "match",
+  "mod",
+  "move",
+  "mut",
+  "pub",
+  "ref",
+  "return",
+  "static",
+  "struct",
+  "trait",
+  "type",
+  "unsafe",
+  "use",
+  "where",
+  "while",
+  "yield",
+])
+/** Tokens a closure's opening `|` can follow: where an expression starts. */
+const CLOSURE_AFTER = new Set(["(", "[", "{", ",", "=", ";", "=>", ":", "return", "move", "async", "break"])
+/** Does a token end an operand: is an `&&`, `||` or `?` after it an operator rather than a reference, a closure or a `?Sized`? */
+const endsOperand = (t: string | undefined): boolean =>
+  t !== undefined && (t === ")" || t === "]" || t === "?" || t === "STR" || t === "NUM" || (RUST_IDENT_START.test(t) && !RUST_KEYWORDS.has(t)))
+
+interface RustFrame {
+  fn?: Fn
+  /** A match's body: the arms counted in it, and the function they count for. */
+  match?: { arms: number; fn: Fn | undefined }
+}
+
+/** The functions in a Rust text whose comments are blanked: `fn` items and methods, with or without a body's `impl`, `trait` or `mod` around them, and closures. */
+export function rustFunctions(stripped: string): FunctionInfo[] {
+  const toks = rustTokens(stripped)
+  const partner = new Map<number, number>()
+  const open: number[] = []
+  toks.forEach((tok, i) => {
+    if (tok.t === "(" || tok.t === "[" || tok.t === "{") open.push(i)
+    else if (CLOSE[tok.t]) {
+      const o = open.pop()
+      if (o !== undefined) {
+        partner.set(o, i)
+        partner.set(i, o)
+      }
+    }
+  })
+  const done: Fn[] = []
+  const frames: RustFrame[] = []
+  const exprs: ExprFn[] = []
+  const bodies = new Map<number, Fn>()
+  const matches = new Set<number>()
+  const innermostFn = (): Fn | undefined => {
+    const e = exprs.at(-1)
+    for (let k = frames.length - 1; k >= 0; k--) {
+      if (e && e.depth > k) return e
+      const f = frames[k]!.fn
+      if (f) return f
+    }
+    return e
+  }
+  /** From index j, the first `{` outside brackets, or -1 when a `;` comes first: a signature's body, a match's arms. */
+  const braceAfter = (j: number): number => {
+    for (; j < toks.length; j++) {
+      const t = toks[j]!.t
+      if (t === "{") return j
+      if (t === ";" || t === "}" || CLOSE[t]) return -1
+      if ((t === "(" || t === "[") && partner.has(j)) j = partner.get(j)!
+    }
+    return -1
+  }
+  const finishExprs = (i: number, depth: number) => {
+    while (exprs.length) {
+      const e = exprs.at(-1)!
+      const t = toks[i]?.t
+      if (!(i >= toks.length || depth < e.depth || (depth === e.depth && (t === "," || t === ";")))) break
+      e.end = toks[i - 1]?.line ?? e.line
+      done.push(exprs.pop()!)
+    }
+  }
+  for (let i = 0; i < toks.length; i++) {
+    const tok = toks[i]!
+    const t = tok.t
+    const prev = toks[i - 1]?.t
+    const next = toks[i + 1]?.t
+    const depth = frames.length
+    finishExprs(i, CLOSE[t] ? depth - 1 : depth)
+    // the decisions in the innermost function's body
+    const loopFor = t === "for" && next !== "<" && !endsOperand(prev) && prev !== ">" && prev !== ">>"
+    const letElse = t === "else" && prev !== "}"
+    const operator = (t === "&&" || t === "||") && endsOperand(prev)
+    const tryOp = t === "?" && (endsOperand(prev) || prev === "}")
+    if (t === "if" || t === "while" || loopFor || letElse || operator || tryOp) {
+      const fn = innermostFn()
+      if (fn) fn.decisions++
+    }
+    if (t === "=>" && frames.at(-1)?.match) frames.at(-1)!.match!.arms++
+    if (t === "(" || t === "[" || t === "{") {
+      const fn = bodies.get(i)
+      const frame: RustFrame = fn ? { fn } : {}
+      if (matches.has(i)) frame.match = { arms: 0, fn: innermostFn() }
+      frames.push(frame)
+      continue
+    }
+    if (CLOSE[t]) {
+      const f = frames.pop()
+      if (f?.match?.fn) f.match.fn.decisions += Math.max(0, f.match.arms - 1)
+      if (f?.fn) {
+        f.fn.end = tok.line
+        done.push(f.fn)
+      }
+      continue
+    }
+    if (t === "match" && prev !== ".") {
+      const body = braceAfter(i + 1)
+      if (body >= 0) matches.add(body)
+      continue
+    }
+    if (t === "fn" && next !== undefined && RUST_IDENT_START.test(next)) {
+      let j = i + 2
+      if (toks[j]?.t === "<") {
+        for (let d = 0; j < toks.length; j++) {
+          const u = toks[j]!.t
+          if (u === "<") d++
+          else if (u === ">") d--
+          else if (u === ">>") d -= 2
+          if (d <= 0) break
+        }
+        j++
+      }
+      if (toks[j]?.t !== "(" || !partner.has(j)) continue
+      const body = braceAfter(partner.get(j)! + 1)
+      if (body >= 0) bodies.set(body, { name: next, line: tok.line, end: tok.line, decisions: 0 })
+      i = partner.get(j)!
+      continue
+    }
+    if ((t === "|" || t === "||") && (prev === undefined || CLOSURE_AFTER.has(prev))) {
+      // a closure: its parameters, then a block, a return type and a block, or an expression
+      let close = i
+      if (t === "|") {
+        close = -1
+        for (let j = i + 1; j < toks.length; j++) {
+          const u = toks[j]!.t
+          if (u === "|") {
+            close = j
+            break
+          }
+          if ((u === "(" || u === "[" || u === "{") && partner.has(j)) j = partner.get(j)!
+          else if (u === ";" || CLOSE[u]) break
+        }
+        if (close < 0) continue
+      }
+      let k = i - 1
+      while (toks[k]?.t === "move" || toks[k]?.t === "async") k--
+      const name = toks[k]?.t === "=" && toks[k - 1] && RUST_IDENT_START.test(toks[k - 1]!.t) && !RUST_KEYWORDS.has(toks[k - 1]!.t)
+        ? toks[k - 1]!.t
+        : "(closure)"
+      const fn: Fn = { name, line: tok.line, end: tok.line, decisions: 0 }
+      const after = toks[close + 1]?.t
+      if (after === "{") bodies.set(close + 1, fn)
+      else if (after === "->") {
+        const body = braceAfter(close + 2)
+        if (body >= 0) bodies.set(body, fn)
+      } else exprs.push({ ...fn, depth })
+      i = close
+      continue
+    }
+  }
+  finishExprs(toks.length, 0)
+  return done
+    .map((f) => ({ name: f.name, line: f.line, lines: Math.max(1, f.end - f.line + 1), complexity: 1 + f.decisions }))
+    .sort((a, b) => a.line - b.line)
+}
+
 // ---- the languages Naima knows ------------------------------------------------
 
 const JS_QUOTES = ['"', "'", "`"]
 
-/** The languages the program ships: their files, comments, and for TS/JS their functions. */
+/** The languages the program ships: their files, comments, and for TypeScript, JavaScript and Rust their functions. */
 export const builtinLanguages: Language[] = [
   {
     id: "typescript",
@@ -626,7 +968,7 @@ export const builtinLanguages: Language[] = [
     functions: jsFunctions,
   },
   { id: "python", says: "Python", extensions: [".py"], code: true, comments: HASH },
-  { id: "rust", says: "Rust", extensions: [".rs"], code: true, comments: C_LIKE },
+  { id: "rust", says: "Rust", extensions: [".rs"], code: true, comments: C_LIKE, strip: stripRust, functions: rustFunctions },
   { id: "go", says: "Go", extensions: [".go"], code: true, comments: C_LIKE, quotes: ['"', "`"] },
   { id: "java", says: "Java", extensions: [".java"], code: true, comments: C_LIKE },
   { id: "kotlin", says: "Kotlin", extensions: [".kt", ".kts"], code: true, comments: C_LIKE },
@@ -926,7 +1268,7 @@ export const builtinMeasures: CodeMeasure[] = [
   { id: "files", says: "how many files, of the languages selected", unit: "files", better: "neither", measure: (i) => i.files.length },
   {
     id: "functions",
-    says: "how many functions, methods and arrow functions, in the languages that find them (TypeScript, JavaScript)",
+    says: "how many functions, methods and arrow functions, in the languages that find them (TypeScript, JavaScript, Rust)",
     unit: "functions",
     better: "neither",
     measure: (i) => i.files.reduce((n, f) => n + (f.functions?.length ?? 0), 0),
@@ -1005,7 +1347,7 @@ export function selectFiles(
       const text = source.read(path)
       if (text === null) cache.set(path, null)
       else {
-        const stripped = stripComments(text, lang)
+        const stripped = lang.strip ? lang.strip(text) : stripComments(text, lang)
         let functions: FunctionInfo[] | undefined
         try {
           functions = lang.functions?.(stripped)

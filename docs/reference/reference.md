@@ -129,7 +129,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `metric-kinds` | metrics | how a metric's number is read from its run: `read({ exit, stdout, stderr, seconds }, metric) → number \| { error }`, `readsExit` | metrics |
 | `metrics` | metrics | a named measurement: `run` (a program and its arguments) and `kind`, a code `measure`, a test `suite`'s number or a `file`'s; a bound — `atMost`, `atLeast` or `equals` — and `better` |  |
 | `code-measures` | metrics | a code-quality number taken in process from the files: `measure({ files, source }, metric) → number \| { error }`, with its `unit` and `better` | metrics |
-| `code-languages` | metrics | a language code measures read: `extensions`, `code`, `comments`, `quotes`, and `functions(stripped) → [{ name, line, lines, complexity }]` when it can find them | metrics |
+| `code-languages` | metrics | a language code measures read: `extensions`, `code`, `comments`, `quotes`, `strip(text)` when the generic comment scan cannot read it, and `functions(stripped) → [{ name, line, lines, complexity }]` when it can find them | metrics |
 | `test-formats` | metrics | how a test suite's machine-readable output is read: `parse(text) → [{ name, file, result, seconds, message }] \| { error }` | metrics |
 | `test-suites` | metrics | a test suite: `run` (a program and its arguments), the `format` its report is in, and where the `report` is |  |
 | `rules` | rules | a rule a plugin ships, active in every project that loads it beside the project's own rules items: `name`, `title`, `audience`, `strength`, `text`, `why`, and optionally `ack` and `enforcedBy`; a project retires one with the rules plugin's `retire` option | coordination, planning, long-work |
@@ -2352,7 +2352,7 @@ naima metrics presets
 |---|---|---|---|
 | `loc` | lines | neither | lines of code: lines with code on them, comments and blank lines left out |
 | `files` | files | neither | how many files, of the languages selected |
-| `functions` | functions | neither | how many functions, methods and arrow functions, in the languages that find them (TypeScript, JavaScript) |
+| `functions` | functions | neither | how many functions, methods and arrow functions, in the languages that find them (TypeScript, JavaScript, Rust) |
 | `function-size` | lines | lower | lines per function: a `statistic` of them — mean (default), median, p90, max or sum |
 | `complexity` |  | lower | cyclomatic complexity per function, estimated: a `statistic` of it — mean (default), median, p90, max or sum |
 | `duplication` | % | lower | the share of code lines inside a run of `window` (default 6) consecutive lines that appears more than once |
@@ -2366,7 +2366,7 @@ naima metrics presets
 | `typescript` | .ts .tsx .mts .cts | yes |
 | `javascript` | .js .jsx .mjs .cjs | yes |
 | `python` | .py |  |
-| `rust` | .rs |  |
+| `rust` | .rs | yes |
 | `go` | .go |  |
 | `java` | .java |  |
 | `kotlin` | .kt .kts |  |

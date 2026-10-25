@@ -89,5 +89,5 @@ Say what the chart shows in one line, with the numbers it is drawn from
 (`naima metrics history` prints them), for example "coverage 78 % → 84 % over
 50 commits; complexity flat at 3.0, the worst function went from 41 to 52".
 The complexity numbers are an estimate, made by scanning the tokens of
-TypeScript and JavaScript rather than parsing them, so report a trend and
+TypeScript, JavaScript and Rust rather than parsing them, so report a trend and
 don't present a single function's score as a fact.

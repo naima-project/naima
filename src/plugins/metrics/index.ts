@@ -286,7 +286,7 @@ export const measuresPoint: ExtensionPoint<CodeMeasure> = {
 export const languagesPoint: ExtensionPoint<Language> = {
   id: "code-languages",
   says:
-    "a language code measures read: `extensions`, `code`, `comments`, `quotes`, and `functions(stripped) → [{ name, line, lines, complexity }]` when it can find them",
+    "a language code measures read: `extensions`, `code`, `comments`, `quotes`, `strip(text)` when the generic comment scan cannot read it, and `functions(stripped) → [{ name, line, lines, complexity }]` when it can find them",
   noun: "code language",
   stored: true,
   key: (l) => l.id,
