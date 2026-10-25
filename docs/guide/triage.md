@@ -52,7 +52,7 @@ $ naima triage
   bugs            1           0          0          0          0   0
   tests           1           0          0          0          0   0
 $ naima triage missing
-2 open items without effort — the field only a person can set:
+2 open items without effort — set once someone has looked at the work, never guessed:
   tests/looks-right-phone  Looks right on a phone
   bugs/second-bug  Second bug
 ```

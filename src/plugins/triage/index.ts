@@ -261,7 +261,7 @@ const SUBCOMMANDS: Record<string, Subcommand> = {
     run(args, ctx) {
       if (args.length) throw usageError(this)
       const unsized = openItems(ctx).filter((i) => !fieldValue(i, EFFORT))
-      ctx.out(`${unsized.length} open items without effort — the field only a person can set:`)
+      ctx.out(`${unsized.length} open items without effort — set once someone has looked at the work, never guessed:`)
       for (const i of byUrgency(ctx, unsized)) ctx.out(`  ${label(i)}  ${i.meta.title}`)
       return 0
     },
