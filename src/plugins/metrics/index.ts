@@ -63,6 +63,7 @@ import {
   type Finding,
   type Item,
   label,
+  message,
   NO_PROGRESS,
   parse,
   type Plugin,
@@ -718,7 +719,7 @@ export function measure(ctx: Context, m: MetricDef, site: Site = workingSite(ctx
       const read = cm.measure({ files, source: selectSource(source, m) }, m)
       return typeof read === "number" ? { value: read, exit: 0 } : { value: null, exit: 0, error: read.error }
     } catch (e) {
-      return { value: null, exit: -1, error: (e as Error).message }
+      return { value: null, exit: -1, error: message(e) }
     }
   }
   if (m.suite !== undefined) {
@@ -726,7 +727,7 @@ export function measure(ctx: Context, m: MetricDef, site: Site = workingSite(ctx
     try {
       o = suiteAt(ctx, m.suite, site)
     } catch (e) {
-      return { value: null, exit: -1, error: (e as Error).message }
+      return { value: null, exit: -1, error: message(e) }
     }
     const v = suiteValue(o, (m.field ?? "failed") as SuiteField)
     return typeof v === "number" ? { value: v, exit: o.run.exit } : { value: null, exit: o.run.exit, error: v.error }
@@ -1229,7 +1230,7 @@ const metricsCommand: Command = {
       try {
         writeFileAtomic(path, doc + "\n")
       } catch (e) {
-        throw new Error(`could not write ${file}: ${(e as Error).message} — print it instead: naima metrics plot … > ${file}`)
+        throw new Error(`could not write ${file}: ${message(e)} — print it instead: naima metrics plot … > ${file}`)
       }
       ctx.out(`wrote ${file}: ${series.map((s) => `${s.name} (${s.points.length} commits)`).join(", ")}`)
       return 0
