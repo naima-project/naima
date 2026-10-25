@@ -5,7 +5,7 @@
 // write the same path. The collection is never stored: it is recombined at
 // read time from every ref worth reading. Nothing in this module writes.
 
-import { spawnSync } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs"
 import { join, relative, resolve, sep } from "node:path"
 import { isRegularFile, walkFiles } from "./files.ts"
@@ -86,6 +86,36 @@ export function runGit(cwd: string, args: string[], opts: GitOptions = {}): GitR
   const r = spawnGit(cwd, args, opts, "utf8")
   const notInstalled = (r.error as { code?: string } | undefined)?.code === "ENOENT"
   return { ok: r.status === 0, out: String(r.stdout ?? "").replace(/\r?\n$/, ""), err: String(r.stderr ?? "").trim(), notInstalled }
+}
+
+/**
+ * A git run that does not block the process, ended after `timeoutMs`: what a network call that must stay short
+ * uses (the tick's update check). It never prompts for credentials, and never throws: a timeout is a failed run that says so.
+ */
+export function runGitAsync(cwd: string, args: string[], timeoutMs: number): Promise<GitRun> {
+  calls++
+  const env = { ...(envFor(cwd) ?? process.env), GIT_TERMINAL_PROMPT: "0" }
+  return new Promise((done) => {
+    let out = ""
+    let err = ""
+    let settled = false
+    // Called only from the child's events and the timer, both after the timer exists.
+    const finish = (r: GitRun): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      done(r)
+    }
+    const child = spawn("git", args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] })
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL")
+      finish({ ok: false, out: "", err: `no answer within ${Math.round(timeoutMs / 1000)} s`, notInstalled: false })
+    }, timeoutMs)
+    child.stdout?.on("data", (b) => (out += String(b)))
+    child.stderr?.on("data", (b) => (err += String(b)))
+    child.once("error", (e) => finish({ ok: false, out: "", err: String(e), notInstalled: (e as { code?: string }).code === "ENOENT" }))
+    child.once("close", (code) => finish({ ok: code === 0, out: out.replace(/\r?\n$/, ""), err: err.trim(), notInstalled: false }))
+  })
 }
 
 /** Why a run failed, in one line: git's own first line, or that git is not there. */

@@ -33,6 +33,7 @@ import { addedPrivate, allowanceLine, privateContext, type PrivateFinding, priva
 import { asRendered, type Format, linesAs, rendered } from "./rendered.ts"
 import { flagsOf } from "./vocabulary.ts"
 import { waive, WAIVERS } from "./waivers.ts"
+import { LEVEL, messagesCommand, messagesType } from "./messages.ts"
 import type { Command, Context, Contribution, FieldDef, Item, Plugin, Rendered, SummarySection, TypeDef, View, Write, WriteHook } from "./types.ts"
 
 export function typeOrThrow(ctx: Context, id: string | undefined): TypeDef {
@@ -842,6 +843,7 @@ export const corePlugin: Plugin = {
     { name: "section", kind: "string", says: "the heading the item is grouped under on its board" },
     { name: "created", kind: "date", says: "when the item was opened" },
     { name: "tags", kind: "strings", says: "free labels a person puts on an item" },
+    LEVEL,
   ],
   relations: [
     { name: "relates-to", inverse: "relates-to", says: "is related to" },
@@ -849,9 +851,10 @@ export const corePlugin: Plugin = {
     { name: "blocks", inverse: "blocked-by", says: "must be resolved before" },
     { name: "blocked-by", inverse: "blocks", says: "waits on" },
   ],
+  types: [messagesType],
   dirs: [WAIVERS],
   checks: coreChecks,
-  commands: [newCommand, show, list, set, note, describe, link, unlink, move, check, waive, board, view, summary, plugins, types, runs],
+  commands: [newCommand, show, list, set, note, describe, link, unlink, move, check, waive, board, view, summary, plugins, types, runs, messagesCommand],
   summary: [counts],
   hooks: [statusMoves, notesAppendOnly, privateInfrastructure],
 }

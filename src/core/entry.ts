@@ -1,5 +1,5 @@
 // The commands the entry point answers itself, before any plugin is loaded:
-// init, update, rollback, hello, plugin, guide, help. Documented like any plugin's command, so
+// init, update, rollback, hello, tick, plugin, guide, help. Documented like any plugin's command, so
 // the reference lists them, and reserved: no plugin command may take one.
 
 import { DATA_DIR, DATA_FILE, PROGRAM_DIR, TRACKER_DIR } from "./layout.ts"
@@ -10,7 +10,7 @@ export const cliCommands: Omit<Command, "run">[] = [
   {
     name: "init",
     says:
-      `make the git repository around the program a Naima project, as its first run does by itself: beside the program, a git clone of Naima at ${TRACKER_DIR}/${PROGRAM_DIR}/, create ${DATA_DIR}/${DATA_FILE}, locked to the clone's origin and its HEAD, which must be on the origin's main, and the tracker folder's README.md and .gitignore; print the line that keeps the program out of each host tool configuration it finds (deno.json, tsconfig.json, .prettierignore); and write what makes an agent run naima hello at the start of every session: the line that tells agents where Naima is and to run it, into the host's AGENTS.md, else the first entry file it has, else a new AGENTS.md, and the session-start hook of each agent tool the project uses that has one (naima.json's agents; absent it, those whose files the project holds); nothing else outside ${TRACKER_DIR}/ is touched unless --write-excludes is given`,
+      `make the git repository around the program a Naima project, as its first run does by itself: beside the program, a git clone of Naima at ${TRACKER_DIR}/${PROGRAM_DIR}/, create ${DATA_DIR}/${DATA_FILE}, locked to the clone's origin and its HEAD, which must be on the origin's main, and the tracker folder's README.md and .gitignore; print the line that keeps the program out of each host tool configuration it finds (deno.json, tsconfig.json, .prettierignore); and write what makes an agent run naima hello at the start of every session: the line that tells agents where Naima is and to run it, into the host's AGENTS.md, else the first entry file it has, else a new AGENTS.md, and the hooks of each agent tool the project uses that has them (naima.json's agents; absent it, those whose files the project holds): a session-start hook that runs naima hello, and a turn-end hook that runs the tick when the agent ends its turn; nothing else outside ${TRACKER_DIR}/ is touched unless --write-excludes is given`,
     enforces:
       "the program is locked to a commit of its source's main, with nothing uncommitted; outside the tracker folder, only the pointer line, the session-start hooks and, with --write-excludes, the exclusion lines are written",
     usage: "init [--private-tracker | --tracker <url> [--private-url] | --tracker-inside] [--write-excludes] [--no-session-hook]",
@@ -90,9 +90,34 @@ export const cliCommands: Omit<Command, "run">[] = [
     name: "hello",
     says:
       `what an agent says first in a session: the banner (I'm Naima, the No-guesswork Artificial Intelligence Meta-Agent, active in this repository, with its version and commit); then, as naima.json's updates says, whether a newer Naima exists and, under update, what it changes and its rehearsal, as update --check says them; then, one line each, what waits on the owner's decision, such as a long run that is due, never started; then what it offers on request: what Naima is and its documentation, an update check, an update after the owner's yes`,
-    enforces: "nothing: it never moves the lock, writes the project nor starts a run; it asks the source only when updates is check or update",
-    usage: "hello",
-    examples: ["hello"],
+    enforces:
+      "it never moves the lock nor starts a run; it asks the source only when updates is check or update, and records that check as the day's, in the tick's state outside the repository; the only thing it may write in the project is an urgent message the tick raises",
+    usage: "hello [--hook <tool>]",
+    options: [
+      {
+        name: "--hook",
+        says:
+          "print the greeting as the session-start hook of that agent tool wants it, named as naima.json's agents names it: the greeting for the owner to see directly, and what the agent is to say first, in the form the tool's adapter gives (src/core/adapters/)",
+      },
+    ],
+    examples: ["hello", "hello --hook <tool>"],
+  },
+  {
+    name: "tick",
+    says:
+      "run the tick now, as every command does before its own work: each job that is due — the update check once a day, unless updates is off; the jobs plugins contribute, such as the due long runs once an hour — run by whichever naima process wins it, a failed one retried an hour later, a week of failed update checks raising an urgent message; then say what is due to the owner, each message once, an urgent one once an hour until the owner acknowledges it (naima messages). Every other command says them after its own output, on standard error, one line each: NAIMA-MESSAGE, a space, and the message as a JSON object with the keys id, level (info, warning or urgent), text and ack, where ack is the command that acknowledges it, or null for a message said once",
+    enforces:
+      "no lock: every decision is a file created only if it does not exist, kept outside the repository in the clone's git directory, so any number of naima processes, in any worktree of the clone, run each due job once; nothing is applied and no long work starts: it finds and says",
+    usage: "tick [--json] [--hook <tool>]",
+    options: [
+      { name: "--json", says: "print the jobs run here and the messages to show as JSON" },
+      {
+        name: "--hook",
+        says:
+          "run as the turn-end hook of that agent tool, named as naima.json's agents names it: when a message is due, print what keeps the agent from ending its turn and tells it what to tell or ask the owner, in the form the tool's adapter gives; nothing otherwise; it never fails",
+      },
+    ],
+    examples: ["tick", "tick --json", "tick --hook <tool>"],
   },
   {
     name: "plugin",

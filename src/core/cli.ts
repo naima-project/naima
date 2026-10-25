@@ -24,7 +24,7 @@ import { cliCommands } from "./entry.ts"
 import { FORMAT, formatRefusal, isFormat, migrate, MIGRATIONS, type Step } from "./format.ts"
 import { formatsFor, type OpenOptions, openProject, owed } from "./project.ts"
 import { bool, pairs, parse, str } from "./args.ts"
-import { gitOrNull, nativePath, runGit, toplevel, trunk } from "./git.ts"
+import { gitOrNull, gitReason, nativePath, runGit, runGitAsync, toplevel, trunk } from "./git.ts"
 import { remoteVisibility, type Visibility } from "./visibility.ts"
 import {
   installTrailerHooks,
@@ -84,6 +84,22 @@ import { shortOrId } from "./names.ts"
 import { apiFor } from "./plugins.ts"
 import { atSessionStart } from "./base.ts"
 import { committedLock as lockOfLastCommit, type SessionConfig, sessionStartGaps, startSessions, unfinishedUpdate } from "./session-start.ts"
+import { adapter, ADAPTERS } from "./adapters/index.ts"
+import { itemStore } from "./messages.ts"
+import {
+  HOUR,
+  type JobOutcome,
+  messageId,
+  messageLine,
+  type Notice,
+  record,
+  type Schedule,
+  startTick,
+  tickDir,
+  type TickResult,
+  type TickTask,
+} from "./tick.ts"
+import type { TickJob } from "./types.ts"
 
 export interface CliOptions extends OpenOptions {
   cwd: string
@@ -98,6 +114,11 @@ export interface CliOptions extends OpenOptions {
   debug?: boolean
   /** How init asks whether a remote URL is public: GitHub's public API, unless a test gives its own. */
   visibility?: (url: string) => Promise<Visibility>
+  /**
+   * The tick, for a run the launcher did not start: a test's clock and update check. Launched, every command
+   * ticks with the real ones; run directly, as the development build, nothing ticks unless this is given.
+   */
+  tick?: { clock?: () => Date; check?: (signal: AbortSignal) => Promise<JobOutcome> }
 }
 
 const usage = (name: string): string => `usage: naima ${cliCommands.find((c) => c.name === name)?.usage ?? name}`
@@ -670,15 +691,160 @@ async function rollback(args: string[], opts: CliOptions, place: Place, lock: Lo
   return await moveLock(opts, place, lock, raw, io, resolveCommit(t, previousLock(place, lock.commit)))
 }
 
+/** The update check's schedule: once a day, a short network call, retried an hour after a failure, urgent after a week of them. */
+export const UPDATE_CHECK: Schedule = { name: "update-check", every: "day", timeoutMs: 8_000, retryAfterMs: HOUR, escalateAfterDays: 7 }
+
+/** What a check of the source found, as the tick records it: a newer Naima is a message for the owner, said once per commit. */
+function checked(lock: Lock, head: string): JobOutcome {
+  if (head === lock.commit) return { ok: true, notices: [] }
+  const notice: Notice = {
+    id: messageId("update-available", short(head)),
+    level: "info",
+    text: `A newer Naima is available: ${short(lock.commit)} → ${
+      short(head)
+    }. Ask the owner whether to update: naima update --check says what it changes, and nothing is applied without the owner's yes.`,
+  }
+  return { ok: true, notices: [notice] }
+}
+
+/** The update check as a job of the tick; null when naima.json's updates is off. */
+function updateCheck(opts: CliOptions, place: Place, lock: Lock, raw: Record<string, unknown>): TickTask | null {
+  if (parseUpdates(raw["updates"]) === "off") return null
+  return {
+    ...UPDATE_CHECK,
+    escalation: (since) => ({
+      title: `Naima has not been able to check for a newer version since ${since}`,
+      text: `The daily check of Naima's source for a newer version has failed every day since ${since}, so a fix or a security update may be waiting unseen. ` +
+        "Run naima update --check to see why it fails (no network, a source that moved or was removed, missing credentials). Nothing is updated without the owner's yes.",
+    }),
+    async run(signal) {
+      if (opts.tick?.check) return await opts.tick.check(signal)
+      const r = await runGitAsync(place.root, ["ls-remote", "--", lock.source, "refs/heads/main"], UPDATE_CHECK.timeoutMs ?? 8_000)
+      const head = r.ok ? r.out.split(/\s+/)[0] : undefined
+      if (!head) return { ok: false, error: r.ok ? "the source has no main branch" : gitReason(r) }
+      return checked(lock, head)
+    },
+  }
+}
+
+/** A plugin's job as the tick runs it, in the project's context. */
+const asTask = (ctx: Context, job: TickJob): TickTask => ({ ...job, run: (signal) => job.run(ctx, signal) })
+
+/** Whether this run ticks: launched, always; run directly, only when a test asks. */
+const ticks = (opts: CliOptions): boolean => opts.launched === true || opts.tick !== undefined
+
+/** Start the tick of a command: every job due claimed and started, nothing waited for. Null when this run does not tick. */
+function beginTick(opts: CliOptions, place: Located, ctx: Context): { finish(): Promise<TickResult> } | null {
+  if (!ticks(opts)) return null
+  try {
+    const dir = tickDir(place.root)
+    if (!dir) return null
+    const check = updateCheck(opts, place, place.lock, place.raw)
+    const jobs = ctx.registry.contributions("jobs").map((c) => asTask(ctx, c.value as TickJob))
+    return startTick({ dir, clock: opts.tick?.clock ?? (() => ctx.now()), tasks: [...(check ? [check] : []), ...jobs], store: itemStore(ctx) })
+  } catch {
+    return null // the tick never stops a command
+  }
+}
+
+/** Wait for the tick's jobs, each bounded by its timeout, and return what it has for the owner, each message claimed. */
+async function endTick(tick: { finish(): Promise<TickResult> } | null): Promise<TickResult> {
+  if (!tick) return { ran: [], shown: [] }
+  try {
+    return await tick.finish()
+  } catch {
+    return { ran: [], shown: [] }
+  }
+}
+
+/** A message as a person reads it in a list: urgent ones marked, with how the owner acknowledges them. */
+const spoken = (n: Notice): string => `${n.level === "urgent" ? "URGENT: " : ""}${n.text}${n.ack ? ` (only the owner acknowledges it: ${n.ack})` : ""}`
+
+/** What an agent is told to do, at the end of its turn, with what the tick has for the owner. */
+export const stopReason = (shown: readonly Notice[]): string =>
+  [
+    "Naima has something for the owner. Before you end this turn, tell the owner in plain words, in your reply:",
+    ...shown.map((n) => `- ${spoken(n)}`),
+    "Ask before acting on any of it: nothing is applied without the owner's yes, and never acknowledge a message on the owner's behalf.",
+  ].join("\n")
+
+/** The adapter `--hook` names, or an error that names the tools that have one. */
+function hookTool(args: string[], command: string): { tool: ReturnType<typeof adapter> | null; rest: string[] } {
+  const at = args.indexOf("--hook")
+  if (at === -1) return { tool: null, rest: args }
+  const id = args[at + 1]
+  const tool = id ? adapter(id) : undefined
+  if (!tool) {
+    throw new Error(
+      `usage: naima ${command} --hook <tool>, one whose adapter has hooks: ${ADAPTERS.filter((a) => a.sessionStart || a.turnEnd).map((a) => a.id).join(", ")}`,
+    )
+  }
+  return { tool, rest: args.filter((_, i) => i !== at && i !== at + 1) }
+}
+
+/**
+ * `naima tick`: run the tick now, waiting for every job due, and say what is due to the owner. With --hook, as the
+ * tool's turn-end hook: what its adapter prints when there is something, nothing otherwise, and never a failure.
+ */
+async function tickCommand(args: string[], opts: CliOptions, place: Located, io: IO): Promise<number> {
+  const { tool, rest } = hookTool(args, "tick")
+  const p = parse(rest, { json: { type: "boolean" } })
+  if (p.positionals.length) throw new Error(usage("tick"))
+  let result: TickResult = { ran: [], shown: [] }
+  try {
+    const ctx = await openProject(place, opts, { ...io, err: () => {} })
+    const tick = beginTick({ ...opts, tick: opts.tick ?? {} }, place, ctx)
+    result = await endTick(tick)
+  } catch (e) {
+    if (tool) return 0
+    throw e
+  }
+  if (tool) {
+    if (result.shown.length) io.out(tool.stopFor ? tool.stopFor(stopReason(result.shown)) : stopReason(result.shown))
+    return 0
+  }
+  if (bool(p, "json")) {
+    io.out(JSON.stringify({ ran: result.ran, messages: result.shown.map((n) => ({ id: n.id, level: n.level, text: n.text, ack: n.ack ?? null })) }, null, 2))
+    return 0
+  }
+  if (!result.shown.length) io.out(result.ran.length ? `ran ${result.ran.join(", ")}; nothing for the owner` : "nothing due")
+  for (const n of result.shown) io.out(spoken(n))
+  return 0
+}
+
+/** What an agent is told at a session start, beside the greeting the owner has just seen. */
+export const greetingContext = (shown: string): string =>
+  [
+    "Naima's session-start greeting (naima hello) has just been shown to the owner directly:",
+    "",
+    shown,
+    "",
+    "In your first reply, say in one line that Naima is active and which version, and pass on, in plain words, anything above that waits on the owner's decision — a newer Naima, a long run that is due, an urgent message — asking before acting on it. Do not run naima hello again in this session.",
+  ].join("\n")
+
 /**
  * `naima hello`: the banner, what the update policy finds, what waits on the owner (the summary sections marked
- * `hello`, such as the long runs that are due), and the offers — what an agent says first in a session. Reads the
- * source only as `updates` says; never moves the lock, never writes the project, never starts a run.
+ * `hello`, such as the long runs that are due, and the urgent messages the tick holds), and the offers — what an
+ * agent says first in a session. Reads the source only as `updates` says, and records that check as the day's update
+ * check; never moves the lock, never starts a run. With --hook, prints it as the tool's session-start hook wants it.
  */
-async function hello(opts: CliOptions, place: Place, lock: Lock, raw: Record<string, unknown>, io: IO): Promise<number> {
+async function hello(args: string[], opts: CliOptions, place: Located, io: IO): Promise<number> {
+  const { tool, rest } = hookTool(args, "hello")
+  if (rest.length) throw new Error(usage("hello"))
+  const { lock, raw } = place
   const me = running(opts.programRoot)
   const policy = parseUpdates(raw["updates"])
   const lines: string[] = []
+  const now = opts.tick?.clock ?? (() => new Date())
+  const dir = ticks(opts) ? tickDir(place.root) : null
+  /** The day's update check, done here: recorded, so the tick does not ask the source again today. */
+  const recorded = (outcome: JobOutcome): void => {
+    try {
+      if (dir) record(UPDATE_CHECK, dir, now(), outcome)
+    } catch {
+      // the tick's state cannot be written here: the next command's tick checks again
+    }
+  }
   // An update an older launcher started, and could not finish: what the next naima update writes.
   try {
     const unfinished = unfinishedUpdate(place.root, place.data, lock.commit, parseConfig(raw, { lenient: true }))
@@ -692,6 +858,7 @@ async function hello(opts: CliOptions, place: Place, lock: Lock, raw: Record<str
     try {
       // Launched, the program may fetch into its own clone, tags too; the development build only reads the source.
       const head = opts.launched ? fetchHead(t) : remoteHead(t)
+      recorded(checked(lock, head.commit))
       if (head.movedTo) lines.push(`${sourceMoved(lock.source, head.movedTo)}.`)
       if (head.commit === lock.commit) lines.push(`Naima is current: the source's ${head.branch} is the locked commit.`)
       else {
@@ -706,24 +873,31 @@ async function hello(opts: CliOptions, place: Place, lock: Lock, raw: Record<str
         }
       }
     } catch (e) {
+      recorded({ ok: false, error: message(e) })
       lines.push(`Could not check for a newer Naima: ${message(e)}.`)
     }
   }
   // What waits on the owner's decision, such as a long run that is due: said, never started. A project that does not
-  // open says why on its next command; the greeting goes on without these lines.
+  // open says why on its next command; the greeting goes on without these lines. Then the tick: what it shows here is
+  // said by the lines above, except the urgent messages, said after them.
   try {
-    lines.push(...await atSessionStart(await openProject(place, opts, { ...io, err: () => {} })))
+    const ctx = await openProject(place, opts, { ...io, err: () => {} })
+    lines.push(...await atSessionStart(ctx))
+    const { shown } = await endTick(beginTick(opts, place, ctx))
+    for (const n of shown) if (n.level === "urgent") lines.push(`URGENT: ${n.text}${n.ack ? ` Only the owner acknowledges it: ${n.ack}.` : ""}`)
   } catch {
     // nothing to add
   }
   // The banner first, read after the check: a fetch brings the tags that name the version.
-  io.out(
+  const all = [
     me
       ? banner(versionOf(me.repo, me.commit), me.commit)
       : `${INTRODUCTION}, active in this repository: a development build, its lock commit ${short(lock.commit)}.`,
-  )
-  for (const line of lines) io.out(line)
-  io.out(OFFERS)
+    ...lines,
+    OFFERS,
+  ]
+  if (tool?.greeting) io.out(tool.greeting(all.join("\n"), greetingContext(all.join("\n"))))
+  else for (const line of all) io.out(line)
   return 0
 }
 
@@ -1005,7 +1179,8 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
       if (!opts.launched) throw new Error(`naima rollback moves the program, so it runs through the launcher: deno run -A <the program>/naima.ts rollback`)
       return await rollback(args, opts, place, place.lock, place.raw, io)
     }
-    if (command === "hello") return await hello(opts, place, place.lock, place.raw, io)
+    if (command === "hello") return await hello(args, opts, place, io)
+    if (command === "tick") return await tickCommand(args, opts, place, io)
     if (command === "plugin") return pluginCommand(args, opts, place, place.raw, io)
     const ctx = await openProject(place, opts, io)
     if (isHelp(command)) return help(ctx, data, io)
@@ -1028,7 +1203,14 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     const cmd = ctx.registry.find<Command>("commands", command as string)?.value
     if (!cmd) throw new Error(`unknown command "${command}" — naima help`)
     if (args.includes("--help") || args.includes("-h")) return commandHelp(cmd, io)
-    const code = await cmd.run(commandArgs, ctx)
+    // The tick: what is due starts now, beside the command, and what it has for the owner is said after it, on standard error.
+    const tick = beginTick(opts, place, ctx)
+    let code: number
+    try {
+      code = await cmd.run(commandArgs, ctx)
+    } finally {
+      for (const n of (await endTick(tick)).shown) io.err(messageLine(n))
+    }
     if (code !== RELAUNCH) return code
     // Only the entry point asks for a relaunch; a command's 75 would make the launcher run it again.
     io.err(`naima: ${command} exited ${RELAUNCH}, the code reserved for asking the launcher to relaunch — reported as ${EXIT.FAILED}`)

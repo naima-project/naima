@@ -80,7 +80,7 @@ const POINTER_MARK = "(naima/ the program, naima-data/ the data)"
 /** The one line that tells agents where Naima is, and to run naima hello at the start of every session unless a session-start hook already did. */
 export function pointerLine(root: string, tracker: string): string {
   const where = posixRelative(root, tracker)
-  return `Naima is in ${where}/ ${POINTER_MARK}; at the start of every session, run \`deno run -A ${where}/${PROGRAM_DIR}/naima.ts hello\` and pass on what it says, unless its output is already in the conversation because a session-start hook ran it: then pass that on and do not run it again; if you find Naima elsewhere, update this line.`
+  return `Naima is in ${where}/ ${POINTER_MARK}; at the start of every session, run \`deno run -A ${where}/${PROGRAM_DIR}/naima.ts hello\` and pass on what it says, unless its output is already in the conversation because a session-start hook ran it: then pass that on and do not run it again; when a naima command prints a NAIMA-MESSAGE line, tell the owner what it says at once, and never acknowledge a message for them; if you find Naima elsewhere, update this line.`
 }
 
 const textOf = (root: string, entryFile: string): string | null => {

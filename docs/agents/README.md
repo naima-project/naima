@@ -61,6 +61,7 @@ can follow them, and Naima's own repository does.
 | [Adopting an existing board](adopting-an-existing-board.md) | when a project that starts using Naima already keeps a TODO.md, a notes file or an issue list |
 | [Planning: epics, milestones and gates](plan-with-epics-and-gates.md) | when the owner names a body of work, a release or a date |
 | [Long work](long-work.md) | before starting any command expected to outlast a few minutes, or to run on another machine |
+| [Messages to the owner](messages.md) | when a naima command prints a NAIMA-MESSAGE line, or a turn-end hook stops you with what to tell the owner |
 | [Tools](tools.md) | when a verifier says `tool missing:`, or work needs mCRL2 or Storm on a machine |
 | [The non-stop loop](the-non-stop-loop.md) | when work should go on while the owner is away, until only the owner's is left |
 | [Code-quality metrics over time](code-quality-metrics.md) | when the owner asks how the code's quality moves, or for a chart of a metric over the commits |

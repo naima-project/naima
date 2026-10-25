@@ -2,6 +2,7 @@
 // hands back to it, is declared here and nowhere else.
 
 import type { PluginApi } from "./api.ts"
+import type { JobOutcome } from "./tick.ts"
 
 /** A typed cross-reference. `id` is always a permanent item id, never a slug. */
 export interface Link {
@@ -213,6 +214,26 @@ export interface GuideSection {
   render(ctx: Context): Rendered | Promise<Rendered>
 }
 
+/**
+ * A job the tick runs when it is due (core/tick.ts): once per slot — the hour or the day — whichever naima process
+ * wins it, retried after a failure, its notices shown to the owner as messages. Nothing it does may need the owner:
+ * it finds, and says; it never starts long work nor applies a change.
+ */
+export interface TickJob {
+  /** Lower case, digits and dashes: the folder its state is kept in. */
+  name: string
+  says: string
+  every: "hour" | "day"
+  /** Its run is ended after this long, and counts as failed. Default 30 s. */
+  timeoutMs?: number
+  /** After a failed run, the next is due this much later. Default an hour. */
+  retryAfterMs?: number
+  /** A failing streak this many days long raises an urgent message: the one `escalation` says. */
+  escalateAfterDays?: number
+  escalation?(since: string): { title: string; text: string }
+  run(ctx: Context, signal: AbortSignal): Promise<JobOutcome> | JobOutcome
+}
+
 /** One additive term of an item's urgency. Lower is more urgent. */
 export interface RankTerm {
   name: string
@@ -325,6 +346,8 @@ export interface Plugin {
   /** Blocks `naima guide` prints first, inside a project. */
   guide?: GuideSection[]
   rank?: RankTerm[]
+  /** Jobs the tick runs when they are due. */
+  jobs?: TickJob[]
   /** Hooks on every item write, in load order. */
   hooks?: WriteHook[]
   /** Additive changes to other plugins' types and fields. */

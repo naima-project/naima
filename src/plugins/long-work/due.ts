@@ -19,6 +19,7 @@ import {
   type Item,
   joinProse,
   label,
+  messageId,
   NOTES_HEADING,
   privateContext,
   readReadme,
@@ -29,6 +30,7 @@ import {
   setFields,
   splitProse,
   type SummarySection,
+  type TickJob,
   today,
 } from "../../core/api.ts"
 import { ensureRunsDir, NAME, parseDuration, parseSize, readSpec, runsDir, showDuration, SUBCOMMANDS, view, writeJsonAtomic } from "./records.ts"
@@ -286,6 +288,21 @@ export const dueSection = (declared: readonly LongRun[], tracker: (ctx: Context)
   async render(ctx) {
     const { due } = await dueRuns(ctx, declared, tracker(ctx))
     return rendered(due, (ds) => ds.map(dueLine))
+  },
+})
+
+/**
+ * The tick's job: once an hour, whichever naima process wins the hour, find the due runs and say each to the owner,
+ * once a day, as a message — so a long session hears of one without waiting for the next session start. Starts nothing.
+ */
+export const dueJob = (declared: readonly LongRun[], tracker: (ctx: Context) => string): TickJob => ({
+  name: "due-runs",
+  says: "find the long runs that are due and tell the owner, once a day each, that they wait on their decision; starts none",
+  every: "hour",
+  timeoutMs: 60_000,
+  async run(ctx) {
+    const { due } = await dueRuns(ctx, declared, tracker(ctx))
+    return { ok: true, notices: due.map((d) => ({ id: messageId("due-run", d.run.name, today(ctx)), level: "info" as const, text: dueLine(d) })) }
   },
 })
 

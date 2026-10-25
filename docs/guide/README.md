@@ -59,6 +59,7 @@ own checks taking the place of tests.
 | keep the tracker private while the code is public | [Keep the tracker private](private-tracker.md) |
 | make sure a fix doesn't land without its test, or a change without its note | [Commit hooks and companion records](commit-hooks.md) |
 | move to a newer Naima | [Update Naima](update-naima.md) |
+| hear, during a long session, of a newer Naima, a long run that is due or an urgent message, and acknowledge one | [What Naima tells you while you work](messages.md) |
 | add a gate, weigh a check, switch a plugin off | [Configure the project](configure-the-project.md) |
 | use a plugin a colleague gave me | [Add a plugin someone gave you](add-a-plugin.md) |
 | write a plugin, or adopt Naima outside software | [Extending Naima](extending-naima.md) |

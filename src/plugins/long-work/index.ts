@@ -37,7 +37,7 @@ import {
   usageError,
 } from "../../core/api.ts"
 import { commandReports, findRuns, noProgressOf } from "./declared.ts"
-import { DUE_FIELD, dueSection, fileDue, type LongRun, readLongRuns, rememberSuccess, startArgs } from "./due.ts"
+import { DUE_FIELD, dueJob, dueSection, fileDue, type LongRun, readLongRuns, rememberSuccess, startArgs } from "./due.ts"
 import { ALLOW, findWaits, SCRIPT } from "./loops.ts"
 import {
   DEFAULTS,
@@ -766,7 +766,7 @@ export default function longWork(options: Record<string, unknown> = {}): Plugin 
     commands: [runCommand(hosts, declared), waitCommand(hosts)],
     checks: [waitLoops, progressDeclared],
     fields: [DUE_FIELD],
-    contributes: { rules: [LONG_WORK_RULE, PROGRESS_RULE], summary: [dueSection(declared, tracker)] },
+    contributes: { rules: [LONG_WORK_RULE, PROGRESS_RULE], summary: [dueSection(declared, tracker)], jobs: [dueJob(declared, tracker)] },
     optional: ["rules"],
   }
 }
