@@ -29,8 +29,9 @@ A milestone that passes its date without holding is pointed out to you.
 A release is a gate with a version number, such as 1.0. When it holds,
 everything it needed is done and checked, and what you publish follows from
 it. The version is tagged in the project's history. The release notes are put
-together from the short notes written with each change, so nobody has to
-remember afterwards what went in. Where the project has a website, it is
+together from what the release did and proved (`naima announce`), and from
+the short notes written with each change where the project keeps them, so
+nobody has to remember afterwards what went in. Where the project has a website, it is
 published too.
 
 ## Everything else

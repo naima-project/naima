@@ -564,6 +564,20 @@ export const readRecords = (ctx: Context): MetricRecord[] => recordFiles(ctx).ma
 const latestOf = (ctx: Context, commit: string | null): { file: string; record: MetricRecord } | undefined =>
   recordFiles(ctx).filter((r) => r.record.commit === commit).sort((a, b) => (a.record.at < b.record.at ? 1 : -1))[0]
 
+/**
+ * The latest record of a commit from which HEAD changed only the tracker: what it measured is what HEAD has,
+ * since the metrics read the project and leave the tracker out. Undefined when there is none.
+ */
+function unchangedSince(ctx: Context): { file: string; record: MetricRecord } | undefined {
+  const records = recordFiles(ctx).sort((a, b) => (a.record.at < b.record.at ? 1 : -1))
+  for (const r of records.slice(0, 20)) {
+    if (!r.record.commit || r.record.dirty) continue
+    const changed = git(ctx, "diff", "--name-only", r.record.commit, "HEAD", "--", ".", `:(exclude)${ctx.trackerDir}`)
+    if (changed === "") return r
+  }
+  return undefined
+}
+
 /** The line of history up to HEAD, oldest first, with each commit's date. */
 function line(ctx: Context): { commit: string; date: string }[] {
   return (git(ctx, "log", "--reverse", "--format=%H %cI", "HEAD") ?? "").split("\n").filter(Boolean).map((l) => {
@@ -1433,12 +1447,14 @@ const metricsGate: Gate = {
   title: "The project's metrics",
   says: "every declared metric held to its bound on the last record of HEAD's commit",
   decides:
-    "holds when the latest record of HEAD's commit (naima metrics run --record) has every declared metric within its bound; with no record of HEAD, it holds only if no metric is declared. It blocks on no item: it says which number fails, and how far, and names the record it read.",
+    "holds when the latest record of HEAD's commit (naima metrics run --record) has every declared metric within its bound — or, with no record of HEAD, and only suites' metrics and code measures declared, the latest record of a commit from which HEAD changed only the tracker; with neither, it holds only if no metric is declared. It blocks on no item: it says which number fails, and how far, and names the record it read.",
   evaluate(ctx) {
     const ms = metricsOf(ctx)
     if (!ms.length) return { holds: true, blocking: [], owed: [], reasons: [], backedBy: [] }
     const head = git(ctx, "rev-parse", "HEAD")
-    const latest = latestOf(ctx, head)
+    // A command or a file may read anything, the tracker or the history among it: only suites and the code measures leave it out.
+    const latest = latestOf(ctx, head) ??
+      (ms.every((m) => m.suite !== undefined || (m.run === undefined && m.file === undefined)) ? unchangedSince(ctx) : undefined)
     if (!latest) {
       return { holds: false, blocking: [], owed: [], reasons: [`no record of ${head?.slice(0, 12) ?? "HEAD"} — naima metrics run --record`], backedBy: [] }
     }

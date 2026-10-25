@@ -140,8 +140,9 @@ explaining what Naima can do.
 If the owner asks what Naima can do, start from the basics, in this order:
 set a goal (a gate); reach it in steps (milestones, smaller gates with dates,
 each showing what is still missing); publish (a release, a gate with a
-version: when it holds, the tag, the release notes from the change notes via
-`naima changes`, and the published site where there is one). Point to
+version: when it holds, the tag, the release notes from `naima announce
+--gate <gate>` (and from the change notes via `naima changes`, where the
+project keeps them), and the published site where there is one). Point to
 [the basics](../../docs/guide/the-basics.md). Tests, proofs, workers and
 models come only when the owner asks further.
 

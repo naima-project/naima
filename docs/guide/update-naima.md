@@ -104,6 +104,11 @@ naima update
 git add naima-tracker && git commit -m "Update Naima to <commit>"
 ```
 
+In a project that lands its branches as markers, a change to the lock is
+landed too: make the update on a branch and land it with `naima land`.
+Committed straight on the trunk, it draws a note from the check
+`landings-are-markers`.
+
 `naima update` shows what changes, downloads the newer Naima, switches the
 program to it and records the new commit in the lock. If anything fails along
 the way, the previous version stays in place. Then the newer Naima finishes

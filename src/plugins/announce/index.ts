@@ -15,6 +15,7 @@ import {
   fieldValue,
   fieldValues,
   type Finding,
+  hasTrait,
   type Item,
   label,
   linked,
@@ -76,6 +77,22 @@ export interface Announceability {
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 
+/**
+ * The items on a gate: those that name it in `gate`, and, for an item whose type groups others (an epic), the items it
+ * groups, nested groups' too — as the gates plugin counts them.
+ */
+function itemsOnGate(ctx: Context, gate: string): Set<Item> {
+  const out = new Set<Item>()
+  const stack = ctx.repo.items.filter((i) => fieldValues(i, GATE).includes(gate))
+  while (stack.length) {
+    const i = stack.pop() as Item
+    if (out.has(i)) continue
+    out.add(i)
+    if (hasTrait(ctx, i, "group")) stack.push(...linked(ctx, i, "has-part"))
+  }
+  return out
+}
+
 export default function announce(options: Record<string, unknown> = {}): Plugin {
   const opts = readOptions(options)
   /** A feature closed into the archive: shipped, since closing takes it fixed and proven. */
@@ -127,9 +144,10 @@ export default function announce(options: Record<string, unknown> = {}): Plugin 
       const since = str(p, "since")
       const gate = str(p, "gate")
       if (p.positionals.length || (since !== undefined && !DATE.test(since))) throw usageError(this)
+      const onGate = gate === undefined ? undefined : itemsOnGate(ctx, gate)
       const rows = ctx.repo.items
         .filter(isFeature)
-        .filter((i) => gate === undefined || fieldValues(i, GATE).includes(gate))
+        .filter((i) => onGate === undefined || onGate.has(i))
         .map((i) => announceability(ctx, i))
         .filter((a) => since === undefined || (a.shippedOn !== null && a.shippedOn >= since))
         .filter((a) => a.announceable || (bool(p, "all") && !a.lacks.some((l) => l.startsWith("not user-facing"))))

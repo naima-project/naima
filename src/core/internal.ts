@@ -23,6 +23,7 @@ export {
   RELAUNCH,
   RUNTIME_DIR,
   runtimeOf,
+  TRACKER_DIR,
   trackerOf,
   trackerReadme,
 } from "./layout.ts"
