@@ -5,8 +5,11 @@
 //   resolved  fixed, and proven by an item that `verifies` it and has passed.
 //   closed    resolved, and moved to the archive with its proof.
 
+import { existsSync, readdirSync } from "node:fs"
+import { join } from "node:path"
 import {
   appliesTo,
+  ATTACHMENTS,
   bool,
   type Check,
   type Command,
@@ -233,6 +236,28 @@ const inspectionProvesNothing: Check = {
       .map((i): Finding => ({
         level: "note",
         message: `${label(i)} passed on inspection — "the code looks right" proves nothing: run it, or name stronger evidence`,
+        item: i,
+      })),
+}
+
+/** The files a test carries as its evidence: its attachments, the placeholder aside. */
+const evidenceFiles = (i: Item): string[] => {
+  const dir = join(i.dir, ATTACHMENTS)
+  return existsSync(dir) ? readdirSync(dir).filter((f) => f !== ".gitkeep") : []
+}
+
+const passedCarriesEvidence: Check = {
+  name: "passed-test-carries-evidence",
+  says:
+    "a passed test an agent performed by driving the running software (runBy agent-hands) carries what shows it passed, an attachment of what was run and what it printed; one with none is noted",
+  run: (ctx) =>
+    ctx.repo.items
+      .filter((i) => i.type === "tests" && proves(ctx, i) && fieldValue(i, RUN_BY) === "agent-hands" && !evidenceFiles(i).length)
+      .map((i): Finding => ({
+        level: "note",
+        message: `${label(i)} passed with nothing attached to show it: attach what was run and what it printed (naima attach ${
+          label(i)
+        } <file> --own), or record it through its suite`,
         item: i,
       })),
 }
@@ -519,6 +544,7 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
       closedNamesCommits,
       regressionSawRed,
       inspectionProvesNothing,
+      passedCarriesEvidence,
       untickedNamesPassed,
       excusesItself(phrases),
     ],
