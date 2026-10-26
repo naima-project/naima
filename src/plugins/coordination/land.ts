@@ -829,7 +829,7 @@ function onlyAddsTrackerData(ctx: Context, sha: string, files: { status: string;
 /**
  * Whether a commit made on the trunk only closes items, as `naima close` does: every file it changed is in the data
  * directory, each item it removes from its type's folder is added under the closed archive with the same files, and
- * nothing else is added outside those items' archived folders.
+ * anything else it adds is new, outside rules, waivers and naima.json, as a commit that only adds to the tracker.
  */
 function onlyClosesItems(ctx: Context, files: { status: string; path: string }[]): boolean {
   if (!files.length) return false
@@ -837,17 +837,18 @@ function onlyClosesItems(ctx: Context, files: { status: string; path: string }[]
   const closed = ctx.registry.types.get("closed")?.dir
   if (!closed) return false
   const itemDirs = new Set([...ctx.registry.types.values()].map((t) => t.dir).filter((d) => d !== closed))
+  const kept = [ctx.registry.types.get("rules")?.dir ?? "rules", WAIVERS].map((d) => `${data}${d}/`)
   const removed = new Set<string>()
   const added = new Set<string>()
   const slugs = new Set<string>()
   for (const { status, path } of files) {
     if (!path.startsWith(data)) return false
     const [dir = "", slug = "", ...rest] = path.slice(data.length).split("/")
-    if (!slug || !rest.length) return false
-    if (status === "D" && itemDirs.has(dir)) {
+    if (status === "D" && itemDirs.has(dir) && slug && rest.length) {
       removed.add(`${slug}/${rest.join("/")}`)
       slugs.add(slug)
-    } else if (status === "A" && dir === closed) added.add(`${slug}/${rest.join("/")}`)
+    } else if (status === "A" && dir === closed && slug && rest.length) added.add(`${slug}/${rest.join("/")}`)
+    else if (status === "A" && !kept.some((k) => path.startsWith(k)) && path !== `${data}${DATA_FILE}`) continue // a new record beside, as a metrics record
     else return false
   }
   if (!removed.size) return false

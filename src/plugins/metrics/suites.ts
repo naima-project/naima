@@ -228,12 +228,17 @@ export function inputFiles(s: SuiteConfig, files: readonly string[]): string[] {
 }
 
 /** The digest a run of `s` speaks for, over the files under `root`. */
-export function suiteDigest(s: SuiteConfig, root: string, files: readonly string[]): { sha256: string; files: number } {
+export function suiteDigest(
+  s: SuiteConfig,
+  root: string,
+  files: readonly string[],
+  read: (file: string) => Uint8Array = (f) => readFileSync(join(root, f)),
+): { sha256: string; files: number } {
   const picked = inputFiles(s, files)
   const listed = picked.map((f) => {
     let digest = ""
     try {
-      digest = createHash("sha256").update(readFileSync(join(root, f))).digest("hex")
+      digest = createHash("sha256").update(read(f)).digest("hex")
     } catch {
       digest = "unreadable"
     }
@@ -367,7 +372,13 @@ export function runSuite(
     } catch (e) {
       parsed = { error: (e as Error).message }
     }
-    if (!Array.isArray(parsed)) return failedRun(`its ${s.format} report could not be read: ${parsed.error}`, out)
+    if (!Array.isArray(parsed)) {
+      // Read from the command's output when no report is named: a command that writes its report to a file names it.
+      const where = s.report
+        ? ""
+        : " — it was read from the command's output, since the suite names no report: name report when the command writes one to a file"
+      return failedRun(`its ${s.format} report could not be read: ${parsed.error}${where}`, out)
+    }
     const roots = rootsOf(root)
     const tests = parsed.map((t): TestResult => {
       const file = fileFrom(roots, t.file)

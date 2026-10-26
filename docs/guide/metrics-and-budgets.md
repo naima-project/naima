@@ -125,7 +125,7 @@ are declared next to the metrics, under `suites`.
 
 | Key       | What it is                                                                                                                                                |
 | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `preset`  | a ready suite (below). Any other key overrides the preset's.                                                                                              |
+| `preset`  | a ready suite (below). Any other key overrides the preset's; a `run` of your own also drops the preset's `prepare` and `report`, so name `report` too when your command writes one. |
 | `run`     | the command, as a list: the program first, then its arguments. No shell. `{tmp}` in an argument is a fresh temporary directory, removed after the run.    |
 | `prepare` | a command run first, which must succeed.                                                                                                                  |
 | `format`  | how the report is read: `junit`, `tap` or `libtest-json`.                                                                                                 |

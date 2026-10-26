@@ -1528,13 +1528,19 @@ const suitesCurrent = {
   blocks(ctx: Context, landing: Landing): string[] {
     const suites = suitesOf(ctx)
     if (!suites.length) return []
-    const files = workingTreeSource(ctx.root, [ctx.trackerDir]).files
+    // The inputs as the branch has them: its tip's files, read from git, not the trunk's checkout the landing runs in.
+    const files = commitSource(ctx.root, landing.to, [ctx.trackerDir]).files
+    const atTip = (f: string): Uint8Array => {
+      const r = spawnSync("git", ["show", `${landing.to}:${f}`], { cwd: ctx.root, maxBuffer: 1 << 30 })
+      if (r.status !== 0) throw new Error(`git show ${f} failed`)
+      return r.stdout
+    }
     const changed = new Set(landing.changed)
     const out: string[] = []
     for (const s of suites) {
       const read = inputFiles(s, files).filter((f) => changed.has(f))
       if (!read.length) continue
-      const digest = suiteDigest(s, ctx.root, files).sha256
+      const digest = suiteDigest(s, ctx.root, files, atTip).sha256
       const last = recordedRuns(ctx, s.name).filter((r) => r.run.inputsSha256 === digest).at(-1)
       const where = last ? ` — ${ctx.trackerDir}/${last.path}` : ""
       if (!last) {
