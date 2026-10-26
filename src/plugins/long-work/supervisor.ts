@@ -125,7 +125,9 @@ export async function supervise(dir: string, graceMs: number = DEFAULTS.graceMs)
   write({})
   const before = spec.guardTracked ? trackedChanges(spec.cwd) : null
   const log = createWriteStream(join(dir, LOG_FILE), { flags: "a" })
-  const env = { ...process.env, NAIMA_RUN_NAME: spec.name, NAIMA_RUN_DIR: dir, NAIMA_RUN_PROGRESS: join(dir, PROGRESS_FILE) }
+  // The tick's folder is the launcher's, for this Naima: the command gets none, so a Naima it runs, or a test suite, finds its own.
+  const { NAIMA_TICK_DIR: _tick, ...inherited } = process.env
+  const env = { ...inherited, NAIMA_RUN_NAME: spec.name, NAIMA_RUN_DIR: dir, NAIMA_RUN_PROGRESS: join(dir, PROGRESS_FILE) }
   const [program, args] = spec.shell ? [p.shell[0], [...p.shell[1], spec.command[0] ?? ""]] : [spec.command[0] ?? "", spec.command.slice(1)]
   let child: ChildProcess
   try {
