@@ -15,7 +15,7 @@
 // branches pair by name. The committed file `naima-tracker/tracker.json`
 // says so where a public clone, which has no tracker, can read it.
 
-import { chmodSync, existsSync, readFileSync, realpathSync } from "node:fs"
+import { chmodSync, existsSync, readdirSync, readFileSync, realpathSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { posixRelative } from "./config.ts"
 import { gitOrNull, mustGit, nativePath, runGit, toplevel, trunk } from "./git.ts"
@@ -176,6 +176,70 @@ export function installTrailerHooks(root: string, data: string): string[] {
   }
   out.push(`wrote ${fromRoot}/${HOOKS_DIR}/${TRAILER_HOOK}, which adds ${TRACKER_TRAILER}: and ${CODE_TRAILER}: trailers to every commit of either repository`)
   return out
+}
+
+/** The per-clone git config key `naima hooks uninstall` sets to `off`: a launched run then leaves core.hooksPath unset. */
+export const HOOKS_OFF_KEY = "naima.hooks"
+
+/** The first comment of every hook Naima writes: what tells its hooks from anyone else's. */
+const WRITTEN_BY = /^# Written by (`naima hooks install`|Naima)/m
+
+/** The hooks in the data directory that Naima wrote, by name: what core.hooksPath pointed there runs. */
+export function naimaHooks(data: string): string[] {
+  const dir = join(data, HOOKS_DIR)
+  if (!existsSync(dir)) return []
+  const out: string[] = []
+  for (const name of readdirSync(dir).sort()) {
+    try {
+      if (WRITTEN_BY.test(readFileSync(join(dir, name), "utf8").slice(0, 300))) out.push(name)
+    } catch {
+      // a directory or an unreadable file is no hook of Naima's
+    }
+  }
+  return out
+}
+
+/**
+ * Point core.hooksPath of the code repository at the data directory's hooks where it is unset: a fresh clone has
+ * the hook files, committed, and not the setting, which git keeps per clone. A core.hooksPath set elsewhere is left
+ * alone, and said; one a clone turned off with `naima hooks uninstall` is left unset. Returns what it did, a line each.
+ */
+export function pointHooksPath(root: string, data: string, opts: { quietWhenSet?: boolean } = {}): string[] {
+  const path = `${relativePosix(root, data)}/${HOOKS_DIR}`
+  const set = gitOrNull(root, "config", "--get", "core.hooksPath")
+  if (set === path) return []
+  if (set) return opts.quietWhenSet ? [] : [`core.hooksPath of the code repository is ${set}, not ${path}: Naima's git hooks are not run there`]
+  if (gitOrNull(root, "config", "--get", HOOKS_OFF_KEY) === "off") return []
+  const r = runGit(root, ["config", "core.hooksPath", path])
+  if (!r.ok) return [`core.hooksPath could not be set to ${path}: ${r.err.split("\n")[0] ?? "git failed"}`]
+  // What stops running now: a hook of the clone's own directory Naima's do not call.
+  const own = join(gitOrNull(root, "rev-parse", "--path-format=absolute", "--git-common-dir") ?? join(root, ".git"), "hooks")
+  const mine = new Set(naimaHooks(data))
+  const stopped = existsSync(own) ? readdirSync(own).filter((n) => !n.endsWith(".sample") && !mine.has(n)).sort() : []
+  return [
+    `core.hooksPath is ${path} now, for this clone and every worktree of it: git runs the project's hooks (${[...mine].join(", ") || "none yet"})${
+      stopped.length ? `; the clone's own ${stopped.join(", ")} no longer runs` : ""
+    } — naima hooks uninstall undoes it`,
+  ]
+}
+
+/**
+ * Write the git hook `name` into the data directory's hooks, executable, and point core.hooksPath at them where it
+ * is unset. Returns what it did, a line each: nothing when the file was already this text and the path set.
+ */
+export function writeGitHook(root: string, data: string, name: string, text: string): string[] {
+  const file = join(data, HOOKS_DIR, name)
+  const same = existsSync(file) && readFileSync(file, "utf8") === text
+  if (!same) {
+    writeFileAtomic(file, text)
+    try {
+      chmodSync(file, 0o755)
+    } catch {
+      // a file system without modes: git's index records it executable once added
+    }
+  }
+  const pointed = pointHooksPath(root, data)
+  return same ? pointed : [`wrote ${relativePosix(root, data)}/${HOOKS_DIR}/${name}`, ...pointed]
 }
 
 /** Whether the trailer hook file in the data directory is the one Naima writes now. */

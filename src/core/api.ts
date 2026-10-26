@@ -103,14 +103,19 @@ export {
 export { DATA_FILE, DEFAULT_DATA, TRACKER_DIR } from "./layout.ts"
 export {
   CODE_TRAILER,
+  HOOKS_DIR,
+  HOOKS_OFF_KEY,
   installTrailerHooks,
+  naimaHooks,
   pairedBranch,
   pairTracker,
+  pointHooksPath,
   SIBLING_FILE,
   TRACKER_TRAILER,
   trackerPath,
   trailerHookCurrent,
   trailerOf,
+  writeGitHook,
 } from "./repos.ts"
 export { WAIVERS } from "./waivers.ts"
 export {

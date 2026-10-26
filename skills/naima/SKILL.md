@@ -192,6 +192,12 @@ The project's own rules for agents — how to work and report here — kept as
 items of its tracker. Obey them for the whole session; `naima guide` prints
 them first too ([read the project's rules](../../docs/agents/read-the-project-rules.md)).
 
+Every change goes through an item: `naima open <item>`, commit the change and
+its test in its worktree, then `naima land`. Never commit, merge or
+fast-forward the trunk by hand: a git hook, the trunk guard, refuses it, and
+only the owner lets a commit through or turns the guard off
+([the rule](../../docs/guide/rules.md#every-change-goes-through-an-item-and-lands)).
+
 Before asking the owner anything, run `naima decisions <words>`: a settled
 decision answers it, and the owner's answer to a new question is recorded as
 one ([asking the human](../../docs/agents/asking-the-human.md)).

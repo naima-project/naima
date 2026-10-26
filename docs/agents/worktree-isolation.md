@@ -123,9 +123,10 @@ process that is reading them at that moment.
 - **Nobody commits on the trunk while a branch is being prepared.** This is a convention while `preparing` is unset, and checked once it is set
   (`naima claim --preparing`, [closing a worktree](closing-a-worktree.md#0-say-the-branch-is-being-prepared)).
 - **A branch lands up to date, as a marker.** Enforced: `naima land` refuses a branch whose ancestor isn't the trunk, and moves the trunk only if it hasn't
-  moved in the meantime. A landing made by hand is a convention that is checked afterwards. From the first marker on the trunk's first-parent line onwards, the
-  check `landings-are-markers` notes every commit on that line that isn't a marker, except a commit made on the trunk that only adds to the tracker data.
-  Nothing blocks such a commit yet, and a git hook that a project can opt into is [planned](../planned.md#blocking-a-landing-that-is-not-a-marker).
+  moved in the meantime. A commit, merge or fast-forward of the trunk made by hand is refused by the trunk guard, a git hook, unless it only adds to the
+  tracker data or is one of the few other commits the trunk takes directly; the owner lets one through with a `Trunk-reason:` trailer, or turns the guard off
+  with `naima guard off`. The check `landings-are-markers` notes afterwards every commit on the first-parent line that isn't a marker
+  ([the rule](../guide/rules.md#every-change-goes-through-an-item-and-lands)).
 - **No shared mutable file.** Convention, kept by the one-file-per-session layout above. Nothing yet fails a hand-made shared log kept outside the tracker,
   which makes this a candidate property for a later model.
 - **Never `git stash pop` in a shared worktree set.** Candidate property for a later model. Nothing yet checks that a stash was applied by sha rather than

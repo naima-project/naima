@@ -27,6 +27,7 @@ import {
   type Finding,
   gitPath,
   gitReason,
+  HOOKS_OFF_KEY,
   installTrailerHooks,
   isGitRepo,
   type Item,
@@ -371,6 +372,7 @@ function install(ctx: Context, opts: HooksOptions, force: boolean): number {
     const r = runGit(ctx.root, ["config", "core.hooksPath", mine])
     if (!r.ok) throw new Error(`git config core.hooksPath: ${gitReason(r)}`)
   }
+  runGit(ctx.root, ["config", "--unset", HOOKS_OFF_KEY])
   ctx.out(`wrote ${fromRoot(ctx, file)} — commit it; core.hooksPath is ${mine}, for this clone and every worktree of it`)
   // Sibling mode: the tracker's repository runs the same hooks, and both run the trailer hook that pairs their commits.
   if (ctx.sibling) { for (const line of installTrailerHooks(ctx.root, ctx.trackerRoot)) ctx.out(line) }
@@ -386,6 +388,8 @@ function uninstall(ctx: Context): number {
   }
   const r = runGit(ctx.root, ["config", "--unset", "core.hooksPath"])
   if (!r.ok) throw new Error(`git config --unset core.hooksPath: ${gitReason(r)}`)
+  // Remembered for this clone, so that a launched run does not point it back.
+  runGit(ctx.root, ["config", HOOKS_OFF_KEY, "off"])
   ctx.out(`core.hooksPath unset: git runs the clone's own hooks again; ${fromRoot(ctx, hookFile(ctx))} is left for the other clones`)
   return 0
 }

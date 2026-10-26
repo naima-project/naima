@@ -18,6 +18,7 @@ import type {
   OptionDoc,
   RankTerm,
   RelationDef,
+  Setup,
   SummarySection,
   TickJob,
   TypeDef,
@@ -324,6 +325,23 @@ export const hooksPoint: ExtensionPoint<WriteHook> = {
   document: (hooks) => ["", "**Write hooks**, run on every item write", ...table(["Hook", "What it does"], hooks.map((h) => [code(h.name), h.says]))],
 }
 
+export const setupPoint: ExtensionPoint<Setup> = {
+  id: "setup",
+  says:
+    "what a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init` and `naima update` after their own work: `install(ctx) → lines`, each said",
+  noun: "setup step",
+  key: (s) => s.name,
+  validate: (v) => shape(v, (s) => text(s, "name"), (s) => fn(s, "install")),
+  gaps: (s) => says(s, "does"),
+  document: (
+    steps,
+  ) => [
+    "",
+    "**Setup**, put in place by `naima init` and `naima update` where missing",
+    ...table(["Step", "What it puts in place"], steps.map((s) => [code(s.name), s.says])),
+  ],
+}
+
 export const extendsPoint: ExtensionPoint<Extension> = {
   id: "extends",
   says:
@@ -378,6 +396,7 @@ export const CORE_POINTS: readonly ExtensionPoint[] = [
   jobsPoint,
   extendsPoint,
   hooksPoint,
+  setupPoint,
   migrationsPoint,
 ]
 

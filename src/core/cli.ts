@@ -44,7 +44,9 @@ import { setWriteGuard } from "./item.ts"
 import {
   installTrailerHooks,
   missingTracker,
+  naimaHooks,
   pairTracker,
+  pointHooksPath,
   projectRootOf,
   readSiblingMarker,
   SIBLING_FILE,
@@ -91,6 +93,7 @@ import {
   OPTIONAL_KEYS,
   pageRules,
   rehearse,
+  RULES_FIRST,
   versionOf,
   withCommit,
   withoutOptional,
@@ -99,7 +102,7 @@ import { changedRules, notesBetween } from "./changes.ts"
 import { createItem, saveProse } from "./item.ts"
 import { isOpen } from "./lifecycle.ts"
 import { EXIT, isInternal, message, NaimaError } from "./errors.ts"
-import type { Command, Context, GuideSection, Plugin } from "./types.ts"
+import type { Command, Context, GuideSection, Plugin, Setup } from "./types.ts"
 import { asRendered, linesAs } from "./rendered.ts"
 import { shortOrId } from "./names.ts"
 import { apiFor } from "./plugins.ts"
@@ -201,6 +204,26 @@ function targetOf(place: Place, lock: Lock, opts: CliOptions): Target {
 }
 
 export { withoutCredentials }
+
+/**
+ * What the loaded plugins put in place in this clone where it is missing (their `setup`), each line said; a step
+ * that fails says why and stops nothing. Run by init and update after their own work.
+ */
+async function setUp(place: Place, opts: CliOptions, io: IO): Promise<void> {
+  let ctx: Context
+  try {
+    ctx = await openProject(place, opts, { ...io, err: () => {} })
+  } catch {
+    return // the project does not open: its next command says why
+  }
+  for (const c of ctx.registry.contributions("setup")) {
+    try {
+      for (const line of await (c.value as Setup).install(ctx)) io.out(line)
+    } catch (e) {
+      io.out(`${c.name}: not put in place: ${message(e)}`)
+    }
+  }
+}
 
 /** The command init names as the next step: a type the loaded plugins really let one create. */
 async function nextStep(place: Place, opts: CliOptions, io: IO): Promise<string> {
@@ -407,7 +430,7 @@ async function recordPrivate(root: string, data: string, io: IO): Promise<void> 
   io.out(
     `recorded in ${posixRelative(root, join(data, DATA_FILE))}, by a hash of its address: the owner says ${
       add.map((r) => r.url).join(", ")
-    } is private — commit it`,
+    } is private — commit it ${LAND_IT}`,
   )
 }
 
@@ -476,6 +499,7 @@ async function init(args: string[], opts: CliOptions, data: string, io: IO): Pro
     const config = parseConfig(found.raw, { lenient: true })
     excludeHost(found.root, found.program, write, io)
     sayLeft(startAgents(found.root, trackerOf(found.data), config, hooks, io).left, io)
+    await setUp(found, opts, io)
     io.out(await nextStep(found, opts, io))
     return 0
   }
@@ -493,6 +517,7 @@ async function init(args: string[], opts: CliOptions, data: string, io: IO): Pro
   }
   excludeHost(made.root, made.program, write, io)
   sayLeft(startAgents(made.root, made.tracker, parseConfig(readRaw(place.data)), hooks, io).left, io)
+  await setUp(place, opts, io)
   io.out(await nextStep(place, opts, io))
   return 0
 }
@@ -755,6 +780,8 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
   // A mechanical fix, said: what makes agents run naima hello at every session start, where it is missing.
   const config = parseConfig(readRaw(place.data), { lenient: true })
   const { wrote, left } = startAgents(place.root, trackerOf(place.data), config, true, io)
+  // And what the plugins put in place in the clone, such as the trunk guard, where it is missing.
+  await setUp(place, opts, io)
   // Launched by an older launcher, whose fence predates these files, this run may not write them: the next run, under
   // this Naima's own launcher, does. What its check notes about them is that run's to fix, not an item to file.
   const unfinished = left.length ? unfinishedUpdate(place.root, place.data, target, config) : null
@@ -1009,6 +1036,7 @@ async function hello(args: string[], opts: CliOptions, place: Located, io: IO): 
       ? banner(versionOf(me.repo, me.commit), me.commit)
       : `${INTRODUCTION}, active in this repository: a development build, its lock commit ${short(lock.commit)}.`,
     ...lines,
+    RULES_FIRST,
     OFFERS,
     BASICS_OFFER,
   ]
@@ -1300,6 +1328,8 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
       if (moved?.from && moved.from !== place.lock.commit) io.err(`naima: locked commit moved ${short(moved.from)} → ${short(place.lock.commit)}`)
       const target = runtimeOf(place.program)
       if (moved || (target && real(opts.programRoot) !== real(target))) return RELAUNCH
+      // A fresh clone has the project's git hooks, committed, and not core.hooksPath, which git keeps per clone.
+      if (naimaHooks(place.data).length) { for (const line of pointHooksPath(place.root, place.data, { quietWhenSet: true })) io.err(`naima: ${line}`) }
     }
     // The commands the entry point runs itself answer --help as every other command does.
     const own = cliCommands.find((c) => c.name === command)
@@ -1336,6 +1366,13 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     const cmd = ctx.registry.find<Command>("commands", command as string)?.value
     if (!cmd) throw new Error(`unknown command "${command}" — naima help`)
     if (args.includes("--help") || args.includes("-h")) return commandHelp(cmd, io)
+    if (cmd.hook) {
+      // Run by a git hook, inside a commit or a ref update: it only reads, and waits for nothing beside it.
+      setWriteGuard(() => {
+        throw new Error(`naima ${command} runs from a git hook and writes nothing`)
+      })
+      return await cmd.run(commandArgs, ctx)
+    }
     // The tracker's privacy, an invariant: every write through the core's helpers is refused while it is exposed.
     const exposure = await trackerExposure(ctx)
     if (exposure.state === "private" && wasExposed(ctx.trackerGit)) {
