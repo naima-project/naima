@@ -123,6 +123,13 @@ git merge-base --is-ancestor main HEAD && echo "ready to land"
 This makes the trunk an ancestor of the branch, which landing requires. Resolve any conflicts here, where you still have the context. Then run step 5 again,
 because the merge brought in code you haven't tested together with yours.
 
+A conflict in a test item's `meta.json` over `lastTestRun` and `status` is
+two runs recorded on two branches, as when several branches run the same
+shared test. Neither side is right after the merge: keep either, then run
+`naima metrics run --record` on the merged tree, which records a run of the
+merged code and rewrites both fields. The test-run files under the item's
+`attachments/` never clash, since each run has a file of its own.
+
 ## 7. Hand it over
 
 Drop the mark and commit the removal with `naima claim --not-preparing`. Then tell the coordinator the branch, the items it closes, anything that arrives red
