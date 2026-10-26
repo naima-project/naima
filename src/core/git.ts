@@ -191,6 +191,13 @@ export function currentBranch(root: string): string {
 }
 
 /**
+ * Where a tracker step that changes more than it adds (an update of Naima, a waiver, a release record, an epic set
+ * done) is committed: on an item's own branch, landed as a marker. Only init's commit, and the close after a
+ * landing, go straight on the trunk.
+ */
+export const LAND_IT = "on the branch of an item of its own, in its worktree, and land it with naima land"
+
+/**
  * The trunk: the local branch origin's HEAD names, else `main`, else
  * `master`; null when there is none of them. One git process.
  */

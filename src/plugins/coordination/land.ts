@@ -858,6 +858,12 @@ function onlyClosesItems(ctx: Context, sha: string, files: { status: string; pat
   return [...removed].every((f) => added.has(f)) && [...added].every((f) => slugs.has(f.split("/")[0] ?? ""))
 }
 
+/** Whether a commit made on the trunk is naima init's: it adds the tracker's naima.json, so the tracker begins with it. */
+function initsTracker(ctx: Context, files: { status: string; path: string }[]): boolean {
+  const data = ctx.trackerPrefix ? `${ctx.trackerPrefix}/` : ""
+  return files.some(({ status, path }) => status === "A" && path === `${data}${DATA_FILE}`)
+}
+
 /** Whether the commit changed nothing in the item file at `path` but its status. */
 function onlyStatusChanged(ctx: Context, sha: string, path: string): boolean {
   const read = (rev: string): Record<string, unknown> | null => {
@@ -910,7 +916,7 @@ function notAMarker(ctx: Context, c: FirstParent, trees: Map<string, string>): s
 export const landingsAreMarkers: Check = {
   name: "landings-are-markers",
   says:
-    "from the first landing marker on the trunk's first-parent line (a merge whose first parent the second contains, whose tree is the second's, with a Closes: trailer), every first-parent commit is a marker: a fast-forward, a commit made on the trunk, a merge not up to date, or one without a Closes: naming an item done or fixed is a note naming it, one note per commit, with the commit as its subject so that a waiver can accept it. A commit made on the trunk that only adds to the tracker data — new files in the data directory outside rules/, waivers/ and naima.json, and lines added to an item's README.md, its meta.json untouched — is accepted without a note, and so is a commit that only closes items as naima close does (each moved whole from its type's folder to the closed archive), and the commit right after a marker that only adds the marker to the commits of items it closes, the record naima land makes. Before the first marker nothing is asked",
+    "from the first landing marker on the trunk's first-parent line (a merge whose first parent the second contains, whose tree is the second's, with a Closes: trailer), every first-parent commit is a marker: a fast-forward, a commit made on the trunk, a merge not up to date, or one without a Closes: naming an item done or fixed is a note naming it, one note per commit, with the commit as its subject so that a waiver can accept it. A commit made on the trunk that only adds to the tracker data — new files in the data directory outside rules/, waivers/ and naima.json, and lines added to an item's README.md, its meta.json untouched — is accepted without a note, and so is a commit that only closes items as naima close does (each moved whole from its type's folder to the closed archive), the commit right after a marker that only adds the marker to the commits of items it closes, the record naima land makes, and naima init's commit, the one that adds naima.json. Any other tracker step that changes more than it adds (an update of Naima, a waiver, a release record, an epic set done) is made on an item's branch and landed. Before the first marker nothing is asked",
   run(ctx) {
     // The markers that close items are the tracker's: the project's trunk, or the tracker's own in sibling mode.
     const repo = ctx.trackerGit
@@ -934,7 +940,7 @@ export const landingsAreMarkers: Check = {
       if (c.parents.length !== 2) {
         const files = direct.get(c.sha) ?? []
         if (emptyMarker(c) && !files.length) continue
-        if (onlyAddsTrackerData(ctx, c.sha, files) || onlyClosesItems(ctx, c.sha, files)) continue
+        if (initsTracker(ctx, files) || onlyAddsTrackerData(ctx, c.sha, files) || onlyClosesItems(ctx, c.sha, files)) continue
         const prev = line[i - 1]
         const afterMarker = prev && prev.closes.length && (prev.parents.length === 2 || emptyMarker(prev))
         // In sibling mode the record names the code marker, in its Code: trailer; otherwise the marker just before it.

@@ -64,7 +64,8 @@ evidence.
    the owner first if the decision in step 2 of proposing didn't already cover it.
 6. **Post-release checks** (stage `post-release checks`). Fetch or install the public release from where a stranger would get it, not from the build directory.
 7. **Announce only what is true** (stage `announce`). The changelog goes out once, after step 6 has passed, and never earlier on the assumption that it will. It
-   goes in the project's `CHANGELOG.md`, newest release first, and in the release item's notes; the tag's message may carry it too. Hand off to the
+   goes in the project's `CHANGELOG.md`, newest release first, and in the release item's notes; the tag's message may carry it too. The record, `CHANGELOG.md` and the item's `status=released`, is made in the release item's worktree and landed with
+   `naima land`, never committed straight on the trunk. Hand off to the
    [announcer](announcer.md), who writes the announcement from `naima announce --gate <gate>` with only the features that can be announced, and to the
    [documentarian](documentarian.md) for the page itself.
 8. **Rollback.** This is available at any stage from publishing onwards. The tag isn't force-moved. Instead a fixed version is published (`vX.Y.Z+1`, never a

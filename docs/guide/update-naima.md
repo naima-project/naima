@@ -78,12 +78,15 @@ says so, and the check at the end of the update takes its place.
 ## Updating
 
 ```sh
+naima new todos "Update Naima"
+naima open todos/update-naima      # its worktree; run the rest there
 naima update
 git add naima-tracker && git commit -m "Update Naima to <commit>"
+naima set todos/update-naima status=done
 ```
 
-In a project that lands its branches as markers, a change to the lock is landed too: make the update on a branch and land it with `naima land`. Committed
-straight on the trunk, it draws a note from the check `landings-are-markers`.
+An update changes what the project holds to, so it gets an item of its own and is made in that item's worktree. The coordinator then lands it from the main
+checkout with `naima land`, like any other change. Committed straight on the trunk, it draws a note from the check `landings-are-markers`.
 
 `naima update` shows what changes, downloads the newer Naima, switches the program to it and records the new commit in the lock. If anything fails along the
 way, the previous version stays in place. Then the newer Naima finishes the update itself:
@@ -105,7 +108,7 @@ why, for example:
 Installed a <tool> session-start hook in <its settings file>: every new conversation starts by running naima hello, and you see its greeting directly: which Naima is active, whether a newer one exists, what waits on your decision.
 ```
 
-Its last line names every file to commit. You review the change and commit it as one, like any other.
+Its last line names every file to commit. You review the change, commit it as one on the item's branch, and land it.
 
 To move to a particular commit of the source's main branch rather than the newest one, use `naima update --to <commit>`.
 
@@ -185,7 +188,7 @@ naima update --accept-source
 ```
 
 It also rewrites `naima-tracker/README.md`, which names the source a fresh clone restores the program from, when Naima wrote that file; commit it with
-`naima.json`.
+`naima.json`, on the branch of an item of its own, and land it.
 
 ## When the repository has moved
 

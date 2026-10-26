@@ -169,12 +169,16 @@ When an update is available and the owner wants to hear about it, tell them
 what it changes: the breaking changes and the actions its change notes ask
 for first, then the rest, any migration, rules added or removed, settings
 that would stop being read, and what the rehearsal says would newly fail.
-Then ask. Only when they say yes, run `naima update`. It renames and removes
+Then ask. Only when they say yes, file an item for the update, open its
+worktree and run `naima update` there. It renames and removes
 settings as the notes say, names the rules to acknowledge again — read them
 with `naima rules --audience agents` and give them back in your next session
 note — runs `naima check` and files a todo for each new finding it could not
-fix. Commit `naima-tracker/` as one change. `naima rollback` goes back to the previous version, also as one
-commit. Never update without asking
+fix. Commit `naima-tracker/` as one change on the item's branch, and land it
+with `naima land`; `naima rollback` goes back the same way. A waiver, a
+release record and an epic set done are landed the same way, from an item of
+their own; only `naima init`'s commit and the close after a landing go
+straight on the trunk. Never update without asking
 ([update Naima](../../docs/guide/update-naima.md)). To check on request, run
 `naima update --check`.
 

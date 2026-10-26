@@ -8,7 +8,7 @@ import { join } from "node:path"
 import { parse, str, usageError } from "./args.ts"
 import { message } from "./errors.ts"
 import { writeFileAtomic } from "./files.ts"
-import { currentBranch } from "./git.ts"
+import { currentBranch, LAND_IT, trunk } from "./git.ts"
 import { today } from "./item.ts"
 import { findPrivate, guardPrivate, privateContext } from "./private.ts"
 import type { Check, Command, Context, Finding } from "./types.ts"
@@ -124,7 +124,12 @@ export const waive: Command = {
     mkdirSync(dir, { recursive: true })
     const file = `${waiver.date}-${randomUUID()}.json`
     writeFileAtomic(join(dir, file), JSON.stringify(waiver, null, 2) + "\n")
-    ctx.out(`wrote ${ctx.trackerDir}/${WAIVERS}/${file} — commit it on ${branch}`)
+    // A waiver changes what the project holds to: it is landed, or committed on the trunk it would be a commit to waive.
+    const main = trunk(ctx.root)
+    const where = branch === main
+      ? `${LAND_IT}, not on ${main}, where landings-are-markers notes it as a commit that is not a landing`
+      : `on ${branch} and land it with naima land`
+    ctx.out(`wrote ${ctx.trackerDir}/${WAIVERS}/${file} — commit it ${where}`)
     return 0
   },
 }
