@@ -49,7 +49,7 @@ naima waive session-note-ack passes/<file>.md --reason "<why it is accepted>"
 ```
 
 This writes one file under `waivers/` in the tracker. The file names the check, the subject of the finding, the reason, who waived it (`--as`, or the first part
-of the branch name) and the day. You commit it like any other change to the tracker. From then on the finding no longer fails `naima check`, but every run still
+of the branch name) and the day. A waiver changes what the project holds to, so it is made in the worktree of an item of its own and landed, like any other change. From then on the finding no longer fails `naima check`, but every run still
 lists the waiver as a note, so it never goes out of sight. When the subject is gone, or no longer fails the check, the waiver is noted as waiving nothing, and
 you can remove it.
 
@@ -453,6 +453,9 @@ diary entry in `events/` or a session note in `passes/`, and it may add lines to
 was. The check accepts such a commit without a note. Filing what the owner says, at the moment it is said, shouldn't need a branch and a landing, and a commit
 that only adds can't change or hide anything that has landed. A commit that changes or deletes a file, or that touches `rules/`, `waivers/` or `naima.json`,
 still goes through a branch: a status, a rule, a waiver and the lock change what the project holds to, so they arrive as a marker like any other change.
+The same holds for the tracker steps that change more than they add, even in a project worked by one agent: an update of Naima, a waiver, a release record
+and an epic set done each get an item of their own, are made in its worktree and are landed with `naima land`. Two commits on the trunk are accepted as they
+are: the one `naima init` makes, which adds `naima.json`, and the one that closes items after a landing, as `naima close` does.
 
 The check names each commit in a note of its own. History on a shared trunk is never rewritten, so a commit it names that the project accepts as it is gets a
 waiver, once, with its reason: `naima waive landings-are-markers

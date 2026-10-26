@@ -228,7 +228,9 @@ tracker, where many items are closed, moved or deleted in one go, tag the point 
 - **Every landing is a marker naming the items it closes.** Enforced by `naima land`. A landing made by hand is checked by `landings-are-markers`, which notes
   every commit on the trunk's first-parent line, from the first marker onwards, that isn't a marker. The exception is a commit made on the trunk that only adds
   to the tracker data: new files in the data directory outside `rules/`, `waivers/` and `naima.json`, and lines added to an item's `README.md`. The coordinator
-  may file an item, append a note, write a diary entry or a session note that way, without a branch. A noted commit the project accepts is waived once,
+  may file an item, append a note, write a diary entry or a session note that way, without a branch. `naima init`'s commit and the close after a landing are
+  accepted too. Every other tracker step that changes more than it adds (an update of Naima, a waiver, a release record, an epic set done) gets an item of its
+  own, is made in its worktree and is landed, even in a project worked by one agent. A noted commit the project accepts is waived once,
   `naima waive landings-are-markers
   <commit> --reason "<why>"` ([the rule](../guide/rules.md#every-landing-is-a-marker-naming-the-items-it-closes)).
 - **No branch is deleted while it still holds work the trunk lacks.** Enforced by `naima prune`, which refuses without an `archive/<branch>` tag.

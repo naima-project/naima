@@ -43,7 +43,8 @@ These rules hold:
   test runs, or what a session note or the timeline already records. The check `diary-entries` notes a day above the coordination option `diaryPerDay` (5 by
   default) and an entry that only restates a session note or a decision ([the rule](../guide/rules.md#agents-keep-the-diary)).
 - **Commit what the commands wrote**, meaning the epic's folder, the items, `naima-tracker/naima-data/naima.json` and any `events/` file, together with the work
-  that led to it.
+  that led to it. What changes more than it adds, such as an epic set done or a gate's settings, is committed on the branch of an item and landed with
+  `naima land`; only a new item, a note or a diary entry may go straight on the trunk.
 
 What each command prints, and every option, is in the [reference](../reference/reference.md). The page for people is
 [plan with epics, milestones and gates](../guide/plan-with-epics-milestones-and-gates.md).

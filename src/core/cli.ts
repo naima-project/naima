@@ -24,7 +24,7 @@ import { cliCommands } from "./entry.ts"
 import { FORMAT, formatRefusal, isFormat, migrate, MIGRATIONS, type Step } from "./format.ts"
 import { formatsFor, type OpenOptions, openProject, owed } from "./project.ts"
 import { bool, pairs, parse, str } from "./args.ts"
-import { gitOrNull, gitReason, nativePath, runGit, runGitAsync, toplevel, trunk } from "./git.ts"
+import { gitOrNull, gitReason, LAND_IT, nativePath, runGit, runGitAsync, toplevel, trunk } from "./git.ts"
 import { remoteVisibility, type Visibility } from "./visibility.ts"
 import {
   clearExposed,
@@ -689,7 +689,7 @@ async function moveLock(opts: CliOptions, place: Place, lock: Lock, raw: Record<
   // Forward, the new Naima finishes: it knows the new format, and its own check is the one that ends the update.
   if (!change.back || change.formats.some((f) => f.to > f.from)) return RELAUNCH
   const verb = change.back ? "Roll Naima back to" : "Update Naima to"
-  io.out(`${short(to)} is the lock — commit it as one change: git add ${tracker} && git commit -m "${verb} ${short(to)}"`)
+  io.out(`${short(to)} is the lock — commit it as one change ${LAND_IT}: git add ${tracker} && git commit -m "${verb} ${short(to)}"`)
   return 0
 }
 
@@ -714,7 +714,7 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
       io.out(
         `trusted ${lock.source} at the locked commit ${
           short(lock.commit)
-        }; rewrote ${shown} for it — commit it: git add ${shown} && git commit -m "Naima's source: ${lock.source}"`,
+        }; rewrote ${shown} for it — commit it ${LAND_IT}: git add ${shown} && git commit -m "Naima's source: ${lock.source}"`,
       )
     } else io.out(`trusted ${lock.source} at the locked commit ${short(lock.commit)}; nothing else moved`)
     return 0
@@ -723,7 +723,7 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
   if (mode !== undefined) {
     const policy = parseUpdates(mode)
     writeValidatedRaw(place.data, { ...raw, updates: policy })
-    io.out(`updates: ${policy} — ${POLICY_SAYS[policy]}; commit it: git add ${tracker} && git commit -m "Naima updates: ${policy}"`)
+    io.out(`updates: ${policy} — ${POLICY_SAYS[policy]}; commit it ${LAND_IT}: git add ${tracker} && git commit -m "Naima updates: ${policy}"`)
     return 0
   }
   const t = targetOf(place, lock, opts)
@@ -764,7 +764,11 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
     io.out(`Naima ${unfinished ? "moved to" : "is at"} ${short(target)}; run naima update once more to finish: ${left.join(" and ")}`)
     return 0
   }
-  io.out(`${short(target)} is the lock — commit it as one change: git add ${[tracker, ...wrote].join(" ")} && git commit -m "Update Naima to ${short(target)}"`)
+  io.out(
+    `${short(target)} is the lock — commit it as one change ${LAND_IT}: git add ${[tracker, ...wrote].join(" ")} && git commit -m "Update Naima to ${
+      short(target)
+    }"`,
+  )
   return 0
 }
 
