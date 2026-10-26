@@ -2579,7 +2579,7 @@ Options, each with the default it takes when nothing sets it:
 
 | Option | Default | What it does |
 |---|---|---|
-| `hosts` | `{}` | the machines a run may go to: name → { "ssh": the destination ssh is given, "dir": the project's checkout there, "naima": the command that runs its Naima from dir (default `deno run -A naima-tracker/naima/naima.ts`) } |
+| `hosts` | `{}` | the machines a run may go to: name → { "ssh": the destination ssh is given, "dir": the project's checkout there, "naima": the command that runs its Naima from dir (default `deno run -A naima-tracker/naima/naima.ts`), "shell": the shell its sshd runs a command through, which every word is quoted for — "posix" (default) or "cmd", the stock Windows OpenSSH server's } |
 | `longRuns` | `{}` | the long runs reported when due, never started on their own: name → { "command": a shell line or [program, ...args], "budgetTime": the time budget of one run, and what makes it due — "within": <n>s\|m\|h\|d since its last success, "fullSuite": true, "gates": [gate names], "model": a model path, "items": [item references]; "budgetDisk" with "creates", "host", "noProgress" as naima run takes them } |
 
 ### naima run

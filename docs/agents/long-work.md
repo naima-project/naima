@@ -8,7 +8,8 @@ Follow this page for any command you expect to take more than a few minutes, or 
    `naima run <name> --budget-time <d> [--budget-disk <size> --creates <path>...] [--host <h>] -- <command>`. The command writes its progress to
    `$NAIMA_RUN_PROGRESS` at least every few seconds, as one JSON line such as `{"stage":"bench","done":3,"total":40,"unit":"cases"}`
    ([the format](../guide/long-work.md#say-how-far-it-is)). A Naima command does this on its own. If the tool really has no way to report progress, start it
-   with `--no-progress "<why>"` instead.
+   with `--no-progress "<why>"` instead. A host whose ssh server runs cmd, as the one that comes with Windows does, is declared with `"shell": "cmd"`
+   ([on another machine](../guide/long-work.md#on-another-machine)); without it every quoted word arrives there with its quotes.
 2. **Wait** with `naima wait <name> --timeout <d>`, using a timeout shorter than your tool call's limit. When the timeout is reached it exits 1 and says the run
    is still going. Then check `naima run list` to see whether the run is stale or lost and whether its rate and ETA are moving, do other work if there is any,
    and decide whether to wait again or to `naima run stop <name>`.

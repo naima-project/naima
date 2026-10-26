@@ -141,7 +141,10 @@ export const BROWSER_OPENER: Record<string, string> = { darwin: "open", windows:
 /** The grant of `command`: only `ui`, `run`, `wait` and `tools` have one; `tools` is the tools directory to write. */
 export function uiGrant(command: string | undefined, os: string, deno: string, tools: string | null = null): UiGrant | null {
   if (command === "tools") return { net: [], read: [], runs: [], write: tools ? [tools] : [], netAll: true, runAll: true }
-  if (command === "run" || command === "wait") return { net: [], read: [deno], runs: [deno, "ssh"], wholeEnv: true }
+  // On Windows `naima run` starts its supervisor through WMI, by PowerShell (src/plugins/long-work/launch.ts).
+  if (command === "run" || command === "wait") {
+    return { net: [], read: [deno], runs: [deno, "ssh", ...(command === "run" && os === "windows" ? ["powershell.exe"] : [])], wholeEnv: true }
+  }
   if (command !== "ui") return null
   return { net: ["127.0.0.1"], read: [deno], runs: [deno, BROWSER_OPENER[os] ?? "xdg-open"] }
 }

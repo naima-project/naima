@@ -113,7 +113,21 @@ export {
   trailerOf,
 } from "./repos.ts"
 export { WAIVERS } from "./waivers.ts"
-export { askHost, DEFAULT_REMOTE_NAIMA, type Host, type HostAnswer, readHosts, shellQuote, sshArgs } from "./hosts.ts"
+export {
+  askHost,
+  cmdEscape,
+  cmdQuote,
+  DEFAULT_REMOTE_NAIMA,
+  type Host,
+  type HostAnswer,
+  type HostShell,
+  readHosts,
+  remoteCommand,
+  shellQuote,
+  sshArgs,
+  windowsArg,
+  windowsCommandLine,
+} from "./hosts.ts"
 export { installDirOf, installedProgram, type InstalledToolRef, platformKey, PLATFORMS, programFile, RECEIPT, toolsDir } from "./tools.ts"
 export { cell, code, sentence, table } from "./markdown.ts"
 export { align, cloneIntoNewWorktree, isClone, short, type Target } from "./program.ts"

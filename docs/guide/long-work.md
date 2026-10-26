@@ -130,6 +130,14 @@ After that, `naima run bench --host lab --budget-time 6h -- 'deno task bench'` r
 project, and `wait`, `run list`, `run status`, `run stop` and `run clean` ask it over ssh. A run on another machine must not change any file the repository
 tracks there. If it does, the run is reported as failed, and the report names the files.
 
+Naima quotes what it sends for the shell the machine's ssh server runs commands through. That is a POSIX shell unless you say otherwise. The ssh server
+that comes with Windows runs commands through cmd, so for a Windows machine you add `"shell": "cmd"`.
+
+```json
+"long-work": { "options": { "hosts": {
+  "win": { "ssh": "me@win.example.org", "dir": "D:\\work\\project", "shell": "cmd" } } } }
+```
+
 ## Where the records are
 
 Each run has a folder in `naima-tracker/.runs/<name>/`, holding what was asked for (`run.json`), the run's state (`status.json`), its `log` and its `progress`.
@@ -137,7 +145,8 @@ The folder tells git to ignore it, so none of it is ever committed.
 
 ## Platforms
 
-Everything above works on macOS and Linux. On Windows you get local runs, which are ended with `taskkill`, and a Windows machine can't be a `--host`. Agents are
+Everything above works on macOS, Linux and Windows. On Windows a run is ended with `taskkill`, and Naima starts the run's supervisor through WMI (with
+PowerShell), so a run started from an ssh session keeps going after the session ends, which a Windows machine used as a `--host` needs. Agents are
 required to use these commands by the rule [long work goes through naima run](rules.md#long-work-goes-through-naima-run-and-naima-wait), and the rule
 [long work reports its progress](rules.md#long-work-reports-its-progress-or-says-why-it-cannot-and-what-it-reports-instead) is the one that asks it to say how
 far along it is.

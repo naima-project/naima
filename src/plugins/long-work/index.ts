@@ -59,6 +59,7 @@ import {
   view,
   writeJsonAtomic,
 } from "./records.ts"
+import { windowsLaunch } from "./launch.ts"
 import { type Host, readHosts, sshArgs } from "./remote.ts"
 
 const SUPERVISOR = fileURLToPath(new URL("./supervisor.ts", import.meta.url))
@@ -273,14 +274,24 @@ async function start(ctx: Context, hosts: Map<string, Host>, cmd: Command, args:
   }
   mkdirSync(dir)
   writeJsonAtomic(join(dir, RUN_FILE), spec)
-  const child = spawn(process.execPath, supervisorArgs("supervise", dir, [dir]), {
-    cwd,
-    env: callerEnv(process.env),
-    detached: true,
-    stdio: "ignore",
-    windowsHide: true,
-  })
-  child.unref()
+  if (process.platform === "win32") {
+    // A detached child stays in the job of an ssh session, and ends with it: WMI starts the supervisor outside it.
+    const how = windowsLaunch(process.execPath, supervisorArgs("supervise", dir, [dir]), cwd)
+    const r = spawnSync(how.program, how.args, { cwd, env: callerEnv(process.env), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true })
+    if (r.status !== 0) {
+      rmSync(dir, { recursive: true, force: true })
+      throw refuse(`naima run: the supervisor could not be started through WMI — ${String(r.stderr || r.error?.message || `exit ${r.status}`).trim()}`)
+    }
+  } else {
+    const child = spawn(process.execPath, supervisorArgs("supervise", dir, [dir]), {
+      cwd,
+      env: callerEnv(process.env),
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    })
+    child.unref()
+  }
   const until = Date.now() + DEFAULTS.startMs
   let v = view(dir, Date.now())
   while (v.state === "starting" && Date.now() < until) {
@@ -754,7 +765,7 @@ export default function longWork(options: Record<string, unknown> = {}): Plugin 
         name: "hosts",
         default: "{}",
         says:
-          'the machines a run may go to: name → { "ssh": the destination ssh is given, "dir": the project\'s checkout there, "naima": the command that runs its Naima from dir (default `deno run -A naima-tracker/naima/naima.ts`) }',
+          'the machines a run may go to: name → { "ssh": the destination ssh is given, "dir": the project\'s checkout there, "naima": the command that runs its Naima from dir (default `deno run -A naima-tracker/naima/naima.ts`), "shell": the shell its sshd runs a command through, which every word is quoted for — "posix" (default) or "cmd", the stock Windows OpenSSH server\'s }',
       },
       {
         name: "longRuns",
