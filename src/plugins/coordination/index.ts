@@ -436,7 +436,7 @@ const closed = (ctx: Context, id: string): boolean => {
 /**
  * Why a claim no longer stands for work in progress, or undefined while it
  * does: its branch is gone; or merged into the trunk, which carries the claim
- * file the merge brought; or every item it claims is closed. A stale claim is
+ * file the merge brought; or every item it claims is done or closed. A stale claim is
  * released by `naima prune --write`, run where its file is.
  */
 export function staleReason(
@@ -450,7 +450,7 @@ export function staleReason(
     main && c.branch !== main && isAncestor(ctx.trackerGit, `refs/heads/${c.branch}`, main) &&
     filesAt(ctx.trackerGit, main, inGit(ctx, CLAIMS), ".json").some((f) => f.name === c.file)
   ) return `its branch is merged into ${main}`
-  if (c.items.length && c.items.every((e) => closed(ctx, e.id))) return "every item it claims is closed"
+  if (c.items.length && c.items.every((e) => closed(ctx, e.id))) return "every item it claims is done or closed"
   return undefined
 }
 
@@ -1091,7 +1091,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       "Several branches may claim one item: `claim` says who else holds it rather than refusing. " +
       "There are no locks: a claim says who works on what and never excludes anyone. What one session at a time must touch — the trunk, the published site, the releases — is touched by one writer, the coordinator; workers only prepare on their own branches, and the owner decides what lands and when, when it matters. " +
       "Work happens by one scheme, checked: the worktree `<worktrees>/<what>` stands on the branch `<who>/<what>` and carries a claim; `open` makes all three in one step. " +
-      "A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. A claim is stale when its branch is gone, or merged into the trunk that carries its file, or every item it claims is closed: `claims` lists it apart, `stale-claims` notes it, and `prune --write` releases it; a claim that still names a closed item among open ones is noted by `claims-on-closed-items`. " +
+      "A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. A claim is stale when its branch is gone, or merged into the trunk that carries its file, or every item it claims is done or closed: `claims` lists it apart, `stale-claims` notes it, and `prune --write` releases it; a claim that still names a closed item among open ones is noted by `claims-on-closed-items`. " +
       "Work left behind is listed by `stale` and in the summary: every branch, worktree and claim whose claim is stale, or with no sign of life (commit, step, session note, file not committed) for `staleAfter` hours, with its facts — last commit, files not committed, commits ahead of the trunk, whether it is up to date with it, items held and their status — and the next step: resume, land, archive or drop. " +
       "Landings are semi-linear: a branch the trunk is an ancestor of enters it as one marker commit, a merge whose tree is the branch tip's and whose message names the items it closes in `Closes:` trailers; `land` makes it from the main checkout, the shortcut for `git merge --no-ff`, and moves the trunk only from the commit it read. " +
       "From the first marker on the trunk's first-parent line every first-parent commit is a marker, or `landings-are-markers` notes it, one note per commit, which `naima waive landings-are-markers <commit>` accepts with a reason; before it nothing is asked, so a history of fast-forwards keeps working. " +

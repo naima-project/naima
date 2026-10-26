@@ -156,7 +156,7 @@ checks that worker's run and worktree, then reports it to the owner as possibly 
 it.
 
 A claim whose work is done is listed apart, at the end of `naima claims`, as stale, and is not counted as work in hand. A claim is stale when its branch is
-gone, when its branch is merged into the trunk and the trunk carries the claim file the merge brought, or when every item it claims is closed. `naima check`
+gone, when its branch is merged into the trunk and the trunk carries the claim file the merge brought, or when every item it claims is done or closed. `naima check`
 adds one note per stale claim with the command that releases it, `naima prune --write`, and the branch to run it on when the file is not on the trunk's disk. A
 live claim that still names a closed item is noted too, with the `naima release` that drops it.
 

@@ -49,7 +49,7 @@ export function fieldError(def: FieldDef, value: unknown): string | null {
 /** Turn a command-line `field=value` into a stored value. Throws with the reason. */
 export function parseFieldValue(def: FieldDef, raw: string): unknown {
   let value: unknown = raw
-  if (def.kind === "strings") value = raw.split(",").map((s) => s.trim()).filter(Boolean)
+  if (def.kind === "strings") value = jsonStrings(raw) ?? raw.split(",").map((s) => s.trim()).filter(Boolean)
   // Several values of a field that takes several are a list; one stays a string, as it is stored.
   if (def.kind === "enum" && def.multiple && raw.includes(",")) value = raw.split(",").map((s) => s.trim()).filter(Boolean)
   if (def.kind === "boolean") value = raw === "true" ? true : raw === "false" ? false : raw
@@ -64,6 +64,17 @@ export function parseFieldValue(def: FieldDef, raw: string): unknown {
   const error = fieldError(def, value)
   if (error) throw new Error(`${def.name}: "${raw}" ${error}`)
   return value
+}
+
+/** A JSON list of strings, as `["a", "b, c"]`, so a value may hold a comma; undefined for anything else. */
+function jsonStrings(raw: string): string[] | undefined {
+  if (!raw.trim().startsWith("[")) return undefined
+  try {
+    const v: unknown = JSON.parse(raw)
+    return Array.isArray(v) && v.every((x) => typeof x === "string") ? v.map((x) => x.trim()).filter(Boolean) : undefined
+  } catch {
+    return undefined
+  }
 }
 
 /** Whether a field's list of values is open — a string's or strings', where an off-list value is a note — rather than an enum's, fixed. */
