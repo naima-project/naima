@@ -103,6 +103,7 @@ export {
 export { DATA_FILE, DEFAULT_DATA, TRACKER_DIR } from "./layout.ts"
 export {
   CODE_TRAILER,
+  DELEGATE_MARK,
   HOOKS_DIR,
   HOOKS_OFF_KEY,
   installTrailerHooks,
@@ -115,6 +116,7 @@ export {
   trackerPath,
   trailerHookCurrent,
   trailerOf,
+  writeDelegates,
   writeGitHook,
 } from "./repos.ts"
 export { WAIVERS } from "./waivers.ts"

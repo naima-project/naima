@@ -210,17 +210,86 @@ export function pointHooksPath(root: string, data: string, opts: { quietWhenSet?
   if (set === path) return []
   if (set) return opts.quietWhenSet ? [] : [`core.hooksPath of the code repository is ${set}, not ${path}: Naima's git hooks are not run there`]
   if (gitOrNull(root, "config", "--get", HOOKS_OFF_KEY) === "off") return []
+  // Every hook of the clone's own directory keeps running: a stub of each name Naima does not write calls it.
+  writeDelegates(data)
   const r = runGit(root, ["config", "core.hooksPath", path])
   if (!r.ok) return [`core.hooksPath could not be set to ${path}: ${r.err.split("\n")[0] ?? "git failed"}`]
-  // What stops running now: a hook of the clone's own directory Naima's do not call.
-  const own = join(gitOrNull(root, "rev-parse", "--path-format=absolute", "--git-common-dir") ?? join(root, ".git"), "hooks")
-  const mine = new Set(naimaHooks(data))
-  const stopped = existsSync(own) ? readdirSync(own).filter((n) => !n.endsWith(".sample") && !mine.has(n)).sort() : []
+  const own = naimaHooks(data).filter((n) => !isDelegate(data, n))
   return [
-    `core.hooksPath is ${path} now, for this clone and every worktree of it: git runs the project's hooks (${[...mine].join(", ") || "none yet"})${
-      stopped.length ? `; the clone's own ${stopped.join(", ")} no longer runs` : ""
-    } — naima hooks uninstall undoes it`,
+    `core.hooksPath is ${path} now, for this clone and every worktree of it: git runs the project's hooks (${
+      own.join(", ") || "none yet"
+    }), and every hook of the clone's own still runs — naima hooks uninstall undoes it`,
   ]
+}
+
+/** Every hook name git runs: a stub of each that Naima does not write itself keeps the clone's own hook running. */
+export const GIT_HOOKS: readonly string[] = [
+  "applypatch-msg",
+  "pre-applypatch",
+  "post-applypatch",
+  "pre-commit",
+  "pre-merge-commit",
+  "prepare-commit-msg",
+  "commit-msg",
+  "post-commit",
+  "pre-rebase",
+  "post-checkout",
+  "post-merge",
+  "pre-push",
+  "pre-receive",
+  "update",
+  "proc-receive",
+  "post-receive",
+  "post-update",
+  "reference-transaction",
+  "push-to-checkout",
+  "pre-auto-gc",
+  "post-rewrite",
+  "sendemail-validate",
+  "fsmonitor-watchman",
+  "p4-changelist",
+  "p4-prepare-changelist",
+  "p4-post-changelist",
+  "p4-pre-submit",
+  "post-index-change",
+]
+
+export const DELEGATE_MARK = "# Written by Naima to delegate"
+
+/** The stub for hook `name`: the clone's own hook of that name, when it exists and is executable, with the same arguments, input and exit code. */
+export const delegateHook = (name: string): string =>
+  [
+    "#!/bin/sh",
+    `${DELEGATE_MARK}: core.hooksPath names this folder, so the clone's own ${name} runs from here.`,
+    `own="$(git rev-parse --git-common-dir)/hooks/${name}"`,
+    '[ -x "$own" ] || exit 0',
+    'exec "$own" "$@"',
+    "",
+  ].join("\n")
+
+const isDelegate = (data: string, name: string): boolean => {
+  try {
+    return readFileSync(join(data, HOOKS_DIR, name), "utf8").includes(DELEGATE_MARK)
+  } catch {
+    return false
+  }
+}
+
+/** Write the stub of every hook name that has no file in the data directory's hooks yet. Returns the names written. */
+export function writeDelegates(data: string): string[] {
+  const out: string[] = []
+  for (const name of GIT_HOOKS) {
+    const file = join(data, HOOKS_DIR, name)
+    if (existsSync(file)) continue
+    writeFileAtomic(file, delegateHook(name))
+    try {
+      chmodSync(file, 0o755)
+    } catch {
+      // a file system without modes: git's index records it executable once added
+    }
+    out.push(name)
+  }
+  return out
 }
 
 /**
@@ -230,6 +299,7 @@ export function pointHooksPath(root: string, data: string, opts: { quietWhenSet?
 export function writeGitHook(root: string, data: string, name: string, text: string): string[] {
   const file = join(data, HOOKS_DIR, name)
   const same = existsSync(file) && readFileSync(file, "utf8") === text
+  writeDelegates(data)
   if (!same) {
     writeFileAtomic(file, text)
     try {

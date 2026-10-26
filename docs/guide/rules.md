@@ -481,7 +481,8 @@ is committed, and point git's `core.hooksPath` at that folder. git keeps that se
 first-parent line is one the check accepts: a marker, the record `naima land` makes after it, a commit that only adds to the tracker data or only closes items,
 or `naima init`'s commit. It also lets through a commit that only turns the guard on or off, a new tip that `origin`'s branch of the trunk already holds (a pull
 of what landed elsewhere), a rewind, and a branch created or deleted. Anything else is refused with one line that says to open an item and land it. Every other
-ref costs nothing but the shell script, and a hook of the same name in the clone's own `.git/hooks` still runs first. A `core.hooksPath` already set to
+ref costs nothing but the shell script. The clone's own hooks in `.git/hooks` keep running: a hook of the same name runs first, and for every other hook
+name git knows the folder holds a small stub that runs the clone's own hook of that name, when there is one. A `core.hooksPath` already set to
 another folder is left alone, and init and update say so.
 
 The owner, and only the owner, lets a commit through once by giving it a reason:

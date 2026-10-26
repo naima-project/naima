@@ -88,7 +88,9 @@ fast-forward of the trunk made by hand, so that work goes through an item, its w
 `naima guard-check`.
 
 `core.hooksPath` is git's setting for one clone, not a file anyone commits, so someone who clones the project has the hooks but not the setting. Their first
-launched run of Naima (`naima hello` or any other command) points `core.hooksPath` at the folder and says so in one line. After `naima hooks uninstall` it
+launched run of Naima (`naima hello` or any other command) points `core.hooksPath` at the folder and says so in one line. Pointing it there stops none of
+the clone's own hooks: for every hook name git knows and Naima does not write, the folder holds a small stub that runs the hook of that name in `.git/hooks`
+when there is one, with the same arguments and input, and returns its exit code. After `naima hooks uninstall` it
 stays unset in that clone.
 
 ```sh

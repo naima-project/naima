@@ -38,6 +38,7 @@ import {
   TRACKER_TRAILER,
   trunk,
   usageError,
+  writeDelegates,
   writeGitHook,
   writeJson,
 } from "../../core/api.ts"
@@ -145,10 +146,12 @@ export function projectGuardHook(ctx: Context): string {
 
 const hookFile = (ctx: Context): string => join(ctx.trackerRoot, HOOKS_DIR, GUARD_HOOK)
 const hooksPathOf = (ctx: Context): string => `${posixRelative(ctx.root, ctx.trackerRoot) || "."}/${HOOKS_DIR}`
+/** Whether the guard itself is in the hooks folder, not absent nor the stub that only runs the clone's own hook. */
+const hasGuard = (ctx: Context): boolean => existsSync(hookFile(ctx)) && readFileSync(hookFile(ctx), "utf8").includes(MARK)
 const isGit = (root: string): boolean => gitOrNull(root, "rev-parse", "--git-dir") !== null
 
 /** Whether git runs the guard in this clone: the hook is there and core.hooksPath names its directory. */
-export const guardRuns = (ctx: Context): boolean => existsSync(hookFile(ctx)) && gitOrNull(ctx.root, "config", "--get", "core.hooksPath") === hooksPathOf(ctx)
+export const guardRuns = (ctx: Context): boolean => hasGuard(ctx) && gitOrNull(ctx.root, "config", "--get", "core.hooksPath") === hooksPathOf(ctx)
 
 /** What the owner is told once, when the guard starts guarding a clone. */
 const announce = (main: string): string =>
@@ -366,7 +369,7 @@ export const guardCommand = (on: boolean): Command => ({
       else {
         ctx.out(
           `the trunk guard is on, and does not run in this clone: ${
-            existsSync(hookFile(ctx)) ? `core.hooksPath does not name ${hooksPathOf(ctx)}` : `${hook} is missing`
+            hasGuard(ctx) ? `core.hooksPath does not name ${hooksPathOf(ctx)}` : `${hook} is missing`
           } — naima update puts it in place`,
         )
       }
@@ -375,6 +378,7 @@ export const guardCommand = (on: boolean): Command => ({
     if (sub === "off") {
       recordGuard(ctx, false)
       rmSync(hookFile(ctx), { force: true })
+      writeDelegates(ctx.trackerRoot) // the clone's own reference-transaction hook keeps running
       ctx.out(
         `the trunk guard is off: commits on ${main} made by hand are not refused, landings-are-markers asks only from the first landing marker, and the landing rule is not shipped. ` +
           `Commit ${config} and the removed ${hook}; naima guard on turns it back on`,
