@@ -35,7 +35,7 @@
   .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
 
   /* top bar */
-  .bar { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; }
+  .bar { display: flex; align-items: center; justify-content: space-between; padding-block: 22px; }
   .logo { font-weight: 650; font-size: 22px; letter-spacing: -.5px; text-decoration: none; }
   .logo .ai { color: var(--accent); }
   .bar nav { display: flex; gap: 26px; align-items: center; font-size: 15px; }
@@ -44,7 +44,7 @@
   .pill { font-size: 12.5px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 4px 10px; letter-spacing: .2px; }
 
   /* hero */
-  .hero { display: grid; grid-template-columns: 1.05fr .95fr; gap: 56px; align-items: center; padding: 56px 0 72px; }
+  .hero { display: grid; grid-template-columns: 1.05fr .95fr; gap: 56px; align-items: center; padding-block: 56px 72px; }
   .eyebrow { display: inline-flex; gap: 10px; align-items: center; font-size: 14px; color: var(--muted); margin-bottom: 22px; }
   h1 { margin: 0; font-size: clamp(40px, 5.2vw, 64px); line-height: 1.03; letter-spacing: -2px; font-weight: 650; }
   h1 em { font-style: normal; color: var(--accent); }
@@ -75,10 +75,10 @@
   .card .ico { width: 38px; height: 38px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; margin-bottom: 16px; }
   .card h3 { margin: 0 0 6px; font-size: 18px; letter-spacing: -.3px; }
   .card p { margin: 0; color: var(--text); font-size: 15.5px; }
-  .does { padding: 40px 0 80px; }
+  .does { padding-block: 40px 80px; }
 
   /* formal methods */
-  .formal { padding: 10px 0 84px; }
+  .formal { padding-block: 10px 84px; }
   .formal .two { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
   .formal ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; }
   .formal li b { display: block; font-size: 17.5px; letter-spacing: -.3px; margin-bottom: 2px; }
@@ -98,10 +98,10 @@
   .stat span { color: var(--muted); font-size: 14.5px; }
 
   /* closing */
-  .closing { text-align: center; padding: 88px 0 56px; }
+  .closing { text-align: center; padding-block: 88px 56px; }
   .closing h2 { margin-bottom: 14px; }
   .closing .cta { justify-content: center; }
-  .credits ul { list-style: none; margin: 0 auto; padding: 24px 0 36px; max-width: 900px; display: flex; justify-content: center; align-items: center; gap: clamp(14px, 4vw, 44px); }
+  .credits ul { list-style: none; margin: 0 auto; padding-block: 24px 36px; max-width: 900px; display: flex; justify-content: center; align-items: center; gap: clamp(14px, 4vw, 44px); }
   .credits li { flex: var(--w) 1 0; min-width: 0; }
   .credits li:nth-child(1) { --w: 5.56; } .credits li:nth-child(2) { --w: 4.12; } .credits li:nth-child(3) { --w: 4.74; } .credits li:nth-child(4) { --w: 7.2; }
   .credits img { display: block; width: 100%; height: auto; filter: grayscale(1); opacity: .6; }
@@ -114,13 +114,37 @@
     .trust .wrap { grid-template-columns: 1fr 1fr; }
     .bar nav a.hide { display: none; }
   }
+  /* A phone: centred, with room to breathe. */
   @media (max-width: 600px) {
-    .wrap { padding: 0 16px; }
-    .grid { grid-template-columns: 1fr; }
-    .sub { font-size: 17px; }
-    .term pre { font-size: 12px; }
-    .credits ul { flex-wrap: wrap; gap: 8px 16px; }
-    .credits li { flex: 0 0 40%; }
+    .wrap { padding: 0 24px; }
+    .bar { padding-block: 18px; }
+    .bar nav { gap: 16px; font-size: 14px; }
+    .hero { padding-block: 36px 64px; gap: 44px; text-align: center; }
+    .eyebrow { display: block; font-size: 13px; line-height: 1.5; margin: 0 auto 18px; max-width: 280px; }
+    h1 { font-size: 38px; letter-spacing: -1.3px; line-height: 1.08; }
+    .sub { font-size: 17px; line-height: 1.6; margin: 20px auto 0; }
+    .cta { margin-top: 30px; flex-direction: column; align-items: stretch; gap: 12px; }
+    .cta .button { text-align: center; padding: 15px 20px; }
+    .fine { margin-top: 20px; }
+    /* the terminal keeps its columns: smaller, scrolling sideways inside itself if it must */
+    .term { text-align: left; }
+    .term pre { font-size: 11px; white-space: pre; overflow-x: auto; padding: 18px; }
+    section h2 { font-size: 28px; letter-spacing: -.7px; text-align: center; }
+    section .lede { font-size: 16.5px; line-height: 1.6; text-align: center; margin: 0 auto 32px; }
+    .does { padding-block: 24px 72px; }
+    .grid { grid-template-columns: 1fr; gap: 14px; }
+    .card { padding: 22px; text-align: center; }
+    .card .ico { margin: 0 auto 14px; }
+    .formal { padding-block: 0 72px; }
+    .formal .two { gap: 36px; }
+    .formal ul { gap: 22px; text-align: center; }
+    .diagram { padding: 16px; }
+    .alsofor { text-align: center; padding: 22px; }
+    .trust .wrap { gap: 26px; padding-top: 40px; padding-bottom: 40px; text-align: center; }
+    .stat b { font-size: 24px; }
+    .closing { padding-block: 72px 44px; }
+    .credits ul { flex-wrap: wrap; gap: 16px 24px; padding-block: 28px 44px; }
+    .credits li { flex: 0 0 38%; }
   }
 </style>
 </head>

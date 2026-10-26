@@ -33,7 +33,7 @@
   a { color: inherit; }
   .wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
 
-  .bar { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; }
+  .bar { display: flex; align-items: center; justify-content: space-between; padding-block: 22px; }
   .logo { font-weight: 650; font-size: 22px; letter-spacing: -.5px; text-decoration: none; }
   .logo .ai { color: var(--accent); }
   .bar nav { display: flex; gap: 26px; align-items: center; font-size: 15px; }
@@ -41,7 +41,7 @@
   .bar nav a:hover, .bar nav a[aria-current] { color: var(--accent); }
   .pill { font-size: 12.5px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 4px 10px; }
 
-  .intro { padding: 48px 0 40px; max-width: 760px; }
+  .intro { padding-block: 48px 40px; max-width: 760px; }
   .clock { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
   .clock svg { width: 16px; height: 16px; }
   h1 { margin: 16px 0 0; font-size: clamp(38px, 5vw, 58px); line-height: 1.04; letter-spacing: -2px; font-weight: 650; }
@@ -59,7 +59,7 @@
   .pain i { font-style: normal; color: var(--bad); font-weight: 700; margin-right: 6px; }
 
   /* how it works */
-  .how { padding: 64px 0 20px; }
+  .how { padding-block: 64px 20px; }
   .steps { counter-reset: s; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
   .step { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; position: relative; }
   .step::before { counter-increment: s; content: counter(s); display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 650; font-size: 14px; margin-bottom: 14px; }
@@ -69,7 +69,7 @@
   .you b { color: var(--fg); }
 
   /* where it lives */
-  .lives { padding: 56px 0 10px; display: grid; grid-template-columns: 1.1fr .9fr; gap: 36px; align-items: center; }
+  .lives { padding-block: 56px 10px; display: grid; grid-template-columns: 1.1fr .9fr; gap: 36px; align-items: center; }
   .lives p { color: var(--text); font-size: 16.5px; margin: 0 0 12px; }
   .facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
   .facts span { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 7px 13px; font-size: 14px; }
@@ -81,14 +81,14 @@
   .beyond b { color: var(--fg); }
 
   /* start */
-  .start { text-align: center; padding: 72px 0 40px; }
+  .start { text-align: center; padding-block: 72px 40px; }
   .start p { color: var(--text); margin: 0 0 26px; font-size: 17.5px; }
   .cta { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
   .button { text-decoration: none; border-radius: 12px; font-size: 16.5px; font-weight: 550; padding: 14px 24px; transition: transform .2s ease, box-shadow .2s ease; }
   .button:hover { transform: translateY(-1px); }
   .primary { background: var(--accent); color: #fff; box-shadow: 0 10px 24px -12px color-mix(in srgb, var(--accent) 80%, transparent); }
   .secondary { border: 1px solid var(--line); background: var(--panel); }
-  .next { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 20px 0 60px; }
+  .next { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding-block: 20px 60px; }
   .next a { text-decoration: none; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; transition: border-color .2s ease, transform .2s ease; }
   .next a:hover { border-color: var(--accent); transform: translateY(-1px); }
   .next b { display: block; font-size: 16px; }
@@ -100,11 +100,30 @@
     .lives { grid-template-columns: 1fr; }
     .bar nav a.hide { display: none; }
   }
+  /* A phone: centred, with room to breathe. */
   @media (max-width: 560px) {
-    .wrap { padding: 0 16px; }
-    .steps { grid-template-columns: 1fr; }
-    .lead { font-size: 17px; }
-    .tree { font-size: 12px; }
+    .wrap { padding: 0 24px; }
+    .bar { padding-block: 18px; }
+    .bar nav { gap: 16px; font-size: 14px; }
+    .intro { padding-block: 36px 44px; text-align: center; margin: 0 auto; }
+    h1 { font-size: 36px; letter-spacing: -1.2px; line-height: 1.08; }
+    .lead { font-size: 17px; line-height: 1.6; }
+    .k, h2 { text-align: center; }
+    h2 { font-size: 28px; }
+    .trouble { gap: 14px; }
+    .pain, .step { padding: 22px; text-align: center; }
+    .steps { grid-template-columns: 1fr; gap: 14px; }
+    .step::before { margin: 0 auto 14px; }
+    .how { padding-block: 64px 10px; }
+    .you { display: block; text-align: center; padding: 22px; }
+    .lives { padding-block: 56px 0; gap: 28px; text-align: center; }
+    .facts { justify-content: center; }
+    .tree { font-size: 11.5px; text-align: left; }
+    .beyond { text-align: center; margin-top: 44px; }
+    .start { padding-block: 64px 36px; }
+    .cta { flex-direction: column; align-items: stretch; }
+    .cta .button { text-align: center; padding: 15px 20px; }
+    .next a { text-align: center; }
   }
 </style>
 </head>
