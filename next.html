@@ -41,15 +41,19 @@
   .bar nav { display: flex; gap: 26px; align-items: center; font-size: 15px; }
   .bar nav a { text-decoration: none; color: var(--text); }
   .bar nav a:hover { color: var(--accent); }
+  .bar nav a.navcta { color: #fff; background: var(--accent); border-radius: 10px; padding: 8px 14px; font-weight: 550; }
+  .bar nav a.navcta:hover { color: #fff; background: color-mix(in srgb, var(--accent) 88%, #000); }
   .pill { font-size: 12.5px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 4px 10px; letter-spacing: .2px; }
 
   /* hero */
-  .hero { display: grid; grid-template-columns: 1.05fr .95fr; gap: 56px; align-items: center; padding-block: 56px 72px; }
+  .hero { display: grid; justify-items: center; text-align: center; gap: 56px; padding-block: 64px 88px; }
+  .hero .term { width: 100%; max-width: 580px; text-align: left; }
   .eyebrow { display: inline-flex; gap: 10px; align-items: center; font-size: 14px; color: var(--muted); margin-bottom: 22px; }
-  h1 { margin: 0; font-size: clamp(40px, 5.2vw, 64px); line-height: 1.03; letter-spacing: -2px; font-weight: 650; }
-  h1 em { font-style: normal; color: var(--accent); }
-  .sub { margin: 24px 0 0; font-size: 19px; color: var(--text); max-width: 520px; }
-  .cta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 34px; }
+  h1 { margin: 0; font-size: clamp(40px, 6vw, 72px); line-height: 1.04; letter-spacing: -2px; font-weight: 650; text-wrap: balance; }
+  h1 span { display: block; }
+  h1 em { display: block; font-style: normal; color: var(--accent); }
+  .sub { margin: 26px auto 0; font-size: 20px; color: var(--text); max-width: 640px; text-wrap: pretty; }
+  .cta { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 34px; }
   .button { text-decoration: none; border-radius: 12px; font-size: 16.5px; font-weight: 550; padding: 14px 24px; transition: transform .2s ease, box-shadow .2s ease, background .2s ease; }
   .button:hover { transform: translateY(-1px); }
   .primary { background: var(--accent); color: #fff; box-shadow: 0 10px 24px -12px color-mix(in srgb, var(--accent) 80%, transparent); }
@@ -61,7 +65,7 @@
   .term { background: var(--term); color: var(--term-text); border-radius: 16px; box-shadow: 0 30px 60px -30px rgba(18, 20, 26, .55), 0 0 0 1px rgba(255, 255, 255, .04) inset; overflow: hidden; }
   .term .dots { display: flex; gap: 7px; padding: 14px 16px; background: #1a1d25; }
   .term .dots i { width: 11px; height: 11px; border-radius: 50%; background: #3a3f4c; }
-  .term pre { margin: 0; padding: 20px 22px 24px; font: 13.5px/1.65 var(--mono); white-space: pre-wrap; }
+  .term pre { margin: 0; padding: 22px 26px 26px; font: 14px/1.7 var(--mono); white-space: pre-wrap; }
   .term .p { color: #8b93a7; }
   .term .c { color: #fff; }
   .term .ok { color: #6ee7a8; }
@@ -69,10 +73,12 @@
 
   /* what it does */
   section h2 { font-size: clamp(28px, 3.2vw, 38px); letter-spacing: -1px; margin: 0 0 10px; font-weight: 650; }
-  section .lede { margin: 0 0 36px; color: var(--text); font-size: 17px; max-width: 640px; }
+  section .lede { margin: 0 0 36px; color: var(--text); font-size: 17.5px; max-width: 640px; text-wrap: pretty; }
+  .does h2, .formal h2 { text-align: center; }
+  .does .lede, .formal .lede { text-align: center; margin: 0 auto 44px; }
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 24px; }
-  .card .ico { width: 38px; height: 38px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; margin-bottom: 16px; }
+  .card .ico { width: 40px; height: 40px; border-radius: 11px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; margin-bottom: 16px; font-size: 19px; font-weight: 600; }
   .card h3 { margin: 0 0 6px; font-size: 18px; letter-spacing: -.3px; }
   .card p { margin: 0; color: var(--text); font-size: 15.5px; }
   .does { padding-block: 40px 80px; }
@@ -88,7 +94,7 @@
   .diagram svg { display: block; width: 100%; height: auto; }
   .diagram .cap { margin: 12px 4px 0; font-size: 14px; color: var(--muted); }
   .diagram .cap code { font: 13px var(--mono); color: var(--fg); }
-  .alsofor { margin: 30px 0 0; padding: 18px 22px; border-radius: 14px; background: var(--accent-soft); color: var(--text); font-size: 16px; }
+  .alsofor { margin: 44px auto 0; max-width: 820px; text-align: center; text-wrap: balance; padding: 20px 26px; border-radius: 14px; background: var(--accent-soft); color: var(--text); font-size: 16px; }
   .alsofor b { color: var(--fg); }
 
   /* trust */
@@ -101,14 +107,16 @@
   .closing { text-align: center; padding-block: 88px 56px; }
   .closing h2 { margin-bottom: 14px; }
   .closing .cta { justify-content: center; }
-  .credits ul { list-style: none; margin: 0 auto; padding-block: 24px 36px; max-width: 900px; display: flex; justify-content: center; align-items: center; gap: clamp(14px, 4vw, 44px); }
+  .credits ul { list-style: none; margin: 0 auto; padding-block: 24px 28px; max-width: 900px; display: flex; justify-content: center; align-items: center; gap: clamp(14px, 4vw, 44px); }
   .credits li { flex: var(--w) 1 0; min-width: 0; }
   .credits li:nth-child(1) { --w: 5.56; } .credits li:nth-child(2) { --w: 4.12; } .credits li:nth-child(3) { --w: 4.74; } .credits li:nth-child(4) { --w: 7.2; }
   .credits img { display: block; width: 100%; height: auto; filter: grayscale(1); opacity: .6; }
+  .foot { margin: 0; padding-bottom: 36px; text-align: center; font-size: 13.5px; color: var(--muted); }
+  .foot a { text-underline-offset: 3px; }
   .credits a:hover img { filter: none; opacity: 1; }
 
   @media (max-width: 900px) {
-    .hero { grid-template-columns: 1fr; gap: 36px; padding-top: 28px; }
+    .hero { gap: 40px; padding-top: 36px; }
     .grid { grid-template-columns: 1fr 1fr; }
     .formal .two { grid-template-columns: 1fr; }
     .trust .wrap { grid-template-columns: 1fr 1fr; }
@@ -118,7 +126,8 @@
   @media (max-width: 600px) {
     .wrap { padding: 0 24px; }
     .bar { padding-block: 18px; }
-    .bar nav { gap: 16px; font-size: 14px; }
+    .bar nav { gap: 14px; font-size: 14px; }
+    .bar nav a.hide-s { display: none; }
     .hero { padding-block: 36px 64px; gap: 44px; text-align: center; }
     .eyebrow { display: block; font-size: 13px; line-height: 1.5; margin: 0 auto 18px; max-width: 280px; }
     h1 { font-size: 38px; letter-spacing: -1.3px; line-height: 1.08; }
@@ -139,6 +148,8 @@
     .formal .two { gap: 36px; }
     .formal ul { gap: 22px; text-align: center; }
     .diagram { padding: 16px; }
+    .formal .two > * { min-width: 0; }
+    .diagram .cap code { font-size: 11.5px; white-space: nowrap; }
     .alsofor { text-align: center; padding: 22px; }
     .trust .wrap { gap: 26px; padding-top: 40px; padding-bottom: 40px; text-align: center; }
     .stat b { font-size: 24px; }
@@ -159,8 +170,9 @@
   <nav aria-label="Site">
     <a class="hide" href="one-minute.html">How it works</a>
     <a class="hide" href="docs.html?p=README.md">Docs</a>
-    <a href="https://github.com/naima-project/naima">GitHub</a>
+    <a class="hide-s" href="https://github.com/naima-project/naima">GitHub</a>
     <span class="pill">v1.1 beta</span>
+    <a class="navcta" href="install.html">Install</a>
   </nav>
 </header>
 
@@ -168,8 +180,8 @@
   <div class="wrap hero">
     <div>
       <div class="eyebrow">Free and open source · works with the AI agent you already use</div>
-      <h1>Your AI writes the code.<br><em>Naima makes it software.</em></h1>
-      <p class="sub">Add Naima to any project. Every change gets tested, every decision is kept, designs are proven and releases are planned — inside your repository, while you keep working as usual.</p>
+      <h1><span>Your AI writes the code.</span> <em>Naima makes it software.</em></h1>
+      <p class="sub">Add Naima to any project. Every change is tested, every decision is written down, the critical designs are proven and releases are planned. It all lives in your repository, and you keep working as usual.</p>
       <div class="cta">
         <a class="button primary" href="install.html">Install in one line</a>
         <a class="button secondary" href="one-minute.html">See it in one minute</a>
@@ -187,20 +199,20 @@ release-1.0    Calculator 1.0        <span class="ok">HOLDS</span>
 <span class="dim">  backed by 30 passing tests, recorded run</span>
 
 <span class="p">$</span> <span class="c">naima announce --gate release-1.0</span>
-<span class="dim">4 announceable — each checked by running it</span></pre>
+<span class="dim">release notes: 4 features, all tested</span></pre>
     </div>
   </div>
 
   <section class="wrap does" aria-labelledby="does">
     <h2 id="does">What Naima does for your software</h2>
-    <p class="lede">The practice of a serious software team, applied by your agents for you. You decide; Naima makes sure every claim of done comes with its evidence.</p>
+    <p class="lede">What a careful software team does, done by your agents. You decide, and every piece of work marked done comes with its evidence.</p>
     <div class="grid">
       <div class="card"><div class="ico">✓</div><h3>Tested by default</h3><p>A change reaches your main line only with the test that shows it works, run and recorded.</p></div>
       <div class="card"><div class="ico">◆</div><h3>Memory across sessions</h3><p>Every request, decision and requirement is written down in the project, so the next session starts where the last one ended.</p></div>
-      <div class="card"><div class="ico">↗</div><h3>Goals and releases</h3><p>Set a goal, reach it in steps, release it. Naima says what is missing, and writes the release notes from what was really done.</p></div>
+      <div class="card"><div class="ico">↗</div><h3>Goals and releases</h3><p>Set a goal, reach it in steps, release it. Naima shows what is still missing and writes the release notes from the work that was done.</p></div>
       <div class="card"><div class="ico">∀</div><h3>Proofs for the critical parts</h3><p>Behaviour with states or concurrency is designed as a model and checked with a model checker before it is coded.</p></div>
-      <div class="card"><div class="ico">≈</div><h3>Quality metrics over time</h3><p>Size, complexity, duplication and coverage are measured on every commit, with budgets that hold the line.</p></div>
-      <div class="card"><div class="ico">⌂</div><h3>Yours, in your repo</h3><p>Plain files under one folder, versioned with your code. Works with any agent that can run a command.</p></div>
+      <div class="card"><div class="ico">≈</div><h3>Quality metrics over time</h3><p>Size, complexity, duplication and coverage are measured on every commit, each with a budget, and shown as a trend.</p></div>
+      <div class="card"><div class="ico">⌂</div><h3>Yours, in your repo</h3><p>Plain files in one folder, versioned with your code. Any agent that can run a command can use it.</p></div>
     </div>
   </section>
 
@@ -237,10 +249,10 @@ release-1.0    Calculator 1.0        <span class="ok">HOLDS</span>
 
   <section class="trust" aria-label="Why it is here to stay">
     <div class="wrap">
-      <div class="stat"><b>670</b><span>tests run on every change to Naima itself</span></div>
-      <div class="stat"><b>Built with Naima</b><span>its own work is planned, tested and proven by Naima</span></div>
-      <div class="stat"><b>Apache 2.0</b><span>free and open source, for good</span></div>
-      <div class="stat"><b>Research-backed</b><span>from the formal methods lab of ISTI-CNR</span></div>
+      <div class="stat"><b>670+</b><span>tests run on every change to Naima itself</span></div>
+      <div class="stat"><b>Built with Naima</b><span>Naima plans, tests and proves its own development</span></div>
+      <div class="stat"><b>Apache 2.0</b><span>free and open source</span></div>
+      <div class="stat"><b>Research</b><span>from the formal methods lab of ISTI&#8209;CNR</span></div>
     </div>
   </section>
 
@@ -248,7 +260,7 @@ release-1.0    Calculator 1.0        <span class="ok">HOLDS</span>
     <h2 id="go">Planned, tested, proven.</h2>
     <p class="lede" style="margin: 0 auto 28px;">Ask your agent to install Naima, or run one line yourself.</p>
     <div class="cta">
-      <a class="button primary" href="install.html">Use it now</a>
+      <a class="button primary" href="install.html">Install in one line</a>
       <a class="button secondary" href="docs.html?p=README.md">Read the docs</a>
     </div>
   </section>
@@ -261,6 +273,7 @@ release-1.0    Calculator 1.0        <span class="ok">HOLDS</span>
     <li><a href="https://www.isti.cnr.it/"><img src="logos/isti-cnr.png" alt="ISTI-CNR, Institute of Information Science and Technologies"></a></li>
     <li><a href="https://www.uva.nl/en"><img src="logos/uva.svg" alt="University of Amsterdam"></a></li>
   </ul>
+  <p class="foot">Naima · Apache 2.0 · <a href="https://github.com/naima-project/naima">GitHub</a> · <a href="docs.html?p=README.md">Docs</a></p>
 </footer>
 </body>
 </html>
