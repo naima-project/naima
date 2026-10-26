@@ -196,9 +196,8 @@ naima set export-keeps testSuite=unit     # only if the names should match one s
 
 A name matches a test's whole name, its file and name together (`./test/export.test.ts > export > keeps the alpha channel`), or the end of its name after any
 `>` or `::`, so `keeps the alpha channel` and `tests::keeps_alpha` work too. A `*` stands for any text. Groups are part of a test's name: a step inside a Deno
-test, a `describe` block, or a Rust module. With pytest, a test's name is its function, inside a test class when there is one (`TestCalc > test_add`), so
-`test_add` or `*test_add*` matches it; its file is its module, as `tests.test_calc`. A list may also be given as JSON,
-`testNames='["test_add", "test_add_negative"]'`, when a name holds a comma.
+test, a `describe` block, or a Rust module. With pytest, a test is matched by its function's name, `test_add` or `*test_add*`, since it ends the test's name;
+its file is its module, as `tests.test_calc`. A list may also be given as JSON, `testNames='["test_add", "test_add_negative"]'`, when a name holds a comma.
 
 When `naima metrics run --record` records a run, every test item whose names match one of its tests gets the result:
 
