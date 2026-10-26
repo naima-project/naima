@@ -92,6 +92,24 @@
   .card p { margin: 0; color: var(--text); font-size: 15.5px; }
   .does { padding-block: 40px 80px; }
 
+  /* git, done for you */
+  .git { padding-block: 24px 88px; }
+  .git h2, .git .lede { text-align: center; }
+  .git .lede { margin: 0 auto 44px; }
+  .flow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; counter-reset: step; }
+  .flow li { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px 16px 18px; counter-increment: step; }
+  .flow li::before { content: counter(step); display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 650; margin-bottom: 12px; }
+  .flow li.you { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+  .flow li.you::before { background: var(--panel); }
+  .flow li.you span { color: var(--accent-soft); }
+  .flow b { display: block; font-size: 16px; letter-spacing: -.2px; margin-bottom: 4px; }
+  .flow span { display: block; color: var(--text); font-size: 14px; line-height: 1.45; }
+  .flow li:not(:last-child)::after { content: "→"; position: absolute; right: -11px; top: 22px; color: var(--muted); font-size: 14px; }
+  .who { display: grid; grid-template-columns: 1fr 5fr; gap: 12px; margin-top: 10px; font-size: 13px; color: var(--muted); text-align: center; }
+  .who span:last-child { border-top: 1px dashed var(--line); padding-top: 8px; }
+  .who span:first-child { border-top: 1px dashed var(--accent); padding-top: 8px; color: var(--accent); }
+  .git .note { margin: 28px auto 0; max-width: 720px; text-align: center; color: var(--text); font-size: 16px; text-wrap: pretty; }
+
   /* formal methods */
   .formal { padding-block: 10px 84px; }
   .formal .two { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
@@ -135,6 +153,9 @@
   @media (max-width: 900px) {
     .hero { gap: 40px; padding-top: 36px; }
     .grid { grid-template-columns: 1fr 1fr; }
+    .flow { grid-template-columns: repeat(3, 1fr); }
+    .flow li:nth-child(3)::after { content: none; }
+    .who { display: none; }
     .formal .two { grid-template-columns: 1fr; }
     .trust .wrap { grid-template-columns: 1fr 1fr; }
     .bar nav a.hide { display: none; }
@@ -158,6 +179,11 @@
     section h2 { font-size: 28px; letter-spacing: -.7px; text-align: center; }
     section .lede { font-size: 16.5px; line-height: 1.6; text-align: center; margin: 0 auto 32px; }
     .does { padding-block: 24px 72px; }
+    .git { padding-block: 8px 72px; }
+    .flow { grid-template-columns: 1fr; gap: 10px; }
+    .flow li { display: grid; grid-template-columns: 26px 1fr; column-gap: 14px; text-align: left; }
+    .flow li::before { grid-row: span 2; margin: 0; }
+    .flow li::after { content: none !important; }
     .grid { grid-template-columns: 1fr; gap: 14px; }
     .card { padding: 22px; text-align: center; }
     .card .ico { margin: 0 auto 14px; }
@@ -222,6 +248,21 @@ release-1.0    Calculator 1.0        <span class="ok">HOLDS</span>
     </div>
   </div>
 
+  <section class="wrap git" aria-labelledby="git">
+    <h2 id="git">You never touch git</h2>
+    <p class="lede">No commits to make, no commit messages to write, no branches to merge. You ask and decide; the agents do the rest, and Naima checks every step.</p>
+    <ol class="flow">
+      <li class="you"><b>You ask</b><span>“Keep a history of the results.”</span></li>
+      <li><b>Filed</b><span>The request becomes an item in the project, triaged.</span></li>
+      <li><b>Branched</b><span>An agent opens a worktree and a branch of its own.</span></li>
+      <li><b>Tested</b><span>The code comes with the test that shows it works, and the run is recorded.</span></li>
+      <li><b>Landed</b><span>Merged into main with a commit message that says what changed, and the item is closed.</span></li>
+      <li><b>Released</b><span>When the goal holds: the tag and the release notes.</span></li>
+    </ol>
+    <div class="who" aria-hidden="true"><span>you</span><span>the agents, checked by Naima</span></div>
+    <p class="note">Several agents can work at once, each in its own worktree. Only one of them lands on main, so they never get in each other’s way.</p>
+  </section>
+
   <section class="wrap does" aria-labelledby="does">
     <h2 id="does">What Naima does for your software</h2>
     <p class="lede">What a careful software team does, done by your agents. You decide, and every piece of work marked done comes with its evidence.</p>
@@ -231,6 +272,9 @@ release-1.0    Calculator 1.0        <span class="ok">HOLDS</span>
       <div class="card"><div class="ico">↗</div><h3>Goals and releases</h3><p>Set a goal, reach it in steps, release it. Naima shows what is still missing and writes the release notes from the work that was done.</p></div>
       <div class="card"><div class="ico">∀</div><h3>Proofs for the critical parts</h3><p>Behaviour with states or concurrency is designed as a model and checked with a model checker before it is coded.</p></div>
       <div class="card"><div class="ico">≈</div><h3>Quality metrics over time</h3><p>Size, complexity, duplication and coverage are measured on every commit, each with a budget, and shown as a trend.</p></div>
+      <div class="card"><div class="ico">⇉</div><h3>Agents in parallel</h3><p>Each piece of work has its own worktree and branch, and one coordinator lands them on main, one at a time.</p></div>
+      <div class="card"><div class="ico">⏱</div><h3>Long jobs under control</h3><p>A long build or analysis runs with a time budget and reports its progress, so a stuck job never looks like work.</p></div>
+      <div class="card"><div class="ico">⊘</div><h3>Nothing private leaks</h3><p>Naima refuses to write a machine name, a home path or a user name into the project, and keeps secrets out of it.</p></div>
       <div class="card"><div class="ico">⌂</div><h3>Yours, in your repo</h3><p>Plain files in one folder, versioned with your code. Any agent that can run a command can use it.</p></div>
     </div>
   </section>
