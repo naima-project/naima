@@ -831,13 +831,15 @@ function onlyAddsTrackerData(ctx: Context, sha: string, files: { status: string;
  * directory, each item it removes from its type's folder is added under the closed archive with the same files, and
  * anything else it adds is new, outside rules, waivers and naima.json, as a commit that only adds to the tracker.
  */
-function onlyClosesItems(ctx: Context, files: { status: string; path: string }[]): boolean {
+function onlyClosesItems(ctx: Context, sha: string, files: { status: string; path: string }[]): boolean {
   if (!files.length) return false
   const data = ctx.trackerPrefix ? `${ctx.trackerPrefix}/` : ""
   const closed = ctx.registry.types.get("closed")?.dir
   if (!closed) return false
   const itemDirs = new Set([...ctx.registry.types.values()].map((t) => t.dir).filter((d) => d !== closed))
   const kept = [ctx.registry.types.get("rules")?.dir ?? "rules", WAIVERS].map((d) => `${data}${d}/`)
+  // A group's status follows its items (an epic's): closing its last item moves it, in the same commit.
+  const groups = new Set([...ctx.registry.types.values()].filter((t) => t.traits?.includes("group")).map((t) => t.dir))
   const removed = new Set<string>()
   const added = new Set<string>()
   const slugs = new Set<string>()
@@ -849,10 +851,28 @@ function onlyClosesItems(ctx: Context, files: { status: string; path: string }[]
       slugs.add(slug)
     } else if (status === "A" && dir === closed && slug && rest.length) added.add(`${slug}/${rest.join("/")}`)
     else if (status === "A" && !kept.some((k) => path.startsWith(k)) && path !== `${data}${DATA_FILE}`) continue // a new record beside, as a metrics record
+    else if (status === "M" && rest.join("/") === META && groups.has(dir) && onlyStatusChanged(ctx, sha, path)) continue // the epic the close finishes
     else return false
   }
   if (!removed.size) return false
   return [...removed].every((f) => added.has(f)) && [...added].every((f) => slugs.has(f.split("/")[0] ?? ""))
+}
+
+/** Whether the commit changed nothing in the item file at `path` but its status. */
+function onlyStatusChanged(ctx: Context, sha: string, path: string): boolean {
+  const read = (rev: string): Record<string, unknown> | null => {
+    const r = runGit(ctx.trackerGit, ["show", `${rev}:${path}`])
+    try {
+      return r.ok ? (JSON.parse(r.out) as Record<string, unknown>) : null
+    } catch {
+      return null
+    }
+  }
+  const before = read(`${sha}^`), after = read(sha)
+  if (!before || !after) return false
+  const { status: _b, ...restBefore } = before
+  const { status: _a, ...restAfter } = after
+  return isDeepStrictEqual(restBefore, restAfter)
 }
 
 /** The item a `Closes:` value names in this checkout: by id, else as a path whose type may have changed since (closing moves it). */
@@ -914,7 +934,7 @@ export const landingsAreMarkers: Check = {
       if (c.parents.length !== 2) {
         const files = direct.get(c.sha) ?? []
         if (emptyMarker(c) && !files.length) continue
-        if (onlyAddsTrackerData(ctx, c.sha, files) || onlyClosesItems(ctx, files)) continue
+        if (onlyAddsTrackerData(ctx, c.sha, files) || onlyClosesItems(ctx, c.sha, files)) continue
         const prev = line[i - 1]
         const afterMarker = prev && prev.closes.length && (prev.parents.length === 2 || emptyMarker(prev))
         // In sibling mode the record names the code marker, in its Code: trailer; otherwise the marker just before it.
