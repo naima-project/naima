@@ -1021,7 +1021,7 @@ const sessionNoteAck: Check = {
             level: "problem",
             subject: `${PASSES}/${p.file}`,
             message:
-              `${PASSES}/${p.file}: a session note dated ${p.date} carries no acknowledgement line — naima pass --ack "<line>", or, for a note already written, naima waive session-note-ack ${PASSES}/${p.file} --reason "<why>"`,
+              `${PASSES}/${p.file}: a session note dated ${p.date} carries no acknowledgement line — naima pass --ack "<line>", or, for a note already written, naima waive session-note-ack ${PASSES}/${p.file} --reason "<why>" --as <who>`,
           }]
         }
         if (!p.body.startsWith(p.ack)) {
@@ -1100,7 +1100,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       "`naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. " +
       "What has no date is counted at the foot, never placed at a guess. Only what nothing derives — a decision taken elsewhere, a build handed out, a policy, an outside fact — is a record, one file per event, `events/<date>-<uuid>.md`, written by `naima event`. " +
       '`naima diary` tells the records of kind `diary`, every decision with its reason, every artifact delivered (on its `deliveredOn`, when an `artifacts` type is loaded) and every session note, day by day. The plugin ships the rule that agents keep the diary on their own, one entry per decision taken with the owner or notable turn and never a log of routine work, acknowledged as "Diary mode on"; the check `diary-entries` notes, never failing, a day with more diary entries than the option `diaryPerDay` allows, and an entry that only restates a session note of its day or a decision taken that day. ' +
-      `\`pass --ack "<line>"\` writes the acknowledgement line whichever plugin declares a rule's \`ack\` field asks an agent to give back — refused if a phrase is missing from it — and records it in the note's front matter; a note dated after ${ACK_REQUIRED_FROM} missing it, or whose body no longer starts with it, is a problem (\`session-note-ack\`), tolerating one written before — on the day it shipped, or earlier, grandfathered like a closed item on the day \`commits\` shipped — since what it recorded is what the rules asked then. A note is never edited after the fact: one written without the line is accepted with a recorded waiver, \`naima waive session-note-ack passes/<file> --reason "<why>"\`.`,
+      `\`pass --ack "<line>"\` writes the acknowledgement line whichever plugin declares a rule's \`ack\` field asks an agent to give back — refused if a phrase is missing from it — and records it in the note's front matter; a note dated after ${ACK_REQUIRED_FROM} missing it, or whose body no longer starts with it, is a problem (\`session-note-ack\`), tolerating one written before — on the day it shipped, or earlier, grandfathered like a closed item on the day \`commits\` shipped — since what it recorded is what the rules asked then. A note is never edited after the fact: one written without the line is accepted with a recorded waiver, \`naima waive session-note-ack passes/<file> --reason "<why>" --as <who>\`.`,
     options: [
       { name: "who", says: "who works, when `naima open` is given no `--as`: the branch's first segment" },
       {

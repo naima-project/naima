@@ -823,7 +823,7 @@ const failedFirst: Check = {
         item,
         subject,
         message: `${subject} holds and proves ${changes.map(label).join(", ")}, and ${what} — run naima verify on that model and keep its counterexample, ` +
-          `or waive it with the reason: naima waive property-failed-first ${subject} --reason "<why>"`,
+          `or waive it with the reason: naima waive property-failed-first ${subject} --reason "<why>" --as <who>`,
       })
     }
     return out
@@ -855,7 +855,7 @@ const witnessed: Check = {
         subject,
         message: `${subject} proves ${
           changes.map(label).join(", ")
-        }, and ${what}, or waive it with the reason: naima waive property-witnessed ${subject} --reason "<why>"`,
+        }, and ${what}, or waive it with the reason: naima waive property-witnessed ${subject} --reason "<why>" --as <who>`,
       })
     }
     for (const item of ctx.repo.items) {

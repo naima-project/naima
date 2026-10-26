@@ -905,7 +905,7 @@ export const landingsAreMarkers: Check = {
     )
     if (start === -1) return []
     const direct = directChanges(repo, main, line[start]?.sha ?? "")
-    const waive = (sha: string) => `, or accept it once: naima waive landings-are-markers ${sha} --reason "<why>"`
+    const waive = (sha: string) => `, or accept it once: naima waive landings-are-markers ${sha} --reason "<why>" --as <who>`
     const out: Finding[] = []
     /** A tracker marker of a branch that changed no tracker file: one parent, no change, Closes: and Code: trailers. */
     const emptyMarker = (c: FirstParent | undefined) => !!c && ctx.sibling && c.parents.length === 1 && c.closes.length > 0 && !!c.code

@@ -848,7 +848,7 @@ export const corePlugin: Plugin = {
     "Fields are typed by the plugin that declares them — `string`, `strings` (comma-separated on the command line), `date` (YYYY, YYYY-MM or YYYY-MM-DD), `enum` (values in rank order), `boolean`, `number`, `object` (a JSON object, written as JSON on the command line) — and unknown fields are kept and not checked. " +
     "Only one direction of a link is stored; the inverse is derived when read. Boards, queues, gate states and summaries are derived when asked and never stored. " +
     "An item is open or done by its status's category; urgency is the sum of every plugin's rank terms, and done items sink. " +
-    'A check\'s finding can be waived when it is accepted rather than fixed: `naima waive <check> <subject> --reason "<why>"` writes one file under `waivers/` naming the check, the subject, the reason, who and when. ' +
+    'A check\'s finding can be waived when it is accepted rather than fixed: `naima waive <check> <subject> --reason "<why>" --as <who>` writes one file under `waivers/` naming the check, the subject, the reason, who and when. ' +
     "A waived finding is not a failure; every `naima check` lists the waivers in use as notes, and notes a waiver whose subject no longer exists or no longer fails. " +
     "Only a check that names the subject of its findings can be waived.",
   fields: [
