@@ -207,8 +207,8 @@ async function nextStep(place: Place, opts: CliOptions, io: IO): Promise<string>
   try {
     const ctx = await openProject(place, opts, io)
     const creatable = [...ctx.registry.types.values()].filter((t) => t.creatable !== false)
-    // A thing to do is a todo where the project has them; a bug is not the first thing anyone files.
-    const type = creatable.find((t) => t.id === "todos") ?? creatable.find((t) => t.id !== "bugs") ?? creatable[0]
+    // The first thing to do is filed where the project files follow-ups (todos, where it has them), not as a defect.
+    const type = creatable.find((t) => t.traits?.includes(FOLLOW_UP)) ?? creatable[0]
     return type ? `next: naima new ${type.id} "<the first thing to do>"` : "next: naima help"
   } catch {
     return "next: naima check" // it says what is wrong with the project
