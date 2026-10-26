@@ -10,6 +10,8 @@
 // a property claims to hold and the model, a file it includes or the tool's
 // version has changed since its run.
 
+import { Buffer } from "node:buffer"
+import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
@@ -27,6 +29,7 @@ import {
   gitPath,
   guardPrivate,
   hasTrait,
+  type Host,
   type Item,
   label,
   linked,
@@ -36,8 +39,10 @@ import {
   privateContext,
   type Progress,
   progressFor,
+  readHosts,
   saveMeta,
   setFieldValue,
+  sshArgs,
   storedLinks,
   str,
   textsAt,
@@ -96,6 +101,10 @@ export interface RunRecord {
   forced?: string
   /** The verdict came over from a run on an earlier version of the model, the two being equivalent (`naima equivalent`); absent for a run of the tool. */
   carried?: Carried
+  /** The declared host whose checkout the run was made in (`naima verify --host`); absent for a run made here. */
+  host?: string
+  /** The flags `--tool-args` passed to the tool, which change what it prints, never the verdict; absent when none. Not part of the run's identity. */
+  toolArgs?: string[]
   at: string
 }
 
@@ -146,7 +155,20 @@ export function inContract(id: string, result: unknown): VerifyResult {
 
 const isObject = (v: unknown): boolean => !!v && typeof v === "object" && !Array.isArray(v)
 
-const sha256 = (path: string): string => createHash("sha256").update(readFileSync(path)).digest("hex")
+/**
+ * The sha256 of a file's content as git commits it: a text file — one with no NUL byte in its first 8000 bytes, git's
+ * own test — is read with CRLF line endings as LF, so a checkout that writes CRLF (Windows, core.autocrlf) hashes as
+ * one that writes LF; a binary file is hashed as it is.
+ */
+export function contentSha256(content: Uint8Array | string): string {
+  const bytes = typeof content === "string" ? Buffer.from(content, "utf8") : Buffer.from(content)
+  const binary = bytes.subarray(0, 8000).includes(0)
+  return createHash("sha256").update(binary || !bytes.includes(13) ? bytes : Buffer.from(bytes.toString("latin1").replace(/\r\n/g, "\n"), "latin1")).digest(
+    "hex",
+  )
+}
+
+const sha256 = (path: string): string => contentSha256(readFileSync(path))
 
 /** JSON with every object's keys sorted: the same options always hash the same. */
 const canonical = (v: unknown): string =>
@@ -192,10 +214,12 @@ function asRun(value: unknown): RunRecord | string {
   const missing = ["verifier", "model", "modelSha256", "property", "output", "at"].filter((k) => typeof r[k] !== "string")
   if (missing.length) return `${missing.join(", ")} missing or not text`
   if (!VERDICTS.includes(r["verdict"] as Verdict)) return `verdict ${JSON.stringify(r["verdict"])} is not one of ${VERDICTS.join(", ")}`
-  for (const k of ["optionsSha256", "counterexample", "toolVersion", "inputsSha256", "forced"]) {
+  for (const k of ["optionsSha256", "counterexample", "toolVersion", "inputsSha256", "forced", "host"]) {
     if (r[k] !== undefined && typeof r[k] !== "string") return `${k} is not text`
   }
   if (r["details"] !== undefined && !isObject(r["details"])) return "details is not a JSON object"
+  const toolArgs = r["toolArgs"]
+  if (toolArgs !== undefined && (!Array.isArray(toolArgs) || !toolArgs.every((a) => typeof a === "string"))) return "toolArgs is not a list of text"
   const carried = r["carried"] as Record<string, unknown> | undefined
   if (carried !== undefined) {
     if (!isObject(carried) || !["from", "modelSha256", "equivalence", "output"].every((k) => typeof carried[k] === "string")) {
@@ -307,12 +331,28 @@ export function modelPath(root: string, model: string): string | null {
   return rel === "" || rel.startsWith("..") || isAbsolute(rel) ? null : abs
 }
 
-/**
- * Run one property's verifier and attach the result. A conclusive run already recorded on the same identity —
- * inputs, tool version, options — is reused instead: the property takes its verdict and points to it. `force`, a
- * reason, runs it again and records the reason with the run.
- */
-export async function verifyItem(ctx: Context, item: Item, progress: Progress = NO_PROGRESS, opts: { force?: string } = {}): Promise<VerifyOutcome> {
+/** How `verifyItem` runs: `force`, the reason to run again; `toolArgs`, flags for the tool that never change the verdict. */
+export interface VerifyOptions {
+  force?: string
+  toolArgs?: string[]
+}
+
+/** What one property's verification came to before anything is written: a recorded run reused, or a new run. */
+export type Decided = { reused: KeptRun } | { record: RunRecord }
+
+/** Why some of `toolArgs` cannot be passed: the flags the verifier does not declare as leaving the verdict alone; null when all can. */
+function refusedToolArgs(verifier: Verifier, toolArgs: readonly string[]): string | null {
+  const known = verifier.toolArgs ?? {}
+  const wrong = toolArgs.filter((a) => !Object.hasOwn(known, a))
+  if (!wrong.length) return null
+  const names = Object.keys(known)
+  return `--tool-args ${wrong.join(" ")}: verifier "${verifier.id}" takes ${
+    names.length ? `only ${names.join(", ")}, flags that change what the tool prints, never the verdict` : "no tool flags"
+  }`
+}
+
+/** The property's verifier, model and property, checked: what a run needs before it starts. */
+function prepared(ctx: Context, item: Item): { id: string; verifier: Verifier; model: string; property: string; path: string } {
   const { verifier: id, model, property } = item.meta
   if (typeof id !== "string" || typeof model !== "string" || typeof property !== "string") {
     throw new Error(`${label(item)}: set verifier, model and property first`)
@@ -322,12 +362,25 @@ export async function verifyItem(ctx: Context, item: Item, progress: Progress = 
   const path = modelPath(ctx.root, model)
   if (!path) throw new Error(`${label(item)}: model ${model} is outside the project — model is a path from the project root`)
   if (!existsSync(path)) throw new Error(`${label(item)}: model ${model} does not exist`)
+  return { id, verifier, model, property, path }
+}
+
+/**
+ * Decide one property without writing anything: a conclusive run already recorded on the same identity — inputs,
+ * tool version, options — is reused; otherwise the verifier runs and its record is returned. `force`, a reason, runs
+ * it again and records the reason with the run.
+ */
+export async function decideItem(ctx: Context, item: Item, progress: Progress = NO_PROGRESS, opts: VerifyOptions = {}): Promise<Decided> {
+  const { id, verifier, model, property, path } = prepared(ctx, item)
+  const toolArgs = opts.toolArgs ?? []
+  const refused = refusedToolArgs(verifier, toolArgs)
+  if (refused) throw new Error(`${label(item)}: ${refused}`)
   const options = optionsOf(item)
   // The adapter's stages are reported as the property's: `<property>: <stage>` (specs/progress-long-work-says-how-far, §6).
   const own = label(item)
   const within: Progress = { ...progress, stage: (name, total, unit) => progress.stage(`${own}: ${name}`, total, unit) }
   progress.stage(own)
-  const request = { model: path, property, options, progress: within }
+  const request: VerifyRequest = { model: path, property, options, progress: within, ...(toolArgs.length ? { toolArgs } : {}) }
   const inputs = (await inputsOf(ctx, verifier, item, request)).map((rel): RunInput => {
     const abs = resolve(ctx.root, rel)
     if (!existsSync(abs)) throw new Error(`${label(item)}: input ${rel} does not exist`)
@@ -344,15 +397,7 @@ export async function verifyItem(ctx: Context, item: Item, progress: Progress = 
   const identity: Identity = { verifier: id, model, property, optionsSha256: optionsHash(options), inputsSha256: digestOf(inputs, toolVersion) }
   if (opts.force === undefined && unversioned === undefined) {
     const known = runsOf(item).filter((k) => conclusive(k.run.verdict) && madeOn(k.run, identity)).pop()
-    if (known) {
-      const status = STATUS[known.run.verdict]
-      if (item.meta.status !== status || fieldValue(item, LAST_RUN) !== known.name) {
-        item.meta.status = status
-        setFieldValue(item, LAST_RUN, known.name)
-        saveMeta(ctx, item)
-      }
-      return { verdict: known.run.verdict, reused: known.name }
-    }
+    if (known) return { reused: known }
   }
   const hash = sha256(path)
   let result: VerifyResult
@@ -361,25 +406,132 @@ export async function verifyItem(ctx: Context, item: Item, progress: Progress = 
   } catch (e) {
     result = { verdict: "error", output: e instanceof Error ? e.message : String(e) }
   }
-  const at = ctx.now().toISOString()
-  const record: RunRecord = {
-    verifier: id,
-    model,
-    modelSha256: hash,
-    property,
-    optionsSha256: identity.optionsSha256,
-    inputs,
-    ...(toolVersion !== undefined ? { toolVersion } : {}),
-    inputsSha256: identity.inputsSha256,
-    verdict: result.verdict,
-    output: result.output,
-    at,
-    ...(result.counterexample !== undefined ? { counterexample: result.counterexample } : {}),
-    ...(result.details !== undefined ? { details: result.details } : {}),
-    ...(opts.force !== undefined ? { forced: opts.force } : {}),
+  return {
+    record: {
+      verifier: id,
+      model,
+      modelSha256: hash,
+      property,
+      optionsSha256: identity.optionsSha256,
+      inputs,
+      ...(toolVersion !== undefined ? { toolVersion } : {}),
+      inputsSha256: identity.inputsSha256,
+      verdict: result.verdict,
+      output: result.output,
+      at: ctx.now().toISOString(),
+      ...(result.counterexample !== undefined ? { counterexample: result.counterexample } : {}),
+      ...(result.details !== undefined ? { details: result.details } : {}),
+      ...(opts.force !== undefined ? { forced: opts.force } : {}),
+      ...(toolArgs.length ? { toolArgs } : {}),
+    },
   }
-  keepRun(ctx, item, record)
-  return { verdict: result.verdict }
+}
+
+/** Make a reused run the property's last one, its status from the verdict. */
+function adopt(ctx: Context, item: Item, known: KeptRun): void {
+  const status = STATUS[known.run.verdict]
+  if (item.meta.status !== status || fieldValue(item, LAST_RUN) !== known.name) {
+    item.meta.status = status
+    setFieldValue(item, LAST_RUN, known.name)
+    saveMeta(ctx, item)
+  }
+}
+
+/**
+ * Run one property's verifier and attach the result. A conclusive run already recorded on the same identity —
+ * inputs, tool version, options — is reused instead: the property takes its verdict and points to it. `force`, a
+ * reason, runs it again and records the reason with the run.
+ */
+export async function verifyItem(ctx: Context, item: Item, progress: Progress = NO_PROGRESS, opts: VerifyOptions = {}): Promise<VerifyOutcome> {
+  const decided = await decideItem(ctx, item, progress, opts)
+  if ("reused" in decided) {
+    adopt(ctx, item, decided.reused)
+    return { verdict: decided.reused.run.verdict, reused: decided.reused.name }
+  }
+  keepRun(ctx, item, decided.record)
+  return { verdict: decided.record.verdict }
+}
+
+/** What `naima verify --emit` prints for one property, one JSON line: the run, and the file it was reused from when it was. */
+interface Emitted {
+  item: string
+  reused?: string
+  run: RunRecord
+}
+
+/** The ssh call that asks `host`'s Naima `args`, its standard error passed on line by line as it comes; its exit status and standard output. */
+function askStreaming(host: Host, args: string[], onErr: (line: string) => void): Promise<{ code: number; out: string; error?: string }> {
+  return new Promise((done) => {
+    const child = spawn("ssh", sshArgs(host, args), { stdio: ["ignore", "pipe", "pipe"], windowsHide: true })
+    let out = ""
+    let pending = ""
+    child.stdout!.on("data", (c: Buffer) => void (out += c.toString("utf8")))
+    child.stderr!.on("data", (c: Buffer) => {
+      const lines = (pending + c.toString("utf8")).split(/\r\n|\r|\n/)
+      pending = lines.pop() ?? ""
+      for (const l of lines) if (l.trim()) onErr(l)
+    })
+    child.on("error", (e) => done({ code: 1, out, error: `ssh: ${e.message}` }))
+    child.on("close", (code) => {
+      if (pending.trim()) onErr(pending)
+      done({ code: code ?? 1, out })
+    })
+  })
+}
+
+/**
+ * Verify one property in `host`'s checkout, through the host's own Naima (`naima verify --emit`, which writes
+ * nothing there), and attach the run here. The run is kept only when it was made on exactly what this checkout
+ * has — the property, the verifier, the options, and every input by its committed content — so a run from a host
+ * whose checkout differs is refused, and nothing is written.
+ */
+export async function verifyOnHost(ctx: Context, host: Host, item: Item, progress: Progress, opts: VerifyOptions = {}): Promise<VerifyOutcome> {
+  const { verifier } = prepared(ctx, item)
+  const refused = refusedToolArgs(verifier, opts.toolArgs ?? [])
+  if (refused) throw new Error(`${label(item)}: ${refused}`)
+  progress.stage(`${label(item)} on ${host.name}`)
+  const args = [
+    "verify",
+    label(item),
+    "--emit",
+    ...(opts.force !== undefined ? ["--force", opts.force] : []),
+    ...(opts.toolArgs?.length ? [`--tool-args=${opts.toolArgs.join(" ")}`] : []),
+  ]
+  const asked = await askStreaming(host, args, (line) => {
+    // The host's progress lines become this run's notes; anything else it says is passed on, named by the host.
+    if (line.startsWith("progress: ")) progress.note(`${host.name}: ${line.slice("progress: ".length)}`)
+    else ctx.err(`${host.name}: ${line}`)
+  })
+  const last = asked.out.trim().split("\n").filter(Boolean).pop()
+  let emitted: Emitted | undefined
+  try {
+    emitted = last ? JSON.parse(last) as Emitted : undefined
+  } catch { /* not a record: said below */ }
+  if (!emitted || typeof emitted !== "object" || emitted.item !== label(item)) {
+    throw new Error(
+      `${label(item)}: ${host.name} (${host.ssh}) returned no run${
+        asked.error ? `: ${asked.error}` : ` (exit ${asked.code})`
+      } — its Naima must know naima verify --emit; nothing was written`,
+    )
+  }
+  const run = asRun(emitted.run)
+  if (typeof run === "string") throw new Error(`${label(item)}: the run ${host.name} returned is malformed: ${run}; nothing was written`)
+  const whys = run.inputs ? staleness(ctx, item, run) : ["it lists no inputs"]
+  if (whys.length) {
+    throw new Error(
+      `${label(item)}: the run ${host.name} made is not on what this checkout has: ${
+        whys.join("; ")
+      } — bring both checkouts to the same commit; nothing was written`,
+    )
+  }
+  const reusedName = emitted.reused
+  const here = reusedName !== undefined ? runsOf(item).find((k) => k.name === reusedName && k.run.at === run.at) : undefined
+  if (here) {
+    adopt(ctx, item, here)
+    return { verdict: here.run.verdict, reused: here.name }
+  }
+  keepRun(ctx, item, { ...run, host: run.host ?? host.name })
+  return { verdict: run.verdict }
 }
 
 /** Attach a run to the property — its record, and its counterexample as a file of its own — and make it the last run, its status from the verdict. */
@@ -417,40 +569,92 @@ function notCurrent(ctx: Context, item: Item): string[] {
 
 const verify: Command = {
   name: "verify",
-  says: "run the verifier of properties and attach each run as evidence",
+  says: "run the verifier of properties and attach each run as evidence, here or in a declared host's checkout",
   enforces:
-    "a property holds only with a run of its verifier on exactly what it has now, attached as evidence; a model or input outside the project is refused; a conclusive run (holds or violated) already recorded on the same identity — every input's digest with the tool's version, and the options — is reused, not repeated, unless --force gives the reason to run it again",
-  usage: 'verify <property>... | verify --all [--force "<reason>"]',
+    "a property holds only with a run of its verifier on exactly what it has now, attached as evidence; every input is hashed by its committed content, a text file's CRLF line endings read as LF, so every checkout hashes alike; a model or input outside the project is refused; a conclusive run (holds or violated) already recorded on the same identity — every input's digest with the tool's version, and the options — is reused, not repeated, unless --force gives the reason to run it again; --tool-args passes only flags the verifier declares as leaving the verdict alone, recorded with the run; with --host, the run is made in the host's checkout, which writes nothing there, and kept here only when it was made on exactly what this checkout has",
+  usage: 'verify <property>... | verify --all [--force "<reason>"] [--tool-args="<flags>"] [--host <host>] [--emit]',
   long: {
     reports:
-      "the properties done of those asked, with a rate and an ETA; within a property, each stage of its verifier with the count its tool exposes — for mCRL2 each tool, with the states lps2lts explores and the BES equations pbessolve generates",
+      "the properties done of those asked, with a rate and an ETA; within a property, each stage of its verifier with the count its tool exposes — for mCRL2 each tool, with the states lps2lts explores and the BES equations pbessolve generates; with --host, the host's own progress lines, as notes",
   },
   options: [
     { name: "--all", says: "every property item" },
     { name: "--force", says: "run again even when a run of the same identity is recorded, for the reason given: kept with the new run" },
+    {
+      name: "--tool-args",
+      says:
+        "flags for the tool, given with = since they start with a dash (--tool-args=--timings), separated by spaces, each one the verifier declares as changing what the tool prints, never the verdict (for mCRL2 --verbose and --timings): kept with the run, and not part of its identity",
+    },
+    {
+      name: "--host",
+      says:
+        "run the verifier in the checkout of this host, declared in the long-work plugin's hosts option, through the host's own Naima over ssh; the run comes back and is attached here, refused when the host's checkout differs from this one",
+    },
+    { name: "--emit", says: "print each run as one JSON line and write nothing: what --host asks the host's Naima" },
   ],
-  examples: ["verify no-deadlock", "verify --all", 'verify no-deadlock --force "the first run was cut short by a reboot"'],
+  examples: [
+    "verify no-deadlock",
+    "verify --all",
+    'verify no-deadlock --force "the first run was cut short by a reboot"',
+    'verify no-deadlock --host lab --tool-args="--verbose --timings"',
+  ],
   async run(args, ctx) {
-    const p = parse(args, { all: { type: "boolean" }, force: { type: "string" } })
+    const p = parse(args, {
+      all: { type: "boolean" },
+      force: { type: "string" },
+      "tool-args": { type: "string" },
+      host: { type: "string" },
+      emit: { type: "boolean" },
+    })
     const items = bool(p, "all") ? properties(ctx) : p.positionals.map((r) => ctx.repo.resolve(r))
+    const emit = bool(p, "emit")
     if (!items.length && bool(p, "all")) {
-      ctx.out("no properties to verify: nothing ran")
+      if (!emit) ctx.out("no properties to verify: nothing ran")
       return 0
     }
     if (!items.length) throw usageError(this)
     const given = str(p, "force")
     const force = given === undefined ? undefined : given.trim()
     if (force === "") throw new Error('--force needs the reason the recorded result is not enough: --force "<reason>"')
-    const allowance = force === undefined ? undefined : guardPrivate("the reason", findPrivate(force, privateContext()), ctx.allowPrivate)
+    const toolArgs = (str(p, "tool-args") ?? "").split(/\s+/).filter(Boolean)
+    const hostName = str(p, "host")
+    if (emit && hostName !== undefined) throw new Error("--emit and --host: --emit is what a host is asked, it is not given together with --host")
+    let host: Host | undefined
+    if (hostName !== undefined) {
+      const hosts = readHosts(ctx.config.plugins["long-work"]?.options ?? {})
+      host = hosts.get(hostName)
+      if (!host) {
+        throw new Error(
+          `no host "${hostName}" — declare it in naima.json: plugins.long-work.options.hosts.${hostName} = { "ssh": "<destination>", "dir": "<project on the host>" }${
+            hosts.size ? `; declared: ${[...hosts.keys()].join(", ")}` : ""
+          }`,
+        )
+      }
+    }
+    // --emit writes nothing, so the reason is checked for private words where the run is kept: here, by the caller of the host.
+    const allowance = force === undefined || emit ? undefined : guardPrivate("the reason", findPrivate(force, privateContext()), ctx.allowPrivate)
+    const opts = {
+      ...(force === undefined ? {} : { force: allowance ? `${force} ${allowance}` : force }),
+      ...(toolArgs.length ? { toolArgs } : {}),
+    }
     let failing = 0
     for (const item of items) if (item.type !== TYPE) throw new Error(`${label(item)} is not a property`)
     const progress = progressFor((l) => ctx.err(l))
     try {
       for (const [i, item] of items.entries()) {
         progress.overall(i, items.length, "properties")
-        const { verdict, reused } = await verifyItem(ctx, item, progress, force === undefined ? {} : { force: allowance ? `${force} ${allowance}` : force })
+        if (emit) {
+          const decided = await decideItem(ctx, item, progress, opts)
+          const out: Emitted = "reused" in decided
+            ? { item: label(item), reused: decided.reused.name, run: decided.reused.run }
+            : { item: label(item), run: decided.record }
+          if (out.run.verdict !== "holds") failing++
+          ctx.out(JSON.stringify(out))
+          continue
+        }
+        const { verdict, reused } = host ? await verifyOnHost(ctx, host, item, progress, opts) : await verifyItem(ctx, item, progress, opts)
         if (verdict !== "holds") failing++
-        const said = reused ? `  (reused ${ATTACHMENTS}/${reused}: a run on the same inputs, tool version and options)` : ""
+        const said = reused ? `  (reused ${ATTACHMENTS}/${reused}: a run on the same inputs, tool version and options)` : host ? `  (on ${host.name})` : ""
         ctx.out(`${verdict.padEnd(9)} ${label(item)}  ${item.meta.title}${said}`)
       }
       progress.overall(items.length, items.length, "properties")
@@ -496,7 +700,7 @@ function earlierVersions(ctx: Context, path: string, wanted: Set<string>, from?:
   const texts = textsAt(top, revs.map((r) => `${r}:${file}`))
   for (const text of texts) {
     if (text === null) continue
-    const sha = createHash("sha256").update(text, "utf8").digest("hex")
+    const sha = contentSha256(text)
     if (wanted.has(sha) && !out.has(sha)) out.set(sha, text)
   }
   return out
@@ -1007,7 +1211,8 @@ export default function verifier(): Plugin {
     says: "properties checked by formal-methods tools, with each run attached as evidence",
     about:
       "A `properties` item names a `verifier` (an adapter any plugin can contribute), a `model` file (a path from the project root) and a `property` in the verifier's own language. " +
-      "`naima verify` runs the adapter and attaches the run — verdict, output, the adapter's `details` of how it reached the verdict when it gives them, the model's sha256, and one digest over every file the run read (the model and what the adapter's `inputs` says it includes) and the tool's version (the adapter's `version`) — and the counterexample as its own file, then sets the status from the verdict. " +
+      "`naima verify` runs the adapter and attaches the run — verdict, output, the adapter's `details` of how it reached the verdict when it gives them, the model's sha256, and one digest over every file the run read (the model and what the adapter's `inputs` says it includes) and the tool's version (the adapter's `version`) — and the counterexample as its own file, then sets the status from the verdict. Every file is hashed by the content git commits: a text file's CRLF line endings are read as LF, so a run made on a Windows checkout with core.autocrlf is current on any other. " +
+      "`--tool-args=<flags>` passes the tool flags the adapter declares in `toolArgs` as changing what it prints, never the verdict, and keeps them with the run, outside its identity. `--host <host>` runs the verifier in the checkout of a host the long-work plugin declares, through that host's Naima (`naima verify --emit`, which prints the run and writes nothing), and attaches the run here, marked with the host, only when it was made on exactly what this checkout has. " +
       'A conclusive run (holds or violated) already recorded on the property with the same identity — verifier, model, property, `verifierOptions`, and the one digest over every input and the tool\'s version — is reused instead of repeated: `naima verify` says `reused` and names the run, and `--force "<reason>"` runs it again, keeping the reason with the new run. An error is never reused. Every run is kept, two made in the same instant included. ' +
       "A property that holds is evidence exactly as a passed test is: it can `verify` a bug and close it. A verdict is only as good as what it was reached on, so `naima check` fails when a property claims to hold and its property, verifier, model path, `verifierOptions`, model contents, any file it includes, the set of files it reads, or the tool's version have changed since the run. " +
       "A property that holds and proves a change — it verifies or satisfies a bug, a todo or a feature — is expected to carry a violated run of the same property, with its counterexample, on other inputs (`property-failed-first`), and to be backed by a witness property that holds, linked by `witnesses` (`property-witnessed`); both are notes that name the property, so either can be waived with its reason. " +

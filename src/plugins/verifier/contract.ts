@@ -11,6 +11,8 @@ export interface VerifyRequest {
   options: Record<string, unknown>
   /** Where the adapter reports its stages and counts, when the tool exposes them (specs/progress-long-work-says-how-far, §6). Absent: nothing reports. */
   progress?: Progress
+  /** Flags `naima verify --tool-args` passes to the tool, each one of the adapter's `toolArgs`: they change what the tool prints, never the verdict. Absent: none. */
+  toolArgs?: string[]
 }
 
 export type Verdict = "holds" | "violated" | "error" | "unknown"
@@ -54,6 +56,8 @@ export interface Verifier {
    */
   runs?: string[]
   verify(request: VerifyRequest, ctx: Context): Promise<VerifyResult>
+  /** The flags `naima verify --tool-args` may pass to the tool, each with what it does: only flags that change what the tool prints (verbosity, timings), never the verdict. Absent: none. */
+  toolArgs?: Record<string, string>
   /**
    * Every file a run on this request reads — the model and whatever it includes — as absolute paths. The run record
    * keeps one digest over all of them and the tool version, so a change to any of them makes the verdict stale.
@@ -73,7 +77,7 @@ export interface Verifier {
 export const verifiersPoint: ExtensionPoint<Verifier> = {
   id: "verifiers",
   says:
-    "an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest; and `equivalences` with `compare({ before, after, equivalence }, ctx) → { verdict, output, counterexample?, details? }` and `preserves({ property, options, equivalence }, ctx)`, for `naima equivalent`",
+    "an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest; `toolArgs`, the flags `naima verify --tool-args` may pass, which never change the verdict; and `equivalences` with `compare({ before, after, equivalence }, ctx) → { verdict, output, counterexample?, details? }` and `preserves({ property, options, equivalence }, ctx)`, for `naima equivalent`",
   noun: "verifier",
   stored: true,
   key: (v) => v.id,
@@ -88,6 +92,10 @@ export const verifiersPoint: ExtensionPoint<Verifier> = {
     const e = a.equivalences
     if (e !== undefined && (!e || typeof e !== "object" || Array.isArray(e) || !Object.values(e).every((s) => typeof s === "string"))) {
       return "has equivalences that are not an object of names to what each preserves"
+    }
+    const t = a.toolArgs
+    if (t !== undefined && (!t || typeof t !== "object" || Array.isArray(t) || !Object.values(t).every((s) => typeof s === "string"))) {
+      return "has toolArgs that are not an object of flags to what each does"
     }
     if ((a.compare === undefined) !== (e === undefined || !Object.keys(e).length)) return "has compare without equivalences, or equivalences without compare"
     return null

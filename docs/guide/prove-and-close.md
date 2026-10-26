@@ -162,6 +162,8 @@ the states explored and the equations generated, with their rate.
 The run records every file the tool read, meaning the model and each file it includes as the adapter declares them, together with a single digest over all of
 them and the tool's version. If any of those files changes, or the model starts reading other files, `naima check` reports that the property is no longer
 current, and `naima verify` has to be run again. The example adapter reads `#include <path>` lines, so you can see this with a model split across several files.
+Each file is hashed by the content git commits, so a text file's CRLF line endings, which a Windows checkout with `core.autocrlf` writes, count as LF, and a run
+made on such a checkout is current on any other. A binary file, one with a NUL byte near its start, is hashed as it is.
 
 A run that has already been made isn't made again. A run is identified by what it read and how: the digest over its files and the tool's version, together with
 the property, the verifier, the model and `verifierOptions`. When `naima verify` finds a run with the same identity among the property's earlier runs, and that
@@ -175,6 +177,23 @@ naima verify <property> --force "the first run was cut short by a reboot"
 ```
 
 Every run stays in the property's `attachments/`, two runs made in the same instant included, so the earlier verdicts can always be read again.
+
+Some flags of a tool change only what it prints, such as how much it says and how long each phase took. A verifier declares which ones those are, and
+`--tool-args` passes them; anything else is refused. For mCRL2 they are `--verbose` and `--timings`, given to every tool of the run, and what they print ends up
+in the run's output. They are kept in the run's record as `toolArgs`, but they are not part of what identifies the run, so a run already made is still reused:
+add `--force` with a reason to make a new one with the flags. The flags start with a dash, so they are given after an `=`.
+
+```sh
+naima verify <property> --tool-args="--verbose --timings" --force "to see how long each tool takes"
+```
+
+A heavy check can run on another machine declared as a [host](long-work.md#on-another-machine). `naima verify <property> --host lab` asks the copy of Naima in
+that machine's checkout to run the verifier and print the run, which writes nothing there, and attaches the run here with `host` set to the machine's name. The
+run is kept only when it was made on exactly what this checkout has: the same property, verifier and options, and every file it read with the same content. When
+the two checkouts differ, it is refused and nothing is written, so bring them to the same commit first. The tool's version is the host's; if this machine has a
+different version of the tool, `naima check` says the property holds by another version. A verification that takes hours can be started with
+`naima run verify-lab --budget-time 8h -- naima verify --all --host lab`, which runs here and keeps its ssh connection to the host for as long as the check
+takes.
 
 ### The mCRL2 model checker
 

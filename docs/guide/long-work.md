@@ -130,6 +130,10 @@ After that, `naima run bench --host lab --budget-time 6h -- 'deno task bench'` r
 project, and `wait`, `run list`, `run status`, `run stop` and `run clean` ask it over ssh. A run on another machine must not change any file the repository
 tracks there. If it does, the run is reported as failed, and the report names the files.
 
+That is why a property is not verified with `naima run --host`, since `naima verify` writes the property's item. `naima verify <property> --host lab` is used
+instead: the verifier runs in the host's checkout, which stays untouched, and the run is attached here
+([proving a property on another machine](prove-and-close.md#properties-proven-by-a-tool)).
+
 Naima quotes what it sends for the shell the machine's ssh server runs commands through. That is a POSIX shell unless you say otherwise. The ssh server
 that comes with Windows runs commands through cmd, so for a Windows machine you add `"shell": "cmd"`.
 
