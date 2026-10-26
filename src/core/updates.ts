@@ -358,11 +358,21 @@ export async function checkFrom(programRoot: string, where: Where): Promise<Find
   }
 }
 
-/** What `after` finds that `before` did not. */
-export const newly = (before: Findings, after: Findings): Findings => ({
-  problems: after.problems.filter((p) => !before.problems.includes(p)),
-  notes: after.notes.filter((n) => !before.notes.includes(n)),
-})
+/**
+ * A finding without the advice that follows what it found: the text before its first " — ", and before a
+ * trailing ", or accept it once:". Two versions may word the advice differently for the same finding.
+ */
+export const findingKey = (finding: string): string => finding.split(" — ")[0]!.split(", or accept it once:")[0]!.trim()
+
+/** What `after` finds that `before` did not, compared by what was found, not by how the advice is worded. */
+export const newly = (before: Findings, after: Findings): Findings => {
+  const had = (list: string[]) => new Set(list.map(findingKey))
+  const problems = had(before.problems), notes = had(before.notes)
+  return {
+    problems: after.problems.filter((p) => !problems.has(findingKey(p))),
+    notes: after.notes.filter((n) => !notes.has(findingKey(n))),
+  }
+}
 
 /**
  * The rehearsal: `to`'s own naima check, run on the project from a temporary copy of `to`, against the one the
