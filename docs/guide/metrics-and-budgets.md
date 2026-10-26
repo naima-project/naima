@@ -123,15 +123,15 @@ are declared next to the metrics, under `suites`.
 }
 ```
 
-| Key       | What it is                                                                                                                                                |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Key       | What it is                                                                                                                                                                          |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `preset`  | a ready suite (below). Any other key overrides the preset's; a `run` of your own also drops the preset's `prepare` and `report`, so name `report` too when your command writes one. |
-| `run`     | the command, as a list: the program first, then its arguments. No shell. `{tmp}` in an argument is a fresh temporary directory, removed after the run.    |
-| `prepare` | a command run first, which must succeed.                                                                                                                  |
-| `format`  | how the report is read: `junit`, `tap` or `libtest-json`.                                                                                                 |
-| `report`  | the file the runner writes its report to, either from the project root or under `{tmp}`. Without it, Naima reads the command's output.                    |
-| `inputs`  | the paths or patterns of the files the tests read, such as `"src"` or `"**/*.py"`. Without it, every file of the working tree outside the tracker counts. |
-| `says`    | what the suite covers.                                                                                                                                    |
+| `run`     | the command, as a list: the program first, then its arguments. No shell. `{tmp}` in an argument is a fresh temporary directory, removed after the run.                              |
+| `prepare` | a command run first, which must succeed.                                                                                                                                            |
+| `format`  | how the report is read: `junit`, `tap` or `libtest-json`.                                                                                                                           |
+| `report`  | the file the runner writes its report to, either from the project root or under `{tmp}`. Without it, Naima reads the command's output.                                              |
+| `inputs`  | the paths or patterns of the files the tests read, such as `"src"` or `"**/*.py"`. Without it, every file of the working tree outside the tracker counts.                           |
+| `says`    | what the suite covers.                                                                                                                                                              |
 
 | Format         | Written by                                                                                                                                  |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -196,7 +196,9 @@ naima set export-keeps testSuite=unit     # only if the names should match one s
 
 A name matches a test's whole name, its file and name together (`./test/export.test.ts > export > keeps the alpha channel`), or the end of its name after any
 `>` or `::`, so `keeps the alpha channel` and `tests::keeps_alpha` work too. A `*` stands for any text. Groups are part of a test's name: a step inside a Deno
-test, a `describe` block, or a Rust module.
+test, a `describe` block, or a Rust module. With pytest, a test's name is its function, inside a test class when there is one (`TestCalc > test_add`), so
+`test_add` or `*test_add*` matches it; its file is its module, as `tests.test_calc`. A list may also be given as JSON,
+`testNames='["test_add", "test_add_negative"]'`, when a name holds a comma.
 
 When `naima metrics run --record` records a run, every test item whose names match one of its tests gets the result:
 

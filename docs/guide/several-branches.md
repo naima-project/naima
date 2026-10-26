@@ -116,10 +116,10 @@ naima prune            # stale claims, and why each is stale
 naima prune --write    # remove them; commit the deletions
 ```
 
-A claim is stale when its branch is gone, when its branch is merged into the trunk and the merge brought its file there, or when every item it claims is done or closed.
-`naima claims` lists stale claims apart, at the end, and `naima
-check` adds a note for each one. A claim that still names an item already closed, next to items
-that are still open, gets a note of its own with the `naima release` that drops the closed item.
+A claim is stale when its branch is gone, when its branch is merged into the trunk and the merge brought its file there, or when every item it claims is done or
+closed. `naima claims` lists stale claims apart, at the end, and `naima
+check` adds a note for each one. A claim that still names an item already closed, next
+to items that are still open, gets a note of its own with the `naima release` that drops the closed item.
 
 ## Work left behind
 
