@@ -51,13 +51,6 @@
   h2 { font-size: clamp(24px, 2.8vw, 32px); letter-spacing: -.8px; margin: 0 0 18px; font-weight: 650; }
   .k { font: 600 12.5px var(--mono); letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
 
-  /* the trouble */
-  .trouble { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-  .pain { background: var(--bad-soft); border-radius: 16px; padding: 22px; }
-  .pain b { display: block; font-size: 17px; letter-spacing: -.2px; margin-bottom: 4px; }
-  .pain span { color: var(--text); font-size: 15.5px; }
-  .pain i { font-style: normal; color: var(--bad); font-weight: 700; margin-right: 6px; }
-
   /* how it works */
   .how { padding-block: 64px 20px; }
   .steps { counter-reset: s; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
@@ -95,8 +88,7 @@
   .next span { color: var(--muted); font-size: 14.5px; }
 
   @media (max-width: 880px) {
-    .trouble, .next { grid-template-columns: 1fr; }
-    .steps { grid-template-columns: 1fr 1fr; }
+      .steps { grid-template-columns: 1fr 1fr; }
     .lives { grid-template-columns: 1fr; }
     .bar nav a.hide { display: none; }
   }
@@ -110,9 +102,7 @@
     .lead { font-size: 17px; line-height: 1.6; }
     .k, h2 { text-align: center; }
     h2 { font-size: 28px; }
-    .trouble { gap: 14px; }
-    .pain, .step { padding: 22px; text-align: center; }
-    .steps { grid-template-columns: 1fr; gap: 14px; }
+        .steps { grid-template-columns: 1fr; gap: 14px; }
     .step::before { margin: 0 auto 14px; }
     .how { padding-block: 64px 10px; }
     .you { display: block; text-align: center; padding: 22px; }
@@ -143,15 +133,6 @@
     <span class="clock"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 1.5"/></svg>A one-minute read</span>
     <h1>Building with an AI is fast. <em>Naima makes it last.</em></h1>
     <p class="lead">Naima is a way of working you add to your project, so the AI you already use works like a careful software team. You keep talking to your agent as usual.</p>
-  </section>
-
-  <section aria-labelledby="t">
-    <p class="k" id="t">The trouble starts after the first version</p>
-    <div class="trouble">
-      <div class="pain"><b><i>✕</i>A fix breaks what worked</b><span>Something that used to work stops, and nobody notices until much later.</span></div>
-      <div class="pain"><b><i>✕</i>“Fixed”, when it isn't</b><span>The AI says it is done, and nothing shows that it is.</span></div>
-      <div class="pain"><b><i>✕</i>Every session forgets</b><span>What the last session decided is gone, so you explain it all again.</span></div>
-    </div>
   </section>
 
   <section class="how" aria-labelledby="h">
