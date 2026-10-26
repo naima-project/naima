@@ -130,6 +130,10 @@ After that, `naima run bench --host lab --budget-time 6h -- 'deno task bench'` r
 project, and `wait`, `run list`, `run status`, `run stop` and `run clean` ask it over ssh. A run on another machine must not change any file the repository
 tracks there. If it does, the run is reported as failed, and the report names the files.
 
+That is why a property is not verified with `naima run --host`, since `naima verify` writes the property's item. `naima verify <property> --host lab` is used
+instead: the verifier runs in the host's checkout, which stays untouched, and the run is attached here
+([proving a property on another machine](prove-and-close.md#properties-proven-by-a-tool)).
+
 ## Where the records are
 
 Each run has a folder in `naima-tracker/.runs/<name>/`, holding what was asked for (`run.json`), the run's state (`status.json`), its `log` and its `progress`.

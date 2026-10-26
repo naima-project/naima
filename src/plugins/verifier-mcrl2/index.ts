@@ -62,6 +62,7 @@ interface VerifyRequest {
   property: string
   options: Record<string, unknown>
   progress?: Progress
+  toolArgs?: string[]
 }
 interface VerifyResult {
   verdict: "holds" | "violated" | "error" | "unknown"
@@ -86,6 +87,7 @@ interface Verifier {
   says: string
   runs: string[]
   verify(request: VerifyRequest, ctx: Context): Promise<VerifyResult>
+  toolArgs: Record<string, string>
   inputs(request: VerifyRequest, ctx: Context): string[]
   version(ctx: Context): Promise<string>
   equivalences: Record<string, string>
@@ -179,6 +181,12 @@ export const EQUIVALENCE = "dpbranching-bisim"
  * results it carries over: strong bisimilarity preserves every modal mu-calculus formula; divergence-preserving
  * branching bisimilarity the fragment the LTS route accepts (formula.ts).
  */
+/** The flags `naima verify --tool-args` may pass to every mCRL2 tool of a run: standard options of the toolset, which change what a tool prints, never its answer. */
+export const TOOL_ARGS: Record<string, string> = {
+  "--verbose": "each tool says what it is doing, kept in the run's output",
+  "--timings": "each tool prints how long its phases took, kept in the run's output",
+}
+
 export const EQUIVALENCES: Record<string, string> = {
   bisim: "strong bisimilarity: preserves every modal mu-calculus formula",
   "dpbranching-bisim": "divergence-preserving branching bisimilarity: preserves the formulas the LTS route accepts, those in the fragment it preserves",
@@ -285,13 +293,14 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
    * Each step is a stage of `progress`; a counting tool is started with `--verbose`, its counting lines read as the
    * stage's count and left out of the log (specs/progress-long-work-says-how-far, §6).
    */
-  function steps(seconds: number | undefined, cwd: string, progress: Progress) {
+  function steps(seconds: number | undefined, cwd: string, progress: Progress, extra: readonly string[] = []) {
     const log: string[] = []
     const used = new Set<Tool>()
     /** One step: its output kept in the log; a failure is the result to return. */
     const step = async (tool: Tool, given: string[], at = cwd): Promise<{ out: ToolRun } | { stop: VerifyResult }> => {
       const counting = COUNTING[tool]
-      const args = counting ? ["--verbose", ...given] : given
+      // The flags --tool-args gives (TOOL_ARGS) go to every tool; a counting tool has --verbose already.
+      const args = counting ? ["--verbose", ...extra.filter((a) => a !== "--verbose"), ...given] : [...extra, ...given]
       progress.stage(tool, undefined, counting?.unit)
       let pending = ""
       const onStderr = counting
@@ -329,8 +338,15 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
   }
 
   /** The standard route: the formula against the linearised model. */
-  async function lpsRoute(model: string, formula: string, dir: string, seconds: number | undefined, progress: Progress): Promise<Outcome> {
-    const s = steps(seconds, dir, progress)
+  async function lpsRoute(
+    model: string,
+    formula: string,
+    dir: string,
+    seconds: number | undefined,
+    progress: Progress,
+    extra: readonly string[] = [],
+  ): Promise<Outcome> {
+    const s = steps(seconds, dir, progress, extra)
     const done = async (r: VerifyResult): Promise<Outcome> => ({ ...r, details: { route: "lps", tools: await s.tools() } })
     const lps = join(dir, "model.lps")
     const pbes = join(dir, "model.pbes")
@@ -424,8 +440,9 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
     seconds: number | undefined,
     threads: number,
     progress: Progress,
+    extra: readonly string[] = [],
   ): Promise<Outcome> {
-    const s = steps(seconds, dir, progress)
+    const s = steps(seconds, dir, progress, extra)
     const details: Record<string, unknown> = { route: "lts" }
     const done = async (r: VerifyResult): Promise<Outcome> => ({ ...r, details: { ...details, tools: await s.tools() } })
     const refuse = (why: string): Promise<Outcome> =>
@@ -507,7 +524,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
     return { verdict: lps.verdict === "error" || lts.verdict === "error" ? "error" : "unknown", output: logs, details }
   }
 
-  async function check({ model, property, options, progress = NO_PROGRESS }: VerifyRequest, ctx: Context): Promise<VerifyResult> {
+  async function check({ model, property, options, progress = NO_PROGRESS, toolArgs = [] }: VerifyRequest, ctx: Context): Promise<VerifyResult> {
     const chosen = routeOf(options)
     if ("wrong" in chosen) return { verdict: "error", output: chosen.wrong }
     const threads = threadsOf(options)
@@ -518,15 +535,24 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
       let formula = formulaFile(property, ctx.root)
       if (formula && !existsSync(formula)) return { verdict: "error", output: `the formula file ${property.trim()} does not exist` }
       if (!formula) writeFileSync(formula = join(dir, "property.mcf"), property.trim() + "\n")
-      if (chosen.route === "lps") return await lpsRoute(model, formula, dir, seconds, progress)
-      if (chosen.route === "lts") return await ltsRoute(model, formula, dir, ctx, seconds, threads, progress)
+      if (chosen.route === "lps") return await lpsRoute(model, formula, dir, seconds, progress, toolArgs)
+      if (chosen.route === "lts") return await ltsRoute(model, formula, dir, ctx, seconds, threads, progress, toolArgs)
       const sub = (name: string): string => {
         const d = join(dir, name)
         mkdirSync(d)
         return d
       }
-      const lps = await lpsRoute(model, formula, sub("lps"), seconds, { ...progress, stage: (n, t, u) => progress.stage(`lps: ${n}`, t, u) })
-      const lts = await ltsRoute(model, formula, sub("lts"), ctx, seconds, threads, { ...progress, stage: (n, t, u) => progress.stage(`lts: ${n}`, t, u) })
+      const lps = await lpsRoute(model, formula, sub("lps"), seconds, { ...progress, stage: (n, t, u) => progress.stage(`lps: ${n}`, t, u) }, toolArgs)
+      const lts = await ltsRoute(
+        model,
+        formula,
+        sub("lts"),
+        ctx,
+        seconds,
+        threads,
+        { ...progress, stage: (n, t, u) => progress.stage(`lts: ${n}`, t, u) },
+        toolArgs,
+      )
       return crossCheck(lps, lts)
     } finally {
       rmSync(dir, { recursive: true, force: true })
@@ -592,6 +618,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
       "an mCRL2 specification against a modal mu-calculus formula, inline or an .mcf file: by the standard route (mcrl22lps, lps2pbes, pbessolve), by the LTS route (the state space once per model, hidden and reduced per formula, lts2pbes, pbessolve) for a formula the reduction preserves, or both, cross-checked; the evidence is the counterexample",
     runs: TOOLS.map(path),
     verify: (request, ctx) => check(request, ctx),
+    toolArgs: TOOL_ARGS,
     equivalences: EQUIVALENCES,
     compare,
     preserves,

@@ -19,7 +19,8 @@
 // other command, may read and run that Deno too — to start a run's supervisor,
 // a process of its own (src/plugins/long-work/supervisor.ts) — and run ssh,
 // to reach a host; and they are handed the whole environment, which a run's
-// command inherits as the caller's. Every command may read the tools
+// command inherits as the caller's. `naima verify --host` may run ssh too, to
+// run the verifier in the host's checkout. Every command may read the tools
 // directory, where an installed tool's programs are (src/core/tools.ts);
 // `naima tools`, and no other command, may write it, use the network and run
 // any program: an install downloads from a host a redirect chooses, and runs
@@ -138,8 +139,9 @@ export interface UiGrant {
 /** The program that opens the default browser, by operating system: the same src/plugins/ui/open.ts starts. */
 export const BROWSER_OPENER: Record<string, string> = { darwin: "open", windows: "rundll32", linux: "xdg-open" }
 
-/** The grant of `command`: only `ui`, `run`, `wait` and `tools` have one; `tools` is the tools directory to write. */
-export function uiGrant(command: string | undefined, os: string, deno: string, tools: string | null = null): UiGrant | null {
+/** The grant of `command`: only `ui`, `run`, `wait`, `tools` and `verify --host` have one; `tools` is the tools directory to write; `rest`, the arguments after the command. */
+export function uiGrant(command: string | undefined, os: string, deno: string, tools: string | null = null, rest: readonly string[] = []): UiGrant | null {
+  if (command === "verify") return rest.some((a) => a === "--host" || a.startsWith("--host=")) ? { net: [], read: [], runs: ["ssh"] } : null
   if (command === "tools") return { net: [], read: [], runs: [], write: tools ? [tools] : [], netAll: true, runAll: true }
   if (command === "run" || command === "wait") return { net: [], read: [deno], runs: [deno, "ssh"], wholeEnv: true }
   if (command !== "ui") return null
@@ -346,7 +348,7 @@ export async function launch(args: string[], cwd: string): Promise<number> {
   const tools = toolsDir(Deno.env.toObject(), Deno.build.os)
   // The tick's state, naima/ in the clone's git directory, shared by its worktrees; the program is told its tick/ folder.
   const tickState = tickFolder(root)
-  const ui = uiGrant(parsed.rest[0], Deno.build.os, Deno.execPath(), tools)
+  const ui = uiGrant(parsed.rest[0], Deno.build.os, Deno.execPath(), tools, parsed.rest.slice(1))
   // A program whose own entry is gone cannot repair itself: when files deleted from its clone are all that differs, git restores them.
   if (!runtimeOf(program)) {
     const restored = restoreDeleted(program)
