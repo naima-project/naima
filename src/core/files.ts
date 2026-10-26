@@ -2,7 +2,7 @@
 // skip rule), and writing one so that a crash never leaves it half written.
 
 import { randomUUID } from "node:crypto"
-import { existsSync, lstatSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { basename, dirname, join } from "node:path"
 
 /** What Deno answers when asked whether a path may be written. */
@@ -80,4 +80,9 @@ export function pathMatches(path: string, pattern: string): boolean {
   if (!p.includes("*")) return path === p || path.startsWith(`${p}/`)
   const re = p.split("**").map((part) => part.split("*").map((s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join("[^/]*")).join(".*")
   return new RegExp(`^${re.replace(/\.\*\//g, "(?:.*/)?")}$`).test(path)
+}
+
+/** The text of `file`, or of standard input when it is `-`: what a command's `--file` reads. */
+export function readText(file: string): string {
+  return readFileSync(file === "-" ? 0 : file, "utf8")
 }

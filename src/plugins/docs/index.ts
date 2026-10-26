@@ -388,6 +388,7 @@ export default function docs(options: Record<string, unknown> = {}): Plugin {
         kind: "strings",
         says: "where the feature is documented: path or path#heading, from the project root",
         appliesTo: opts.featureTypes,
+        traits: ["archive"],
       },
     ],
     checks: [documented, referenceCurrent, featuresDocumented, linksResolve],

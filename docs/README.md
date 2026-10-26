@@ -1,48 +1,33 @@
 # Documentation
 
-If you are new, read [Naima in one minute](guide/naima-in-one-minute.md),
-then [Naima in ten minutes](guide/naima-in-ten-minutes.md), which explains
-what Naima does, including the advanced parts. [What Naima is for](purpose.md)
-gives the full picture, and [the primer](guide/primer.md) introduces every
-idea Naima uses. After that, pick your starting point from the table below,
-according to who you are.
+If you are new, read [Naima in one minute](guide/naima-in-one-minute.md), then [Naima in ten minutes](guide/naima-in-ten-minutes.md), which explains what Naima
+does, including the advanced parts. [What Naima is for](purpose.md) gives the full picture, and [the primer](guide/primer.md) introduces every idea Naima uses.
+After that, pick your starting point from the table below, according to who you are.
 
-| You are… | Start at | Then |
-|---|---|---|
-| **new to Naima** | [Naima in one minute](guide/naima-in-one-minute.md), then [the basics](guide/the-basics.md) (set a goal, reach it in steps, publish), then [in ten minutes](guide/naima-in-ten-minutes.md), then [what Naima is for](purpose.md): what it is, what it manages, what exists and what is planned | [the primer](guide/primer.md): every concept in the order you meet it, then [how the project runs](guide/how-the-project-runs.md) and [the tutorial](guide/tutorial.md) |
-| **a person whose project Naima runs** | [the guide](guide/README.md): how the project runs first, then a page per task | [questions](guide/faq.md), [glossary](guide/glossary.md) |
-| **an AI agent working on a project** | [the pages for agents](agents/README.md): the skill, the flows | [the rules](guide/rules.md) |
-| **looking something up** | [the reference](reference/reference.md): every command, type, field, check, gate, generated from the code | [the format](reference/format.md): every file and field on disk |
-| **changing Naima's own code, or studying how it works** | developing Naima (requirements, architecture, plugins, documentation) is in the workshop, Naima's private development repository | [the rules](guide/rules.md) |
+| You are…                                                | Start at                                                                                                                                                                                                                                                                                       | Then                                                                                                                                                                    |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **new to Naima**                                        | [Naima in one minute](guide/naima-in-one-minute.md), then [the basics](guide/the-basics.md) (set a goal, reach it in steps, publish), then [in ten minutes](guide/naima-in-ten-minutes.md), then [what Naima is for](purpose.md): what it is, what it manages, what exists and what is planned | [the primer](guide/primer.md): every concept in the order you meet it, then [how the project runs](guide/how-the-project-runs.md) and [the tutorial](guide/tutorial.md) |
+| **a person whose project Naima runs**                   | [the guide](guide/README.md): how the project runs first, then a page per task                                                                                                                                                                                                                 | [questions](guide/faq.md), [glossary](guide/glossary.md)                                                                                                                |
+| **an AI agent working on a project**                    | [the pages for agents](agents/README.md): the skill, the flows                                                                                                                                                                                                                                 | [the rules](guide/rules.md)                                                                                                                                             |
+| **looking something up**                                | [the reference](reference/reference.md): every command, type, field, check, gate, generated from the code                                                                                                                                                                                      | [the format](reference/format.md): every file and field on disk                                                                                                         |
+| **changing Naima's own code, or studying how it works** | developing Naima (requirements, architecture, plugins, documentation) is in the workshop, Naima's private development repository                                                                                                                                                               | [the rules](guide/rules.md)                                                                                                                                             |
 
 ## Where each thing is
 
-- **[purpose](purpose.md)** says what Naima is, and **[planned](planned.md)**
-  lists in one place everything it doesn't do yet.
-- **[contributing](CONTRIBUTING.md)** says how to report a problem, ask for
-  a feature or send a fix to Naima, for people and agents.
-- **[guide/](guide/README.md)** is for people and assumes no code. It covers
-  how the project runs, the tutorial, a page per everyday task, concepts, the
-  [rules](guide/rules.md) (the only page that states them), a project's own
-  rules ([write one](guide/write-a-project-rule.md)), installing,
-  configuration, questions and the glossary. It also has
-  [extending Naima](guide/extending-naima.md), for a programmer writing a
-  plugin or a researcher adopting Naima outside software.
-- **[agents/](agents/README.md)** is for agents. It explains how an agent
-  learns a project, the skill, [the project's own rules](agents/read-the-project-rules.md),
-  and the flows, which are the procedures an agent follows.
-- **[reference/](reference/)** holds [the format](reference/format.md), the
-  open specification of every file, and [the reference](reference/reference.md).
-  The reference is generated from the plugins' manifests, so it can't drift
-  from the code, and it opens with
-  [every command, what it does and what it enforces](reference/reference.md#commands-at-a-glance).
-  It also holds [the plugin contract](reference/plugin-contract.md), for
-  writing a plugin.
-- **`develop/`** is for people changing Naima itself. It covers the
-  architecture, the documentation rule and how Naima's own tracker works. It
-  lives in the workshop, Naima's private development repository, and not in a
-  project's clone.
+- **[purpose](purpose.md)** says what Naima is, and **[planned](planned.md)** lists in one place everything it doesn't do yet.
+- **[contributing](CONTRIBUTING.md)** says how to report a problem, ask for a feature or send a fix to Naima, for people and agents.
+- **[guide/](guide/README.md)** is for people and assumes no code. It covers how the project runs, the tutorial, a page per everyday task, concepts, the
+  [rules](guide/rules.md) (the only page that states them), a project's own rules ([write one](guide/write-a-project-rule.md)), installing, configuration,
+  questions and the glossary. It also has [extending Naima](guide/extending-naima.md), for a programmer writing a plugin or a researcher adopting Naima outside
+  software.
+- **[agents/](agents/README.md)** is for agents. It explains how an agent learns a project, the skill,
+  [the project's own rules](agents/read-the-project-rules.md), and the flows, which are the procedures an agent follows.
+- **[reference/](reference/)** holds [the format](reference/format.md), the open specification of every file, and [the reference](reference/reference.md). The
+  reference is generated from the plugins' manifests, so it can't drift from the code, and it opens with
+  [every command, what it does and what it enforces](reference/reference.md#commands-at-a-glance). It also holds
+  [the plugin contract](reference/plugin-contract.md), for writing a plugin.
+- **`develop/`** is for people changing Naima itself. It covers the architecture, the documentation rule and how Naima's own tracker works. It lives in the
+  workshop, Naima's private development repository, and not in a project's clone.
 
-The reference is generated by `naima docs`. In Naima's repository,
-`deno task docs` rewrites it, and `deno task verify` fails when it is out of
-date or when anything loaded is undocumented.
+The reference is generated by `naima docs`. In Naima's repository, `deno task docs` rewrites it, and `deno task verify` fails when it is out of date or when
+anything loaded is undocumented.

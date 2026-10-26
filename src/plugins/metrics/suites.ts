@@ -21,8 +21,7 @@
 
 import { createHash, randomUUID } from "node:crypto"
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync } from "node:fs"
-import { tmpdir } from "node:os"
-import { isAbsolute, join, relative, resolve, sep } from "node:path"
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { spawnSync } from "node:child_process"
 import {
   ATTACHMENTS,
@@ -32,12 +31,14 @@ import {
   isOpen,
   type Item,
   label,
+  message,
   pathMatches,
   privateContext,
   proves,
   redactPrivate,
   saveMeta,
   setFieldValue,
+  TRACKER_DIR,
   writeFileAtomic,
   writeJson,
 } from "../../core/api.ts"
@@ -58,6 +59,20 @@ export interface RunOutput {
 const ANSI = /\x1b\[[0-9;?]*[ -\/]*[@-~]/g
 
 /** Run a command in `cwd`, colour off, its output stripped of escape codes. */
+/**
+ * Where a suite's `{tmp}` goes: `.tmp/` in the tracker folder, which git ignores. Not the system's temporary
+ * folder, which the launcher does not let the program write: the program may write only its tracker folder.
+ */
+function scratchDir(ctx: Context): string {
+  // The tracker folder: the data's parent when it is the usual naima-tracker/, else the data folder itself.
+  const tracker = basename(dirname(ctx.trackerRoot)) === TRACKER_DIR ? dirname(ctx.trackerRoot) : ctx.trackerRoot
+  const dir = join(tracker, ".tmp")
+  mkdirSync(dir, { recursive: true })
+  const ignore = join(dir, ".gitignore")
+  if (!existsSync(ignore)) writeFileAtomic(ignore, "*\n")
+  return dir
+}
+
 export function runCommand(program: string, args: string[], cwd: string): RunOutput & { error?: Error } {
   const start = performance.now()
   const r = spawnSync(program, args, { cwd, encoding: "utf8", maxBuffer: 256 * 1024 * 1024, env: { ...process.env, NO_COLOR: "1" } })
@@ -213,12 +228,17 @@ export function inputFiles(s: SuiteConfig, files: readonly string[]): string[] {
 }
 
 /** The digest a run of `s` speaks for, over the files under `root`. */
-export function suiteDigest(s: SuiteConfig, root: string, files: readonly string[]): { sha256: string; files: number } {
+export function suiteDigest(
+  s: SuiteConfig,
+  root: string,
+  files: readonly string[],
+  read: (file: string) => Uint8Array = (f) => readFileSync(join(root, f)),
+): { sha256: string; files: number } {
   const picked = inputFiles(s, files)
   const listed = picked.map((f) => {
     let digest = ""
     try {
-      digest = createHash("sha256").update(readFileSync(join(root, f))).digest("hex")
+      digest = createHash("sha256").update(read(f)).digest("hex")
     } catch {
       digest = "unreadable"
     }
@@ -328,7 +348,7 @@ export function runSuite(
     log: out ? clean(tail([out.stdout, out.stderr].filter((x) => x.trim()).join("\n"), LOG_LIMIT)) : "",
   })
   if (!format) return failedRun(`no test format "${s.format}"`)
-  const tmp = join(tmpdir(), `naima-suite-${randomUUID().slice(0, 8)}`)
+  const tmp = join(scratchDir(ctx), `naima-suite-${randomUUID().slice(0, 8)}`)
   const fill = (args: string[]) => args.map((a) => a.replaceAll("{tmp}", tmp))
   try {
     mkdirSync(tmp, { recursive: true })
@@ -352,7 +372,13 @@ export function runSuite(
     } catch (e) {
       parsed = { error: (e as Error).message }
     }
-    if (!Array.isArray(parsed)) return failedRun(`its ${s.format} report could not be read: ${parsed.error}`, out)
+    if (!Array.isArray(parsed)) {
+      // Read from the command's output when no report is named: a command that writes its report to a file names it.
+      const where = s.report
+        ? ""
+        : " — it was read from the command's output, since the suite names no report: name report when the command writes one to a file"
+      return failedRun(`its ${s.format} report could not be read: ${parsed.error}${where}`, out)
+    }
     const roots = rootsOf(root)
     const tests = parsed.map((t): TestResult => {
       const file = fileFrom(roots, t.file)
@@ -500,7 +526,7 @@ export function attachToItems(ctx: Context, runs: SuiteOutcome[]): string[] {
     } catch (e) {
       item.meta = was.meta
       rmSync(path, { force: true })
-      lines.push(`  ! ${label(item)}: not updated — ${(e as Error).message}`)
+      lines.push(`  ! ${label(item)}: not updated — ${message(e)}`)
       continue
     }
     const failing = ran.filter((t) => t.result === "failed").length

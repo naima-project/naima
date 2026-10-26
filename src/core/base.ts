@@ -2,7 +2,7 @@
 // plugin: the generic fields and relations, the invariants, and the commands
 // that work on any item type.
 
-import { existsSync, readdirSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { bool, pairs, parse, str, strs, usageError } from "./args.ts"
 import { coreChecks, runChecks } from "./check.ts"
@@ -28,7 +28,7 @@ import {
 import { byUrgency, isEvidenceType, isOpen, label, proves, refutes } from "./lifecycle.ts"
 import { CONTRACT } from "./contract.ts"
 import { shortOrId } from "./names.ts"
-import { writeFileAtomic } from "./files.ts"
+import { readText, writeFileAtomic } from "./files.ts"
 import { addedPrivate, allowanceLine, privateContext, type PrivateFinding, privateRefusal } from "./private.ts"
 import { asRendered, type Format, linesAs, rendered } from "./rendered.ts"
 import { flagsOf } from "./vocabulary.ts"
@@ -148,8 +148,10 @@ const newCommand: Command = {
     if (bool(p, "dedupe")) {
       const likely = likelyDuplicatesOf(ctx, type.id, title.trim())
       if (likely.length) {
-        ctx.out("possible duplicates — link instead of refiling, or file anyway:")
+        ctx.out("similar titles, which may be the same thing or only related — link one if it is the same, or file anyway:")
         for (const item of likely) ctx.out(line(item))
+        // Said apart from the list, so the new item is never read as one of its own duplicates.
+        ctx.out("filed anyway, as a new item:")
       }
     }
     const item = createItem(ctx, type, title.trim(), fields, { authored: true })
@@ -328,7 +330,7 @@ const unlink: Command = {
 
 /** The text a prose command writes: its `--file`, else its arguments after the item, trimmed; a usage error when empty. */
 function proseText(cmd: Command, file: string | undefined, words: string[]): string {
-  const text = (file ? readFileSync(file, "utf8") : words.join(" ")).trim()
+  const text = (file ? readText(file) : words.join(" ")).trim()
   if (!text) throw usageError(cmd)
   return text
 }
@@ -358,7 +360,7 @@ const note: Command = {
   usage: 'note <item> "<text>" [--by <who>] | note <item> --file <f> [--by <who>]',
   options: [
     { name: "--by", says: "who writes the note; without it, git's user.name" },
-    { name: "--file", says: "read the note from a file instead of the arguments" },
+    { name: "--file", says: "read the note from a file instead of the arguments; - reads standard input" },
   ],
   examples: ['note export-drops "Reproduced on a 16-bit PNG; 8-bit keeps alpha." --by "triage agent"', "note export-drops --file finding.md"],
   run(args, ctx) {
@@ -383,7 +385,7 @@ const describe: Command = {
   says: "replace an item's description, keeping its title line and its Notes section",
   enforces: "the title line and the Notes section stay as they are: a description holding a title or a Notes section is refused",
   usage: 'describe <item> "<text>" | describe <item> --file <f>',
-  options: [{ name: "--file", says: "read the description from a file instead of the arguments" }],
+  options: [{ name: "--file", says: "read the description from a file instead of the arguments; - reads standard input" }],
   examples: ['describe export-drops "Export to PNG loses the alpha channel; done when every bit depth keeps it."', "describe export-drops --file triaged.md"],
   run(args, ctx) {
     const p = parse(args, { file: { type: "string" } })
@@ -846,7 +848,7 @@ export const corePlugin: Plugin = {
     "Fields are typed by the plugin that declares them — `string`, `strings` (comma-separated on the command line), `date` (YYYY, YYYY-MM or YYYY-MM-DD), `enum` (values in rank order), `boolean`, `number`, `object` (a JSON object, written as JSON on the command line) — and unknown fields are kept and not checked. " +
     "Only one direction of a link is stored; the inverse is derived when read. Boards, queues, gate states and summaries are derived when asked and never stored. " +
     "An item is open or done by its status's category; urgency is the sum of every plugin's rank terms, and done items sink. " +
-    'A check\'s finding can be waived when it is accepted rather than fixed: `naima waive <check> <subject> --reason "<why>"` writes one file under `waivers/` naming the check, the subject, the reason, who and when. ' +
+    'A check\'s finding can be waived when it is accepted rather than fixed: `naima waive <check> <subject> --reason "<why>" --as <who>` writes one file under `waivers/` naming the check, the subject, the reason, who and when. ' +
     "A waived finding is not a failure; every `naima check` lists the waivers in use as notes, and notes a waiver whose subject no longer exists or no longer fails. " +
     "Only a check that names the subject of its findings can be waived.",
   fields: [

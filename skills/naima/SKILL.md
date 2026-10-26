@@ -49,7 +49,9 @@ duplicates searched first (`naima list`, or `naima new --dedupe`, which
 prints likely duplicates of the same type before writing and still writes)
 and linked instead of refiled; triaged on the spot (impact, priority,
 confidence); a decision recorded with `naima new decisions`, a deferral with
-its reason. "I already told you" means a report was lost: file it now and
+its reason. A choice you make yourself because the owner left it open (a
+language, a default, leaving something out) is a decision too: record it,
+and tell the owner they can change it. "I already told you" means a report was lost: file it now and
 say so — never argue that it was already said. The full shape of a report
 is [reporting and triage](../../docs/agents/reporting-and-triage.md); this
 line is so it happens even when nobody typed `/flow:report`.
@@ -85,7 +87,9 @@ never rewrite history, never commit a secret
 
 Run `deno --version`. If it is missing, install it with its official
 installer, once per machine: `curl -fsSL https://deno.land/install.sh | sh`
-([installing](../../docs/guide/install.md#deno-once-per-machine)).
+([installing](../../docs/guide/install.md#deno-once-per-machine)). The
+README's "Deno by hand" does the same steps one by one, checking the download,
+for an owner who prefers to see each of them; either way is right.
 
 ## 2. Have a project
 
@@ -103,8 +107,10 @@ git clone https://github.com/naima-project/naima.git naima-tracker/naima
 deno run -A naima-tracker/naima/naima.ts init
 ```
 
-`init` writes the rest of `naima-tracker/` and touches nothing else. Commit
-`naima-tracker/` with the work; git never shows `naima-tracker/naima/`, which
+`init` writes the rest of `naima-tracker/`, the line in `AGENTS.md` (or the
+first agent entry file the project has) that tells agents to run `naima
+hello`, and the session hooks of the agent tools the project uses; nothing
+else. Commit `naima-tracker/` and that file with the work; git never shows `naima-tracker/naima/`, which
 is ignored ([bootstrap a project](../../docs/guide/install.md#bootstrap-a-project)).
 
 When the project already keeps a TODO.md, a notes file or an issue list,
@@ -136,8 +142,9 @@ explaining what Naima can do.
 If the owner asks what Naima can do, start from the basics, in this order:
 set a goal (a gate); reach it in steps (milestones, smaller gates with dates,
 each showing what is still missing); publish (a release, a gate with a
-version: when it holds, the tag, the release notes from the change notes via
-`naima changes`, and the published site where there is one). Point to
+version: when it holds, the tag, the release notes from `naima announce
+--gate <gate>` (and from the change notes via `naima changes`, where the
+project keeps them), and the published site where there is one). Point to
 [the basics](../../docs/guide/the-basics.md). Tests, proofs, workers and
 models come only when the owner asks further.
 

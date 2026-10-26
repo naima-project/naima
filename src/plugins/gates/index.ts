@@ -45,6 +45,7 @@ import {
   fieldValue,
   fieldValues,
   type Finding,
+  gitOrNull,
   groupBy,
   isEvidenceType,
   isOpen,
@@ -300,7 +301,10 @@ export async function goals(ctx: Context): Promise<string[]> {
   const ahead = (g: GateDef, r: GateResult): boolean => !(g.due && daysLeft(ctx, g.due) < 0 && r.holds)
   const all: Goal[] = []
   for (const { value: gate } of gatesOf(ctx)) if (gate.due || gate.version) all.push({ gate, result: await gate.evaluate(ctx) })
-  const live = all.filter((g) => ahead(g.gate, g.result))
+  // A release already tagged is behind the project too: its version names a tag in git.
+  const tags = new Set((gitOrNull(ctx.root, "tag", "--list") ?? "").split("\n").map((t) => t.trim()).filter(Boolean))
+  const released = (g: GateDef): boolean => !!g.version && (tags.has(`v${g.version}`) || tags.has(g.version))
+  const live = all.filter((g) => ahead(g.gate, g.result) && !released(g.gate))
   const byDate = (a: Goal, b: Goal): number => (a.gate.due ?? "9999-99-99").localeCompare(b.gate.due ?? "9999-99-99")
   const dated = live.filter((g) => g.gate.due).sort(byDate)
   const nearest = dated.filter((g) => g.gate.due === dated[0]?.gate.due).slice(0, 2)
@@ -555,6 +559,27 @@ function declareGate(ctx: Context, name: string, gate: GateConfig): void {
   writeJson(DATA_PATH(ctx), { ...raw, plugins: { ...plugins, gates: { ...entry, options: next } } })
 }
 
+/** Change a declared gate's fields in naima.json: each given value set, an empty one removed. */
+function updateGate(ctx: Context, name: string, changes: Record<string, unknown>): void {
+  const raw = JSON.parse(readFileSync(DATA_PATH(ctx), "utf8")) as Record<string, unknown>
+  const plugins = isObject(raw["plugins"]) ? raw["plugins"] : {}
+  const entry = isObject(plugins["gates"]) ? plugins["gates"] : {}
+  const options = isObject(entry["options"]) ? entry["options"] : {}
+  const current = isObject(options["gates"]) ? options["gates"] : {}
+  const gate = current[name]
+  if (!isObject(gate)) throw new Error(`gate ${name} is not declared in ${ctx.trackerDir}/${DATA_FILE}, so it cannot be changed here — a plugin declares it`)
+  const next: Record<string, unknown> = { ...gate }
+  for (const [key, value] of Object.entries(changes)) {
+    if (value === "" || value === false) {
+      if (key === "title") throw new Error("a gate keeps its title: give a new one")
+      delete next[key]
+    } else next[key] = value
+  }
+  const all = { ...options, gates: { ...current, [name]: next } }
+  readOptions(all)
+  writeJson(DATA_PATH(ctx), { ...raw, plugins: { ...plugins, gates: { ...entry, options: all } } })
+}
+
 const findGate = (ctx: Context, name: string | undefined): GateDef => {
   const gate = name === undefined ? undefined : ctx.registry.find<GateDef>("gates", name)?.value
   if (!gate) throw new Error(`no gate "${name}" — gates: ${gatesOf(ctx).map((g) => g.name).join(", ") || 'none yet: naima gate new <name> "<title>"'}`)
@@ -567,18 +592,23 @@ const gateCommand: Command = {
     "declare a gate — a milestone, with a date and a version — put items on it or take them off, and show one; writes go to naima.json and to the items, validated, through the write hooks",
   enforces: "writes to naima.json and to the items are validated and pass the write hooks",
   usage:
-    'gate new <name> "<title>" [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite] | gate add <gate> <item>... | gate remove <gate> <item>... | gate show <gate>',
+    'gate new <name> "<title>" [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite] | gate set <name> [--title <t>] [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite | --no-full-suite] | gate add <gate> <item>... | gate remove <gate> <item>... | gate show <gate>',
   options: [
-    { name: "--says", says: "gate new: what the gate is for, in one sentence" },
-    { name: "--due", says: "gate new: the date it is due, YYYY-MM-DD, which makes it a milestone" },
-    { name: "--version", says: "gate new: the version it ships as" },
-    { name: "--holds-on", says: 'gate new: "code" (the default) waits for code and lets proof be owed; "proof" waits for every proof too' },
-    { name: "--coverage", says: "gate new: the coverage lists it requires, comma-separated: each entry with NO TEST blocks it" },
+    { name: "--title", says: "gate set: its new title" },
+    { name: "--says", says: "gate new and set: what the gate is for, in one sentence" },
+    { name: "--due", says: 'gate new and set: the date it is due, YYYY-MM-DD, which makes it a milestone; with set, "" takes the date off' },
+    { name: "--version", says: 'gate new and set: the version it ships as; with set, "" takes it off' },
+    { name: "--holds-on", says: 'gate new and set: "code" (the default) waits for code and lets proof be owed; "proof" waits for every proof too' },
+    {
+      name: "--coverage",
+      says: 'gate new and set: the coverage lists it requires, comma-separated: each entry with NO TEST blocks it; with set, "" takes them off',
+    },
     {
       name: "--full-suite",
       says:
-        "gate new: a release gate, which holds only when every gate that is part of the full suite holds too: every property current, every test suite passing",
+        "gate new and set: a release gate, which holds only when every gate that is part of the full suite holds too: every property current, every test suite passing",
     },
+    { name: "--no-full-suite", says: "gate set: no longer a release gate that waits for the full suite" },
   ],
   examples: [
     'gate new beta "Public beta" --says "the first outside users" --due 2026-12-01 --version 0.9',
@@ -586,15 +616,19 @@ const gateCommand: Command = {
     "gate remove beta bugs/export-drops-alpha",
     "gate show beta",
     'gate new v1 "First release" --version 1.0 --full-suite',
+    'gate set beta --due ""',
+    "gate set beta --due 2026-12-15",
   ],
   async run(args, ctx) {
     const p = parse(args, {
+      title: { type: "string" },
       says: { type: "string" },
       due: { type: "string" },
       version: { type: "string" },
       "holds-on": { type: "string" },
       coverage: { type: "string" },
       "full-suite": { type: "boolean" },
+      "no-full-suite": { type: "boolean" },
     })
     const [sub, name, ...rest] = p.positionals
     if (sub === "new") {
@@ -613,6 +647,22 @@ const gateCommand: Command = {
       } as GateConfig
       declareGate(ctx, name, gate)
       ctx.out(`gate ${name} declared in ${ctx.trackerDir}/${DATA_FILE} — put items on it: naima gate add ${name} <item>...`)
+      return 0
+    }
+    if (sub === "set") {
+      if (!name || rest.length) throw usageError(this)
+      const changes: Record<string, unknown> = Object.fromEntries(
+        (["title", "says", "due", "version"] as const).flatMap((k) => (str(p, k) !== undefined ? [[k, (str(p, k) ?? "").trim()]] : [])),
+      )
+      if (str(p, "holds-on") !== undefined) changes["holdsOn"] = (str(p, "holds-on") ?? "").trim()
+      const coverage = str(p, "coverage")
+      if (coverage !== undefined) changes["coverage"] = coverage.trim() === "" ? "" : coverage.split(",").map((l) => l.trim()).filter(Boolean)
+      if (bool(p, "full-suite") && bool(p, "no-full-suite")) throw usageError(this)
+      if (bool(p, "full-suite")) changes["fullSuite"] = true
+      if (bool(p, "no-full-suite")) changes["fullSuite"] = false
+      if (!Object.keys(changes).length) throw usageError(this)
+      updateGate(ctx, name, changes)
+      ctx.out(`gate ${name}: ${Object.entries(changes).map(([k, v]) => (v === "" || v === false ? `${k} removed` : `${k} ${v}`)).join(", ")}`)
       return 0
     }
     if (sub === "add" || sub === "remove") {
@@ -719,12 +769,17 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
       (c.coverage?.length
         ? ` Blocked too by every entry with NO TEST of the coverage list${c.coverage.length === 1 ? "" : "s"} ${c.coverage.join(", ")}.`
         : "") +
+      (c.version ? " A release gate, having a version, does not hold while no item is on it." : "") +
       (c.fullSuite
         ? " A release gate: it holds only when every gate that is part of the full suite holds too (naima gates marks them), their blocking items, owed items and reasons joining its own."
         : ""),
     evaluate: (ctx) => {
       const r = evaluateGate(ctx, name, c.holdsOn ?? "code")
       const reasons = c.coverage?.length ? coverageReasons(ctx, lists, c.coverage) : []
+      // A release with nothing on it is not ready: holding vacuously would announce an empty release.
+      if (c.version && !ctx.repo.items.some((i) => onGates(i).includes(name))) {
+        reasons.push(`nothing is on it yet — naima gate add ${name} <item>...`)
+      }
       const own = reasons.length ? { ...r, holds: false, reasons } : r
       // A gate that is not a release gate answers at once, as it always has; a release gate awaits its parts.
       return c.fullSuite ? withFullSuite(ctx, own) : own

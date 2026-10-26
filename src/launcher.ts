@@ -36,6 +36,8 @@ import { existsSync, readFileSync } from "node:fs"
 import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
+  ADAPTERS,
+  DATA_DIR,
   DATA_FILE,
   DEFAULT_ENTRY_FILES,
   EXCLUDE_FILES,
@@ -56,6 +58,7 @@ import {
   tickDir,
   toolsDir,
   toplevel,
+  TRACKER_DIR,
   trackerOf,
   VISIBILITY_HOST,
   worktrees,
@@ -112,7 +115,8 @@ export const ENV = {
 
 /** The variables of `env` the program may see: ENV's names and prefixes, compared as Windows does, without case. */
 export function allowedEnv(env: Record<string, string>): Record<string, string> {
-  const names = new Set<string>(ENV.names)
+  // And the variables that tell which agent tool the program runs inside, so init installs that tool's hooks.
+  const names = new Set<string>([...ENV.names, ...ADAPTERS.flatMap((a) => a.env ?? [])])
   const keep = (name: string): boolean => names.has(name.toUpperCase()) || ENV.prefixes.some((p) => name.toUpperCase().startsWith(p))
   return Object.fromEntries(Object.entries(env).filter(([name]) => keep(name)))
 }
@@ -305,6 +309,14 @@ function existing(path: string): string {
   return dir
 }
 
+/** The data of the project `cwd` is in, when it is not the one this launcher's program belongs to; else undefined. */
+export function otherProject(cwd: string, own: string): string | undefined {
+  const here = toplevel(cwd)
+  if (!here || real(here) === real(toplevel(dirname(own)) ?? dirname(own))) return undefined
+  const data = join(here, TRACKER_DIR, DATA_DIR)
+  return existsSync(join(data, DATA_FILE)) ? data : undefined
+}
+
 export async function launch(args: string[], cwd: string): Promise<number> {
   let parsed: ReturnType<typeof globalOptions>
   try {
@@ -314,7 +326,9 @@ export async function launch(args: string[], cwd: string): Promise<number> {
   }
   // Resolved: Deno grants real paths, and the program reads its own directory, which may not be the project's.
   const own = real(dirname(dirname(fileURLToPath(import.meta.url))))
-  const given = parsed.data ?? Deno.env.get("NAIMA_DATA")
+  // Run from inside another project that uses Naima — a fresh clone, whose program is not cloned yet — the
+  // launcher serves that project, as if named with --data: the data says where its program goes, and it is cloned.
+  const given = parsed.data ?? Deno.env.get("NAIMA_DATA") ?? otherProject(cwd, own)
   const data = findData(cwd, own, given)
   // Named, the data says where its program is; beside the program, the data is the program's own and the parent folder bounds the writes.
   const program = given && existsSync(join(data, DATA_FILE)) ? programOf(data) : own

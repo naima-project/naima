@@ -63,6 +63,7 @@ import {
   type Finding,
   type Item,
   label,
+  message,
   NO_PROGRESS,
   parse,
   type Plugin,
@@ -563,6 +564,20 @@ export const readRecords = (ctx: Context): MetricRecord[] => recordFiles(ctx).ma
 const latestOf = (ctx: Context, commit: string | null): { file: string; record: MetricRecord } | undefined =>
   recordFiles(ctx).filter((r) => r.record.commit === commit).sort((a, b) => (a.record.at < b.record.at ? 1 : -1))[0]
 
+/**
+ * The latest record of a commit from which HEAD changed only the tracker: what it measured is what HEAD has,
+ * since the metrics read the project and leave the tracker out. Undefined when there is none.
+ */
+function unchangedSince(ctx: Context): { file: string; record: MetricRecord } | undefined {
+  const records = recordFiles(ctx).sort((a, b) => (a.record.at < b.record.at ? 1 : -1))
+  for (const r of records.slice(0, 20)) {
+    if (!r.record.commit || r.record.dirty) continue
+    const changed = git(ctx, "diff", "--name-only", r.record.commit, "HEAD", "--", ".", `:(exclude)${ctx.trackerDir}`)
+    if (changed === "") return r
+  }
+  return undefined
+}
+
 /** The line of history up to HEAD, oldest first, with each commit's date. */
 function line(ctx: Context): { commit: string; date: string }[] {
   return (git(ctx, "log", "--reverse", "--format=%H %cI", "HEAD") ?? "").split("\n").filter(Boolean).map((l) => {
@@ -718,7 +733,7 @@ export function measure(ctx: Context, m: MetricDef, site: Site = workingSite(ctx
       const read = cm.measure({ files, source: selectSource(source, m) }, m)
       return typeof read === "number" ? { value: read, exit: 0 } : { value: null, exit: 0, error: read.error }
     } catch (e) {
-      return { value: null, exit: -1, error: (e as Error).message }
+      return { value: null, exit: -1, error: message(e) }
     }
   }
   if (m.suite !== undefined) {
@@ -726,7 +741,7 @@ export function measure(ctx: Context, m: MetricDef, site: Site = workingSite(ctx
     try {
       o = suiteAt(ctx, m.suite, site)
     } catch (e) {
-      return { value: null, exit: -1, error: (e as Error).message }
+      return { value: null, exit: -1, error: message(e) }
     }
     const v = suiteValue(o, (m.field ?? "failed") as SuiteField)
     return typeof v === "number" ? { value: v, exit: o.run.exit } : { value: null, exit: o.run.exit, error: v.error }
@@ -1229,7 +1244,7 @@ const metricsCommand: Command = {
       try {
         writeFileAtomic(path, doc + "\n")
       } catch (e) {
-        throw new Error(`could not write ${file}: ${(e as Error).message} — print it instead: naima metrics plot … > ${file}`)
+        throw new Error(`could not write ${file}: ${message(e)} — print it instead: naima metrics plot … > ${file}`)
       }
       ctx.out(`wrote ${file}: ${series.map((s) => `${s.name} (${s.points.length} commits)`).join(", ")}`)
       return 0
@@ -1432,12 +1447,14 @@ const metricsGate: Gate = {
   title: "The project's metrics",
   says: "every declared metric held to its bound on the last record of HEAD's commit",
   decides:
-    "holds when the latest record of HEAD's commit (naima metrics run --record) has every declared metric within its bound; with no record of HEAD, it holds only if no metric is declared. It blocks on no item: it says which number fails, and how far, and names the record it read.",
+    "holds when the latest record of HEAD's commit (naima metrics run --record) has every declared metric within its bound — or, with no record of HEAD, and only suites' metrics and code measures declared, the latest record of a commit from which HEAD changed only the tracker; with neither, it holds only if no metric is declared. It blocks on no item: it says which number fails, and how far, and names the record it read.",
   evaluate(ctx) {
     const ms = metricsOf(ctx)
     if (!ms.length) return { holds: true, blocking: [], owed: [], reasons: [], backedBy: [] }
     const head = git(ctx, "rev-parse", "HEAD")
-    const latest = latestOf(ctx, head)
+    // A command or a file may read anything, the tracker or the history among it: only suites and the code measures leave it out.
+    const latest = latestOf(ctx, head) ??
+      (ms.every((m) => m.suite !== undefined || (m.run === undefined && m.file === undefined)) ? unchangedSince(ctx) : undefined)
     if (!latest) {
       return { holds: false, blocking: [], owed: [], reasons: [`no record of ${head?.slice(0, 12) ?? "HEAD"} — naima metrics run --record`], backedBy: [] }
     }
@@ -1460,15 +1477,22 @@ const suitesGate: Gate = {
   title: "Every test suite passes",
   says: "every declared test suite passed on HEAD's commit, by a recorded run",
   decides:
-    "holds when the latest record of HEAD's commit (naima metrics run --record) names, for every declared suite, a recorded run — made on it, or reused because its inputs are unchanged — with no failing test and no error. It blocks on no item: it says which suite failed and how, and names each run it stands on.",
+    "holds when the latest record of HEAD's commit (naima metrics run --record) names, for every declared suite, a recorded run — made on it, or reused because its inputs are unchanged — with no failing test and no error; with no record of HEAD, a suite's latest recorded run on its inputs as they are now stands for it, so a commit that changed none of them needs no new run. It blocks on no item: it says which suite failed and how, and names each run it stands on.",
   evaluate(ctx) {
     const suites = suitesOf(ctx)
     const head = git(ctx, "rev-parse", "HEAD")
     const latest = recordFiles(ctx).filter((r) => r.record.commit === head && r.record.runs).sort((a, b) => (a.record.at < b.record.at ? 1 : -1))
     const reasons: string[] = []
     const backedBy: string[] = []
+    // A commit that left a suite's inputs as they were, such as one that only writes the tracker, needs no new run.
+    let files: string[] | undefined
+    const sameInputs = (suite: SuiteDef): string | undefined => {
+      files ??= workingTreeSource(ctx.root, [ctx.trackerDir]).files
+      const digest = suiteDigest(suite, ctx.root, files).sha256
+      return recordedRuns(ctx, suite.name).filter((r) => r.run.inputsSha256 === digest).at(-1)?.path
+    }
     for (const s of suites) {
-      const path = latest.map((r) => r.record.runs?.[s.name]).find((x): x is string => typeof x === "string")
+      const path = latest.map((r) => r.record.runs?.[s.name]).find((x): x is string => typeof x === "string") ?? sameInputs(s)
       const run = path ? readSuiteRun(ctx, path) : null
       if (!path || !run) {
         reasons.push(`suite ${s.name}: no recorded run for ${head?.slice(0, 12) ?? "HEAD"} — naima metrics run ${s.name} --record`)
@@ -1504,13 +1528,19 @@ const suitesCurrent = {
   blocks(ctx: Context, landing: Landing): string[] {
     const suites = suitesOf(ctx)
     if (!suites.length) return []
-    const files = workingTreeSource(ctx.root, [ctx.trackerDir]).files
+    // The inputs as the branch has them: its tip's files, read from git, not the trunk's checkout the landing runs in.
+    const files = commitSource(ctx.root, landing.to, [ctx.trackerDir]).files
+    const atTip = (f: string): Uint8Array => {
+      const r = spawnSync("git", ["show", `${landing.to}:${f}`], { cwd: ctx.root, maxBuffer: 1 << 30 })
+      if (r.status !== 0) throw new Error(`git show ${f} failed`)
+      return r.stdout
+    }
     const changed = new Set(landing.changed)
     const out: string[] = []
     for (const s of suites) {
       const read = inputFiles(s, files).filter((f) => changed.has(f))
       if (!read.length) continue
-      const digest = suiteDigest(s, ctx.root, files).sha256
+      const digest = suiteDigest(s, ctx.root, files, atTip).sha256
       const last = recordedRuns(ctx, s.name).filter((r) => r.run.inputsSha256 === digest).at(-1)
       const where = last ? ` — ${ctx.trackerDir}/${last.path}` : ""
       if (!last) {

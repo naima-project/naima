@@ -1,13 +1,13 @@
 # Plan with epics, milestones and gates
 
-Naima has three ways to say what a body of work is for and when it is done, and each of them takes a single command. Nothing here needs you to edit
-`naima.json` by hand. The agents run these commands for you, unless you want to run them yourself.
+Naima has three ways to say what a body of work is for and when it is done, and each of them takes a single command. Nothing here needs you to edit `naima.json`
+by hand. The agents run these commands for you, unless you want to run them yourself.
 
-| Word          | What it is                                                            | Made with                                       |
-| ------------- | --------------------------------------------------------------------- | ----------------------------------------------- |
-| **epic**      | a body of work that groups items; done when they all are              | `naima new epics "<title>"`                     |
+| Word          | What it is                                                                  | Made with                                       |
+| ------------- | --------------------------------------------------------------------------- | ----------------------------------------------- |
+| **epic**      | a body of work that groups items; done when they all are                    | `naima new epics "<title>"`                     |
 | **gate**      | what must be settled before something may happen, like a release or a merge | `naima gate new <name> "<title>"`               |
-| **milestone** | a gate with a date, and optionally a version                          | `naima gate new … --due YYYY-MM-DD --version v` |
+| **milestone** | a gate with a date, and optionally a version                                | `naima gate new … --due YYYY-MM-DD --version v` |
 
 ## Group work in an epic
 
@@ -42,9 +42,9 @@ naima gate new beta "Public beta" --says "the first outside users"
 naima gate add beta bugs/first-run-crash epics/onboarding
 ```
 
-The gate is written into the project's configuration, and it is checked in the same way it will later be read. The items get `gate=beta` through the same
-checks as any `naima set`. An epic on a gate stands for its items, so the gate waits for them rather than for the epic itself. An empty epic on a gate blocks
-it, because nothing has been planned yet.
+The gate is written into the project's configuration, and it is checked in the same way it will later be read. The items get `gate=beta` through the same checks
+as any `naima set`. An epic on a gate stands for its items, so the gate waits for them rather than for the epic itself. An empty epic on a gate blocks it,
+because nothing has been planned yet.
 
 By default a gate waits for **code**, which means that a fixed item that still owes its proof doesn't block it. `--holds-on proof` makes the gate wait for every
 proof as well ([prove and close](prove-and-close.md)).
@@ -68,6 +68,11 @@ beta — Public beta (version 0.9; due 2026-12-01, 17 days left): BLOCKED by 2
 `naima gates`, `naima queue beta` and `naima summary` show the number of days left, `today`, or how many days overdue it is. Once the date has passed and the
 gate still doesn't hold, `naima check` warns about it (the check `milestone-overdue`). This is a note rather than a failure, because a late milestone is
 something to know about, not a sign that the project is broken.
+
+A date moves, or comes off, with `naima gate set`: `naima gate set beta --due
+2026-12-15` changes it, and `naima gate set beta --due ""` takes it off. The same
+command changes a gate's title, what it says, its version, what it holds on and its coverage lists, and makes it a release gate that waits for the full suite
+(`--full-suite`), or no longer (`--no-full-suite`).
 
 `naima gates --json` prints the same information as data: each gate's name, title and timing, whether it holds, and the items that block it or only still owe a
 proof.
@@ -101,8 +106,8 @@ Each event is one file in `naima-tracker/naima-data/events/`.
 
 ## Say what waits on what: the order of the work
 
-A plan is rarely a simple list. A specification waits on its requirements, a model waits on its specification, and a release waits on everything it ships.
-You record each of these waits with one link.
+A plan is rarely a simple list. A specification waits on its requirements, a model waits on its specification, and a release waits on everything it ships. You
+record each of these waits with one link.
 
 ```sh
 naima link todos/write-the-specification blocked-by todos/write-the-requirements
@@ -128,8 +133,8 @@ The depth is the number of waits that come before an item, and a blocker that is
 to show only that gate's items, and both accept `--json`. Items that wait on each other in a cycle could never start, so `naima check` fails on such a cycle
 (the check `dependencies-acyclic`) and names every item in it.
 
-Both commands list only work. An epic is done when its items are, so it isn't listed, and waiting on an epic means waiting on its open items. A requirement isn't
-listed either, because it is what the work is held to, and it is met when a test or property that verifies it passes. If a `blocked-by` link names a
+Both commands list only work. An epic is done when its items are, so it isn't listed, and waiting on an epic means waiting on its open items. A requirement
+isn't listed either, because it is what the work is held to, and it is met when a test or property that verifies it passes. If a `blocked-by` link names a
 requirement, `naima check` notes it (the check `dependencies-wait-on-work`), and the link should wait on the work that delivers or proves the requirement
 instead.
 
@@ -158,10 +163,9 @@ naima diary --from 2026-10-05
 Each decision is shown with its reason, taken from its page, and each session note is shown in full. Nothing is stored for the diary apart from those files.
 
 The agents write diary entries on their own, without being asked, for a decision taken with you in conversation, a change in the direction of the work, or
-something notable that happens outside the tracker. They write none for routine work, and none for what a session note or a decision already says, so the
-diary stays short enough to read ([the rule](rules.md#agents-keep-the-diary)). `naima check` notes a day with more than five diary entries, and an entry that
-only repeats a session note or a decision of its day. The number is the coordination plugin's `diaryPerDay` option in
-`naima-tracker/naima-data/naima.json`.
+something notable that happens outside the tracker. They write none for routine work, and none for what a session note or a decision already says, so the diary
+stays short enough to read ([the rule](rules.md#agents-keep-the-diary)). `naima check` notes a day with more than five diary entries, and an entry that only
+repeats a session note or a decision of its day. The number is the coordination plugin's `diaryPerDay` option in `naima-tracker/naima-data/naima.json`.
 
 ```json
 "plugins": {

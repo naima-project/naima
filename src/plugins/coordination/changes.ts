@@ -195,7 +195,11 @@ export const changesCommand: Command = {
     if (p.positionals.length) throw usageError(this)
     const repo = str(p, "repo")
     const products = repo !== undefined ? [{ dir: join(ctx.root, repo), prefix: repo ? `${repo}/` : "" }] : productsOnDisk(ctx)
-    if (!products.length) throw new Error(`no repository of this project has a ${CHANGES_CONFIG}: there are no change notes to read`)
+    if (!products.length) {
+      throw new Error(
+        `no repository of this project has a ${CHANGES_CONFIG}, so it keeps no change notes: the release notes come from naima announce --gate <gate>, or start keeping change notes with a ${CHANGES_CONFIG} (naima guide lists the page)`,
+      )
+    }
     for (const product of products) {
       const to = str(p, "to") ?? "HEAD"
       if (!commitExists(product.dir, to)) throw new Error(`no commit ${to} in ${product.prefix || "the project"}`)

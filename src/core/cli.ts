@@ -53,7 +53,7 @@ import {
   writeSiblingMarker,
 } from "./repos.ts"
 import { exclusions } from "./excludes.ts"
-import { ALLOW_PRIVATE, allowPrivateOption, REVISED, revisedOption } from "./private.ts"
+import { ALLOW_PRIVATE, allowPrivateOption, findPrivate, guardPrivate, privateContext, REVISED, revisedOption } from "./private.ts"
 import { DATA_DIR, DATA_FILE, DEFAULT_DATA, findData, globalOptions, PROGRAM_DIR, real, RELAUNCH, runtimeOf, trackerOf, trackerReadme } from "./layout.ts"
 import {
   align,
@@ -206,7 +206,9 @@ export { withoutCredentials }
 async function nextStep(place: Place, opts: CliOptions, io: IO): Promise<string> {
   try {
     const ctx = await openProject(place, opts, io)
-    const type = [...ctx.registry.types.values()].find((t) => t.creatable !== false)
+    const creatable = [...ctx.registry.types.values()].filter((t) => t.creatable !== false)
+    // The first thing to do is filed where the project files follow-ups (todos, where it has them), not as a defect.
+    const type = creatable.find((t) => t.traits?.includes(FOLLOW_UP)) ?? creatable[0]
     return type ? `next: naima new ${type.id} "<the first thing to do>"` : "next: naima help"
   } catch {
     return "next: naima check" // it says what is wrong with the project
@@ -305,7 +307,17 @@ function createData(data: string, opts: CliOptions): { root: string; tracker: st
   writeRaw(data, { format: FORMAT, ...(Object.keys(formats).length ? { formats } : {}), source, commit: me.commit })
   const program = join(tracker, PROGRAM_DIR)
   ignoreProgram({ tracker, program })
-  return { root, tracker, program, said: `wrote ${parent}/: README.md, .gitignore, ${DATA_DIR}/${DATA_FILE} — locked to ${source} at ${short(me.commit)}` }
+  // A source on this machine's disk goes into the repository with the lock: say so, since it names a private path.
+  const local = !/^[a-z][a-z0-9+.-]*:\/\//i.test(source) && !/^[^/\\]+@[^/\\]+:/.test(source)
+  const warn = local
+    ? `\n${source} is a folder on this machine: it is committed in ${DATA_DIR}/${DATA_FILE} as the lock's source, and nobody else can fetch from it — clone Naima from its public address instead, unless this is a test`
+    : ""
+  return {
+    root,
+    tracker,
+    program,
+    said: `wrote ${parent}/: README.md, .gitignore, ${DATA_DIR}/${DATA_FILE} — locked to ${source} at ${short(me.commit)}${warn}`,
+  }
 }
 
 /**
@@ -1094,7 +1106,9 @@ function showOnePlugin(name: string, opts: CliOptions, raw: Record<string, unkno
 }
 
 function pluginCommand(args: string[], opts: CliOptions, place: Place, raw: Record<string, unknown>, io: IO): number {
-  const [sub, name, ...rest] = parse(args).positionals
+  // Taken as every write takes them: a value is text that goes into the repository, checked for private names.
+  const { reason, rest: unsigned } = allowPrivateOption(args)
+  const [sub, name, ...rest] = parse(revisedOption(unsigned).rest).positionals
   if (sub === "show") {
     if (rest.length) throw new Error(usage("plugin"))
     return name ? showOnePlugin(name, opts, raw, io) : showAllPlugins(opts, raw, io)
@@ -1119,6 +1133,7 @@ function pluginCommand(args: string[], opts: CliOptions, place: Place, raw: Reco
   const refusal = pluginRefusal(name, opts, raw)
   if (refusal) throw new Error(refusal)
   const assigns = pairs(rest)
+  guardPrivate(`the options of ${name}`, findPrivate(assigns.map(([, v]) => v).join("\n"), privateContext()), reason)
   const known = declaredOptions(name, opts)
   for (const [key, value] of assigns) {
     // Removing one is allowed: an option no plugin reads is what naima check notes, to be removed.
@@ -1282,6 +1297,9 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
       const target = runtimeOf(place.program)
       if (moved || (target && real(opts.programRoot) !== real(target))) return RELAUNCH
     }
+    // The commands the entry point runs itself answer --help as every other command does.
+    const own = cliCommands.find((c) => c.name === command)
+    if (own && (args.includes("--help") || args.includes("-h"))) return commandHelp(own as Command, io)
     if (command === "update") {
       if (!opts.launched) throw new Error(`naima update moves the program, so it runs through the launcher: deno run -A <the program>/naima.ts update`)
       return await update(args, opts, place, place.lock, place.raw, io)

@@ -18,9 +18,9 @@ git add naima-tracker && git commit -m "Claim export-drops"
   no claim, such as one made before Naima was installed, is left alone with a note
   ([the rule](rules.md#worktrees-and-branches-are-named-by-one-scheme-and-every-worktree-carries-a-claim)). Install the project's dependencies there before
   running anything.
-- `naima open` refuses a new worktree once as many worker worktrees are open as the coordination option `maxWorkers` allows (3 by default), because
-  every worker is paid for while it runs. The refusal lists the open ones; remove one that has landed with `naima prune --branch <branch> --write`, give
-  related items to one worker, or raise the bound in `naima.json`: `"plugins": { "coordination": { "options": { "maxWorkers": 4 } } }`.
+- `naima open` refuses a new worktree once as many worker worktrees are open as the coordination option `maxWorkers` allows (3 by default), because every worker
+  is paid for while it runs. The refusal lists the open ones; remove one that has landed with `naima prune --branch <branch> --write`, give related items to one
+  worker, or raise the bound in `naima.json`: `"plugins": { "coordination": { "options": { "maxWorkers": 4 } } }`.
 - The first `naima` command run in the new worktree fetches its own copy of Naima from the main checkout's copy, at the same locked commit.
 - The claim is a single file belonging to this branch, saying what it works on, and `naima claim` adds items to it. Others see it straight away, but nobody is
   locked out. Several branches may claim the same [item](glossary.md#item), and `claim` tells you who else holds it.
@@ -47,7 +47,7 @@ From inside the worktree:
 ```sh
 naima claim --preparing     # told when the trunk moves under the branch
 naima release export-drops
-naima pass "Fixed export of the alpha channel; proven by tests/export-keeps-alpha; layered PSD files not tried"
+naima pass "Fixed export of the alpha channel; proven by tests/export-keeps-alpha; layered PSD files not tried" --ack "<line>"
 naima check
 git add -A && git commit -m "Release the claim; session note"
 git merge --no-edit main
@@ -71,8 +71,8 @@ merge --no-ff ada/export-alpha -m "Land ada/export-alpha" -m "Closes: <item
 id>"`.
 
 Right after the marker, `naima land` makes one more commit on the trunk. It adds the marker's hash to the `commits` field of each item the marker closes,
-keeping the hashes already there, so `naima close` finds a commit reachable from the trunk with no hand step. The check that reads the trunk accepts that
-commit as part of the landing. A landing made by hand needs `naima set <item> commits=<marker>` instead.
+keeping the hashes already there, so `naima close` finds a commit reachable from the trunk with no hand step. The check that reads the trunk accepts that commit
+as part of the landing. A landing made by hand needs `naima set <item> commits=<marker>` instead.
 
 Before the trunk moves, `naima land` checks the proofs of what the branch changed. A property verified on a file the branch changed has to hold on a current
 run, and a test suite that reads one has to have a passing recorded run on the branch's files. Models in development are left out. If something isn't current,
@@ -116,12 +116,10 @@ naima prune            # stale claims, and why each is stale
 naima prune --write    # remove them; commit the deletions
 ```
 
-A claim is stale when its branch is gone, when its branch is merged into the
-trunk and the merge brought its file there, or when every item it claims is
+A claim is stale when its branch is gone, when its branch is merged into the trunk and the merge brought its file there, or when every item it claims is done or
 closed. `naima claims` lists stale claims apart, at the end, and `naima
-check` adds a note for each one. A claim that still names an item already
-closed, next to items that are still open, gets a note of its own with the
-`naima release` that drops the closed item.
+check` adds a note for each one. A claim that still names an item already closed, next
+to items that are still open, gets a note of its own with the `naima release` that drops the closed item.
 
 ## Work left behind
 
@@ -130,36 +128,23 @@ naima stale            # every branch, worktree and claim left behind, with the 
 naima stale --json     # the same, as data
 ```
 
-Workers stop without warning: a session ends, an agent crashes. `naima stale`
-lists what they leave behind. A branch counts as stale when its claim is
-stale, or when nothing has happened on it for `staleAfter` hours (24 unless
-the project sets another number in the coordination plugin's options).
-Something happening means a commit, a step posted with `naima claim --step`,
-a session note written on the branch, or a file changed in its worktree and
-not yet committed.
+Workers stop without warning: a session ends, an agent crashes. `naima stale` lists what they leave behind. A branch counts as stale when its claim is stale, or
+when nothing has happened on it for `staleAfter` hours (24 unless the project sets another number in the coordination plugin's options). Something happening
+means a commit, a step posted with `naima claim --step`, a session note written on the branch, or a file changed in its worktree and not yet committed.
 
-For each one it shows the worktree, the last commit, the files not committed,
-how many commits the trunk lacks and whether the branch is up to date with
-the trunk, and the items its claim holds with their status. Then it suggests
-what to do next, and the command for it:
+For each one it shows the worktree, the last commit, the files not committed, how many commits the trunk lacks and whether the branch is up to date with the
+trunk, and the items its claim holds with their status. Then it suggests what to do next, and the command for it:
 
-- **resume** when anything is not committed, or the branch is behind the
-  trunk with open items: hand the worktree to a new worker, who looks at
-  `git status` first and never throws away what is there;
-- **land** when the branch is ahead of the trunk, up to date with it and
-  holds open items: run its gates, then `naima land <branch>`;
-- **archive** when it has commits the trunk lacks but no open item claimed:
-  `naima prune --branch <branch> --archive --write` keeps them under an
+- **resume** when anything is not committed, or the branch is behind the trunk with open items: hand the worktree to a new worker, who looks at `git status`
+  first and never throws away what is there;
+- **land** when the branch is ahead of the trunk, up to date with it and holds open items: run its gates, then `naima land <branch>`;
+- **archive** when it has commits the trunk lacks but no open item claimed: `naima prune --branch <branch> --archive --write` keeps them under an
   `archive/<branch>` tag;
-- **drop** when the trunk already has everything, or the branch is gone:
-  `naima prune --branch <branch> --write`, then `naima prune --write` for the
-  claim.
+- **drop** when the trunk already has everything, or the branch is gone: `naima prune --branch <branch> --write`, then `naima prune --write` for the claim.
 
-`naima summary` has a "stale work" section with one line per entry, so the
-leftovers show up at the start of a session without asking.
+`naima summary` has a "stale work" section with one line per entry, so the leftovers show up at the start of a session without asking.
 
-Only release someone else's claim by hand when nothing is being worked on
-there and nothing on that branch is left unmerged.
+Only release someone else's claim by hand when nothing is being worked on there and nothing on that branch is left unmerged.
 
 ## The full procedure
 

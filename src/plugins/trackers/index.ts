@@ -5,7 +5,11 @@
 //   resolved  fixed, and proven by an item that `verifies` it and has passed.
 //   closed    resolved, and moved to the archive with its proof.
 
+import { existsSync, readdirSync } from "node:fs"
+import { join } from "node:path"
 import {
+  appliesTo,
+  ATTACHMENTS,
   bool,
   type Check,
   type Command,
@@ -236,6 +240,28 @@ const inspectionProvesNothing: Check = {
       })),
 }
 
+/** The files a test carries as its evidence: its attachments, the placeholder aside. */
+const evidenceFiles = (i: Item): string[] => {
+  const dir = join(i.dir, ATTACHMENTS)
+  return existsSync(dir) ? readdirSync(dir).filter((f) => f !== ".gitkeep") : []
+}
+
+const passedCarriesEvidence: Check = {
+  name: "passed-test-carries-evidence",
+  says:
+    "a passed test an agent performed by driving the running software (runBy agent-hands) carries what shows it passed, an attachment of what was run and what it printed; one with none is noted",
+  run: (ctx) =>
+    ctx.repo.items
+      .filter((i) => i.type === "tests" && proves(ctx, i) && fieldValue(i, RUN_BY) === "agent-hands" && !evidenceFiles(i).length)
+      .map((i): Finding => ({
+        level: "note",
+        message: `${label(i)} passed with nothing attached to show it: attach what was run and what it printed (naima attach ${
+          label(i)
+        } <file> --own), or record it through its suite`,
+        item: i,
+      })),
+}
+
 const UNTICKED = /^\s*[-*]\s*\[ \]/
 
 const untickedNamesPassed: Check = {
@@ -327,6 +353,11 @@ const close: Command = {
     setFieldValue(archived, CLOSED_ON, today(ctx))
     const moved = moveItem(ctx, archived, typeOrThrow(ctx, "closed"), { force: bool(p, "force") })
     ctx.out(`closed → ${label(moved)}`)
+    // A closed item can't be changed: a feature closed without saying whom it is for is never announced.
+    const facing = ctx.registry.fields.get("facing")
+    if (facing && appliesTo(facing, item.type) && item.meta["facing"] === undefined) {
+      ctx.out(`  it was closed without facing, so naima announce does not list it until you set it: naima set ${label(moved)} facing=user`)
+    }
     return 0
   },
 }
@@ -449,7 +480,8 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
         statuses: { closed: { category: "done", says: "fixed, proven, archived" } },
         initialStatus: "closed",
         creatable: false,
-        traits: [FIXABLE],
+        // archive: fields that describe what an item was (whom a feature is for, where it is documented) may apply here too.
+        traits: [FIXABLE, "archive"],
       },
     ],
     fields: [
@@ -464,7 +496,7 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
           agent: "settled by a command: a unit test, a grep, an API call",
           "agent-hands": "settled by an agent driving the running software",
           human: "needs a person: a judgement of how it looks, a physical act, a reserved decision",
-          build: "needs an artefact nobody here makes: a signed build, a second machine",
+          build: "needs an artifact nobody here makes: a signed build, a second machine",
         },
         appliesTo: ["tests", "bugs", "todos"],
       },
@@ -512,6 +544,7 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
       closedNamesCommits,
       regressionSawRed,
       inspectionProvesNothing,
+      passedCarriesEvidence,
       untickedNamesPassed,
       excusesItself(phrases),
     ],

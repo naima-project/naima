@@ -113,6 +113,8 @@ export const claudeCode: AgentAdapter = {
   name: "Claude Code",
   entryFile: "CLAUDE.md",
   footprint: ["CLAUDE.md", ".claude"],
+  runningIn: (env) => env["CLAUDECODE"] === "1",
+  env: ["CLAUDECODE"],
   sessionStart,
   turnEnd,
   greeting: (shown, context) => JSON.stringify({ systemMessage: shown, hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: context } }),

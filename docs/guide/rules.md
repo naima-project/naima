@@ -31,8 +31,8 @@ counterpart (`property-evidence` for `holds-only-by-verify` and `property-reopen
 ### The tracker is never exposed
 
 The tracker holds what a project does not publish, so nobody outside it may read it: it is not committed in a repository whose origin is public, and its own
-repository, when it has one, has no public remote. **Enforced by** every write through Naima's helpers, which is refused while the tracker is exposed, with
-the command that fixes it, and by the check `tracker-private`, which `naima update` files as a todo in a project where it newly fails
+repository, when it has one, has no public remote. **Enforced by** every write through Naima's helpers, which is refused while the tracker is exposed, with the
+command that fixes it, and by the check `tracker-private`, which `naima update` files as a todo in a project where it newly fails
 ([keep the tracker private](private-tracker.md#the-tracker-is-never-exposed)).
 
 ### Run `naima check` before every commit
@@ -248,11 +248,11 @@ repository, so the names it holds are never committed. What the CLI doesn't writ
 ### Free text and files are signed against the no-leaks checklist
 
 Before an agent writes free text or a file into the tracker (a title, a description, a note, a free-text field, a session note, an event or an attachment), it
-reads the text against the [no-leaks checklist](../agents/NOLEAKS.md) that the program ships and fixes what the checklist rules out. The owner is paraphrased and
-never quoted. Nothing goes in about the owner's other private projects, unpublished papers or venues, business, money or clients, or about any person other than
-the owner. Machine names, addresses, home paths and user names are replaced by placeholders, and every log or file is read line by line, its metadata included,
-before it is attached. When in doubt, the agent leaves it out and asks the owner. Only the agent talking to the owner writes text taken from what the owner
-said. A worker writes its own observations, because it never heard the owner and can't judge what in a relayed message is private.
+reads the text against the [no-leaks checklist](../agents/NOLEAKS.md) that the program ships and fixes what the checklist rules out. The owner is paraphrased
+and never quoted. Nothing goes in about the owner's other private projects, unpublished papers or venues, business, money or clients, or about any person other
+than the owner. Machine names, addresses, home paths and user names are replaced by placeholders, and every log or file is read line by line, its metadata
+included, before it is attached. When in doubt, the agent leaves it out and asks the owner. Only the agent talking to the owner writes text taken from what the
+owner said. A worker writes its own observations, because it never heard the owner and can't judge what in a relayed message is private.
 
 Why: the private-infrastructure check catches the shapes a machine can recognise, but a client's name, an unpublished venue or a quoted sentence of the owner's
 has no shape. Signing makes the agent stop and check before every write, and the recorded hash shows afterwards which version of the checklist each write was
@@ -261,9 +261,9 @@ checked against. It does not make a write perfect, and the private-infrastructur
 **Enforced by** the write hook `signed-writes` of the `privacy` plugin, for `naima new`, `describe`, `note`, `set` of a free-text field (the title, or a text
 field with no list of values), `pass`, `event` and `attach`. Each of them refuses the write unless `--revised` names the checklist, as in
 `naima note export-drops "..." --revised naima-tracker/naima/docs/agents/NOLEAKS.md`, and the file it names is byte for byte the one the running program ships.
-The refusal names the checklist's path. A signed write records the checklist's hash, who signed (git's `user.name`) and the day: in the item's field
-`revised`, in the front matter of a session note or an event, and in an attachment's record. Statuses, enums, dates, links, claims, the fields Naima fills and
-the records it generates need no signature. A project can turn the requirement off with the plugin's option `signed: false`
+The refusal names the checklist's path. A signed write records the checklist's hash, who signed (git's `user.name`) and the day: in the item's field `revised`,
+in the front matter of a session note or an event, and in an attachment's record. Statuses, enums, dates, links, claims, the fields Naima fills and the records
+it generates need no signature. A project can turn the requirement off with the plugin's option `signed: false`
 ([configure the project](configure-the-project.md)). Reading the text against the checklist, and who writes the owner's words, are **convention**.
 
 ### Git is the agent's job, done safely
@@ -462,11 +462,11 @@ default ([closing a worktree](../agents/closing-a-worktree.md#7-hand-it-over)).
 
 ### Public commits name nothing of a private tracker
 
-When the tracker is kept in a repository of its own beside a public code repository ([sibling mode](private-tracker.md#sibling-mode)), nothing committed
-to the code names tracker content: no item id, title or slug, no tracker path, no claim or session note. A code commit names the tracker only by the opaque
-hash in its `Tracker:` trailer. **Enforced by** Naima for what it writes itself: the code's landing marker carries only `Land <branch>` and `Tracker:`, and
-`naima open` names branches `<who>/<random>` rather than after the item. **Convention** for commit messages written by people and agents, branch names given
-with `--name`, and the reason given to `land --no-change-note`.
+When the tracker is kept in a repository of its own beside a public code repository ([sibling mode](private-tracker.md#sibling-mode)), nothing committed to the
+code names tracker content: no item id, title or slug, no tracker path, no claim or session note. A code commit names the tracker only by the opaque hash in its
+`Tracker:` trailer. **Enforced by** Naima for what it writes itself: the code's landing marker carries only `Land <branch>` and `Tracker:`, and `naima open`
+names branches `<who>/<random>` rather than after the item. **Convention** for commit messages written by people and agents, branch names given with `--name`,
+and the reason given to `land --no-change-note`.
 
 Why: the tracker is private because what it holds is; a title or a path copied into a public commit message is published for good, since history on a shared
 trunk is never rewritten.

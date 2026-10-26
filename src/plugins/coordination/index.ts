@@ -8,7 +8,7 @@
 // by the tool. The collections are recombined at read time from every branch.
 
 import { randomBytes, randomUUID } from "node:crypto"
-import { mkdirSync, readFileSync, unlinkSync } from "node:fs"
+import { mkdirSync, unlinkSync } from "node:fs"
 import { dirname, join } from "node:path"
 import {
   allRefNames,
@@ -41,6 +41,7 @@ import {
   posixRelative,
   privateContext,
   readAcrossBranches,
+  readText,
   rendered,
   short,
   str,
@@ -435,7 +436,7 @@ const closed = (ctx: Context, id: string): boolean => {
 /**
  * Why a claim no longer stands for work in progress, or undefined while it
  * does: its branch is gone; or merged into the trunk, which carries the claim
- * file the merge brought; or every item it claims is closed. A stale claim is
+ * file the merge brought; or every item it claims is done or closed. A stale claim is
  * released by `naima prune --write`, run where its file is.
  */
 export function staleReason(
@@ -449,7 +450,7 @@ export function staleReason(
     main && c.branch !== main && isAncestor(ctx.trackerGit, `refs/heads/${c.branch}`, main) &&
     filesAt(ctx.trackerGit, main, inGit(ctx, CLAIMS), ".json").some((f) => f.name === c.file)
   ) return `its branch is merged into ${main}`
-  if (c.items.length && c.items.every((e) => closed(ctx, e.id))) return "every item it claims is closed"
+  if (c.items.length && c.items.every((e) => closed(ctx, e.id))) return "every item it claims is done or closed"
   return undefined
 }
 
@@ -663,10 +664,10 @@ const pass: Command = {
   name: "pass",
   says: "write this session's note (one new file), or list the newest",
   enforces:
-    "a session note is one new file: earlier ones are never rewritten; --ack is refused unless it carries every phrase the project's active rules ask an agent to acknowledge",
+    "a session note is one new file: earlier ones are never rewritten; a note is refused without --ack when the project's active rules ask for an acknowledgement, and --ack is refused unless it carries every phrase they ask for",
   usage: 'pass "<what changed, what is proven, what is left>" [--ack "<line>"] | pass --file <f> [--ack "<line>"] | pass --list [n] [--json]',
   options: [
-    { name: "--file", says: "read the note from a file instead of the arguments" },
+    { name: "--file", says: "read the note from a file instead of the arguments; - reads standard input" },
     {
       name: "--ack",
       says:
@@ -696,11 +697,20 @@ const pass: Command = {
       return 0
     }
     const file = str(p, "file")
-    const text = (file ? readFileSync(file, "utf8") : p.positionals.join(" ")).trim()
+    const text = (file ? readText(file) : p.positionals.join(" ")).trim()
     if (!text) throw usageError(this)
     const ack = str(p, "ack")
+    const asked = expectedAcks(ctx)
+    // Refused now rather than flagged by naima check later: a note written without it cannot be rewritten.
+    if (ack === undefined && asked.length) {
+      throw new Error(
+        `pass needs --ack "<line>": the project's rules ask a session note to acknowledge ${
+          asked.join(" · ")
+        } — naima rules --audience agents prints the line to give back`,
+      )
+    }
     if (ack !== undefined) {
-      const missing = expectedAcks(ctx).filter((phrase) => !ack.includes(phrase))
+      const missing = asked.filter((phrase) => !ack.includes(phrase))
       if (missing.length) {
         throw new Error(
           `pass --ack is missing: ${missing.join(" · ")} — naima rules --audience agents prints the line to give back`,
@@ -1001,15 +1011,17 @@ const sessionNoteAck: Check = {
   says:
     `a session note dated after ${ACK_REQUIRED_FROM} carries the acknowledgement line it was written with (naima pass --ack), and its body still begins with it — a rule change afterwards never invalidates a note already written, since what was asked of it then is what it recorded`,
   run(ctx) {
+    const asked = expectedAcks(ctx).length > 0
     return readPasses(ctx)
       .filter((p) => p.date > ACK_REQUIRED_FROM)
       .flatMap((p): Finding[] => {
+        if (!p.ack && !asked) return [] // nothing to acknowledge in a project whose rules ask for none
         if (!p.ack) {
           return [{
             level: "problem",
             subject: `${PASSES}/${p.file}`,
             message:
-              `${PASSES}/${p.file}: a session note dated ${p.date} carries no acknowledgement line — naima pass --ack "<line>", or, for a note already written, naima waive session-note-ack ${PASSES}/${p.file} --reason "<why>"`,
+              `${PASSES}/${p.file}: a session note dated ${p.date} carries no acknowledgement line — naima pass --ack "<line>", or, for a note already written, naima waive session-note-ack ${PASSES}/${p.file} --reason "<why>" --as <who>`,
           }]
         }
         if (!p.body.startsWith(p.ack)) {
@@ -1079,7 +1091,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       "Several branches may claim one item: `claim` says who else holds it rather than refusing. " +
       "There are no locks: a claim says who works on what and never excludes anyone. What one session at a time must touch — the trunk, the published site, the releases — is touched by one writer, the coordinator; workers only prepare on their own branches, and the owner decides what lands and when, when it matters. " +
       "Work happens by one scheme, checked: the worktree `<worktrees>/<what>` stands on the branch `<who>/<what>` and carries a claim; `open` makes all three in one step. " +
-      "A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. A claim is stale when its branch is gone, or merged into the trunk that carries its file, or every item it claims is closed: `claims` lists it apart, `stale-claims` notes it, and `prune --write` releases it; a claim that still names a closed item among open ones is noted by `claims-on-closed-items`. " +
+      "A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. A claim is stale when its branch is gone, or merged into the trunk that carries its file, or every item it claims is done or closed: `claims` lists it apart, `stale-claims` notes it, and `prune --write` releases it; a claim that still names a closed item among open ones is noted by `claims-on-closed-items`. " +
       "Work left behind is listed by `stale` and in the summary: every branch, worktree and claim whose claim is stale, or with no sign of life (commit, step, session note, file not committed) for `staleAfter` hours, with its facts — last commit, files not committed, commits ahead of the trunk, whether it is up to date with it, items held and their status — and the next step: resume, land, archive or drop. " +
       "Landings are semi-linear: a branch the trunk is an ancestor of enters it as one marker commit, a merge whose tree is the branch tip's and whose message names the items it closes in `Closes:` trailers; `land` makes it from the main checkout, the shortcut for `git merge --no-ff`, and moves the trunk only from the commit it read. " +
       "From the first marker on the trunk's first-parent line every first-parent commit is a marker, or `landings-are-markers` notes it, one note per commit, which `naima waive landings-are-markers <commit>` accepts with a reason; before it nothing is asked, so a history of fast-forwards keeps working. " +
@@ -1088,7 +1100,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       "`naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. " +
       "What has no date is counted at the foot, never placed at a guess. Only what nothing derives — a decision taken elsewhere, a build handed out, a policy, an outside fact — is a record, one file per event, `events/<date>-<uuid>.md`, written by `naima event`. " +
       '`naima diary` tells the records of kind `diary`, every decision with its reason, every artifact delivered (on its `deliveredOn`, when an `artifacts` type is loaded) and every session note, day by day. The plugin ships the rule that agents keep the diary on their own, one entry per decision taken with the owner or notable turn and never a log of routine work, acknowledged as "Diary mode on"; the check `diary-entries` notes, never failing, a day with more diary entries than the option `diaryPerDay` allows, and an entry that only restates a session note of its day or a decision taken that day. ' +
-      `\`pass --ack "<line>"\` writes the acknowledgement line whichever plugin declares a rule's \`ack\` field asks an agent to give back — refused if a phrase is missing from it — and records it in the note's front matter; a note dated after ${ACK_REQUIRED_FROM} missing it, or whose body no longer starts with it, is a problem (\`session-note-ack\`), tolerating one written before — on the day it shipped, or earlier, grandfathered like a closed item on the day \`commits\` shipped — since what it recorded is what the rules asked then. A note is never edited after the fact: one written without the line is accepted with a recorded waiver, \`naima waive session-note-ack passes/<file> --reason "<why>"\`.`,
+      `\`pass --ack "<line>"\` writes the acknowledgement line whichever plugin declares a rule's \`ack\` field asks an agent to give back — refused if a phrase is missing from it — and records it in the note's front matter; a note dated after ${ACK_REQUIRED_FROM} missing it, or whose body no longer starts with it, is a problem (\`session-note-ack\`), tolerating one written before — on the day it shipped, or earlier, grandfathered like a closed item on the day \`commits\` shipped — since what it recorded is what the rules asked then. A note is never edited after the fact: one written without the line is accepted with a recorded waiver, \`naima waive session-note-ack passes/<file> --reason "<why>" --as <who>\`.`,
     options: [
       { name: "who", says: "who works, when `naima open` is given no `--as`: the branch's first segment" },
       {

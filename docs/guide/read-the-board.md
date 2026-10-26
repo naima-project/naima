@@ -1,10 +1,8 @@
 # Read the board, the queue and the gates
 
-Every view on this page is [derived](glossary.md#derived), which means it is
-worked out from the [items](glossary.md#item) each time you ask and never
-stored, so it is always up to date. None of these commands changes anything,
-so they can be run at any time. The agents run them for you, but you can run
-them yourself whenever you like.
+Every view on this page is [derived](glossary.md#derived), which means it is worked out from the [items](glossary.md#item) each time you ask and never stored,
+so it is always up to date. None of these commands changes anything, so they can be run at any time. The agents run them for you, but you can run them yourself
+whenever you like.
 
 ## Where the project stands
 
@@ -16,11 +14,9 @@ naima board bugs       # one type, grouped by section
 naima show <item>      # one item: fields, links both ways, attachments, page
 ```
 
-`naima summary` has a block for each plugin. Together they show item counts,
-bugs, what is next, the gates, who is working on what
-([claims](glossary.md#claim-file)) and where the last sessions left off
-([session notes](glossary.md#session-note)). With `--markdown` it prints the
-same thing as markdown, so you can paste it into a report.
+`naima summary` has a block for each plugin. Together they show item counts, bugs, what is next, the gates, who is working on what
+([claims](glossary.md#claim-file)) and where the last sessions left off ([session notes](glossary.md#session-note)). With `--markdown` it prints the same thing
+as markdown, so you can paste it into a report.
 
 ## How many bugs are left
 
@@ -32,10 +28,8 @@ bugs: 1 open
   resolved, not closed  0
 ```
 
-These are three separate numbers, and they are never added together. The
-answer to "how many are left" is the first one, the unfixed bugs. A fixed bug
-that nothing proves yet is counted in a different number, and so is one that
-is proven and is only waiting for `naima close`
+These are three separate numbers, and they are never added together. The answer to "how many are left" is the first one, the unfixed bugs. A fixed bug that
+nothing proves yet is counted in a different number, and so is one that is proven and is only waiting for `naima close`
 ([three states](rules.md#fixed-resolved-and-closed-are-three-states)).
 
 ## Boards
@@ -45,22 +39,26 @@ naima board bugs           # open items, by section
 naima board bugs --all     # done ones too
 ```
 
-A [section](glossary.md#section) is a heading you give to items
-(`naima new bugs "…" --section Export`), so that a board reads like a
-plan.
+A [section](glossary.md#section) is a heading you give to items (`naima new bugs "…" --section Export`), so that a board reads like a plan.
 
 ## Gates
 
-A [gate](glossary.md#gate) is what a release or a merge waits on. It is
-declared once in the configuration, and then items are put on it.
+A [gate](glossary.md#gate) is what a release or a merge waits on. It is declared once in the configuration, and then items are put on it.
 
-1. Declare it in `naima-tracker/naima-data/naima.json`
-   ([configure the project](configure-the-project.md#add-a-release-gate)).
+1. Declare it in `naima-tracker/naima-data/naima.json` ([configure the project](configure-the-project.md#add-a-release-gate)).
 
    ```json
-   { "plugins": { "gates": { "options": { "gates": {
-     "v1": { "title": "First release", "says": "what the first release waits on", "holdsOn": "code" }
-   } } } } }
+   {
+     "plugins": {
+       "gates": {
+         "options": {
+           "gates": {
+             "v1": { "title": "First release", "says": "what the first release waits on", "holdsOn": "code" }
+           }
+         }
+       }
+     }
+   }
    ```
 
 2. Put items on it.
@@ -80,40 +78,28 @@ declared once in the configuration, and then items are put on it.
 
 `holdsOn` decides what blocks the gate.
 
-- With `"code"`, which is the default, the gate waits for code. An item with
-  no fix blocks it. A fixed item that only owes its
-  [proof](glossary.md#proof), and the proving gestures themselves, are
-  listed as **owed** (`·`) but don't block it.
+- With `"code"`, which is the default, the gate waits for code. An item with no fix blocks it. A fixed item that only owes its [proof](glossary.md#proof), and
+  the proving gestures themselves, are listed as **owed** (`·`) but don't block it.
 - With `"proof"`, every open item on the gate blocks it.
 
-`naima gates v1 --check` exits with 1 while the gate is blocked, so a
-release script or CI can wait on it.
+`naima gates v1 --check` exits with 1 while the gate is blocked, so a release script or CI can wait on it.
 
 ### A release gate waits for the full suite
 
-A gate declared with `"fullSuite": true`, or with
-`naima gate new v1 "First release" --full-suite`, is a release gate. Besides
-its own items, it waits for every gate that is part of the project's full
-suite, which `naima gates` marks `[in the full suite]`:
+A gate declared with `"fullSuite": true`, or with `naima gate new v1 "First release" --full-suite`, is a release gate. Besides its own items, it waits for every
+gate that is part of the project's full suite, which `naima gates` marks `[in the full suite]`:
 
-- `properties`: every property holds on a run of the project as it is now.
-  A property whose model, formula file or options changed since its run
-  blocks the gate, and so does one that is open, violated or in error. The
-  properties of a [model in development](prove-and-close.md#a-model-in-development)
-  are listed as owed instead.
-- `suites`, once the project declares test suites: every suite passed on the
-  current commit, by a recorded run
-  ([metrics and budgets](metrics-and-budgets.md)).
+- `properties`: every property holds on a run of the project as it is now. A property whose model, formula file or options changed since its run blocks the
+  gate, and so does one that is open, violated or in error. The properties of a [model in development](prove-and-close.md#a-model-in-development) are listed as
+  owed instead.
+- `suites`, once the project declares test suites: every suite passed on the current commit, by a recorded run ([metrics and budgets](metrics-and-budgets.md)).
 
-The gate doesn't run anything. Before a release, the full suite is run with
-`naima verify --all` and `naima metrics run --record`. Both reuse every
-result whose inputs haven't changed, so only what changed since the last run
-costs time. Then the gate says whether everything is current.
+The gate doesn't run anything. Before a release, the full suite is run with `naima verify --all` and `naima metrics run --record`. Both reuse every result whose
+inputs haven't changed, so only what changed since the last run costs time. Then the gate says whether everything is current.
 
 ## The queue
 
-The [queue](glossary.md#queue) is the list of open items on the gates,
-split up by who has to carry out their proof ([run by](glossary.md#run-by)).
+The [queue](glossary.md#queue) is the list of open items on the gates, split up by who has to carry out their proof ([run by](glossary.md#run-by)).
 
 ```console
 $ naima queue v1 --human
@@ -123,17 +109,13 @@ v1: 2 open — agent 0, human 2, build 0, unclassified 0
   tests/looks-right-phone  Looks right on a phone  (judgement)
 ```
 
-`--human` lists what needs a person, with the reason for each item, which
-makes it the list to hand to the [owner](glossary.md#owner). "Unclassified"
-counts the items whose `runBy` nobody has set yet. Without a gate name,
-`naima queue` covers every gate.
+`--human` lists what needs a person, with the reason for each item, which makes it the list to hand to the [owner](glossary.md#owner). "Unclassified" counts the
+items whose `runBy` nobody has set yet. Without a gate name, `naima queue` covers every gate.
 
 ## A role's queue
 
-Each job in the team of agents is a [role](glossary.md#role), which says
-what the job owns and what it refuses to do. `naima roles` lists the roles,
-each with the number of open items on its queue, and
-`naima queue --role <role>` lists one role's queue, most urgent first.
+Each job in the team of agents is a [role](glossary.md#role), which says what the job owns and what it refuses to do. `naima roles` lists the roles, each with
+the number of open items on its queue, and `naima queue --role <role>` lists one role's queue, most urgent first.
 
 ```console
 $ naima queue --role tester
@@ -142,29 +124,22 @@ tester — Tester: 1 open
   tests/looks-right-phone  Looks right on a phone
 ```
 
-An item goes on a role's queue according to its `role` field, if that is
-set (`naima set <item> role=documentarian`). Otherwise it goes by the item's
-[kind](glossary.md#kind), where `code` belongs to the implementer, `writing`
-to the documentarian and `decision` to you, or by its type, so every test
-item belongs to the tester. With a gate name, `naima queue v1 --role
-implementer` keeps only what is on that gate. A project can add its own roles,
-or replace one, under `plugins.roles.options.roles`
-([the reference](../reference/reference.md)).
+An item goes on a role's queue according to its `role` field, if that is set (`naima set <item> role=documentarian`). Otherwise it goes by the item's
+[kind](glossary.md#kind), where `code` belongs to the implementer, `writing` to the documentarian and `decision` to you, or by its type, so every test item
+belongs to the tester. With a gate name, `naima queue v1 --role
+implementer` keeps only what is on that gate. A project can add its own roles, or replace one,
+under `plugins.roles.options.roles` ([the reference](../reference/reference.md)).
 
 ## Other views
 
-`naima view` lists the named views that the loaded plugins offer. Examples
-are `next`, which shows open items with the most urgent first, and
-`timeline`, which shows when each gate and epic opened and finished, along
-with each release and session, all derived from the items and git.
-`naima view next --json` gives the data behind a view.
+`naima view` lists the named views that the loaded plugins offer. Examples are `next`, which shows open items with the most urgent first, and `timeline`, which
+shows when each gate and epic opened and finished, along with each release and session, all derived from the items and git. `naima view next --json` gives the
+data behind a view.
 
 ## How long a `now` item has waited
 
-`naima view next` has an age column, which gives the number of whole days
-since an item's priority was last confirmed (from `triagedOn`, or from
-`created` for an item that was never triaged). Like everything else here it
-is worked out when you read it, not stored. A `now` item that no branch's
+`naima view next` has an age column, which gives the number of whole days since an item's priority was last confirmed (from `triagedOn`, or from `created` for
+an item that was never triaged). Like everything else here it is worked out when you read it, not stored. A `now` item that no branch's
 [claim](glossary.md#claim-file) names is marked `unclaimed`.
 
 ```console
@@ -172,8 +147,5 @@ $ naima view next
   high    now     S       bugs/second-bug  Second bug  (6d unclaimed)
 ```
 
-`naima check` includes the check `unclaimed-now-item-aging`, which adds a
-note for every `now` item that has been open longer than
-`plugins.triage.options.maxNowAgeDays` (3 days by default) without anyone
-claiming it. That way such items show up without anyone having to look at
-the queue.
+`naima check` includes the check `unclaimed-now-item-aging`, which adds a note for every `now` item that has been open longer than
+`plugins.triage.options.maxNowAgeDays` (3 days by default) without anyone claiming it. That way such items show up without anyone having to look at the queue.

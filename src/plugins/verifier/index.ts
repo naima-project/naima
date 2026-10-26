@@ -433,6 +433,10 @@ const verify: Command = {
   async run(args, ctx) {
     const p = parse(args, { all: { type: "boolean" }, force: { type: "string" } })
     const items = bool(p, "all") ? properties(ctx) : p.positionals.map((r) => ctx.repo.resolve(r))
+    if (!items.length && bool(p, "all")) {
+      ctx.out("no properties to verify: nothing ran")
+      return 0
+    }
     if (!items.length) throw usageError(this)
     const given = str(p, "force")
     const force = given === undefined ? undefined : given.trim()
@@ -819,7 +823,7 @@ const failedFirst: Check = {
         item,
         subject,
         message: `${subject} holds and proves ${changes.map(label).join(", ")}, and ${what} — run naima verify on that model and keep its counterexample, ` +
-          `or waive it with the reason: naima waive property-failed-first ${subject} --reason "<why>"`,
+          `or waive it with the reason: naima waive property-failed-first ${subject} --reason "<why>" --as <who>`,
       })
     }
     return out
@@ -851,7 +855,7 @@ const witnessed: Check = {
         subject,
         message: `${subject} proves ${
           changes.map(label).join(", ")
-        }, and ${what}, or waive it with the reason: naima waive property-witnessed ${subject} --reason "<why>"`,
+        }, and ${what}, or waive it with the reason: naima waive property-witnessed ${subject} --reason "<why>" --as <who>`,
       })
     }
     for (const item of ctx.repo.items) {
@@ -1029,7 +1033,7 @@ export default function verifier(): Plugin {
         id: MODELS,
         dir: "models",
         title: "Models",
-        says: "a model, or another artefact properties are verified on, named by its path in model: whether it is in development",
+        says: "a model, or another artifact properties are verified on, named by its path in model: whether it is in development",
         statuses: {
           [DEVELOPMENT]: {
             category: "open",
