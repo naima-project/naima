@@ -110,6 +110,13 @@
   .who span:first-child { border-top: 1px dashed var(--accent); padding-top: 8px; color: var(--accent); }
   .git .note { margin: 28px auto 0; max-width: 720px; text-align: center; color: var(--text); font-size: 16px; text-wrap: pretty; }
 
+  /* long work */
+  .runs { padding-block: 0 88px; }
+  .runs .two { display: grid; grid-template-columns: 1fr 1.1fr; gap: 48px; align-items: center; }
+  .runs h2 { margin-bottom: 14px; }
+  .runs p { margin: 0 0 14px; color: var(--text); font-size: 16.5px; max-width: 480px; text-wrap: pretty; }
+  .runs .term pre { font-size: 13px; }
+
   /* formal methods */
   .formal { padding-block: 10px 84px; }
   .formal .two { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
@@ -157,6 +164,7 @@
     .flow li:nth-child(3)::after { content: none; }
     .who { display: none; }
     .formal .two { grid-template-columns: 1fr; }
+    .runs .two { grid-template-columns: 1fr; gap: 32px; }
     .trust .wrap { grid-template-columns: 1fr 1fr; }
     .bar nav a.hide { display: none; }
   }
@@ -188,6 +196,9 @@
     .card { padding: 22px; text-align: center; }
     .card .ico { margin: 0 auto 14px; }
     .formal { padding-block: 0 72px; }
+    .runs { padding-block: 0 72px; }
+    .runs h2, .runs p { text-align: center; margin-inline: auto; }
+    .runs .term pre { font-size: 11px; white-space: pre; overflow-x: auto; }
     .formal .two { gap: 36px; }
     .formal ul { gap: 22px; text-align: center; }
     .diagram { padding: 16px; }
@@ -276,6 +287,27 @@ release-1.0    Calculator 1.0        <span class="ok">HOLDS</span>
       <div class="card"><div class="ico">⏱</div><h3>Long jobs under control</h3><p>A long build or analysis runs with a time budget and reports its progress, so a stuck job never looks like work.</p></div>
       <div class="card"><div class="ico">⊘</div><h3>Nothing private leaks</h3><p>Naima refuses to write a machine name, a home path or a user name into the project, and keeps secrets out of it.</p></div>
       <div class="card"><div class="ico">⌂</div><h3>Yours, in your repo</h3><p>Plain files in one folder of your project, versioned with git. In a public project that folder is a private repository of its own, ignored by your code’s. Any agent that can run a command can use it.</p></div>
+    </div>
+  </section>
+
+  <section class="wrap runs" aria-labelledby="runs">
+    <div class="two">
+      <div>
+        <h2 id="runs">Long jobs you never have to babysit</h2>
+        <p>A test suite, a build or an analysis that takes an hour runs detached, with a name and a time budget. Past its budget it stops itself instead of hanging.</p>
+        <p>It reports how far it has got, so a stuck job is never mistaken for work in progress, and waiting means reading its record, not a loop that checks every few seconds.</p>
+      </div>
+      <div class="term" aria-label="A long run started, watched and waited for">
+        <div class="dots"><i></i><i></i><i></i></div>
+        <pre><span class="p">$</span> <span class="c">naima run tests --budget-time 40m -- deno task verify</span>
+
+<span class="p">$</span> <span class="c">naima run list</span>
+tests     running    3m 10s of 40m   4/7 stages · ETA 4m
+metrics   succeeded  16m 15s of 20m  16/16 metrics
+
+<span class="p">$</span> <span class="c">naima wait tests --timeout 10m</span>
+run tests: <span class="ok">succeeded</span> <span class="dim">— exit 0</span></pre>
+      </div>
     </div>
   </section>
 
