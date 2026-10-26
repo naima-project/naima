@@ -68,6 +68,9 @@ export const banner = (version: string, commit: string): string => `${INTRODUCTI
 export const OFFERS =
   "On request: what Naima is and its documentation (naima guide); whether a newer Naima exists (naima update --check); an update (naima update), only after the owner's yes."
 
+/** What an agent does before any work, told at every session start. */
+export const RULES_FIRST = "Before any work, read this project's rules with naima rules --audience agents and give back their acknowledgements."
+
 /** The plugins table, as naima.json holds it. */
 type Table = Record<string, { options?: unknown; source?: unknown; replacedBy?: unknown } | undefined>
 

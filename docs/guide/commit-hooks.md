@@ -80,4 +80,25 @@ costs one `git diff` and nothing more. When the hook does start Naima, it runs `
 - After changing the rules, run `naima hooks install` again. The hook-current check fails as long as the committed hook watches different paths from the ones
   the rules name.
 
+## The trunk guard
+
+The same folder holds a second hook, `reference-transaction`, which `naima init` and `naima update` write without being asked. It refuses a commit, merge or
+fast-forward of the trunk made by hand, so that work goes through an item, its worktree and `naima land`
+([the rule](rules.md#every-change-goes-through-an-item-and-lands)). For any ref other than the trunk it exits at once, and for the trunk it runs
+`naima guard-check`.
+
+`core.hooksPath` is git's setting for one clone, not a file anyone commits, so someone who clones the project has the hooks but not the setting. Their first
+launched run of Naima (`naima hello` or any other command) points `core.hooksPath` at the folder and says so in one line. Pointing it there stops none of
+the clone's own hooks: for every hook name git knows and Naima does not write, the folder holds a small stub that runs the hook of that name in `.git/hooks`
+when there is one, with the same arguments and input, and returns its exit code. After `naima hooks uninstall` it
+stays unset in that clone.
+
+```sh
+naima guard        # on or off, and whether it runs in this clone
+naima guard off    # turn it off for the project: recorded in naima.json, the hook removed
+naima guard on     # turn it back on
+```
+
+Commit `naima.json` and the hook after turning the guard on or off; that commit goes straight on the trunk, since the guard lets it through.
+
 Every option is in the [reference](../reference/reference.md#commit-hooks).

@@ -173,6 +173,11 @@ export interface Command {
    * what it reports instead (rule long-work/long-work-reports-progress, checked by `progress-declared`).
    */
   long?: { reports: string } | { cannot: string; instead: string }
+  /**
+   * True for a command a git hook runs, which only reads: no tick beside it and no question to GitHub about the
+   * tracker's privacy, so a commit waits for nothing else; every write it tries is refused.
+   */
+  hook?: boolean
   /** True for a command still provisional: it runs when called, but `naima --help` and the reference do not list it. */
   hidden?: boolean
   run(args: string[], ctx: Context): number | Promise<number>
@@ -316,6 +321,16 @@ export interface TextWrite {
   record: Record<string, unknown>
 }
 
+/**
+ * What a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init`
+ * and `naima update` after their own work. `install` returns what it did, a line each, said to whoever ran it.
+ */
+export interface Setup {
+  name: string
+  says: string
+  install(ctx: Context): string[] | Promise<string[]>
+}
+
 /** A hook on every item write the core's helpers make, run in plugin load order. */
 export interface WriteHook {
   name: string
@@ -357,6 +372,8 @@ export interface Plugin {
   jobs?: TickJob[]
   /** Hooks on every item write, in load order. */
   hooks?: WriteHook[]
+  /** What it puts in place in a clone where missing, run by `naima init` and `naima update`. */
+  setup?: Setup[]
   /** Additive changes to other plugins' types and fields. */
   extends?: Extension[]
   /** Its own data migrations, in order from its format 1: its format is 1 + their number (docs/reference/format.md#migrations). */

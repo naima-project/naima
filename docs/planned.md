@@ -54,14 +54,6 @@ checklist on its own, without being prompted, at a project's first commit.
 [skill](agents/skill.md). **Today:** the installer's instructions tell the agent to add that line
 ([working with AI agents](guide/working-with-agents.md#get-an-agent-going)).
 
-## Blocking a landing that is not a marker
-
-This would be an opt-in git hook (`reference-transaction`) that refuses any move of the trunk not made by `naima land`, for a project that wants such a landing
-blocked rather than just noted. It would never be the default, so landing by hand or with a hosting platform's merge button stays allowed. **Today:** the check
-`landings-are-markers` looks at the trunk's first-parent line, starting from the first marker on it, and notes every commit there that is not a
-[marker](guide/glossary.md#marker), except one made on the trunk that only adds to the tracker data
-([the rule](guide/rules.md#every-landing-is-a-marker-naming-the-items-it-closes)).
-
 ## Knowledge entries
 
 - **Provenance as Datalog**: the entries, their basis, status and links exported as Datalog facts, with recursive rules that answer which established entries

@@ -51,6 +51,8 @@ export const trackerReadme = (parent: string, source: string): string =>
 
     git clone ${source} ${parent}/${PROGRAM_DIR}
     deno run -A ${parent}/${PROGRAM_DIR}/naima.ts check
+
+New to this project, as a person or an agent? Run those two commands in your clone, or ask your agent to run \`naima hello\`: that first run also points git at the project's hooks, which git keeps per clone. The trunk is guarded: a commit, merge or fast-forward of it made by hand is refused, and work lands through \`naima open\` and \`naima land\`. A project that prefers committing by hand turns the guard off with \`naima guard off\`.
 `
 
 /**

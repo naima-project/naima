@@ -24,9 +24,11 @@ import {
   type Context,
   CONTRACT,
   DATA_FILE,
+  DELEGATE_MARK,
   type Finding,
   gitPath,
   gitReason,
+  HOOKS_OFF_KEY,
   installTrailerHooks,
   isGitRepo,
   type Item,
@@ -351,6 +353,8 @@ export function preCommit(ctx: Context, opts: HooksOptions): string {
 }
 
 const hookFile = (ctx: Context): string => join(ctx.trackerRoot, HOOKS_DIR, PRE_COMMIT)
+/** Whether a hook file is there and not the stub that only runs the clone's own hook: what install wrote, or a hand edit of it. */
+const ours = (file: string): boolean => existsSync(file) && !readFileSync(file, "utf8").includes(DELEGATE_MARK)
 const hooksPath = (ctx: Context): string => fromRoot(ctx, join(ctx.trackerRoot, HOOKS_DIR))
 const currentHooksPath = (ctx: Context): string | null => {
   const r = runGit(ctx.root, ["config", "--get", "core.hooksPath"])
@@ -371,6 +375,7 @@ function install(ctx: Context, opts: HooksOptions, force: boolean): number {
     const r = runGit(ctx.root, ["config", "core.hooksPath", mine])
     if (!r.ok) throw new Error(`git config core.hooksPath: ${gitReason(r)}`)
   }
+  runGit(ctx.root, ["config", "--unset", HOOKS_OFF_KEY])
   ctx.out(`wrote ${fromRoot(ctx, file)} — commit it; core.hooksPath is ${mine}, for this clone and every worktree of it`)
   // Sibling mode: the tracker's repository runs the same hooks, and both run the trailer hook that pairs their commits.
   if (ctx.sibling) { for (const line of installTrailerHooks(ctx.root, ctx.trackerRoot)) ctx.out(line) }
@@ -386,6 +391,8 @@ function uninstall(ctx: Context): number {
   }
   const r = runGit(ctx.root, ["config", "--unset", "core.hooksPath"])
   if (!r.ok) throw new Error(`git config --unset core.hooksPath: ${gitReason(r)}`)
+  // Remembered for this clone, so that a launched run does not point it back.
+  runGit(ctx.root, ["config", HOOKS_OFF_KEY, "off"])
   ctx.out(`core.hooksPath unset: git runs the clone's own hooks again; ${fromRoot(ctx, hookFile(ctx))} is left for the other clones`)
   return 0
 }
@@ -394,7 +401,7 @@ function list(ctx: Context, opts: HooksOptions): number {
   const set = currentHooksPath(ctx)
   const mine = hooksPath(ctx)
   ctx.out(
-    set === mine
+    set === mine && ours(hookFile(ctx))
       ? `pre-commit hook: installed (core.hooksPath is ${mine})`
       : set
       ? `pre-commit hook: not installed — core.hooksPath is ${set}`
@@ -423,7 +430,8 @@ export default function hooks(options: PluginOptions = {}): Plugin {
     says: "the pre-commit hook in the data directory, once written, is the one naima hooks install writes for the companion rules as they are now",
     run(ctx) {
       const file = hookFile(ctx)
-      if (!existsSync(file)) return []
+      // Absent, or the stub that only runs the clone's own pre-commit: never written by install.
+      if (!ours(file)) return []
       return readFileSync(file, "utf8") === preCommit(ctx, opts)
         ? []
         : [{ level: "problem", message: `${fromRoot(ctx, file)} is not the hook the companion rules make now — naima hooks install rewrites it` }]

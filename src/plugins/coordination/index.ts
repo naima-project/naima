@@ -77,11 +77,14 @@ import { claimsUiView, notesUiView } from "./ui.ts"
 import { readStaleAfter, staleCommand, type StaleData, staleData, staleSection } from "./stale.ts"
 import { changeNotesCheck, changesCommand } from "./changes.ts"
 import { land, landingReportsPoint, landingsAreMarkers, landingsPaired } from "./land.ts"
+import { guardCheckCommand, guardCommand, guardedFrom, guardOffSection, guardSetup, LANDING_RULE, readTrunkGuard, switchesGuard } from "./guard.ts"
 import { DIARY_RULE, diaryCheck, diaryCommand, eventCommand, EVENTS, frontLines, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
 
 export { type NextStep, type StaleData, type StaleEntry } from "./stale.ts"
 export { type Timeline, type TimelineEvent, timelineOf } from "./timeline.ts"
 export { claimedInHistory, CLOSES, type Landing, type LandingReport, landingReportsPoint, markerMessage, moveTrunk, STALE_PROOFS } from "./land.ts"
+
+export { GUARD_HOOK, guardHook, installGuard, LANDING_RULE, TRUNK_REASON, trunkRefusal } from "./guard.ts"
 
 export const CLAIMS = "claims"
 
@@ -1070,6 +1073,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
   const diaryPerDay = readDiaryPerDay(options)
   const silentAfter = readSilentAfter(options)
   const staleAfter = readStaleAfter(options)
+  const guarded = readTrunkGuard(options)
   const stale = (ctx: Context): StaleData =>
     staleData(ctx, {
       claims: readClaims(ctx),
@@ -1095,6 +1099,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       "Work left behind is listed by `stale` and in the summary: every branch, worktree and claim whose claim is stale, or with no sign of life (commit, step, session note, file not committed) for `staleAfter` hours, with its facts — last commit, files not committed, commits ahead of the trunk, whether it is up to date with it, items held and their status — and the next step: resume, land, archive or drop. " +
       "Landings are semi-linear: a branch the trunk is an ancestor of enters it as one marker commit, a merge whose tree is the branch tip's and whose message names the items it closes in `Closes:` trailers; `land` makes it from the main checkout, the shortcut for `git merge --no-ff`, and moves the trunk only from the commit it read. " +
       "From the first marker on the trunk's first-parent line every first-parent commit is a marker, or `landings-are-markers` notes it, one note per commit, which `naima waive landings-are-markers <commit>` accepts with a reason; before it nothing is asked, so a history of fast-forwards keeps working. " +
+      "The trunk guard holds the same line before anything lands: a git `reference-transaction` hook (git 2.28 or later), written by `naima init` and by `naima update` into the data directory's `hooks/` and named by core.hooksPath, refuses a commit, merge or fast-forward of the trunk made by hand, in one line that says to open an item and land it. It lets through what the check accepts (a marker, the record land makes after it, a commit that only adds to the tracker data or only closes items, naima init's commit), a commit that only switches the guard, a tip origin's branch of the trunk already holds (a pull), a rewind, and a commit with a `Trunk-reason:` trailer, the owner's way through, which the check then notes with its reason. Other refs cost the shell script alone; for the trunk it starts `naima guard-check`. While the guard is on the check asks from the commit that added the hook to the trunk, so a project is not noted for its past; the plugin ships the rule that every change goes through an item and lands, acknowledged as \"Landing mode on\". `naima guard off` turns it off for the project (the option `trunkGuard`, the hook removed), `naima guard on` back on, and `naima hello` says when it is off. " +
       "A commit made on the trunk that only adds to the tracker data is accepted without a note: new files in the data directory outside `rules/`, `waivers/` and `naima.json`, and lines added to an item's README.md with its meta.json untouched, so the coordinator files an item, appends a note or writes a diary entry or a session note without a branch; a status, a rule, a waiver, the lock or a release record still lands, from the worktree of an item of its own. naima init's commit, the one that adds `naima.json`, and the close after a landing are accepted too. " +
       "A repository of the project with `changes/config.json` — the project itself, or a product it holds as a submodule — names there the paths whose change is a change of behaviour; a branch that changes one adds a change note, `changes/<date>-<slug>.md`, in the same repository. `land` refuses a branch that does not, unless `--no-change-note` gives the reason, which the marker records as a `No-change-note:` trailer; `change-notes` notes it on the branch beforehand, and is a problem for a file of `changes/` that is not a change note. `changes` prints the release notes the change notes of a range make. " +
       "`naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. " +
@@ -1114,6 +1119,12 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
         says:
           "how many worker worktrees (folders of the worktrees directory, on a branch the scheme applies to) may be open at once: naima open refuses another, naming the open ones; a positive whole number",
         default: String(MAX_WORKERS),
+      },
+      {
+        name: "trunkGuard",
+        says:
+          "false turns the trunk guard off: the git hook that refuses a commit, merge or fast-forward of the trunk made by hand is removed and not put back by naima update, the landing rule is not shipped, and landings-are-markers asks only from the first marker; written by naima guard off and naima guard on",
+        default: "true",
       },
       { name: "diaryPerDay", says: "how many diary entries a day may hold before the check diary-entries notes it: a positive whole number", default: "5" },
       {
@@ -1138,7 +1149,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       trunkMoved,
       closedNotClaimed,
       sessionNoteAck,
-      landingsAreMarkers,
+      landingsAreMarkers(guarded ? { from: guardedFrom, accepts: switchesGuard } : null),
       landingsPaired,
       branchesPaired,
       diaryCheck(readPasses, diaryPerDay),
@@ -1150,6 +1161,8 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       release,
       claimsCommand(silentAfter),
       land,
+      guardCommand(guarded),
+      guardCheckCommand,
       changesCommand,
       prune,
       staleCommand(stale, staleAfter),
@@ -1160,13 +1173,14 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
     views: [timelineView(readPasses)],
     contributes: {
       "ui-views": [claimsUiView((ctx) => claimsData(ctx, undefined, silentAfter)), timelineUiView(readPasses), notesUiView(readPasses)],
-      rules: [DIARY_RULE, PROGRESS_RULE],
+      rules: [DIARY_RULE, PROGRESS_RULE, ...(guarded ? [LANDING_RULE] : [])],
     },
     // The claims are a panel of naima ui, the timeline and the session notes tabs, when the ui plugin is loaded; without it, still commands and a view.
     // The diary rule is listed by naima rules when the rules plugin is loaded; without it, the check still notes.
     optional: ["ui-views", "rules"],
     points: [landingReportsPoint],
-    summary: [whereWeWere, inHand(silentAfter), staleSection(stale)],
+    summary: [whereWeWere, inHand(silentAfter), staleSection(stale), guardOffSection(guarded)],
+    setup: [guardSetup(guarded)],
     hooks: [noClosingOwnWork],
   }
 }

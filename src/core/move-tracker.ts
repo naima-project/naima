@@ -77,7 +77,14 @@ export function moveTrackerOut(root: string, data: string, say: (line: string) =
   writeSiblingMarker(tracker, {})
   const paths = [prefix, posixRelative(root, join(tracker, SIBLING_FILE)), ...(ignore ? [posixRelative(root, ignore)] : [])]
   runGit(root, ["add", "--", ...paths.slice(1)])
-  const commit = runGit(root, ["commit", "-q", "--no-verify", "-m", "Keep the tracker in a repository of its own"])
+  // Straight on the code's trunk, as init's step: the trailer lets it past the trunk guard and says why.
+  const commit = runGit(root, [
+    "commit",
+    "-q",
+    "--no-verify",
+    "-m",
+    `Keep the tracker in a repository of its own\n\nTrunk-reason: naima init --private-tracker moves the tracker out of the code`,
+  ])
   if (!commit.ok) {
     runGit(root, ["reset", "-q", "--", ...paths])
     rmSync(work, { recursive: true, force: true })

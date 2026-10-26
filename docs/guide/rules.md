@@ -446,7 +446,8 @@ A hosting platform's merge button makes the same shape, provided branches are re
 open`,
 `naima land`, `naima prune`) are shortcuts for what a person can do by hand, and `naima check` has the final word. **Enforced by** the check
 `landings-are-markers`, as a note. Starting from the first marker on the trunk's first-parent line, it names every commit on that line that isn't a marker and
-says why. History before the first marker isn't judged.
+says why. While the [trunk guard](#every-change-goes-through-an-item-and-lands) is on, it also starts from the commit that put the guard's hook on the trunk,
+when that comes first. History before either isn't judged, so a project that updates is not noted for what it committed before.
 
 One kind of commit may be made directly on the trunk: one that only adds to the tracker data. It may add new files in the data directory, such as a new item, a
 diary entry in `events/` or a session note in `passes/`, and it may add lines to an item's `README.md`, as a note does, while the item's `meta.json` stays as it
@@ -459,9 +460,41 @@ are: the one `naima init` makes, which adds `naima.json`, and the one that close
 
 The check names each commit in a note of its own. History on a shared trunk is never rewritten, so a commit it names that the project accepts as it is gets a
 waiver, once, with its reason: `naima waive landings-are-markers
-<commit> --reason "<why>"`. From then on `naima check` lists the waiver instead of the note.
-Blocking such a commit with a git hook is [planned](../planned.md#blocking-a-landing-that-is-not-a-marker), as something a project could opt into but never the
-default ([closing a worktree](../agents/closing-a-worktree.md#7-hand-it-over)).
+<commit> --reason "<why>"`. From then on `naima check` lists the waiver instead of the note
+([closing a worktree](../agents/closing-a-worktree.md#7-hand-it-over)).
+
+### Every change goes through an item and lands
+
+Every change goes through an item. `naima open <item>` makes its worktree and branch, the change and its test are committed there, and `naima land` puts it on
+the trunk. Nobody commits, merges or fast-forwards the trunk by hand. Only three things go straight on the trunk: the commit of `naima init`, the tracker
+additions the CLI writes (an item filed, a note, a diary entry), and the close after a landing.
+
+Why: an agent that was never told this made about ninety plain commits, half of them straight on the trunk, and merged a worktree it had made by hand with a
+fast-forward. No item said what any of it was for, no landing closed one, and nothing stopped it.
+
+This rule ships with Naima, is active for agents in every project while the trunk guard is on, and is acknowledged as "Landing mode on". **Enforced by** the
+trunk guard, a git hook that refuses the commit, and by the check `landings-are-markers`, as a note.
+
+The trunk guard is a `reference-transaction` hook (git 2.28 or later). `naima init` and `naima update` write it into the data directory's `hooks/` folder, which
+is committed, and point git's `core.hooksPath` at that folder. git keeps that setting per clone, so a fresh clone gets it on its first launched run of Naima
+(for instance `naima hello`), which says so in one line. When something moves the trunk, the hook lets it through only if every commit it adds to the
+first-parent line is one the check accepts: a marker, the record `naima land` makes after it, a commit that only adds to the tracker data or only closes items,
+or `naima init`'s commit. It also lets through a commit that only turns the guard on or off, a new tip that `origin`'s branch of the trunk already holds (a pull
+of what landed elsewhere), a rewind, and a branch created or deleted. Anything else is refused with one line that says to open an item and land it. Every other
+ref costs nothing but the shell script. The clone's own hooks in `.git/hooks` keep running: a hook of the same name runs first, and for every other hook
+name git knows the folder holds a small stub that runs the clone's own hook of that name, when there is one. A `core.hooksPath` already set to
+another folder is left alone, and init and update say so.
+
+The owner, and only the owner, lets a commit through once by giving it a reason:
+
+```sh
+git commit -m "Fix the broken release" --trailer "Trunk-reason: the release is broken and cannot wait for a landing"
+```
+
+The check then notes that commit with its reason, and a waiver accepts it as for any other note. A project that prefers committing by hand turns the guard off
+with `naima guard off`. That records `"trunkGuard": false` in the coordination plugin's options in `naima.json` and removes the hook. `naima update` then leaves
+it out, the rule above is no longer shipped, `landings-are-markers` starts from the first marker again, and `naima hello` says that the guard is off.
+`naima guard on` turns it back on, and `naima guard` says whether it runs in this clone.
 
 ### Public commits name nothing of a private tracker
 
