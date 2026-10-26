@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Naima in one minute</title>
+<meta name="description" content="Naima in one minute: what goes wrong when you build with an AI, and how Naima makes the AI you already use work like a careful software team, inside your project.">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="alternate" type="text/plain" href="llms.txt" title="Naima, for AI agents: how to install it">
+<link rel="preload" href="fonts/inter-tight-latin.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #fbfaf7;
+    --panel: #ffffff;
+    --fg: #16181d;
+    --text: #3a3d44;
+    --muted: #6a6d75;
+    --line: #e6e3dc;
+    --accent: #2a3f8f;
+    --accent-soft: #eef1fb;
+    --bad: #9a3b2f;
+    --bad-soft: #f6ece9;
+    --ok: #1f7a4d;
+    --sans: "Inter Tight", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @font-face { font-family: "Inter Tight"; font-style: normal; font-weight: 100 900; font-display: block; src: url("fonts/inter-tight-latin.woff2") format("woff2"); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow-x: clip; line-height: 1.5; }
+  a { color: inherit; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+
+  .bar { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; }
+  .logo { font-weight: 650; font-size: 22px; letter-spacing: -.5px; text-decoration: none; }
+  .logo .ai { color: var(--accent); }
+  .bar nav { display: flex; gap: 26px; align-items: center; font-size: 15px; }
+  .bar nav a { text-decoration: none; color: var(--text); }
+  .bar nav a:hover, .bar nav a[aria-current] { color: var(--accent); }
+  .pill { font-size: 12.5px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 4px 10px; }
+
+  .intro { padding: 48px 0 40px; max-width: 760px; }
+  .clock { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+  .clock svg { width: 16px; height: 16px; }
+  h1 { margin: 16px 0 0; font-size: clamp(38px, 5vw, 58px); line-height: 1.04; letter-spacing: -2px; font-weight: 650; }
+  h1 em { font-style: normal; color: var(--accent); }
+  .lead { margin: 22px 0 0; font-size: 19px; color: var(--text); }
+
+  h2 { font-size: clamp(24px, 2.8vw, 32px); letter-spacing: -.8px; margin: 0 0 18px; font-weight: 650; }
+  .k { font: 600 12.5px var(--mono); letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+
+  /* the trouble */
+  .trouble { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .pain { background: var(--bad-soft); border-radius: 16px; padding: 22px; }
+  .pain b { display: block; font-size: 17px; letter-spacing: -.2px; margin-bottom: 4px; }
+  .pain span { color: var(--text); font-size: 15.5px; }
+  .pain i { font-style: normal; color: var(--bad); font-weight: 700; margin-right: 6px; }
+
+  /* how it works */
+  .how { padding: 64px 0 20px; }
+  .steps { counter-reset: s; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .step { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; position: relative; }
+  .step::before { counter-increment: s; content: counter(s); display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 650; font-size: 14px; margin-bottom: 14px; }
+  .step b { display: block; font-size: 17px; letter-spacing: -.2px; margin-bottom: 4px; }
+  .step span { color: var(--text); font-size: 15.5px; }
+  .you { margin-top: 18px; display: flex; gap: 14px; align-items: flex-start; background: var(--accent-soft); border-radius: 16px; padding: 18px 22px; color: var(--text); font-size: 16.5px; }
+  .you b { color: var(--fg); }
+
+  /* where it lives */
+  .lives { padding: 56px 0 10px; display: grid; grid-template-columns: 1.1fr .9fr; gap: 36px; align-items: center; }
+  .lives p { color: var(--text); font-size: 16.5px; margin: 0 0 12px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .facts span { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 7px 13px; font-size: 14px; }
+  .tree { background: #12141a; color: #d7dae3; border-radius: 16px; padding: 22px; font: 13.5px/1.7 var(--mono); white-space: pre; overflow-x: auto; box-shadow: 0 24px 50px -30px rgba(18, 20, 26, .55); }
+  .tree .d { color: #8b93a7; }
+  .tree .h { color: #a6b5ff; }
+
+  .beyond { margin: 46px 0 0; padding: 20px 24px; border-radius: 16px; border: 1px dashed var(--line); color: var(--text); font-size: 16.5px; }
+  .beyond b { color: var(--fg); }
+
+  /* start */
+  .start { text-align: center; padding: 72px 0 40px; }
+  .start p { color: var(--text); margin: 0 0 26px; font-size: 17.5px; }
+  .cta { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .button { text-decoration: none; border-radius: 12px; font-size: 16.5px; font-weight: 550; padding: 14px 24px; transition: transform .2s ease, box-shadow .2s ease; }
+  .button:hover { transform: translateY(-1px); }
+  .primary { background: var(--accent); color: #fff; box-shadow: 0 10px 24px -12px color-mix(in srgb, var(--accent) 80%, transparent); }
+  .secondary { border: 1px solid var(--line); background: var(--panel); }
+  .next { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 20px 0 60px; }
+  .next a { text-decoration: none; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; transition: border-color .2s ease, transform .2s ease; }
+  .next a:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .next b { display: block; font-size: 16px; }
+  .next span { color: var(--muted); font-size: 14.5px; }
+
+  @media (max-width: 880px) {
+    .trouble, .next { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr 1fr; }
+    .lives { grid-template-columns: 1fr; }
+    .bar nav a.hide { display: none; }
+  }
+  @media (max-width: 560px) {
+    .wrap { padding: 0 16px; }
+    .steps { grid-template-columns: 1fr; }
+    .lead { font-size: 17px; }
+    .tree { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+<header class="wrap bar">
+  <a class="logo" href="next.html" aria-label="Naima, home">N<span class="ai">AI</span>MA</a>
+  <nav aria-label="Site">
+    <a href="one-minute.html" aria-current="page">How it works</a>
+    <a class="hide" href="docs.html?p=README.md">Docs</a>
+    <a href="https://github.com/naima-project/naima">GitHub</a>
+    <span class="pill">v1.1 beta</span>
+  </nav>
+</header>
+
+<main class="wrap">
+  <section class="intro">
+    <span class="clock"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 1.5"/></svg>A one-minute read</span>
+    <h1>Building with an AI is fast. <em>Naima makes it last.</em></h1>
+    <p class="lead">Naima is a way of working you add to your project, so the AI you already use works like a careful software team. You keep talking to your agent as usual.</p>
+  </section>
+
+  <section aria-labelledby="t">
+    <p class="k" id="t">The trouble starts after the first version</p>
+    <div class="trouble">
+      <div class="pain"><b><i>✕</i>A fix breaks what worked</b><span>Something that used to work stops, and nobody notices until much later.</span></div>
+      <div class="pain"><b><i>✕</i>“Fixed”, when it isn't</b><span>The AI says it is done, and nothing shows that it is.</span></div>
+      <div class="pain"><b><i>✕</i>Every session forgets</b><span>What the last session decided is gone, so you explain it all again.</span></div>
+    </div>
+  </section>
+
+  <section class="how" aria-labelledby="h">
+    <h2 id="h">What happens behind the scenes</h2>
+    <div class="steps">
+      <div class="step"><b>Your request is written down</b><span>Every request becomes an item in the project, in plain words.</span></div>
+      <div class="step"><b>It is built, then tested</b><span>A change counts as done only when a test shows it works.</span></div>
+      <div class="step"><b>Someone else checks it</b><span>Different agents build and check the work, so nobody judges their own.</span></div>
+      <div class="step"><b>Your decisions are kept</b><span>What you decide is recorded, so you are never asked the same thing twice.</span></div>
+    </div>
+    <p class="you"><b>You only decide.</b> When there is something only you can settle, you are asked, one question at a time. Everything else is the agents' work.</p>
+  </section>
+
+  <section class="lives" aria-labelledby="l">
+    <div>
+      <h2 id="l">It all lives in your project</h2>
+      <p>One folder of your project holds it, kept tidy and versioned with state-of-the-art tools such as git, without you having to know them.</p>
+      <p>Change agent or model whenever you like: the work stays where it is.</p>
+      <div class="facts"><span>No account</span><span>No server</span><span>No subscription</span><span>Free and open source</span></div>
+    </div>
+    <div class="tree" aria-label="The folder Naima keeps in a project"><span class="h">your-project/</span>
+├── <span class="d">your code, as before</span>
+└── <span class="h">naima-tracker/</span>
+    ├── naima/           <span class="d"># the program</span>
+    └── naima-data/      <span class="d"># requests, tests,</span>
+                         <span class="d">#   decisions, plans</span></div>
+  </section>
+
+  <p class="beyond"><b>Born for software, not only for it.</b> It works for other long-lived work too, such as a data analysis or a paper written with colleagues.</p>
+
+  <section class="start" aria-labelledby="s">
+    <h2 id="s">Start in one sentence</h2>
+    <p>Open an agent that can run commands in your project's folder, and ask it: “install Naima here”.</p>
+    <div class="cta">
+      <a class="button primary" href="install.html">How to install</a>
+      <a class="button secondary" href="next.html">Back to the home page</a>
+    </div>
+  </section>
+
+  <nav class="next" aria-label="Read next">
+    <a href="docs.html?p=guide/naima-in-ten-minutes.md"><b>Naima in ten minutes</b><span>What it does in more depth, the advanced parts included.</span></a>
+    <a href="docs.html?p=guide/primer.md"><b>The primer</b><span>Every idea, introduced with an example.</span></a>
+    <a href="docs.html?p=README.md"><b>All the documentation</b><span>Guides for people, pages for agents, the reference.</span></a>
+  </nav>
+</main>
+</body>
+</html>
