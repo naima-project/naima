@@ -23,8 +23,9 @@ the ranking ([the rule](rules.md#effort-is-never-guessed)).
 Every change to these fields stamps `triagedOn` with today's date.
 
 For a feature or a bug, the agent also records whether the behaviour has states or concurrency, such as a lifecycle, a protocol or a retry loop:
-`naima set export-drops stateful=true`, or `false`. A stateful change is designed from a model first ([design with a model](design-with-a-model.md)), and once it
-has landed, `naima check` notes it when no model or property is linked to it and no note says why it has none.
+`naima set export-drops stateful=true`, or `false`. A stateful change is modelled and verified before it is coded
+([design with a model](design-with-a-model.md)), and once it has landed, `naima check` notes it when no model or property is linked to it and no note says why
+it has none.
 
 ## Rewrite the description, note what you checked
 

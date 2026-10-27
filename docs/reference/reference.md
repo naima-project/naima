@@ -1939,7 +1939,7 @@ Artifacts: something the project makes and keeps — an analysis, a profile, a r
 | Rule | Title | For | Strength | Enforced by | Ack |
 |---|---|---|---|---|---|
 | `requirements-elicited-at-every-prompt` | Requirements are elicited at every prompt, each with how it is checked or measured | agents | must | `requirements-proven` | `Elicitation mode on` |
-| `behaviour-designed-from-a-model` | Behaviour with states or concurrency is designed from a model first, kept in step with the code | everyone | should | `model-first` | `Model first mode on` |
+| `behaviour-designed-from-a-model` | Behaviour with states or concurrency is modelled and verified before it is coded | everyone | must | `model-first` | `Model first mode on` |
 
 ## knowledge
 

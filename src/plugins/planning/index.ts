@@ -23,7 +23,7 @@
 //
 // It ships two rules: requirements are elicited at every prompt of the owner,
 // each with how it is checked or measured; behaviour with states or
-// concurrency is designed from a model first, kept in step with the code.
+// concurrency is modelled and verified before it is coded.
 
 import {
   bool,
@@ -653,13 +653,13 @@ export const ELICITATION_RULE = {
 /** The rule that behaviour with states or concurrency starts from a model. */
 export const MODEL_FIRST_RULE = {
   name: "behaviour-designed-from-a-model",
-  title: "Behaviour with states or concurrency is designed from a model first, kept in step with the code",
+  title: "Behaviour with states or concurrency is modelled and verified before it is coded",
   audience: "everyone",
-  strength: "should",
+  strength: "must",
   text:
-    'Before implementing behaviour that has states or concurrency (a lifecycle, a protocol, a scheduler, a retry loop, two processes sharing data), whoever designs it writes a model of it: a state machine, as data or drawn; an mCRL2 specification; or a state machine encoded in mCRL2, for which the guide gives a template. Another form a tool can check is welcome too. Each property the behaviour must have is an item, a `properties` item checked by `naima verify` where a verifier exists, and the model changes in the same change as the code it describes. A trivial change needs no model; skipping it on non-trivial behaviour needs its reason, written on the item as a note (`naima note <item> "No model: <reason>"`). Whoever triages a feature or a bug records whether its behaviour has states or concurrency (`naima set <item> stateful=true`, or `false`), and `naima check` notes a stateful change that landed with neither a model linked nor that note.',
+    'When behaviour has states or concurrency (a lifecycle, a protocol, a scheduler, a retry loop, two processes sharing data), it is modelled before any of its code is written, in proportion: each state machine is modelled on its own and kept small, and only what is not obvious is modelled, never the whole system at once and never what a test shows plainly. The model is in mCRL2, or a state machine encoded in mCRL2 (the guide gives a template), or another form a tool checks; a drawing or a description alone is not a model. Each property it must have is a `properties` item, and `naima verify` shows every one holds before the first line of its code is written. Its state space is minimised once and every property is checked on that, the LTS route (`verifierOptions` route lts) wherever the formula allows it, and a run already made on the same model and formula is reused, never recomputed. Where naima-codegen supports the language, every such state machine is generated from its model and checked against it, and the code around it is written to connect to the generated machine; elsewhere the code follows the model, and the model changes in the same change as the code it describes. The rule applies only when the behaviour has states or concurrency: a trivial change needs no model, and skipping one on behaviour that is not trivial needs its reason, written on the item as a note (`naima note <item> "No model: <reason>"`). Whoever triages a feature or a bug records whether its behaviour has states or concurrency (`naima set <item> stateful=true`, or `false`), and `naima check` notes a stateful change that landed with neither a model linked nor that note.',
   why:
-    "behaviour with states fails in the orders of events nobody thought to test, and a model checker explores every order; a model written after the code only describes the code, defects included, while one written first is what the code is checked against.",
+    "behaviour with states fails in the orders of events nobody thought to test, and a model checker explores every order; a model checked only after the code describes the code, defects included, while one verified first is what the code is checked against. Small machines, each modelled alone and minimised once, check in seconds, so the rule costs little where it applies and nothing where it does not. Small machines, each modelled alone, check in seconds, so the rule costs little where it applies and nothing where it does not. An experiment with ten fresh agents found that, under the softer wording, four wrote a model before coding but none verified it first.",
   ack: "Model first mode on",
   enforcedBy: "model-first",
 }

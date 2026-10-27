@@ -242,9 +242,8 @@ Why: an agent that does the work itself keeps the owner waiting for every step, 
 ### Write commands the agent tool runs without asking the owner
 
 Every shell command is written so the agent tool can see it is safe and never stops the owner to ask: no `rm` of a path built from a variable that could be
-empty (a literal path, or `${DIR:?}/${name:?}`), no `cd` chained with other commands, one job per command, scripts as files run by their interpreter, files
-read and edited with the tool's own tools, and nothing written outside the project and the scratch directory
-([the details](../agents/commands-without-prompts.md)).
+empty (a literal path, or `${DIR:?}/${name:?}`), no `cd` chained with other commands, one job per command, scripts as files run by their interpreter, files read
+and edited with the tool's own tools, and nothing written outside the project and the scratch directory ([the details](../agents/commands-without-prompts.md)).
 
 Why: each permission prompt stops the owner, mostly for a harmless command written in a way the tool could not judge, and an owner asked too often starts to
 allow everything. Acknowledged as "Clean commands mode on". **Convention**.
@@ -468,20 +467,26 @@ This rule ships with Naima, is active for agents in every project, and is acknow
 ([requirements come from every conversation](plan-with-requirements-specs-and-decisions.md#requirements-come-from-every-conversation),
 [reporting and triage](../agents/reporting-and-triage.md#elicit-the-requirements-it-carries)).
 
-### Behaviour with states is designed from a model first
+### Behaviour with states is modelled and verified before it is coded
 
-Before anyone implements behaviour that has states or concurrency, such as a lifecycle, a protocol, a scheduler, a retry loop or two processes sharing data,
-they write a [model](glossary.md#model) of it. The model can be a state machine, kept as data or drawn, an mCRL2 specification, or a state machine encoded in
-mCRL2, and any other form that a tool can check is welcome too. Each property the behaviour must have becomes a property item, checked by `naima verify` where a
-[verifier](glossary.md#verifier) exists, and the model changes in the same change as the code it describes. A trivial change needs no model. Skipping the model
-for behaviour that isn't trivial needs a reason, written on the item as a note.
+When behaviour has states or concurrency, such as a lifecycle, a protocol, a scheduler, a retry loop or two processes sharing data, it is modelled before any of
+its code is written, in proportion. Each state machine is modelled on its own and kept small, and only what isn't obvious is modelled, never the whole system at
+once and never what a test shows plainly. The [model](glossary.md#model) is in mCRL2, or a state machine encoded in mCRL2, or another form a tool can check; a
+drawing or a description alone is not one. Each property the behaviour must have becomes a property item, and `naima verify` shows that every one holds before
+the first line of the code is written. The state space is minimised once and every property is checked on it, by the
+[LTS route](prove-and-close.md#properties-proven-by-a-tool) wherever the formula allows, and a run already made on the same model and formula is reused rather
+than computed again. Where [naima-codegen](https://github.com/naima-project/naima-codegen) supports the language, every such state machine is generated from its
+model and checked against it, with the code around it written to connect to the generated machine; elsewhere the code follows the model, which changes in the
+same change as the code it describes. The rule applies only when the behaviour has states or concurrency. A trivial change needs no model, and skipping the
+model for behaviour that isn't trivial needs a reason, written on the item as a note.
 
 ```sh
 naima note features/job-retries "No model: <the reason>"
 ```
 
-Why: behaviour with states fails in orders of events that nobody thought to test, and a model checker explores every order. A model written after the code only
-describes the code, defects included, while one written first is what the code is checked against.
+Why: behaviour with states fails in orders of events that nobody thought to test, and a model checker explores every order. A model checked only after the code
+describes the code, defects included, while one verified first is what the code is checked against. Ten fresh agents asked to build a traffic-light controller
+under the softer wording wrote a model before coding four times, and verified it first never.
 
 Whoever triages a feature or a bug records whether its behaviour has states or concurrency, in its field `stateful`, decided from what the item asks for and
 never guessed from the code.
@@ -492,8 +497,8 @@ naima set features/job-retries stateful=true
 
 This rule ships with Naima, applies to everyone in every project as a _should_, and is acknowledged as "Model first mode on". **Enforced by** the check
 `model-first`, as a note, on a change recorded `stateful=true` that landed with no models or properties item linked to it and no note "No model: <reason>". The
-rest is **convention**, and a property item, once there, is held current by the check `property-evidence` ([design with a model](design-with-a-model.md), with
-a template of a state machine in mCRL2).
+rest is **convention**, and a property item, once there, is held current by the check `property-evidence` ([design with a model](design-with-a-model.md), with a
+template of a state machine in mCRL2).
 
 ## Branches and worktrees
 

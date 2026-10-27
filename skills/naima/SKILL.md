@@ -39,12 +39,12 @@ already told you" means a report was lost: file it now and say so — never argu
 The same holds for requirements: check every prompt for a requirement it adds or changes, file or revise it, and settle how it is checked — a test, a property
 of a model, or a metric with a budget ([elicit](../../docs/agents/reporting-and-triage.md#elicit-the-requirements-it-carries)). A fact the owner gives, a
 finding an investigation reaches, and a lesson a mistake teaches are each a `knowledge` entry with its basis and its evidence linked, a lesson with kind
-`lesson` ([knowledge](../../docs/guide/knowledge.md)). Behaviour with states or concurrency is designed from a model first
-([design with a model](../../docs/guide/design-with-a-model.md)): when triaging a feature or a bug, record `stateful=true` or `false`. Once the model
-holds its properties, offer to generate the state machine's code from it with naima-codegen, in Rust, Python or TypeScript with Svelte, checked against the
-model ([generate the code](../../docs/guide/design-with-a-model.md#generate-the-code-from-the-model)). A decision taken with the owner, a change of direction or a notable event outside the tracker
-gets one diary entry, never routine work ([the rule](../../docs/guide/rules.md#agents-keep-the-diary)). How to work with the owner (quiet, simple, fast,
-capture, loops closed) is the shipped working rules, printed by `naima rules --audience agents`
+`lesson` ([knowledge](../../docs/guide/knowledge.md)). Behaviour with states or concurrency is modelled and verified before it is coded
+([design with a model](../../docs/guide/design-with-a-model.md)): when triaging a feature or a bug, record `stateful=true` or `false`. Once the model holds its
+properties, offer to generate the state machine's code from it with naima-codegen, in Rust, Python or TypeScript with Svelte, checked against the model
+([generate the code](../../docs/guide/design-with-a-model.md#generate-the-code-from-the-model)). A decision taken with the owner, a change of direction or a
+notable event outside the tracker gets one diary entry, never routine work ([the rule](../../docs/guide/rules.md#agents-keep-the-diary)). How to work with the
+owner (quiet, simple, fast, capture, loops closed) is the shipped working rules, printed by `naima rules --audience agents`
 ([working with the owner](../../docs/guide/rules.md#working-with-the-owner)).
 
 In this page, `naima` means, from the project's root:
@@ -141,10 +141,11 @@ first too ([read the project's rules](../../docs/agents/read-the-project-rules.m
 Every change goes through an item: `naima open <item>`, commit the change and its test in its worktree, then `naima land`. Never commit, merge or fast-forward
 the trunk by hand: a git hook, the trunk guard, refuses it, and only the owner lets a commit through or turns the guard off
 ([the rule](../../docs/guide/rules.md#every-change-goes-through-an-item-and-lands)). When the guard is installed, tell the owner it is on, and that
-`naima guard off` turns it off for committing by hand or a mixed flow: as information, never as a question to answer. Write every shell command so the agent tool runs it without asking the owner: no `rm` on a path built from a
-variable that could be empty, no `cd` chained with other commands, scripts as files ([commands without prompts](../../docs/agents/commands-without-prompts.md)). When the code's origin is on GitHub, tell
-the owner too that `naima guard server` makes the server refuse such pushes, as information: run it only on the owner's word. When the tracker is a
-repository of its own, Naima commits every tracker write itself: never commit or edit the tracker's files by hand.
+`naima guard off` turns it off for committing by hand or a mixed flow: as information, never as a question to answer. Write every shell command so the agent
+tool runs it without asking the owner: no `rm` on a path built from a variable that could be empty, no `cd` chained with other commands, scripts as files
+([commands without prompts](../../docs/agents/commands-without-prompts.md)). When the code's origin is on GitHub, tell the owner too that `naima guard server`
+makes the server refuse such pushes, as information: run it only on the owner's word. When the tracker is a repository of its own, Naima commits every tracker
+write itself: never commit or edit the tracker's files by hand.
 
 Before asking the owner anything, run `naima decisions <words>`: a settled decision answers it, and the owner's answer to a new question is recorded as one
 ([asking the human](../../docs/agents/asking-the-human.md)).
