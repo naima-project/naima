@@ -136,7 +136,10 @@ When the project has a model, `naima hello` says once that the code can be gener
 2. It runs `naima-codegen generate --front-end` to learn whether the model is in the subset, and fixes the model until it is, checking its properties again with
    `naima verify` after each change.
 3. It runs `naima-codegen generate`, which writes the code under `generated/`, never edited by hand, and commits it with the model in the same change.
-4. When the model comes with a policy, it runs `naima-codegen check-refinement`, which checks that the generated stepping rules stay inside the model.
+4. When the model comes with a policy, it checks that the generated stepping rules stay inside the model with a property whose verifier is `naima-codegen` and
+   whose property is `refines`, and the model's properties on the refined systems with one whose property is `properties`, both run by `naima verify`. It
+   runs them as soon as the code is generated, not only at the end: `naima verify` runs `naima-codegen check-refinement` and records the run, while running
+   that command by hand leaves no record ([the checks of naima-codegen](prove-and-close.md#the-checks-of-naima-codegen)).
 5. After every later change of the model, `naima-codegen generate --check` says whether `generated/` is still what the model gives.
 
 How to write `codegen.toml`, the policy and the checks is in naima-codegen's own documentation, with two complete examples: a job queue with retries, and a

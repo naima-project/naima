@@ -246,6 +246,37 @@ naima set <property> 'verifierOptions={"route":"lts","threads":8}'
 A `verifierOptions` of `{ "timeoutSeconds": 600 }` stops a run that takes longer than that and records it as `error` (undecided). If the tool isn't installed,
 the run is recorded as an error whose output begins with `tool missing:` and explains how to install it, and the property is never reported as holding.
 
+### The checks of naima-codegen
+
+[naima-codegen](https://github.com/naima-project/naima-codegen) writes a model's state machine as code ([generate the code](design-with-a-model.md#generate-the-code-from-the-model)),
+and its `check-refinement` command checks the generated machine against the model. The verifier `naima-codegen`, which comes with Naima and needs no plugin
+switched on, runs those checks through `naima verify`, so each check leaves a run with its evidence like any other property. The `model` of the property is the
+codegen project's `codegen.toml`, and the codegen project is the directory that holds it (the one above, for a `model/codegen.toml`). The `property` says which
+check to run:
+
+- `refines` runs `naima-codegen check-refinement`. The property holds when every check that the generated machine stays inside the model holds, and is violated
+  when one fails; the failing checks are the counterexample.
+- `properties` runs `naima-codegen check-refinement --properties`, which checks every property item of the codegen project on the refined systems. It holds
+  when all of them hold.
+- The path of one of those items' `.mcf` files, from the codegen project, makes the same run but judges the property on that file alone.
+
+```sh
+naima new properties "the generated form stays inside its model"
+naima set <property> verifier=naima-codegen model=form/codegen.toml property=refines
+naima set <property> 'verifierOptions={"group":"small"}'
+naima verify <property>
+```
+
+`verifierOptions` may name the codegen project's directory in `project`, limit the run to some groups in `group` (one name or a list), skip the trace inclusion
+check on a model too large to explore with `"noModel": true`, and end a run that takes too long with `timeoutSeconds`. The run reads every file of the codegen
+project: the model, the policy, `codegen.toml`, its properties and the generated code. A change to any of them, a regeneration included, makes the property no
+longer current, and a run on exactly the same files is reused. A project naima-codegen refuses, such as a model outside the subset it accepts, is recorded as an
+error whose output begins with `refused:` and lists the problems.
+
+naima-codegen is not installed by `naima tools`. Clone its repository and put its `naima-codegen` script on `PATH`; it needs Python 3.11 or later and the mCRL2
+tools at the version the model pins. Without it the run is recorded as an error whose output begins with `tool missing:`. Only `naima verify` is allowed to
+start it.
+
 ## Proving a change to a model
 
 When a model changes because of an item, such as a bug in a protocol or a feature that adds a buffer pool, the property linked to that item has to show that the

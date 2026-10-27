@@ -56,6 +56,7 @@ import {
   writeJson,
 } from "../../core/api.ts"
 import { exampleRegex } from "./adapters/example-regex.ts"
+import { naimaCodegen } from "./adapters/naima-codegen.ts"
 import { type CompareResult, type Verdict, type Verifier, verifiersPoint, type VerifyRequest, type VerifyResult } from "./contract.ts"
 
 export type { CompareRequest, CompareResult, Verdict, Verifier, VerifyRequest, VerifyResult } from "./contract.ts"
@@ -1250,7 +1251,7 @@ export default function verifier(): Plugin {
       "A `models` item marks a model, by its path in `model`, as in development: while it is, the staleness of its properties is a note rather than a problem and the two change checks ask nothing of them; it leaves development (status `stable`) only when every property verified on it holds on a run of exactly what it has now. " +
       `When the project has a \`models\` item, \`naima summary\`, \`naima hello\` and \`naima guide\` say once, in one line, that the code of a state machine can be generated from a model with naima-codegen (${CODEGEN}), checked against it. ` +
       "A refactoring of a model is proved by equivalence: `naima equivalent <model>` finds, in git, the earlier version each property's last run read, has the verifier compare it with the model as it is now modulo an equivalence (`--modulo`, the adapter's first by default), and, when the two are equivalent, records for each property a run that carries the earlier verdict over to the new version, marked `carried` with the run it came from, the earlier version's sha256 and the comparison's output; a later `naima verify` reuses it. Nothing carries over when the versions differ, when the equivalence does not preserve the property, or when anything besides the model changed — the property, its options, another input, the tool's version. " +
-      "The shipped adapter, `example-regex`, is a stand-in that shows the shape of a real one; the opt-in `verifier-mcrl2` plugin contributes a real one.",
+      "The shipped adapters are `example-regex`, a stand-in that shows the shape of a real one, and `naima-codegen`, which runs naima-codegen's checks on a codegen project: its `model` is the project's `codegen.toml`, the project its directory (or the one above, for `model/codegen.toml`) unless `verifierOptions.project` names it; `property` `refines` runs `naima-codegen check-refinement` (with `--no-model` when `verifierOptions.noModel` is true), which holds when every check of the generated machine against the model holds and is violated, the failing checks its counterexample, when one fails; `properties` runs `check-refinement --properties`, every property item of the codegen project on the refined systems, and the path of one of their `.mcf` files, the same run judged on that property alone; `verifierOptions.group`, a group or a list, limits the run to those groups, and `timeoutSeconds` ends it as unknown. A project naima-codegen refuses is an error run whose output begins `refused:`. Every file of the codegen project — model, policy, `codegen.toml`, properties, generated code — is an input, so a regeneration makes its runs stale; the version is the first line of `naima-codegen --version`, or, for a naima-codegen without one, a fixed text, the generator's digest being in `generated/MANIFEST.json`. naima-codegen is found on PATH and is not installed by `naima tools`: missing, the run is an error whose output begins `tool missing:` and says how to install it from its repository; the launcher lets `naima verify`, and no other command, start it. The opt-in `verifier-mcrl2` plugin contributes the mCRL2 adapter.",
     types: [
       {
         id: TYPE,
@@ -1291,7 +1292,7 @@ export default function verifier(): Plugin {
       { name: "verifierOptions", kind: "object", says: "options handed to the verifier with the model and the property, as a JSON object", appliesTo: [TYPE] },
     ],
     points: [verifiersPoint],
-    contributes: { verifiers: [exampleRegex], gates: [allHold], "landing-reports": [propertiesCurrent], summary: [codegenSection] },
+    contributes: { verifiers: [exampleRegex, naimaCodegen], gates: [allHold], "landing-reports": [propertiesCurrent], summary: [codegenSection] },
     // Its gate is there when a gates plugin is, its landing report when the coordination plugin is: without them, nothing lists either.
     optional: ["gates", "landing-reports"],
     relations: [

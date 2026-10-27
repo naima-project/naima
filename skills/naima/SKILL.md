@@ -42,7 +42,8 @@ finding an investigation reaches, and a lesson a mistake teaches are each a `kno
 `lesson` ([knowledge](../../docs/guide/knowledge.md)). Behaviour with states or concurrency is modelled and verified before it is coded
 ([design with a model](../../docs/guide/design-with-a-model.md)): when triaging a feature or a bug, record `stateful=true` or `false`. Once the model holds its
 properties, offer to generate the state machine's code from it with naima-codegen, in Rust, Python or TypeScript with Svelte, checked against the model
-([generate the code](../../docs/guide/design-with-a-model.md#generate-the-code-from-the-model)). A decision taken with the owner, a change of direction or a
+([generate the code](../../docs/guide/design-with-a-model.md#generate-the-code-from-the-model)); check it with `naima verify` on a property whose verifier
+is `naima-codegen`, early and after every change, never with `naima-codegen check-refinement` alone, so the run is recorded. A decision taken with the owner, a change of direction or a
 notable event outside the tracker gets one diary entry, never routine work ([the rule](../../docs/guide/rules.md#agents-keep-the-diary)). How to work with the
 owner (quiet, simple, fast, capture, loops closed) is the shipped working rules, printed by `naima rules --audience agents`
 ([working with the owner](../../docs/guide/rules.md#working-with-the-owner)).
