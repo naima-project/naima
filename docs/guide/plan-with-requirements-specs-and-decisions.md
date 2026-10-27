@@ -39,6 +39,14 @@ naima view requirements
 `naima check` refuses a requirement that is marked met when no test for it has passed, or when one has failed. It also reminds you of a requirement that is
 proven but not yet marked met, and of one that nothing delivers or proves.
 
+A requirement that you did not ask for yourself, one an agent filed on its own, starts _proposed_ rather than stated
+([where each item comes from](working-with-agents.md#where-each-item-comes-from)). No gate counts it, and `naima check` reminds you of it, until you agree and
+the agent records your yes:
+
+```sh
+naima confirm requirements/export-takes-under-second --words "Yes, a second at most"
+```
+
 ## Requirements come from every conversation
 
 Requirements aren't written once, at the start of the work. Whenever you say something about what you want, the agent checks whether it adds a requirement or

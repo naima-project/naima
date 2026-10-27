@@ -33,6 +33,7 @@ import { addedPrivate, allowanceLine, privateContext, type PrivateFinding, priva
 import { asRendered, type Format, linesAs, rendered } from "./rendered.ts"
 import { flagsOf } from "./vocabulary.ts"
 import { waive, WAIVERS } from "./waivers.ts"
+import { askedByOption, ORIGIN, originCommand, originMatches, originOnce } from "./origin.ts"
 import { LEVEL, messagesCommand, messagesType } from "./messages.ts"
 import type { Command, Context, Contribution, FieldDef, Item, Plugin, Rendered, SummarySection, TypeDef, View, Write, WriteHook } from "./types.ts"
 
@@ -125,8 +126,16 @@ const newCommand: Command = {
   says: "open an item",
   enforces:
     "every field is validated against its type's declarations before the item exists, and every write hook runs: a typo or a refusal leaves nothing behind; an archive type takes no new item",
-  usage: 'new <type> "<title>" [--section <s>] [--set field=value]... [--dedupe]',
+  usage: 'new <type> "<title>" [--section <s>] [--set field=value]... [--asked-by <role>] [--by <who>] [--from <item>] [--dedupe]',
   options: [
+    {
+      name: "--asked-by",
+      says:
+        "who asked for it, recorded in its origin: owner only for what the owner said, asked, reported or decided; coordinator or worker for what that agent asked; agent for what an agent found on its own; person:<name> for someone else",
+      default: "agent",
+    },
+    { name: "--by", says: "who files it, recorded in its origin", default: "git's user.name" },
+    { name: "--from", says: "the item it was derived from, recorded in its origin: a bug found while working on a feature" },
     { name: "--section", says: "the heading the item is grouped under on its board" },
     { name: "--set", says: "a field=value pair to set on the new item; repeatable" },
     { name: "--dedupe", says: "print items of the same type with a similar title before writing; never blocks" },
@@ -135,9 +144,18 @@ const newCommand: Command = {
     'new bugs "Export drops the alpha channel"',
     'new tests "Export keeps the alpha channel" --set runBy=agent --section export',
     'new todos "Retry export on timeout" --dedupe',
+    'new requirements "Export keeps the alpha channel" --asked-by owner',
+    'new bugs "Export crashes on an empty layer" --from export-keeps',
   ],
   run(args, ctx) {
-    const p = parse(args, { section: { type: "string" }, set: { type: "string", multiple: true }, dedupe: { type: "boolean" } })
+    const p = parse(args, {
+      section: { type: "string" },
+      set: { type: "string", multiple: true },
+      dedupe: { type: "boolean" },
+      "asked-by": { type: "string" },
+      by: { type: "string" },
+      from: { type: "string" },
+    })
     const [typeId, title] = p.positionals
     const type = typeOrThrow(ctx, typeId)
     if (type.creatable === false) throw new Error(`${type.id} is an archive: items arrive by being moved there, not by being opened`)
@@ -145,6 +163,15 @@ const newCommand: Command = {
     const section = str(p, "section")
     // Every assignment is validated before the item exists: a typo leaves nothing behind.
     const fields = withFields(ctx, type.id, section ? { section } : {}, pairs(strs(p, "set")))
+    if (Object.hasOwn(fields, ORIGIN.name)) throw new Error("origin is not set by hand: --asked-by, --by and --from say it")
+    const asked = str(p, "asked-by")
+    const from = str(p, "from")
+    const by = str(p, "by")
+    const origin = {
+      ...(asked !== undefined ? askedByOption(asked) : {}),
+      ...(by ? { by } : {}),
+      ...(from ? { from: ctx.repo.resolve(from).meta.id } : {}),
+    }
     if (bool(p, "dedupe")) {
       const likely = likelyDuplicatesOf(ctx, type.id, title.trim())
       if (likely.length) {
@@ -154,7 +181,7 @@ const newCommand: Command = {
         ctx.out("filed anyway, as a new item:")
       }
     }
-    const item = createItem(ctx, type, title.trim(), fields, { authored: true })
+    const item = createItem(ctx, type, title.trim(), fields, { authored: true, origin })
     ctx.out(`${ctx.trackerDir}/${type.dir}/${item.slug}/  ${item.meta.id}`)
     return 0
   },
@@ -257,14 +284,24 @@ const list: Command = {
   name: "list",
   says: "list items, most urgent first",
   enforces: "nothing: it only reads",
-  usage: "list [type] [--open]",
-  options: [{ name: "--open", says: "only items whose status is in the open category" }],
-  examples: ["list", "list bugs --open"],
+  usage: "list [type] [--open] [--origin <role|session|date range>]",
+  options: [
+    { name: "--open", says: "only items whose status is in the open category" },
+    {
+      name: "--origin",
+      says:
+        "only items whose origin matches: a role who asked (owner, coordinator, worker, agent, person, unknown), a day or a range of days filed (2026-10-27, 2026-10-01..2026-10-27, either end open), else a session id",
+    },
+  ],
+  examples: ["list", "list bugs --open", "list requirements --origin agent", "list --origin 2026-10-01..", "list --origin 2026-10-27-1a2b3c4d"],
   run(args, ctx) {
-    const p = parse(args, { open: { type: "boolean" } })
+    const p = parse(args, { open: { type: "boolean" }, origin: { type: "string" } })
     const typeId = p.positionals[0]
     if (typeId) typeOrThrow(ctx, typeId)
-    const items = ctx.repo.items.filter((i) => (!typeId || i.type === typeId) && (!bool(p, "open") || isOpen(ctx, i)))
+    const origin = str(p, "origin")
+    const items = ctx.repo.items.filter((i) =>
+      (!typeId || i.type === typeId) && (!bool(p, "open") || isOpen(ctx, i)) && (origin === undefined || originMatches(i, origin))
+    )
     for (const item of byUrgency(ctx, items)) ctx.out(line(item))
     ctx.out(`${items.length} item${items.length === 1 ? "" : "s"}`)
     return 0
@@ -870,6 +907,7 @@ export const corePlugin: Plugin = {
     { name: "section", kind: "string", says: "the heading the item is grouped under on its board" },
     { name: "created", kind: "date", says: "when the item was opened" },
     { name: "tags", kind: "strings", says: "free labels a person puts on an item" },
+    ORIGIN,
     LEVEL,
   ],
   relations: [
@@ -881,7 +919,27 @@ export const corePlugin: Plugin = {
   types: [messagesType],
   dirs: [WAIVERS],
   checks: coreChecks,
-  commands: [newCommand, show, list, set, note, describe, link, unlink, move, check, waive, board, view, summary, plugins, types, runs, messagesCommand],
+  commands: [
+    newCommand,
+    show,
+    list,
+    set,
+    note,
+    describe,
+    link,
+    unlink,
+    move,
+    check,
+    waive,
+    board,
+    view,
+    summary,
+    plugins,
+    types,
+    runs,
+    messagesCommand,
+    originCommand,
+  ],
   summary: [counts],
-  hooks: [statusMoves, notesAppendOnly, privateInfrastructure],
+  hooks: [statusMoves, notesAppendOnly, privateInfrastructure, originOnce],
 }

@@ -312,6 +312,20 @@ export interface Write {
    * (naima new, describe, note, set) — rather than a record Naima fills or generates: what a no-leaks signature covers.
    */
   authored?: boolean
+  /** For a create: who asked for the item, who files it and what it comes from, as `naima new` was told (core/origin.ts). */
+  origin?: OriginRequest
+}
+
+/** What a create is told of its origin; the core's hook `origin-once` fills the rest (core/origin.ts). */
+export interface OriginRequest {
+  /** The role that asked: owner, coordinator, worker, agent, person or unknown; absent, agent. */
+  askedBy?: string
+  /** The name of the person who asked, when askedBy is person. */
+  person?: string
+  /** Who files it; absent, git's user.name. */
+  by?: string
+  /** The id of the item it was derived from. */
+  from?: string
 }
 
 /**

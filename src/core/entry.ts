@@ -101,9 +101,14 @@ export const cliCommands: Omit<Command, "run">[] = [
     says:
       `what an agent says first in a session: the banner (I'm Naima, the No-guesswork Artificial Intelligence Meta-Agent, active in this repository, with its version and commit); then, as naima.json's updates says, whether a newer Naima exists and, under update, what it changes and its rehearsal, as update --check says them; then where the project is going, as the plugins say it, such as the nearest gate with a due date and the next release, each with its verdict as naima gates gives it; then, one line each, what waits on the owner's decision, such as a long run that is due, never started, or that nothing does; then what it offers on request: what the plugins offer, such as generating code from a model the project has, then what Naima is and its documentation, an update check, an update after the owner's yes; last, the offer to explain what Naima can do from the basics (docs/guide/the-basics.md). Under --hook, the agent is told to open its first reply with the introduction, its name in bold, and how to explain the basics`,
     enforces:
-      "it never moves the lock nor starts a run; it asks the source only when updates is check or update, and records that check as the day's, in the tick's state outside the repository; the only thing it may write in the project is an urgent message the tick raises",
-    usage: "hello [--hook <tool>]",
+      "it never moves the lock nor starts a run; it asks the source only when updates is check or update, and records that check as the day's, and the session it starts (naima origin), in the tick's state outside the repository; the only thing it may write in the project is an urgent message the tick raises",
+    usage: "hello [--hook <tool>] [--session <id>]",
     options: [
+      {
+        name: "--session",
+        says:
+          "the id of the session it starts, which every write in this worktree records until the next hello (naima origin); without it, the agent tool's own when its hook is given one, else a new one: the day and eight hex digits",
+      },
       {
         name: "--hook",
         says:

@@ -117,6 +117,14 @@ export const claudeCode: AgentAdapter = {
   env: ["CLAUDECODE"],
   sessionStart,
   turnEnd,
+  sessionOf: (input) => {
+    try {
+      const v: unknown = JSON.parse(input)
+      return isObject(v) && typeof v["session_id"] === "string" ? v["session_id"] : undefined
+    } catch {
+      return undefined
+    }
+  },
   greeting: (shown, context) => JSON.stringify({ systemMessage: shown, hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: context } }),
   stopFor: (reason) => JSON.stringify({ decision: "block", reason }),
 }

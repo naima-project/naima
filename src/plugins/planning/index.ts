@@ -35,6 +35,8 @@ import {
   type FieldDef,
   fieldValue,
   type Finding,
+  gitOrNull,
+  isGitRepo,
   isOpen,
   type Item,
   label,
@@ -45,9 +47,11 @@ import {
   readReadme,
   refutes,
   rendered,
+  saveMeta,
   saveProse,
   slugify,
   splitProse,
+  str,
   today,
   type TypeDef,
   typeOrThrow,
@@ -62,6 +66,26 @@ import { ARTIFACT_FIELDS, ARTIFACT_RELATIONS, artifactsCheck, artifactsType, del
 /** The trait the gates plugin reads (dependencies.ts): a standard the work is held to, never itself the work. */
 const STANDARD = "standard"
 
+/** The status flag the gates plugin reads: an item not yet confirmed by the owner, which no gate counts as a goal. */
+const PROPOSED = "proposed"
+
+/** The owner's confirmation of a requirement someone else proposed, as naima confirm records it. */
+const CONFIRMED: FieldDef = {
+  name: "confirmed",
+  kind: "object",
+  appliesTo: ["requirements"],
+  says:
+    "the owner's confirmation of a requirement filed by someone else, written by naima confirm: { words: the owner's yes, restated; by: who recorded it; on: the day }",
+}
+
+/** Who asked for an item, as the core's origin records it; undefined when it has none. */
+const askedBy = (meta: Record<string, unknown>): string | undefined => {
+  const o = meta["origin"]
+  return o && typeof o === "object" && !Array.isArray(o) && typeof (o as Record<string, unknown>)["askedBy"] === "string"
+    ? (o as Record<string, string>)["askedBy"]
+    : undefined
+}
+
 const requirementsType: TypeDef = {
   id: "requirements",
   traits: [STANDARD],
@@ -70,6 +94,11 @@ const requirementsType: TypeDef = {
   says:
     "something the result must satisfy, stated so it can be checked: delivered by the items that satisfy it, proven by the tests or properties that verify it",
   statuses: {
+    proposed: {
+      category: "open",
+      flags: [PROPOSED],
+      says: "filed by someone other than the owner and not yet confirmed by the owner (naima confirm): no gate counts it as a goal",
+    },
     stated: { category: "open", says: "stated, and not yet proven" },
     met: { category: "done", says: "proven: a test or property linked to it has passed, and none refutes it" },
     dropped: { category: "done", says: "no longer required; the page says why" },
@@ -98,13 +127,21 @@ const requirementsOf = (ctx: Context): Item[] => ctx.repo.items.filter((i) => i.
 const requirementsCheck: Check = {
   name: "requirements-proven",
   says:
-    "a requirement marked met has a proof that passed and none that refutes it; one proven but still stated is noted; one that nothing satisfies or verifies is noted",
+    "a requirement marked met has a proof that passed and none that refutes it; one proven but still stated is noted; one that nothing satisfies or verifies is noted; one proposed by someone other than the owner and never confirmed is noted",
   run(ctx) {
     const out: Finding[] = []
     for (const req of requirementsOf(ctx)) {
       const state = provenState(ctx, req)
       const status = req.meta.status
-      if (status === "met" && state === "refuted") {
+      if (status === PROPOSED) {
+        out.push({
+          level: "note",
+          item: req,
+          message: `${label(req)} was asked by ${askedBy(req.meta) ?? "someone"}, not the owner, and the owner never confirmed it — naima confirm ${
+            label(req)
+          } --words "<the owner's yes, restated>", or naima set ${label(req)} status=dropped`,
+        })
+      } else if (status === "met" && state === "refuted") {
         const by = proofsOf(ctx, req).filter((p) => refutes(ctx, p)).map(label).join(", ")
         out.push({ level: "problem", item: req, message: `${label(req)} is met, but ${by} refutes it — fix it, or naima set ${label(req)} status=stated` })
       } else if (status === "met" && state === "unproven") {
@@ -670,6 +707,57 @@ const modelFirstCheck: Check = {
 
 // ── hooks ─────────────────────────────────────────────────────────────────────
 
+/**
+ * A requirement the owner did not ask for is proposed until the owner confirms it: created proposed when its origin's
+ * askedBy is not owner, and moved on from proposed to stated or met only by naima confirm.
+ */
+const proposedRequirements: WriteHook = {
+  name: "requirements-confirmed",
+  says:
+    "a new requirement whose origin says someone other than the owner asked for it is proposed, not stated; it becomes stated or met only through naima confirm, with the owner's words restated, or is dropped; --force takes a move on",
+  beforeWrite(write) {
+    if (write.item.type !== requirementsType.id) return
+    const meta = write.item.meta
+    if (write.kind === "create") {
+      if (meta.status === requirementsType.initialStatus && askedBy(meta) !== "owner") write.item.meta = { ...meta, status: PROPOSED }
+      return
+    }
+    if (write.kind !== "update" || write.force || write.before?.status !== PROPOSED) return
+    if (meta.status === PROPOSED || meta.status === "dropped" || meta[CONFIRMED.name] !== undefined) return
+    return `${label(write.item)} is proposed: only the owner confirms it — naima confirm ${label(write.item)} --words "<the owner's yes, restated>"`
+  },
+}
+
+const confirm: Command = {
+  name: "confirm",
+  says:
+    "record the owner's confirmation of a proposed requirement, one someone other than the owner filed: it becomes stated, and gates count it from then on; the owner's yes, restated, is kept on the item",
+  enforces:
+    "only a proposed requirement is confirmed, and only with the owner's words restated: an agent runs it after the owner said yes, never on its own judgement",
+  usage: 'confirm <requirement> --words "<the owner\'s yes, restated>" [--by <who>]',
+  options: [
+    { name: "--words", says: "the owner's yes, restated in the agent's words, recorded in the field confirmed" },
+    { name: "--by", says: "who records it", default: "git's user.name" },
+  ],
+  examples: ['confirm export-keeps --words "Yes, the export must keep the alpha channel"'],
+  run(args, ctx) {
+    const p = parse(args, { words: { type: "string" }, by: { type: "string" } })
+    const [ref, ...rest] = p.positionals
+    const words = str(p, "words")?.trim()
+    if (!ref?.trim() || rest.length || !words) throw usageError(this)
+    const item = ctx.repo.resolve(ref)
+    if (item.type !== requirementsType.id) throw new Error(`${label(item)} is not a requirement: only a requirement is confirmed`)
+    if (item.meta.status !== PROPOSED) throw new Error(`${label(item)} is ${item.meta.status}, not proposed: there is nothing to confirm`)
+    const by = str(p, "by")?.trim() || (isGitRepo(ctx.root) ? gitOrNull(ctx.root, "config", "user.name") ?? undefined : undefined)
+    const confirmed = { words, ...(by ? { by } : {}), on: today(ctx) }
+    const next: Item = { ...item, meta: { ...item.meta, status: "stated", [CONFIRMED.name]: confirmed } }
+    saveMeta(ctx, next, { authored: true })
+    item.meta = next.meta
+    ctx.out(`${label(item)}: confirmed by the owner, now stated`)
+    return 0
+  },
+}
+
 const stamp: WriteHook = {
   name: "planning-stamps",
   says:
@@ -694,6 +782,7 @@ export default function planning(): Plugin {
     says: "requirements proven by tests, specifications versioned name-vN, the owner's decisions recorded once, and the artifacts the project makes and keeps",
     about: "Planning as items, so each is proven or checked rather than implied by a test. " +
       "A **requirement** says what must hold: the features, tests or epics that deliver it are linked `satisfies`, the tests or properties that prove it `verifies`; it is `met` only once a proof has passed and none refutes it, and `naima view requirements` traces each one. " +
+      'A requirement whose origin says someone other than the owner asked for it (`naima new requirements "<what>"` without `--asked-by owner`) starts `proposed`: no gate counts it as a goal, `requirements-proven` notes it, and it becomes `stated` only when the owner confirms it, `naima confirm <requirement> --words "<the owner\'s yes, restated>"`, which records the words in its field `confirmed`. ' +
       "A **specification** says how something must behave, versioned `name-vN`: `naima spec revise <spec>` opens the next version as a draft that `supersedes` the old one, one version per name is `current`, and an item that follows a spec is linked `specified-by` — work starts from the spec, and closes when the code matches it. " +
       "A **decision** is a choice or a standing permission of the owner's, dated and restated in the owner's words: it `settles` the items that waited on it and `supersedes` the decision it replaces. " +
       "Before asking the owner anything, an agent runs `naima decisions <words>`; after the owner answers, it records the answer with `naima new decisions`, so a settled question is never asked again. " +
@@ -703,7 +792,7 @@ export default function planning(): Plugin {
       'The plugin ships two rules, listed by `naima rules` when the rules plugin is loaded: requirements are elicited at every prompt of the owner, each with how it is checked or measured (a test, a property, or a metric with a budget), acknowledged as "Elicitation mode on" and held in part by `requirements-proven`, which notes a requirement nothing proves; and behaviour with states or concurrency is designed from a model first (a state machine, mCRL2, or a state machine encoded in mCRL2), its properties as items, kept in step with the code, acknowledged as "Model first mode on". ' +
       'Whether a change has states or concurrency is recorded at triage, in its field `stateful` (true or false), and never guessed from the code; `model-first` notes a change triaged `stateful: true` that landed with no `models` or `properties` item linked to it and no note "No model: <reason>". It is a note, not a problem: the rule is a should.',
     types: [requirementsType, specsType, decisionsType, releasesType, sessionsType, artifactsType],
-    fields: [SPEC, VERSION, DECIDED_ON, STANDING, SITTING_RUN, STATEFUL, ...ARTIFACT_FIELDS],
+    fields: [SPEC, VERSION, DECIDED_ON, STANDING, SITTING_RUN, STATEFUL, CONFIRMED, ...ARTIFACT_FIELDS],
     relations: [
       { name: "satisfies", inverse: "satisfied-by", says: "delivers or proves the requirement" },
       { name: "satisfied-by", inverse: "satisfies", says: "is delivered by" },
@@ -718,11 +807,11 @@ export default function planning(): Plugin {
       ...ARTIFACT_RELATIONS,
     ],
     // What it reads of others: who performs a proof and why, and what proves an item.
-    uses: { fields: [RUN_BY.name, HUMAN_BECAUSE.name, FIXED_ON.name], relations: ["verified-by"] },
-    commands: [spec, decisions],
+    uses: { fields: [RUN_BY.name, HUMAN_BECAUSE.name, FIXED_ON.name, "origin"], relations: ["verified-by"] },
+    commands: [spec, decisions, confirm],
     views: [requirementsView, releasesView],
     checks: [requirementsCheck, specsCheck, decisionsCheck, releasesCheck, artifactsCheck, modelFirstCheck],
-    hooks: [stamp, releasesHook, deliveryHook],
+    hooks: [stamp, proposedRequirements, releasesHook, deliveryHook],
     contributes: { rules: [ELICITATION_RULE, MODEL_FIRST_RULE] },
     // The rules are listed by naima rules when the rules plugin is loaded; without it, planning works the same.
     optional: ["rules"],

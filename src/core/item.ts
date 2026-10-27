@@ -6,7 +6,7 @@ import { join, relative } from "node:path"
 import { NaimaError } from "./errors.ts"
 import { writeFileAtomic } from "./files.ts"
 import { dirsAcrossBranches } from "./git.ts"
-import type { Context, Item, Meta, TextWrite, TypeDef, Write } from "./types.ts"
+import type { Context, Item, Meta, OriginRequest, TextWrite, TypeDef, Write } from "./types.ts"
 
 export const META = "meta.json"
 export const README = "README.md"
@@ -111,10 +111,16 @@ export interface WriteOptions {
   force?: boolean
   /** The write carries text its writer authored (Write.authored). */
   authored?: boolean
+  /** For a create: its origin as asked (Write.origin). */
+  origin?: OriginRequest
 }
 
 /** The flags of a write, from its options. */
-const flags = (opts: WriteOptions): { force: boolean; authored?: true } => ({ force: opts.force === true, ...(opts.authored ? { authored: true } : {}) })
+const flags = (opts: WriteOptions): { force: boolean; authored?: true; origin?: OriginRequest } => ({
+  force: opts.force === true,
+  ...(opts.authored ? { authored: true } : {}),
+  ...(opts.origin ? { origin: opts.origin } : {}),
+})
 
 /** The fields an item has on disk: what a write hook compares against. Null when there is no readable object. */
 function onDisk(dir: string): Meta | null {

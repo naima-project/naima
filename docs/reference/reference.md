@@ -41,7 +41,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`init`](#naima-init) | core | make the git repository around the program a Naima project, as its first run does by itself: beside the program, a git clone of Naima at naima-tracker/naima/, create naima-data/naima.json, locked to the clone's origin and its HEAD, which must be on the origin's main, and the tracker folder's README.md and .gitignore; print the line that keeps the program out of each host tool configuration it finds (deno.json, tsconfig.json, .prettierignore); and write what makes an agent run naima hello at the start of every session: the line that tells agents where Naima is and to run it, into the host's AGENTS.md, else the first entry file it has, else a new AGENTS.md, and the hooks of each agent tool the project uses that has them (naima.json's agents; absent it, those whose files the project holds and the one Naima runs inside): a session-start hook that runs naima hello, and a turn-end hook that runs the tick when the agent ends its turn; nothing else outside naima-tracker/ is touched unless --write-excludes is given | the program is locked to a commit of its source's main, with nothing uncommitted; outside the tracker folder, only the pointer line, the session-start hooks and, with --write-excludes, the exclusion lines are written |
 | [`update`](#naima-update) | core | move the lock to the head of the source's main, or to the commit --to names: say what changes (the commits, the change notes they add — breaking first, then those that ask an action —, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, rename and remove options in naima.json as the change notes say and remove those it reads nowhere, each said with its value, and record the new commit; moving forward, the new Naima finishes: it migrates the data if its format moved, names the rules agents acknowledge again, runs naima check, and files an item in the type with the trait follow-up for each problem or note that is new since the commit before; writes, and says, what makes agents run naima hello at every session start where it is missing — the pointer line, rewritten when it does not say so, and each session-start hook as naima init installs them; all as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima | the lock moves only to a commit of the source's main, with the data migrated forward in the same change; never back past a migration, which runs forward only; a source naima.json names other than the program's origin is refused, by every command, until --accept-source |
 | [`rollback`](#naima-rollback) | core | move the lock back to the one naima.json recorded before it, found in its git history, as one change to commit: what update --to does with that commit | the lock goes back only to a commit that reads the data's formats: a migration is undone by reverting its commit, never by running an older Naima on newer data |
-| [`hello`](#naima-hello) | core | what an agent says first in a session: the banner (I'm Naima, the No-guesswork Artificial Intelligence Meta-Agent, active in this repository, with its version and commit); then, as naima.json's updates says, whether a newer Naima exists and, under update, what it changes and its rehearsal, as update --check says them; then where the project is going, as the plugins say it, such as the nearest gate with a due date and the next release, each with its verdict as naima gates gives it; then, one line each, what waits on the owner's decision, such as a long run that is due, never started, or that nothing does; then what it offers on request: what the plugins offer, such as generating code from a model the project has, then what Naima is and its documentation, an update check, an update after the owner's yes; last, the offer to explain what Naima can do from the basics (docs/guide/the-basics.md). Under --hook, the agent is told to open its first reply with the introduction, its name in bold, and how to explain the basics | it never moves the lock nor starts a run; it asks the source only when updates is check or update, and records that check as the day's, in the tick's state outside the repository; the only thing it may write in the project is an urgent message the tick raises |
+| [`hello`](#naima-hello) | core | what an agent says first in a session: the banner (I'm Naima, the No-guesswork Artificial Intelligence Meta-Agent, active in this repository, with its version and commit); then, as naima.json's updates says, whether a newer Naima exists and, under update, what it changes and its rehearsal, as update --check says them; then where the project is going, as the plugins say it, such as the nearest gate with a due date and the next release, each with its verdict as naima gates gives it; then, one line each, what waits on the owner's decision, such as a long run that is due, never started, or that nothing does; then what it offers on request: what the plugins offer, such as generating code from a model the project has, then what Naima is and its documentation, an update check, an update after the owner's yes; last, the offer to explain what Naima can do from the basics (docs/guide/the-basics.md). Under --hook, the agent is told to open its first reply with the introduction, its name in bold, and how to explain the basics | it never moves the lock nor starts a run; it asks the source only when updates is check or update, and records that check as the day's, and the session it starts (naima origin), in the tick's state outside the repository; the only thing it may write in the project is an urgent message the tick raises |
 | [`tick`](#naima-tick) | core | run the tick now, as every command does before its own work: each job that is due — the update check once a day, unless updates is off; the jobs plugins contribute, such as the due long runs once an hour — run by whichever naima process wins it, a failed one retried an hour later, a week of failed update checks raising an urgent message; then say what is due to the owner, each message once, an urgent one once an hour until the owner acknowledges it (naima messages). Every other command says them after its own output, on standard error, one line each: NAIMA-MESSAGE, a space, and the message as a JSON object with the keys id, level (info, warning or urgent), text and ack, where ack is the command that acknowledges it, or null for a message said once | no lock: every decision is a file created only if it does not exist, kept outside the repository in the clone's git directory, so any number of naima processes, in any worktree of the clone, run each due job once; nothing is applied and no long work starts: it finds and says |
 | [`plugin`](#naima-plugin) | core | turn a plugin on or off, or set one of its options, in naima.json's plugins table — validated the way the project is validated on every load, instead of a hand-edit of the file | a name must be a first-party plugin (loaded or opt-in) or one the table already names with its own source; an option set on one whose options are known here must be one it declares; the whole file is re-validated before it is written, so nothing a later load would refuse ever reaches disk |
 | [`guide`](#naima-guide) | core | inside a project, first print what its plugins contribute to the guide, such as the project's active rules for agents; then where the running Naima's documentation is: the skill, the docs map, the guide for people, the rules, the pages for agents, the format, installing; read them as files | nothing: it only prints |
@@ -64,6 +64,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`types`](#naima-types) | core | list item types, their statuses and fields, then every field's list of values with how many items hold each | nothing: it only reads |
 | [`runs`](#naima-runs) | core | list the external programs the loaded contributions declare they start (a model checker, say), which the launcher allows besides git | nothing: it lists the programs the launcher allows besides git; the launcher refuses any other |
 | [`messages`](#naima-messages) | core | list what Naima has to tell the owner: the urgent messages not yet acknowledged, which the tick shows at most once an hour, then what it said once, such as a newer Naima; with ack, the owner acknowledges a message, which stops it being shown, in every worktree and, once the tracker is committed, on every machine | a message is acknowledged only by the owner's command, never on their behalf; an acknowledgement is never undone |
+| [`origin`](#naima-origin) | core | say the session this worktree is in; with a session id, list what that session filed (each with who asked) and every other item it changed, to review a session that drifted and undo it item by item; with --backfill, give every item with no origin one inferred from git | an origin is never changed: the backfill writes only to items with none, marks each inferred: true with askedBy unknown, for the owner to settle in a review; the session's log is read from outside the repository and never committed |
 | [`close`](#naima-close) | trackers | archive a resolved item: fixed, and proven by an item that has passed | an item is archived only when fixed and proven: fixedOn set and a verified-by item that has passed, with every write hook agreeing; --force takes a hook's refusal on, for the one who owns the evidence |
 | [`bugs`](#naima-bugs) | trackers | how many bugs have no code written, and how many are fixed but unproven | nothing: it only counts |
 | [`open`](#naima-open) | coordination | start a piece of work: a worktree <worktrees>/<what> on a new branch <who>/<what> from the trunk, and its claim on the items, in one step | work happens on its own branch and worktree from the trunk, and its claim on the items is recorded in the same step; a branch that already exists is never reused, and the refusal says whether it is merged into the trunk; no worker worktree is opened beyond the option maxWorkers, and the refusal names the open ones and how to raise the bound |
@@ -89,6 +90,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`epic`](#naima-epic) | epics | each epic with its progress — n of m closed, what it waits for and whose hands — or put items in an epic and take them out | only an epic groups items and never itself, and its status follows its items: setting it against them is refused |
 | [`spec`](#naima-spec) | planning | each specification: its current version, its drafts, and the open items that follow it; or revise one into its next version | a revision is a new spec item, its next version, that supersedes the old one; the old version is kept as it was |
 | [`decisions`](#naima-decisions) | planning | search the owner's decisions before asking: the settled ones whose title or page hold every word given, newest first | nothing: it only searches, so a settled question is looked up before it is asked again |
+| [`confirm`](#naima-confirm) | planning | record the owner's confirmation of a proposed requirement, one someone other than the owner filed: it becomes stated, and gates count it from then on; the owner's yes, restated, is kept on the item | only a proposed requirement is confirmed, and only with the owner's words restated: an agent runs it after the owner said yes, never on its own judgement |
 | [`knowledge`](#naima-knowledge) | knowledge | print the established knowledge entries by kind, each with its source or evidence | nothing: it reads the knowledge entries and prints them; `naima check` holds what an entry must stand on |
 | [`roles`](#naima-roles) | roles | every role: what it owns, what it refuses, the kinds and types on its queue, and how many open items are on it | nothing: it only reads; a role that refuses nothing is refused when the plugin loads |
 | [`announce`](#naima-announce) | announce | the features that may be announced — user-facing, shipped, documented and checked by a person or end to end — major first: the source of release notes | nothing: it only lists, and only features user-facing, shipped, documented and checked by a person or end to end |
@@ -234,14 +236,15 @@ naima rollback
 
 What an agent says first in a session: the banner (I'm Naima, the No-guesswork Artificial Intelligence Meta-Agent, active in this repository, with its version and commit); then, as naima.json's updates says, whether a newer Naima exists and, under update, what it changes and its rehearsal, as update --check says them; then where the project is going, as the plugins say it, such as the nearest gate with a due date and the next release, each with its verdict as naima gates gives it; then, one line each, what waits on the owner's decision, such as a long run that is due, never started, or that nothing does; then what it offers on request: what the plugins offer, such as generating code from a model the project has, then what Naima is and its documentation, an update check, an update after the owner's yes; last, the offer to explain what Naima can do from the basics (docs/guide/the-basics.md). Under --hook, the agent is told to open its first reply with the introduction, its name in bold, and how to explain the basics.
 
-**Enforces**: It never moves the lock nor starts a run; it asks the source only when updates is check or update, and records that check as the day's, in the tick's state outside the repository; the only thing it may write in the project is an urgent message the tick raises.
+**Enforces**: It never moves the lock nor starts a run; it asks the source only when updates is check or update, and records that check as the day's, and the session it starts (naima origin), in the tick's state outside the repository; the only thing it may write in the project is an urgent message the tick raises.
 
 ```sh
-naima hello [--hook <tool>]
+naima hello [--hook <tool>] [--session <id>]
 ```
 
 | Option | Default | What it does |
 |---|---|---|
+| `--session` |  | the id of the session it starts, which every write in this worktree records until the next hello (naima origin); without it, the agent tool's own when its hook is given one, else a new one: the day and eight hex digits |
 | `--hook` |  | print the greeting as the session-start hook of that agent tool wants it, named as naima.json's agents names it: the greeting for the owner to see directly, and what the agent is to say first, in the form the tool's adapter gives (src/core/adapters/) |
 
 Examples:
@@ -336,11 +339,14 @@ Open an item.
 **Enforces**: Every field is validated against its type's declarations before the item exists, and every write hook runs: a typo or a refusal leaves nothing behind; an archive type takes no new item.
 
 ```sh
-naima new <type> "<title>" [--section <s>] [--set field=value]... [--dedupe]
+naima new <type> "<title>" [--section <s>] [--set field=value]... [--asked-by <role>] [--by <who>] [--from <item>] [--dedupe]
 ```
 
 | Option | Default | What it does |
 |---|---|---|
+| `--asked-by` | `agent` | who asked for it, recorded in its origin: owner only for what the owner said, asked, reported or decided; coordinator or worker for what that agent asked; agent for what an agent found on its own; person:<name> for someone else |
+| `--by` | `git's user.name` | who files it, recorded in its origin |
+| `--from` |  | the item it was derived from, recorded in its origin: a bug found while working on a feature |
 | `--section` |  | the heading the item is grouped under on its board |
 | `--set` |  | a field=value pair to set on the new item; repeatable |
 | `--dedupe` |  | print items of the same type with a similar title before writing; never blocks |
@@ -351,6 +357,8 @@ Examples:
 naima new bugs "Export drops the alpha channel"
 naima new tests "Export keeps the alpha channel" --set runBy=agent --section export
 naima new todos "Retry export on timeout" --dedupe
+naima new requirements "Export keeps the alpha channel" --asked-by owner
+naima new bugs "Export crashes on an empty layer" --from export-keeps
 ```
 
 ### naima show
@@ -382,18 +390,22 @@ List items, most urgent first.
 **Enforces**: Nothing: it only reads.
 
 ```sh
-naima list [type] [--open]
+naima list [type] [--open] [--origin <role|session|date range>]
 ```
 
 | Option | Default | What it does |
 |---|---|---|
 | `--open` |  | only items whose status is in the open category |
+| `--origin` |  | only items whose origin matches: a role who asked (owner, coordinator, worker, agent, person, unknown), a day or a range of days filed (2026-10-27, 2026-10-01..2026-10-27, either end open), else a session id |
 
 Examples:
 
 ```sh
 naima list
 naima list bugs --open
+naima list requirements --origin agent
+naima list --origin 2026-10-01..
+naima list --origin 2026-10-27-1a2b3c4d
 ```
 
 ### naima set
@@ -705,6 +717,35 @@ naima messages --all
 naima messages ack update-check-failing-since-2026-10-18
 ```
 
+### naima origin
+
+Say the session this worktree is in; with a session id, list what that session filed (each with who asked) and every other item it changed, to review a session that drifted and undo it item by item; with --backfill, give every item with no origin one inferred from git.
+
+**Enforces**: An origin is never changed: the backfill writes only to items with none, marks each inferred: true with askedBy unknown, for the owner to settle in a review; the session's log is read from outside the repository and never committed.
+
+**Progress**: none — the backfill asks git once per item, with no total known to git; instead, It prints one line per item it gives an origin.
+
+```sh
+naima origin [<session>] [--json]
+naima origin --backfill [--dry-run]
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--json` |  | print the review as JSON: the session, the items it filed, the items it changed |
+| `--backfill` |  | give each item with no origin the one git gives: the commit that added its meta.json, its author and date, the branch of the landing marker that brought it in; inferred: true, askedBy unknown |
+| `--dry-run` |  | with --backfill: say what it would write, and write nothing |
+
+Examples:
+
+```sh
+naima origin
+naima origin 2026-10-27-1a2b3c4d
+naima origin 2026-10-27-1a2b3c4d --json
+naima origin --backfill --dry-run
+naima origin --backfill
+```
+
 ### type: messages
 
 Messages: what Naima has to tell the owner and waits on them to read, such as an update check failing for days: created by the tick, acknowledged by the owner. Items live in `naima-tracker/naima-data/messages/`; a new one starts as `unread`; it is an archive: items arrive by being moved there, never by being opened.
@@ -725,6 +766,7 @@ Moves allowed: `acknowledged` → ; a status not named moves to any.
 | `section` | string | every type | the heading the item is grouped under on its board |  |
 | `created` | date | every type | when the item was opened |  |
 | `tags` | strings | every type | free labels a person puts on an item |  |
+| `origin` | object | every type | where the item comes from, written once by naima new and never changed: { askedBy: owner, coordinator, worker, agent, person (with person: the name) or unknown; filedBy: { name, role }; session: the session it was filed in; on: the instant; branch; from: the id of the item it was derived from }, with inferred: true and commit when naima origin --backfill read it from git |  |
 | `level` | enum | any type tagged `messages` | how much a message weighs: info and warning are said once, urgent is shown once an hour until acknowledged | `info` worth knowing; `warning` worth acting on; `urgent` the owner should know now: shown once an hour until acknowledged |
 
 **Link relations** — only the direction written is stored; the inverse is derived when read.
@@ -764,6 +806,7 @@ Moves allowed: `acknowledged` → ; a status not named moves to any.
 | `status-moves` | a status moves only to one its type's transitions allow from the status it has; a status the transitions do not name moves to any, and --force takes the move on |
 | `notes-append-only` | a write of an item's prose keeps its Notes section as it was and may only add after it; --force takes a rewrite on |
 | `private-infrastructure` | a write of an item's title, fields or prose that adds a machine name, an IP address, a URI with a port, a home-directory path, the user's name or a word of the private list is refused, each finding listed with the placeholder to write instead; --allow-private "<reason>" lets a deliberate mention through and records the reason in the item's notes |
+| `origin-once` | every new item records its origin (who asked, in what role, who filed it, the session, the instant, the branch, the item it came from) and no later write changes or drops it; every write in a session is logged, outside the repository, for naima origin |
 
 ## trackers
 
@@ -1695,9 +1738,9 @@ Requirements proven by tests, specifications versioned name-vN, the owner's deci
 
 Its contributions' qualified ids are `planning/<name>`.
 
-Planning as items, so each is proven or checked rather than implied by a test. A **requirement** says what must hold: the features, tests or epics that deliver it are linked `satisfies`, the tests or properties that prove it `verifies`; it is `met` only once a proof has passed and none refutes it, and `naima view requirements` traces each one. A **specification** says how something must behave, versioned `name-vN`: `naima spec revise <spec>` opens the next version as a draft that `supersedes` the old one, one version per name is `current`, and an item that follows a spec is linked `specified-by` — work starts from the spec, and closes when the code matches it. A **decision** is a choice or a standing permission of the owner's, dated and restated in the owner's words: it `settles` the items that waited on it and `supersedes` the decision it replaces. Before asking the owner anything, an agent runs `naima decisions <words>`; after the owner answers, it records the answer with `naima new decisions`, so a settled question is never asked again. A **release** opens at its first stage (`naima new releases "<name>"`); each stage's output is recorded with `naima note`, headed `Stage: <name>` (or `Stage: <name> — skipped, decided by <who>`), and the hook refuses `status=released` while a stage is unrecorded — `naima view releases` shows what each one still owes. A **session** is a dated, append-only record of one test sitting, linked `records` to the test or tests it was for; several share a `run` name when they were sat together. It is optional — most of the time the test's own page and status say enough — and is never edited once written: a later sitting is a new session. An **artifact** is something the project makes and keeps — an analysis, a profile, a report, a dataset, a figure: `due` by a day, made by the todo or feature linked `produces`, made of `files` (paths from the project root) or its attachments, made from `inputs` (files or directories) and the data of the tests, properties or other artifacts it `uses`, and replaced by a later version that `supersedes` it. `naima set <artifact> status=delivered` refuses while a file it names is missing or it has none, and otherwise records `madeFrom` — the commit, one digest over its inputs and the data of what it uses, the moment — and `deliveredOn`, from which `naima diary` tells the delivery; neither is set by hand. `artifacts-current` notes an artifact past its due day and not delivered, a delivered one whose inputs changed since it was made, and a planned one nothing produces. The plugin ships two rules, listed by `naima rules` when the rules plugin is loaded: requirements are elicited at every prompt of the owner, each with how it is checked or measured (a test, a property, or a metric with a budget), acknowledged as "Elicitation mode on" and held in part by `requirements-proven`, which notes a requirement nothing proves; and behaviour with states or concurrency is designed from a model first (a state machine, mCRL2, or a state machine encoded in mCRL2), its properties as items, kept in step with the code, acknowledged as "Model first mode on". Whether a change has states or concurrency is recorded at triage, in its field `stateful` (true or false), and never guessed from the code; `model-first` notes a change triaged `stateful: true` that landed with no `models` or `properties` item linked to it and no note "No model: <reason>". It is a note, not a problem: the rule is a should.
+Planning as items, so each is proven or checked rather than implied by a test. A **requirement** says what must hold: the features, tests or epics that deliver it are linked `satisfies`, the tests or properties that prove it `verifies`; it is `met` only once a proof has passed and none refutes it, and `naima view requirements` traces each one. A requirement whose origin says someone other than the owner asked for it (`naima new requirements "<what>"` without `--asked-by owner`) starts `proposed`: no gate counts it as a goal, `requirements-proven` notes it, and it becomes `stated` only when the owner confirms it, `naima confirm <requirement> --words "<the owner's yes, restated>"`, which records the words in its field `confirmed`. A **specification** says how something must behave, versioned `name-vN`: `naima spec revise <spec>` opens the next version as a draft that `supersedes` the old one, one version per name is `current`, and an item that follows a spec is linked `specified-by` — work starts from the spec, and closes when the code matches it. A **decision** is a choice or a standing permission of the owner's, dated and restated in the owner's words: it `settles` the items that waited on it and `supersedes` the decision it replaces. Before asking the owner anything, an agent runs `naima decisions <words>`; after the owner answers, it records the answer with `naima new decisions`, so a settled question is never asked again. A **release** opens at its first stage (`naima new releases "<name>"`); each stage's output is recorded with `naima note`, headed `Stage: <name>` (or `Stage: <name> — skipped, decided by <who>`), and the hook refuses `status=released` while a stage is unrecorded — `naima view releases` shows what each one still owes. A **session** is a dated, append-only record of one test sitting, linked `records` to the test or tests it was for; several share a `run` name when they were sat together. It is optional — most of the time the test's own page and status say enough — and is never edited once written: a later sitting is a new session. An **artifact** is something the project makes and keeps — an analysis, a profile, a report, a dataset, a figure: `due` by a day, made by the todo or feature linked `produces`, made of `files` (paths from the project root) or its attachments, made from `inputs` (files or directories) and the data of the tests, properties or other artifacts it `uses`, and replaced by a later version that `supersedes` it. `naima set <artifact> status=delivered` refuses while a file it names is missing or it has none, and otherwise records `madeFrom` — the commit, one digest over its inputs and the data of what it uses, the moment — and `deliveredOn`, from which `naima diary` tells the delivery; neither is set by hand. `artifacts-current` notes an artifact past its due day and not delivered, a delivered one whose inputs changed since it was made, and a planned one nothing produces. The plugin ships two rules, listed by `naima rules` when the rules plugin is loaded: requirements are elicited at every prompt of the owner, each with how it is checked or measured (a test, a property, or a metric with a budget), acknowledged as "Elicitation mode on" and held in part by `requirements-proven`, which notes a requirement nothing proves; and behaviour with states or concurrency is designed from a model first (a state machine, mCRL2, or a state machine encoded in mCRL2), its properties as items, kept in step with the code, acknowledged as "Model first mode on". Whether a change has states or concurrency is recorded at triage, in its field `stateful` (true or false), and never guessed from the code; `model-first` notes a change triaged `stateful: true` that landed with no `models` or `properties` item linked to it and no note "No model: <reason>". It is a note, not a problem: the rule is a should.
 
-**Uses**, declared by other plugins: fields `runBy`, `humanBecause`, `fixedOn`; relations `verified-by`.
+**Uses**, declared by other plugins: fields `runBy`, `humanBecause`, `fixedOn`, `origin`; relations `verified-by`.
 
 ### naima spec
 
@@ -1745,6 +1788,27 @@ naima decisions journal
 naima decisions licence --all --json
 ```
 
+### naima confirm
+
+Record the owner's confirmation of a proposed requirement, one someone other than the owner filed: it becomes stated, and gates count it from then on; the owner's yes, restated, is kept on the item.
+
+**Enforces**: Only a proposed requirement is confirmed, and only with the owner's words restated: an agent runs it after the owner said yes, never on its own judgement.
+
+```sh
+naima confirm <requirement> --words "<the owner's yes, restated>" [--by <who>]
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--words` |  | the owner's yes, restated in the agent's words, recorded in the field confirmed |
+| `--by` | `git's user.name` | who records it |
+
+Examples:
+
+```sh
+naima confirm export-keeps --words "Yes, the export must keep the alpha channel"
+```
+
 ### type: requirements
 
 Requirements: something the result must satisfy, stated so it can be checked: delivered by the items that satisfy it, proven by the tests or properties that verify it. Items live in `naima-tracker/naima-data/requirements/`; a new one starts as `stated`.
@@ -1753,6 +1817,7 @@ Traits: `standard`.
 
 | Status | Category | Flags | Meaning |
 |---|---|---|---|
+| `proposed` | open | proposed | filed by someone other than the owner and not yet confirmed by the owner (naima confirm): no gate counts it as a goal |
 | `stated` | open |  | stated, and not yet proven |
 | `met` | done |  | proven: a test or property linked to it has passed, and none refutes it |
 | `dropped` | done |  | no longer required; the page says why |
@@ -1816,6 +1881,7 @@ Artifacts: something the project makes and keeps — an analysis, a profile, a r
 | `standing` | boolean | decisions | a standing permission: the action it names may be taken again, every time, without asking |  |
 | `sittingRun` | string | sessions | the name shared by every session of one sitting, when several tests were sat together |  |
 | `stateful` | boolean | any type tagged `fixable` | whether the behaviour this change adds or fixes has states or concurrency (a lifecycle, a protocol, a scheduler, a retry loop, two processes sharing data): recorded at triage, true or false; when true, the change starts from a model (model-first) |  |
+| `confirmed` | object | requirements | the owner's confirmation of a requirement filed by someone else, written by naima confirm: { words: the owner's yes, restated; by: who recorded it; on: the day } |  |
 | `due` | date | artifacts | the day it is due; past it and not delivered, naima check notes it |  |
 | `inputs` | strings | artifacts | the files or directories it is made from, from the project root: with the data of the items it uses, what the digest in madeFrom covers |  |
 | `files` | strings | artifacts | the files it consists of, from the project root; the files in its attachments/ count too |  |
@@ -1845,7 +1911,7 @@ Artifacts: something the project makes and keeps — an analysis, a profile, a r
 
 | Check | What it holds |
 |---|---|
-| `requirements-proven` | a requirement marked met has a proof that passed and none that refutes it; one proven but still stated is noted; one that nothing satisfies or verifies is noted |
+| `requirements-proven` | a requirement marked met has a proof that passed and none that refutes it; one proven but still stated is noted; one that nothing satisfies or verifies is noted; one proposed by someone other than the owner and never confirmed is noted |
 | `specs-versioned` | one version of a specification is current; a version superseded by a current one is marked superseded; a spec supersedes only an earlier version of itself; an open item following a superseded version is noted |
 | `decisions-settled` | an open item waiting on the owner's decision (runBy human, humanBecause decision) that a settled decision settles is noted, to be acted on rather than asked; a decision superseded by a settled one is marked superseded |
 | `release-stages` | a release marked released has every stage recorded or skipped with who decided; one hand-edited past the hook is a problem |
@@ -1864,6 +1930,7 @@ Artifacts: something the project makes and keeps — an analysis, a profile, a r
 | Hook | What it does |
 |---|---|
 | `planning-stamps` | a new spec takes its name and version from its title (`Export format v2` is export-format, version 2) unless given; a new decision is dated today unless given |
+| `requirements-confirmed` | a new requirement whose origin says someone other than the owner asked for it is proposed, not stated; it becomes stated or met only through naima confirm, with the owner's words restated, or is dropped; --force takes a move on |
 | `release-stages` | a release is marked released only once every stage is recorded, or skipped and said by whom |
 | `artifacts-delivered` | an artifact becomes delivered only with its files — every path in files exists, and there is at least one, there or in its attachments — and is then stamped with madeFrom (the commit, the digest over its inputs and the data of what it uses, the moment) and deliveredOn; any other write that changes those two is refused |
 

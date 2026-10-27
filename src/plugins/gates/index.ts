@@ -47,6 +47,7 @@ import {
   type Finding,
   gitOrNull,
   groupBy,
+  hasFlag,
   isEvidenceType,
   isOpen,
   type Item,
@@ -208,10 +209,16 @@ const owesOnlyProof = (ctx: Context, item: Item): boolean => !refuted(ctx, item)
 
 export { GROUP } from "./dependencies.ts"
 
-/** The items a gate waits for — those on it, a group standing for its members — or, with no gate named, every gate's. */
+/** The status flag of an item not yet confirmed by the owner, such as a requirement an agent proposed: no gate counts it as a goal. */
+export const PROPOSED = "proposed"
+
+/**
+ * The items a gate waits for — those on it, a group standing for its members — or, with no gate named, every gate's;
+ * never one whose status is flagged proposed, which waits on the owner's confirmation, not on the work.
+ */
 export function gatedItems(ctx: Context, name?: string): Item[] {
   const on = ctx.repo.items.filter((i) => (name === undefined ? onGates(i).length > 0 : onGates(i).includes(name)))
-  return [...new Set(on.flatMap((i) => standsFor(ctx, i)))]
+  return [...new Set(on.flatMap((i) => standsFor(ctx, i)))].filter((i) => !hasFlag(ctx, i, PROPOSED))
 }
 
 const DAY = 86_400_000

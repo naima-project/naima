@@ -110,6 +110,12 @@ values holds one as a string and several as a list: `"gate": "v1"`, `"gate": ["v
 is the directory's name and may change; the id may not. Only one direction of a link is stored; its inverse is derived when read. Boards, queues and gate states
 are derived and never stored.
 
+`origin`, written by the core when the item is created and never changed afterwards, is an object: `askedBy` (`owner`, `coordinator`, `worker`, `agent`,
+`person` with `person` the name, or `unknown`), `filedBy` (`{ "name"?, "role" }`), `session` (optional: the session's id), `on` (an ISO instant), `branch` and
+`from` (the id of the item it was derived from), both optional; an origin inferred from git by `naima origin --backfill` adds `"inferred": true` and `commit`
+(its first 12 hex digits). An item with no `origin`, filed before it existed, is valid. Sessions and their logs live outside the repository, in the clone's git
+directory beside the tick's state, and are never committed.
+
 ## Coordination files
 
 State that belongs to no branch is one file per writer, on the writer's own branch, recombined when read ([concepts](../guide/concepts.md)):

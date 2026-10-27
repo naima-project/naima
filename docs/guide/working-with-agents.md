@@ -85,3 +85,30 @@ worktree. You only talk to the coordinator. How the work is shared out is descri
 - `naima summary` shows where things stand, including the latest [session notes](glossary.md#session-note).
 - `naima pass --list` shows the newest session notes in full.
 - `git log` shows every change, with its reason in the commit message.
+
+## Where each item comes from
+
+Every item records its origin when it is filed, in the field `origin` of its `meta.json`, and nothing changes it afterwards. It says who asked for the item
+(`askedBy`: you, the `owner`; the `coordinator` or a `worker`; an `agent` that found it on its own; a `person` other than you, by name; or `unknown`), who
+filed it and in what role (`filedBy`), the session it was filed in, the moment, the branch, and the item it was derived from (`from`), when there is one.
+Agents say `--asked-by owner` only for what you said; everything else they file is theirs.
+
+A requirement an agent filed on its own is _proposed_. No gate counts it, and `naima check` reminds you of it, until you say yes and the agent records your
+words with `naima confirm <requirement> --words "<your yes, restated>"`; then it is stated like any other.
+
+### Reviewing a session
+
+`naima hello`, which runs when a session starts, gives the session an id; when the agent tool has its own session id, that one is used. Every item filed until
+the next `naima hello` records it, and every change made in the session is logged beside the tick's state, outside the repository. A worktree with no session of
+its own counts in the main worktree's, so a worker's filings land in the session of the coordinator that started it.
+
+```sh
+naima origin                           # the session this worktree is in
+naima origin 2026-10-27-1a2b3c4d       # what that session filed, who asked for each, and what else it changed
+naima list requirements --origin agent # requirements nobody but an agent asked for
+naima list --origin 2026-10-20..2026-10-27
+```
+
+A session that drifted is reviewed item by item from that list, and undone the same way: drop what should not have been filed, and revert the changes with git.
+Items filed before origins existed get one from git with `naima origin --backfill` (try `--dry-run` first): the commit that added each item, its author and
+date, and the branch of the landing that brought it in, marked `inferred`, with `askedBy` left `unknown` for you to settle.

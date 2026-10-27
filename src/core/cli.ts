@@ -125,6 +125,7 @@ import {
   type TickResult,
   type TickTask,
 } from "./tick.ts"
+import { startSession } from "./origin.ts"
 import type { TickJob } from "./types.ts"
 
 export interface CliOptions extends OpenOptions {
@@ -145,6 +146,17 @@ export interface CliOptions extends OpenOptions {
    * ticks with the real ones; run directly, as the development build, nothing ticks unless this is given.
    */
   tick?: { clock?: () => Date; check?: (signal: AbortSignal) => Promise<JobOutcome> }
+  /** What a session-start hook is given on standard input, for a test; launched, it is read from standard input. */
+  hookInput?: () => string
+}
+
+/** Standard input, as a session-start hook is given it: nothing from a terminal, or when it cannot be read. */
+function readHookInput(): string {
+  try {
+    return process.stdin.isTTY ? "" : readFileSync(0, "utf8")
+  } catch {
+    return ""
+  }
 }
 
 const usage = (name: string): string => `usage: naima ${cliCommands.find((c) => c.name === name)?.usage ?? name}`
@@ -963,7 +975,9 @@ export const greetingContext = (shown: string): string =>
  */
 async function hello(args: string[], opts: CliOptions, place: Located, io: IO): Promise<number> {
   const { tool, rest } = hookTool(args, "hello")
-  if (rest.length) throw new Error(usage("hello"))
+  const at = rest.indexOf("--session")
+  const given = at === -1 ? undefined : rest[at + 1]
+  if (rest.length !== (at === -1 ? 0 : 2) || (at !== -1 && !given)) throw new Error(usage("hello"))
   const { lock, raw } = place
   const me = running(opts.programRoot)
   const policy = parseUpdates(raw["updates"])
@@ -971,6 +985,9 @@ async function hello(args: string[], opts: CliOptions, place: Located, io: IO): 
   /** Whether something the lines say waits on the owner's decision: a newer Naima, an unfinished update, a due run, an urgent message. */
   let waits = false
   const now = opts.tick?.clock ?? (() => new Date())
+  // The session it starts: given, else the tool's own from its hook's input, read only when launched as a hook.
+  const hookInput = tool?.sessionOf ? (opts.hookInput ?? (opts.launched ? readHookInput : () => ""))() : ""
+  startSession(place.root, now(), given ?? (hookInput ? tool?.sessionOf?.(hookInput) : undefined))
   const dir = ticks(opts) ? tickDir(place.root) : null
   /** The day's update check, done here: recorded, so the tick does not ask the source again today. */
   const recorded = (outcome: JobOutcome): void => {

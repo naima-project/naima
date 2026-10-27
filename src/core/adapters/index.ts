@@ -51,6 +51,8 @@ export interface AgentAdapter {
   turnEnd?: AgentHook
   /** What naima hello --hook prints for the tool: `shown` for the owner to see directly, `context` for the agent. */
   greeting?(shown: string, context: string): string
+  /** The tool's own session id, from what its session-start hook is given on standard input: what naima hello --hook records as the session. */
+  sessionOf?(hookInput: string): string | undefined
   /** What naima tick --hook prints for the tool when the owner has to be told something: `reason`, for the agent. */
   stopFor?(reason: string): string
 }

@@ -85,6 +85,10 @@ The title says what happened, not what to do about it.
 3. **What was measured and what was inferred, kept apart.** "Read in the code, certain" is marked differently from what the agent checked, and "not reproduced"
    differently from what it assumes. An item that keeps the two apart stays useful even when its boldest claim turns out to be false.
 4. **The consequence**, meaning who notices and when. Without it the `impact` field has to be guessed, and a guessed impact puts the ranking in the wrong order.
+5. **Who asked for it.** `naima new` records the item's origin: who asked and in what role, who filed it, the session, the moment and the branch. The agent
+   passes `--asked-by owner` only for what the owner said, asked, reported or decided; what it found on its own keeps the default, `agent`, and a finding made
+   while working on another item names it with `--from <item>`. A requirement not asked by the owner starts `proposed`: no gate counts it until the owner says
+   yes and the agent records it with `naima confirm <requirement> --words "<the owner's yes, restated>"`.
 
 A report doesn't include a fix nobody has tried, a cause nobody has checked, or a severity chosen to get attention. Attention is what the `priority` field is
 for.
