@@ -102,7 +102,10 @@ export {
 } from "./git.ts"
 export { DATA_FILE, DEFAULT_DATA, TRACKER_DIR } from "./layout.ts"
 export {
+  CLI_TRAILER,
+  cliCommitMessage,
   CODE_TRAILER,
+  commitTrackerPaths,
   DELEGATE_MARK,
   HOOKS_DIR,
   HOOKS_OFF_KEY,
@@ -119,6 +122,7 @@ export {
   writeDelegates,
   writeGitHook,
 } from "./repos.ts"
+export { githubRepo } from "./visibility.ts"
 export { WAIVERS } from "./waivers.ts"
 export {
   askHost,

@@ -77,7 +77,7 @@ leaves the machine until you push it somewhere yourself. Init also writes:
 - a line in `naima-tracker/.gitignore` that keeps `naima-data/` out of the code repository.
 - a `commit-msg` hook in `naima-data/hooks/`, which both repositories run (their `core.hooksPath` points at it).
 
-The first commits are two: the data in the tracker repository, then `naima-tracker/` in the code's.
+The first commits are two: Naima commits the data in the tracker repository itself, and you commit `naima-tracker/` in the code's.
 
 To give the tracker a private remote later, one line is enough with GitHub's command-line tool:
 
@@ -87,6 +87,19 @@ gh repo create <owner>/<project>-tracker --private --source naima-tracker/naima-
 
 A colleague then clones the code as usual, and the tracker into place with `naima init --tracker <its address>`, or with
 `git clone <its address> naima-tracker/naima-data`.
+
+### Naima commits the tracker
+
+In sibling mode nobody commits the tracker by hand. Every naima command that writes to it (a new item, a note, a claim, a field set, an update) ends with one
+commit in the tracker's repository, on the branch it stands on. The subject names the command and the items it wrote, for example
+`naima new: features/dark-mode`, and a `Naima-Command: new` trailer names the command. `naima open` commits the new claim on the tracker's branch of the
+worktree in the same way, and `naima init` makes the tracker's first commit.
+
+Item files are written through naima commands, never by hand. A file of the tracker changed by hand is left as it is: the next command commits only what it
+wrote itself, and says which files it left. On the tracker's trunk, the [trunk guard](commit-hooks.md#the-trunk-guard) refuses a commit made by hand, and
+`naima check` (`landings-are-markers`) notes one that got past it, counting from the first commit Naima made there.
+
+A tracker committed with the code works as before: its writes stay uncommitted, and they are committed with the work.
 
 ### How the two repositories stay linked
 

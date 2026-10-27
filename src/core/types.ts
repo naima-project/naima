@@ -180,6 +180,8 @@ export interface Command {
   hook?: boolean
   /** True for a command still provisional: it runs when called, but `naima --help` and the reference do not list it. */
   hidden?: boolean
+  /** The external programs the command starts besides git, which the launcher grants (`naima runs` lists them). */
+  runs?: string[]
   run(args: string[], ctx: Context): number | Promise<number>
 }
 

@@ -20,6 +20,7 @@ import {
   cloneIntoNewWorktree,
   CODE_TRAILER,
   type Command,
+  commitTrackerPaths,
   type Context,
   CONTRACT,
   currentBranch,
@@ -819,10 +820,16 @@ function openCommand(policy: Policy): Command {
       // The new worktree is outside what this run may write: git writes the claim there.
       const { file: name, ref: _ref, local: _local, ...body } = claim
       const file = `${rel(ctx, CLAIMS)}/${name}`
-      if (trackerBase) writeThroughGit(trackerTree, `${inGit(ctx, CLAIMS)}/${name}`, JSON.stringify(body, null, 2) + "\n")
+      // A tracker of its own is committed by Naima: the claim is the first commit of the tracker's branch.
+      const claimed = `${inGit(ctx, CLAIMS)}/${name}`
+      if (trackerBase) writeThroughGit(trackerTree, claimed, JSON.stringify(body, null, 2) + "\n")
       else writeThroughGit(path, file, JSON.stringify(body, null, 2) + "\n")
+      const unsaved = trackerBase ? commitTrackerPaths(trackerTree, "open", [claimed]) : null
       ctx.out(`opened ${path} on ${branch}, from ${base}${trackerBase ? `, and its tracker on ${branch}, from the tracker's ${trackerBase}` : ""}`)
-      ctx.out(`claimed ${claim.items.map((e) => e.ref).join(", ")} in ${file} — commit it on ${branch} with the work`)
+      const refs = claim.items.map((e) => e.ref).join(", ")
+      if (!trackerBase) ctx.out(`claimed ${refs} in ${file} — commit it on ${branch} with the work`)
+      else if (unsaved) ctx.out(`claimed ${refs} in ${file}, not committed (${unsaved}): commit it on the tracker's ${branch}`)
+      else ctx.out(`claimed ${refs} in ${file}, committed on the tracker's ${branch}`)
       ctx.out(`next: cd ${path}, and install the dependencies a fresh checkout lacks`)
       return 0
     },

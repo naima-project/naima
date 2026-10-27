@@ -12,6 +12,12 @@
 // does a ref created or deleted. The owner lets a commit through once with a
 // `Trunk-reason:` trailer, which landings-are-markers then notes with its reason.
 //
+// In sibling mode the tracker's own repository runs the same hook, and its
+// trunk is guarded too: it takes the commits Naima makes there itself, each with
+// a `Naima-Command:` trailer, which the hook tells by itself without starting
+// Naima, landing markers, and a commit with a `Trunk-reason:` trailer; anything
+// else starts `naima guard-check --tracker`, which says why not.
+//
 // The hook is a file of the data directory's hooks, committed, which
 // core.hooksPath names in every clone (core/repos.ts points it there where it is
 // unset). `naima guard off` removes it and records the choice in naima.json;
@@ -21,6 +27,8 @@ import { existsSync, readFileSync, rmSync } from "node:fs"
 import { isAbsolute, join, relative } from "node:path"
 import { isDeepStrictEqual } from "node:util"
 import {
+  bool,
+  CLI_TRAILER,
   type Command,
   type Context,
   DATA_FILE,
@@ -42,6 +50,7 @@ import {
   writeGitHook,
   writeJson,
 } from "../../core/api.ts"
+import { guardServer, serverHintOf } from "./server.ts"
 import { CLOSES, initsTracker, onlyAddsTrackerData, onlyClosesItems, recordsMarker, TRUNK_REASON } from "./land.ts"
 
 export { TRUNK_REASON }
@@ -95,13 +104,21 @@ export function guardLauncher(ctx: Context): string {
   return fromRoot(ctx, launcher)
 }
 
+/** The tracker's side of the guard in sibling mode: its trunk's name, and the code root from the data directory. */
+export interface TrackerSide {
+  trunk: string
+  back: string
+}
+
 /**
  * The hook: shell that reads the ref updates, runs the clone's own hook of the same name first, and for an update
  * of `refs/heads/<trunkName>` in the prepared state only, starts `command guard-check <old> <new>`. `command` is
  * Deno on the launcher by default; `launcher` names it for the check that it exists. In sibling mode the tracker's
- * repository runs the same hooks: there it does nothing.
+ * repository runs the same hooks: with `tracker` it guards the tracker's trunk too, letting the CLI's own commits
+ * through without starting Naima; without it, it does nothing there.
  */
-export function guardHook(trunkName: string, command: string, opts: { launcher?: string; sibling?: boolean } = {}): string {
+export function guardHook(trunkName: string, command: string, opts: { launcher?: string; sibling?: boolean; tracker?: TrackerSide } = {}): string {
+  if (opts.tracker) return trackerGuardHook(trunkName, command, opts.tracker, opts.launcher)
   return [
     "#!/bin/sh",
     `${MARK}: rewritten by it, never by hand.`,
@@ -138,10 +155,70 @@ export function guardHook(trunkName: string, command: string, opts: { launcher?:
   ].join("\n")
 }
 
+/** The launcher's two checks, that it is there and that Deno is: without either, the trunk moves unchecked, and says so. */
+const launcherChecks = (launcher: string | undefined, trunkName: string): string[] =>
+  launcher
+    ? [
+      `if [ ! -f ${quote(launcher)} ]; then echo "naima: the trunk guard cannot run here (no ${launcher}): ${trunkName} moves unchecked" >&2; exit 0; fi`,
+      `command -v deno >/dev/null 2>&1 || { echo "naima: the trunk guard cannot run (deno is not on PATH): ${trunkName} moves unchecked" >&2; exit 0; }`,
+    ]
+    : []
+
+/** The hook of sibling mode, which both repositories run: each guards its own trunk, the tracker's from the code root. */
+function trackerGuardHook(trunkName: string, command: string, tracker: TrackerSide, launcher?: string): string {
+  return [
+    "#!/bin/sh",
+    `${MARK}: rewritten by it, never by hand.`,
+    "# Refuses a commit, merge or fast-forward of the trunk made by hand: work lands through naima open and naima land.",
+    "# The tracker's repository runs it too: its trunk takes the commits Naima makes there itself, which name their command.",
+    "# Any other ref costs this script alone. naima guard off turns it off for the project.",
+    "",
+    "input=$(cat)",
+    "# A hook the clone had before core.hooksPath pointed here still runs, first, with the same lines.",
+    `legacy="$(git rev-parse --git-common-dir)/hooks/${GUARD_HOOK}"`,
+    `if [ -x "$legacy" ]; then printf '%s\\n' "$input" | "$legacy" "$@" || exit $?; fi`,
+    '[ "$1" = prepared ] || exit 0',
+    'top="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0',
+    `guarded=${quote(`refs/heads/${trunkName}`)}`,
+    "side=",
+    `if [ -f "$top/${DATA_FILE}" ]; then guarded=${quote(`refs/heads/${tracker.trunk}`)}; side=--tracker; fi`,
+    "old=",
+    "new=",
+    "while read -r o n ref; do",
+    '  if [ "$ref" = "$guarded" ]; then old=$o; new=$n; fi',
+    "done <<EOF",
+    "$input",
+    "EOF",
+    '[ -n "$new" ] || exit 0',
+    'if [ -n "$side" ]; then',
+    "  # A branch created, or every commit the move adds naming the command that made it: Naima's own, no need to start it.",
+    '  case "$old" in *[!0]*) ;; *) exit 0 ;; esac',
+    '  all=$(git rev-list --count --first-parent "$new" "^$old")',
+    `  own=$(git log --first-parent --format='%(trailers:key=${CLI_TRAILER},valueonly,separator=%x2C)' "$new" "^$old" | grep -c .)`,
+    '  [ "$all" = "$own" ] && exit 0',
+    `  top="$top/${tracker.back}"`,
+    "  unset GIT_DIR GIT_WORK_TREE GIT_PREFIX GIT_COMMON_DIR",
+    "fi",
+    'cd "$top" || exit 0',
+    ...launcherChecks(launcher, trunkName),
+    "unset GIT_INDEX_FILE",
+    `exec ${command} guard-check $side "$old" "$new"`,
+    "",
+  ].join("\n")
+}
+
+/** The tracker's side of the guard, in sibling mode while the tracker has a trunk; null otherwise. */
+const trackerSide = (ctx: Context): TrackerSide | undefined => {
+  if (!ctx.sibling) return undefined
+  const main = trunk(ctx.trackerGit) ?? gitOrNull(ctx.trackerGit, "symbolic-ref", "--quiet", "--short", "HEAD")
+  return main ? { trunk: main, back: posixRelative(ctx.trackerRoot, ctx.root) || "." } : undefined
+}
+
 /** The hook as the project's setup writes it: Deno on the program's launcher. */
 export function projectGuardHook(ctx: Context): string {
   const launcher = guardLauncher(ctx)
-  return guardHook(guardedTrunk(ctx.root), `deno run -A ${quote(launcher)}`, { launcher, sibling: ctx.sibling })
+  const tracker = trackerSide(ctx)
+  return guardHook(guardedTrunk(ctx.root), `deno run -A ${quote(launcher)}`, { launcher, sibling: ctx.sibling, ...(tracker ? { tracker } : {}) })
 }
 
 const hookFile = (ctx: Context): string => join(ctx.trackerRoot, HOOKS_DIR, GUARD_HOOK)
@@ -153,19 +230,22 @@ const isGit = (root: string): boolean => gitOrNull(root, "rev-parse", "--git-dir
 /** Whether git runs the guard in this clone: the hook is there and core.hooksPath names its directory. */
 export const guardRuns = (ctx: Context): boolean => hasGuard(ctx) && gitOrNull(ctx.root, "config", "--get", "core.hooksPath") === hooksPathOf(ctx)
 
-/** What the owner is told once, when the guard starts guarding a clone. */
-const announce = (main: string): string =>
-  `the trunk is guarded now: a commit, merge or fast-forward of ${main} made by hand is refused, and work lands through naima open and naima land. ` +
-  `It stays on. Tell the owner, as information and not as a question: for committing on ${main} by hand, or mixing hand commits with landings, ` +
-  `naima guard off turns the guard off for the project, and naima guard on turns it back on.`
+/** What the owner is told once, when the guard starts guarding a clone: and, when the code's origin is on GitHub, that the server can guard it too. */
+const announce = (root: string, main: string): string => {
+  const server = serverHintOf(root, main)
+  return `the trunk is guarded now: a commit, merge or fast-forward of ${main} made by hand is refused, and work lands through naima open and naima land. ` +
+    `It stays on. Tell the owner, as information and not as a question: for committing on ${main} by hand, or mixing hand commits with landings, ` +
+    `naima guard off turns the guard off for the project, and naima guard on turns it back on.${server ? ` ${server}.` : ""}`
+}
 
 /** Write the guard where it is missing or not current; `command` replaces Deno on the launcher (tests). Returns what it did, a line each. */
 export function installGuard(ctx: Context, command?: string): string[] {
   if (!isGit(ctx.root)) return []
   const had = guardRuns(ctx)
-  const text = command ? guardHook(guardedTrunk(ctx.root), command, { sibling: ctx.sibling }) : projectGuardHook(ctx)
+  const tracker = trackerSide(ctx)
+  const text = command ? guardHook(guardedTrunk(ctx.root), command, { sibling: ctx.sibling, ...(tracker ? { tracker } : {}) }) : projectGuardHook(ctx)
   const lines = writeGitHook(ctx.root, ctx.trackerRoot, GUARD_HOOK, text)
-  if (!had && guardRuns(ctx)) lines.push(announce(guardedTrunk(ctx.root)))
+  if (!had && guardRuns(ctx)) lines.push(announce(ctx.root, guardedTrunk(ctx.root)))
   return lines
 }
 
@@ -194,15 +274,17 @@ interface Added {
   closes: string[]
   tracker: string
   reason: string
+  /** The command a commit Naima made itself names, in its `Naima-Command:` trailer; empty otherwise. */
+  cli: string
 }
 
 const FORMAT =
-  `%H%x1f%P%x1f%T%x1f%s%x1f%(trailers:key=${CLOSES},valueonly,separator=%x1d)%x1f%(trailers:key=${TRACKER_TRAILER},valueonly,separator=%x1d)%x1f%(trailers:key=${TRUNK_REASON},valueonly,separator=%x1d)%x1e`
+  `%H%x1f%P%x1f%T%x1f%s%x1f%(trailers:key=${CLOSES},valueonly,separator=%x1d)%x1f%(trailers:key=${TRACKER_TRAILER},valueonly,separator=%x1d)%x1f%(trailers:key=${TRUNK_REASON},valueonly,separator=%x1d)%x1f%(trailers:key=${CLI_TRAILER},valueonly,separator=%x1d)%x1e`
 
 function commitsOf(root: string, args: string[]): Added[] {
   const out = gitOrNull(root, "log", `--format=${FORMAT}`, ...args) ?? ""
   return out.split("\x1e").map((r) => r.replace(/^\n/, "")).filter(Boolean).map((r) => {
-    const [sha = "", parents = "", tree = "", subject = "", closes = "", tracker = "", reason = ""] = r.split("\x1f")
+    const [sha = "", parents = "", tree = "", subject = "", closes = "", tracker = "", reason = "", cli = ""] = r.split("\x1f")
     return {
       sha,
       parents: parents.split(" ").filter(Boolean),
@@ -211,6 +293,7 @@ function commitsOf(root: string, args: string[]): Added[] {
       closes: closes.split("\x1d").map((c) => c.trim()).filter(Boolean),
       tracker: tracker.split("\x1d")[0]?.trim() ?? "",
       reason: reason.split("\x1d").map((c) => c.trim()).filter(Boolean).join("; "),
+      cli: cli.split("\x1d")[0]?.trim() ?? "",
     }
   })
 }
@@ -266,6 +349,17 @@ export function switchesGuard(ctx: Context, sha: string, files: { status: string
   return !!before && !!after && option(before) !== option(after) && isDeepStrictEqual(strip(before), strip(after))
 }
 
+/** Why the tracker's trunk, in sibling mode, may not take `c` directly; null when it may. */
+function trackerRefusal(repo: string, c: Added, upstream: string | null): string | null {
+  if (c.reason || c.cli) return null
+  if (c.parents.length >= 2) {
+    if (isMarker(repo, c)) return null
+    if (upstream && c.parents.slice(1).every((p) => isAncestor(repo, p, upstream))) return null // a pull's merge
+    return "a merge that is not a landing marker"
+  }
+  return `a commit made by hand, without the ${CLI_TRAILER}: trailer of the commits Naima makes there: tracker files are written through naima commands, which commit them`
+}
+
 /** Why the trunk may not take `c` directly, after `prev`; null when it may. */
 function refusal(ctx: Context, c: Added, prev: Added | undefined, upstream: string | null): string | null {
   const root = ctx.root
@@ -291,9 +385,10 @@ function refusal(ctx: Context, c: Added, prev: Added | undefined, upstream: stri
  * rewind, and a tip the upstream (origin's branch of the same name) holds pass; otherwise every commit the move adds
  * to the first-parent line must be one the trunk takes directly.
  */
-export function trunkRefusal(ctx: Context, old: string, next: string): string | null {
-  const root = ctx.root
-  const main = guardedTrunk(root)
+export function trunkRefusal(ctx: Context, old: string, next: string, side: "code" | "tracker" = "code"): string | null {
+  const tracker = side === "tracker"
+  const root = tracker ? ctx.trackerGit : ctx.root
+  const main = tracker ? (trunk(root) ?? guardedTrunk(root)) : guardedTrunk(root)
   if (ZERO.test(old) || ZERO.test(next) || old === next) return null
   if (isAncestor(root, next, old)) return null
   const up = `refs/remotes/origin/${main}`
@@ -302,7 +397,13 @@ export function trunkRefusal(ctx: Context, old: string, next: string): string | 
   const added = commitsOf(root, ["--first-parent", "--reverse", next, `^${old}`])
   let prev: Added | undefined = commitsOf(root, ["-1", old])[0]
   for (const c of added) {
-    const why = refusal(ctx, c, prev, upstream)
+    const why = tracker ? trackerRefusal(root, c, upstream) : refusal(ctx, c, prev, upstream)
+    if (why && tracker) {
+      return `the tracker's ${main} may not take ${
+        c.sha.slice(0, 12)
+      } "${c.subject}": ${why}. The trunk stays where it was: make the change with the naima command for it, ` +
+        `or on an item's branch, and land it; only the owner lets a commit through by hand, with a ${TRUNK_REASON}: <why> trailer`
+    }
     if (why) {
       return `${main} may not take ${c.sha.slice(0, 12)} "${c.subject}": ${why}. Open an item (naima open <item>), commit the change in its worktree, ` +
         `and land it with naima land; only the owner lets a commit through by hand, with a ${TRUNK_REASON}: <why> trailer (naima guard off turns the guard off)`
@@ -319,13 +420,15 @@ export const guardCheckCommand: Command = {
   says: "what the trunk guard's git hook runs when the trunk is about to move: exit 0 when it may, else one line saying why not and what to do",
   enforces:
     "a commit, merge or fast-forward of the trunk made by hand is refused unless every commit it adds to the first-parent line is a landing marker, the record land makes, a commit that only adds to the tracker data or only closes items, naima init's commit, one that only switches the guard, or one with a Trunk-reason: trailer; a tip the upstream holds, a rewind, a ref created or deleted pass",
-  usage: "guard-check <old> <new>",
-  examples: ["guard-check 0123abc 4567def"],
+  usage: "guard-check [--tracker] <old> <new>",
+  examples: ["guard-check 0123abc 4567def", "guard-check --tracker 0123abc 4567def"],
+  options: [{ name: "--tracker", says: "the move is of the tracker's trunk, in sibling mode: it takes the commits Naima makes there and landing markers" }],
   hook: true,
   run(args, ctx) {
-    const [old, next, ...rest] = parse(args).positionals
+    const p = parse(args, { tracker: { type: "boolean" } })
+    const [old, next, ...rest] = p.positionals
     if (!old || !next || rest.length) throw usageError(this)
-    const why = trunkRefusal(ctx, old, next)
+    const why = trunkRefusal(ctx, old, next, bool(p, "tracker") ? "tracker" : "code")
     if (!why) return 0
     ctx.err(`naima: ${why}`)
     return 1
@@ -353,21 +456,29 @@ function recordGuard(ctx: Context, on: boolean): void {
 export const guardCommand = (on: boolean): Command => ({
   name: "guard",
   says:
-    "the trunk guard: whether it is on and runs in this clone; off turns it off for the project (recorded in naima.json, the hook removed), on turns it back on",
+    "the trunk guard: whether it is on and runs in this clone; off turns it off for the project (recorded in naima.json, the hook removed), on turns it back on; server, on the owner's word, makes a GitHub ruleset that lets only the repository's admins push the trunk (with gh, else it says the request and the web page; --print only says them)",
   enforces:
     "while on, the git hook refuses a commit, merge or fast-forward of the trunk made by hand (naima guard-check says what passes); off is the owner's choice, recorded, and update does not put the hook back",
-  usage: "guard [status] | guard on | guard off",
-  examples: ["guard", "guard off", "guard on"],
+  usage: "guard [status] | guard on | guard off | guard server [--print]",
+  examples: ["guard", "guard off", "guard on", "guard server", "guard server --print"],
+  options: [{ name: "--print", says: "with server: say the ruleset, the gh and curl requests and the web page, and send nothing to GitHub" }],
+  runs: ["gh"],
   run(args, ctx) {
-    const [sub = "status", ...rest] = parse(args).positionals
+    const p = parse(args, { print: { type: "boolean" } })
+    const [sub = "status", ...rest] = p.positionals
     if (rest.length) throw usageError(this)
     const config = posixRelative(ctx.root, join(ctx.trackerRoot, DATA_FILE))
     const hook = posixRelative(ctx.root, hookFile(ctx))
     const main = guardedTrunk(ctx.root)
+    if (sub === "server") return guardServer(ctx, main, bool(p, "print"))
+    if (bool(p, "print")) throw usageError(this)
     if (sub === "status") {
       if (!on) ctx.out(`the trunk guard is off (${config}: ${GUARD_OPTION} false): commits on ${main} are not refused — naima guard on turns it on`)
-      else if (guardRuns(ctx)) ctx.out(`the trunk guard is on and runs in this clone: ${main} takes landings and the tracker's own commits only`)
-      else {
+      else if (guardRuns(ctx)) {
+        ctx.out(`the trunk guard is on and runs in this clone: ${main} takes landings and the tracker's own commits only`)
+        const server = serverHintOf(ctx.root, main)
+        if (server) ctx.out(server)
+      } else {
         ctx.out(
           `the trunk guard is on, and does not run in this clone: ${
             hasGuard(ctx) ? `core.hooksPath does not name ${hooksPathOf(ctx)}` : `${hook} is missing`

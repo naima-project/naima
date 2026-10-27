@@ -42,6 +42,7 @@ import {
 import { moveTrackerOut } from "./move-tracker.ts"
 import { setWriteGuard } from "./item.ts"
 import {
+  commitTrackerWrites,
   installTrailerHooks,
   missingTracker,
   naimaHooks,
@@ -51,6 +52,7 @@ import {
   readSiblingMarker,
   SIBLING_FILE,
   TRACKER_URL_KEY,
+  trackerChanges,
   trackerGitOf,
   writeSiblingMarker,
 } from "./repos.ts"
@@ -513,7 +515,11 @@ async function init(args: string[], opts: CliOptions, data: string, io: IO): Pro
   io.out(made.said + cloned)
   if (sibling) {
     for (const line of installTrailerHooks(made.root, place.data)) io.out(line)
-    io.out(`commit ${posixRelative(made.root, place.data)}/ in the tracker repository first, then ${posixRelative(made.root, made.tracker)}/ in the code's`)
+    io.out(
+      `Naima commits ${posixRelative(made.root, place.data)}/ in the tracker repository itself, as it commits every write there; commit ${
+        posixRelative(made.root, made.tracker)
+      }/ in the code's`,
+    )
   }
   excludeHost(made.root, made.program, write, io)
   sayLeft(startAgents(made.root, made.tracker, parseConfig(readRaw(place.data)), hooks, io).left, io)
@@ -1270,6 +1276,30 @@ function commandHelp(cmd: Command, io: IO): number {
   return 0
 }
 
+/**
+ * Run a command of the entry point's own that may write the tracker (init, update, rollback, plugin) and, when the
+ * tracker is a repository of its own, commit what it wrote there, as every other command's writes are.
+ */
+async function committingTracker(data: string, command: string, io: IO, run: () => Promise<number>): Promise<number> {
+  const repoOf = (): string | null => {
+    try {
+      const at = locate(data)
+      const git = at ? trackerGitOf(at.root, at.data) : null
+      return at && git !== at.root ? git : null
+    } catch {
+      return null // a naima.json this program cannot read: the command itself says why
+    }
+  }
+  const was = repoOf()
+  const before = was ? trackerChanges(was) : new Map<string, string>()
+  try {
+    return await run()
+  } finally {
+    const repo = repoOf()
+    if (repo) { for (const line of commitTrackerWrites(repo, command, before)) io.err(`naima: ${line}`) }
+  }
+}
+
 export async function runCli(argv: string[], opts: CliOptions): Promise<number> {
   const io = opts.io ?? consoleIO
   setWriteGuard(null)
@@ -1293,7 +1323,7 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
       const at = args.indexOf("--tracker")
       const rest = at === -1 ? args : args.filter((_, i) => i !== at && i !== at + 1)
       if ((at !== -1 && !args[at + 1]) || rest.some((a) => !known.includes(a))) throw new Error(usage("init"))
-      return await init(args, opts, data, io)
+      return await committingTracker(data, "init", io, () => init(args, opts, data, io))
     }
     if (command === "guide") return await guide(opts, data, io)
     let place = locate(data)
@@ -1336,15 +1366,18 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     if (own && (args.includes("--help") || args.includes("-h"))) return commandHelp(own as Command, io)
     if (command === "update") {
       if (!opts.launched) throw new Error(`naima update moves the program, so it runs through the launcher: deno run -A <the program>/naima.ts update`)
-      return await update(args, opts, place, place.lock, place.raw, io)
+      return await committingTracker(data, "update", io, () => update(args, opts, place!, place!.lock, place!.raw, io))
     }
     if (command === "rollback") {
       if (!opts.launched) throw new Error(`naima rollback moves the program, so it runs through the launcher: deno run -A <the program>/naima.ts rollback`)
-      return await rollback(args, opts, place, place.lock, place.raw, io)
+      return await committingTracker(data, "rollback", io, () => rollback(args, opts, place!, place!.lock, place!.raw, io))
     }
     if (command === "hello") return await hello(args, opts, place, io)
     if (command === "tick") return await tickCommand(args, opts, place, io)
-    if (command === "plugin") return pluginCommand(args, opts, place, place.raw, io)
+    if (command === "plugin") {
+      const at = place
+      return await committingTracker(data, "plugin", io, () => Promise.resolve(pluginCommand(args, opts, at, at.raw, io)))
+    }
     const ctx = await openProject(place, opts, io)
     if (isHelp(command)) return help(ctx, data, io)
     if (ctx.sibling) {
@@ -1380,6 +1413,8 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
       clearExposed(ctx.trackerGit)
     }
     setWriteGuard(writeGuard(ctx.trackerRoot, exposure, io.err))
+    // A tracker kept as a repository of its own is committed by Naima: what this command writes there is one commit.
+    const before = ctx.sibling ? trackerChanges(ctx.trackerGit) : null
     // The tick: what is due starts now, beside the command, and what it has for the owner is said after it, on standard error.
     const tick = beginTick(opts, place, ctx)
     let code: number
@@ -1387,6 +1422,7 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
       code = await cmd.run(commandArgs, ctx)
     } finally {
       for (const n of (await endTick(tick)).shown) io.err(messageLine(n))
+      if (before) { for (const line of commitTrackerWrites(ctx.trackerGit, command as string, before)) io.err(`naima: ${line}`) }
     }
     if (code !== RELAUNCH) return code
     // Only the entry point asks for a relaunch; a command's 75 would make the launcher run it again.

@@ -101,4 +101,25 @@ naima guard on     # turn it back on
 
 Commit `naima.json` and the hook after turning the guard on or off; that commit goes straight on the trunk, since the guard lets it through.
 
+When the tracker is kept as a repository of its own ([sibling mode](private-tracker.md#sibling-mode)), the tracker's repository runs the same hook, and its
+trunk is guarded too. Naima commits every write to that tracker itself, and each of those commits carries a `Naima-Command:` trailer naming the command, which
+the hook recognises without starting Naima. The tracker's trunk takes those commits, landing markers and a commit with a `Trunk-reason:` trailer, and refuses
+any other commit made there by hand.
+
+### Guarding the trunk on the server
+
+The hook guards only a clone that runs it. A clone made somewhere else, before its first run of Naima, or a tool that skips hooks can still push the trunk.
+When the code's `origin` is on GitHub, the server can refuse those pushes too, and Naima says so when it installs the guard and in `naima guard`. It never
+turns that protection on by itself: it is the owner's decision, and the owner's command.
+
+```sh
+naima guard server           # make the ruleset on GitHub, with the GitHub CLI
+naima guard server --print   # only say the ruleset, the request and the web page
+```
+
+`naima guard server` makes a branch ruleset named `naima: only the coordinator pushes the trunk`. The ruleset refuses an update, a deletion or a force-push of
+the trunk from everyone except the repository's admins, and the coordinator pushes as an admin. It needs the GitHub CLI, `gh`, signed in with an account that
+may administer the repository. If the ruleset is already there, the command says so and makes nothing. Without `gh`, or with `--print`, it sends nothing:
+it prints the ruleset as JSON, the `gh api` and `curl` requests that make it, and the page of the repository's settings where it can be made by hand.
+
 Every option is in the [reference](../reference/reference.md#commit-hooks).

@@ -71,7 +71,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`release`](#naima-release) | coordination | drop this branch's claim on items; the last one removes the file, unless the branch is being prepared (claim --preparing) | only this branch's own claim is dropped, and only on items it holds; while the branch is being prepared, the emptied file is kept |
 | [`claims`](#naima-claims) | coordination | who holds what, recombined from every branch, with what each branch's worker is doing now | nothing: it only reads; a claim whose last sign of life (its step, or its branch's last commit) is more than silentAfter minutes old (15 here) is flagged possibly stuck; a stale claim (branch gone or merged into the trunk, or every item closed) is listed apart, at the end, and released by naima prune --write |
 | [`land`](#naima-land) | coordination | land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor | runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item or an item open and not fixed, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, adds the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right after the marker, so that naima close finds a commit reachable from the trunk; then prints what every landing report says of the files the landing changed, never undoing it |
-| [`guard`](#naima-guard) | coordination | the trunk guard: whether it is on and runs in this clone; off turns it off for the project (recorded in naima.json, the hook removed), on turns it back on | while on, the git hook refuses a commit, merge or fast-forward of the trunk made by hand (naima guard-check says what passes); off is the owner's choice, recorded, and update does not put the hook back |
+| [`guard`](#naima-guard) | coordination | the trunk guard: whether it is on and runs in this clone; off turns it off for the project (recorded in naima.json, the hook removed), on turns it back on; server, on the owner's word, makes a GitHub ruleset that lets only the repository's admins push the trunk (with gh, else it says the request and the web page; --print only says them) | while on, the git hook refuses a commit, merge or fast-forward of the trunk made by hand (naima guard-check says what passes); off is the owner's choice, recorded, and update does not put the hook back |
 | [`guard-check`](#naima-guard-check) | coordination | what the trunk guard's git hook runs when the trunk is about to move: exit 0 when it may, else one line saying why not and what to do | a commit, merge or fast-forward of the trunk made by hand is refused unless every commit it adds to the first-parent line is a landing marker, the record land makes, a commit that only adds to the tracker data or only closes items, naima init's commit, one that only switches the guard, or one with a Trunk-reason: trailer; a tip the upstream holds, a rewind, a ref created or deleted pass |
 | [`changes`](#naima-changes) | coordination | print the release notes a range of commits makes, assembled from the change notes it adds to changes/, as Markdown: breaking changes first, then those that need an action, then features, behaviour changes and fixes, each with its text and what to do; from the newest version tag (v…) to HEAD unless --from and --to say otherwise, in every repository of the project with a changes/config.json (the project itself, a submodule) unless --repo names one | nothing: it only prints; a change note that does not parse is named on stderr |
 | [`prune`](#naima-prune) | coordination | list (or with --write remove) stale claim files: their branch is gone, or merged into the trunk that carries the file, or every item they claim is closed; one only another ref carries is listed with that ref, to be dropped there. With --branch, delete a branch and its worktree, refusing one with unmerged commits that no archive/<branch> tag holds | the trunk is never pruned, and a branch with unmerged commits that no archive/<branch> tag holds is refused, and so is a worktree with anything uncommitted, inside its submodules too; a clean one is removed even when it holds a submodule; nothing is removed without --write |
@@ -1085,7 +1085,7 @@ naima land agent/scheduler --stale-proofs "the liveness property runs for two da
 
 ### naima guard
 
-The trunk guard: whether it is on and runs in this clone; off turns it off for the project (recorded in naima.json, the hook removed), on turns it back on.
+The trunk guard: whether it is on and runs in this clone; off turns it off for the project (recorded in naima.json, the hook removed), on turns it back on; server, on the owner's word, makes a GitHub ruleset that lets only the repository's admins push the trunk (with gh, else it says the request and the web page; --print only says them).
 
 **Enforces**: While on, the git hook refuses a commit, merge or fast-forward of the trunk made by hand (naima guard-check says what passes); off is the owner's choice, recorded, and update does not put the hook back.
 
@@ -1093,7 +1093,12 @@ The trunk guard: whether it is on and runs in this clone; off turns it off for t
 naima guard [status]
 naima guard on
 naima guard off
+naima guard server [--print]
 ```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--print` |  | with server: say the ruleset, the gh and curl requests and the web page, and send nothing to GitHub |
 
 Examples:
 
@@ -1101,6 +1106,8 @@ Examples:
 naima guard
 naima guard off
 naima guard on
+naima guard server
+naima guard server --print
 ```
 
 ### naima guard-check
@@ -1110,13 +1117,18 @@ What the trunk guard's git hook runs when the trunk is about to move: exit 0 whe
 **Enforces**: A commit, merge or fast-forward of the trunk made by hand is refused unless every commit it adds to the first-parent line is a landing marker, the record land makes, a commit that only adds to the tracker data or only closes items, naima init's commit, one that only switches the guard, or one with a Trunk-reason: trailer; a tip the upstream holds, a rewind, a ref created or deleted pass.
 
 ```sh
-naima guard-check <old> <new>
+naima guard-check [--tracker] <old> <new>
 ```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--tracker` |  | the move is of the tracker's trunk, in sibling mode: it takes the commits Naima makes there and landing markers |
 
 Examples:
 
 ```sh
 naima guard-check 0123abc 4567def
+naima guard-check --tracker 0123abc 4567def
 ```
 
 ### naima changes
@@ -1276,7 +1288,7 @@ naima event 2026-10-05 "The plan was entered" --kind diary
 | `trunk-moved-while-preparing` | a branch whose claim is marked preparing is told every commit the trunk took that it lacks, and which of them the trunk's reflog records as committed on the trunk directly |
 | `closed-not-claimed` | no archived item (one in a type that is not creatable, where naima close moves it) is claimed by the branch you stand on: what no-closing-own-claims refuses on a write, asserted on the tracker as it is, hand edits included |
 | `session-note-ack` | a session note dated after 2026-10-02 carries the acknowledgement line it was written with (naima pass --ack), and its body still begins with it — a rule change afterwards never invalidates a note already written, since what was asked of it then is what it recorded |
-| `landings-are-markers` | from the first landing marker on the trunk's first-parent line (a merge whose first parent the second contains, whose tree is the second's, with a Closes: trailer), every first-parent commit is a marker: a fast-forward, a commit made on the trunk, a merge not up to date, or one without a Closes: naming an item done or fixed is a note naming it, one note per commit, with the commit as its subject so that a waiver can accept it. A commit made on the trunk that only adds to the tracker data — new files in the data directory outside rules/, waivers/ and naima.json, and lines added to an item's README.md, its meta.json untouched — is accepted without a note, and so is a commit that only closes items as naima close does (each moved whole from its type's folder to the closed archive), the commit right after a marker that only adds the marker to the commits of items it closes, the record naima land makes, and naima init's commit, the one that adds naima.json. Any other tracker step that changes more than it adds (an update of Naima, a waiver, a release record, an epic set done) is made on an item's branch and landed. Before the first marker nothing is asked, unless the trunk guard is on: then the check asks from the commit that added the guard's hook to the trunk, so a project is not noted for what it committed before the guard; a commit the owner let through the guard with a Trunk-reason: trailer is a note that gives the reason |
+| `landings-are-markers` | from the first landing marker on the trunk's first-parent line (a merge whose first parent the second contains, whose tree is the second's, with a Closes: trailer), every first-parent commit is a marker: a fast-forward, a commit made on the trunk, a merge not up to date, or one without a Closes: naming an item done or fixed is a note naming it, one note per commit, with the commit as its subject so that a waiver can accept it. A commit made on the trunk that only adds to the tracker data — new files in the data directory outside rules/, waivers/ and naima.json, and lines added to an item's README.md, its meta.json untouched — is accepted without a note, and so is a commit that only closes items as naima close does (each moved whole from its type's folder to the closed archive), the commit right after a marker that only adds the marker to the commits of items it closes, the record naima land makes, and naima init's commit, the one that adds naima.json. Any other tracker step that changes more than it adds (an update of Naima, a waiver, a release record, an epic set done) is made on an item's branch and landed. Before the first marker nothing is asked, unless the trunk guard is on: then the check asks from the commit that added the guard's hook to the trunk, so a project is not noted for what it committed before the guard; a commit the owner let through the guard with a Trunk-reason: trailer is a note that gives the reason. In sibling mode, where Naima commits every write to the tracker itself with a Naima-Command: trailer naming the command, such a commit is accepted, and from the first of them on, a commit of the tracker's trunk without one is a note: it was made by hand |
 | `landings-paired` | with the tracker in a repository of its own, every landing is made on both sides and their trailers match: a tracker marker (Closes:, Code:) whose code commit the code's trunk does not hold, or a code marker (Tracker:) whose tracker commit is not a marker on the tracker's trunk naming the code it merged, is a problem naming naima land <branch> --repair, which finishes it; a landing whose code marker is not recorded in the commits of the items it closes is a note naming the same command |
 | `branches-paired` | with the tracker in a repository of its own, the tracker stands on the branch of the code's name (its trunk on the code's trunk), so work on code branch X writes to tracker branch X — any naima command pairs them, creating the tracker's branch from its trunk; a commit of the branch, in either repository, that does not name the other repository's commit in its Tracker: or Code: trailer is a note, and so is a missing trailer hook |
 | `diary-entries` | as notes, never failing: a day with more diary entries than the coordination option diaryPerDay (5 by default), and a diary entry that only restates a session note of its day or a decision taken that day, which naima diary already shows |

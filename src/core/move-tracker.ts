@@ -16,7 +16,7 @@ import { posixRelative } from "./config.ts"
 import { gitOrNull, gitReason, runGit, trunk } from "./git.ts"
 import { DATA_FILE } from "./layout.ts"
 import { ignoreProgram } from "./program.ts"
-import { HOOKS_DIR, installTrailerHooks, SIBLING_FILE, writeSiblingMarker } from "./repos.ts"
+import { CLI_TRAILER, HOOKS_DIR, installTrailerHooks, SIBLING_FILE, writeSiblingMarker } from "./repos.ts"
 
 /** The folder, in the tracker folder, the history is filtered in before it moves into place; removed after. */
 const WORK = ".naima-data-moving"
@@ -100,5 +100,5 @@ export function moveTrackerOut(root: string, data: string, say: (line: string) =
   say(`${prefix} is now a git repository of its own, with its history, on this machine only: no remote, nothing public`)
   for (const line of installTrailerHooks(root, data)) say(line)
   runGit(data, ["add", "--", HOOKS_DIR])
-  runGit(data, ["commit", "-q", "--no-verify", "-m", "Pair the tracker's commits with the code's", "--", HOOKS_DIR])
+  runGit(data, ["commit", "-q", "--no-verify", "-m", `Pair the tracker's commits with the code's\n\n${CLI_TRAILER}: init`, "--", HOOKS_DIR])
 }

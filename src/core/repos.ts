@@ -355,3 +355,61 @@ export function pairTracker(root: string, trackerGit: string, codeBranch: string
   }
   return exists ? `the tracker moved to ${want}, the code's branch` : `the tracker took a new branch ${want}, from its ${base}, to pair with the code's`
 }
+
+// ── the tracker's own commits ────────────────────────────────────────────────
+
+/** The trailer of every tracker commit Naima makes itself in sibling mode, naming the command: what tells them from commits made by hand. */
+export const CLI_TRAILER = "Naima-Command"
+
+/** The files a tracker's working tree has changed, each with its status as git status says it: path → the two status letters. */
+export function trackerChanges(trackerGit: string): Map<string, string> {
+  const out = new Map<string, string>()
+  const r = runGit(trackerGit, ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames"])
+  if (!r.ok) return out
+  for (const entry of r.out.split("\0")) if (entry.length > 3) out.set(entry.slice(3), entry.slice(0, 2))
+  return out
+}
+
+/** The message of a tracker commit made by `naima <command>`: the items (or files) it wrote in the subject, the command in the trailer. */
+export function cliCommitMessage(command: string, paths: readonly string[]): string {
+  const names = [
+    ...new Set(paths.map((p) => {
+      const parts = p.split("/")
+      return parts.length >= 3 ? `${parts[0]}/${parts[1]}` : p
+    })),
+  ].sort()
+  const shown = names.length > 3 ? `${names.slice(0, 3).join(", ")} and ${names.length - 3} more` : names.join(", ")
+  return `naima ${command}: ${shown}\n\n${CLI_TRAILER}: ${command}\n`
+}
+
+/** Commit `paths` of a tracker kept as a repository of its own, as `naima <command>` wrote them. Null when done, else why not. */
+export function commitTrackerPaths(trackerGit: string, command: string, paths: readonly string[]): string | null {
+  if (!paths.length) return null
+  const input = paths.join("\0") + "\0"
+  const spec = ["--pathspec-from-file=-", "--pathspec-file-nul"]
+  const added = runGit(trackerGit, ["--literal-pathspecs", "add", "-A", ...spec], { input })
+  if (!added.ok) return `git add: ${added.err.split("\n")[0] ?? "git failed"}`
+  const made = runGit(trackerGit, ["--literal-pathspecs", "commit", "-q", "-m", cliCommitMessage(command, paths), ...spec], { input })
+  return made.ok ? null : `git commit: ${made.err.split("\n").find((l) => l.trim()) ?? "git failed"}`
+}
+
+/**
+ * Commit what `naima <command>` wrote to a tracker kept as a repository of its own: every file whose state differs
+ * from `before`, the tracker's changes when the command started, in one commit. A file changed before the command
+ * and not by it is left as it is, and said. Returns the lines to say.
+ */
+export function commitTrackerWrites(trackerGit: string, command: string, before: ReadonlyMap<string, string>): string[] {
+  const after = trackerChanges(trackerGit)
+  const mine = [...after].filter(([p, s]) => before.get(p) !== s).map(([p]) => p)
+  const out: string[] = []
+  const failed = commitTrackerPaths(trackerGit, command, mine)
+  if (failed) out.push(`what naima ${command} wrote to the tracker is not committed (${failed}): git -C ${TRACKER_DIR}/${DATA_DIR} commit it`)
+  const left = [...before.keys()].filter((p) => after.has(p) && !mine.includes(p))
+  if (left.length) {
+    const shown = left.length > 3 ? `${left.slice(0, 3).join(", ")} and ${left.length - 3} more` : left.join(", ")
+    out.push(
+      `the tracker has changes no naima command made (${shown}), left uncommitted: tracker files are written through naima commands, which commit them, never by hand`,
+    )
+  }
+  return out
+}

@@ -48,8 +48,9 @@ only caught by someone reading it.
 ## A tracker kept in a repository of its own
 
 When `naima-tracker/naima-data/` is a git repository of its own beside a public code repository ([sibling mode](../guide/private-tracker.md)), a piece of work
-is two commits in two repositories: the code in the code's worktree, the tracker files (claims, items, session notes) with
-`git -C naima-tracker/naima-data commit`. The commit-msg hook adds the `Tracker:` and `Code:` trailers that pair them; never remove them. A code commit's
+is commits in two repositories: you commit the code in the code's worktree, and Naima commits the tracker. Every naima command that writes the tracker
+(claims, items, session notes) makes its own commit there, naming the command in a `Naima-Command:` trailer. Never commit the tracker by hand and never edit
+its files by hand; the trunk guard refuses such a commit on the tracker's trunk. The commit-msg hook adds the `Tracker:` and `Code:` trailers that pair them; never remove them. A code commit's
 message names no item, title or tracker path: write what changed in the code, and keep the item's name for the tracker commit
 ([the rule](../guide/rules.md#public-commits-name-nothing-of-a-private-tracker)). A landing that `naima check` reports unpaired is finished by the coordinator
 with `naima land <branch> --repair`.

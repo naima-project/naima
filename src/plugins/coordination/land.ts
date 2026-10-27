@@ -12,6 +12,7 @@ import {
   appliesTo,
   bool,
   type Check,
+  CLI_TRAILER,
   code,
   CODE_TRAILER,
   type Command,
@@ -357,7 +358,7 @@ function recordMarker(ctx: Context, marker: string, ids: string[]): void {
     }
     if (!files.length) return
     // In sibling mode the record is a tracker commit: it names the code marker it records, as every tracker commit does.
-    const text = ctx.sibling ? `${recordSubject(marker)}\n\n${CODE_TRAILER}: ${marker}\n` : recordSubject(marker)
+    const text = ctx.sibling ? `${recordSubject(marker)}\n\n${CODE_TRAILER}: ${marker}\n${CLI_TRAILER}: land\n` : recordSubject(marker)
     const r = runGit(ctx.trackerGit, ["commit", "-q", "-m", text, "--", ...files])
     if (!r.ok) throw new Error(`git commit: ${gitReason(r)}`)
     ctx.out(`recorded ${marker.slice(0, 12)} in the commits of ${refs.join(", ")}`)
@@ -479,7 +480,7 @@ async function landBoth(ctx: Context, branch: string, closes: string[], noChange
     }
     const parents = trk.tip === trk.old ? ["-p", trk.old] : ["-p", trk.old, "-p", trk.tip]
     const made = runGit(ctx.trackerGit, ["commit-tree", trkTree, ...parents, "-F", "-"], {
-      input: markerMessage(branch, ids, [`${CODE_TRAILER}: ${code.tip}`, ...own]),
+      input: markerMessage(branch, ids, [`${CODE_TRAILER}: ${code.tip}`, ...own, `${CLI_TRAILER}: land`]),
     })
     if (!made.ok) throw new Error(`git commit-tree: ${gitReason(made)}`)
     tm = made.out.trim()
@@ -764,15 +765,17 @@ export interface FirstParent {
   code: string
   /** Why the owner let it onto the trunk by hand, from its `Trunk-reason:` trailers; empty otherwise. */
   reason: string
+  /** The command a tracker commit Naima made itself names, in its `Naima-Command:` trailer; empty otherwise. */
+  cli: string
 }
 
 /** The trunk's first-parent line, oldest first, in one `git log`. */
 function firstParentLine(root: string, main: string): FirstParent[] {
   const format =
-    `%H%x1f%P%x1f%T%x1f%s%x1f%(trailers:key=${CLOSES},valueonly,separator=%x1d)%x1f%(trailers:key=${CODE_TRAILER},valueonly,separator=%x1d)%x1f%(trailers:key=${TRUNK_REASON},valueonly,separator=%x1d)%x1e`
+    `%H%x1f%P%x1f%T%x1f%s%x1f%(trailers:key=${CLOSES},valueonly,separator=%x1d)%x1f%(trailers:key=${CODE_TRAILER},valueonly,separator=%x1d)%x1f%(trailers:key=${TRUNK_REASON},valueonly,separator=%x1d)%x1f%(trailers:key=${CLI_TRAILER},valueonly,separator=%x1d)%x1e`
   const out = gitOrNull(root, "log", "--first-parent", "--reverse", `--format=${format}`, `refs/heads/${main}`) ?? ""
   return out.split("\x1e").map((r) => r.replace(/^\n/, "")).filter(Boolean).map((r) => {
-    const [sha = "", parents = "", tree = "", subject = "", closes = "", code = "", reason = ""] = r.split("\x1f")
+    const [sha = "", parents = "", tree = "", subject = "", closes = "", code = "", reason = "", cli = ""] = r.split("\x1f")
     return {
       sha,
       parents: parents.split(" ").filter(Boolean),
@@ -781,6 +784,7 @@ function firstParentLine(root: string, main: string): FirstParent[] {
       closes: closes.split("\x1d").map((c) => c.trim()).filter(Boolean),
       code: code.split("\x1d")[0]?.trim() ?? "",
       reason: reason.split("\x1d").map((c) => c.trim()).filter(Boolean).join("; "),
+      cli: cli.split("\x1d")[0]?.trim() ?? "",
     }
   })
 }
@@ -933,7 +937,7 @@ export interface Guarded {
 export const landingsAreMarkers = (guarded: Guarded | null = null): Check => ({
   name: "landings-are-markers",
   says:
-    "from the first landing marker on the trunk's first-parent line (a merge whose first parent the second contains, whose tree is the second's, with a Closes: trailer), every first-parent commit is a marker: a fast-forward, a commit made on the trunk, a merge not up to date, or one without a Closes: naming an item done or fixed is a note naming it, one note per commit, with the commit as its subject so that a waiver can accept it. A commit made on the trunk that only adds to the tracker data — new files in the data directory outside rules/, waivers/ and naima.json, and lines added to an item's README.md, its meta.json untouched — is accepted without a note, and so is a commit that only closes items as naima close does (each moved whole from its type's folder to the closed archive), the commit right after a marker that only adds the marker to the commits of items it closes, the record naima land makes, and naima init's commit, the one that adds naima.json. Any other tracker step that changes more than it adds (an update of Naima, a waiver, a release record, an epic set done) is made on an item's branch and landed. Before the first marker nothing is asked, unless the trunk guard is on: then the check asks from the commit that added the guard's hook to the trunk, so a project is not noted for what it committed before the guard; a commit the owner let through the guard with a Trunk-reason: trailer is a note that gives the reason",
+    "from the first landing marker on the trunk's first-parent line (a merge whose first parent the second contains, whose tree is the second's, with a Closes: trailer), every first-parent commit is a marker: a fast-forward, a commit made on the trunk, a merge not up to date, or one without a Closes: naming an item done or fixed is a note naming it, one note per commit, with the commit as its subject so that a waiver can accept it. A commit made on the trunk that only adds to the tracker data — new files in the data directory outside rules/, waivers/ and naima.json, and lines added to an item's README.md, its meta.json untouched — is accepted without a note, and so is a commit that only closes items as naima close does (each moved whole from its type's folder to the closed archive), the commit right after a marker that only adds the marker to the commits of items it closes, the record naima land makes, and naima init's commit, the one that adds naima.json. Any other tracker step that changes more than it adds (an update of Naima, a waiver, a release record, an epic set done) is made on an item's branch and landed. Before the first marker nothing is asked, unless the trunk guard is on: then the check asks from the commit that added the guard's hook to the trunk, so a project is not noted for what it committed before the guard; a commit the owner let through the guard with a Trunk-reason: trailer is a note that gives the reason. In sibling mode, where Naima commits every write to the tracker itself with a Naima-Command: trailer naming the command, such a commit is accepted, and from the first of them on, a commit of the tracker's trunk without one is a note: it was made by hand",
   run(ctx) {
     // The markers that close items are the tracker's: the project's trunk, or the tracker's own in sibling mode.
     const repo = ctx.trackerGit
@@ -948,7 +952,9 @@ export const landingsAreMarkers = (guarded: Guarded | null = null): Check => ({
     )
     // From the first marker, or from the commit that put the guard on the trunk when that is earlier.
     const guardStart = guarded ? guarded.from(ctx, repo, line) : -1
-    const start = [firstMarker, guardStart].filter((i) => i !== -1).reduce((a, b) => Math.min(a, b), Infinity)
+    // In sibling mode Naima commits the tracker itself: from its first such commit on, one made by hand is a note.
+    const firstCli = ctx.sibling ? line.findIndex((c) => c.parents.length === 1 && !!c.cli) : -1
+    const start = [firstMarker, guardStart, firstCli].filter((i) => i !== -1).reduce((a, b) => Math.min(a, b), Infinity)
     if (start === Infinity) return []
     const direct = directChanges(repo, main, line[start]?.sha ?? "")
     const waive = (sha: string) => `, or accept it once: naima waive landings-are-markers ${sha} --reason "<why>" --as <who>`
@@ -958,8 +964,19 @@ export const landingsAreMarkers = (guarded: Guarded | null = null): Check => ({
     for (const [i, c] of line.entries()) {
       if (i <= start) continue
       if (c.parents.length !== 2) {
+        if (c.cli) continue
         const files = direct.get(c.sha) ?? []
         if (emptyMarker(c) && !files.length) continue
+        if (firstCli !== -1 && i > firstCli) {
+          out.push({
+            level: "note",
+            subject: c.sha,
+            message: c.reason ? byHand(main, c) + waive(c.sha) : `the tracker's ${main} took ${c.sha.slice(0, 12)} "${c.subject}", a commit made by hand: ` +
+              `Naima commits every write to a tracker kept as a repository of its own, with a ${CLI_TRAILER}: trailer, and tracker files are ` +
+              `written through naima commands, never by hand${waive(c.sha)}`,
+          })
+          continue
+        }
         if (initsTracker(ctx, files) || onlyAddsTrackerData(ctx, c.sha, files) || onlyClosesItems(ctx, c.sha, files)) continue
         if (guarded?.accepts(ctx, c.sha, files)) continue
         const prev = line[i - 1]
