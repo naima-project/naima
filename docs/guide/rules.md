@@ -478,10 +478,10 @@ the first line of the code is written. The state space is minimised once and eve
 than computed again. Where [naima-codegen](https://github.com/naima-project/naima-codegen) supports the language, every such state machine is generated from its
 model and checked against it, with the code around it written to connect to the generated machine; elsewhere the code follows the model, which changes in the
 same change as the code it describes. The rule applies only when the behaviour has states or concurrency. A trivial change needs no model, and skipping the
-model for behaviour that isn't trivial needs a reason, written on the item as a note.
+model for behaviour that isn't trivial is an exception: it is filed, with its reason, as a waiver of the check, and `naima check` lists every waiver.
 
 ```sh
-naima note features/job-retries "No model: <the reason>"
+naima waive model-first features/job-retries --reason "<the reason>"
 ```
 
 Why: behaviour with states fails in orders of events that nobody thought to test, and a model checker explores every order. A model checked only after the code
@@ -495,8 +495,8 @@ never guessed from the code.
 naima set features/job-retries stateful=true
 ```
 
-This rule ships with Naima, applies to everyone in every project as a _should_, and is acknowledged as "Model first mode on". **Enforced by** the check
-`model-first`, as a note, on a change recorded `stateful=true` that landed with no models or properties item linked to it and no note "No model: <reason>". The
+This rule ships with Naima, applies to everyone in every project as a _must_ where the behaviour has states or concurrency, and is acknowledged as "Model first mode on". **Enforced by** the check
+`model-first`, as a note, on a change recorded `stateful=true` that landed with no models or properties item linked to it and no waiver of the check. The
 rest is **convention**, and a property item, once there, is held current by the check `property-evidence` ([design with a model](design-with-a-model.md), with a
 template of a state machine in mCRL2).
 

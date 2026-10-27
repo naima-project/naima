@@ -13,11 +13,11 @@ steps that break it. The agents write the model, the properties and the code. Yo
 ## When a model is written
 
 A model is written before implementing anything that has states or concurrency: a lifecycle, a protocol, a scheduler, a retry loop, or two processes sharing
-data. A trivial change doesn't need one, such as renaming a state or fixing a message. If the agent skips the model for behaviour that isn't trivial, it writes
-the reason on the item as a note, so the choice can be questioned later.
+data. A trivial change doesn't need one, such as renaming a state or fixing a message. If the agent skips the model for behaviour that isn't trivial, it files the
+exception, with its reason, as a waiver of the check, so the choice can be inspected and questioned at any time.
 
 ```sh
-naima note features/job-retries "No model: <the reason>"
+naima waive model-first features/job-retries --reason "<the reason>"
 ```
 
 When a requirement you state concerns behaviour like this, the agent proposes the model and its properties as the way to check it
