@@ -37,7 +37,9 @@ worktree() {
   scratch=$(mktemp) || return 1
   index=$(cd "$1" && git rev-parse --git-path index) || { rm -f "$scratch"; return 1; }
   case $index in /* | [A-Za-z]:*) ;; *) index="$1/$index" ;; esac
-  cp "$index" "$scratch" 2>/dev/null || : > "$scratch"
+  # -p keeps the index's own time: git checks by content every entry no older than the index (racily clean), and a copy
+  # stamped now would trust the size and time of a file changed in the same second as the index was written.
+  cp -p "$index" "$scratch" 2>/dev/null || : > "$scratch"
   (cd "$1" && GIT_INDEX_FILE=$scratch git add -A . && GIT_INDEX_FILE=$scratch git write-tree) 2>/dev/null
   rm -f "$scratch"
 }
