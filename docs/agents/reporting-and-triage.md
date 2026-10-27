@@ -102,6 +102,12 @@ naima triage set <item> impact=high priority=next confidence=reported
 | `confidence` | do we understand it? `measured` · `diagnosed` · `reported` · `unclear`                                                                                                                    |
 | `effort`     | **never guessed.** Nothing in a report says what a fix costs, so leave it empty until someone has looked at the code. An unsized item sinks in the ranking, and that is the right outcome |
 
+**Record whether the behaviour has states or concurrency.** For a feature or a bug, decide whether the behaviour it adds or fixes has states or concurrency: a
+lifecycle, a protocol, a scheduler, a retry loop, two processes sharing data. Record it with `naima set <item> stateful=true`, or `stateful=false`. Decide it
+from what the item asks for, never by searching the code. A change recorded `stateful=true` starts from a model
+([design with a model](../guide/design-with-a-model.md)), and once it has landed, `naima check` notes it (the check `model-first`) if no `models` or
+`properties` item is linked to it and no note `No model: <reason>` says why it has none.
+
 **Classifiers take the project's values.** The fields `area` (where the item lives) and `kind` (the mode of work; a role's name is a kind) take the values the
 project lists, if it lists any. `naima types` prints each list with how many items hold each value, and marks any value that is not on the list. The agent picks
 a value from the list. A new value is defined in `naima.json`'s `extends`, with a title and a meaning, in the same commit that first uses it. If an off-list

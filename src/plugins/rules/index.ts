@@ -4,6 +4,7 @@
 // reads that project's rules before anything else.
 
 import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import {
   bool,
   type Check,
@@ -24,6 +25,7 @@ import {
   readReadme,
   type Rendered,
   rendered,
+  runGit,
   str,
   table,
   type TypeDef,
@@ -189,6 +191,9 @@ export function ackLine(rules: Rule[]): string | null {
   return phrases.length ? `Acknowledge: ${phrases.join(" · ")}` : null
 }
 
+/** The first line `naima rules` prints, for `audience` or for all: what a copy of its output starts with. */
+const listHeading = (audience?: Audience): string => `The project's rules${audience ? ` for ${audience}` : ""} (naima rules):`
+
 function rulesRendered(rules: Rule[], heading: string): Rendered<Rule[]> {
   return rendered(rules, (rs) =>
     rs.length
@@ -249,7 +254,7 @@ const command = (retired: ReadonlySet<string>): Command => ({
       ctx.out(JSON.stringify(rules, null, 2))
       return 0
     }
-    const lines = rulesRendered(rules, `The project's rules${audience ? ` for ${audience}` : ""} (naima rules):`).text()
+    const lines = rulesRendered(rules, listHeading(audience as Audience | undefined)).text()
     for (const l of lines.length ? lines : [`no active rules${audience ? ` for ${audience}` : ""} — naima new rules "<the rule>"`]) ctx.out(l)
     return 0
   },
@@ -261,10 +266,36 @@ const guide = (retired: ReadonlySet<string>): GuideSection => ({
   render: (ctx) => rulesRendered(activeRules(ctx, "agents", retired), "Read first — the project's rules for agents (naima rules --audience agents):"),
 })
 
+/**
+ * The markdown files tracked at the repository's root that are a copy of `naima rules` output — those whose first line
+ * is its heading — and are no longer what it prints: an agent tool that imports such a file into its always-on
+ * instructions reads the old rules, and misses those an update of Naima added.
+ */
+export function staleCopies(ctx: Context, retired: ReadonlySet<string>): { file: string; audience: Audience | undefined }[] {
+  const listed = runGit(ctx.root, ["ls-files", "-z", "--", ":(glob)*.md"])
+  if (!listed.ok) return []
+  const headings = new Map<string, Audience | undefined>([[listHeading(), undefined], ...AUDIENCES.map((a) => [listHeading(a), a] as const)])
+  const out: { file: string; audience: Audience | undefined }[] = []
+  for (const file of listed.out.split("\0").filter(Boolean)) {
+    let text: string
+    try {
+      text = readFileSync(join(ctx.root, file), "utf8")
+    } catch {
+      continue // listed but deleted in the working tree
+    }
+    const first = text.split("\n", 1)[0]?.trim() ?? ""
+    if (!headings.has(first)) continue
+    const audience = headings.get(first)
+    const now = rulesRendered(activeRules(ctx, audience, retired), listHeading(audience)).text().join("\n")
+    if (text.trim() !== now.trim()) out.push({ file, audience })
+  }
+  return out
+}
+
 const check = (retired: ReadonlySet<string>): Check => ({
   name: "rules",
   says:
-    "every active rule has its text and a valid audience, and names as enforcedBy only a check or gate that exists; every name the retire option holds is a rule a loaded plugin ships",
+    "every active rule has its text and a valid audience, and names as enforcedBy only a check or gate that exists; every name the retire option holds is a rule a loaded plugin ships; and a copy of naima rules kept in a markdown file at the repository's root, such as one an agent tool imports, is noted when it is no longer what naima rules prints",
   run(ctx) {
     const known = new Set(["checks", "gates"].flatMap((p) => ctx.registry.contributions(p).flatMap((c) => [c.name, c.id])))
     const ships = shipped(ctx)
@@ -276,9 +307,16 @@ const check = (retired: ReadonlySet<string>): Check => ({
       level: "problem",
       message: `${c.id}: the shipped rule names as enforcedBy "${c.value.enforcedBy}", which is no check or gate`,
     }))
+    const stale: Finding[] = staleCopies(ctx, retired).map(({ file, audience }) => ({
+      level: "note",
+      message: `${file} is a copy of naima rules that is out of date, so whoever reads it misses rules added or changed since — write it again: naima rules${
+        audience ? ` --audience ${audience}` : ""
+      } > ${file}`,
+    }))
     return [
       ...unknown,
       ...badShipped,
+      ...stale,
       ...active(ctx).flatMap((item): Finding[] => {
         const out: Finding[] = []
         const text = ruleText(item)
@@ -323,7 +361,8 @@ export default function rules(options: Record<string, unknown> = {}): Plugin {
       "A rule's page is the rule and its reason; `audience` says whom it binds (`agents`, `people`, `everyone`), `strength` how much (`must`, `should`), and `enforcedBy`, when set, the check or gate that holds it. " +
       "An active rule is shown; a retired one is kept as history. `naima rules --audience agents` is what an agent reads at the start of work, and `naima guide` prints it first. " +
       "`ack`, when a rule sets it, is the exact phrase an agent gives back in acknowledgement; `naima rules` and `naima guide` print every active one's, joined, as the line to give — `naima rules check-ack <file|->` checks that a piece of text carries them all, naming what is missing and exiting 1 if so. " +
-      "A plugin may also ship rules (the `rules` point): each is active in every project that loads the plugin, listed beside the project's own with the plugin that ships it, and retired by naming it in the `retire` option rather than by editing it.",
+      "A plugin may also ship rules (the `rules` point): each is active in every project that loads the plugin, listed beside the project's own with the plugin that ships it, and retired by naming it in the `retire` option rather than by editing it. " +
+      "A markdown file at the repository's root whose first line is the heading `naima rules` prints is a copy of its output, kept for an agent tool that imports it; when it no longer matches, as after an update of Naima that ships new rules, `naima check` notes it with the command that writes it again.",
     options: [{ name: "retire", default: "[]", says: "the shipped rules this project does not hold to, each by its name or qualified id (`<plugin>/<name>`)" }],
     points: [rulesPoint],
     types: [rulesType],

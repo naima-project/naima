@@ -101,6 +101,13 @@ way, the previous version stays in place. Then the newer Naima finishes the upda
 - it runs `naima check`, and files a todo for each problem or note that is new since the version you had, so nothing it couldn't fix by itself is forgotten. A
   todo it has already filed isn't filed twice.
 
+The rules an update adds are in `naima rules` as soon as the lock has moved. A copy of them kept in a file, such as one your agent tool imports into its
+instructions, is not rewritten by the update: `naima check` notes it as out of date, with the command that writes it again, and the update files that note as a
+todo ([read the project's rules](../agents/read-the-project-rules.md)).
+
+An update from a Naima older than 1.1.0-beta.1 is finished by that older Naima, unless the data format changes: it shows the rules added, from the rules page,
+but does not name the rules to acknowledge again nor run the newer Naima's check. After such an update, run `naima check` once.
+
 Everything ends up in the tracker folder, apart from that line and those hooks. For each of them, the update prints one sentence saying what it installed and
 why, for example:
 

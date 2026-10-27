@@ -37,7 +37,9 @@ The same holds for requirements: check every prompt for a requirement it adds or
 of a model, or a metric with a budget ([elicit](../../docs/agents/reporting-and-triage.md#elicit-the-requirements-it-carries)). A fact the owner gives, a
 finding an investigation reaches, and a lesson a mistake teaches are each a `knowledge` entry with its basis and its evidence linked, a lesson with kind
 `lesson` ([knowledge](../../docs/guide/knowledge.md)). Behaviour with states or concurrency is designed from a model first
-([design with a model](../../docs/guide/design-with-a-model.md)). A decision taken with the owner, a change of direction or a notable event outside the tracker
+([design with a model](../../docs/guide/design-with-a-model.md)): when triaging a feature or a bug, record `stateful=true` or `false`. Once the model
+holds its properties, offer to generate the state machine's code from it with naima-codegen, in Rust, Python or TypeScript with Svelte, checked against the
+model ([generate the code](../../docs/guide/design-with-a-model.md#generate-the-code-from-the-model)). A decision taken with the owner, a change of direction or a notable event outside the tracker
 gets one diary entry, never routine work ([the rule](../../docs/guide/rules.md#agents-keep-the-diary)). How to work with the owner (quiet, simple, fast,
 capture, loops closed) is the shipped working rules, printed by `naima rules --audience agents`
 ([working with the owner](../../docs/guide/rules.md#working-with-the-owner)).

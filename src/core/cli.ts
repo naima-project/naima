@@ -106,7 +106,7 @@ import type { Command, Context, GuideSection, Plugin, Setup } from "./types.ts"
 import { asRendered, linesAs } from "./rendered.ts"
 import { shortOrId } from "./names.ts"
 import { apiFor } from "./plugins.ts"
-import { atSessionStart, goalsAtSessionStart } from "./base.ts"
+import { atSessionStart, goalsAtSessionStart, offersAtSessionStart } from "./base.ts"
 import { committedLock as lockOfLastCommit, type SessionConfig, sessionStartGaps, startSessions, unfinishedUpdate } from "./session-start.ts"
 import { adapter, ADAPTERS } from "./adapters/index.ts"
 import { itemStore } from "./messages.ts"
@@ -950,7 +950,8 @@ export const greetingContext = (shown: string): string =>
 
 /**
  * `naima hello`: the banner, what the update policy finds, what waits on the owner (the summary sections marked
- * `hello`, such as the long runs that are due, and the urgent messages the tick holds), and the offers — what an
+ * `hello`, such as the long runs that are due, and the urgent messages the tick holds), and the offers, the summary
+ * sections' first, such as generating code from a model — what an
  * agent says first in a session. Reads the source only as `updates` says, and records that check as the day's update
  * check; never moves the lock, never starts a run. With --hook, prints it as the tool's session-start hook wants it.
  */
@@ -1015,6 +1016,7 @@ async function hello(args: string[], opts: CliOptions, place: Located, io: IO): 
   // Where the project is going comes first: the goals the plugins say (the next milestone and release, with what
   // stops them). Then what waits on the owner, or that nothing does.
   const decisions: string[] = []
+  const offers: string[] = []
   try {
     const ctx = await openProject(place, opts, { ...io, err: () => {} })
     try {
@@ -1023,6 +1025,11 @@ async function hello(args: string[], opts: CliOptions, place: Located, io: IO): 
       // a goal that cannot be evaluated here: naima gates says why
     }
     decisions.push(...await atSessionStart(ctx))
+    try {
+      offers.push(...await offersAtSessionStart(ctx))
+    } catch {
+      // an offer that cannot be rendered here is left out
+    }
     const { shown } = await endTick(beginTick(opts, place, ctx))
     for (const n of shown) if (n.level === "urgent") decisions.push(`URGENT: ${n.text}${n.ack ? ` Only the owner acknowledges it: ${n.ack}.` : ""}`)
   } catch {
@@ -1037,6 +1044,7 @@ async function hello(args: string[], opts: CliOptions, place: Located, io: IO): 
       : `${INTRODUCTION}, active in this repository: a development build, its lock commit ${short(lock.commit)}.`,
     ...lines,
     RULES_FIRST,
+    ...offers,
     OFFERS,
     BASICS_OFFER,
   ]

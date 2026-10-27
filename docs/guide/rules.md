@@ -473,9 +473,17 @@ naima note features/job-retries "No model: <the reason>"
 Why: behaviour with states fails in orders of events that nobody thought to test, and a model checker explores every order. A model written after the code only
 describes the code, defects included, while one written first is what the code is checked against.
 
-This rule ships with Naima, applies to everyone in every project as a _should_, and is acknowledged as "Model first mode on". **Convention**: nothing checks
-that a model exists, and a property item, once there, is held current by the check `property-evidence` ([design with a model](design-with-a-model.md), with a
-template of a state machine in mCRL2).
+Whoever triages a feature or a bug records whether its behaviour has states or concurrency, in its field `stateful`, decided from what the item asks for and
+never guessed from the code.
+
+```sh
+naima set features/job-retries stateful=true
+```
+
+This rule ships with Naima, applies to everyone in every project as a _should_, and is acknowledged as "Model first mode on". **Enforced by** the check
+`model-first`, as a note, on a change recorded `stateful=true` that landed with no models or properties item linked to it and no note "No model: <reason>". The
+rest is **convention**, and a property item, once there, is held current by the check `property-evidence` ([design with a model](design-with-a-model.md), with
+a template of a state machine in mCRL2).
 
 ## Branches and worktrees
 

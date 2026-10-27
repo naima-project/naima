@@ -211,6 +211,8 @@ export interface SummarySection {
   hello?: boolean
   /** Where the project is going, in two or three lines, as `naima hello` says it after the update check and before what waits on the owner: the next goal and the next release, each with its status. A block with nothing to say renders no lines. */
   goals?(ctx: Context): Rendered | Promise<Rendered>
+  /** What the agent can do on request, a line each, as `naima hello` says it among its offers, after what waits on the owner: such as generating code from a model the project has. A block with nothing to offer renders no lines. */
+  offers?(ctx: Context): Rendered | Promise<Rendered>
   render(ctx: Context): Rendered | Promise<Rendered>
 }
 

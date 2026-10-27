@@ -21,7 +21,10 @@ it owns the routing table.
    home paths and user names
    ([the rule](../../../../docs/guide/rules.md#no-machine-names-or-private-infrastructure-in-a-repository)).
 3. **Triage it now**: `naima triage set <item> impact=… priority=… confidence=…`.
-   `effort` only if you have looked at the code.
+   `effort` only if you have looked at the code. For a feature or a bug,
+   record whether its behaviour has states or concurrency:
+   `naima set <item> stateful=true` (or `false`); a stateful one starts
+   from a model.
 4. **Elicit the requirement it carries**: does it add or change one? File it
    (`naima new requirements … --dedupe`), revise it, or `naima spec revise`;
    restate it so a test can decide it; settle how it is checked (a test, a

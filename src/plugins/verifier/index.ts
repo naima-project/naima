@@ -28,6 +28,7 @@ import {
   gitOrNull,
   gitPath,
   guardPrivate,
+  type GuideSection,
   hasTrait,
   type Host,
   type Item,
@@ -40,11 +41,13 @@ import {
   type Progress,
   progressFor,
   readHosts,
+  rendered,
   saveMeta,
   setFieldValue,
   sshArgs,
   storedLinks,
   str,
+  type SummarySection,
   textsAt,
   toplevel,
   usageError,
@@ -1128,6 +1131,34 @@ const leavesDevelopmentProved: WriteHook = {
   },
 }
 
+// ── code from a model ─────────────────────────────────────────────────────────
+
+/** Where naima-codegen is: a public tool that writes a model's state machine as code checked against it. */
+export const CODEGEN = "https://github.com/naima-project/naima-codegen"
+
+/** One line, when the project has a models item: that the code can be generated from a model, and where to read how. */
+function codegenLine(ctx: Context): string[] {
+  const models = ctx.repo.items.filter((i) => i.type === MODELS)
+  if (!models.length) return []
+  return [
+    `This project has ${
+      models.length === 1 ? "a model" : `${models.length} models`
+    } (naima list ${MODELS}): the code of a state machine can be generated from it with naima-codegen (${CODEGEN}), in Rust, Python or TypeScript with Svelte, checked against the model — docs/guide/design-with-a-model.md, "Generate the code from the model"`,
+  ]
+}
+
+/** In `naima summary` and among `naima hello`'s offers, never as something that waits on the owner. */
+const codegenSection: SummarySection = {
+  name: "codegen",
+  offers: (ctx) => rendered(codegenLine(ctx), (l) => l),
+  render: (ctx) => rendered(codegenLine(ctx), (l) => l),
+}
+const codegenGuide: GuideSection = {
+  name: "codegen",
+  says: "when the project has a models item, one line: the code can be generated from the model with naima-codegen",
+  render: (ctx) => rendered(codegenLine(ctx), (l) => l),
+}
+
 const modelDevelopment: Check = {
   name: "model-development",
   says:
@@ -1217,6 +1248,7 @@ export default function verifier(): Plugin {
       "A property that holds is evidence exactly as a passed test is: it can `verify` a bug and close it. A verdict is only as good as what it was reached on, so `naima check` fails when a property claims to hold and its property, verifier, model path, `verifierOptions`, model contents, any file it includes, the set of files it reads, or the tool's version have changed since the run. " +
       "A property that holds and proves a change — it verifies or satisfies a bug, a todo or a feature — is expected to carry a violated run of the same property, with its counterexample, on other inputs (`property-failed-first`), and to be backed by a witness property that holds, linked by `witnesses` (`property-witnessed`); both are notes that name the property, so either can be waived with its reason. " +
       "A `models` item marks a model, by its path in `model`, as in development: while it is, the staleness of its properties is a note rather than a problem and the two change checks ask nothing of them; it leaves development (status `stable`) only when every property verified on it holds on a run of exactly what it has now. " +
+      `When the project has a \`models\` item, \`naima summary\`, \`naima hello\` and \`naima guide\` say once, in one line, that the code of a state machine can be generated from a model with naima-codegen (${CODEGEN}), checked against it. ` +
       "A refactoring of a model is proved by equivalence: `naima equivalent <model>` finds, in git, the earlier version each property's last run read, has the verifier compare it with the model as it is now modulo an equivalence (`--modulo`, the adapter's first by default), and, when the two are equivalent, records for each property a run that carries the earlier verdict over to the new version, marked `carried` with the run it came from, the earlier version's sha256 and the comparison's output; a later `naima verify` reuses it. Nothing carries over when the versions differ, when the equivalence does not preserve the property, or when anything besides the model changed — the property, its options, another input, the tool's version. " +
       "The shipped adapter, `example-regex`, is a stand-in that shows the shape of a real one; the opt-in `verifier-mcrl2` plugin contributes a real one.",
     types: [
@@ -1259,7 +1291,7 @@ export default function verifier(): Plugin {
       { name: "verifierOptions", kind: "object", says: "options handed to the verifier with the model and the property, as a JSON object", appliesTo: [TYPE] },
     ],
     points: [verifiersPoint],
-    contributes: { verifiers: [exampleRegex], gates: [allHold], "landing-reports": [propertiesCurrent] },
+    contributes: { verifiers: [exampleRegex], gates: [allHold], "landing-reports": [propertiesCurrent], summary: [codegenSection] },
     // Its gate is there when a gates plugin is, its landing report when the coordination plugin is: without them, nothing lists either.
     optional: ["gates", "landing-reports"],
     relations: [
@@ -1268,6 +1300,7 @@ export default function verifier(): Plugin {
     ],
     checks: [evidence, failedFirst, witnessed, modelDevelopment],
     commands: [verify, verifiers, equivalent],
+    guide: [codegenGuide],
     hooks: [reopenOnChange, holdsByVerifyOnly, leavesDevelopmentProved],
   }
 }
