@@ -262,6 +262,12 @@ writes it.
 
 `naima metrics presets` lists the ready-made metrics. You declare one by naming its preset, and you can add a bound or narrow down the files if you like.
 
+A new project already has some of them. `naima init` declares the `code.*` metrics that fit the languages of the project's files, with no bounds, so its quality
+is recorded from the first commit: lines, files, duplication and markers always, functions, function size and complexity when there is TypeScript, JavaScript or
+Rust, dependencies when there is a manifest, and `deno.lint` when there is a `deno.json`. No preset that runs the tests is declared, since each recording would
+run the whole suite. `naima update` does the same, once, for a project that has never declared any metrics. Both say it in one line. To remove them, delete them
+from `plugins.metrics.options.metrics` and leave it as `{}`: an empty list is never filled again.
+
 ```json
 "metrics": {
   "loc": { "preset": "code.loc", "include": ["src"] },

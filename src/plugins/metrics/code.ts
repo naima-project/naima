@@ -1242,7 +1242,7 @@ export function dependenciesIn(name: string, text: string): number {
   return 0
 }
 
-const MANIFESTS = new Set(["package.json", "deno.json", "deno.jsonc", "requirements.txt", "go.mod", "Cargo.toml"])
+export const MANIFESTS = new Set(["package.json", "deno.json", "deno.jsonc", "requirements.txt", "go.mod", "Cargo.toml"])
 const MARKERS = "\\b(TODO|FIXME|XXX|HACK)\\b"
 
 const fnMeasure = (id: string, says: string, unit: string, of: (f: FunctionInfo) => number): CodeMeasure => ({

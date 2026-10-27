@@ -317,6 +317,21 @@ async function start(ctx: Context, hosts: Map<string, Host>, cmd: Command, args:
   return EXIT.OK
 }
 
+/**
+ * Why a host's Naima did not start a run, as the tail of the refusal: the long-work plugin is blamed only when the
+ * host's Naima says it has no `run` command; otherwise the host's own line: the one where its run says it failed
+ * (such as "could not start: spawn echo ENOENT"), else its error output's last line, else its output's.
+ */
+export function remoteCause(out: string, err: string): string {
+  const errs = err.split("\n").map((l) => l.trim()).filter(Boolean)
+  const outs = out.split("\n").map((l) => l.trim()).filter(Boolean)
+  if ([...errs, ...outs].some((l) => /unknown command "run"/.test(l))) {
+    return `) — its own Naima has no run command: it needs the long-work plugin`
+  }
+  const why = outs.find((l) => /^run \S+: (?:failed|killed|lost)\b/.test(l)) ?? errs.at(-1) ?? outs.at(-1)
+  return why ? `: ${why})` : ")"
+}
+
 /** `naima run --host`: the host's own Naima starts the run, always guarded; here, only the record naming the host. */
 function startRemote(
   ctx: Context,
@@ -342,12 +357,7 @@ function startRemote(
   for (const l of r.out.split("\n").filter(Boolean)) ctx.out(`${host.name}: ${l}`)
   if (!r.ok) {
     for (const l of r.err.split("\n").filter(Boolean)) ctx.err(`${host.name}: ${l}`)
-    const why = r.err.split("\n").filter(Boolean).pop() ?? ""
-    throw refuse(
-      `naima run: ${host.name} (${host.ssh}) did not start the run (exit ${r.code}${
-        why ? `: ${why}` : ""
-      }) — its own Naima must have the long-work plugin; nothing recorded here`,
-    )
+    throw refuse(`naima run: ${host.name} (${host.ssh}) did not start the run (exit ${r.code}${remoteCause(r.out, r.err)}; nothing recorded here`)
   }
   ensureRunsDir(tracker(ctx))
   const dir = recordOf(ctx, name)
