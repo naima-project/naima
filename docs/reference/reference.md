@@ -126,7 +126,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `jobs` | core | a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it; what it finds is shown to the owner as messages | long-work |
 | `extends` | core | additive changes to another plugin's type — statuses (an existing one only with its category), traits, transitions — or field — enum values, more types or traits it applies to | knowledge, roles |
 | `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done; `beforeText(text, ctx)` may refuse a write of free text or a file that is not an item's (a session note, an event, an attachment) or add to its record | core, coordination, triage, epics, planning, knowledge, verifier, privacy |
-| `setup` | core | what a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init` and `naima update` after their own work: `install(ctx) → lines`, each said | coordination |
+| `setup` | core | what a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init` and `naima update` after their own work: `install(ctx) → lines`, each said | coordination, metrics |
 | `migrations` | core | a plugin's own data migrations, in order from its format 1, run by `naima update` after the core's | gates |
 | `landing-reports` | coordination | what `naima land` checks before a branch lands and reports once it has: `name`, `says`, and `blocks(ctx, { branch, from, to, changed }) → lines`, what the landing changed whose proofs are not current, any line refusing the landing unless --stale-proofs gives the reason, or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root | verifier |
 | `gates` | gates | a named release or merge condition, backed by items: `title`, `says`, `decides`, `evaluate(ctx) → { holds, blocking, owed }`; `inFullSuite` makes it part of the full suite a release gate (`fullSuite`) requires | verifier |
@@ -2507,6 +2507,12 @@ naima metrics presets
 **Directories** it owns under the tracker root: `metrics/`, `test-runs/`.
 
 **Summary sections**: `metrics`.
+
+**Setup**, put in place by `naima init` and `naima update` where missing
+
+| Step | What it puts in place |
+|---|---|
+| `code-metrics` | the built-in code-quality metrics that fit the project's languages, with no bounds, declared where plugins.metrics.options has no metrics yet: once, so a project whose owner removed them is not proposed them again |
 
 **UI views**, the tabs of the provisional window
 

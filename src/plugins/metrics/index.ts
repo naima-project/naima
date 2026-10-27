@@ -93,6 +93,7 @@ import {
 import { builtinFormats, type TestFormat } from "./formats.ts"
 import { htmlReport, plotSvg, REPORT_CSS, selectionPage, type Series } from "./plot.ts"
 import { PRESETS, SUITE_PRESETS } from "./presets.ts"
+import { metricsSetup } from "./proposal.ts"
 import { performanceRequirements, satisfiesChecked } from "./requirements.ts"
 import {
   attachToItems,
@@ -1656,6 +1657,7 @@ export default function metrics(options: Record<string, unknown> = {}): Plugin {
     optional: ["gates", "ui-views", "landing-reports"],
     checks: [boundReasons, suitesCheck, satisfiesChecked(metricsOf), performanceRequirements(metricsOf)],
     commands: [metricsCommand],
+    setup: [metricsSetup(languagesOf)],
     summary: [summarySection],
   }
 }

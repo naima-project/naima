@@ -128,14 +128,17 @@ You declare another machine once, in `naima.json`.
 
 After that, `naima run bench --host lab --budget-time 6h -- 'deno task bench'` runs the work on that machine, using the copy of Naima it already has for the
 project, and `wait`, `run list`, `run status`, `run stop` and `run clean` ask it over ssh. A run on another machine must not change any file the repository
-tracks there. If it does, the run is reported as failed, and the report names the files.
+tracks there. If it does, the run is reported as failed, and the report names the files. If the run cannot start there, for instance because the program it
+names does not exist on that machine, `naima run` says so with the host's own line, such as `could not start: spawn echo ENOENT` (on Windows `echo` is built
+into cmd and is no program: a command given as one quoted string is run by the shell, which knows it), and records nothing here. Only when the host's Naima has
+no `run` command does it say that the host's Naima needs the long-work plugin.
 
 That is why a property is not verified with `naima run --host`, since `naima verify` writes the property's item. `naima verify <property> --host lab` is used
 instead: the verifier runs in the host's checkout, which stays untouched, and the run is attached here
 ([proving a property on another machine](prove-and-close.md#properties-proven-by-a-tool)).
 
-Naima quotes what it sends for the shell the machine's ssh server runs commands through. That is a POSIX shell unless you say otherwise. The ssh server
-that comes with Windows runs commands through cmd, so for a Windows machine you add `"shell": "cmd"`.
+Naima quotes what it sends for the shell the machine's ssh server runs commands through. That is a POSIX shell unless you say otherwise. The ssh server that
+comes with Windows runs commands through cmd, so for a Windows machine you add `"shell": "cmd"`.
 
 ```json
 "long-work": { "options": { "hosts": {
@@ -150,7 +153,7 @@ The folder tells git to ignore it, so none of it is ever committed.
 ## Platforms
 
 Everything above works on macOS, Linux and Windows. On Windows a run is ended with `taskkill`, and Naima starts the run's supervisor through WMI (with
-PowerShell), so a run started from an ssh session keeps going after the session ends, which a Windows machine used as a `--host` needs. Agents are
-required to use these commands by the rule [long work goes through naima run](rules.md#long-work-goes-through-naima-run-and-naima-wait), and the rule
+PowerShell), so a run started from an ssh session keeps going after the session ends, which a Windows machine used as a `--host` needs. Agents are required to
+use these commands by the rule [long work goes through naima run](rules.md#long-work-goes-through-naima-run-and-naima-wait), and the rule
 [long work reports its progress](rules.md#long-work-reports-its-progress-or-says-why-it-cannot-and-what-it-reports-instead) is the one that asks it to say how
 far along it is.
