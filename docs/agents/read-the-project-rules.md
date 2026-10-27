@@ -10,6 +10,10 @@ It prints the project's own active rules for agents and for everyone, with `must
 for the whole session, on top of [the rules](../guide/rules.md) that every project holds to. `naima guide`, run inside the project, prints the same rules first
 and then points at the documentation.
 
+The list includes the [working rules](../guide/rules.md#working-with-the-owner) that Naima ships to every project: quiet mode, talking to the owner, fast mode,
+asking before what cannot be undone, capturing with judgment, never asking what the rules answer, closing every loop, no new status document and the right tool
+for the job. A project may have retired some of them or replaced them with its own, so follow the list as printed.
+
 ```sh
 naima rules                  # every active rule, whatever its audience
 naima rules --json           # as data: item, title, audience, strength, enforcedBy, ack, text

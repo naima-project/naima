@@ -49,9 +49,9 @@ naima waive session-note-ack passes/<file>.md --reason "<why it is accepted>"
 ```
 
 This writes one file under `waivers/` in the tracker. The file names the check, the subject of the finding, the reason, who waived it (`--as`, or the first part
-of the branch name) and the day. A waiver changes what the project holds to, so it is made in the worktree of an item of its own and landed, like any other change. From then on the finding no longer fails `naima check`, but every run still
-lists the waiver as a note, so it never goes out of sight. When the subject is gone, or no longer fails the check, the waiver is noted as waiving nothing, and
-you can remove it.
+of the branch name) and the day. A waiver changes what the project holds to, so it is made in the worktree of an item of its own and landed, like any other
+change. From then on the finding no longer fails `naima check`, but every run still lists the waiver as a note, so it never goes out of sight. When the subject
+is gone, or no longer fails the check, the waiver is noted as waiving nothing, and you can remove it.
 
 Only a check that names the subject of its findings can be waived. Today those are `session-note-ack` and the checks of
 [a change to a model is proved, not just checked](#a-change-to-a-model-is-proved-not-just-checked).
@@ -191,6 +191,88 @@ deferred item is left exactly as the unfilled template it was created with.
 A [beta marker](glossary.md#beta-marker) in the code names the item whose passing would prove the behaviour. **Enforced by** the check `beta-markers`, which
 fails on a marker that names nothing or that is still there after its proof has passed.
 
+## Working with the owner
+
+These rules ship with Naima in the `working-rules` plugin. They are active in every project, and `naima rules --audience agents` lists them beside the project's own,
+each with its reason and, for most, the phrase an agent gives back. A project that does not want one names it in the rules plugin's `retire` option, for example
+`"rules": { "options": { "retire": ["working-rules/fast-mode"] } }` in `naima.json`. To change one, retire it and write the project's own version as a rules item
+([write a project rule](write-a-project-rule.md)). Switching the `working-rules` plugin off drops them all. None has a check, so each is a **convention**.
+
+### Quiet mode
+
+Agents use their intelligence to spend as few AI tokens as the work allows. Routine steps stay silent. During a task an agent speaks only to ask before a
+high-risk step or to state, in one line, an assumption that carries some risk, and at the end it gives a summary of one or two lines, more only on request. It
+never repeats in chat what it has just written somewhere durable, such as an item, a commit or a document: the chat says what changed and what the owner has to
+do. Raw command output goes neither into the chat nor into the agent's context. It is redirected to a file, the file's size is checked, and only the relevant
+part is read.
+
+Why: the owner's attention and the agent's context are the scarcest things in the work, and something durable is read where it is written. Acknowledged as
+"Quiet mode on". **Convention**.
+
+### Talking to the owner
+
+A message opens with the answer, stays short enough to skim, and asks at most one question. Next steps come as now, next and later, and the message names the
+assumptions nobody stated and the loops still open, in a calm and direct tone. An identifier (an item id, a file, an acronym, a label) is always said together
+with what it is. What was measured is kept apart from what is believed, so a guess is never stated as a fact and a claim is checked before it is reported, and
+every number comes with the number it is compared to. When the owner corrects something, the agent fixes the thing itself, not the way it described it.
+
+Why: a message the owner has to decode costs more than the work it reports, and a guess reported as a fact gets acted on as one. Acknowledged as "Simple mode
+on". **Convention**.
+
+### Fast mode
+
+Tests and checks run at the end of a phase, not after every edit, and isolated experiments run in parallel. Anything that takes more than a few seconds runs in
+the background while the conversation goes on, and the next question is asked straight away. An agent waits in the foreground only when the next thing it has to
+say depends on the result, and then it says what is running and how long it takes. No wait is blind: each one checks progress at short intervals (new commits,
+changed files, the process still alive), and spare capacity goes to the next piece of work.
+
+Why: time spent waiting is the owner's time too, and a wait nobody checks hides a stalled job while the machine sits idle. Acknowledged as "Fast mode on".
+**Convention** ([long work](../agents/long-work.md)).
+
+### Ask before what cannot be undone
+
+Deleting data or items, force-pushing, rewriting published history and discarding someone's uncommitted work all wait for the owner's yes.
+
+Why: what can't be undone is the owner's decision. Acknowledged as "Irreversible actions mode on". **Convention**.
+
+### Capture, with judgment
+
+Once the owner has settled a request, a report, a decision or a deferral, the agent files it straight away, in its own words rather than the chat's, after
+searching for a duplicate to link instead, and triages it on the spot. While the owner is thinking aloud or asking in principle, the agent discusses and files
+nothing, and when that exchange has settled it asks once whether to file it. "I already told you" means a report was lost, so the agent files it now and says it
+was missing.
+
+Why: a request that was never filed has to be made again, and an item filed for a passing thought is noise to review and undo. Acknowledged as "Capture mode
+on". **Convention** ([reporting and triage](../agents/reporting-and-triage.md)).
+
+### Never ask what the rules answer
+
+Before asking the owner anything, an agent checks the project's rules (`naima rules`) and its decisions (`naima decisions <words>`). A question they settle is
+not put to the owner, even when the editor or app the agent runs in offers buttons for it, such as which branch to use, whether to commit, or whether to keep a
+safeguard. The agent answers it from the rules and says the answer in one line. Something the owner should know, such as how to turn a safeguard off, is told as
+information, not offered as a choice.
+
+Why: a question the rules already answer costs the owner's attention and makes them think the choice is theirs again. Acknowledged as "Rules answer mode on".
+**Convention** ([asking the human](../agents/asking-the-human.md)).
+
+### Close every loop
+
+Before a turn ends, every open question, promised follow-up or unfinished step is done, filed as an item, or asked as the one question. A session ends with a
+session note written with `naima pass`, which the next session's `naima hello` reads. There is no separate handover file, prompt or summary, because the session
+note and the tracker are the handover.
+
+Why: a loop left open in a chat is forgotten when the chat ends, and a handover kept outside the tracker drifts away from it. Acknowledged as "Loops closed mode
+on". **Convention**.
+
+### No new status document
+
+Nobody starts a new status page, progress summary or "where things stand" document. The authoritative one for that kind of status is updated in place instead:
+`naima guide` prints the documents the project declares, and when none is declared, `naima board`, `naima queue` and `naima summary` are authoritative. A
+document that has been replaced is retired in that list.
+
+Why: a second status document always drifts from the trackers, and each reader then plans from whichever one they opened first. Active for everyone.
+**Convention**.
+
 ## People and agents
 
 ### Don't ask the human if you know the answer
@@ -321,7 +403,8 @@ take hours. Only someone who knows what else is going on can pick the moment.
 
 Every action is done with the method made for it, such as a real parser for a language, a library built for the format, or the tool built for the job. An ad-hoc
 script, a hack or a regular expression is used only where it really is the right tool, for a flat, regular pattern with nothing nested. It is never used in
-place of parsing a structured language like markdown, HTML, JSON, YAML or source code. **Convention**.
+place of parsing a structured language like markdown, HTML, JSON, YAML or source code. It ships with the other [working rules](#working-with-the-owner) and is
+active for everyone. **Convention**.
 
 Why: a check that read markdown with regular expressions reported hundreds of working links as broken, because it couldn't see anchors declared in HTML. People
 switch off or ignore a check that raises false alarms, and then the real defects it exists to find go unseen as well.
@@ -453,10 +536,10 @@ One kind of commit may be made directly on the trunk: one that only adds to the 
 diary entry in `events/` or a session note in `passes/`, and it may add lines to an item's `README.md`, as a note does, while the item's `meta.json` stays as it
 was. The check accepts such a commit without a note. Filing what the owner says, at the moment it is said, shouldn't need a branch and a landing, and a commit
 that only adds can't change or hide anything that has landed. A commit that changes or deletes a file, or that touches `rules/`, `waivers/` or `naima.json`,
-still goes through a branch: a status, a rule, a waiver and the lock change what the project holds to, so they arrive as a marker like any other change.
-The same holds for the tracker steps that change more than they add, even in a project worked by one agent: an update of Naima, a waiver, a release record
-and an epic set done each get an item of their own, are made in its worktree and are landed with `naima land`. Two commits on the trunk are accepted as they
-are: the one `naima init` makes, which adds `naima.json`, and the one that closes items after a landing, as `naima close` does.
+still goes through a branch: a status, a rule, a waiver and the lock change what the project holds to, so they arrive as a marker like any other change. The
+same holds for the tracker steps that change more than they add, even in a project worked by one agent: an update of Naima, a waiver, a release record and an
+epic set done each get an item of their own, are made in its worktree and are landed with `naima land`. Two commits on the trunk are accepted as they are: the
+one `naima init` makes, which adds `naima.json`, and the one that closes items after a landing, as `naima close` does.
 
 The check names each commit in a note of its own. History on a shared trunk is never rewritten, so a commit it names that the project accepts as it is gets a
 waiver, once, with its reason: `naima waive landings-are-markers
@@ -481,9 +564,9 @@ is committed, and point git's `core.hooksPath` at that folder. git keeps that se
 first-parent line is one the check accepts: a marker, the record `naima land` makes after it, a commit that only adds to the tracker data or only closes items,
 or `naima init`'s commit. It also lets through a commit that only turns the guard on or off, a new tip that `origin`'s branch of the trunk already holds (a pull
 of what landed elsewhere), a rewind, and a branch created or deleted. Anything else is refused with one line that says to open an item and land it. Every other
-ref costs nothing but the shell script. The clone's own hooks in `.git/hooks` keep running: a hook of the same name runs first, and for every other hook
-name git knows the folder holds a small stub that runs the clone's own hook of that name, when there is one. A `core.hooksPath` already set to
-another folder is left alone, and init and update say so.
+ref costs nothing but the shell script. The clone's own hooks in `.git/hooks` keep running: a hook of the same name runs first, and for every other hook name
+git knows the folder holds a small stub that runs the clone's own hook of that name, when there is one. A `core.hooksPath` already set to another folder is left
+alone, and init and update say so.
 
 The owner, and only the owner, lets a commit through once by giving it a reason:
 
