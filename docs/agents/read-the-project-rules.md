@@ -19,6 +19,11 @@ naima rules                  # every active rule, whatever its audience
 naima rules --json           # as data: item, title, audience, strength, enforcedBy, ack, text
 ```
 
+Read the rules from the command, not from a copy. Some projects keep the output in a file that their agent tool imports into its instructions, such as
+`naima rules --audience agents > AGENT-RULES.md`. Such a copy does not change by itself: after an update of Naima that ships new rules, it still lists the old
+ones, and an agent that reads only the copy misses the new ones. `naima check` notes a copy kept as a markdown file at the repository's root once it no longer
+matches what `naima rules` prints, with the command that writes it again, and `naima update` files that note as an item.
+
 A rule is an [item](../guide/glossary.md#item) in the project's tracker, and a person writes it ([write a project rule](../guide/write-a-project-rule.md)). A
 rule marked `enforcedBy` is also upheld by that check or [gate](../guide/glossary.md#gate). The others are kept by whoever reads them.
 

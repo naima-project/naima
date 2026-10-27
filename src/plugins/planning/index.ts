@@ -47,6 +47,7 @@ import {
   rendered,
   saveProse,
   slugify,
+  splitProse,
   today,
   type TypeDef,
   typeOrThrow,
@@ -619,10 +620,52 @@ export const MODEL_FIRST_RULE = {
   audience: "everyone",
   strength: "should",
   text:
-    'Before implementing behaviour that has states or concurrency (a lifecycle, a protocol, a scheduler, a retry loop, two processes sharing data), whoever designs it writes a model of it: a state machine, as data or drawn; an mCRL2 specification; or a state machine encoded in mCRL2, for which the guide gives a template. Another form a tool can check is welcome too. Each property the behaviour must have is an item, a `properties` item checked by `naima verify` where a verifier exists, and the model changes in the same change as the code it describes. A trivial change needs no model; skipping it on non-trivial behaviour needs its reason, written on the item as a note (`naima note <item> "No model: <reason>"`).',
+    'Before implementing behaviour that has states or concurrency (a lifecycle, a protocol, a scheduler, a retry loop, two processes sharing data), whoever designs it writes a model of it: a state machine, as data or drawn; an mCRL2 specification; or a state machine encoded in mCRL2, for which the guide gives a template. Another form a tool can check is welcome too. Each property the behaviour must have is an item, a `properties` item checked by `naima verify` where a verifier exists, and the model changes in the same change as the code it describes. A trivial change needs no model; skipping it on non-trivial behaviour needs its reason, written on the item as a note (`naima note <item> "No model: <reason>"`). Whoever triages a feature or a bug records whether its behaviour has states or concurrency (`naima set <item> stateful=true`, or `false`), and `naima check` notes a stateful change that landed with neither a model linked nor that note.',
   why:
     "behaviour with states fails in the orders of events nobody thought to test, and a model checker explores every order; a model written after the code only describes the code, defects included, while one written first is what the code is checked against.",
   ack: "Model first mode on",
+  enforcedBy: "model-first",
+}
+
+// ── model first ───────────────────────────────────────────────────────────────
+
+/** Whether a change's behaviour has states or concurrency: recorded at triage, never guessed from the code. */
+export const STATEFUL: FieldDef = {
+  name: "stateful",
+  kind: "boolean",
+  says:
+    "whether the behaviour this change adds or fixes has states or concurrency (a lifecycle, a protocol, a scheduler, a retry loop, two processes sharing data): recorded at triage, true or false; when true, the change starts from a model (model-first)",
+  traits: ["fixable"],
+}
+const FIXED_ON = { name: "fixedOn", kind: "date" } as const
+/** The verifier plugin's types, by id: a model, and a property checked on one. */
+const MODEL_TYPES = ["models", "properties"]
+/** The start of the note that records why a change with states had no model. */
+const NO_MODEL = "No model:"
+
+/** Does the item's Notes section hold a note that starts "No model:"? */
+const saysNoModel = (item: Item): boolean => splitProse(readReadme(item)).notes.split("\n").some((l) => l.trim().startsWith(NO_MODEL))
+
+const modelFirstCheck: Check = {
+  name: "model-first",
+  says:
+    'a change triaged as having states or concurrency (stateful: true) that landed (fixedOn set) with no models or properties item linked to it, and no note "No model: <reason>", is noted: the rule that such behaviour is designed from a model first was not kept, or its reason was not written',
+  run(ctx) {
+    const out: Finding[] = []
+    for (const item of ctx.repo.items) {
+      if (fieldValue(item, STATEFUL) !== true || !fieldValue(item, FIXED_ON)) continue
+      const modelled = ctx.repo.linksOf(item).some((l) => MODEL_TYPES.includes(ctx.repo.byId.get(l.id)?.type ?? ""))
+      if (modelled || saysNoModel(item)) continue
+      out.push({
+        level: "note",
+        item,
+        message: `${label(item)}: triaged stateful and landed with no model — link the models or properties item it was designed from (naima link ${
+          label(item)
+        } <rel> <property>), or write why it has none: naima note ${label(item)} "No model: <reason>"`,
+      })
+    }
+    return out
+  },
 }
 
 // ── hooks ─────────────────────────────────────────────────────────────────────
@@ -657,9 +700,10 @@ export default function planning(): Plugin {
       'A **release** opens at its first stage (`naima new releases "<name>"`); each stage\'s output is recorded with `naima note`, headed `Stage: <name>` (or `Stage: <name> — skipped, decided by <who>`), and the hook refuses `status=released` while a stage is unrecorded — `naima view releases` shows what each one still owes. ' +
       "A **session** is a dated, append-only record of one test sitting, linked `records` to the test or tests it was for; several share a `run` name when they were sat together. It is optional — most of the time the test's own page and status say enough — and is never edited once written: a later sitting is a new session. " +
       "An **artifact** is something the project makes and keeps — an analysis, a profile, a report, a dataset, a figure: `due` by a day, made by the todo or feature linked `produces`, made of `files` (paths from the project root) or its attachments, made from `inputs` (files or directories) and the data of the tests, properties or other artifacts it `uses`, and replaced by a later version that `supersedes` it. `naima set <artifact> status=delivered` refuses while a file it names is missing or it has none, and otherwise records `madeFrom` — the commit, one digest over its inputs and the data of what it uses, the moment — and `deliveredOn`, from which `naima diary` tells the delivery; neither is set by hand. `artifacts-current` notes an artifact past its due day and not delivered, a delivered one whose inputs changed since it was made, and a planned one nothing produces. " +
-      'The plugin ships two rules, listed by `naima rules` when the rules plugin is loaded: requirements are elicited at every prompt of the owner, each with how it is checked or measured (a test, a property, or a metric with a budget), acknowledged as "Elicitation mode on" and held in part by `requirements-proven`, which notes a requirement nothing proves; and behaviour with states or concurrency is designed from a model first (a state machine, mCRL2, or a state machine encoded in mCRL2), its properties as items, kept in step with the code, acknowledged as "Model first mode on".',
+      'The plugin ships two rules, listed by `naima rules` when the rules plugin is loaded: requirements are elicited at every prompt of the owner, each with how it is checked or measured (a test, a property, or a metric with a budget), acknowledged as "Elicitation mode on" and held in part by `requirements-proven`, which notes a requirement nothing proves; and behaviour with states or concurrency is designed from a model first (a state machine, mCRL2, or a state machine encoded in mCRL2), its properties as items, kept in step with the code, acknowledged as "Model first mode on". ' +
+      'Whether a change has states or concurrency is recorded at triage, in its field `stateful` (true or false), and never guessed from the code; `model-first` notes a change triaged `stateful: true` that landed with no `models` or `properties` item linked to it and no note "No model: <reason>". It is a note, not a problem: the rule is a should.',
     types: [requirementsType, specsType, decisionsType, releasesType, sessionsType, artifactsType],
-    fields: [SPEC, VERSION, DECIDED_ON, STANDING, SITTING_RUN, ...ARTIFACT_FIELDS],
+    fields: [SPEC, VERSION, DECIDED_ON, STANDING, SITTING_RUN, STATEFUL, ...ARTIFACT_FIELDS],
     relations: [
       { name: "satisfies", inverse: "satisfied-by", says: "delivers or proves the requirement" },
       { name: "satisfied-by", inverse: "satisfies", says: "is delivered by" },
@@ -674,10 +718,10 @@ export default function planning(): Plugin {
       ...ARTIFACT_RELATIONS,
     ],
     // What it reads of others: who performs a proof and why, and what proves an item.
-    uses: { fields: [RUN_BY.name, HUMAN_BECAUSE.name], relations: ["verified-by"] },
+    uses: { fields: [RUN_BY.name, HUMAN_BECAUSE.name, FIXED_ON.name], relations: ["verified-by"] },
     commands: [spec, decisions],
     views: [requirementsView, releasesView],
-    checks: [requirementsCheck, specsCheck, decisionsCheck, releasesCheck, artifactsCheck],
+    checks: [requirementsCheck, specsCheck, decisionsCheck, releasesCheck, artifactsCheck, modelFirstCheck],
     hooks: [stamp, releasesHook, deliveryHook],
     contributes: { rules: [ELICITATION_RULE, MODEL_FIRST_RULE] },
     // The rules are listed by naima rules when the rules plugin is loaded; without it, planning works the same.

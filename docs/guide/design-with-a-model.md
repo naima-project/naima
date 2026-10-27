@@ -116,3 +116,28 @@ happens when it doesn't, is in [prove and close](prove-and-close.md#properties-p
 The model describes the code, so the two change together, in the same change. When the behaviour changes, the agent changes the model first, checks the
 properties again, and then changes the code to match. A property whose model or formula has changed since its last run is reported by `naima check` as no longer
 current, and `naima verify` runs it again.
+
+## Generate the code from the model
+
+Once the model of a state machine holds its properties, the code that runs it can be generated from the model instead of written by hand.
+[naima-codegen](https://github.com/naima-project/naima-codegen) is a public tool of the Naima project that does this. It reads a process written in mCRL2,
+in the subset it accepts, and writes the same state machine as a Rust crate, a Python package, or TypeScript modules with a Svelte 5 class for user
+interfaces. Each output is checked against mCRL2 itself, and its tests compare the outputs with each other. The generated code decides which events are
+allowed and what comes next; the code around it only carries out the actions the model names, so a change of behaviour is a change of the model.
+
+The model has to be one linear process, `proc Core`, whose every summand is a condition, one labelled action and the next state, each label declared an input
+(an event from outside) or an output (an action the process decides). A model outside that subset is refused with a list of problems, each naming the part of
+naima-codegen's specification it breaks. The tool needs the mCRL2 tools at the version the model pins, and Python 3.11 or later.
+
+When the project has a model, `naima hello` says once that the code can be generated from it. The agent then works like this:
+
+1. It writes the naima-codegen project beside the model: `codegen.toml`, which declares each parameter, each label as input or output, and the languages to
+   write, and the model under `model/` (`core.mcrl2` with `proc Core`, and `codegen-init.mcrl2` with its initial state).
+2. It runs `naima-codegen generate --front-end` to learn whether the model is in the subset, and fixes the model until it is, checking its properties again with
+   `naima verify` after each change.
+3. It runs `naima-codegen generate`, which writes the code under `generated/`, never edited by hand, and commits it with the model in the same change.
+4. When the model comes with a policy, it runs `naima-codegen check-refinement`, which checks that the generated stepping rules stay inside the model.
+5. After every later change of the model, `naima-codegen generate --check` says whether `generated/` is still what the model gives.
+
+How to write `codegen.toml`, the policy and the checks is in naima-codegen's own documentation, with two complete examples: a job queue with retries, and a
+form for a user interface.
