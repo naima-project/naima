@@ -12,7 +12,7 @@ import { randomUUID } from "node:crypto"
 import { bool, parse, usageError } from "./args.ts"
 import { ATTACHMENTS, META, README, saveMeta, writeJson } from "./item.ts"
 import { isOpen } from "./lifecycle.ts"
-import { dirsAcrossBranches, worktrees } from "./git.ts"
+import { commitOn, dirsAcrossBranches, worktrees } from "./git.ts"
 import {
   ackCommand,
   ackedHere,
@@ -133,7 +133,7 @@ export const messagesCommand: Command = {
       if (tick) acknowledge(tick, id, ctx.now())
       if (item && isOpen(ctx, item)) {
         saveMeta(ctx, { ...item, meta: { ...item.meta, status: "acknowledged" } })
-        ctx.out(`${id}: acknowledged — commit the tracker so every machine sees it`)
+        ctx.out(`${id}: acknowledged — commit it ${commitOn(ctx.root, true)}, so every machine sees it`)
       } else ctx.out(`${id}: acknowledged`)
       return 0
     }

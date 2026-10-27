@@ -6,8 +6,11 @@
 // starts Naima, `naima guard-check <old> <new>`, which says whether every
 // commit the move adds to the trunk's first-parent line is one the trunk takes
 // directly: a landing marker, the record land makes after it, a commit that
-// only adds to the tracker data or only closes items, naima init's commit, or
-// one that only switches the guard. A new tip the upstream already holds
+// only adds to the tracker data (claims, which are coordination state, may also
+// be rewritten or removed) or only closes items, naima init's commit, or one
+// that only switches the guard. A command that tells the user to commit on the
+// branch checked out says so through commitOn, and only for a write this rule
+// takes on the trunk. A new tip the upstream already holds
 // passes, so a pull of what landed elsewhere works; a rewind passes, and so
 // does a ref created or deleted. The owner lets a commit through once with a
 // `Trunk-reason:` trailer, which landings-are-markers then notes with its reason.
@@ -419,7 +422,7 @@ export const guardCheckCommand: Command = {
   name: "guard-check",
   says: "what the trunk guard's git hook runs when the trunk is about to move: exit 0 when it may, else one line saying why not and what to do",
   enforces:
-    "a commit, merge or fast-forward of the trunk made by hand is refused unless every commit it adds to the first-parent line is a landing marker, the record land makes, a commit that only adds to the tracker data or only closes items, naima init's commit, one that only switches the guard, or one with a Trunk-reason: trailer; a tip the upstream holds, a rewind, a ref created or deleted pass",
+    "a commit, merge or fast-forward of the trunk made by hand is refused unless every commit it adds to the first-parent line is a landing marker, the record land makes, a commit that only adds to the tracker data (a claim may also be rewritten or removed) or only closes items, naima init's commit, one that only switches the guard, or one with a Trunk-reason: trailer; a tip the upstream holds, a rewind, a ref created or deleted pass",
   usage: "guard-check [--tracker] <old> <new>",
   examples: ["guard-check 0123abc 4567def", "guard-check --tracker 0123abc 4567def"],
   options: [{ name: "--tracker", says: "the move is of the tracker's trunk, in sibling mode: it takes the commits Naima makes there and landing markers" }],

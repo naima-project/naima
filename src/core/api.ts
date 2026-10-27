@@ -79,6 +79,7 @@ export {
   allRefNames,
   type BranchFile,
   commitExists,
+  commitOn,
   currentBranch,
   filesAt,
   gitOrNull,

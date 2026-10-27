@@ -20,6 +20,7 @@ import {
   cloneIntoNewWorktree,
   CODE_TRAILER,
   type Command,
+  commitOn,
   commitTrackerPaths,
   type Context,
   CONTRACT,
@@ -328,7 +329,7 @@ const claimCommand: Command = {
     if (preparing !== undefined) ctx.out(`${branch} is ${preparing ? "" : "no longer "}being prepared to enter the trunk`)
     if (preparing === false && !items.length && empty(mine) && mine.local) {
       unlinkSync(join(ctx.trackerRoot, CLAIMS, mine.file))
-      ctx.out(`removed ${join(rel(ctx, CLAIMS), mine.file)}, which held only the mark — commit the deletion on ${branch}`)
+      ctx.out(`removed ${join(rel(ctx, CLAIMS), mine.file)}, which held only the mark — commit the deletion ${commitOn(ctx.root)}`)
       return 0
     }
     for (const item of items) {
@@ -341,7 +342,7 @@ const claimCommand: Command = {
       mine.items.push({ id: item.meta.id, ref: label(item), title: item.meta.title })
       ctx.out(`claimed ${label(item)}`)
     }
-    ctx.out(`wrote ${writeClaim(ctx, mine)} — commit it on ${branch} with your work`)
+    ctx.out(`wrote ${writeClaim(ctx, mine)} — commit it ${commitOn(ctx.root)} with your work`)
     return 0
   },
 }
@@ -365,7 +366,7 @@ const release: Command = {
     ctx.out(`released ${mine.items.length - kept.length} on ${branch}`)
     if (kept.length === 0 && mine.local && !mine.preparing) {
       unlinkSync(join(ctx.trackerRoot, CLAIMS, mine.file))
-      ctx.out(`removed ${join(rel(ctx, CLAIMS), mine.file)} — commit the deletion on ${branch}`)
+      ctx.out(`removed ${join(rel(ctx, CLAIMS), mine.file)} — commit the deletion ${commitOn(ctx.root)}`)
     } else {
       // A claim read from another ref cannot be deleted from here: an emptied copy on this branch overrides it.
       mine.items = kept
@@ -656,9 +657,7 @@ const prune: Command = {
     }
     for (const c of here) unlinkSync(join(ctx.trackerRoot, CLAIMS, c.file))
     ctx.out(
-      `removed ${here.length} here${elsewhere.length ? `; ${elsewhere.length} must be dropped on its ref` : ""} — commit the deletions on ${
-        currentBranch(ctx.root)
-      }`,
+      `removed ${here.length} here${elsewhere.length ? `; ${elsewhere.length} must be dropped on its ref` : ""} — commit the deletions ${commitOn(ctx.root)}`,
     )
     return 0
   },
@@ -734,7 +733,7 @@ const pass: Command = {
       join(dir, name),
       `---\ndate: ${date}\nat: ${now.toISOString()}\nbranch: ${branch}${ack ? `\nack: ${ack}` : ""}\n${record}---\n\n${body}\n`,
     )
-    ctx.out(`wrote ${join(rel(ctx, PASSES), name)} — commit it on ${branch} with the work it describes`)
+    ctx.out(`wrote ${join(rel(ctx, PASSES), name)} — commit it ${commitOn(ctx.root)} with the work it describes`)
     return 0
   },
 }
@@ -1107,7 +1106,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       "Landings are semi-linear: a branch the trunk is an ancestor of enters it as one marker commit, a merge whose tree is the branch tip's and whose message names the items it closes in `Closes:` trailers; `land` makes it from the main checkout, the shortcut for `git merge --no-ff`, and moves the trunk only from the commit it read. " +
       "From the first marker on the trunk's first-parent line every first-parent commit is a marker, or `landings-are-markers` notes it, one note per commit, which `naima waive landings-are-markers <commit>` accepts with a reason; before it nothing is asked, so a history of fast-forwards keeps working. " +
       "The trunk guard holds the same line before anything lands: a git `reference-transaction` hook (git 2.28 or later), written by `naima init` and by `naima update` into the data directory's `hooks/` and named by core.hooksPath, refuses a commit, merge or fast-forward of the trunk made by hand, in one line that says to open an item and land it. It lets through what the check accepts (a marker, the record land makes after it, a commit that only adds to the tracker data or only closes items, naima init's commit), a commit that only switches the guard, a tip origin's branch of the trunk already holds (a pull), a rewind, and a commit with a `Trunk-reason:` trailer, the owner's way through, which the check then notes with its reason. Other refs cost the shell script alone; for the trunk it starts `naima guard-check`. While the guard is on the check asks from the commit that added the hook to the trunk, so a project is not noted for its past; the plugin ships the rule that every change goes through an item and lands, acknowledged as \"Landing mode on\". `naima guard off` turns it off for the project (the option `trunkGuard`, the hook removed), `naima guard on` back on, and `naima hello` says when it is off. " +
-      "A commit made on the trunk that only adds to the tracker data is accepted without a note: new files in the data directory outside `rules/`, `waivers/` and `naima.json`, and lines added to an item's README.md with its meta.json untouched, so the coordinator files an item, appends a note or writes a diary entry or a session note without a branch; a status, a rule, a waiver, the lock or a release record still lands, from the worktree of an item of its own. naima init's commit, the one that adds `naima.json`, and the close after a landing are accepted too. " +
+      "A commit made on the trunk that only adds to the tracker data is accepted without a note: new files in the data directory outside `rules/`, `waivers/` and `naima.json`, lines added to an item's README.md with its meta.json untouched, and any change to a claim in `claims/` (added, rewritten by `claim --step` or removed by `release` and `prune --write`), so the coordinator files an item, appends a note, writes a diary entry or a session note, and keeps the claims without a branch; a status, a rule, a waiver, the lock or a release record still lands, from the worktree of an item of its own. naima init's commit, the one that adds `naima.json`, and the close after a landing are accepted too. " +
       "A repository of the project with `changes/config.json` — the project itself, or a product it holds as a submodule — names there the paths whose change is a change of behaviour; a branch that changes one adds a change note, `changes/<date>-<slug>.md`, in the same repository. `land` refuses a branch that does not, unless `--no-change-note` gives the reason, which the marker records as a `No-change-note:` trailer; `change-notes` notes it on the branch beforehand, and is a problem for a file of `changes/` that is not a change note. `changes` prints the release notes the change notes of a range make. " +
       "`naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. " +
       "What has no date is counted at the foot, never placed at a guess. Only what nothing derives — a decision taken elsewhere, a build handed out, a policy, an outside fact — is a record, one file per event, `events/<date>-<uuid>.md`, written by `naima event`. " +

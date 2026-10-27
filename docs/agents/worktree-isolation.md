@@ -29,7 +29,7 @@ git reset --keep <sha>^                 # the trunk goes back one; --keep, never
 ```
 
 The commit then lands with the branch, as a [marker](../guide/glossary.md#marker) (rule 3). Once the trunk's first-parent line contains a marker, `naima check`
-notes every commit made directly on the trunk after it (the check `landings-are-markers`), unless the commit only adds to the tracker data, is `naima init`'s, or closes items after a landing
+notes every commit made directly on the trunk after it (the check `landings-are-markers`), unless the commit only adds to the tracker data (claims included, which may also be rewritten or removed), is `naima init`'s, or closes items after a landing
 ([the rule](../guide/rules.md#every-landing-is-a-marker-naming-the-items-it-closes)).
 
 Whether a project allows direct commits on the trunk at all is the [owner](../guide/glossary.md#owner)'s call. This rule is only about not doing it while a

@@ -582,8 +582,10 @@ waiver, once, with its reason: `naima waive landings-are-markers
 ### Every change goes through an item and lands
 
 Every change goes through an item. `naima open <item>` makes its worktree and branch, the change and its test are committed there, and `naima land` puts it on
-the trunk. Nobody commits, merges or fast-forwards the trunk by hand. Only three things go straight on the trunk: the commit of `naima init`, the tracker
-additions the CLI writes (an item filed, a note, a diary entry), and the close after a landing.
+the trunk. Nobody commits, merges or fast-forwards the trunk by hand. Only four things go straight on the trunk: the commit of `naima init`, the tracker
+additions the CLI writes (an item filed, a note, an attachment, a diary entry, a session note), the claims (`naima claim`, `release` and `prune` add, rewrite
+and remove them), and the close after a landing. A command that writes something else on the trunk (an acknowledged message, a waiver) says to commit it on an
+item's branch and land it.
 
 Why: an agent that was never told this made about ninety plain commits, half of them straight on the trunk, and merged a worktree it had made by hand with a
 fast-forward. No item said what any of it was for, no landing closed one, and nothing stopped it.
@@ -595,7 +597,8 @@ The trunk guard is a `reference-transaction` hook (git 2.28 or later). `naima in
 is committed, and point git's `core.hooksPath` at that folder. git keeps that setting per clone, so a fresh clone gets it on its first launched run of Naima
 (for instance `naima hello`), which says so in one line. When something moves the trunk, the hook lets it through only if every commit it adds to the
 first-parent line is one the check accepts: a marker, the record `naima land` makes after it, a commit that only adds to the tracker data or only closes items,
-or `naima init`'s commit. It also lets through a commit that only turns the guard on or off, a new tip that `origin`'s branch of the trunk already holds (a pull
+or `naima init`'s commit. Adding to the tracker data includes rewriting or removing a claim, and changing an item's `meta.json` only in the fields Naima fills
+when it writes something else (the signature a note signed with `--revised` leaves, the record of an attachment). It also lets through a commit that only turns the guard on or off, a new tip that `origin`'s branch of the trunk already holds (a pull
 of what landed elsewhere), a rewind, and a branch created or deleted. Anything else is refused with one line that says to open an item and land it. Every other
 ref costs nothing but the shell script. The clone's own hooks in `.git/hooks` keep running: a hook of the same name runs first, and for every other hook name
 git knows the folder holds a small stub that runs the clone's own hook of that name, when there is one. A `core.hooksPath` already set to another folder is left

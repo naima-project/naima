@@ -47,6 +47,7 @@ import {
   worktrees,
 } from "../../core/api.ts"
 import { changeNoteTrailers } from "./changes.ts"
+import { CLAIMS } from "./index.ts"
 import { plural } from "./worktrees.ts"
 
 /** A landing: the branch, the trunk before it, and every file it changed, from the project root. */
@@ -815,19 +816,25 @@ function directChanges(root: string, main: string, from: string): Map<string, { 
 /**
  * Whether a commit made on the trunk only adds to the tracker data: every file it changed is in the data directory,
  * outside rules, waivers and naima.json, and is new, or is an item's README.md to which it only adds lines (its
- * meta.json untouched, since a changed meta.json is a file that is not new). The READMEs are diffed only here.
+ * meta.json untouched, since a changed meta.json is a file that is not new), or is a claim, added, rewritten or
+ * removed: claims are coordination state, the housekeeping naima claim, release and prune do on the branch checked
+ * out, the trunk included; or is an item's meta.json changed only in fields Naima fills (FieldDef.filled: the
+ * signature naima note leaves, the record naima attach writes). The READMEs and meta.json files are diffed only here.
  */
 export function onlyAddsTrackerData(ctx: Context, sha: string, files: { status: string; path: string }[]): boolean {
   if (!files.length) return false
   const data = ctx.trackerPrefix ? `${ctx.trackerPrefix}/` : ""
   const kept = [ctx.registry.types.get("rules")?.dir ?? "rules", WAIVERS].map((d) => `${data}${d}/`)
+  const claims = `${data}${CLAIMS}/`
   const itemDirs = new Set([...ctx.registry.types.values()].map((t) => t.dir))
   const readmes: string[] = []
   for (const { status, path } of files) {
     if (!path.startsWith(data) || path === `${data}${DATA_FILE}` || kept.some((k) => path.startsWith(k))) return false
-    if (status === "A") continue
+    if (status === "A" || path.startsWith(claims)) continue
     const [dir = "", , name, ...more] = path.slice(data.length).split("/")
-    if (status !== "M" || name !== "README.md" || more.length || !itemDirs.has(dir)) return false
+    if (status !== "M" || more.length || !itemDirs.has(dir)) return false
+    if (name === META && onlyFilledChanged(ctx, sha, path)) continue
+    if (name !== "README.md") return false
     readmes.push(path)
   }
   if (!readmes.length) return true
@@ -873,6 +880,24 @@ export function onlyClosesItems(ctx: Context, sha: string, files: { status: stri
 export function initsTracker(ctx: Context, files: { status: string; path: string }[]): boolean {
   const data = ctx.trackerPrefix ? `${ctx.trackerPrefix}/` : ""
   return files.some(({ status, path }) => status === "A" && path === `${data}${DATA_FILE}`)
+}
+
+/** Whether the commit changed nothing in the item file at `path` but fields Naima fills (FieldDef.filled). */
+function onlyFilledChanged(ctx: Context, sha: string, path: string): boolean {
+  const before = readJsonAt(ctx, `${sha}^`, path), after = readJsonAt(ctx, sha, path)
+  if (!before || !after) return false
+  const kept = (meta: Record<string, unknown>) => Object.fromEntries(Object.entries(meta).filter(([k]) => !ctx.registry.fields.get(k)?.filled))
+  return isDeepStrictEqual(kept(before), kept(after))
+}
+
+/** The JSON object at `path` in revision `rev` of the tracker, or null. */
+function readJsonAt(ctx: Context, rev: string, path: string): Record<string, unknown> | null {
+  const r = runGit(ctx.trackerGit, ["show", `${rev}:${path}`])
+  try {
+    return r.ok ? (JSON.parse(r.out) as Record<string, unknown>) : null
+  } catch {
+    return null
+  }
 }
 
 /** Whether the commit changed nothing in the item file at `path` but its status. */

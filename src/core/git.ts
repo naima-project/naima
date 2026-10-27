@@ -198,6 +198,20 @@ export function currentBranch(root: string): string {
 export const LAND_IT = "on the branch of an item of its own, in its worktree, and land it with naima land"
 
 /**
+ * Where to commit what a command just wrote, as the words that follow "commit it": the one place a command's message
+ * names a branch to commit on, so that every such message agrees with the trunk guard. A write the guard takes on the
+ * trunk (an addition to the tracker, a claim's housekeeping) is committed on the branch checked out, the trunk
+ * included; one that `lands` (it changes more than it adds) is committed on an item's branch and landed, never on the
+ * trunk.
+ */
+export function commitOn(root: string, lands = false): string {
+  const branch = currentBranch(root)
+  if (!lands) return `on ${branch}`
+  const main = trunk(root)
+  return branch === main ? `${LAND_IT}, not on ${main}` : `on ${branch} and land it with naima land`
+}
+
+/**
  * The trunk: the local branch origin's HEAD names, else `main`, else
  * `master`; null when there is none of them. One git process.
  */

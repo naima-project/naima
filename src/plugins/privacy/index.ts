@@ -149,6 +149,7 @@ const hashOf = (bytes: Uint8Array): string => createHash("sha256").update(bytes)
 const SIGNED: FieldDef = {
   name: "revised",
   kind: "object",
+  filled: true,
   says:
     "the last no-leaks signature on the item's free text, which naima fills on a signed write: { checklist: the first 16 hex digits of the checklist's SHA-256, by: who, when git says, on: the day }; git's history holds the earlier ones",
 }
@@ -169,6 +170,7 @@ function freeText(write: Write, ctx: Context): boolean {
 const ATTACHED: FieldDef = {
   name: "attached",
   kind: "object",
+  filled: true,
   says:
     "whose each attachment is, as naima attach records it: file name → { from: owner or agent, consent: the owner's yes restated (for the owner's), by, on }",
 }

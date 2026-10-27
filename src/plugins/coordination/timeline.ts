@@ -31,8 +31,8 @@ import {
   type BranchFile,
   type Check,
   type Command,
+  commitOn,
   type Context,
-  currentBranch,
   fieldValue,
   fieldValues,
   type Finding,
@@ -361,7 +361,7 @@ export const eventCommand: Command = {
       join(dir, name),
       `---\ndate: ${date}\n${at ? `at: ${at}\n` : ""}kind: ${kind}\n${record}---\n\n${[text, allowance].filter(Boolean).join("\n\n")}\n`,
     )
-    ctx.out(`wrote ${ctx.trackerDir}/${EVENTS}/${name} — commit it on ${currentBranch(ctx.root)}`)
+    ctx.out(`wrote ${ctx.trackerDir}/${EVENTS}/${name} — commit it ${commitOn(ctx.root)}`)
     return 0
   },
 }

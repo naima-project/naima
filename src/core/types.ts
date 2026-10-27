@@ -91,6 +91,12 @@ export interface FieldDef {
   valuesFrom?: string
   /** For `enum`: an item may hold several of its values — one as a string, several as a list. */
   multiple?: boolean
+  /**
+   * A record Naima fills when it writes something else, never a value anyone sets: the signature of a signed write,
+   * the record of an attachment. A change of an item confined to such fields is bookkeeping of an addition, which
+   * the trunk guard takes on the trunk with it.
+   */
+  filled?: boolean
 }
 
 /**
