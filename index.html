@@ -114,6 +114,7 @@
   .runs { padding-block: 0 88px; }
   .runs .two { display: grid; grid-template-columns: 1fr 1.1fr; gap: 48px; align-items: center; }
   .runs h2 { margin-bottom: 14px; }
+  .runs h2 code { font: inherit; font-family: var(--mono); font-size: .82em; color: var(--accent); }
   .runs p { margin: 0 0 14px; color: var(--text); font-size: 16.5px; max-width: 480px; text-wrap: pretty; }
   .runs .term pre { font-size: 13px; }
 
@@ -274,26 +275,10 @@ release-1.0    Calculator 1.0        <span class="ok">HOLDS</span>
     <p class="note">Several agents can work at once, each in its own worktree. Only one of them lands on main, so they never get in each other’s way.</p>
   </section>
 
-  <section class="wrap does" aria-labelledby="does">
-    <h2 id="does">What Naima does for your software</h2>
-    <p class="lede">What a careful software team does, done by your agents. You decide, and every piece of work marked done comes with its evidence.</p>
-    <div class="grid">
-      <div class="card"><div class="ico">✓</div><h3>Tested by default</h3><p>A change reaches your main line only with the test that shows it works, run and recorded.</p></div>
-      <div class="card"><div class="ico">◆</div><h3>Memory across sessions</h3><p>Every request, decision and requirement is written down in the project, so the next session starts where the last one ended.</p></div>
-      <div class="card"><div class="ico">↗</div><h3>Goals and releases</h3><p>Set a goal, reach it in steps, release it. Naima shows what is still missing and writes the release notes from the work that was done.</p></div>
-      <div class="card"><div class="ico">∀</div><h3>Proofs for the critical parts</h3><p>Behaviour with states or concurrency is designed as a model and checked with a model checker before it is coded.</p></div>
-      <div class="card"><div class="ico">≈</div><h3>Quality metrics over time</h3><p>Size, complexity, duplication and coverage are measured on every commit, each with a budget, and shown as a trend.</p></div>
-      <div class="card"><div class="ico">⇉</div><h3>Agents in parallel</h3><p>Each piece of work has its own worktree and branch, and one coordinator lands them on main, one at a time.</p></div>
-      <div class="card"><div class="ico">⏱</div><h3>Long jobs under control</h3><p>A long build or analysis runs with a time budget and reports its progress, so a stuck job never looks like work.</p></div>
-      <div class="card"><div class="ico">⊘</div><h3>Nothing private leaks</h3><p>Naima refuses to write a machine name, a home path or a user name into the project, and keeps secrets out of it.</p></div>
-      <div class="card"><div class="ico">⌂</div><h3>Yours, in your repo</h3><p>Plain files in one folder of your project, versioned with git. In a public project that folder is a private repository of its own, ignored by your code’s. Any agent that can run a command can use it.</p></div>
-    </div>
-  </section>
-
   <section class="wrap runs" aria-labelledby="runs">
     <div class="two">
       <div>
-        <h2 id="runs">Long jobs you never have to babysit</h2>
+        <h2 id="runs"><code>naima run</code>: long jobs you never have to babysit</h2>
         <p>A test suite, a build or an analysis that takes an hour runs detached, with a name and a time budget. Past its budget it stops itself instead of hanging.</p>
         <p>It reports how far it has got, so a stuck job is never mistaken for work in progress, and waiting means reading its record, not a loop that checks every few seconds.</p>
       </div>
@@ -308,6 +293,22 @@ metrics   succeeded  16m 15s of 20m  16/16 metrics
 <span class="p">$</span> <span class="c">naima wait tests --timeout 10m</span>
 run tests: <span class="ok">succeeded</span> <span class="dim">— exit 0</span></pre>
       </div>
+    </div>
+  </section>
+
+  <section class="wrap does" aria-labelledby="does">
+    <h2 id="does">What Naima does for your software</h2>
+    <p class="lede">What a careful software team does, done by your agents. You decide, and every piece of work marked done comes with its evidence.</p>
+    <div class="grid">
+      <div class="card"><div class="ico">✓</div><h3>Tested by default</h3><p>A change reaches your main line only with the test that shows it works, run and recorded.</p></div>
+      <div class="card"><div class="ico">◆</div><h3>Memory across sessions</h3><p>Every request, decision and requirement is written down in the project, so the next session starts where the last one ended.</p></div>
+      <div class="card"><div class="ico">↗</div><h3>Goals and releases</h3><p>Set a goal, reach it in steps, release it. Naima shows what is still missing and writes the release notes from the work that was done.</p></div>
+      <div class="card"><div class="ico">∀</div><h3>Proofs for the critical parts</h3><p>Behaviour with states or concurrency is designed as a model and checked with a model checker before it is coded.</p></div>
+      <div class="card"><div class="ico">≈</div><h3>Quality metrics over time</h3><p>Size, complexity, duplication and coverage are measured on every commit, each with a budget, and shown as a trend.</p></div>
+      <div class="card"><div class="ico">⇉</div><h3>Agents in parallel</h3><p>Each piece of work has its own worktree and branch, and one coordinator lands them on main, one at a time.</p></div>
+      <div class="card"><div class="ico">⏱</div><h3>Long jobs under control</h3><p>A long build or analysis runs with a time budget and reports its progress, so a stuck job never looks like work.</p></div>
+      <div class="card"><div class="ico">⊘</div><h3>Nothing private leaks</h3><p>Naima refuses to write a machine name, a home path or a user name into the project, and keeps secrets out of it.</p></div>
+      <div class="card"><div class="ico">⌂</div><h3>Yours, in your repo</h3><p>Plain files in one folder of your project, versioned with git. In a public project that folder is a private repository of its own, ignored by your code’s. Any agent that can run a command can use it.</p></div>
     </div>
   </section>
 
