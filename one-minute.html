@@ -153,6 +153,19 @@
     <p class="you"><b>You only decide.</b> The agent runs these for you; you are asked only what nobody else can settle, one question at a time.</p>
   </section>
 
+  <section class="how" aria-labelledby="r">
+    <h2 id="r">The rules your agent works by</h2>
+    <dl class="cmds">
+      <div><dt>Quiet</dt><dd>As few AI tokens as the work allows: raw command output goes to a file, not into the context, and nothing written down is repeated in the chat.</dd></div>
+      <div><dt>Talking to you</dt><dd>The answer first, one question at a time, every number with what it is compared to.</dd></div>
+      <div><dt>Fast</dt><dd>Tests at the end of a phase, not after every edit; long jobs in the background while the conversation goes on.</dd></div>
+      <div><dt>Workers in the background</dt><dd>The agent you talk to hands each piece of work to a worker in its own worktree, and stays with you.</dd></div>
+      <div><dt>Ask first</dt><dd>Nothing that cannot be undone, such as deleting data or rewriting history, happens without your yes.</dd></div>
+      <div><dt>Nothing left hanging</dt><dd>What you settle is filed at once; each session ends with a note the next one starts from.</dd></div>
+    </dl>
+    <p class="you"><b>Yours to change.</b> The rules ship with Naima and are listed by <code>naima rules</code>; a project can retire any of them or write its own.</p>
+  </section>
+
   <section class="lives" aria-labelledby="l">
     <div>
       <h2 id="l">It all lives in your project</h2>
