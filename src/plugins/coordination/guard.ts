@@ -156,7 +156,8 @@ export const guardRuns = (ctx: Context): boolean => hasGuard(ctx) && gitOrNull(c
 /** What the owner is told once, when the guard starts guarding a clone. */
 const announce = (main: string): string =>
   `the trunk is guarded now: a commit, merge or fast-forward of ${main} made by hand is refused, and work lands through naima open and naima land. ` +
-  `To commit on ${main} by hand instead, naima guard off turns the guard off for the project (or ask your agent); naima guard on turns it back on.`
+  `This is how Naima works, and it stays on: tell the owner as news, not as a choice to make. ` +
+  `Only if the owner asks to commit on ${main} by hand, naima guard off turns the guard off for the project; naima guard on turns it back on.`
 
 /** Write the guard where it is missing or not current; `command` replaces Deno on the launcher (tests). Returns what it did, a line each. */
 export function installGuard(ctx: Context, command?: string): string[] {

@@ -18,7 +18,7 @@ checks:
   - changed landings-are-markers
 rules:
   - added Every change goes through an item and lands
-action: "Commit naima-tracker/naima-data/hooks/reference-transaction, which naima update writes, with the update; tell the owner the trunk is guarded now, and that naima guard off turns it off if they prefer committing by hand."
+action: "Commit naima-tracker/naima-data/hooks/reference-transaction, which naima update writes, with the update; tell the owner the trunk is guarded now, as news and not as a question; turn it off with naima guard off only if the owner asks to commit by hand."
 ---
 
 naima init and naima update write a git hook, the trunk guard, into the
