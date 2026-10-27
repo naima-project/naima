@@ -197,8 +197,9 @@ its test in its worktree, then `naima land`. Never commit, merge or
 fast-forward the trunk by hand: a git hook, the trunk guard, refuses it, and
 only the owner lets a commit through or turns the guard off
 ([the rule](../../docs/guide/rules.md#every-change-goes-through-an-item-and-lands)). When the guard
-is installed, tell the owner it is on, as news; never offer to turn it off
-unless the owner asks to commit by hand.
+is installed, tell the owner it is on, and that `naima guard off` turns it
+off for committing by hand or a mixed flow: as information, never as a
+question to answer.
 
 Before asking the owner anything, run `naima decisions <words>`: a settled
 decision answers it, and the owner's answer to a new question is recorded as
