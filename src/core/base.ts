@@ -373,8 +373,13 @@ const note: Command = {
     const who = author(ctx, str(p, "by"))
     const branch = isGitRepo(ctx.root) ? currentBranch(ctx.root) : "HEAD"
     const entry = `### ${today(ctx)} — ${who}${branch === "HEAD" ? "" : `, on ${branch}`}\n\n${text}`
-    const prose = splitProse(readReadme(item))
-    saveProse(ctx, item, joinProse({ ...prose, notes: [prose.notes || NOTES_HEADING, entry].join("\n\n") }), { authored: true })
+    const raw = readReadme(item)
+    const prose = splitProse(raw)
+    // The note is appended to the file as it is, so every line already there stays byte for byte: a note is a pure addition.
+    const head = raw.replace(/\n+$/, "")
+    const last = !prose.notes || head.endsWith(prose.notes.replace(/\n+$/, ""))
+    const next = last ? `${head}\n\n${prose.notes ? "" : `${NOTES_HEADING}\n\n`}${entry}\n` : joinProse({ ...prose, notes: [prose.notes, entry].join("\n\n") })
+    saveProse(ctx, item, next, { authored: true })
     ctx.out(`${label(item)}: note added`)
     return 0
   },
