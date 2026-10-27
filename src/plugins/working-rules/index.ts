@@ -56,6 +56,18 @@ export const FAST_RULE: WorkingRule = {
   ack: "Fast mode on",
 }
 
+export const COORDINATOR_RULE: WorkingRule = {
+  name: "coordinator-delegates",
+  title: "The agent talking to the owner coordinates; workers do the work",
+  audience: "agents",
+  strength: "must",
+  text:
+    "The agent in the conversation with the owner is the coordinator. It sends every piece of work to a worker in the background, each in its own worktree opened with naima open, and stays in the conversation: it answers, asks, lands the workers' branches with naima land, and reports. A worker starts no workers of its own. Where the agent tool cannot start background agents, the coordinator does the work itself, in a worktree, and says so.",
+  why:
+    "an agent that does the work itself keeps the owner waiting for every step, and its context fills with the work instead of the conversation; a worker in the background lets the owner keep deciding while the work happens.",
+  ack: "Coordinator mode on",
+}
+
 export const IRREVERSIBLE_RULE: WorkingRule = {
   name: "ask-before-irreversible",
   title: "Ask before what cannot be undone",
@@ -129,6 +141,7 @@ export const WORKING_RULES: readonly WorkingRule[] = [
   QUIET_RULE,
   TALKING_RULE,
   FAST_RULE,
+  COORDINATOR_RULE,
   IRREVERSIBLE_RULE,
   CAPTURE_RULE,
   RULES_ANSWER_RULE,
@@ -142,9 +155,9 @@ export default function working(): Plugin {
     name: "working-rules",
     contract: CONTRACT,
     says:
-      "the working rules every project ships for its agents: quiet, talking to the owner, fast, asking before what cannot be undone, capturing with judgment, never asking what the rules answer, closing every loop; and for everyone, no new status document and the right tool for the job",
+      "the working rules every project ships for its agents: quiet, talking to the owner, fast, the coordinator delegating to workers, asking before what cannot be undone, capturing with judgment, never asking what the rules answer, closing every loop; and for everyone, no new status document and the right tool for the job",
     about:
-      "How an agent works with the owner is the same in every project, so Naima ships it as rules rather than leaving each project to write them: spend few tokens and stay silent through routine steps, talk so the owner reads little and decodes nothing, never keep the owner waiting, ask before what cannot be undone, file what the owner settles and nothing they are still thinking through, never ask what the rules already answer, and leave no loop open when a turn or a session ends. " +
+      "How an agent works with the owner is the same in every project, so Naima ships it as rules rather than leaving each project to write them: spend few tokens and stay silent through routine steps, talk so the owner reads little and decodes nothing, never keep the owner waiting, send the work to workers in the background while the coordinator stays in the conversation, ask before what cannot be undone, file what the owner settles and nothing they are still thinking through, never ask what the rules already answer, and leave no loop open when a turn or a session ends. " +
       "Two more bind everyone: no new status document beside the authoritative one, and the state-of-the-art method for every job. " +
       "Each is a shipped rule, listed by `naima rules --audience agents` beside the project's own, most with the phrase an agent gives back. " +
       "A project drops one by naming it in the rules plugin's `retire` option, and changes one by retiring it and writing its own `rules` item in its place; switching this plugin off drops them all.",

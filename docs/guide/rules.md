@@ -193,10 +193,11 @@ fails on a marker that names nothing or that is still there after its proof has 
 
 ## Working with the owner
 
-These rules ship with Naima in the `working-rules` plugin. They are active in every project, and `naima rules --audience agents` lists them beside the project's own,
-each with its reason and, for most, the phrase an agent gives back. A project that does not want one names it in the rules plugin's `retire` option, for example
-`"rules": { "options": { "retire": ["working-rules/fast-mode"] } }` in `naima.json`. To change one, retire it and write the project's own version as a rules item
-([write a project rule](write-a-project-rule.md)). Switching the `working-rules` plugin off drops them all. None has a check, so each is a **convention**.
+These rules ship with Naima in the `working-rules` plugin. They are active in every project, and `naima rules --audience agents` lists them beside the project's
+own, each with its reason and, for most, the phrase an agent gives back. A project that does not want one names it in the rules plugin's `retire` option, for
+example `"rules": { "options": { "retire": ["working-rules/fast-mode"] } }` in `naima.json`. To change one, retire it and write the project's own version as a
+rules item ([write a project rule](write-a-project-rule.md)). Switching the `working-rules` plugin off drops them all. None has a check, so each is a
+**convention**.
 
 ### Quiet mode
 
@@ -228,6 +229,15 @@ changed files, the process still alive), and spare capacity goes to the next pie
 
 Why: time spent waiting is the owner's time too, and a wait nobody checks hides a stalled job while the machine sits idle. Acknowledged as "Fast mode on".
 **Convention** ([long work](../agents/long-work.md)).
+
+### The agent talking to the owner coordinates; workers do the work
+
+The agent in the conversation with the owner is the coordinator. It sends every piece of work to a worker in the background, each in its own worktree opened
+with `naima open`, and stays in the conversation: it answers, asks, lands the workers' branches with `naima land`, and reports. A worker starts no workers of
+its own. Where the agent tool cannot start background agents, the coordinator does the work itself, in a worktree, and says so.
+
+Why: an agent that does the work itself keeps the owner waiting for every step, and its context fills with the work instead of the conversation. Acknowledged as
+"Coordinator mode on". **Convention** ([coordinator and workers](../agents/coordinator-and-workers.md)).
 
 ### Ask before what cannot be undone
 
