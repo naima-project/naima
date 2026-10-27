@@ -53,11 +53,10 @@
 
   /* how it works */
   .how { padding-block: 64px 20px; }
-  .steps { counter-reset: s; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-  .step { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; position: relative; }
-  .step::before { counter-increment: s; content: counter(s); display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 650; font-size: 14px; margin-bottom: 14px; }
-  .step b { display: block; font-size: 17px; letter-spacing: -.2px; margin-bottom: 4px; }
-  .step span { color: var(--text); font-size: 15.5px; }
+  .cmds { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
+  .cmds div { padding: 14px 0; border-top: 1px solid var(--line); }
+  .cmds dt { font: 600 14.5px var(--mono); color: var(--accent); margin-bottom: 4px; }
+  .cmds dd { margin: 0; color: var(--text); font-size: 15.5px; }
   .you { margin-top: 18px; display: flex; gap: 14px; align-items: flex-start; background: var(--accent-soft); border-radius: 16px; padding: 18px 22px; color: var(--text); font-size: 16.5px; }
   .you b { color: var(--fg); }
 
@@ -88,8 +87,7 @@
   .next span { color: var(--muted); font-size: 14.5px; }
 
   @media (max-width: 880px) {
-      .steps { grid-template-columns: 1fr 1fr; }
-    .lives { grid-template-columns: 1fr; }
+        .lives { grid-template-columns: 1fr; }
     .bar nav a.hide { display: none; }
   }
   /* A phone: centred, with room to breathe. */
@@ -102,9 +100,8 @@
     .lead { font-size: 17px; line-height: 1.6; }
     .k, h2 { text-align: center; }
     h2 { font-size: 28px; }
-        .steps { grid-template-columns: 1fr; gap: 14px; }
-    .step::before { margin: 0 auto 14px; }
-    .how { padding-block: 64px 10px; }
+            .how { padding-block: 64px 10px; }
+    .cmds { grid-template-columns: 1fr; }
     .you { display: block; text-align: center; padding: 22px; }
     .lives { padding-block: 56px 0; gap: 28px; text-align: center; }
     .facts { justify-content: center; }
@@ -113,6 +110,8 @@
     .start { padding-block: 64px 36px; }
     .cta { flex-direction: column; align-items: stretch; }
     .cta .button { text-align: center; padding: 15px 20px; }
+    .next { grid-template-columns: 1fr; }
+    .next > * { min-width: 0; }
     .next a { text-align: center; }
   }
 </style>
@@ -131,25 +130,33 @@
 <main class="wrap">
   <section class="intro">
     <span class="clock"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 1.5"/></svg>A one-minute read</span>
-    <h1>Building with an AI is fast. <em>Naima makes it last.</em></h1>
-    <p class="lead">Naima is a way of working you add to your project, so the AI you already use works like a careful software team. You keep talking to your agent as usual.</p>
+    <h1>Naima in one minute</h1>
+    <p class="lead">Naima is a command-line program that lives in your project. Your AI agent calls it for each step of the work: filing a request, opening a branch, landing a change, recording a test run. The program does each step the same way every time, checks it, and writes it down as plain files in the repository. The agent decides what to do; Naima makes how it is done deterministic.</p>
   </section>
 
   <section class="how" aria-labelledby="h">
-    <h2 id="h">What happens behind the scenes</h2>
-    <div class="steps">
-      <div class="step"><b>Your request is written down</b><span>Every request becomes an item in the project, in plain words.</span></div>
-      <div class="step"><b>It is built, then tested</b><span>A change counts as done only when a test shows it works.</span></div>
-      <div class="step"><b>Someone else checks it</b><span>Different agents build and check the work, so nobody judges their own.</span></div>
-      <div class="step"><b>Your decisions are kept</b><span>What you decide is recorded, so you are never asked the same thing twice.</span></div>
-    </div>
-    <p class="you"><b>You only decide.</b> When there is something only you can settle, you are asked, one question at a time. Everything else is the agents' work.</p>
+    <h2 id="h">The commands your agent runs</h2>
+    <dl class="cmds">
+      <div><dt>naima hello</dt><dd>Starts every session: the version in use, the next goal and release, and anything waiting on you.</dd></div>
+      <div><dt>naima new</dt><dd>Turns a request, a bug or a decision into an item, after looking for duplicates.</dd></div>
+      <div><dt>naima open</dt><dd>Gives an item its own worktree and branch, and records who works on it.</dd></div>
+      <div><dt>naima land</dt><dd>Merges a finished branch into main as one commit naming the items it closes. A git hook refuses anything else on main.</dd></div>
+      <div><dt>naima run · wait</dt><dd>Runs a long job with a time budget and a progress record, and waits on the record instead of guessing.</dd></div>
+      <div><dt>naima verify</dt><dd>Checks a property of a model with the mCRL2 model checker and attaches the run as evidence.</dd></div>
+      <div><dt>naima gates</dt><dd>Says which goals and releases hold, and lists what each one still misses.</dd></div>
+      <div><dt>naima metrics</dt><dd>Measures size, complexity, duplication and coverage on each commit, and shows the trend.</dd></div>
+      <div><dt>naima pass</dt><dd>Writes the session note the next session starts from, so nothing stays only in a chat.</dd></div>
+      <div><dt>naima diary</dt><dd>Lists the project's decisions and turns, day by day, each with its reason.</dd></div>
+      <div><dt>naima decisions</dt><dd>Finds what was already settled, so you are not asked again.</dd></div>
+      <div><dt>naima announce</dt><dd>Writes the release notes from the work that was done and checked.</dd></div>
+    </dl>
+    <p class="you"><b>You only decide.</b> The agent runs these for you; you are asked only what nobody else can settle, one question at a time.</p>
   </section>
 
   <section class="lives" aria-labelledby="l">
     <div>
       <h2 id="l">It all lives in your project</h2>
-      <p>One folder of your project holds it, kept tidy and versioned with state-of-the-art tools such as git, without you having to know them.</p>
+      <p>One folder of your project holds it, versioned with git. The agent handles git for you.</p>
       <p>If your code is public, that folder stays private: it becomes a git repository of its own, which your code’s repository ignores.</p>
       <p>Change agent or model whenever you like: the work stays where it is.</p>
       <div class="facts"><span>No account</span><span>No server</span><span>No subscription</span><span>Free and open source</span></div>
