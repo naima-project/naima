@@ -462,7 +462,6 @@ export const guardCommand = (on: boolean): Command => ({
   usage: "guard [status] | guard on | guard off | guard server [--print]",
   examples: ["guard", "guard off", "guard on", "guard server", "guard server --print"],
   options: [{ name: "--print", says: "with server: say the ruleset, the gh and curl requests and the web page, and send nothing to GitHub" }],
-  runs: ["gh"],
   run(args, ctx) {
     const p = parse(args, { print: { type: "boolean" } })
     const [sub = "status", ...rest] = p.positionals

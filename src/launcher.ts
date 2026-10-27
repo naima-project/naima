@@ -139,8 +139,10 @@ export interface UiGrant {
 /** The program that opens the default browser, by operating system: the same src/plugins/ui/open.ts starts. */
 export const BROWSER_OPENER: Record<string, string> = { darwin: "open", windows: "rundll32", linux: "xdg-open" }
 
-/** The grant of `command`: only `ui`, `run`, `wait`, `tools` and `verify --host` have one; `tools` is the tools directory to write; `rest`, the arguments after the command. */
+/** The grant of `command`: only `ui`, `run`, `wait`, `tools`, `verify --host` and `guard server` have one; `tools` is the tools directory to write; `rest`, the arguments after the command. */
 export function uiGrant(command: string | undefined, os: string, deno: string, tools: string | null = null, rest: readonly string[] = []): UiGrant | null {
+  // gh only for guard server, which sends the ruleset; --print sends nothing.
+  if (command === "guard") return rest[0] === "server" && !rest.includes("--print") ? { net: [], read: [], runs: ["gh"] } : null
   if (command === "verify") return rest.some((a) => a === "--host" || a.startsWith("--host=")) ? { net: [], read: [], runs: ["ssh"] } : null
   if (command === "tools") return { net: [], read: [], runs: [], write: tools ? [tools] : [], netAll: true, runAll: true }
   // On Windows `naima run` starts its supervisor through WMI, by PowerShell (src/plugins/long-work/launch.ts).
