@@ -46,14 +46,7 @@
   .clock svg { width: 16px; height: 16px; }
   h1 { margin: 16px 0 0; font-size: clamp(38px, 5vw, 58px); line-height: 1.04; letter-spacing: -2px; font-weight: 650; }
   h1 em { font-style: normal; color: var(--accent); }
-  .vs { margin-top: 30px; border-top: 1px solid var(--line); }
-  .vs-row { display: grid; grid-template-columns: 1fr 28px 1fr; gap: 12px; align-items: baseline; padding: 13px 0; border-bottom: 1px solid var(--line); font-size: 17px; }
-  .vs-row span:first-child { color: var(--muted); }
-  .vs-row span:last-child { color: var(--fg); font-weight: 550; }
-  .vs-row i { font-style: normal; color: var(--accent); text-align: center; }
-  .vs-head { font: 600 12.5px var(--mono); letter-spacing: 1.2px; text-transform: uppercase; padding-block: 10px; }
-  .vs-head span:first-child, .vs-head span:last-child { color: var(--muted); font-weight: 600; }
-  .vs-head span:last-child { color: var(--accent); }
+  .lead + .lead { margin-top: 14px; }
   .lead { margin: 22px 0 0; font-size: 19px; color: var(--text); }
 
   h2 { font-size: clamp(24px, 2.8vw, 32px); letter-spacing: -.8px; margin: 0 0 18px; font-weight: 650; }
@@ -103,14 +96,11 @@
     .wrap { padding: 0 24px; }
     .bar { padding-block: 18px; }
     .bar nav { gap: 16px; font-size: 14px; }
-    .intro { padding-block: 36px 44px; text-align: center; margin: 0 auto; }
+    .intro { padding-block: 36px 44px; margin: 0 auto; }
+    .intro .lead { text-align: left; }
     h1 { font-size: 36px; letter-spacing: -1.2px; line-height: 1.08; }
     .lead { font-size: 17px; line-height: 1.6; }
-    .vs-row { grid-template-columns: 1fr; gap: 2px; text-align: center; font-size: 16px; }
-    .vs-row i { display: none; }
-    .vs-row span:first-child { font-size: 14.5px; }
-    .vs-head { display: none; }
-    .k, h2 { text-align: center; }
+            .k, h2 { text-align: center; }
     h2 { font-size: 28px; }
             .how { padding-block: 64px 10px; }
     .cmds { grid-template-columns: 1fr; }
@@ -143,14 +133,8 @@
   <section class="intro">
     <span class="clock"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 1.5"/></svg>A one-minute read</span>
     <h1>Naima in one minute</h1>
-    <p class="lead">A program in your project that your AI agent calls for every step, so each step is done the same way, checked and written down.</p>
-    <div class="vs" role="table" aria-label="Working with an AI agent alone, and with Naima">
-      <div class="vs-row vs-head" role="row"><span role="columnheader">An AI agent alone</span><i aria-hidden="true"></i><span role="columnheader">With Naima</span></div>
-      <div class="vs-row" role="row"><span role="cell">Decisions vanish when the chat ends</span><i aria-hidden="true">→</i><span role="cell">Every decision is a file in the repository</span></div>
-      <div class="vs-row" role="row"><span role="cell">“Done” is the agent’s word</span><i aria-hidden="true">→</i><span role="cell">Done means a test passed, and the run is kept</span></div>
-      <div class="vs-row" role="row"><span role="cell">Each fix may break the last one</span><i aria-hidden="true">→</i><span role="cell">Main takes only tested work, landed by Naima</span></div>
-      <div class="vs-row" role="row"><span role="cell">The next session starts from zero</span><i aria-hidden="true">→</i><span role="cell">It starts from the last session’s note</span></div>
-    </div>
+    <p class="lead">Naima is a program that lives in your project, and your AI agent calls it at each step of the work. It brings the habits of software engineering and of science to that work. A change counts as done when a test shows it, every claim rests on a recorded measurement, and the parts that must not fail are designed as models and checked with a model checker before they are coded.</p>
+    <p class="lead">It is made of plugins. The tracker, the goals and releases, the metrics, the verifiers and the rules your agent follows are each one, so a project keeps the ones it needs and can add its own.</p>
   </section>
 
   <section class="how" aria-labelledby="h">
