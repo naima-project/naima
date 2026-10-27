@@ -8,7 +8,7 @@ So in a project that uses Naima, such behaviour is designed with a [model](gloss
 moves between them, written before the code. A [model checker](glossary.md#model-checker) then explores every order of events the model allows and says whether
 each [property](glossary.md#property) you care about holds, such as "a job is never retried more than twice". When a property fails, the checker shows the exact
 steps that break it. The agents write the model, the properties and the code. You decide what the behaviour must and must not do
-([the rule](rules.md#behaviour-with-states-is-designed-from-a-model-first)).
+([the rule](rules.md#behaviour-with-states-is-modelled-and-verified-before-it-is-coded)).
 
 ## When a model is written
 
