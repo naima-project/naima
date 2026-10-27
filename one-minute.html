@@ -46,7 +46,10 @@
   .clock svg { width: 16px; height: 16px; }
   h1 { margin: 16px 0 0; font-size: clamp(38px, 5vw, 58px); line-height: 1.04; letter-spacing: -2px; font-weight: 650; }
   h1 em { font-style: normal; color: var(--accent); }
-  .lead + .lead { margin-top: 14px; }
+  .pillars { margin: 26px 0 0; display: grid; gap: 0; border-top: 1px solid var(--line); }
+  .pillars div { display: grid; grid-template-columns: 200px 1fr; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .pillars dt { font-weight: 650; color: var(--fg); }
+  .pillars dd { margin: 0; color: var(--text); }
   .lead { margin: 22px 0 0; font-size: 19px; color: var(--text); }
 
   h2 { font-size: clamp(24px, 2.8vw, 32px); letter-spacing: -.8px; margin: 0 0 18px; font-weight: 650; }
@@ -98,6 +101,7 @@
     .bar nav { gap: 16px; font-size: 14px; }
     .intro { padding-block: 36px 44px; margin: 0 auto; }
     .intro .lead { text-align: left; }
+    .pillars div { grid-template-columns: 1fr; gap: 2px; }
     h1 { font-size: 36px; letter-spacing: -1.2px; line-height: 1.08; }
     .lead { font-size: 17px; line-height: 1.6; }
             .k, h2 { text-align: center; }
@@ -133,8 +137,13 @@
   <section class="intro">
     <span class="clock"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 1.5"/></svg>A one-minute read</span>
     <h1>Naima in one minute</h1>
-    <p class="lead">Naima is a program that lives in your project, and your AI agent calls it at each step of the work. It brings the habits of software engineering and of science to that work. A change counts as done when a test shows it, every claim rests on a recorded measurement, and the parts that must not fail are designed as models and checked with a model checker before they are coded.</p>
-    <p class="lead">It is made of plugins. The tracker, the goals and releases, the metrics, the verifiers and the rules your agent follows are each one, so a project keeps the ones it needs and can add its own.</p>
+    <p class="lead">Naima is a program in your project. Your AI agent runs it at each step of the work.</p>
+    <dl class="pillars">
+      <div><dt>Software engineering</dt><dd>Each change gets its own branch, and a test that shows it works.</dd></div>
+      <div><dt>Scientific method</dt><dd>Claims rest on recorded evidence: test runs, metrics on every commit.</dd></div>
+      <div><dt>Formal methods</dt><dd>The parts that must not fail are modelled and checked with mCRL2.</dd></div>
+      <div><dt>Plugins</dt><dd>Tracker, goals, metrics and checks are separate plugins. Keep what you need.</dd></div>
+    </dl>
   </section>
 
   <section class="how" aria-labelledby="h">
