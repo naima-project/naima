@@ -2778,6 +2778,7 @@ How an agent works with the owner is the same in every project, so Naima ships i
 | `talking-to-the-owner` | Talking to the owner | agents | must |  | `Simple mode on` |
 | `fast-mode` | Fast mode | agents | must |  | `Fast mode on` |
 | `coordinator-delegates` | The agent talking to the owner coordinates; workers do the work | agents | must |  | `Coordinator mode on` |
+| `commands-without-prompts` | Write commands the agent tool runs without asking the owner | agents | must |  | `Clean commands mode on` |
 | `ask-before-irreversible` | Ask before what cannot be undone | agents | must |  | `Irreversible actions mode on` |
 | `capture-with-judgment` | Capture, with judgment | agents | must |  | `Capture mode on` |
 | `never-ask-what-rules-answer` | Never ask what the rules answer | agents | must |  | `Rules answer mode on` |

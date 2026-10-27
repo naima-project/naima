@@ -239,6 +239,16 @@ its own. Where the agent tool cannot start background agents, the coordinator do
 Why: an agent that does the work itself keeps the owner waiting for every step, and its context fills with the work instead of the conversation. Acknowledged as
 "Coordinator mode on". **Convention** ([coordinator and workers](../agents/coordinator-and-workers.md)).
 
+### Write commands the agent tool runs without asking the owner
+
+Every shell command is written so the agent tool can see it is safe and never stops the owner to ask: no `rm` of a path built from a variable that could be
+empty (a literal path, or `${DIR:?}/${name:?}`), no `cd` chained with other commands, one job per command, scripts as files run by their interpreter, files
+read and edited with the tool's own tools, and nothing written outside the project and the scratch directory
+([the details](../agents/commands-without-prompts.md)).
+
+Why: each permission prompt stops the owner, mostly for a harmless command written in a way the tool could not judge, and an owner asked too often starts to
+allow everything. Acknowledged as "Clean commands mode on". **Convention**.
+
 ### Ask before what cannot be undone
 
 Deleting data or items, force-pushing, rewriting published history and discarding someone's uncommitted work all wait for the owner's yes.
