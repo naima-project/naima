@@ -118,6 +118,15 @@
   .runs p { margin: 0 0 14px; color: var(--text); font-size: 16.5px; max-width: 480px; text-wrap: pretty; }
   .runs .term pre { font-size: 13px; }
 
+  /* code from the model */
+  .codegen { padding-block: 0 88px; }
+  .codegen h2, .codegen .lede { text-align: center; }
+  .codegen .lede { margin: 0 auto 40px; }
+  .codegen .grid { grid-template-columns: repeat(3, 1fr); }
+  .codegen .card .n { font: 600 12.5px var(--mono); color: var(--accent); letter-spacing: 1px; margin-bottom: 10px; }
+  .codegen .card code { font: 13px var(--mono); background: var(--accent-soft); color: var(--accent); padding: 1px 5px; border-radius: 5px; }
+  .codegen .note { margin: 24px auto 0; max-width: 720px; text-align: center; color: var(--text); font-size: 16px; text-wrap: pretty; }
+
   /* formal methods */
   .formal { padding-block: 10px 84px; }
   .formal .two { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
@@ -197,6 +206,8 @@
     .card { padding: 22px; text-align: center; }
     .card .ico { margin: 0 auto 14px; }
     .formal { padding-block: 0 72px; }
+    .codegen { padding-block: 0 72px; }
+    .codegen .grid { grid-template-columns: 1fr; }
     .runs { padding-block: 0 72px; }
     .runs h2, .runs p { text-align: center; margin-inline: auto; }
     .runs .term pre { font-size: 11px; white-space: pre; overflow-x: auto; }
@@ -310,6 +321,17 @@ run tests: <span class="ok">succeeded</span> <span class="dim">— exit 0</span>
       <div class="card"><div class="ico">⊘</div><h3>Nothing private leaks</h3><p>Naima refuses to write a machine name, a home path or a user name into the project, and keeps secrets out of it.</p></div>
       <div class="card"><div class="ico">⌂</div><h3>Yours, in your repo</h3><p>Plain files in one folder of your project, versioned with git. In a public project that folder is a private repository of its own, ignored by your code’s. Any agent that can run a command can use it.</p></div>
     </div>
+  </section>
+
+  <section class="wrap codegen" aria-labelledby="codegen">
+    <h2 id="codegen">From the model to the code, with proof</h2>
+    <p class="lede">With <a href="https://github.com/naima-project/naima-codegen">naima-codegen</a>, a state machine is written once, as a model, and the code is generated from it. A model checker then shows that the code never does what the model forbids.</p>
+    <div class="grid">
+      <div class="card"><div class="n">1 · WRITE</div><h3>A small model and a policy</h3><p>The machine in mCRL2: what it may do at each step. The policy says which output to take when several are allowed.</p></div>
+      <div class="card"><div class="n">2 · GENERATE</div><h3>Code in three languages</h3><p>The same machine as a Rust crate, a Python package, or TypeScript with a Svelte class, and a refined model of exactly what that code does.</p></div>
+      <div class="card"><div class="n">3 · PROVE</div><h3>Refinement checking</h3><p><code>check-refinement</code> shows that the refined model stays inside yours: no forbidden step, no deadlock, every event accepted. The properties are checked on the generated machine too.</p></div>
+    </div>
+    <p class="note">The rest of the code only connects to the generated machine. In an experiment, eight of ten fresh AI agents asked to build a traffic-light controller generated it this way.</p>
   </section>
 
   <section class="wrap formal" aria-labelledby="formal">
