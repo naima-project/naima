@@ -21,6 +21,7 @@ Every contribution below has a qualified id, `<plugin>/<name>`, and goes by its 
 - [beta-markers](#beta-markers) — markers in the code for behaviour shipped without proof
 - [verifier](#verifier) — properties checked by formal-methods tools, with each run attached as evidence
 - [tools](#tools) — the tools plugins need, installed by Naima into its own directory on the machine it runs on: naima tools reports them, installs one with consent, removes one
+- [backup](#backup) — a remote for every repository Naima relies on: the owner is asked once whether to create a private GitHub repository for one that has none
 - [verifier-mcrl2](#verifier-mcrl2) — the mCRL2 adapter: a property is a modal mu-calculus formula over an mCRL2 specification
 - [ui](#ui) — the views plugins contribute, a provisional window onto the project, shown in a native window or the browser from a server on this machine only, until the new UI replaces it
 - [metrics](#metrics) — named measurements — a command's number, a code-quality number taken in process, a test suite's results — recorded per commit, held to a budget, a floor or a baseline, and read back along the commit timeline
@@ -100,6 +101,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`verifiers`](#naima-verifiers) | verifier | list the verifier adapters every plugin contributes | nothing: it only reads |
 | [`equivalent`](#naima-equivalent) | verifier | compare a model with the earlier version its properties were verified on, modulo an equivalence, and carry each result over to the model as it is now when the two are equivalent: a refactoring proved without running its properties again | a result carries over only from a conclusive run on an earlier version of the model, with everything else it read unchanged — the property, the options, every other input, the tool's version — when the verifier finds the two versions equivalent and says the equivalence preserves the property; the carried run is recorded as such, naming the run it came from, the earlier version and the comparison |
 | [`tools`](#naima-tools) | tools | the tools the loaded plugins declare, on this machine or a declared host: what is installed, missing or unavailable; show what an install would fetch; install one with consent into Naima's own directory, its download checked and the tool verified, never touching PATH or the system; remove one; print an installed program's path | an install fetches only the declared source, refuses a size or sha256 that differs, keeps nothing that fails its verification, and goes on only with consent — a yes on a terminal, or --consent with --by, recorded in the receipt; nothing is written outside the tools directory; a tool another installed tool needs is not removed |
+| [`backup`](#naima-backup) | backup | the remote of each repository Naima relies on — the tracker's own, kept private beside the code, and the project's: say which have one; create a private GitHub repository with gh, after the owner's yes; add one the owner made by hand; record that the owner keeps one on this machine | a repository Naima relies on is never left without a remote unless the owner said so: the owner is asked once, at init or at the next update, and a no is recorded and recalled by naima hello |
 | [`metrics`](#naima-metrics) | metrics | the project's metrics — each a name and the command or code measure that takes it — run, recorded per commit, held to a budget, a floor or a baseline, and read back along the commit timeline as a trend, a table or a chart; every number with the one it is compared to | numbers are recorded with the commit they measure; a ratcheted bound only tightens, and loosening one is refused without --because naming the item that says why |
 | [`rules`](#naima-rules) | rules | print the project's active rules, must before should, each with its text and reason, ending with the line an agent must acknowledge back; or check that text carries every one (rules check-ack) | nothing: it only reads |
 | [`run`](#naima-run) | long-work | start a long command detached — locally, or on a declared host through its own Naima — with a log, a progress file, a time budget and, on what it declares it creates, a disk budget, ending itself when one runs out; list the runs against their budgets, show one, stop one, or remove what one created | every run has a time budget, and is ended, its whole process group with it, when it runs out or its declared paths outgrow the disk budget; a declared path is never the root, the home directory, the repository or above it, nor holds a tracked file; a run is never cleaned while it runs; a remote run is always guarded, failing when it changes a tracked file; nothing starts on its own: a due long run is reported and filed, and starts only when a person or an agent runs it |
@@ -115,26 +117,26 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 
 | Point | Declared by | What it is | Contributed by |
 |---|---|---|---|
-| `commands` | core | `naima <name>`: a command, with its usage, options and examples | core, trackers, coordination, triage, gates, epics, planning, knowledge, roles, announce, loop, beta-markers, verifier, tools, ui, metrics, rules, long-work, commit-hooks, privacy, adopt, docs |
+| `commands` | core | `naima <name>`: a command, with its usage, options and examples | core, trackers, coordination, triage, gates, epics, planning, knowledge, roles, announce, loop, beta-markers, verifier, tools, backup, ui, metrics, rules, long-work, commit-hooks, privacy, adopt, docs |
 | `types` | core | item types: a directory of items, their statuses, and the status a new one starts in | core, trackers, epics, planning, knowledge, verifier, rules |
 | `fields` | core | typed fields of an item's meta.json, and the types they apply to | core, trackers, triage, gates, planning, knowledge, roles, announce, verifier, rules, long-work, privacy, adopt, docs |
 | `relations` | core | link relations between items, each naming its inverse | core, trackers, epics, planning, knowledge, verifier |
 | `checks` | core | invariants `naima check` holds: a problem fails it, a note does not | core, trackers, coordination, triage, gates, epics, planning, knowledge, announce, beta-markers, verifier, metrics, rules, long-work, commit-hooks, privacy, docs |
 | `views` | core | `naima view <name>`: a named rendering of derived state | coordination, triage, planning |
 | `dirs` | core | directories under the tracker root a plugin owns that are not item types | core, coordination, metrics, commit-hooks, adopt |
-| `summary` | core | a block of `naima summary`; one marked `hello` is said by `naima hello` among what waits on the owner, and one with `goals(ctx)` says there where the project is going | core, trackers, coordination, triage, gates, epics, beta-markers, verifier, metrics, long-work |
+| `summary` | core | a block of `naima summary`; one marked `hello` is said by `naima hello` among what waits on the owner, and one with `goals(ctx)` says there where the project is going | core, trackers, coordination, triage, gates, epics, beta-markers, verifier, backup, metrics, long-work |
 | `guide` | core | a block `naima guide` prints first, inside a project, before the documentation pages | triage, verifier, rules |
 | `rank` | core | an additive term of every item's urgency; lower is more urgent | triage, gates |
 | `jobs` | core | a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it; what it finds is shown to the owner as messages | long-work |
 | `extends` | core | additive changes to another plugin's type — statuses (an existing one only with its category), traits, transitions — or field — enum values, more types or traits it applies to | knowledge, roles |
 | `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done; `beforeText(text, ctx)` may refuse a write of free text or a file that is not an item's (a session note, an event, an attachment) or add to its record | core, coordination, triage, epics, planning, knowledge, verifier, privacy |
-| `setup` | core | what a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init` and `naima update` after their own work: `install(ctx) → lines`, each said | coordination, metrics |
+| `setup` | core | what a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init` and `naima update` after their own work: `install(ctx) → lines`, each said | coordination, backup, metrics |
 | `migrations` | core | a plugin's own data migrations, in order from its format 1, run by `naima update` after the core's | gates |
 | `landing-reports` | coordination | what `naima land` checks before a branch lands and reports once it has: `name`, `says`, and `blocks(ctx, { branch, from, to, changed }) → lines`, what the landing changed whose proofs are not current, any line refusing the landing unless --stale-proofs gives the reason, or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root | verifier |
 | `gates` | gates | a named release or merge condition, backed by items: `title`, `says`, `decides`, `evaluate(ctx) → { holds, blocking, owed }`; `inFullSuite` makes it part of the full suite a release gate (`fullSuite`) requires | verifier |
 | `roles` | roles | a role of the company of agents: `title`, what it `owns`, what it `refuses` (never empty), the `kinds` and `types` on its queue, and `queue(ctx)`, its open items most urgent first | roles |
 | `verifiers` | verifier | an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest; `toolArgs`, the flags `naima verify --tool-args` may pass, which never change the verdict; and `equivalences` with `compare({ before, after, equivalence }, ctx) → { verdict, output, counterexample?, details? }` and `preserves({ property, options, equivalence }, ctx)`, for `naima equivalent` | verifier, verifier-mcrl2 |
-| `tools` | tools | a tool a plugin needs, which `naima tools install` installs into Naima's own directory: name, exact version, licence, programs, how an install is verified, and per platform a source (url, size, sha256, format) or the answer saying why there is none | verifier-mcrl2 |
+| `tools` | tools | a tool a plugin needs, which `naima tools install` installs into Naima's own directory: name, exact version, licence, programs, how an install is verified, and per platform a source (url, size, sha256, format) or the answer saying why there is none | backup, verifier-mcrl2 |
 | `ui-views` | ui | a view the provisional window shows as a tab, or as a panel of its first screen: `name` (its path), `title`, `says`, `order` (lower first, 0 when absent), `panel` (true: on the first screen, not a tab), `render(params, ctx) → { data, html, css? }`, rendered at each request | coordination, triage, gates, ui, metrics |
 | `metric-kinds` | metrics | how a metric's number is read from its run: `read({ exit, stdout, stderr, seconds }, metric) → number \| { error }`, `readsExit` | metrics |
 | `metrics` | metrics | a named measurement: `run` (a program and its arguments) and `kind`, a code `measure`, a test `suite`'s number or a `file`'s; a bound — `atMost`, `atLeast` or `equals` — and `better` |  |
@@ -2449,6 +2451,59 @@ naima tools install mcrl2 --host lab
 naima tools remove storm
 naima tools path storm python
 ```
+
+## backup
+
+A remote for every repository Naima relies on: the owner is asked once whether to create a private GitHub repository for one that has none.
+
+Its contributions' qualified ids are `backup/<name>`.
+
+A repository with no remote lives on one machine and is lost with it. The repositories Naima relies on are the project's and, when the tracker is kept private beside the code, the tracker's own. For each one with no remote, `naima init`, or the next `naima update` of an existing installation, says the question to ask the owner, once: whether to create a private GitHub repository for it, or keep working locally. On a yes, `naima backup create` uses gh, GitHub's command-line tool: when it is missing, Naima installs it into its own tools folder with the owner's consent, from GitHub's release archive, its checksum verified, without administrator rights; then gh signs in through the browser, showing a one-time code to copy and paste, and creates the private repository and pushes to it. Without a browser, the owner makes an empty private repository at github.com/new and `naima backup add <its address>` adds it and pushes. A no is recorded in that repository's git config (`naima.backup`), and every later `naima hello` says in one line that it is not backed up by a remote. For the project's repository, the owner is also told that GitHub takes no file over 100 MB.
+
+### naima backup
+
+The remote of each repository Naima relies on — the tracker's own, kept private beside the code, and the project's: say which have one; create a private GitHub repository with gh, after the owner's yes; add one the owner made by hand; record that the owner keeps one on this machine.
+
+**Enforces**: A repository Naima relies on is never left without a remote unless the owner said so: the owner is asked once, at init or at the next update, and a no is recorded and recalled by naima hello.
+
+**Progress**: none — gh's sign-in and its repository creation have no progress interface; instead, The install of gh reports its download through naima tools; gh's own lines are shown as it prints them.
+
+```sh
+naima backup [create [--repo tracker|project] [--name <name>] [--consent "<yes>" --by <who>] [--no-browser]
+naima add <address> [--repo tracker|project]
+naima decline [--repo tracker|project]]
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--repo` |  | which repository: tracker (its own repository, kept private beside the code) or project; the one holding the tracker by default |
+| `--name` |  | create: the name of the repository on GitHub; the project folder's name by default, with -tracker for the tracker's |
+| `--consent` |  | create: the owner's yes, restated, recorded with gh when Naima installs it |
+| `--by` |  | create: who said yes |
+| `--no-browser` |  | create: say how to make the repository by hand at github.com/new and add it, instead of signing in through a browser |
+
+Examples:
+
+```sh
+naima backup
+naima backup create --repo tracker --consent "yes, make it private on GitHub" --by owner
+naima backup add https://github.com/<owner>/<project>-tracker.git --repo tracker
+naima backup decline --repo tracker
+```
+
+**Summary sections**: `backup`.
+
+**Setup**, put in place by `naima init` and `naima update` where missing
+
+| Step | What it puts in place |
+|---|---|
+| `backup-question` | for each repository Naima relies on that has no remote and was never asked about: the question to put to the owner, once, recorded as asked |
+
+**Tools**, installed by `naima tools install`
+
+| Tool | Version | Licence | Platforms |
+|---|---|---|---|
+| `gh` | 2.103.3 | MIT | darwin-arm64, darwin-x64, linux-x64, linux-arm64, windows-x64 |
 
 ## verifier-mcrl2
 

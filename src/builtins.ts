@@ -6,6 +6,7 @@
 import { apiFor, type FirstParty, type Plugin, type PluginOptions } from "./core/internal.ts"
 import adopt from "./plugins/adopt/index.ts"
 import announce from "./plugins/announce/index.ts"
+import backup from "./plugins/backup/index.ts"
 import betaMarkers from "./plugins/beta-markers/index.ts"
 import docs from "./plugins/docs/index.ts"
 import epics from "./plugins/epics/index.ts"
@@ -47,6 +48,7 @@ export const firstParty: readonly FirstParty[] = [
   { name: "beta-markers", factory: betaMarkers },
   { name: "verifier", factory: verifier },
   { name: "tools", factory: tools },
+  { name: "backup", factory: backup },
   { name: "verifier-mcrl2", factory: verifierMcrl2, optIn: true },
   { name: "storm", factory: storm, optIn: true },
   { name: "pack-analyses", factory: packAnalyses, optIn: true },

@@ -16,9 +16,10 @@ naima hello
 The first line it prints is the one the agent shows you, for example
 `I'm Naima, the No-guesswork Artificial Intelligence Meta-Agent, active in this repository: version 1.0.0, commit 45ba22c1134c.` The version is the latest
 release tag at or before the locked commit. After that comes what Naima found about newer versions, then one line for each long run that is due
-([long work](long-work.md#when-a-long-run-is-due)), and a reminder of what you can ask for: an explanation of Naima and its documentation, a check for an
-update, or an update. With an agent tool that has a session-start hook, you see this greeting directly. `naima hello` never changes the lock and never starts a
-run. Its check for a newer Naima counts as the day's update check.
+([long work](long-work.md#when-a-long-run-is-due)), one line for each repository you chose to keep without a remote
+([a remote for every repository](private-tracker.md#a-remote-for-every-repository)), and a reminder of what you can ask for: an explanation of Naima and its
+documentation, a check for an update, or an update. With an agent tool that has a session-start hook, you see this greeting directly. `naima hello` never
+changes the lock and never starts a run. Its check for a newer Naima counts as the day's update check.
 
 ## During a long session
 
@@ -98,6 +99,8 @@ way, the previous version stays in place. Then the newer Naima finishes the upda
 - it adds what makes every agent run `naima hello` at the start of a session, if your project doesn't have it yet: a line in your entry file, such as
   `AGENTS.md`, and the session-start and turn-end hooks of each agent tool you use that has them, or a newer form of hooks installed before
   ([the entry point](install.md#the-agent-harness-entry-point));
+- it asks once, for each repository Naima relies on that has no remote and was never asked about, whether to create a private GitHub repository for it
+  ([a remote for every repository](private-tracker.md#a-remote-for-every-repository));
 - it runs `naima check`, and files a todo for each problem or note that is new since the version you had, so nothing it couldn't fix by itself is forgotten. A
   todo it has already filed isn't filed twice.
 
