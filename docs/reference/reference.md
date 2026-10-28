@@ -93,6 +93,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`spec`](#naima-spec) | planning | each specification: its current version, its drafts, and the open items that follow it; or revise one into its next version | a revision is a new spec item, its next version, that supersedes the old one; the old version is kept as it was |
 | [`decisions`](#naima-decisions) | planning | search the owner's decisions before asking: the settled ones whose title or page hold every word given, newest first | nothing: it only searches, so a settled question is looked up before it is asked again |
 | [`confirm`](#naima-confirm) | planning | record the owner's confirmation of a proposed requirement, one someone other than the owner filed: it becomes stated, and gates count it from then on; the owner's yes, restated, is kept on the item | only a proposed requirement is confirmed, and only with the owner's words restated: an agent runs it after the owner said yes, never on its own judgement |
+| [`model-first`](#naima-model-first) | planning | show or set how strictly the project applies model first (planning option modelFirst): strict, the rule a must; advisory, a should, with code that existed before the setting exempt unless rewritten and a new protocol or concurrency kept a must; deferred until a gate or a date the owner names, which files at once the todo that plans adopting model checking there | the setting is the owner's choice: an agent sets it only after the owner said which; deferring always names a gate or a date and files its todo |
 | [`knowledge`](#naima-knowledge) | knowledge | print the established knowledge entries by kind, each with its source or evidence | nothing: it reads the knowledge entries and prints them; `naima check` holds what an entry must stand on |
 | [`roles`](#naima-roles) | roles | every role: what it owns, what it refuses, the kinds and types on its queue, and how many open items are on it | nothing: it only reads; a role that refuses nothing is refused when the plugin loads |
 | [`announce`](#naima-announce) | announce | the features that may be announced — user-facing, shipped, documented and checked by a person or end to end — major first: the source of release notes | nothing: it only lists, and only features user-facing, shipped, documented and checked by a person or end to end |
@@ -125,13 +126,13 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `checks` | core | invariants `naima check` holds: a problem fails it, a note does not | core, trackers, coordination, triage, gates, epics, planning, knowledge, announce, beta-markers, verifier, metrics, rules, long-work, commit-hooks, privacy, docs |
 | `views` | core | `naima view <name>`: a named rendering of derived state | coordination, triage, planning |
 | `dirs` | core | directories under the tracker root a plugin owns that are not item types | core, coordination, metrics, commit-hooks, adopt |
-| `summary` | core | a block of `naima summary`; one marked `hello` is said by `naima hello` among what waits on the owner, and one with `goals(ctx)` says there where the project is going | core, trackers, coordination, triage, gates, epics, beta-markers, verifier, backup, metrics, long-work |
+| `summary` | core | a block of `naima summary`; one marked `hello` is said by `naima hello` among what waits on the owner, and one with `goals(ctx)` says there where the project is going | core, trackers, coordination, triage, gates, epics, planning, beta-markers, verifier, backup, metrics, long-work |
 | `guide` | core | a block `naima guide` prints first, inside a project, before the documentation pages | triage, verifier, rules |
 | `rank` | core | an additive term of every item's urgency; lower is more urgent | triage, gates |
 | `jobs` | core | a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it; what it finds is shown to the owner as messages | long-work |
 | `extends` | core | additive changes to another plugin's type — statuses (an existing one only with its category), traits, transitions — or field — enum values, more types or traits it applies to | knowledge, roles |
 | `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done; `beforeText(text, ctx)` may refuse a write of free text or a file that is not an item's (a session note, an event, an attachment) or add to its record | core, coordination, triage, epics, planning, knowledge, verifier, privacy |
-| `setup` | core | what a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init` and `naima update` after their own work: `install(ctx) → lines`, each said | coordination, backup, metrics |
+| `setup` | core | what a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init` and `naima update` after their own work: `install(ctx) → lines`, each said | coordination, planning, backup, metrics |
 | `migrations` | core | a plugin's own data migrations, in order from its format 1, run by `naima update` after the core's | gates |
 | `landing-reports` | coordination | what `naima land` checks before a branch lands and reports once it has: `name`, `says`, and `blocks(ctx, { branch, from, to, changed }) → lines`, what the landing changed whose proofs are not current, any line refusing the landing unless --stale-proofs gives the reason, or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root | verifier |
 | `gates` | gates | a named release or merge condition, backed by items: `title`, `says`, `decides`, `evaluate(ctx) → { holds, blocking, owed }`; `inFullSuite` makes it part of the full suite a release gate (`fullSuite`) requires | verifier |
@@ -1775,7 +1776,15 @@ Requirements proven by tests, specifications versioned name-vN, the owner's deci
 
 Its contributions' qualified ids are `planning/<name>`.
 
-Planning as items, so each is proven or checked rather than implied by a test. A **requirement** says what must hold: the features, tests or epics that deliver it are linked `satisfies`, the tests or properties that prove it `verifies`; it is `met` only once a proof has passed and none refutes it, and `naima view requirements` traces each one. A requirement whose origin says someone other than the owner asked for it (`naima new requirements "<what>"` without `--asked-by owner`) starts `proposed`: no gate counts it as a goal, `requirements-proven` notes it, and it becomes `stated` only when the owner confirms it, `naima confirm <requirement> --words "<the owner's yes, restated>"`, which records the words in its field `confirmed`. A **specification** says how something must behave, versioned `name-vN`: `naima spec revise <spec>` opens the next version as a draft that `supersedes` the old one, one version per name is `current`, and an item that follows a spec is linked `specified-by` — work starts from the spec, and closes when the code matches it. A **decision** is a choice or a standing permission of the owner's, dated and restated in the owner's words: it `settles` the items that waited on it and `supersedes` the decision it replaces. Before asking the owner anything, an agent runs `naima decisions <words>`; after the owner answers, it records the answer with `naima new decisions`, so a settled question is never asked again. A **release** opens at its first stage (`naima new releases "<name>"`); each stage's output is recorded with `naima note`, headed `Stage: <name>` (or `Stage: <name> — skipped, decided by <who>`), and the hook refuses `status=released` while a stage is unrecorded — `naima view releases` shows what each one still owes. A **session** is a dated, append-only record of one test sitting, linked `records` to the test or tests it was for; several share a `run` name when they were sat together. It is optional — most of the time the test's own page and status say enough — and is never edited once written: a later sitting is a new session. An **artifact** is something the project makes and keeps — an analysis, a profile, a report, a dataset, a figure: `due` by a day, made by the todo or feature linked `produces`, made of `files` (paths from the project root) or its attachments, made from `inputs` (files or directories) and the data of the tests, properties or other artifacts it `uses`, and replaced by a later version that `supersedes` it. `naima set <artifact> status=delivered` refuses while a file it names is missing or it has none, and otherwise records `madeFrom` — the commit, one digest over its inputs and the data of what it uses, the moment — and `deliveredOn`, from which `naima diary` tells the delivery; neither is set by hand. `artifacts-current` notes an artifact past its due day and not delivered, a delivered one whose inputs changed since it was made, and a planned one nothing produces. The plugin ships two rules, listed by `naima rules` when the rules plugin is loaded: requirements are elicited at every prompt of the owner, each with how it is checked or measured (a test, a property, or a metric with a budget), acknowledged as "Elicitation mode on" and held in part by `requirements-proven`, which notes a requirement nothing proves; and behaviour with states or concurrency is designed from a model first (a state machine, mCRL2, or a state machine encoded in mCRL2), its properties as items, kept in step with the code, acknowledged as "Model first mode on". Whether a change has states or concurrency is recorded at triage, in its field `stateful` (true or false), and never guessed from the code; `model-first` notes a change triaged `stateful: true` that landed with no `models` or `properties` item linked to it and no waiver of the model-first check gives the exception with its reason. It is a note, not a problem: the rule binds where the behaviour has states, and the waiver is the exception, filed.
+Planning as items, so each is proven or checked rather than implied by a test. A **requirement** says what must hold: the features, tests or epics that deliver it are linked `satisfies`, the tests or properties that prove it `verifies`; it is `met` only once a proof has passed and none refutes it, and `naima view requirements` traces each one. A requirement whose origin says someone other than the owner asked for it (`naima new requirements "<what>"` without `--asked-by owner`) starts `proposed`: no gate counts it as a goal, `requirements-proven` notes it, and it becomes `stated` only when the owner confirms it, `naima confirm <requirement> --words "<the owner's yes, restated>"`, which records the words in its field `confirmed`. A **specification** says how something must behave, versioned `name-vN`: `naima spec revise <spec>` opens the next version as a draft that `supersedes` the old one, one version per name is `current`, and an item that follows a spec is linked `specified-by` — work starts from the spec, and closes when the code matches it. A **decision** is a choice or a standing permission of the owner's, dated and restated in the owner's words: it `settles` the items that waited on it and `supersedes` the decision it replaces. Before asking the owner anything, an agent runs `naima decisions <words>`; after the owner answers, it records the answer with `naima new decisions`, so a settled question is never asked again. A **release** opens at its first stage (`naima new releases "<name>"`); each stage's output is recorded with `naima note`, headed `Stage: <name>` (or `Stage: <name> — skipped, decided by <who>`), and the hook refuses `status=released` while a stage is unrecorded — `naima view releases` shows what each one still owes. A **session** is a dated, append-only record of one test sitting, linked `records` to the test or tests it was for; several share a `run` name when they were sat together. It is optional — most of the time the test's own page and status say enough — and is never edited once written: a later sitting is a new session. An **artifact** is something the project makes and keeps — an analysis, a profile, a report, a dataset, a figure: `due` by a day, made by the todo or feature linked `produces`, made of `files` (paths from the project root) or its attachments, made from `inputs` (files or directories) and the data of the tests, properties or other artifacts it `uses`, and replaced by a later version that `supersedes` it. `naima set <artifact> status=delivered` refuses while a file it names is missing or it has none, and otherwise records `madeFrom` — the commit, one digest over its inputs and the data of what it uses, the moment — and `deliveredOn`, from which `naima diary` tells the delivery; neither is set by hand. `artifacts-current` notes an artifact past its due day and not delivered, a delivered one whose inputs changed since it was made, and a planned one nothing produces. The plugin ships two rules, listed by `naima rules` when the rules plugin is loaded: requirements are elicited at every prompt of the owner, each with how it is checked or measured (a test, a property, or a metric with a budget), acknowledged as "Elicitation mode on" and held in part by `requirements-proven`, which notes a requirement nothing proves; and behaviour with states or concurrency is designed from a model first (a state machine, mCRL2, or a state machine encoded in mCRL2), its properties as items, kept in step with the code, acknowledged as "Model first mode on". Whether a change has states or concurrency is recorded at triage, in its field `stateful` (true or false), and never guessed from the code; `model-first` notes a change triaged `stateful: true` that landed with no `models` or `properties` item linked to it and no waiver of the model-first check gives the exception with its reason. It is a note, not a problem: the rule binds where the behaviour has states, and the waiver is the exception, filed. How strictly the project applies model first is its own choice, the option `modelFirst`, shown and set with `naima model-first`: `strict` (the default) keeps the rule a must and notes every such change; `advisory` makes it a should, where a new protocol or concurrency (`statefulKind: protocol`) is still noted as a must, other new behaviour is noted as advice, and a change to existing code is not noted: one triaged `statefulKind: existing`, or, untriaged, one whose files all existed at the commit the setting was adopted at (`modelFirstSince`) and none had half its lines removed; `deferred` adopts model checking later, by the gate or the date in `modelFirstUntil`: `naima model-first deferred --until <gate|date>` files at once the todo that plans it, on that gate, `model-first` notes the deferral instead of each change, and `naima hello` says it until the owner chooses. `naima init` proposes the setting to a project that has none: strict for a new project, advisory when the repository already holds substantial code (20 source files or 2000 lines), and says the question to put to the owner.
+
+Options, each with the default it takes when nothing sets it:
+
+| Option | Default | What it does |
+|---|---|---|
+| `modelFirst` | `strict` | how strictly the project applies model first: strict (a must), advisory (a should; existing code exempt unless rewritten; a new protocol or concurrency kept a must) or deferred (adopted later, by modelFirstUntil); set with naima model-first |
+| `modelFirstSince` |  | the full hash of the commit the setting was adopted at: what existed there is existing code, for advisory |
+| `modelFirstUntil` |  | with deferred: the gate the adoption todo stands on, or the date YYYY-MM-DD by which the owner decides |
 
 **Uses**, declared by other plugins: fields `runBy`, `humanBecause`, `fixedOn`, `origin`; relations `verified-by`.
 
@@ -1844,6 +1853,31 @@ Examples:
 
 ```sh
 naima confirm export-keeps --words "Yes, the export must keep the alpha channel"
+```
+
+### naima model-first
+
+Show or set how strictly the project applies model first (planning option modelFirst): strict, the rule a must; advisory, a should, with code that existed before the setting exempt unless rewritten and a new protocol or concurrency kept a must; deferred until a gate or a date the owner names, which files at once the todo that plans adopting model checking there.
+
+**Enforces**: The setting is the owner's choice: an agent sets it only after the owner said which; deferring always names a gate or a date and files its todo.
+
+```sh
+naima model-first [strict
+naima advisory
+naima deferred --until <gate|YYYY-MM-DD>]
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--until` |  | with deferred: the gate (or milestone) the adoption todo stands on, or the date by which the owner decides |
+
+Examples:
+
+```sh
+naima model-first
+naima model-first advisory
+naima model-first deferred --until v1
+naima model-first deferred --until 2027-03-01
 ```
 
 ### type: requirements
@@ -1918,6 +1952,7 @@ Artifacts: something the project makes and keeps — an analysis, a profile, a r
 | `standing` | boolean | decisions | a standing permission: the action it names may be taken again, every time, without asking |  |
 | `sittingRun` | string | sessions | the name shared by every session of one sitting, when several tests were sat together |  |
 | `stateful` | boolean | any type tagged `fixable` | whether the behaviour this change adds or fixes has states or concurrency (a lifecycle, a protocol, a scheduler, a retry loop, two processes sharing data): recorded at triage, true or false; when true, the change starts from a model (model-first) |  |
+| `statefulKind` | enum | any type tagged `fixable` | with stateful true, which kind of change it is, recorded at triage: it matters where model first is advisory, which keeps the must for a new protocol or concurrency and exempts existing code | `protocol` adds a new protocol or new concurrency: the must holds in every setting; `new` adds other new behaviour with states: a model is required when strict, advised when advisory; `existing` changes behaviour that existed before the project adopted its model-first setting, without rewriting it: exempt when advisory |
 | `confirmed` | object | requirements | the owner's confirmation of a requirement filed by someone else, written by naima confirm: { words: the owner's yes, restated; by: who recorded it; on: the day } |  |
 | `due` | date | artifacts | the day it is due; past it and not delivered, naima check notes it |  |
 | `inputs` | strings | artifacts | the files or directories it is made from, from the project root: with the data of the items it uses, what the digest in madeFrom covers |  |
@@ -1953,7 +1988,7 @@ Artifacts: something the project makes and keeps — an analysis, a profile, a r
 | `decisions-settled` | an open item waiting on the owner's decision (runBy human, humanBecause decision) that a settled decision settles is noted, to be acted on rather than asked; a decision superseded by a settled one is marked superseded |
 | `release-stages` | a release marked released has every stage recorded or skipped with who decided; one hand-edited past the hook is a problem |
 | `artifacts-current` | as notes: an artifact past its due day and not delivered; a delivered artifact whose inputs, or the data of the items it uses, changed since it was made; a planned artifact nothing produces |
-| `model-first` | a change triaged as having states or concurrency (stateful: true) that landed (fixedOn set) with no models or properties item linked to it, and no waiver of this check filed with its reason, is noted: the rule that such behaviour is designed from a model first was not kept, or its reason was not written |
+| `model-first` | a change triaged as having states or concurrency (stateful: true) that landed (fixedOn set) with no models or properties item linked to it, and no waiver of this check filed with its reason, is noted, as the project's setting (planning option modelFirst) says: strict notes every one; advisory notes a new protocol or concurrency as a must, other new behaviour as advice, and nothing on existing code; deferred notes the deferral and its planned todo instead of each change |
 
 **Views**, printed by `naima view <name>`
 
@@ -1961,6 +1996,8 @@ Artifacts: something the project makes and keeps — an analysis, a profile, a r
 |---|---|
 | `requirements` | every requirement that is not dropped: its status, whether it is proven, what satisfies it and what proves it |
 | `releases` | every release in progress or done: its status and which stages it still owes |
+
+**Summary sections**: `model-first`.
 
 **Write hooks**, run on every item write
 
@@ -1970,6 +2007,12 @@ Artifacts: something the project makes and keeps — an analysis, a profile, a r
 | `requirements-confirmed` | a new requirement whose origin says someone other than the owner asked for it is proposed, not stated; it becomes stated or met only through naima confirm, with the owner's words restated, or is dropped; --force takes a move on |
 | `release-stages` | a release is marked released only once every stage is recorded, or skipped and said by whom |
 | `artifacts-delivered` | an artifact becomes delivered only with its files — every path in files exists, and there is at least one, there or in its attachments — and is then stamped with madeFrom (the commit, the digest over its inputs and the data of what it uses, the moment) and deliveredOn; any other write that changes those two is refused |
+
+**Setup**, put in place by `naima init` and `naima update` where missing
+
+| Step | What it puts in place |
+|---|---|
+| `model-first-setting` | at init, when the project has not chosen how strictly it applies model first and has no items yet: write init's proposal (strict for a new project, advisory when the repository already holds substantial code) and say the question to put to the owner, who may keep it, change it or defer it |
 
 **Shipped rules**, active in every project that loads the plugin, listed by `naima rules`
 

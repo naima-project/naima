@@ -13,8 +13,8 @@ steps that break it. The agents write the model, the properties and the code. Yo
 ## When a model is written
 
 A model is written before implementing anything that has states or concurrency: a lifecycle, a protocol, a scheduler, a retry loop, or two processes sharing
-data. A trivial change doesn't need one, such as renaming a state or fixing a message. If the agent skips the model for behaviour that isn't trivial, it files the
-exception, with its reason, as a waiver of the check, so the choice can be inspected and questioned at any time.
+data. A trivial change doesn't need one, such as renaming a state or fixing a message. If the agent skips the model for behaviour that isn't trivial, it files
+the exception, with its reason, as a waiver of the check, so the choice can be inspected and questioned at any time.
 
 ```sh
 naima waive model-first features/job-retries --reason "<the reason>"
@@ -22,6 +22,36 @@ naima waive model-first features/job-retries --reason "<the reason>"
 
 When a requirement you state concerns behaviour like this, the agent proposes the model and its properties as the way to check it
 ([requirements come from every conversation](plan-with-requirements-specs-and-decisions.md#requirements-come-from-every-conversation)).
+
+## How strictly a project applies it
+
+Each project chooses how strictly it applies model first, and can change its choice at any time. `naima model-first` says which setting holds, and sets it.
+
+- **Strict** is the default. Every change with states or concurrency starts from a verified model, and `naima check` notes one that landed without a model or a
+  waiver.
+- **Advisory** suits a project that already has a lot of code, which cannot all be modelled at once. A model is advised but not required, and `naima check` says
+  so as advice. A change to code that existed before the setting was adopted is exempt, unless it rewrites that code. A new protocol or new concurrency still
+  needs a model: that is where a model checker finds the defects tests miss.
+- **Deferred** suits a project that is not ready to adopt model checking yet. You name a gate, a milestone or a date, and a todo for adopting it is filed at
+  once on that gate, so it is not forgotten. Until you decide, `naima hello` reminds the agent at the start of each session, and `naima check` notes the
+  deferral instead of each change.
+
+```sh
+naima model-first advisory
+naima model-first deferred --until v1
+naima model-first deferred --until 2027-03-01
+```
+
+When Naima joins a project, `naima init` proposes a setting and asks you: strict for a new project, advisory when the repository already holds a lot of code (20
+source files or 2000 lines).
+
+In an advisory project, the agent records at triage which kind of change it is, so the check knows what to ask for: `statefulKind=protocol` for a new protocol
+or new concurrency, `new` for other new behaviour with states, `existing` for a change to existing behaviour. When it has not been recorded, a change whose
+files all existed when the setting was adopted, none of them mostly rewritten, counts as existing.
+
+```sh
+naima set features/job-retries statefulKind=protocol
+```
 
 ## Which form the model takes
 
@@ -120,15 +150,15 @@ current, and `naima verify` runs it again.
 ## Generate the code from the model
 
 Once the model of a state machine holds its properties, the code that runs it can be generated from the model instead of written by hand.
-[naima-codegen](https://github.com/naima-project/naima-codegen) is a public tool of the Naima project that does this. It reads a process written in mCRL2,
-in the subset it accepts, and writes the same state machine as a Rust crate, a Python package, or TypeScript modules with a Svelte 5 class for user
-interfaces. Each output is checked against mCRL2 itself, and its tests compare the outputs with each other. The generated code decides which events are
-allowed and what comes next; the code around it only carries out the actions the model names, so a change of behaviour is a change of the model.
+[naima-codegen](https://github.com/naima-project/naima-codegen) is a public tool of the Naima project that does this. It reads a process written in mCRL2, in
+the subset it accepts, and writes the same state machine as a Rust crate, a Python package, or TypeScript modules with a Svelte 5 class for user interfaces.
+Each output is checked against mCRL2 itself, and its tests compare the outputs with each other. The generated code decides which events are allowed and what
+comes next; the code around it only carries out the actions the model names, so a change of behaviour is a change of the model.
 
 The model has to be one linear process, `proc Core`, whose every summand is a condition, one labelled action and the next state, each label declared an input
 (an event from outside) or an output (an action the process decides). A model outside that subset is refused with a list of problems, each naming the part of
-naima-codegen's specification it breaks. The tool needs the mCRL2 tools at the version the model pins, and Python 3.11 or later. Naima works with
-one commit of it, checked out as [the checks of naima-codegen](prove-and-close.md#the-checks-of-naima-codegen) show.
+naima-codegen's specification it breaks. The tool needs the mCRL2 tools at the version the model pins, and Python 3.11 or later. Naima works with one commit of
+it, checked out as [the checks of naima-codegen](prove-and-close.md#the-checks-of-naima-codegen) show.
 
 When the project has a model, `naima hello` says once that the code can be generated from it. The agent then works like this:
 
@@ -138,10 +168,10 @@ When the project has a model, `naima hello` says once that the code can be gener
    `naima verify` after each change.
 3. It runs `naima-codegen generate`, which writes the code under `generated/`, never edited by hand, and commits it with the model in the same change.
 4. When the model comes with a policy, it checks that the generated stepping rules stay inside the model with a property whose verifier is `naima-codegen` and
-   whose property is `refines`, and the model's properties on the refined systems with one whose property is `properties`, both run by `naima verify`. It
-   runs them as soon as the code is generated, not only at the end: `naima verify` runs `naima-codegen check-refinement` and records the run, while running
-   that command by hand leaves no record ([the checks of naima-codegen](prove-and-close.md#the-checks-of-naima-codegen)).
+   whose property is `refines`, and the model's properties on the refined systems with one whose property is `properties`, both run by `naima verify`. It runs
+   them as soon as the code is generated, not only at the end: `naima verify` runs `naima-codegen check-refinement` and records the run, while running that
+   command by hand leaves no record ([the checks of naima-codegen](prove-and-close.md#the-checks-of-naima-codegen)).
 5. After every later change of the model, `naima-codegen generate --check` says whether `generated/` is still what the model gives.
 
-How to write `codegen.toml`, the policy and the checks is in naima-codegen's own documentation, with two complete examples: a job queue with retries, and a
-form for a user interface.
+How to write `codegen.toml`, the policy and the checks is in naima-codegen's own documentation, with two complete examples: a job queue with retries, and a form
+for a user interface.
