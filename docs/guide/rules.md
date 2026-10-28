@@ -552,7 +552,8 @@ commit made in another clone and then pulled arrives as a fast-forward and isn't
 A branch enters the trunk as a [marker](glossary.md#marker). That is a merge commit whose first parent is the trunk and whose second parent is the branch tip,
 whose tree is the branch tip's tree, and which has one `Closes: <item id>` trailer for each item it closes. The branch is prepared first, by merging the trunk
 into it and running its gates again, so that the trunk is an ancestor of the branch. A branch that isn't up to date is never forced in. Every landing closes at
-least one item, so partial work is split: the finished part is closed and the rest becomes a new item. The trunk's first-parent line is the record of landings,
+least one item, so partial work is split: the finished part is closed and the rest becomes a new item. The one exception is a branch that changes only tracker
+data, landed with `naima land <branch> --tracker-only "<reason>"`: its marker carries a `Tracker-only: <reason>` trailer and may close nothing. The trunk's first-parent line is the record of landings,
 and `M^1..M^2` lists the commits that a marker `M` landed.
 
 The coordinator lands with `naima land <branch>`. By hand, the same commit:

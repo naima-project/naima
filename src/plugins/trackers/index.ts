@@ -32,6 +32,7 @@ import {
   rendered,
   runChecks,
   setFieldValue,
+  str,
   type SummarySection,
   today,
   trunk,
@@ -53,6 +54,8 @@ const ABOUT = `Three words that are not synonyms:
 - **fixed** — the code change exists: \`fixedOn\` is set. Nothing is proven.
 - **resolved** — fixed, and proven by an item that \`verifies\` it and whose status \`proves\` (a passed test, a property that holds).
 - **closed** — resolved, and moved to \`closed/\` by \`naima close\`, carrying its proof.
+
+A todo whose work is a judgement with no code, a review or a decision (its \`kind\` says which), has nothing to fix and no test to pass. Once its status is \`done\` or \`dropped\`, \`naima close <item> --reason "<what was settled, and where it is written>"\` archives it without a proof. The reason is kept in \`closedBecause\`, and \`naima check\` lists every such item as a note, \`closed-without-proof\`, so nothing is closed this way unseen.
 
 "How many bugs are left" means the unfixed count; \`naima bugs\` never adds the three together.
 
@@ -88,6 +91,14 @@ const CLOSED_ON = { name: "closedOn", kind: "date" } as const
 const RUN_BY = { name: "runBy", kind: "enum" } as const
 const HUMAN_BECAUSE = { name: "humanBecause", kind: "enum" } as const
 const COMMITS = { name: "commits", kind: "strings" } as const
+const CLOSED_BECAUSE = { name: "closedBecause", kind: "string" } as const
+const KIND = { name: "kind", kind: "string" } as const
+
+/** The kinds of todo whose work is a judgement with no code — a review, a decision — closed with a reason instead of a proof. */
+export const CLOSED_WITH_REASON = ["review", "decision"]
+
+/** Whether `item` was closed with a reason, as a review or a decision, instead of with a proof. */
+const closedWithReason = (item: Item): boolean => item.type === "closed" && !!fieldValue(item, CLOSED_BECAUSE)
 
 /**
  * The one guessed value `commits` may hold: it marks an item closed before
@@ -180,11 +191,24 @@ const fixNamesGesture: Check = {
 
 const closedHasProof: Check = {
   name: "closed-carries-proof",
-  says: "every archived item is verified by an item that has passed",
+  says: "every archived item is verified by an item that has passed, unless it was closed with a reason as a review or a decision",
   run: (ctx) =>
     ctx.repo.items
-      .filter((i) => i.type === "closed" && !linked(ctx, i, "verified-by").some((p) => proves(ctx, p)))
+      .filter((i) => i.type === "closed" && !closedWithReason(i) && !linked(ctx, i, "verified-by").some((p) => proves(ctx, p)))
       .map((i): Finding => ({ level: "problem", message: `${label(i)} is closed without a passed proof`, item: i })),
+}
+
+const closedWithoutProof: Check = {
+  name: "closed-without-proof",
+  says: "every item closed with a reason instead of a proof (a todo of kind review or decision, naima close --reason) is listed as a note with its reason",
+  run: (ctx) =>
+    ctx.repo.items
+      .filter(closedWithReason)
+      .map((i): Finding => ({
+        level: "note",
+        message: `${label(i)} was closed without a proof, as a ${fieldValue(i, KIND) ?? "todo"}: ${fieldValue(i, CLOSED_BECAUSE)}`,
+        item: i,
+      })),
 }
 
 const humanSaysWhy: Check = {
@@ -321,22 +345,35 @@ function readExcusePhrases(options: Record<string, unknown>): string[] {
 
 const close: Command = {
   name: "close",
-  says: "archive a resolved item: fixed, and proven by an item that has passed",
+  says: "archive a resolved item: fixed, and proven by an item that has passed; or a finished review or decision, with the reason",
   enforces:
-    "an item is archived only when fixed and proven: fixedOn set and a verified-by item that has passed, with every write hook agreeing; --force takes a hook's refusal on, for the one who owns the evidence",
-  usage: "close <item> [--force]",
-  options: [{
-    name: "--force",
-    says: "close it although a write hook refuses — for the one who owns the evidence, say an item this branch claims whose proof someone else performed",
-  }],
-  examples: ["close export-drops", "close export-drops --force"],
+    "an item is archived only when fixed and proven: fixedOn set and a verified-by item that has passed, with every write hook agreeing; --force takes a hook's refusal on, for the one who owns the evidence. --reason closes, without fixedOn, proof or commit, only a todo whose kind is review or decision and whose status is done or dropped; the reason is kept in closedBecause and naima check lists it",
+  usage: 'close <item> [--force] [--reason "<why>"]',
+  options: [
+    {
+      name: "--force",
+      says: "close it although a write hook refuses — for the one who owns the evidence, say an item this branch claims whose proof someone else performed",
+    },
+    {
+      name: "--reason",
+      says:
+        "close a todo whose work is a judgement with no code — kind review or decision, its status done or dropped — without a proof: what was settled and where it is written, kept in closedBecause and listed by naima check as closed-without-proof",
+    },
+  ],
+  examples: [
+    "close export-drops",
+    "close export-drops --force",
+    'close review-last-two-days --reason "each change reviewed with the owner; the decisions are in the item\'s notes"',
+  ],
   async run(args, ctx) {
-    const p = parse(args, { force: { type: "boolean" } })
+    const p = parse(args, { force: { type: "boolean" }, reason: { type: "string" } })
     const ref = p.positionals[0]
-    if (!ref?.trim()) throw usageError(this)
+    if (!ref?.trim() || p.positionals.length > 1) throw usageError(this)
     const item = ctx.repo.resolve(ref)
     const state = lifecycle(ctx, item)
     if (state === "closed") throw new Error(`${label(item)} is already closed`)
+    const reason = str(p, "reason")?.trim()
+    if (reason !== undefined) return closeWithReason(ctx, item, reason, bool(p, "force"))
     const problem = await proofProblem(ctx, item)
     if (problem) throw new Error(`${label(item)} cannot be closed: ${problem}`)
     if (state !== "resolved") {
@@ -360,6 +397,32 @@ const close: Command = {
     }
     return 0
   },
+}
+
+/**
+ * Close a todo whose work is a judgement with no code — a review, a decision — with the reason instead of a proof:
+ * it has no fixedOn, no test and no commit to show, and its status (done or dropped) already says it is finished.
+ */
+function closeWithReason(ctx: Context, item: Item, reason: string, force: boolean): number {
+  if (!reason || reason.includes("\n")) throw new Error("--reason takes what was settled and where it is written, on one line")
+  const kind = fieldValue(item, KIND)
+  if (item.type !== "todos" || !kind || !CLOSED_WITH_REASON.includes(kind)) {
+    throw new Error(
+      `${label(item)} cannot be closed with a reason: only a todo of kind ${CLOSED_WITH_REASON.join(" or ")} is, its work a judgement with no code to prove — ${
+        item.type === "todos" ? `set its kind if that is what it is (naima set ${label(item)} kind=review), or ` : ""
+      }close it with fixedOn and a passed proof`,
+    )
+  }
+  if (isOpen(ctx, item)) {
+    throw new Error(`${label(item)} is ${item.meta.status}: mark it finished first (naima set ${label(item)} status=done, or status=dropped), then close it`)
+  }
+  const archived: Item = { ...item, meta: { ...item.meta, status: "closed" } }
+  setFieldValue(archived, CLOSED_FROM, item.type)
+  setFieldValue(archived, CLOSED_ON, today(ctx))
+  setFieldValue(archived, CLOSED_BECAUSE, reason)
+  const moved = moveItem(ctx, archived, typeOrThrow(ctx, "closed"), { force })
+  ctx.out(`closed → ${label(moved)}, without a proof, as a ${kind}: ${reason}`)
+  return 0
 }
 
 const bugs: Command = {
@@ -395,10 +458,14 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
   const { commitsRequiredFrom } = readOptions(options)
   const closedNamesCommits: Check = {
     name: "closed-names-its-commits",
-    says: `an item closed on or after ${commitsRequiredFrom} names a commit reachable from the trunk`,
+    says:
+      `an item closed on or after ${commitsRequiredFrom} names a commit reachable from the trunk, unless it was closed with a reason as a review or a decision`,
     run: (ctx) =>
       ctx.repo.items
-        .filter((i) => i.type === "closed" && (fieldValue(i, CLOSED_ON) ?? "") >= commitsRequiredFrom && !hasCommitFromTrunk(ctx, i) && !isGrandfathered(i))
+        .filter((i) =>
+          i.type === "closed" && (fieldValue(i, CLOSED_ON) ?? "") >= commitsRequiredFrom && !closedWithReason(i) && !hasCommitFromTrunk(ctx, i) &&
+          !isGrandfathered(i)
+        )
         .map((i): Finding => ({ level: "problem", message: `${label(i)} is closed without a commit reachable from the trunk`, item: i })),
   }
   const phrases = readExcusePhrases(options)
@@ -489,6 +556,12 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
       { name: "closedOn", kind: "date", says: "when the item was archived", appliesTo: ["closed"] },
       { name: "closedFrom", kind: "string", says: "the type the item was archived from", appliesTo: ["closed"] },
       {
+        name: "closedBecause",
+        kind: "string",
+        says: "why an item was closed without a proof: a todo of kind review or decision, closed by naima close --reason",
+        appliesTo: ["closed"],
+      },
+      {
         name: "runBy",
         kind: "enum",
         says: "who can perform the proving gesture — the instrument, not the effort",
@@ -539,6 +612,7 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
       provenButOpen,
       fixNamesGesture,
       closedHasProof,
+      closedWithoutProof,
       humanSaysWhy,
       commitsAreReal,
       closedNamesCommits,
