@@ -24,6 +24,7 @@ import {
   type Finding,
   gitOrNull,
   gitReason,
+  type GitRun,
   isAncestor,
   isOpen,
   isUuid,
@@ -269,9 +270,21 @@ function idOf(ctx: Context, rev: string, ref: string): string {
  */
 export function moveTrunk(root: string, trunkName: string, marker: string, old: string, reason: string): void {
   const r = runGit(root, ["update-ref", "-m", reason, `refs/heads/${trunkName}`, marker, old])
-  if (!r.ok) {
-    throw new Error(`${trunkName} moved while landing (it is no longer ${old.slice(0, 12)}): nothing landed — run naima land again (${gitReason(r)})`)
-  }
+  if (!r.ok) throw new Error(trunkNotMoved(root, trunkName, old, r))
+}
+
+/**
+ * Why `trunk` did not move from `old`, in one line: a hook's refusal when the trunk is still at `old` — its own
+ * lines, without the runtime's notices printed before them — and otherwise that the trunk moved meanwhile.
+ */
+export function trunkNotMoved(root: string, trunkName: string, old: string, r: GitRun): string {
+  const now = gitOrNull(root, "rev-parse", "--verify", "--quiet", `refs/heads/${trunkName}`)
+  if (now !== old) return `${trunkName} moved while landing (it is no longer ${old.slice(0, 12)}): nothing landed — run naima land again (${gitReason(r)})`
+  const lines = r.err.split("\n").map((l) => l.trim()).filter((l) => l && !/^(\x1b\[[0-9;]*m)*(Info|Warning|Download|Check)\b/.test(l))
+  // The refusal is the hook's last line of its own; notices Naima printed before it are not why.
+  const own = lines.filter((l) => l.startsWith("naima: ")).slice(-1)
+  const why = (own.length ? own : lines).map((l) => l.replace(/^(fatal|error): /, "")).join(" ") || gitReason(r)
+  return `${trunkName} refused the landing, still at ${old.slice(0, 12)}: ${why} — nothing landed`
 }
 
 /** One repository's side of a landing: its trunk, the commit the trunk is at, and the branch tip (the trunk's commit when the branch is absent). */
@@ -544,7 +557,7 @@ async function landBoth(
       if (!made.ok) throw new Error(`git commit-tree: ${gitReason(made)}`)
       cm = made.out.trim()
       const r = runGit(ctx.root, ["update-ref", "-m", `land: ${branch}`, `refs/heads/${code.main}`, cm, code.old])
-      if (!r.ok) throw new Error(`${code.main} moved while landing (it is no longer ${code.old.slice(0, 12)}): ${gitReason(r)}`)
+      if (!r.ok) throw new Error(trunkNotMoved(ctx.root, code.main, code.old, r))
     } catch (e) {
       backCode()
       ctx.reload()

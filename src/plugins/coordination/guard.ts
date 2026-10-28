@@ -54,7 +54,7 @@ import {
   writeJson,
 } from "../../core/api.ts"
 import { guardServer, serverHintOf } from "./server.ts"
-import { CLOSES, initsTracker, onlyAddsTrackerData, onlyClosesItems, recordsMarker, TRUNK_REASON } from "./land.ts"
+import { CLOSES, initsTracker, onlyAddsTrackerData, onlyClosesItems, recordsMarker, TRACKER_ONLY, TRUNK_REASON } from "./land.ts"
 
 export { TRUNK_REASON }
 
@@ -279,15 +279,17 @@ interface Added {
   reason: string
   /** The command a commit Naima made itself names, in its `Naima-Command:` trailer; empty otherwise. */
   cli: string
+  /** Why a branch that changed only tracker data landed, from a marker's `Tracker-only:` trailer; empty otherwise. */
+  trackerOnly: string
 }
 
 const FORMAT =
-  `%H%x1f%P%x1f%T%x1f%s%x1f%(trailers:key=${CLOSES},valueonly,separator=%x1d)%x1f%(trailers:key=${TRACKER_TRAILER},valueonly,separator=%x1d)%x1f%(trailers:key=${TRUNK_REASON},valueonly,separator=%x1d)%x1f%(trailers:key=${CLI_TRAILER},valueonly,separator=%x1d)%x1e`
+  `%H%x1f%P%x1f%T%x1f%s%x1f%(trailers:key=${CLOSES},valueonly,separator=%x1d)%x1f%(trailers:key=${TRACKER_TRAILER},valueonly,separator=%x1d)%x1f%(trailers:key=${TRUNK_REASON},valueonly,separator=%x1d)%x1f%(trailers:key=${CLI_TRAILER},valueonly,separator=%x1d)%x1f%(trailers:key=${TRACKER_ONLY},valueonly,separator=%x1d)%x1e`
 
 function commitsOf(root: string, args: string[]): Added[] {
   const out = gitOrNull(root, "log", `--format=${FORMAT}`, ...args) ?? ""
   return out.split("\x1e").map((r) => r.replace(/^\n/, "")).filter(Boolean).map((r) => {
-    const [sha = "", parents = "", tree = "", subject = "", closes = "", tracker = "", reason = "", cli = ""] = r.split("\x1f")
+    const [sha = "", parents = "", tree = "", subject = "", closes = "", tracker = "", reason = "", cli = "", trackerOnly = ""] = r.split("\x1f")
     return {
       sha,
       parents: parents.split(" ").filter(Boolean),
@@ -297,6 +299,7 @@ function commitsOf(root: string, args: string[]): Added[] {
       tracker: tracker.split("\x1d")[0]?.trim() ?? "",
       reason: reason.split("\x1d").map((c) => c.trim()).filter(Boolean).join("; "),
       cli: cli.split("\x1d")[0]?.trim() ?? "",
+      trackerOnly: trackerOnly.split("\x1d").map((c) => c.trim()).filter(Boolean).join("; "),
     }
   })
 }
@@ -312,11 +315,14 @@ function filesOf(root: string, sha: string): { status: string; path: string }[] 
 
 const treeOf = (root: string, sha: string): string => gitOrNull(root, "rev-parse", `${sha}^{tree}`) ?? ""
 
-/** Whether a commit is a landing marker: a merge whose first parent the second contains, whose tree is the second's, naming what it lands. */
-export function isMarker(root: string, c: Pick<Added, "parents" | "tree" | "closes" | "tracker">): boolean {
+/**
+ * Whether a commit is a landing marker: a merge whose first parent the second contains, whose tree is the second's,
+ * naming what it lands (`Closes:`, `Tracker:`) or why it lands only tracker data (`Tracker-only:`).
+ */
+export function isMarker(root: string, c: Pick<Added, "parents" | "tree" | "closes" | "tracker"> & { trackerOnly?: string }): boolean {
   const [first, second] = c.parents
   if (c.parents.length !== 2 || !first || !second) return false
-  return (c.closes.length > 0 || !!c.tracker) && treeOf(root, second) === c.tree && isAncestor(root, first, second)
+  return (c.closes.length > 0 || !!c.tracker || !!c.trackerOnly) && treeOf(root, second) === c.tree && isAncestor(root, first, second)
 }
 
 /** Whether a commit only switches the guard: naima.json changed in `trunkGuard` alone, and the hook added or removed. */
