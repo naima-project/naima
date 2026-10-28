@@ -49,6 +49,18 @@ export interface AgentAdapter {
   sessionStart?: AgentHook
   /** Its turn-end hook, when the tool has one: it runs the tick, cheaply, and has the agent tell the owner what is due. */
   turnEnd?: AgentHook
+  /**
+   * Its hooks on sub-agents, when the tool has them (subagents.ts): as one starts, the project's rules are put in its
+   * context; before each of its tool calls, one that acts is held until it has the rules; as it stops, one that never
+   * had them is sent back to read them and say so.
+   */
+  subagentStart?: AgentHook
+  subagentTool?: AgentHook
+  subagentStop?: AgentHook
+  /** What naima subagent --hook prints for the tool: `context`, put in the starting sub-agent's context. */
+  subagentContext?(context: string): string
+  /** The sub-agent's id, from what its sub-agent-start hook is given on standard input. */
+  agentOf?(hookInput: string): string | undefined
   /** What naima hello --hook prints for the tool: `shown` for the owner to see directly, `context` for the agent. */
   greeting?(shown: string, context: string): string
   /** The tool's own session id, from what its session-start hook is given on standard input: what naima hello --hook records as the session. */

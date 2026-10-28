@@ -21,6 +21,7 @@ import {
 } from "./config.ts"
 import { consoleIO, type IO, type Place } from "./context.ts"
 import { cliCommands } from "./entry.ts"
+import { AGENT_ID, markRules, SUBAGENT_PREAMBLE } from "./subagents.ts"
 import { FORMAT, formatRefusal, isFormat, migrate, MIGRATIONS, type Step } from "./format.ts"
 import { formatsFor, type OpenOptions, openProject, owed } from "./project.ts"
 import { bool, pairs, parse, str } from "./args.ts"
@@ -930,10 +931,41 @@ function hookTool(args: string[], command: string): { tool: ReturnType<typeof ad
   const tool = id ? adapter(id) : undefined
   if (!tool) {
     throw new Error(
-      `usage: naima ${command} --hook <tool>, one whose adapter has hooks: ${ADAPTERS.filter((a) => a.sessionStart || a.turnEnd).map((a) => a.id).join(", ")}`,
+      `usage: naima ${command} --hook <tool>, one whose adapter has hooks: ${
+        ADAPTERS.filter((a) => a.sessionStart || a.turnEnd || a.subagentStart).map((a) => a.id).join(", ")
+      }`,
     )
   }
   return { tool, rest: args.filter((_, i) => i !== at && i !== at + 1) }
+}
+
+/**
+ * `naima subagent --hook <tool>`: as the tool's sub-agent-start hook, the guide sections marked for sub-agents (the
+ * project's rules for agents, where the plugin that holds them marks its section) for the starting sub-agent's context, in the form the tool's adapter gives, and the mark that it has them. Never a failure: a
+ * project that does not open, or an input with no agent id, prints nothing, and the guard holds the sub-agent's
+ * calls until it reads the rules itself.
+ */
+async function subagentCommand(args: string[], opts: CliOptions, place: Located, io: IO): Promise<number> {
+  const { tool, rest } = hookTool(args, "subagent")
+  if (!tool || rest.length) throw new Error(usage("subagent"))
+  if (!tool.subagentContext || !tool.agentOf) return 0
+  const input = (opts.hookInput ?? (opts.launched ? readHookInput : () => ""))()
+  const id = tool.agentOf(input)
+  if (!id || !AGENT_ID.test(id)) return 0
+  const lines: string[] = []
+  try {
+    const ctx = await openProject(place, opts, { ...io, err: () => {} })
+    // The guide sections a plugin marks for sub-agents, such as the project's rules for agents.
+    for (const c of ctx.registry.contributions("guide")) {
+      const section = c.value as GuideSection
+      if (section.subagents) lines.push(...linesAs(asRendered(await section.render(ctx), `guide section "${c.name}"`), "text"))
+    }
+  } catch {
+    return 0
+  }
+  if (!markRules(place.root, id, "given")) return 0
+  if (lines.length) io.out(tool.subagentContext([SUBAGENT_PREAMBLE, "", ...lines].join("\n")))
+  return 0
 }
 
 /**
@@ -1411,6 +1443,7 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     }
     if (command === "hello") return await hello(args, opts, place, io)
     if (command === "tick") return await tickCommand(args, opts, place, io)
+    if (command === "subagent") return await subagentCommand(args, opts, place, io)
     if (command === "plugin") {
       const at = place
       return await committingTracker(data, "plugin", io, () => Promise.resolve(pluginCommand(args, opts, at, at.raw, io)))
