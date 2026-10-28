@@ -227,16 +227,23 @@ route** instead. The model's state space is generated once, and each formula is 
 what is left in a way that doesn't change the answer. That takes seconds per property, where the standard route took hours. You choose it in `verifierOptions`.
 
 ```sh
-naima set <property> 'verifierOptions={"route":"lts","threads":8}'
+naima set <property> 'verifierOptions={"route":"lts","threads":8,"maxStates":50000000}'
 ```
 
-- The shrinking is exact only for formulas that never count internal steps, so Naima checks each formula before using the route. Every action named in a box or
-  a diamond must come right after a `true*`-like star (`[true* .
-  ready(n)]`, not `[ready(n)]`), and a fixpoint must have one of the usual "eventually" shapes,
-  such as `mu X . ([!done]X && <true>true)`. A formula that doesn't pass is recorded as an error beginning `LTS route refused:`, which says which part failed,
-  and the standard route can still decide it.
+- The shrinking must not change the answer, so Naima looks at each formula and picks the most shrinking method that still gives the same answer for it. A
+  formula that never counts internal steps — every action named in a box or a diamond comes right after a `true*`-like star (`[true* . ready(n)]`, not
+  `[ready(n)]`) — and has no fixpoint is checked modulo branching bisimilarity, after hiding the actions it doesn't mention. One that also uses an "eventually"
+  fixpoint, such as `mu X . ([!done]X && <true>true)`, or asks about deadlock after a star, such as `[true*]<true>true`, needs the variant that keeps infinite
+  internal loops, divergence-preserving branching bisimilarity, because plain branching bisimilarity would erase a loop that never reaches `done`. Any other
+  formula, for instance one with a single step `[true]`, is checked modulo strong bisimilarity with nothing hidden, which is safe for every formula but shrinks
+  less. The run's output and its record say which method was used and why.
 - The state space is generated once for each version of the model, kept in Naima's work folder and shared by every property on that model. Changing the model
-  produces a new one.
+  produces a new one. The shrunk state space is kept beside it too, so another formula that needs the same method and hides the same actions starts from it.
+- `maxStates` stops generating the state space once it has that many states. The run is then recorded as `unknown`, with an output that begins
+  `state cap reached:`, because a cut-short state space can't give a verdict, and it isn't kept. Use it on a model whose state space may be infinite or too large
+  for the machine. The standard route has no such count, so there the option is an error; bound that route with `timeoutSeconds` instead.
+- While the state space is generated, `naima verify` reports how many states it has, the level of the search it has reached and the transitions so far, every
+  second or so. The other steps report the lines their tools print. Under `naima run`, this is the run's progress.
 - The run record says how the verdict was reached. It gives the route, the size of the state space before and after shrinking, the hidden actions and the
   version of every tool. On `false`, the counterexample comes from the shrunk state space, so each hidden action shows up in it as `tau`.
 - `"route":"cross-check"` runs both routes and holds only when they agree, and if they disagree the run is an error. It's worth running once on a model small
@@ -273,9 +280,17 @@ project: the model, the policy, `codegen.toml`, its properties and the generated
 longer current, and a run on exactly the same files is reused. A project naima-codegen refuses, such as a model outside the subset it accepts, is recorded as an
 error whose output begins with `refused:` and lists the problems.
 
-naima-codegen is not installed by `naima tools`. Clone its repository and put its `naima-codegen` script on `PATH`; it needs Python 3.11 or later and the mCRL2
-tools at the version the model pins. Without it the run is recorded as an error whose output begins with `tool missing:`. Only `naima verify` is allowed to
-start it.
+naima-codegen is not installed by `naima tools`, and it has no releases yet. The verifier is made for one commit of it, `5aca11dbb1e0`. Clone its repository,
+check out that commit, and put its `naima-codegen` script on `PATH`; it needs Python 3.11 or later and the mCRL2 tools at the version the model pins.
+
+```sh
+git clone https://github.com/naima-project/naima-codegen
+git -C naima-codegen checkout 5aca11dbb1e0753fecd1c454c8c14eea0267932a
+```
+
+The commit id is also the checksum: git checks the files against it. Each run records the version it ran with, which is the commit of the checkout the script
+runs from, with a note when it isn't the pinned one. Without the script the run is recorded as an error whose output begins with `tool missing:`. Only
+`naima verify` is allowed to start it.
 
 ## Proving a change to a model
 

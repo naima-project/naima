@@ -127,7 +127,8 @@ allowed and what comes next; the code around it only carries out the actions the
 
 The model has to be one linear process, `proc Core`, whose every summand is a condition, one labelled action and the next state, each label declared an input
 (an event from outside) or an output (an action the process decides). A model outside that subset is refused with a list of problems, each naming the part of
-naima-codegen's specification it breaks. The tool needs the mCRL2 tools at the version the model pins, and Python 3.11 or later.
+naima-codegen's specification it breaks. The tool needs the mCRL2 tools at the version the model pins, and Python 3.11 or later. Naima works with
+one commit of it, checked out as [the checks of naima-codegen](prove-and-close.md#the-checks-of-naima-codegen) show.
 
 When the project has a model, `naima hello` says once that the code can be generated from it. The agent then works like this:
 

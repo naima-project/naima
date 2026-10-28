@@ -43,8 +43,12 @@ export interface Span {
   to: number
 }
 
-/** The check's answer: in the fragment, with the actions the formula mentions; or refused, saying why. */
-export type FragmentAnswer = { ok: true; mentioned: string[] } | { ok: false; reason: string }
+/**
+ * The check's answer: in the fragment, with the actions the formula mentions and whether it sees divergence (an
+ * inevitability pattern, or deadlock through a star), which plain branching bisimilarity does not preserve; or
+ * refused, saying why.
+ */
+export type FragmentAnswer = { ok: true; mentioned: string[]; divergence: boolean } | { ok: false; reason: string }
 
 interface Token {
   text: string
@@ -497,21 +501,26 @@ function inevitability(f: StateFrm & { k: "mu" | "nu" }): boolean {
   return body.k === join && ((loop(body.l) && stop(body.r)) || (stop(body.l) && loop(body.r)))
 }
 
-function inFragment(f: StateFrm): void {
+/** Whether a formula in the fragment uses a form that sees divergence: set by `inFragment` as it goes. */
+interface Seen {
+  divergence: boolean
+}
+
+function inFragment(f: StateFrm, seen: Seen): void {
   switch (f.k) {
     case "true":
     case "false":
     case "val":
       return
     case "not":
-      return inFragment(f.f)
+      return inFragment(f.f, seen)
     case "and":
     case "or":
     case "imp":
-      inFragment(f.l)
-      return inFragment(f.r)
+      inFragment(f.l, seen)
+      return inFragment(f.r, seen)
     case "quant":
-      return inFragment(f.body)
+      return inFragment(f.body, seen)
     case "box":
     case "dia": {
       // Nested modalities of one kind are joined: [R1][R2]φ is [R1 . R2]φ.
@@ -522,12 +531,16 @@ function inFragment(f: StateFrm): void {
         body = body.f
       }
       const endsStar = weakPath(r, false)
-      if (endsStar && deadlockBody(f.k, body)) return
-      return inFragment(body)
+      if (endsStar && deadlockBody(f.k, body)) {
+        seen.divergence = true
+        return
+      }
+      return inFragment(body, seen)
     }
     case "mu":
     case "nu":
       if (!inevitability(f)) throw new Outside(f.at, "a fixpoint other than the four inevitability patterns")
+      seen.divergence = true
       return
     case "var":
       throw new Outside(f.at, `the fixpoint variable ${f.x} outside its pattern`)
@@ -548,13 +561,14 @@ export function checkFragment(src: string): FragmentAnswer {
     if (e instanceof Refusal) return { ok: false, reason: `the check cannot read the formula: ${e.message}` }
     throw e
   }
+  const seen: Seen = { divergence: false }
   try {
-    inFragment(f)
+    inFragment(f, seen)
   } catch (e) {
     if (e instanceof Outside) return { ok: false, reason: `${quote(src, e.at)} is ${e.message}` }
     throw e
   }
-  return { ok: true, mentioned: mentionedActions(f) }
+  return { ok: true, mentioned: mentionedActions(f), divergence: seen.divergence }
 }
 
 /** The action names of one LTS label, `tau` giving none (§3.3); null when the label cannot be read. */

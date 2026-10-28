@@ -263,7 +263,8 @@ any program. An install downloads from whatever host a redirect points to (a rel
 `unzip`), a Python and the tool it verifies, and none of these exists yet when the launcher starts ([tools](tools.md)).
 
 **`naima verify`, and no other command,** may also run `naima-codegen`, found on `PATH`, the program of the `naima-codegen` verifier that comes with Naima
-([the checks of naima-codegen](prove-and-close.md#the-checks-of-naima-codegen)), and with `--host` it may run `ssh`, to run the verifier on another machine.
+([the checks of naima-codegen](prove-and-close.md#the-checks-of-naima-codegen)), and read that script, to find the commit it runs from. With `--host` it may
+run `ssh`, to run the verifier on another machine.
 
 The allow-list of variables is `ENV` in `src/launcher.ts`. Deno can't grant a named list of variables and still let the program pass its environment on to git,
 so the launcher enforces the list by giving the program only those variables. An unrelated secret, such as a cloud key, simply isn't there. Deno also splits its

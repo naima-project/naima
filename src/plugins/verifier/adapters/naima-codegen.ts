@@ -20,11 +20,15 @@
 //
 // naima-codegen is found on PATH: `naima tools` does not install it. The
 // launcher grants it to `naima verify` alone (launcher.ts, `uiGrant`), so this
-// first-party adapter adds no program to any other command.
+// first-party adapter adds no program to any other command. The adapter is
+// made for one commit of naima-codegen, `CODEGEN_PIN`: its git object id is the
+// checksum, verified by git when that commit is checked out. A naima-codegen
+// with no `--version` is recorded by the commit of the checkout it runs from,
+// and whether that is the pinned one.
 
 import { spawn } from "node:child_process"
-import { existsSync, statSync } from "node:fs"
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
+import { existsSync, realpathSync, statSync } from "node:fs"
+import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { type Context, message, NO_PROGRESS, projectFiles } from "../../../core/api.ts"
 import type { Verifier, VerifyRequest, VerifyResult } from "../contract.ts"
 
@@ -34,8 +38,28 @@ export const CODEGEN_PROGRAM = "naima-codegen"
 /** Where naima-codegen comes from: it is installed from its repository, never by naima tools. */
 export const CODEGEN_REPOSITORY = "https://github.com/naima-project/naima-codegen"
 
+/**
+ * The naima-codegen this adapter is made for: a commit of its repository, which has no releases. The commit's git
+ * object id is its checksum: git verifies the content against it when the commit is checked out.
+ */
+export const CODEGEN_PIN = { commit: "5aca11dbb1e0753fecd1c454c8c14eea0267932a", repository: CODEGEN_REPOSITORY }
+
+const short = (commit: string): string => commit.slice(0, 12)
+
 const MISSING =
-  `tool missing: ${CODEGEN_PROGRAM} is not on PATH — naima tools does not install it: clone ${CODEGEN_REPOSITORY} and put its ${CODEGEN_PROGRAM} script on PATH (it needs Python 3.11 or later and the mCRL2 toolset the model pins)`
+  `tool missing: ${CODEGEN_PROGRAM} is not on PATH — naima tools does not install it: git clone ${CODEGEN_REPOSITORY}, check out the pinned commit ${CODEGEN_PIN.commit} (git -C naima-codegen checkout ${CODEGEN_PIN.commit}) and put its ${CODEGEN_PROGRAM} script on PATH (it needs Python 3.11 or later and the mCRL2 toolset the model pins)`
+
+/** The program `name` as PATH finds it, its links resolved; null when it is not there or cannot be read. */
+export function programOnPath(name: string): string | null {
+  for (const dir of (process.env["PATH"] ?? "").split(delimiter)) {
+    if (!dir) continue
+    try {
+      const file = join(dir, name)
+      if (statSync(file).isFile()) return realpathSync(file)
+    } catch { /* not here, or not readable: the next directory */ }
+  }
+  return null
+}
 
 /** What one run of the program gave. */
 export interface CodegenRun {
@@ -238,8 +262,23 @@ export function codegenVerifier(config: { run?: CodegenRunner; program?: string 
       const r = await run(program, ["--version"], ctx.root)
       if (r.missing) throw new Error(MISSING)
       if (r.error) throw new Error(`${CODEGEN_PROGRAM} could not start: ${r.error}`)
-      // A naima-codegen with no --version answers with its usage: the generator's own digest is then in generated/MANIFEST.json, an input of the run.
-      return r.exit === 0 && r.stdout.trim() ? r.stdout.trim().split("\n")[0]!.trim() : `${CODEGEN_PROGRAM} (no --version: see generated/MANIFEST.json)`
+      if (r.exit === 0 && r.stdout.trim()) return r.stdout.trim().split("\n")[0]!.trim()
+      // The pinned naima-codegen has no --version: it answers with its usage. Its version is then the commit of the
+      // git checkout the program runs from, compared with the pin.
+      const pinned = short(CODEGEN_PIN.commit)
+      const found = programOnPath(program)
+      if (found) {
+        const at = dirname(found)
+        const tracked = await run("git", ["-C", at, "ls-files", "--error-unmatch", basename(found)], ctx.root)
+        const head = tracked.exit === 0 ? await run("git", ["-C", at, "rev-parse", "HEAD"], ctx.root) : null
+        const commit = head?.exit === 0 ? head.stdout.trim() : ""
+        if (/^[0-9a-f]{40}$/.test(commit)) {
+          return commit === CODEGEN_PIN.commit
+            ? `${CODEGEN_PROGRAM} ${pinned} (the pinned commit)`
+            : `${CODEGEN_PROGRAM} ${short(commit)}, not the pinned ${pinned}`
+        }
+      }
+      return `${CODEGEN_PROGRAM} at an unknown commit (no --version, and not run from a git checkout; the pinned commit is ${pinned})`
     },
   }
 }

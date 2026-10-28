@@ -11,11 +11,14 @@
 //   pbessolve --file=model.lps --evidence-file=ev.lps …  true, or false with evidence
 //   lps2lts ev.lps ev.aut                                the evidence as a labelled transition system
 //
-// The LTS route, `lts`, for a formula in the fragment divergence-preserving
-// branching bisimilarity preserves (formula.ts):
+// The LTS route, `lts`, reduces the state space only by an equivalence that
+// preserves and reflects the formula, the coarsest of three (formula.ts):
+// branching bisimilarity for a formula of the fragment that sees no divergence,
+// divergence-preserving branching bisimilarity for one that does, strong
+// bisimilarity, hiding nothing, for any other formula:
 //
-//   mcrl22lps, lps2lts, ltsinfo -a                       the LTS, once per model version (lts-cache.ts)
-//   ltsconvert --tau=<unmentioned> -edpbranching-bisim   hide and reduce, per formula
+//   mcrl22lps, lps2lts [--max], ltsinfo -a               the LTS, once per model version (lts-cache.ts)
+//   ltsconvert [--tau=<unmentioned>] -e<equivalence>     hide and reduce, once per equivalence and hidden set
 //   lts2pbes -c, pbessolve --evidence-file               the verdict on the reduced LTS, with its evidence
 //   ltsconvert ev.lts ev.aut                             on false: the counterexample, hidden actions as tau
 //
@@ -39,7 +42,23 @@ import { tmpdir } from "node:os"
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { type Context, CONTRACT, installedProgram, message, NO_PROGRESS, type Plugin, type Progress } from "../../core/api.ts"
 import { checkFragment, labelActions } from "./formula.ts"
-import { cacheKey, cacheRoot, discard, ENTRY_LPS, ENTRY_LTS, freshFolder, type LtsRecord, prune, publish, readEntry, sha256File } from "./lts-cache.ts"
+import {
+  cacheKey,
+  cacheRoot,
+  discard,
+  ENTRY_LPS,
+  ENTRY_LTS,
+  freshFolder,
+  type LtsRecord,
+  prune,
+  publish,
+  readEntry,
+  readReduced,
+  reducedKey,
+  type ReducedRecord,
+  sha256File,
+  storeReduced,
+} from "./lts-cache.ts"
 import { MCRL2 } from "./tool.ts"
 
 export { MCRL2 } from "./tool.ts"
@@ -147,14 +166,28 @@ const numberIn = (pattern: RegExp, fragment: string): number | null => {
 
 /**
  * The tools whose `--verbose` output counts their work, with the unit and how a counting line says it: `lps2lts`
- * the states explored (`<n>st, <m>tr, explored …`), `pbessolve` the BES equations generated (`Generated <n> BES
- * equations`). Their counting lines come separated by carriage returns as well as newlines
- * (specs/progress-long-work-says-how-far, §6).
+ * the states explored (`<n>st, <m>tr, explored …. Last level: <l>, …`), with the level of the exploration and the
+ * transitions as the note; `pbessolve` the BES equations generated (`Generated <n> BES equations`). Their counting
+ * lines come separated by carriage returns as well as newlines (specs/progress-long-work-says-how-far, §6).
  */
-export const COUNTING: Record<string, { unit: string; count(fragment: string): number | null }> = {
-  lps2lts: { unit: "states", count: (f) => numberIn(/^(\d+)st, \d+tr, explored\b/, f) },
+export const COUNTING: Record<string, { unit: string; count(fragment: string): number | null; note?(fragment: string): string | null }> = {
+  lps2lts: {
+    unit: "states",
+    count: (f) => numberIn(/^(\d+)st, \d+tr, explored\b/, f),
+    note: (f) => {
+      const m = /^\d+st, (\d+)tr, explored\b(?:.*Last level: (\d+))?/.exec(f.trim())
+      if (!m) return null
+      return [m[2] !== undefined ? `level ${m[2]}` : "", `${m[1]} transitions`].filter(Boolean).join(", ")
+    },
+  },
   pbessolve: { unit: "BES equations", count: (f) => numberIn(/^Generated (\d+) BES equations\b/, f) },
 }
+
+/** The tools started with `--verbose` although they count nothing: their lines are the run's notes while they work on a large LTS. */
+const VERBOSE: ReadonlySet<string> = new Set(["ltsconvert", "lts2pbes"])
+
+/** What `lps2lts` prints when it stops at `--max`: the cap was reached and the LTS is incomplete. */
+const CAPPED = /Explored the maximum number \((\d+)\) of states/
 
 /** A counting tool's output without its counting lines: what the run keeps (§6). */
 export function withoutCounting(tool: string, text: string): string {
@@ -173,8 +206,41 @@ const INSTALL =
 export const ROUTES = ["lps", "lts", "cross-check"] as const
 export type Route = (typeof ROUTES)[number]
 
-/** The equivalence the LTS route reduces modulo (§2, step 4). */
-export const EQUIVALENCE = "dpbranching-bisim"
+/**
+ * The equivalences the LTS route reduces modulo, the coarsest first: each formula is reduced by the first that
+ * preserves and reflects it (§3).
+ */
+export const REDUCTIONS = ["branching-bisim", "dpbranching-bisim", "bisim"] as const
+export type Reduction = (typeof REDUCTIONS)[number]
+
+/**
+ * The coarsest equivalence that preserves and reflects the formula `src`, with the actions it may hide and why
+ * (§3): branching bisimilarity for a formula of the fragment that sees no divergence; divergence-preserving
+ * branching bisimilarity for one with an inevitability pattern or a deadlock through a star; strong bisimilarity,
+ * hiding nothing, for every other formula, since it preserves the whole modal mu-calculus.
+ */
+export function reductionFor(src: string): { equivalence: Reduction; mentioned: string[] | null; why: string } {
+  const f = checkFragment(src)
+  if (!f.ok) {
+    return {
+      equivalence: "bisim",
+      mentioned: null,
+      why: `outside the fragment the branching equivalences preserve (${f.reason}): only strong bisimilarity, hiding no action, preserves it`,
+    }
+  }
+  return f.divergence
+    ? {
+      equivalence: "dpbranching-bisim",
+      mentioned: f.mentioned,
+      why:
+        "in the fragment, and it sees divergence (an inevitability pattern or a deadlock through a star): divergence-preserving branching bisimilarity preserves it, plain branching bisimilarity does not",
+    }
+    : {
+      equivalence: "branching-bisim",
+      mentioned: f.mentioned,
+      why: "in the fragment, with no fixpoint and no deadlock through a star: branching bisimilarity preserves it",
+    }
+}
 
 /**
  * The equivalences two versions of a model are compared modulo, the strongest first, each with the properties whose
@@ -228,6 +294,13 @@ function routeOf(options: Record<string, unknown>): { route: Route } | { wrong: 
   return (ROUTES as readonly unknown[]).includes(r)
     ? { route: r as Route }
     : { wrong: `verifierOptions.route must be ${ROUTES.map((x) => JSON.stringify(x)).join(", ")}, not ${JSON.stringify(r)}` }
+}
+
+/** The `--max` of lps2lts (§1): the most states one exploration may reach; undefined when there is no cap, or why the option is wrong. */
+function maxStatesOf(options: Record<string, unknown>): number | undefined | { wrong: string } {
+  const m = options["maxStates"]
+  if (m === undefined) return undefined
+  return typeof m === "number" && Number.isInteger(m) && m > 0 ? m : { wrong: `verifierOptions.maxStates must be a positive integer, not ${JSON.stringify(m)}` }
 }
 
 /** The `--threads` of lps2lts (§1), or why the `threads` option is not a positive integer. */
@@ -299,21 +372,23 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
     /** One step: its output kept in the log; a failure is the result to return. */
     const step = async (tool: Tool, given: string[], at = cwd): Promise<{ out: ToolRun } | { stop: VerifyResult }> => {
       const counting = COUNTING[tool]
-      // The flags --tool-args gives (TOOL_ARGS) go to every tool; a counting tool has --verbose already.
-      const args = counting ? ["--verbose", ...extra.filter((a) => a !== "--verbose"), ...given] : [...extra, ...given]
+      // The flags --tool-args gives (TOOL_ARGS) go to every tool; a counting or verbose tool has --verbose already.
+      const args = counting || VERBOSE.has(tool) ? ["--verbose", ...extra.filter((a) => a !== "--verbose"), ...given] : [...extra, ...given]
       progress.stage(tool, undefined, counting?.unit)
+      // Every line a tool prints on standard error is the stage's note as it comes; a counting line is its count.
       let pending = ""
-      const onStderr = counting
-        ? (chunk: string): void => {
-          const fragments = (pending + chunk).split(/\r\n|\r|\n/)
-          pending = fragments.pop() ?? ""
-          for (const f of fragments) {
-            const n = counting.count(f)
-            if (n !== null) progress.at(n)
-            else if (f.trim()) progress.note(f.trim())
-          }
+      const onStderr = (chunk: string): void => {
+        const fragments = (pending + chunk).split(/\r\n|\r|\n/)
+        pending = fragments.pop() ?? ""
+        for (const f of fragments) {
+          const n = counting ? counting.count(f) : null
+          if (n !== null) {
+            progress.at(n)
+            const note = counting!.note?.(f)
+            if (note) progress.note(note)
+          } else if (f.trim()) progress.note(f.trim())
         }
-        : undefined
+      }
       sayAbsent()
       const raw = await run(path(tool), args, at, seconds ? seconds * 1000 : undefined, onStderr)
       const r = counting ? { ...raw, stderr: withoutCounting(tool, raw.stderr) } : raw
@@ -378,7 +453,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
     model: string,
     ctx: Context,
     s: ReturnType<typeof steps>,
-    threads: number,
+    explore: { threads: number; maxStates?: number | undefined },
     earlier?: { rel: string; dir: string },
   ): Promise<{ stop: VerifyResult } | { dir: string; record: LtsRecord; reused: boolean }> {
     const version = await run(path("mcrl22lps"), ["--version"], workBase(ctx.program))
@@ -401,10 +476,24 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
       const lps = join(folder, ENTRY_LPS)
       const lts = join(folder, ENTRY_LTS)
       const started = Date.now()
-      const threaded = threads > 1 ? [`--threads=${threads}`] : []
-      for (const [tool, args] of [["mcrl22lps", [model, lps]], ["lps2lts", [...threaded, lps, lts]]] as const) {
+      const threaded = explore.threads > 1 ? [`--threads=${explore.threads}`] : []
+      // The cap changes no complete LTS, so it is no part of the key; an LTS it cut short is never kept.
+      const capped = explore.maxStates !== undefined ? [`--max=${explore.maxStates}`] : []
+      for (const [tool, args] of [["mcrl22lps", [model, lps]], ["lps2lts", [...threaded, ...capped, lps, lts]]] as const) {
         const r = await s.step(tool, [...args], folder)
         if ("stop" in r) return r
+        const cap = tool === "lps2lts" ? CAPPED.exec(`${r.out.stdout}\n${r.out.stderr}`) : null
+        if (cap) {
+          return {
+            stop: {
+              verdict: "unknown",
+              output: [
+                ...s.log,
+                `state cap reached: lps2lts stopped at ${explore.maxStates} states (verifierOptions.maxStates), so the state space is larger and the LTS is incomplete: no verdict. Raise maxStates, or bound the model's data so its state space is finite.`,
+              ].join("\n"),
+            },
+          }
+        }
       }
       const generationSeconds = Math.round((Date.now() - started) / 100) / 10
       const info = await s.step("ltsinfo", ["--action-label", lts], folder)
@@ -431,31 +520,27 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
     }
   }
 
-  /** The LTS route (§2): refused outside the fragment (§3), on the cached LTS, hidden and reduced per formula. */
+  /**
+   * The LTS route (§2): the cached LTS, reduced modulo the coarsest equivalence that preserves and reflects the
+   * formula (§3) — hiding the actions it does not mention when that equivalence is a branching one — and solved.
+   * The reduced LTS is kept beside the LTS, one per equivalence and hidden set, for every formula that needs the same.
+   */
   async function ltsRoute(
     model: string,
     formula: string,
     dir: string,
     ctx: Context,
     seconds: number | undefined,
-    threads: number,
+    explore: { threads: number; maxStates?: number | undefined },
     progress: Progress,
     extra: readonly string[] = [],
   ): Promise<Outcome> {
     const s = steps(seconds, dir, progress, extra)
     const details: Record<string, unknown> = { route: "lts" }
     const done = async (r: VerifyResult): Promise<Outcome> => ({ ...r, details: { ...details, tools: await s.tools() } })
-    const refuse = (why: string): Promise<Outcome> =>
-      done({
-        verdict: "error",
-        output: [`LTS route refused: ${why}.`, `Route "lps" decides this property by the standard route.`, ...s.log].join("\n"),
-      })
 
-    const fragment = checkFragment(readFileSync(formula, "utf8"))
-    if (!fragment.ok) return refuse(`${fragment.reason} (specs/verifier-mcrl2-lts-route-cross-check, §3.1)`)
-    details["mentioned"] = fragment.mentioned
-
-    const lts = await ltsOf(model, ctx, s, threads)
+    let chosen = reductionFor(readFileSync(formula, "utf8"))
+    const lts = await ltsOf(model, ctx, s, explore)
     if ("stop" in lts) return done(lts.stop)
     const { record } = lts
     details["lts"] = {
@@ -466,29 +551,53 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
       generationSeconds: record.generationSeconds,
     }
 
-    const mentioned = new Set(fragment.mentioned)
-    const hidden = new Set<string>()
-    for (const label of record.labels) {
-      const names = labelActions(label)
-      if (!names) return refuse(`the LTS label ${JSON.stringify(label)} cannot be read as a multi-action (§3.3)`)
-      if (names.length > 1 && names.some((n) => !mentioned.has(n))) {
-        return refuse(`the LTS label ${JSON.stringify(label)} joins a hidden action to another: hiding would change what the formula sees (§3.3)`)
+    // The actions the formula does not mention are hidden, unless a label joins one to another (§3.3): hiding it would
+    // change what the formula sees, so the formula falls back to strong bisimilarity, which hides nothing.
+    let hiddenNames: string[] = []
+    if (chosen.mentioned) {
+      const mentioned = new Set(chosen.mentioned)
+      const hidden = new Set<string>()
+      for (const label of record.labels) {
+        const names = labelActions(label)
+        const joins = names !== null && names.length > 1 && names.some((n) => !mentioned.has(n))
+        if (!names || joins) {
+          chosen = {
+            equivalence: "bisim",
+            mentioned: chosen.mentioned,
+            why: `the LTS label ${JSON.stringify(label)} ${
+              names ? "joins a hidden action to another" : "cannot be read as a multi-action"
+            }, so no action is hidden and only strong bisimilarity preserves the formula`,
+          }
+          hidden.clear()
+          break
+        }
+        for (const n of names) if (!mentioned.has(n)) hidden.add(n)
       }
-      for (const n of names) if (!mentioned.has(n)) hidden.add(n)
+      hiddenNames = [...hidden].sort()
+      details["mentioned"] = chosen.mentioned
     }
-    const hiddenNames = [...hidden].sort()
     details["hidden"] = hiddenNames
+    s.log.push(`reduced modulo ${chosen.equivalence}: the formula is ${chosen.why}`)
 
-    const full = join(lts.dir, ENTRY_LTS)
-    const reduced = join(dir, "reduced.lts")
-    const tau = hiddenNames.length ? [`--tau=${hiddenNames.join(",")}`] : []
-    const converted = await s.step("ltsconvert", [...tau, `--equivalence=${EQUIVALENCE}`, full, reduced])
-    if ("stop" in converted) return done(converted.stop)
-    const info = await s.step("ltsinfo", [reduced])
-    if ("stop" in info) return done(info.stop)
-    const size = readLtsInfo(`${info.out.stdout}\n${info.out.stderr}`)
-    if (!size) return done({ verdict: "error", output: [...s.log, "ltsinfo printed no number of states and transitions"].join("\n") })
-    details["reduced"] = { equivalence: EQUIVALENCE, states: size.states, transitions: size.transitions }
+    const key = reducedKey(chosen.equivalence, hiddenNames)
+    let reduced: string
+    let size: ReducedRecord | null = readReduced(lts.dir, key)
+    if (size) {
+      reduced = size.path
+      s.log.push(`reduced LTS reused: ${chosen.equivalence}${hiddenNames.length ? `, ${hiddenNames.length} actions hidden` : ""}`)
+    } else {
+      const made = join(dir, "reduced.lts")
+      const tau = hiddenNames.length ? [`--tau=${hiddenNames.join(",")}`] : []
+      const converted = await s.step("ltsconvert", [...tau, `--equivalence=${chosen.equivalence}`, join(lts.dir, ENTRY_LTS), made])
+      if ("stop" in converted) return done(converted.stop)
+      const info = await s.step("ltsinfo", [made])
+      if ("stop" in info) return done(info.stop)
+      const read = readLtsInfo(`${info.out.stdout}\n${info.out.stderr}`)
+      if (!read) return done({ verdict: "error", output: [...s.log, "ltsinfo printed no number of states and transitions"].join("\n") })
+      size = storeReduced(lts.dir, key, made, { equivalence: chosen.equivalence, hidden: hiddenNames, states: read.states, transitions: read.transitions })
+      reduced = size.path
+    }
+    details["reduced"] = { equivalence: chosen.equivalence, why: chosen.why, states: size.states, transitions: size.transitions, reused: size.reused }
 
     const pbes = join(dir, "reduced.pbes")
     const evidence = join(dir, "evidence.lts")
@@ -529,6 +638,16 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
     if ("wrong" in chosen) return { verdict: "error", output: chosen.wrong }
     const threads = threadsOf(options)
     if (typeof threads === "string") return { verdict: "error", output: threads }
+    const maxStates = maxStatesOf(options)
+    if (typeof maxStates === "object") return { verdict: "error", output: maxStates.wrong }
+    if (maxStates !== undefined && chosen.route === "lps") {
+      return {
+        verdict: "error",
+        output:
+          'verifierOptions.maxStates caps the states lps2lts explores, which the "lts" and "cross-check" routes do and the standard route does not: bound it with timeoutSeconds',
+      }
+    }
+    const explore = { threads, maxStates }
     const seconds = timeoutOf(options)
     const dir = mkdtempSync(join(workBase(ctx.program), "run-"))
     try {
@@ -536,7 +655,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
       if (formula && !existsSync(formula)) return { verdict: "error", output: `the formula file ${property.trim()} does not exist` }
       if (!formula) writeFileSync(formula = join(dir, "property.mcf"), property.trim() + "\n")
       if (chosen.route === "lps") return await lpsRoute(model, formula, dir, seconds, progress, toolArgs)
-      if (chosen.route === "lts") return await ltsRoute(model, formula, dir, ctx, seconds, threads, progress, toolArgs)
+      if (chosen.route === "lts") return await ltsRoute(model, formula, dir, ctx, seconds, explore, progress, toolArgs)
       const sub = (name: string): string => {
         const d = join(dir, name)
         mkdirSync(d)
@@ -549,7 +668,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
         sub("lts"),
         ctx,
         seconds,
-        threads,
+        explore,
         { ...progress, stage: (n, t, u) => progress.stage(`lts: ${n}`, t, u) },
         toolArgs,
       )
@@ -574,10 +693,10 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
     })
     try {
       const rel = relative(ctx.root, after).split(sep).join("/")
-      const old = await ltsOf(before, ctx, s, 1, { rel, dir: join(dir, "before") })
+      const old = await ltsOf(before, ctx, s, { threads: 1 }, { rel, dir: join(dir, "before") })
       if ("stop" in old) return await failed(old.stop, { equivalence })
       phase = "after"
-      const now = await ltsOf(after, ctx, s, 1)
+      const now = await ltsOf(after, ctx, s, { threads: 1 })
       if ("stop" in now) return await failed(now.stop, { equivalence })
       const size = (l: { record: LtsRecord; reused: boolean }) => ({ states: l.record.states, transitions: l.record.transitions, reused: l.reused })
       const details: Record<string, unknown> = { equivalence, before: size(old), after: size(now) }
@@ -615,7 +734,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
   return {
     id: "mcrl2",
     says:
-      "an mCRL2 specification against a modal mu-calculus formula, inline or an .mcf file: by the standard route (mcrl22lps, lps2pbes, pbessolve), by the LTS route (the state space once per model, hidden and reduced per formula, lts2pbes, pbessolve) for a formula the reduction preserves, or both, cross-checked; the evidence is the counterexample",
+      "an mCRL2 specification against a modal mu-calculus formula, inline or an .mcf file: by the standard route (mcrl22lps, lps2pbes, pbessolve), by the LTS route (the state space once per model, reduced per formula by the coarsest equivalence that preserves it, lts2pbes, pbessolve), or both, cross-checked; the evidence is the counterexample",
     runs: TOOLS.map(path),
     verify: (request, ctx) => check(request, ctx),
     toolArgs: TOOL_ARGS,
@@ -648,8 +767,8 @@ export function mcrl2Plugin(options: Record<string, unknown> = {}, run: Runner =
     about:
       "Off until `naima.json` names it under `plugins`, since it starts programs. Contributes the `mcrl2` verifier and the `mcrl2` tool. `model` is an mCRL2 specification; `property` is a modal mu-calculus formula, inline, or the path of an `.mcf` file from the project root, which is then an input of the run. " +
       "A property chooses its route in `verifierOptions.route`. `lps`, the default, is the standard route: `mcrl22lps`, `lps2pbes --counter-example`, and `pbessolve` with an evidence file: `true` holds; `false` is violated, and the evidence, printed by `lps2lts` as an `.aut` labelled transition system, is the counterexample; any other answer, or `verifierOptions.timeoutSeconds` reached by a step, is unknown. " +
-      "`lts`, the LTS route, is for a model whose state space is small but whose data makes the standard route slow. The formula is first checked to be in the fragment that divergence-preserving branching bisimilarity preserves — every visible step right after a star over an action formula that includes tau, no single step that includes tau, fixpoints only as the four inevitability patterns — and refused otherwise, as an error run whose output begins `LTS route refused:`. Then `mcrl22lps` and `lps2lts` (with `--threads` from `verifierOptions.threads`) make the LTS once per model version, kept in the run work folder under a key over the model's contents, the toolset's version and the recipe, and shared by every property of that model; per formula, `ltsconvert` hides every action the formula does not mention and reduces modulo `dpbranching-bisim`; on the reduced LTS, `lts2pbes --counter-example` and one `pbessolve` with an evidence file decide; on false, the evidence, printed by `ltsconvert` as an `.aut` labelled transition system, is the counterexample, over the reduced LTS, where the hidden actions appear as tau. " +
-      "`cross-check` runs both routes and gives a verdict only when they agree; a disagreement is an error whose output begins `the routes disagree:`. Each run records in its `details` the route, the version of every tool it started, and for the LTS route the LTS's key, reuse and size, the mentioned and hidden actions, the reduced size, and on false that the counterexample comes from the reduced LTS. " +
+      "`lts`, the LTS route, is for a model whose state space is small but whose data makes the standard route slow. `mcrl22lps` and `lps2lts` (with `--threads` from `verifierOptions.threads`) make the LTS once per model version, kept in the run work folder under a key over the model's contents, the toolset's version and the recipe, and shared by every property of that model. `verifierOptions.maxStates` caps the states `lps2lts` may explore (`--max`): a state space larger than the cap makes the run unknown, its output beginning `state cap reached:`, and the LTS cut short is not kept; on the standard route the option is an error, since that route explores with `pbessolve`. Each formula is then reduced only by an equivalence that preserves and reflects it, the coarsest of three: `branching-bisim` for a formula of the fragment the branching equivalences preserve — every visible step right after a star over an action formula that includes tau, no single step that includes tau, fixpoints only as the four inevitability patterns — when it has no fixpoint and no deadlock through a star; `dpbranching-bisim` when it has one of those, which see divergence; `bisim`, strong bisimilarity, for every other formula. With a branching equivalence, `ltsconvert` first hides every action the formula does not mention, unless a label joins such an action to another, in which case the formula takes `bisim` and nothing is hidden. The output says which equivalence was used and why; the reduced LTS is kept beside the LTS, one per equivalence and set of hidden actions, for every formula that needs the same. On the reduced LTS, `lts2pbes --counter-example` and one `pbessolve` with an evidence file decide; on false, the evidence, printed by `ltsconvert` as an `.aut` labelled transition system, is the counterexample, over the reduced LTS, where the hidden actions appear as tau. " +
+      "`cross-check` runs both routes and gives a verdict only when they agree; a disagreement is an error whose output begins `the routes disagree:`. Each run records in its `details` the route, the version of every tool it started, and for the LTS route the LTS's key, reuse and size, the mentioned and hidden actions, the equivalence it reduced by and why, the reduced size and whether it was reused, and on false that the counterexample comes from the reduced LTS. While a step runs, every line it prints is the run's progress: `lps2lts` its states, level and transitions, `pbessolve` its BES equations, `ltsconvert` and `lts2pbes`, started with `--verbose`, their stages. " +
       "The tools are taken from `bin` when it is given and exists on this machine, otherwise from the mCRL2 202607.0 that `naima tools install mcrl2` installed on this machine, otherwise from PATH; a `bin` that does not exist on this machine, as when a shared `naima.json` names another machine's path, is said once and passed over. The plugin declares that tool, so `naima tools` reports it. A tool that is not there is an error run whose output begins `tool missing:`; a tool that fails is an error with its output. The version recorded is the first line of `mcrl22lps --version`. " +
       "For `naima equivalent`, it compares two versions of a model modulo `bisim` (strong bisimilarity, the default, which preserves every formula) or `dpbranching-bisim` (divergence-preserving branching bisimilarity, which preserves the formulas the LTS route accepts): `mcrl22lps`, `lps2lts` and `ltsinfo` for each version, the new one through the LTS cache, then `ltscompare --counter-example`; on false, the distinguishing formula it writes is what tells them apart.",
     options: [
