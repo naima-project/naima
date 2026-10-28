@@ -24,7 +24,8 @@ it owns the routing table.
    `effort` only if you have looked at the code. For a feature or a bug,
    record whether its behaviour has states or concurrency:
    `naima set <item> stateful=true` (or `false`); a stateful one starts
-   from a model.
+   from a model. Where model first is advisory, also
+   `statefulKind=protocol`, `new` or `existing`.
 4. **Elicit the requirement it carries**: does it add or change one? File it
    (`naima new requirements … --dedupe`), revise it, or `naima spec revise`;
    restate it so a test can decide it; settle how it is checked (a test, a

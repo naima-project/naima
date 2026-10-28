@@ -495,13 +495,21 @@ under the softer wording wrote a model before coding four times, and verified it
 Whoever triages a feature or a bug records whether its behaviour has states or concurrency, in its field `stateful`, decided from what the item asks for and
 never guessed from the code.
 
+How strictly a project applies this rule is its own choice, and it can change it later with `naima model-first`. It is strict by default, as written above. A
+project can make it advisory instead: the rule becomes a _should_, a change to code that existed before the setting was adopted is exempt unless it rewrites
+that code, and a new protocol or new concurrency keeps the _must_. Or it can defer model checking to a gate or a date the owner names, which files a todo for
+adopting it there at once. `naima init` proposes strict for a new project and advisory when Naima joins a repository that already holds a lot of code, and asks
+the owner ([how strictly a project applies it](design-with-a-model.md#how-strictly-a-project-applies-it)). Why: a project with a large codebase cannot model it
+all at once, and a rule it cannot keep would be ignored; one that adopts model checking later should plan when, or it is forgotten.
+
 ```sh
 naima set features/job-retries stateful=true
 ```
 
 This rule ships with Naima, applies to everyone in every project as a _must_ where the behaviour has states or concurrency, and is acknowledged as "Model first
 mode on". **Enforced by** the check `model-first`, as a note, on a change recorded `stateful=true` that landed with no models or properties item linked to it
-and no waiver of the check. The rest is **convention**, and a property item, once there, is held current by the check `property-evidence`
+and no waiver of the check; where the project applies it as advice, not on a change to existing code, and where it deferred model checking, on the deferral
+instead. The rest is **convention**, and a property item, once there, is held current by the check `property-evidence`
 ([design with a model](design-with-a-model.md), with a template of a state machine in mCRL2).
 
 ## Branches and worktrees

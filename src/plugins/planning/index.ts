@@ -59,6 +59,18 @@ import {
   type WriteHook,
 } from "../../core/api.ts"
 import { ARTIFACT_FIELDS, ARTIFACT_RELATIONS, artifactsCheck, artifactsType, deliveryHook } from "./artifacts.ts"
+import {
+  modelFirstCheck,
+  modelFirstCommand,
+  modelFirstRule,
+  modelFirstSection,
+  modelFirstSetup,
+  readModelFirst,
+  STATEFUL,
+  STATEFUL_KIND,
+} from "./model-first.ts"
+
+export { MODEL_FIRST_RULE, STATEFUL, STATEFUL_KIND } from "./model-first.ts"
 
 // ── requirements ──────────────────────────────────────────────────────────────
 
@@ -649,56 +661,6 @@ export const ELICITATION_RULE = {
   enforcedBy: "requirements-proven",
 }
 
-/** The rule that behaviour with states or concurrency starts from a model. */
-export const MODEL_FIRST_RULE = {
-  name: "behaviour-designed-from-a-model",
-  title: "Behaviour with states or concurrency is modelled and verified before it is coded",
-  audience: "everyone",
-  strength: "must",
-  text:
-    'When behaviour has states or concurrency (a lifecycle, a protocol, a scheduler, a retry loop, two processes sharing data), it is modelled before any of its code is written, in proportion: each state machine is modelled on its own and kept small, and only what is not obvious is modelled, never the whole system at once and never what a test shows plainly. The model is in mCRL2, or a state machine encoded in mCRL2 (the guide gives a template), or another form a tool checks; a drawing or a description alone is not a model. Each property it must have is a `properties` item, and `naima verify` shows every one holds before the first line of its code is written. Its state space is minimised once and every property is checked on that, the LTS route (`verifierOptions` route lts) wherever the formula allows it, and a run already made on the same model and formula is reused, never recomputed. Where naima-codegen supports the language, every such state machine is generated from its model and checked against it, and the code around it is written to connect to the generated machine; elsewhere the code follows the model, and the model changes in the same change as the code it describes. The rule applies only when the behaviour has states or concurrency: a trivial change needs no model, and skipping one on behaviour that is not trivial is an exception, filed with its reason as a waiver of the model-first check (`naima waive model-first <item> --reason "<why>"`), which naima check lists at any time. Whoever triages a feature or a bug records whether its behaviour has states or concurrency (`naima set <item> stateful=true`, or `false`), and `naima check` notes a stateful change that landed with neither a model linked nor that waiver.',
-  why:
-    "behaviour with states fails in the orders of events nobody thought to test, and a model checker explores every order; a model checked only after the code describes the code, defects included, while one verified first is what the code is checked against. Small machines, each modelled alone and minimised once, check in seconds, so the rule costs little where it applies and nothing where it does not. Small machines, each modelled alone, check in seconds, so the rule costs little where it applies and nothing where it does not. An experiment with ten fresh agents found that, under the softer wording, four wrote a model before coding but none verified it first.",
-  ack: "Model first mode on",
-  enforcedBy: "model-first",
-}
-
-// ── model first ───────────────────────────────────────────────────────────────
-
-/** Whether a change's behaviour has states or concurrency: recorded at triage, never guessed from the code. */
-export const STATEFUL: FieldDef = {
-  name: "stateful",
-  kind: "boolean",
-  says:
-    "whether the behaviour this change adds or fixes has states or concurrency (a lifecycle, a protocol, a scheduler, a retry loop, two processes sharing data): recorded at triage, true or false; when true, the change starts from a model (model-first)",
-  traits: ["fixable"],
-}
-const FIXED_ON = { name: "fixedOn", kind: "date" } as const
-/** The verifier plugin's types, by id: a model, and a property checked on one. */
-const MODEL_TYPES = ["models", "properties"]
-const modelFirstCheck: Check = {
-  name: "model-first",
-  says:
-    "a change triaged as having states or concurrency (stateful: true) that landed (fixedOn set) with no models or properties item linked to it, and no waiver of this check filed with its reason, is noted: the rule that such behaviour is designed from a model first was not kept, or its reason was not written",
-  run(ctx) {
-    const out: Finding[] = []
-    for (const item of ctx.repo.items) {
-      if (fieldValue(item, STATEFUL) !== true || !fieldValue(item, FIXED_ON)) continue
-      const modelled = ctx.repo.linksOf(item).some((l) => MODEL_TYPES.includes(ctx.repo.byId.get(l.id)?.type ?? ""))
-      if (modelled) continue
-      out.push({
-        level: "note",
-        item,
-        subject: label(item),
-        message: `${label(item)}: triaged stateful and landed with no model — link the models or properties item it was designed from (naima link ${
-          label(item)
-        } <rel> <property>), or file the exception with its reason: naima waive model-first ${label(item)} --reason "<why it needs no model>"`,
-      })
-    }
-    return out
-  },
-}
-
 // ── hooks ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -769,7 +731,8 @@ const stamp: WriteHook = {
   },
 }
 
-export default function planning(): Plugin {
+export default function planning(options: Record<string, unknown> = {}): Plugin {
+  const modelFirst = readModelFirst(options)
   return {
     name: "planning",
     contract: CONTRACT,
@@ -784,9 +747,11 @@ export default function planning(): Plugin {
       "A **session** is a dated, append-only record of one test sitting, linked `records` to the test or tests it was for; several share a `run` name when they were sat together. It is optional — most of the time the test's own page and status say enough — and is never edited once written: a later sitting is a new session. " +
       "An **artifact** is something the project makes and keeps — an analysis, a profile, a report, a dataset, a figure: `due` by a day, made by the todo or feature linked `produces`, made of `files` (paths from the project root) or its attachments, made from `inputs` (files or directories) and the data of the tests, properties or other artifacts it `uses`, and replaced by a later version that `supersedes` it. `naima set <artifact> status=delivered` refuses while a file it names is missing or it has none, and otherwise records `madeFrom` — the commit, one digest over its inputs and the data of what it uses, the moment — and `deliveredOn`, from which `naima diary` tells the delivery; neither is set by hand. `artifacts-current` notes an artifact past its due day and not delivered, a delivered one whose inputs changed since it was made, and a planned one nothing produces. " +
       'The plugin ships two rules, listed by `naima rules` when the rules plugin is loaded: requirements are elicited at every prompt of the owner, each with how it is checked or measured (a test, a property, or a metric with a budget), acknowledged as "Elicitation mode on" and held in part by `requirements-proven`, which notes a requirement nothing proves; and behaviour with states or concurrency is designed from a model first (a state machine, mCRL2, or a state machine encoded in mCRL2), its properties as items, kept in step with the code, acknowledged as "Model first mode on". ' +
-      "Whether a change has states or concurrency is recorded at triage, in its field `stateful` (true or false), and never guessed from the code; `model-first` notes a change triaged `stateful: true` that landed with no `models` or `properties` item linked to it and no waiver of the model-first check gives the exception with its reason. It is a note, not a problem: the rule binds where the behaviour has states, and the waiver is the exception, filed.",
+      "Whether a change has states or concurrency is recorded at triage, in its field `stateful` (true or false), and never guessed from the code; `model-first` notes a change triaged `stateful: true` that landed with no `models` or `properties` item linked to it and no waiver of the model-first check gives the exception with its reason. It is a note, not a problem: the rule binds where the behaviour has states, and the waiver is the exception, filed. " +
+      "How strictly the project applies model first is its own choice, the option `modelFirst`, shown and set with `naima model-first`: `strict` (the default) keeps the rule a must and notes every such change; `advisory` makes it a should, where a new protocol or concurrency (`statefulKind: protocol`) is still noted as a must, other new behaviour is noted as advice, and a change to existing code is not noted: one triaged `statefulKind: existing`, or, untriaged, one whose files all existed at the commit the setting was adopted at (`modelFirstSince`) and none had half its lines removed; `deferred` adopts model checking later, by the gate or the date in `modelFirstUntil`: `naima model-first deferred --until <gate|date>` files at once the todo that plans it, on that gate, `model-first` notes the deferral instead of each change, and `naima hello` says it until the owner chooses. " +
+      "`naima init` proposes the setting to a project that has none: strict for a new project, advisory when the repository already holds substantial code (20 source files or 2000 lines), and says the question to put to the owner.",
     types: [requirementsType, specsType, decisionsType, releasesType, sessionsType, artifactsType],
-    fields: [SPEC, VERSION, DECIDED_ON, STANDING, SITTING_RUN, STATEFUL, CONFIRMED, ...ARTIFACT_FIELDS],
+    fields: [SPEC, VERSION, DECIDED_ON, STANDING, SITTING_RUN, STATEFUL, STATEFUL_KIND, CONFIRMED, ...ARTIFACT_FIELDS],
     relations: [
       { name: "satisfies", inverse: "satisfied-by", says: "delivers or proves the requirement" },
       { name: "satisfied-by", inverse: "satisfies", says: "is delivered by" },
@@ -801,12 +766,24 @@ export default function planning(): Plugin {
       ...ARTIFACT_RELATIONS,
     ],
     // What it reads of others: who performs a proof and why, and what proves an item.
-    uses: { fields: [RUN_BY.name, HUMAN_BECAUSE.name, FIXED_ON.name, "origin"], relations: ["verified-by"] },
-    commands: [spec, decisions, confirm],
+    uses: { fields: [RUN_BY.name, HUMAN_BECAUSE.name, "fixedOn", "origin"], relations: ["verified-by"] },
+    commands: [spec, decisions, confirm, modelFirstCommand(modelFirst)],
+    options: [
+      {
+        name: "modelFirst",
+        default: "strict",
+        says:
+          "how strictly the project applies model first: strict (a must), advisory (a should; existing code exempt unless rewritten; a new protocol or concurrency kept a must) or deferred (adopted later, by modelFirstUntil); set with naima model-first",
+      },
+      { name: "modelFirstSince", says: "the full hash of the commit the setting was adopted at: what existed there is existing code, for advisory" },
+      { name: "modelFirstUntil", says: "with deferred: the gate the adoption todo stands on, or the date YYYY-MM-DD by which the owner decides" },
+    ],
     views: [requirementsView, releasesView],
-    checks: [requirementsCheck, specsCheck, decisionsCheck, releasesCheck, artifactsCheck, modelFirstCheck],
+    checks: [requirementsCheck, specsCheck, decisionsCheck, releasesCheck, artifactsCheck, modelFirstCheck(modelFirst)],
+    setup: [modelFirstSetup(modelFirst)],
+    summary: [modelFirstSection(modelFirst)],
     hooks: [stamp, proposedRequirements, releasesHook, deliveryHook],
-    contributes: { rules: [ELICITATION_RULE, MODEL_FIRST_RULE] },
+    contributes: { rules: [ELICITATION_RULE, modelFirstRule(modelFirst)] },
     // The rules are listed by naima rules when the rules plugin is loaded; without it, planning works the same.
     optional: ["rules"],
   }

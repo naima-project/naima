@@ -110,7 +110,11 @@ naima triage set <item> impact=high priority=next confidence=reported
 lifecycle, a protocol, a scheduler, a retry loop, two processes sharing data. Record it with `naima set <item> stateful=true`, or `stateful=false`. Decide it
 from what the item asks for, never by searching the code. A change recorded `stateful=true` starts from a model
 ([design with a model](../guide/design-with-a-model.md)), and once it has landed, `naima check` notes it (the check `model-first`) if no `models` or
-`properties` item is linked to it and no waiver of the check (`naima waive model-first <item> --reason "<why>"`) gives the exception with its reason.
+`properties` item is linked to it and no waiver of the check (`naima waive model-first <item> --reason "<why>"`) gives the exception with its reason. In a
+project that applies model first as advice (`naima model-first` says which setting holds), also record which kind of stateful change it is:
+`naima set <item> statefulKind=protocol` for a new protocol or new concurrency, which keeps the must; `new` for other new behaviour with states; `existing` for
+a change to behaviour that existed before the setting was adopted, without rewriting it, which is exempt
+([how strictly a project applies it](../guide/design-with-a-model.md#how-strictly-a-project-applies-it)).
 
 **Classifiers take the project's values.** The fields `area` (where the item lives) and `kind` (the mode of work; a role's name is a kind) take the values the
 project lists, if it lists any. `naima types` prints each list with how many items hold each value, and marks any value that is not on the list. The agent picks
