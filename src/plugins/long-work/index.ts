@@ -78,17 +78,23 @@ const refuse = (msg: string): NaimaError => new NaimaError(msg)
 const tracker = (ctx: Context): string => trackerFolder(ctx.trackerRoot, TRACKER_DIR)
 const recordOf = (ctx: Context, name: string): string => join(runsDir(tracker(ctx)), name)
 
-/** A path with its symlinks resolved as far as it exists: what git and the repository root are compared in. */
+/**
+ * A path with its symlinks resolved as far as it exists: what git and the repository root are compared in. A path
+ * the program may not read — the home directory, outside the project the launcher fences it to — is left as it is
+ * written: under Deno even asking whether it exists is refused.
+ */
 function real(path: string): string {
   let head = resolve(path)
   const rest: string[] = []
-  while (!existsSync(head) && dirname(head) !== head) {
-    rest.unshift(head.slice(dirname(head).length + 1))
-    head = dirname(head)
-  }
   try {
+    while (!existsSync(head) && dirname(head) !== head) {
+      rest.unshift(head.slice(dirname(head).length + 1))
+      head = dirname(head)
+    }
     head = realpathSync(head)
-  } catch { /* left as it is */ }
+  } catch {
+    return resolve(path)
+  }
   return join(head, ...rest)
 }
 
@@ -486,14 +492,28 @@ async function waitFor(ctx: Context, hosts: Map<string, Host>, cmd: Command, arg
     report: { type: "string" },
     tail: { type: "string" },
     json: { type: "boolean" },
+    host: { type: "string" },
   })
   const [name, ...extra] = p.positionals
   if (!name || extra.length) throw usageError(cmd)
   const timeout = duration(str(p, "timeout"), DEFAULTS.timeoutMs, "--timeout")!
   const tail = positiveInt(str(p, "tail"), DEFAULTS.tail, "--tail")
   const dir = recordOf(ctx, name)
-  if (!existsSync(dir)) throw refuse(`no run "${name}" here — naima run list shows the runs of this worktree`)
-  const remote = !!readSpec(dir)?.host
+  const hostName = str(p, "host")
+  // With --host, the run is the host's, found by its record there: it may have been started there, with no record here.
+  const onlyThere = hostName === undefined ? undefined : hostOf(hosts, hostName)
+  if (onlyThere) {
+    const here = existsSync(dir) ? readSpec(dir)?.host : undefined
+    if (existsSync(dir) && here !== onlyThere.name) {
+      throw refuse(
+        `naima wait: the run "${name}" recorded here is ${here ? `on ${here}` : "a run of this machine"}, not on ${onlyThere.name} — leave out --host`,
+      )
+    }
+  } else if (!existsSync(dir)) {
+    throw refuse(`no run "${name}" here — naima run list shows the runs of this worktree; a run started on a host: naima wait ${name} --host <host>`)
+  }
+  const remote = !!onlyThere || !!readSpec(dir)?.host
+  const look = (n: number): RunView => (onlyThere ? remoteView(onlyThere, name, n) : runView(ctx, hosts, name, n))
   const every = duration(str(p, "every"), remote ? DEFAULTS.remoteEveryMs : DEFAULTS.waitEveryMs, "--every")!
   const report = duration(str(p, "report"), DEFAULTS.reportMs, "--report")!
   const until = Date.now() + timeout
@@ -504,17 +524,22 @@ async function waitFor(ctx: Context, hosts: Map<string, Host>, cmd: Command, arg
     ctx.err(waitLine(v))
     reported = Date.now()
   }
-  let v = runView(ctx, hosts, name, 0)
+  let v = look(0)
+  if (onlyThere && v.state === "unknown") {
+    // No record here to say the run exists: a host that cannot report it at once is not waited on.
+    for (const l of describe(v)) ctx.out(l)
+    return EXIT.FAILED
+  }
   while (!v.over && Date.now() + every <= until) {
     await delay(every)
-    v = runView(ctx, hosts, name, 0)
+    v = look(0)
     tell(v)
   }
   if (!v.over && Date.now() < until) {
     await delay(Math.max(0, until - Date.now()))
-    v = runView(ctx, hosts, name, 0)
+    v = look(0)
   }
-  v = runView(ctx, hosts, name, tail)
+  v = look(tail)
   if (bool(p, "json")) ctx.out(JSON.stringify(v, null, 2))
   else {
     for (const l of describe(v)) ctx.out(l)
@@ -620,16 +645,21 @@ const waitCommand = (hosts: Map<string, Host>): Command => ({
     "block until a run started by naima run ends, or the timeout passes, saying how it goes meanwhile, then print its state, exit status, budgets, last progress line and the log's tail: found by its record, never by a process pattern",
   enforces:
     "a wait is always bounded: it ends at its --timeout (default 10m) and says the run is still running, exiting 1, so waiting again is a decision; it exits 0 only for a run that succeeded",
-  usage: "wait <name> [--timeout <duration>] [--every <duration>] [--report <duration>] [--tail <n>] [--json]",
+  usage: "wait <name> [--host <host>] [--timeout <duration>] [--every <duration>] [--report <duration>] [--tail <n>] [--json]",
   long: { reports: "every --report, on standard error: the run's state, elapsed time and progress line with its rate and ETA" },
   options: [
+    {
+      name: "--host",
+      says:
+        "the declared host the run is on, asked by its record there: for a run started on the host itself, with no record here; a run recorded here is found without it",
+    },
     { name: "--timeout", says: "how long to wait at most, <n>s|m|h|d (default 10m)" },
     { name: "--every", says: "how often to look (default 1s; for a remote run 30s, one ssh call each)" },
     { name: "--report", says: "how often to print, on standard error, the run's elapsed time and progress while waiting (default 30s)" },
     { name: "--tail", says: "how many of the log's last lines to print (default 20)" },
     { name: "--json", says: "print the run as JSON" },
   ],
-  examples: ["wait bench", "wait bench --timeout 9m --tail 50", "wait models --json"],
+  examples: ["wait bench", "wait bench --timeout 9m --tail 50", "wait models --json", "wait models --host lab --timeout 1h"],
   run(args, ctx) {
     return waitFor(ctx, hosts, this, args)
   },
