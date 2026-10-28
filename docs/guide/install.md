@@ -98,8 +98,8 @@ plain `git clone` of Naima into `naima-tracker/naima/` followed by any `naima` c
 ```
 
 `main` is the branch Naima is developed on. Its tests, its site, the rules for working on it and its own tracker live in the workshop, a separate repository
-that is private for now. Cloning `naima-project/naima` gets you none of that, only what runs Naima: `naima.ts`, `src/`, `docs/`, `skills/`, `README.md`,
-`LICENSE` and `NOTICE`, which is exactly what a project should carry. Tests make sure the clone stays that way. No test runner, type-checker or agent harness
+that is private for now. Cloning `naima-project/naima` gets you none of that, only what runs Naima: `naima.ts`, `src/`, `docs/`, `skills/`, `README.md`
+and `LICENSE`, which is exactly what a project should carry. Tests make sure the clone stays that way. No test runner, type-checker or agent harness
 that walks the file system picks up anything of Naima's own, and every import and relative link in the clone resolves inside it.
 
 ## The lock is git

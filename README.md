@@ -164,4 +164,4 @@ unpacking it, and stop if they differ.
 
 ## Licence
 
-Apache License 2.0: [LICENSE](LICENSE), [NOTICE](NOTICE).
+MIT: [LICENSE](LICENSE).

@@ -46,4 +46,4 @@ owner opens the pages above with the drafted text.
 
 ## Licence
 
-Contributions are made under the [Apache License 2.0](../LICENSE): by opening a pull request you agree to license your contribution under it.
+Contributions are made under the [MIT License](../LICENSE): by opening a pull request you agree to license your contribution under it.
