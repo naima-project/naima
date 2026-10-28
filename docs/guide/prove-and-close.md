@@ -152,6 +152,21 @@ An item closed before `commits` existed isn't checked for one, because the rule 
 migration, which set `commits=legacy`. That marker is never a guessed hash, and it is never enough to satisfy `naima close` itself. `naima check` reports a
 closed item from that date onwards that has neither a commit nor the `legacy` marker, and any item whose `commits` names a hash git doesn't have.
 
+### A review or a decision
+
+Some todos have no code to fix and no test to pass: a review of changes with the owner, or a decision to take. Their work is a judgement, written down in the
+item's notes. Mark such a todo with its kind and, once it is finished, its status, then close it with a reason instead of a proof:
+
+```sh
+naima set review-last-two-days kind=review status=done
+naima close review-last-two-days --reason "each change reviewed with the owner; the decisions are in the item's notes"
+```
+
+Only a todo whose `kind` is `review` or `decision`, and whose status is `done` or `dropped`, can be closed this way. Naima asks it for no `fixedOn`, no proof
+and no commit, and keeps the reason in its `closedBecause` field. `naima check` lists every item closed like this as a note, `closed-without-proof`, with its
+reason, so none of them goes unseen. The notes of such a review usually reach the trunk on a branch that changes nothing but tracker data, landed with
+`naima land <branch> --tracker-only "<reason>"` ([several branches](several-branches.md)).
+
 ## Properties, proven by a tool
 
 A [property](glossary.md#property) is proven by a [verifier](glossary.md#verifier), which is a model checker, instead of by hand. `naima verifiers` lists the
