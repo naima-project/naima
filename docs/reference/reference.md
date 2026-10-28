@@ -2838,11 +2838,12 @@ Block until a run started by naima run ends, or the timeout passes, saying how i
 **Progress**: Every --report, on standard error: the run's state, elapsed time and progress line with its rate and ETA.
 
 ```sh
-naima wait <name> [--timeout <duration>] [--every <duration>] [--report <duration>] [--tail <n>] [--json]
+naima wait <name> [--host <host>] [--timeout <duration>] [--every <duration>] [--report <duration>] [--tail <n>] [--json]
 ```
 
 | Option | Default | What it does |
 |---|---|---|
+| `--host` |  | the declared host the run is on, asked by its record there: for a run started on the host itself, with no record here; a run recorded here is found without it |
 | `--timeout` |  | how long to wait at most, <n>s\|m\|h\|d (default 10m) |
 | `--every` |  | how often to look (default 1s; for a remote run 30s, one ssh call each) |
 | `--report` |  | how often to print, on standard error, the run's elapsed time and progress while waiting (default 30s) |
@@ -2855,6 +2856,7 @@ Examples:
 naima wait bench
 naima wait bench --timeout 9m --tail 50
 naima wait models --json
+naima wait models --host lab --timeout 1h
 ```
 
 **Fields**

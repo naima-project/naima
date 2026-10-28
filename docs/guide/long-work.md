@@ -133,6 +133,12 @@ names does not exist on that machine, `naima run` says so with the host's own li
 into cmd and is no program: a command given as one quoted string is run by the shell, which knows it), and records nothing here. Only when the host's Naima has
 no `run` command does it say that the host's Naima needs the long-work plugin.
 
+`--budget-disk` and `--creates` work on another machine as they do here: the host's Naima measures and cleans what the run declares, in the host's checkout.
+
+A run started on the machine itself, from a session there, has no record here, so `naima wait` is told where it is: `naima wait bench --host lab --timeout 1h`
+asks the host by the run's record there. If the host does not know the run, `wait` says so and exits 1 at once instead of waiting for nothing. A run started
+from here with `--host` is found without it.
+
 That is why a property is not verified with `naima run --host`, since `naima verify` writes the property's item. `naima verify <property> --host lab` is used
 instead: the verifier runs in the host's checkout, which stays untouched, and the run is attached here
 ([proving a property on another machine](prove-and-close.md#properties-proven-by-a-tool)).
