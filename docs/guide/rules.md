@@ -212,13 +212,17 @@ Why: the owner's attention and the agent's context are the scarcest things in th
 
 ### Talking to the owner
 
-A message opens with the answer, stays short enough to skim, and asks at most one question. Next steps come as now, next and later, and the message names the
-assumptions nobody stated and the loops still open, in a calm and direct tone. An identifier (an item id, a file, an acronym, a label) is always said together
-with what it is. What was measured is kept apart from what is believed, so a guess is never stated as a fact and a claim is checked before it is reported, and
-every number comes with the number it is compared to. When the owner corrects something, the agent fixes the thing itself, not the way it described it.
+A message opens with the answer, stays short enough to skim, and asks at most one question. When the owner is present, the agent gathers every pending
+discussion into one meeting. It lists the open questions as the meeting's agenda and goes through them one question per message, without starting work between
+them and without splitting them across separate interruptions, and the owner decides when the meeting stops and when it resumes. The agent acts on the answers
+once the meeting ends, and a question it finds while acting waits for the next meeting unless it blocks the work. Next steps come as now, next and later, and
+the message names the assumptions nobody stated and the loops still open, in a calm and direct tone. An identifier (an item id, a file, an acronym, a label) is
+always said together with what it is. What was measured is kept apart from what is believed, so a guess is never stated as a fact and a claim is checked before
+it is reported, and every number comes with the number it is compared to. When the owner corrects something, the agent fixes the thing itself, not the way it
+described it.
 
-Why: a message the owner has to decode costs more than the work it reports, and a guess reported as a fact gets acted on as one. Acknowledged as "Simple mode
-on". **Convention**.
+Why: a message the owner has to decode costs more than the work it reports, questions asked in separate interruptions cost the owner more than one meeting that
+settles them all, and a guess reported as a fact gets acted on as one. Acknowledged as "Simple mode on". **Convention**.
 
 ### Fast mode
 
@@ -495,10 +499,10 @@ never guessed from the code.
 naima set features/job-retries stateful=true
 ```
 
-This rule ships with Naima, applies to everyone in every project as a _must_ where the behaviour has states or concurrency, and is acknowledged as "Model first mode on". **Enforced by** the check
-`model-first`, as a note, on a change recorded `stateful=true` that landed with no models or properties item linked to it and no waiver of the check. The
-rest is **convention**, and a property item, once there, is held current by the check `property-evidence` ([design with a model](design-with-a-model.md), with a
-template of a state machine in mCRL2).
+This rule ships with Naima, applies to everyone in every project as a _must_ where the behaviour has states or concurrency, and is acknowledged as "Model first
+mode on". **Enforced by** the check `model-first`, as a note, on a change recorded `stateful=true` that landed with no models or properties item linked to it
+and no waiver of the check. The rest is **convention**, and a property item, once there, is held current by the check `property-evidence`
+([design with a model](design-with-a-model.md), with a template of a state machine in mCRL2).
 
 ## Branches and worktrees
 
@@ -598,11 +602,11 @@ is committed, and point git's `core.hooksPath` at that folder. git keeps that se
 (for instance `naima hello`), which says so in one line. When something moves the trunk, the hook lets it through only if every commit it adds to the
 first-parent line is one the check accepts: a marker, the record `naima land` makes after it, a commit that only adds to the tracker data or only closes items,
 or `naima init`'s commit. Adding to the tracker data includes rewriting or removing a claim, and changing an item's `meta.json` only in the fields Naima fills
-when it writes something else (the signature a note signed with `--revised` leaves, the record of an attachment). It also lets through a commit that only turns the guard on or off, a new tip that `origin`'s branch of the trunk already holds (a pull
-of what landed elsewhere), a rewind, and a branch created or deleted. Anything else is refused with one line that says to open an item and land it. Every other
-ref costs nothing but the shell script. The clone's own hooks in `.git/hooks` keep running: a hook of the same name runs first, and for every other hook name
-git knows the folder holds a small stub that runs the clone's own hook of that name, when there is one. A `core.hooksPath` already set to another folder is left
-alone, and init and update say so.
+when it writes something else (the signature a note signed with `--revised` leaves, the record of an attachment). It also lets through a commit that only turns
+the guard on or off, a new tip that `origin`'s branch of the trunk already holds (a pull of what landed elsewhere), a rewind, and a branch created or deleted.
+Anything else is refused with one line that says to open an item and land it. Every other ref costs nothing but the shell script. The clone's own hooks in
+`.git/hooks` keep running: a hook of the same name runs first, and for every other hook name git knows the folder holds a small stub that runs the clone's own
+hook of that name, when there is one. A `core.hooksPath` already set to another folder is left alone, and init and update say so.
 
 The owner, and only the owner, lets a commit through once by giving it a reason:
 

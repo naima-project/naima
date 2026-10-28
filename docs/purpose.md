@@ -208,6 +208,10 @@ program stops a breach. Every role is also data. `naima roles` lists each role w
 
 ## Principles
 
+- **The owner only decides.** Your time is the scarcest resource in the project, so agents spend it only on what needs your decision. When you are present, an
+  agent gathers every pending discussion into one meeting and goes through it one question per message, without splitting it across separate interruptions and
+  without starting work between the questions. You decide when the meeting stops and when it resumes. Reports are short, an agent never asks you what the rules
+  already answer, and long work runs in the background while the conversation goes on ([talking to the owner](guide/rules.md#talking-to-the-owner)).
 - **Privacy.** Your chat with an agent is private. Nothing from it is copied into the repository unless you explicitly say so. A screenshot or file you shared
   becomes an attachment only after you have explicitly said yes ([the rule](guide/rules.md#the-owners-chat-stays-private)).
 - **Extensible by data.** Everything beyond a small core is a [plugin](guide/glossary.md#plugin), including item types, fields, checks, gates and verifiers
