@@ -2,10 +2,12 @@
 // §4): one LTS per model version, shared by every property on it, under the
 // run work folder. An entry is a folder named by its key, holding model.lps,
 // model.lts and lts.json; it is generated elsewhere and renamed into place
-// whole, so a reader never sees a partial one.
+// whole, so a reader never sees a partial one. Beside them, reduced/ keeps
+// one reduced LTS per equivalence and set of hidden actions, each with its
+// record, shared by every formula that needs the same reduction.
 
 import { createHash } from "node:crypto"
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync } from "node:fs"
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { writeJson } from "../../core/api.ts"
 
@@ -109,4 +111,52 @@ export function prune(root: string, keep: string, model: string): string[] {
     }
   }
   return removed
+}
+
+/** What the cache keeps of one reduced LTS: how it was reduced, its size, and its sha256. */
+export interface ReducedRecord {
+  equivalence: string
+  hidden: string[]
+  states: number
+  transitions: number
+  sha256: string
+  /** Where it is, and whether it was taken from the cache: filled when it is read, never stored. */
+  path: string
+  reused: boolean
+}
+
+/** The name a reduction is kept under in an entry: the equivalence and the hidden actions. */
+export const reducedKey = (equivalence: string, hidden: string[]): string =>
+  createHash("sha256").update(canonical({ equivalence, hidden: [...hidden].sort() })).digest("hex").slice(0, 32)
+
+const reducedDir = (entry: string): string => join(entry, "reduced")
+
+/** The reduced LTS kept in `entry` under `key`, when it is there whole: its record reads and its sha256 matches. */
+export function readReduced(entry: string, key: string): ReducedRecord | null {
+  const path = join(reducedDir(entry), `${key}.lts`)
+  try {
+    const r = JSON.parse(readFileSync(join(reducedDir(entry), `${key}.json`), "utf8")) as Omit<ReducedRecord, "path" | "reused">
+    if (!r || typeof r !== "object" || !existsSync(path) || sha256File(path) !== r.sha256) return null
+    return { ...r, path, reused: true }
+  } catch {
+    return null
+  }
+}
+
+/** Keep the reduced LTS `made` in `entry` under `key`: copied beside its record, each renamed into place whole. */
+export function storeReduced(entry: string, key: string, made: string, about: Omit<ReducedRecord, "sha256" | "path" | "reused">): ReducedRecord {
+  const dir = reducedDir(entry)
+  mkdirSync(dir, { recursive: true })
+  const path = join(dir, `${key}.lts`)
+  const sha256 = sha256File(made)
+  const tmp = mkdtempSync(join(dir, "tmp-"))
+  try {
+    copyFileSync(made, join(tmp, "reduced.lts"))
+    renameSync(join(tmp, "reduced.lts"), path)
+    writeJson(join(tmp, "reduced.json"), { ...about, sha256 })
+    renameSync(join(tmp, "reduced.json"), join(dir, `${key}.json`))
+  } finally {
+    discard(tmp)
+  }
+  return { ...about, sha256, path, reused: false }
 }

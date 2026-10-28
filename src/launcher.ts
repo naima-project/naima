@@ -35,8 +35,8 @@
 // that ran: the launcher runs the program directory's own code, which is the
 // locked commit.
 
-import { existsSync, readFileSync } from "node:fs"
-import { dirname, isAbsolute, join, relative, resolve } from "node:path"
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs"
+import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
   ADAPTERS,
@@ -144,6 +144,19 @@ export const BROWSER_OPENER: Record<string, string> = { darwin: "open", windows:
 /** The program `naima verify` may start besides the loaded contributions' `runs`: the verifier plugin's naima-codegen adapter's, found on PATH. Kept equal to that adapter's `CODEGEN_PROGRAM` by a test. */
 export const VERIFY_PROGRAM = "naima-codegen"
 
+/** naima-codegen as PATH finds it, and the file it links to, which `naima verify` may read: none when it is not on PATH. */
+function codegenFiles(): string[] {
+  for (const dir of (process.env["PATH"] ?? "").split(delimiter)) {
+    if (!dir) continue
+    const file = join(dir, VERIFY_PROGRAM)
+    try {
+      // A path with a comma cannot be granted (Deno splits on commas): the version then says the commit is unknown.
+      if (statSync(file).isFile()) return [...new Set([file, realpathSync(file)])].filter((f) => !f.includes(","))
+    } catch { /* not here: the next directory */ }
+  }
+  return []
+}
+
 /** The grant of `command`: only `ui`, `run`, `wait`, `tools`, `backup create`, `verify` and `guard server` have one; `tools` is the tools directory to write; `rest`, the arguments after the command. */
 export function uiGrant(command: string | undefined, os: string, deno: string, tools: string | null = null, rest: readonly string[] = []): UiGrant | null {
   // gh only for guard server, which sends the ruleset; --print sends nothing.
@@ -152,7 +165,8 @@ export function uiGrant(command: string | undefined, os: string, deno: string, t
   if (command === "verify") {
     return {
       net: [],
-      read: [],
+      // The program itself, and the file it links to: the adapter reads where it is to find the commit it runs from.
+      read: codegenFiles(),
       runs: [
         VERIFY_PROGRAM,
         ...(rest.some((a) => a === "--host" || a.startsWith("--host=")) ? ["ssh"] : []),
