@@ -7,7 +7,7 @@
 // --is-ancestor`: the check, not the command, is the authority.
 
 import { join, relative } from "node:path"
-import { isDeepStrictEqual } from "node:util"
+import { isDeepStrictEqual, stripVTControlCharacters } from "node:util"
 import {
   appliesTo,
   bool,
@@ -280,7 +280,7 @@ export function moveTrunk(root: string, trunkName: string, marker: string, old: 
 export function trunkNotMoved(root: string, trunkName: string, old: string, r: GitRun): string {
   const now = gitOrNull(root, "rev-parse", "--verify", "--quiet", `refs/heads/${trunkName}`)
   if (now !== old) return `${trunkName} moved while landing (it is no longer ${old.slice(0, 12)}): nothing landed — run naima land again (${gitReason(r)})`
-  const lines = r.err.split("\n").map((l) => l.trim()).filter((l) => l && !/^(\x1b\[[0-9;]*m)*(Info|Warning|Download|Check)\b/.test(l))
+  const lines = stripVTControlCharacters(r.err).split("\n").map((l) => l.trim()).filter((l) => l && !/^(Info|Warning|Download|Check)\b/.test(l))
   // The refusal is the hook's last line of its own; notices Naima printed before it are not why.
   const own = lines.filter((l) => l.startsWith("naima: ")).slice(-1)
   const why = (own.length ? own : lines).map((l) => l.replace(/^(fatal|error): /, "")).join(" ") || gitReason(r)
