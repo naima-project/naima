@@ -1,7 +1,10 @@
 // Where an item comes from: who asked for it and in what role, who filed it,
 // in which session, when and on which branch, and the item it was derived
 // from. `origin` is written once, when the item is created, and never changed
-// afterwards (features/every-item-records-origin-who-asked-what).
+// afterwards (features/every-item-records-origin-who-asked-what), except who
+// asked: `naima origin --set <item> --asked-by <who>` settles it, as when the
+// backfill left it unknown, and the origin keeps each such correction: what
+// it was, who corrected it and when.
 //
 // A session is what `naima hello` starts: it gives the session an id, kept
 // beside the tick's state in the clone's git directory, never committed, one
@@ -20,7 +23,7 @@ import { createHash, randomUUID } from "node:crypto"
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync } from "node:fs"
 import { dirname, join, relative, resolve } from "node:path"
 import { ADAPTERS } from "./adapters/index.ts"
-import { bool, parse, usageError } from "./args.ts"
+import { bool, parse, str, usageError } from "./args.ts"
 import { writeFileAtomic } from "./files.ts"
 import { currentBranch, gitOrNull, isGitRepo, runGit } from "./git.ts"
 import { META, saveMeta } from "./item.ts"
@@ -48,13 +51,24 @@ export interface Origin {
   inferred?: true
   /** For an inferred origin: the commit that added the item, its first 12 hex digits. */
   commit?: string
+  /** Each time who asked was set after the item was filed (naima origin --set): what it was, who set it, when. */
+  corrected?: Correction[]
+}
+
+/** One correction of who asked: what it was before, who corrected it, the instant. */
+export interface Correction {
+  was: Role
+  /** The person who asked, when it was person. */
+  wasPerson?: string
+  by: string
+  on: string
 }
 
 export const ORIGIN: FieldDef = {
   name: "origin",
   kind: "object",
   says:
-    "where the item comes from, written once by naima new and never changed: { askedBy: owner, coordinator, worker, agent, person (with person: the name) or unknown; filedBy: { name, role }; session: the session it was filed in; on: the instant; branch; from: the id of the item it was derived from }, with inferred: true and commit when naima origin --backfill read it from git",
+    "where the item comes from, written once by naima new and never changed but for who asked: { askedBy: owner, coordinator, worker, agent, person (with person: the name) or unknown; filedBy: { name, role }; session: the session it was filed in; on: the instant; branch; from: the id of the item it was derived from }, with inferred: true and commit when naima origin --backfill read it from git, and corrected: [{ was, by, on }] for each time naima origin --set changed who asked",
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v)
@@ -213,8 +227,12 @@ export const originOnce: WriteHook = {
     }
     const was = write.before?.[ORIGIN.name]
     if (was === undefined) return
-    if (JSON.stringify(was) === JSON.stringify(write.item.meta[ORIGIN.name])) return
-    return `${label(write.item)}: its origin is written once, when it is created, and never changed`
+    const now = write.item.meta[ORIGIN.name]
+    if (JSON.stringify(was) === JSON.stringify(now)) return
+    if (isCorrection(was, now)) return
+    return `${label(write.item)}: its origin is written once, when it is created, and never changed, but for who asked: naima origin --set ${
+      label(write.item)
+    } --asked-by <who>`
   },
   afterWrite(write, ctx) {
     try {
@@ -229,6 +247,41 @@ export const originOnce: WriteHook = {
       // the log is a convenience kept outside the repository: a folder that cannot be written loses it, never the write
     }
   },
+}
+
+/** The origin without who asked and its corrections: what a correction leaves as it was. */
+const fixedPart = (o: Record<string, unknown>): string => {
+  const { askedBy: _a, person: _p, corrected: _c, ...rest } = o
+  return JSON.stringify(rest)
+}
+
+/**
+ * Whether `now` is `was` with who asked changed and that change recorded: every other field as it was, the earlier
+ * corrections kept, and one more that names what it was.
+ */
+export function isCorrection(was: unknown, now: unknown): boolean {
+  if (!isObject(was) || !isObject(now) || fixedPart(was) !== fixedPart(now)) return false
+  if (!(ROLES as readonly string[]).includes(now["askedBy"] as string)) return false
+  if (now["askedBy"] === "person" ? typeof now["person"] !== "string" || !now["person"].trim() : now["person"] !== undefined) return false
+  const before = Array.isArray(was["corrected"]) ? was["corrected"] : []
+  const after = Array.isArray(now["corrected"]) ? now["corrected"] : null
+  if (!after || after.length !== before.length + 1 || JSON.stringify(after.slice(0, -1)) !== JSON.stringify(before)) return false
+  const last = after[after.length - 1]
+  return isObject(last) && last["was"] === was["askedBy"] && (last["wasPerson"] ?? undefined) === (was["person"] ?? undefined) &&
+    typeof last["by"] === "string" && typeof last["on"] === "string"
+}
+
+/** The origin with who asked set to `asked`, the correction recorded; null when it already says so. */
+export function corrected(ctx: Context, o: Origin, asked: Pick<OriginRequest, "askedBy" | "person">, by: string): Origin | null {
+  if (o.askedBy === asked.askedBy && (o.person ?? undefined) === (asked.person ?? undefined)) return null
+  const { person: _p, ...rest } = o
+  const entry: Correction = { was: o.askedBy, ...(o.person ? { wasPerson: o.person } : {}), by, on: ctx.now().toISOString() }
+  return {
+    ...rest,
+    askedBy: asked.askedBy as Role,
+    ...(asked.askedBy === "person" && asked.person ? { person: asked.person } : {}),
+    corrected: [...(o.corrected ?? []), entry],
+  }
 }
 
 // ── selecting by origin ──────────────────────────────────────────────────────
@@ -308,10 +361,11 @@ export function reviewSession(ctx: Context, session: string): SessionReview {
 export const originCommand: Command = {
   name: "origin",
   says:
-    "say the session this worktree is in; with a session id, list what that session filed (each with who asked) and every other item it changed, to review a session that drifted and undo it item by item; with --backfill, give every item with no origin one inferred from git",
+    "say the session this worktree is in; with a session id, list what that session filed (each with who asked) and every other item it changed, to review a session that drifted and undo it item by item; with --backfill, give every item with no origin one inferred from git; with --set, settle who asked for an item, such as one the backfill left unknown",
   enforces:
-    "an origin is never changed: the backfill writes only to items with none, marks each inferred: true with askedBy unknown, for the owner to settle in a review; the session's log is read from outside the repository and never committed",
-  usage: "origin [<session>] [--json] | origin --backfill [--dry-run]",
+    "an origin is never changed but for who asked, and only through --set, which keeps the rest as it was and records each correction in the origin: what it was, who set it, when; the backfill writes only to items with none, marks each inferred: true with askedBy unknown, for the owner to settle in a review; the session's log is read from outside the repository and never committed",
+  usage:
+    "origin [<session>] [--json] | origin --backfill [--dry-run] | origin --set <item> --asked-by <owner|coordinator|worker|agent|unknown|person:<name>> [--by <name>]",
   options: [
     { name: "--json", says: "print the review as JSON: the session, the items it filed, the items it changed" },
     {
@@ -320,13 +374,53 @@ export const originCommand: Command = {
         "give each item with no origin the one git gives: the commit that added its meta.json, its author and date, the branch of the landing marker that brought it in; inferred: true, askedBy unknown",
     },
     { name: "--dry-run", says: "with --backfill: say what it would write, and write nothing" },
+    { name: "--set", says: "the item whose origin says who asked to set, as --asked-by gives it; the correction is recorded in its origin" },
+    { name: "--asked-by", says: "with --set: who asked, a role (owner, coordinator, worker, agent, unknown) or person:<name>" },
+    { name: "--by", says: "with --set: who makes the correction, as it is recorded; absent, git's user.name" },
   ],
-  examples: ["origin", "origin 2026-10-27-1a2b3c4d", "origin 2026-10-27-1a2b3c4d --json", "origin --backfill --dry-run", "origin --backfill"],
+  examples: [
+    "origin",
+    "origin 2026-10-27-1a2b3c4d",
+    "origin 2026-10-27-1a2b3c4d --json",
+    "origin --backfill --dry-run",
+    "origin --backfill",
+    "origin --set bugs/export-crashes --asked-by owner",
+    'origin --set bugs/export-crashes --asked-by "person:Ada"',
+  ],
   long: { cannot: "the backfill asks git once per item, with no total known to git", instead: "it prints one line per item it gives an origin" },
   run(args, ctx) {
-    const p = parse(args, { json: { type: "boolean" }, backfill: { type: "boolean" }, "dry-run": { type: "boolean" } })
+    const p = parse(args, {
+      json: { type: "boolean" },
+      backfill: { type: "boolean" },
+      "dry-run": { type: "boolean" },
+      set: { type: "string" },
+      "asked-by": { type: "string" },
+      by: { type: "string" },
+    })
     const [session, ...rest] = p.positionals
     if (rest.length) throw usageError(this)
+    const target = str(p, "set")
+    const asked = str(p, "asked-by")
+    if (target !== undefined || asked !== undefined) {
+      if (!target || !asked || session || bool(p, "backfill")) throw usageError(this)
+      const item = ctx.repo.resolve(target)
+      const o = originOf(item)
+      if (!o) throw new Error(`${label(item)} has no origin to correct: naima origin --backfill gives it one first`)
+      const by = str(p, "by")?.trim() || (isGitRepo(ctx.root) ? gitOrNull(ctx.root, "config", "user.name") : null) || "unknown"
+      const next = corrected(ctx, o, askedByOption(asked), by)
+      if (!next) {
+        ctx.out(`${label(item)}: already asked by ${asked}`)
+        return 0
+      }
+      // The name of a person is text its writer typed: the no-leaks signature covers it as any other.
+      saveMeta(ctx, { ...item, meta: { ...item.meta, [ORIGIN.name]: next } }, { authored: true })
+      ctx.out(
+        `${label(item)}: asked by ${next.person ? `person:${next.person}` : next.askedBy}, was ${
+          o.person ? `person:${o.person}` : o.askedBy
+        }; recorded in its origin`,
+      )
+      return 0
+    }
     if (bool(p, "backfill")) {
       if (session) throw usageError(this)
       const dry = bool(p, "dry-run")

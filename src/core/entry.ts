@@ -135,6 +135,16 @@ export const cliCommands: Omit<Command, "run">[] = [
     examples: ["tick", "tick --json", "tick --hook <tool>"],
   },
   {
+    name: "subagent",
+    says:
+      "run as the sub-agent-start hook of that agent tool, named as naima.json's agents names it: put the project's rules for agents, as naima rules --audience agents prints them, in the starting sub-agent's context, in the form the tool's adapter gives, and mark, by the sub-agent's id, that it has them, so the tool's guard lets its calls through; the guard holds the calls of a sub-agent with no mark until it runs naima rules, and the hook on its stop sends one that never had them back to read them (docs/agents/read-the-project-rules.md)",
+    enforces:
+      "it never fails and never blocks a sub-agent from starting: a project that does not open, or an input with no agent id, prints nothing and leaves the guard to hold the sub-agent until it reads the rules; the mark is kept outside the repository, in the clone's git directory",
+    usage: "subagent --hook <tool>",
+    options: [{ name: "--hook", says: "the agent tool whose sub-agent-start hook runs it, named as naima.json's agents names it" }],
+    examples: ["subagent --hook <tool>"],
+  },
+  {
     name: "plugin",
     says:
       "turn a plugin on or off, or set one of its options, in naima.json's plugins table — validated the way the project is validated on every load, instead of a hand-edit of the file",

@@ -27,6 +27,26 @@ matches what `naima rules` prints, with the command that writes it again, and `n
 A rule is an [item](../guide/glossary.md#item) in the project's tracker, and a person writes it ([write a project rule](../guide/write-a-project-rule.md)). A
 rule marked `enforcedBy` is also upheld by that check or [gate](../guide/glossary.md#gate). The others are kept by whoever reads them.
 
+## Sub-agents get the rules too
+
+A worker or any other sub-agent follows the same rules as the agent that started it, and it has to read them before it does anything. Telling it to in the brief
+is not enough, because a brief can leave that out. Where the agent tool has hooks for sub-agents, `naima init` and `naima update` install three of them
+([which tools have them](../guide/install.md#running-naima-hello-at-every-session-start)):
+
+- When a sub-agent starts, a hook runs `naima subagent --hook <tool>`. This puts the project's rules for agents in the sub-agent's context before its first
+  prompt and marks it, by its id, as having them.
+- Before a sub-agent runs a command or writes a file, a hook checks that mark. If the sub-agent does not have it, the call is refused and the sub-agent is told
+  to run `naima rules --audience agents` first. Running that command sets the mark. Reading files is never held, and calls from the main session go through
+  straight away, without starting Deno.
+- When a sub-agent stops without ever having the rules, a hook sends it back once. It reads the rules, checks its work against them and says in its report that
+  it started without them. The tool's own internal agents are left alone.
+
+The marks are kept in the clone's git directory under `naima/subagents/`, outside the repository. That folder also holds `skipped`, a log with one line for
+each sub-agent that stopped without the rules.
+
+In a tool without hooks for sub-agents, a sub-agent gets the rules only if its brief tells it to run `naima rules --audience agents` first. So when you start a
+worker in one of those tools, put that line at the top of its brief.
+
 ## Giving the acknowledgement back
 
 When any active rule sets `ack`, the listing above ends with one more line:

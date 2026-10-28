@@ -44,6 +44,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`rollback`](#naima-rollback) | core | move the lock back to the one naima.json recorded before it, found in its git history, as one change to commit: what update --to does with that commit | the lock goes back only to a commit that reads the data's formats: a migration is undone by reverting its commit, never by running an older Naima on newer data |
 | [`hello`](#naima-hello) | core | what an agent says first in a session: the banner (I'm Naima, the No-guesswork Artificial Intelligence Meta-Agent, active in this repository, with its version and commit); then, as naima.json's updates says, whether a newer Naima exists and, under update, what it changes and its rehearsal, as update --check says them; then where the project is going, as the plugins say it, such as the nearest gate with a due date and the next release, each with its verdict as naima gates gives it; then, one line each, what waits on the owner's decision, such as a long run that is due, never started, or that nothing does; then what it offers on request: what the plugins offer, such as generating code from a model the project has, then what Naima is and its documentation, an update check, an update after the owner's yes; last, the offer to explain what Naima can do from the basics (docs/guide/the-basics.md). Under --hook, the agent is told to open its first reply with the introduction, its name in bold, and how to explain the basics | it never moves the lock nor starts a run; it asks the source only when updates is check or update, and records that check as the day's, and the session it starts (naima origin), in the tick's state outside the repository; the only thing it may write in the project is an urgent message the tick raises |
 | [`tick`](#naima-tick) | core | run the tick now, as every command does before its own work: each job that is due — the update check once a day, unless updates is off; the jobs plugins contribute, such as the due long runs once an hour — run by whichever naima process wins it, a failed one retried an hour later, a week of failed update checks raising an urgent message; then say what is due to the owner, each message once, an urgent one once an hour until the owner acknowledges it (naima messages). Every other command says them after its own output, on standard error, one line each: NAIMA-MESSAGE, a space, and the message as a JSON object with the keys id, level (info, warning or urgent), text and ack, where ack is the command that acknowledges it, or null for a message said once | no lock: every decision is a file created only if it does not exist, kept outside the repository in the clone's git directory, so any number of naima processes, in any worktree of the clone, run each due job once; nothing is applied and no long work starts: it finds and says |
+| [`subagent`](#naima-subagent) | core | run as the sub-agent-start hook of that agent tool, named as naima.json's agents names it: put the project's rules for agents, as naima rules --audience agents prints them, in the starting sub-agent's context, in the form the tool's adapter gives, and mark, by the sub-agent's id, that it has them, so the tool's guard lets its calls through; the guard holds the calls of a sub-agent with no mark until it runs naima rules, and the hook on its stop sends one that never had them back to read them (docs/agents/read-the-project-rules.md) | it never fails and never blocks a sub-agent from starting: a project that does not open, or an input with no agent id, prints nothing and leaves the guard to hold the sub-agent until it reads the rules; the mark is kept outside the repository, in the clone's git directory |
 | [`plugin`](#naima-plugin) | core | turn a plugin on or off, or set one of its options, in naima.json's plugins table — validated the way the project is validated on every load, instead of a hand-edit of the file | a name must be a first-party plugin (loaded or opt-in) or one the table already names with its own source; an option set on one whose options are known here must be one it declares; the whole file is re-validated before it is written, so nothing a later load would refuse ever reaches disk |
 | [`guide`](#naima-guide) | core | inside a project, first print what its plugins contribute to the guide, such as the project's active rules for agents; then where the running Naima's documentation is: the skill, the docs map, the guide for people, the rules, the pages for agents, the format, installing; read them as files | nothing: it only prints |
 | [`help`](#naima-help) | core | list every command the loaded plugins provide, with its usage | nothing: it only prints |
@@ -65,7 +66,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`types`](#naima-types) | core | list item types, their statuses and fields, then every field's list of values with how many items hold each | nothing: it only reads |
 | [`runs`](#naima-runs) | core | list the external programs the loaded contributions declare they start (a model checker, say), which the launcher allows besides git | nothing: it lists the programs the launcher allows besides git; the launcher refuses any other |
 | [`messages`](#naima-messages) | core | list what Naima has to tell the owner: the urgent messages not yet acknowledged, which the tick shows at most once an hour, then what it said once, such as a newer Naima; with ack, the owner acknowledges a message, which stops it being shown, in every worktree and, once the tracker is committed, on every machine | a message is acknowledged only by the owner's command, never on their behalf; an acknowledgement is never undone |
-| [`origin`](#naima-origin) | core | say the session this worktree is in; with a session id, list what that session filed (each with who asked) and every other item it changed, to review a session that drifted and undo it item by item; with --backfill, give every item with no origin one inferred from git | an origin is never changed: the backfill writes only to items with none, marks each inferred: true with askedBy unknown, for the owner to settle in a review; the session's log is read from outside the repository and never committed |
+| [`origin`](#naima-origin) | core | say the session this worktree is in; with a session id, list what that session filed (each with who asked) and every other item it changed, to review a session that drifted and undo it item by item; with --backfill, give every item with no origin one inferred from git; with --set, settle who asked for an item, such as one the backfill left unknown | an origin is never changed but for who asked, and only through --set, which keeps the rest as it was and records each correction in the origin: what it was, who set it, when; the backfill writes only to items with none, marks each inferred: true with askedBy unknown, for the owner to settle in a review; the session's log is read from outside the repository and never committed |
 | [`close`](#naima-close) | trackers | archive a resolved item: fixed, and proven by an item that has passed | an item is archived only when fixed and proven: fixedOn set and a verified-by item that has passed, with every write hook agreeing; --force takes a hook's refusal on, for the one who owns the evidence |
 | [`bugs`](#naima-bugs) | trackers | how many bugs have no code written, and how many are fixed but unproven | nothing: it only counts |
 | [`open`](#naima-open) | coordination | start a piece of work: a worktree <worktrees>/<what> on a new branch <who>/<what> from the trunk, and its claim on the items, in one step | work happens on its own branch and worktree from the trunk, and its claim on the items is recorded in the same step; a branch that already exists is never reused, and the refusal says whether it is merged into the trunk; no worker worktree is opened beyond the option maxWorkers, and the refusal names the open ones and how to raise the bound |
@@ -277,6 +278,26 @@ Examples:
 naima tick
 naima tick --json
 naima tick --hook <tool>
+```
+
+### naima subagent
+
+Run as the sub-agent-start hook of that agent tool, named as naima.json's agents names it: put the project's rules for agents, as naima rules --audience agents prints them, in the starting sub-agent's context, in the form the tool's adapter gives, and mark, by the sub-agent's id, that it has them, so the tool's guard lets its calls through; the guard holds the calls of a sub-agent with no mark until it runs naima rules, and the hook on its stop sends one that never had them back to read them (docs/agents/read-the-project-rules.md).
+
+**Enforces**: It never fails and never blocks a sub-agent from starting: a project that does not open, or an input with no agent id, prints nothing and leaves the guard to hold the sub-agent until it reads the rules; the mark is kept outside the repository, in the clone's git directory.
+
+```sh
+naima subagent --hook <tool>
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--hook` |  | the agent tool whose sub-agent-start hook runs it, named as naima.json's agents names it |
+
+Examples:
+
+```sh
+naima subagent --hook <tool>
 ```
 
 ### naima plugin
@@ -721,15 +742,16 @@ naima messages ack update-check-failing-since-2026-10-18
 
 ### naima origin
 
-Say the session this worktree is in; with a session id, list what that session filed (each with who asked) and every other item it changed, to review a session that drifted and undo it item by item; with --backfill, give every item with no origin one inferred from git.
+Say the session this worktree is in; with a session id, list what that session filed (each with who asked) and every other item it changed, to review a session that drifted and undo it item by item; with --backfill, give every item with no origin one inferred from git; with --set, settle who asked for an item, such as one the backfill left unknown.
 
-**Enforces**: An origin is never changed: the backfill writes only to items with none, marks each inferred: true with askedBy unknown, for the owner to settle in a review; the session's log is read from outside the repository and never committed.
+**Enforces**: An origin is never changed but for who asked, and only through --set, which keeps the rest as it was and records each correction in the origin: what it was, who set it, when; the backfill writes only to items with none, marks each inferred: true with askedBy unknown, for the owner to settle in a review; the session's log is read from outside the repository and never committed.
 
 **Progress**: none — the backfill asks git once per item, with no total known to git; instead, It prints one line per item it gives an origin.
 
 ```sh
 naima origin [<session>] [--json]
 naima origin --backfill [--dry-run]
+naima origin --set <item> --asked-by <owner|coordinator|worker|agent|unknown|person:<name>> [--by <name>]
 ```
 
 | Option | Default | What it does |
@@ -737,6 +759,9 @@ naima origin --backfill [--dry-run]
 | `--json` |  | print the review as JSON: the session, the items it filed, the items it changed |
 | `--backfill` |  | give each item with no origin the one git gives: the commit that added its meta.json, its author and date, the branch of the landing marker that brought it in; inferred: true, askedBy unknown |
 | `--dry-run` |  | with --backfill: say what it would write, and write nothing |
+| `--set` |  | the item whose origin says who asked to set, as --asked-by gives it; the correction is recorded in its origin |
+| `--asked-by` |  | with --set: who asked, a role (owner, coordinator, worker, agent, unknown) or person:<name> |
+| `--by` |  | with --set: who makes the correction, as it is recorded; absent, git's user.name |
 
 Examples:
 
@@ -746,6 +771,8 @@ naima origin 2026-10-27-1a2b3c4d
 naima origin 2026-10-27-1a2b3c4d --json
 naima origin --backfill --dry-run
 naima origin --backfill
+naima origin --set bugs/export-crashes --asked-by owner
+naima origin --set bugs/export-crashes --asked-by "person:Ada"
 ```
 
 ### type: messages
@@ -768,7 +795,7 @@ Moves allowed: `acknowledged` → ; a status not named moves to any.
 | `section` | string | every type | the heading the item is grouped under on its board |  |
 | `created` | date | every type | when the item was opened |  |
 | `tags` | strings | every type | free labels a person puts on an item |  |
-| `origin` | object | every type | where the item comes from, written once by naima new and never changed: { askedBy: owner, coordinator, worker, agent, person (with person: the name) or unknown; filedBy: { name, role }; session: the session it was filed in; on: the instant; branch; from: the id of the item it was derived from }, with inferred: true and commit when naima origin --backfill read it from git |  |
+| `origin` | object | every type | where the item comes from, written once by naima new and never changed but for who asked: { askedBy: owner, coordinator, worker, agent, person (with person: the name) or unknown; filedBy: { name, role }; session: the session it was filed in; on: the instant; branch; from: the id of the item it was derived from }, with inferred: true and commit when naima origin --backfill read it from git, and corrected: [{ was, by, on }] for each time naima origin --set changed who asked |  |
 | `level` | enum | any type tagged `messages` | how much a message weighs: info and warning are said once, urgent is shown once an hour until acknowledged | `info` worth knowing; `warning` worth acting on; `urgent` the owner should know now: shown once an hour until acknowledged |
 
 **Link relations** — only the direction written is stored; the inverse is derived when read.
