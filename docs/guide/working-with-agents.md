@@ -89,9 +89,9 @@ worktree. You only talk to the coordinator. How the work is shared out is descri
 ## Where each item comes from
 
 Every item records its origin when it is filed, in the field `origin` of its `meta.json`, and nothing changes it afterwards. It says who asked for the item
-(`askedBy`: you, the `owner`; the `coordinator` or a `worker`; an `agent` that found it on its own; a `person` other than you, by name; or `unknown`), who
-filed it and in what role (`filedBy`), the session it was filed in, the moment, the branch, and the item it was derived from (`from`), when there is one.
-Agents say `--asked-by owner` only for what you said; everything else they file is theirs.
+(`askedBy`: you, the `owner`; the `coordinator` or a `worker`; an `agent` that found it on its own; a `person` other than you, by name; or `unknown`), who filed
+it and in what role (`filedBy`), the session it was filed in, the moment, the branch, and the item it was derived from (`from`), when there is one. Agents say
+`--asked-by owner` only for what you said; everything else they file is theirs.
 
 A requirement an agent filed on its own is _proposed_. No gate counts it, and `naima check` reminds you of it, until you say yes and the agent records your
 words with `naima confirm <requirement> --words "<your yes, restated>"`; then it is stated like any other.
@@ -112,3 +112,11 @@ naima list --origin 2026-10-20..2026-10-27
 A session that drifted is reviewed item by item from that list, and undone the same way: drop what should not have been filed, and revert the changes with git.
 Items filed before origins existed get one from git with `naima origin --backfill` (try `--dry-run` first): the commit that added each item, its author and
 date, and the branch of the landing that brought it in, marked `inferred`, with `askedBy` left `unknown` for you to settle.
+
+To settle who asked, or to correct it when it was recorded wrong, use `naima origin --set`. Who asked is the only part of an origin that can change. The rest
+stays as it was filed, and the origin keeps a record of each change: what it said before, who changed it and when.
+
+```sh
+naima origin --set bugs/export-crashes --asked-by owner
+naima origin --set bugs/export-crashes --asked-by "person:Ada"
+```

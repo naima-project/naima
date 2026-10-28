@@ -54,6 +54,8 @@ git merge --no-edit main
 ```
 
 - `naima release` drops this branch's claim. Run it here, not on the [trunk](glossary.md#trunk).
+- `naima claim` refuses to run on the trunk: a claim there would be copied to every branch that merges the trunk. A claim naming the trunk that an older
+  program wrote is stale, refuses no `naima close`, and `naima prune --write` removes it.
 - `naima pass` writes a [session note](glossary.md#session-note) saying what changed, what is proven, and what was **not** verified.
 - Merging the trunk into the branch first makes the trunk its ancestor, which landing requires. Resolve any conflicts here and run the checks again.
 
@@ -79,6 +81,11 @@ run, and a test suite that reads one has to have a passing recorded run on the b
 nothing lands: the worker runs `naima verify` or `naima metrics run --record` on the branch and commits the runs. When a proof can't be made current before
 landing, for instance because it takes days, `--stale-proofs "<reason>"` lands the branch anyway, and the marker keeps the reason in a `Stale-proofs:` trailer
 ([when the rules apply](prove-and-close.md#when-the-rules-apply)).
+
+A branch that changes only tracker data, such as the notes and decisions of a review, may close no item. `naima land <branch> --tracker-only "<reason>"`
+lands it anyway, and the marker keeps the reason in a `Tracker-only:` trailer in place of `Closes:`. It still closes the items the branch claimed or that
+`--closes` names, once they are done or fixed. It is refused when the branch changes any file outside the tracker data, and the check that reads the trunk
+notes a `Tracker-only:` marker made by hand that does.
 
 `prune --branch` deletes a branch only when its commits are held by the trunk or by an `archive/<branch>` tag. `--archive` makes that tag, for work that is set
 aside rather than merged. It removes the worktree only when nothing in it is uncommitted, inside its submodules too; a clean worktree that holds a submodule,
@@ -116,7 +123,7 @@ naima prune            # stale claims, and why each is stale
 naima prune --write    # remove them; commit the deletions
 ```
 
-A claim is stale when its branch is gone, when its branch is merged into the trunk and the merge brought its file there, or when every item it claims is done or
+A claim is stale when its branch is gone, when it names the trunk, when its branch is merged into the trunk and the merge brought its file there, or when every item it claims is done or
 closed. `naima claims` lists stale claims apart, at the end, and `naima
 check` adds a note for each one. A claim that still names an item already closed, next
 to items that are still open, gets a note of its own with the `naima release` that drops the closed item.

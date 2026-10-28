@@ -229,6 +229,8 @@ export interface GuideSection {
   name: string
   says: string
   render(ctx: Context): Rendered | Promise<Rendered>
+  /** Whether a sub-agent is given this section as it starts (naima subagent --hook), such as the project's rules for agents. */
+  subagents?: boolean
 }
 
 /**

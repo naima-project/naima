@@ -263,6 +263,7 @@ const command = (retired: ReadonlySet<string>): Command => ({
 const guide = (retired: ReadonlySet<string>): GuideSection => ({
   name: "rules",
   says: "the project's active rules for agents, read before anything else",
+  subagents: true,
   render: (ctx) => rulesRendered(activeRules(ctx, "agents", retired), "Read first — the project's rules for agents (naima rules --audience agents):"),
 })
 

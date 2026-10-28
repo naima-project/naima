@@ -271,6 +271,9 @@ function freshClaim(ctx: Context, branch: string): Claim {
   return { branch, claimedAt: today(ctx), items: [], file: committed?.file ?? `${randomUUID()}.json`, ref: branch, local: true }
 }
 
+/** Whether `branch` is the trunk, of the project or, in sibling mode, of the tracker: no claim belongs there. */
+const onTrunk = (ctx: Context, branch: string): boolean => branch === trunk(ctx.root) || branch === trunk(ctx.trackerGit)
+
 /** A claim that holds nothing: no item. */
 const empty = (c: Claim): boolean => !c.items.length
 
@@ -278,7 +281,7 @@ const claimCommand: Command = {
   name: "claim",
   says: "record that this branch is working on items (writes one file on this branch)",
   enforces:
-    "a claim belongs to a branch, never to a detached HEAD, and is one file on that branch; it never locks anything: several branches may claim one item",
+    "a claim belongs to a branch, never to a detached HEAD nor to the trunk, and is one file on that branch; it never locks anything: several branches may claim one item",
   usage: 'claim <item>... [--note "why"] [--step "what I am doing now"] [--preparing | --not-preparing]',
   options: [
     { name: "--note", says: "why this branch holds the items; replaces the previous note" },
@@ -314,6 +317,11 @@ const claimCommand: Command = {
     const items = p.positionals.map((r) => ctx.repo.resolve(r))
     const branch = currentBranch(ctx.root)
     if (branch === "HEAD") throw new Error("HEAD is detached: a claim belongs to a branch — git switch -c <branch>, then claim")
+    if (onTrunk(ctx, branch)) {
+      throw new Error(
+        `${branch} is the trunk: a claim belongs to an item's branch, never to the trunk, where every merge would carry it — naima open <item> makes the branch and its claim`,
+      )
+    }
     const all = readClaims(ctx)
     const held = myClaim(ctx, branch, all)
     if (!held && !items.length) throw new Error(`${branch} holds no claim: claim its items first (naima claim <item>...)`)
@@ -451,6 +459,7 @@ export function staleReason(
   alive: Set<string> = allRefNames(ctx.trackerGit),
 ): string | undefined {
   if (!alive.has(c.branch)) return "its branch is gone"
+  if (main && c.branch === main) return `it names ${main}, the trunk, where no claim belongs`
   if (
     main && c.branch !== main && isAncestor(ctx.trackerGit, `refs/heads/${c.branch}`, main) &&
     filesAt(ctx.trackerGit, main, inGit(ctx, CLAIMS), ".json").some((f) => f.name === c.file)
@@ -619,7 +628,7 @@ function pruneBranch(ctx: Context, branch: string, write: boolean, archive: bool
 const prune: Command = {
   name: "prune",
   says:
-    "list (or with --write remove) stale claim files: their branch is gone, or merged into the trunk that carries the file, or every item they claim is closed; one only another ref carries is listed with that ref, to be dropped there. With --branch, delete a branch and its worktree, refusing one with unmerged commits that no archive/<branch> tag holds",
+    "list (or with --write remove) stale claim files: their branch is gone, or is the trunk, or merged into the trunk that carries the file, or every item they claim is closed; one only another ref carries is listed with that ref, to be dropped there. With --branch, delete a branch and its worktree, refusing one with unmerged commits that no archive/<branch> tag holds",
   enforces:
     "the trunk is never pruned, and a branch with unmerged commits that no archive/<branch> tag holds is refused, and so is a worktree with anything uncommitted, inside its submodules too; a clean one is removed even when it holds a submodule; nothing is removed without --write",
   usage: "prune [--write] | prune --branch <b> [--archive] [--write]",
@@ -931,11 +940,12 @@ const claimsResolve: Check = {
 const noClosingOwnWork: WriteHook = {
   name: "no-closing-own-claims",
   says:
-    "archiving an item (a move to a type that is not creatable, as naima close does) that the branch you stand on claims is refused unless --force: a branch does not close its own items on the strength of its own tests",
+    "archiving an item (a move to a type that is not creatable, as naima close does) that the branch you stand on claims is refused unless --force: a branch does not close its own items on the strength of its own tests; a claim naming the trunk is stale, never the trunk's own, and refuses nothing",
   beforeWrite(write, ctx) {
     if (write.kind !== "move" || write.to?.creatable !== false || write.force) return
     const branch = currentBranch(ctx.root)
     if (branch === "HEAD") return // detached: no branch, so no claim of its own
+    if (onTrunk(ctx, branch)) return // a claim naming the trunk is stale, never the trunk's own work: prune releases it
     const id = write.item.meta.id
     if (!readClaims(ctx).some((c) => c.branch === branch && c.items.some((e) => e.id === id))) return
     return `${
@@ -956,7 +966,7 @@ const releaseLine = (c: Claim): string => `naima prune --write${c.local ? "" : `
 const staleClaims: Check = {
   name: "stale-claims",
   says:
-    "a claim whose branch is gone, or merged into the trunk (which then carries its file), or whose items are all closed, no longer stands for work in progress: one note per stale claim, naming the command that releases it",
+    "a claim whose branch is gone, or is the trunk, or merged into the trunk (which then carries its file), or whose items are all closed, no longer stands for work in progress: one note per stale claim, naming the command that releases it",
   run(ctx) {
     const main = trunk(ctx.trackerGit)
     const alive = allRefNames(ctx.trackerGit)
@@ -998,10 +1008,10 @@ const claimsOnClosedItems: Check = {
 const closedNotClaimed: Check = {
   name: "closed-not-claimed",
   says:
-    "no archived item (one in a type that is not creatable, where naima close moves it) is claimed by the branch you stand on: what no-closing-own-claims refuses on a write, asserted on the tracker as it is, hand edits included",
+    "no archived item (one in a type that is not creatable, where naima close moves it) is claimed by the branch you stand on: what no-closing-own-claims refuses on a write, asserted on the tracker as it is, hand edits included; on the trunk nothing is asked, since a claim naming the trunk is stale",
   run(ctx) {
     const branch = currentBranch(ctx.root)
-    if (branch === "HEAD") return []
+    if (branch === "HEAD" || onTrunk(ctx, branch)) return [] // a claim naming the trunk is stale-claims' note
     const mine = new Set(readClaims(ctx).filter((c) => c.branch === branch).flatMap((c) => c.items.map((e) => e.id)))
     return ctx.repo.items
       .filter((i) => mine.has(i.meta.id) && ctx.registry.types.get(i.type)?.creatable === false)

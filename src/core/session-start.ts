@@ -40,8 +40,9 @@ export function adaptersInUse(
   return ADAPTERS.filter((a) => a.footprint.some((f) => existsSync(join(root, f))) || a.runningIn?.(env) === true)
 }
 
-/** A tool's hooks that run Naima: its session-start hook, then its turn-end hook, those it has. */
-export const hooksOf = (a: AgentAdapter): AgentHook[] => [a.sessionStart, a.turnEnd].filter((h): h is AgentHook => h !== undefined)
+/** A tool's hooks that run Naima: its session-start hook, its turn-end hook, then its hooks on sub-agents, those it has. */
+export const hooksOf = (a: AgentAdapter): AgentHook[] =>
+  [a.sessionStart, a.turnEnd, a.subagentStart, a.subagentTool, a.subagentStop].filter((h): h is AgentHook => h !== undefined)
 
 /** The program's launcher, from the project root, as a hook names it. */
 const programPath = (root: string, tracker: string): string => posixRelative(root, join(tracker, PROGRAM_DIR, "naima.ts"))
