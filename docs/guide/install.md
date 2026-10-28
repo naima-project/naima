@@ -70,6 +70,12 @@ at most once a day, so that a repository made public later is noticed before the
 repository is left as it is by `init`, which says how to move it out. How the two repositories are kept in step, and how to move an existing tracker out, is in
 [keep the tracker private](private-tracker.md).
 
+Having chosen, `init` says in one sentence which layout it took and that layout's risk. Then, for each repository Naima relies on that has no remote (the
+project's, and the tracker's own when it is kept beside the code), it gives the agent one question for you: whether to create a private GitHub repository for it
+with `naima backup create`, or keep working locally with `naima backup decline`, which `naima hello` then recalls in one line at every session. For the
+project's repository it also says how to do it by hand, and that GitHub takes no file over 100 MB
+([a remote for every repository](private-tracker.md#a-remote-for-every-repository)).
+
 `init` only locks something everyone else can fetch. It refuses a clone with uncommitted changes, or one whose commit its origin doesn't have, and it removes
 any credentials from the origin URL (`https://user:token@…` is written as `https://…`) before the URL goes into `naima.json`, since that file is committed.
 
@@ -252,9 +258,9 @@ Deno with only these permissions:
 | env        | an allow-list: `HOME`, `PATH`, the user, shell, terminal, locale and temporary-directory variables, the proxy variables, Windows' system ones, and every `NAIMA_*`, `GIT_*`, `SSH_*`, `LC_*` and `DENO_*`                                                                                         | what git needs to reach a source, and Naima's own; nothing else of the environment reaches the program, nor the git it runs                                                                                                                                                                 |
 | net        | none, but `api.github.com`                                                                                                                                                                                                                                                                        | the network is git's, in alignment and update; GitHub is asked whether the tracker's remotes are public, by `init` and then at most once a day ([where the tracker lives](#where-the-tracker-lives))                                                                                        |
 
-**`naima tools`, and no other command,** may also write to the tools directory, reach any host and run any program. An install downloads from whatever host a
-redirect points to (a release's content server), and runs the unpackers (`tar`, `hdiutil`, `ditto`, `unzip`), a Python and the tool it verifies, and none of
-these exists yet when the launcher starts ([tools](tools.md)).
+**`naima tools`, and `naima backup create`, which installs gh through it, and no other command,** may also write to the tools directory, reach any host and run
+any program. An install downloads from whatever host a redirect points to (a release's content server), and runs the unpackers (`tar`, `hdiutil`, `ditto`,
+`unzip`), a Python and the tool it verifies, and none of these exists yet when the launcher starts ([tools](tools.md)).
 
 **`naima verify`, and no other command,** may also run `naima-codegen`, found on `PATH`, the program of the `naima-codegen` verifier that comes with Naima
 ([the checks of naima-codegen](prove-and-close.md#the-checks-of-naima-codegen)), and with `--host` it may run `ssh`, to run the verifier on another machine.

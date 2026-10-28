@@ -406,6 +406,16 @@ function siblingTracker(data: string, url: string | null, privateUrl: boolean, i
   return false
 }
 
+/**
+ * The layout init chose for the tracker, and its risk, in one sentence: said when Naima is added to an existing
+ * repository, so the owner knows where the tracker is and what could go wrong with it.
+ */
+export function layoutSentence(sibling: boolean): string {
+  return sibling
+    ? "The tracker is kept private beside the code, in a git repository of its own that the code's repository ignores: nobody who reads the code sees it, but it is backed up only once that repository has a remote of its own."
+    : "The tracker is kept inside the code's repository, committed with it: whoever can read the code can read the tracker, so the repository must stay private while the tracker is in it."
+}
+
 const PRIVATE_TRACKER = `naima init --private-tracker (a git repository of its own in ${DEFAULT_DATA}, ignored by the project, on this machine only)`
 
 /** What init says, through the agent, of a project that is public or may be: where its tracker lives. */
@@ -503,6 +513,7 @@ async function init(args: string[], opts: CliOptions, data: string, io: IO): Pro
   const found = locate(data)
   if (found) {
     io.out(`${posixRelative(found.root, join(found.data, DATA_FILE))} already exists — left as it is`)
+    if (moved) io.out(layoutSentence(true))
     if (moved) await sweepAfter(found, opts, io)
     else if (sibling) { for (const line of installTrailerHooks(found.root, found.data)) io.out(line) }
     else if (trackerGitOf(found.root, found.data) === found.root) {
@@ -525,6 +536,7 @@ async function init(args: string[], opts: CliOptions, data: string, io: IO): Pro
     ? (align({ ...targetOf(place, parseLock(readRaw(place.data)), opts) }), `, and cloned ${PROGRAM_DIR}/`)
     : ""
   io.out(made.said + cloned)
+  io.out(layoutSentence(sibling))
   if (sibling) {
     for (const line of installTrailerHooks(made.root, place.data)) io.out(line)
     io.out(

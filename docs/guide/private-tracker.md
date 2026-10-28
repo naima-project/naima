@@ -37,6 +37,42 @@ With the installer, set `NAIMA_TRACKER` to `private` or `inside` (or to the URL 
 If the project already has a tracker committed inside and is public, init leaves it as it is and says how to move it out: see
 [moving an existing tracker out](#move-an-existing-tracker-out).
 
+Once it has set up the tracker, init says in one sentence which layout it chose and what that layout risks. Kept inside, whoever can read the code can read the
+tracker, so the repository must stay private while the tracker is in it. Kept beside the code, nobody who reads the code sees the tracker, but it is backed up
+only once its own repository has a remote.
+
+## A remote for every repository
+
+A repository with no remote lives on one machine and is lost with it. The repositories Naima relies on are the project's and, in sibling mode, the tracker's
+own. For each one that has no remote, `naima init` gives the agent a question to put to you once: should Naima create a private GitHub repository for it and
+push to it, or do you keep working locally? A project installed before this question existed is asked at its next `naima update`. The answer goes back to Naima
+as a command:
+
+```sh
+naima backup create --repo tracker --consent "<your yes, restated>" --by <you>   # yes
+naima backup decline --repo tracker                                              # no, keep it on this machine
+```
+
+`--repo project` names the project's repository instead. When it is the project's repository that has no remote, you are also told that GitHub takes no file
+over 100 MB, so larger files have to stay out of the repository before it can go there.
+
+On a yes, Naima uses gh, GitHub's command-line tool. If gh is not on the machine, Naima installs it into its own [tools folder](tools.md#where-the-tools-go),
+without administrator rights: the release archive for your platform (macOS, Linux or Windows, on arm64 or x64), downloaded from GitHub's releases and checked
+against the checksum from the release's checksums file. Your yes is recorded with it. Then gh signs you in to GitHub through your browser. It shows a one-time
+code: copy it, and paste it into the GitHub page that opens. Finally gh creates the private repository, named after the project folder (with `-tracker` for the
+tracker's, or the name given with `--name`), and pushes to it.
+
+Without a browser on the machine, `naima backup create --no-browser` says how to do it by hand: make an empty private repository at
+[github.com/new](https://github.com/new), with no README, licence or `.gitignore`, and give its address to the agent, which adds it and pushes:
+
+```sh
+naima backup add https://github.com/<owner>/<project>-tracker.git --repo tracker
+```
+
+A no is recorded in that repository's own git configuration (`naima.backup`), so it is not asked again. From then on, every `naima hello` says in one line that
+the repository is not backed up by a remote, and that you can ask the agent to set one up. `naima backup` on its own says, for each repository, whether it has a
+remote. A remote added in any way, by Naima or by hand, ends the reminder.
+
 ## The tracker is never exposed
 
 Choosing well at the start is not enough: a private repository can be made public later, and a tracker kept beside the code can be given a public remote. So
@@ -69,7 +105,7 @@ the remote is public, the fix is the one for an exposed tracker.
 ### What init sets up
 
 `naima init --private-tracker` creates a git repository in `naima-tracker/naima-data/`, on this machine only, with no remote. It works offline and nothing of it
-leaves the machine until you push it somewhere yourself. Init also writes:
+leaves the machine until it has a remote, which init asks you about ([a remote for every repository](#a-remote-for-every-repository)). Init also writes:
 
 - `naima-tracker/tracker.json`, committed with the code. It says that the tracker is a repository of its own, so that a clone of the code knows it. It names the
   tracker's address only when you clone one with `--tracker <url>`, and not even then with `--private-url`, which keeps the address in the clone's own git
@@ -79,13 +115,7 @@ leaves the machine until you push it somewhere yourself. Init also writes:
 
 The first commits are two: Naima commits the data in the tracker repository itself, and you commit `naima-tracker/` in the code's.
 
-To give the tracker a private remote later, one line is enough with GitHub's command-line tool:
-
-```sh
-gh repo create <owner>/<project>-tracker --private --source naima-tracker/naima-data --push
-```
-
-A colleague then clones the code as usual, and the tracker into place with `naima init --tracker <its address>`, or with
+Once the tracker has a remote, a colleague then clones the code as usual, and the tracker into place with `naima init --tracker <its address>`, or with
 `git clone <its address> naima-tracker/naima-data`.
 
 ### Naima commits the tracker
