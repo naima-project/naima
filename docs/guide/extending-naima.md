@@ -96,7 +96,7 @@ No check can hold a rule verified by `agent`, so the agent reads its change agai
 naima reviewed stance-ui/ui-consistent-help --item bugs/help-moves "the help link stays last in the header on every page, the new settings page included"
 ```
 
-This writes one small file under `reviews/` in the tracker, which is committed on the branch with the change. When the branch lands, `naima land` prints each
+This writes one small file under `rule-reviews/` in the tracker, which is committed on the branch with the change. When the branch lands, `naima land` prints each
 review it carries. If the landing changes a file that such a rule `covers` and carries no review of it, `naima land` adds a note that names the rule, the files
 and the command above. The note doesn't stop the landing. `naima reviewed` refuses a rule that a check verifies, since `naima check` already runs that check.
 

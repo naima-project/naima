@@ -2,7 +2,7 @@
 // asks for (`verifiedBy: agent`). No check holds such a rule, so the agent
 // reads its change against the rule and says what it checked with
 // `naima reviewed <rule> --item <item> "<what was checked>"`: one file under
-// reviews/, landed with the change. When the change lands, the landing report
+// rule-reviews/, landed with the change. When the change lands, the landing report
 // shows every review it carries, and notes each agent-verified rule that
 // covers a file the landing changed (the rule's `covers`) with no review.
 
@@ -28,8 +28,8 @@ import {
   writeFileAtomic,
 } from "../../core/api.ts"
 
-/** The data directory reviews are written to, one file each. */
-export const REVIEWS = "reviews"
+/** The data directory reviews are written to, one file each: not reviews/, which the papers pack keeps for the reviews of a paper. */
+export const REVIEWS = "rule-reviews"
 
 export interface Review {
   /** The rule reviewed, as `naima rules` names it. */
@@ -41,7 +41,7 @@ export interface Review {
   by: string
   /** The day, YYYY-MM-DD. */
   date: string
-  /** The file under reviews/. */
+  /** The file under rule-reviews/. */
   file: string
 }
 
