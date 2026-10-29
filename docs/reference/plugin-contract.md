@@ -65,16 +65,17 @@ Every kind of contribution is an **extension point**: the core declares its own,
 loaded plugin declares. A contribution goes under the point's id in `contributes`; for the core's points, the same key at the top of the manifest says the same
 thing and is typed.
 
-| Part          | What it declares                                                                                                                                 |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `says`        | one line: what the plugin is (required)                                                                                                          |
-| `about`       | longer markdown: the concepts a reader needs before the reference                                                                                |
-| `options`     | the keys the plugin reads from its `options`: `name`, `says`, `default` (a first-party plugin infers each default from the repository)           |
-| `points`      | extension points it declares ([below](#extension-points))                                                                                        |
-| `contributes` | contributions to any point, by point id: `{ "gates": [...] }`; to a point that reads files, a folder instead: `{ "rules": "rules/" }`            |
-| `home`        | where the plugin is, as a file URL, normally `import.meta.url`: a folder named under `contributes` is read relative to it                        |
-| `optional`    | points it contributes to only when some loaded plugin declares them; without one those contributions are dropped instead of refused              |
-| `uses`        | what it reads that another plugin declares, by point: `{ fields: ["fixedOn"], relations: ["verifies"] }` ([below](#cooperation-without-imports)) |
+| Part          | What it declares                                                                                                                                   |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `says`        | one line: what the plugin is (required)                                                                                                            |
+| `about`       | longer markdown: the concepts a reader needs before the reference                                                                                  |
+| `options`     | the keys the plugin reads from its `options`: `name`, `says`, `default` (a first-party plugin infers each default from the repository)             |
+| `points`      | extension points it declares ([below](#extension-points))                                                                                          |
+| `contributes` | contributions to any point, by point id: `{ "gates": [...] }`; to a point that reads files, a folder instead: `{ "rules": "rules/" }`              |
+| `home`        | where the plugin is, as a file URL, normally `import.meta.url`: a folder named under `contributes` is read relative to it                          |
+| `optional`    | points it contributes to only when some loaded plugin declares them; without one those contributions are dropped instead of refused                |
+| `uses`        | what it reads that another plugin declares, by point: `{ fields: ["fixedOn"], relations: ["verifies"] }` ([below](#cooperation-without-imports))   |
+| `attribution` | for a plugin or stance from outside Naima: `name`, `homepage`, `source`, `authors`, `license`, `version`, printed by `naima credits` (provisional) |
 
 The core's points, each also a typed key of the manifest:
 
@@ -92,6 +93,7 @@ The core's points, each also a typed key of the manifest:
 | `rank`       | an additive urgency term; lower is more urgent                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `hooks`      | [write hooks](#write-hooks): `beforeWrite(write, ctx)`, which may change what is written or refuse it, and `afterWrite(write, ctx)`, on every item write                                                                                                                                                                                                                                                                                                                                   |
 | `migrations` | its own data migrations, in order from its format 1: `from`, `says`, and pure `config(raw)`, `item(meta)`, `stale(meta)`; its format is 1 + their number ([migrations](format.md#migrations))                                                                                                                                                                                                                                                                                              |
+| `credits`    | what the plugin runs or builds on without installing it, such as a program found on the PATH: `name`, `homepage`, `source`, `authors`, `license`, `version`, printed by `naima credits` (provisional)                                                                                                                                                                                                                                                                                      |
 
 First-party plugins declare two more: the `gates` plugin declares `gates` (a named condition: `title`, `says`, `decides`,
 `evaluate(ctx) → { holds,
@@ -125,9 +127,10 @@ export default (): Plugin => ({ name: "chat", says: "…", contributes: { notifi
 
 A point's contributions are read with `ctx.registry.contributions(id)` — each with its qualified id, the name it goes by, and whose it is — and one by name with
 `ctx.registry.find(id, ref)`. A contribution `validate` refuses is refused when the project loads; `configured(c)` marks one the project's configuration makes,
-which the program's reference leaves out. The core's own points are declared exactly this way (`src/core/points.ts`): adding a kind of contribution never takes
-a change to the core. The on-disk layout is not a point: `<type>/<slug>/{README.md,meta.json,attachments/}` is the compatibility boundary between forks
-([the format](format.md)).
+which the program's reference leaves out. A point whose contributions stand for something from outside Naima, as the tools point's do, gives `credit(c)`, the
+contribution's attribution, and `naima credits` prints it (provisional). The core's own points are declared exactly this way (`src/core/points.ts`): adding a
+kind of contribution never takes a change to the core. The on-disk layout is not a point: `<type>/<slug>/{README.md,meta.json,attachments/}` is the
+compatibility boundary between forks ([the format](format.md)).
 
 ### Contributions kept as files
 

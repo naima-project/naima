@@ -41,8 +41,8 @@ is not enough, because a brief can leave that out. Where the agent tool has hook
 - When a sub-agent stops without ever having the rules, a hook sends it back once. It reads the rules, checks its work against them and says in its report that
   it started without them. The tool's own internal agents are left alone.
 
-The marks are kept in the clone's git directory under `naima/subagents/`, outside the repository. That folder also holds `skipped`, a log with one line for
-each sub-agent that stopped without the rules.
+The marks are kept in the clone's git directory under `naima/subagents/`, outside the repository. That folder also holds `skipped`, a log with one line for each
+sub-agent that stopped without the rules.
 
 In a tool without hooks for sub-agents, a sub-agent gets the rules only if its brief tells it to run `naima rules --audience agents` first. So when you start a
 worker in one of those tools, put that line at the top of its brief.

@@ -22,6 +22,8 @@ export const PYTHON = {
   version: "3.13.16+20261003",
   licence: "PSF-2.0 (CPython; the build bundles OpenSSL, SQLite, Tcl/Tk and others under their own licences)",
   homepage: "https://github.com/astral-sh/python-build-standalone",
+  source: "https://github.com/astral-sh/python-build-standalone",
+  authors: ["Astral", "the CPython developers"],
   programs: ["python"],
   verify: { program: "python", args: ["--version"], expect: "Python 3.13.16" },
   platforms: {
@@ -72,6 +74,8 @@ export const STORM = {
   version: "1.14.0",
   licence: "GPL-3.0-only (stormpy and Storm; its dependencies Deprecated MIT, wrapt BSD-2-Clause)",
   homepage: "https://www.stormchecker.org",
+  source: "https://github.com/moves-rwth/stormpy",
+  authors: ["the Storm team at RWTH Aachen University"],
   needs: ["python"],
   programs: ["python"],
   verify: {

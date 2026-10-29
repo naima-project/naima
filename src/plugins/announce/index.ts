@@ -12,6 +12,9 @@ import {
   type Command,
   type Context,
   CONTRACT,
+  creditsMarkdown,
+  creditsOf,
+  creditsText,
   fieldValue,
   fieldValues,
   type Finding,
@@ -138,6 +141,7 @@ export default function announce(options: Record<string, unknown> = {}): Plugin 
       { name: "--all", says: "also every user-facing feature that is not announceable, with what it lacks" },
       { name: "--json", says: "print each feature as JSON: item, title, major, shippedOn, announceable, lacks, checkedBy" },
     ],
+    // With --gate it prints the release notes of that gate, so it ends with their Credits section, as naima credits prints it.
     examples: ["announce", "announce --since 2026-09-01", "announce --gate v1 --all", "announce --json"],
     run(args, ctx) {
       const p = parse(args, { since: { type: "string" }, gate: { type: "string" }, all: { type: "boolean" }, json: { type: "boolean" } })
@@ -162,6 +166,32 @@ export default function announce(options: Record<string, unknown> = {}): Plugin 
       const no = rows.filter((a) => !a.announceable)
       if (no.length) ctx.out(`${no.length} user-facing, not announceable`)
       for (const a of no) ctx.out(`  ✗ ${a.item}  ${a.title} — ${a.lacks.join("; ")}`)
+      if (gate !== undefined) {
+        ctx.out()
+        ctx.out("Credits")
+        for (const line of creditsText(creditsOf(ctx))) ctx.out(`  ${line}`)
+      }
+      return 0
+    },
+  }
+
+  const credits: Command = {
+    name: "credits",
+    says:
+      "every attribution in use in the project — Naima itself, each plugin or stance loaded from outside Naima, what a plugin runs without installing it, and every tool a loaded plugin declares — each with its name, homepage, source, authors, licence and version, and what it fails to declare (provisional)",
+    enforces: "nothing: it only prints",
+    usage: "credits [--json | --markdown]",
+    options: [
+      { name: "--json", says: "print each credit as JSON: name, homepage, source, authors, license, version, kind, plugin, missing" },
+      { name: "--markdown", says: "print the credits as the Credits section of release notes, in Markdown" },
+    ],
+    examples: ["credits", "credits --json", "credits --markdown"],
+    run(args, ctx) {
+      const p = parse(args, { json: { type: "boolean" }, markdown: { type: "boolean" } })
+      if (p.positionals.length || (bool(p, "json") && bool(p, "markdown"))) throw usageError(this)
+      const list = creditsOf(ctx)
+      const lines = bool(p, "json") ? [JSON.stringify(list, null, 2)] : bool(p, "markdown") ? creditsMarkdown(list) : creditsText(list)
+      for (const line of lines) ctx.out(line)
       return 0
     },
   }
@@ -194,6 +224,7 @@ export default function announce(options: Record<string, unknown> = {}): Plugin 
     about:
       "What may be announced is computed, never declared. A feature is **announceable** when it is user-facing (`facing: user`), shipped (a status in `shippedStatuses`, or closed into the archive), documented (its `docs` field names a page) and checked: a passed item verifies it whose `runBy` is in `checkedBy` — a person, or an agent driving the running software, end to end — or whose `evidenceKind` is in `checkedEvidence`. A refuting proof outweighs any that proves. " +
       "`naima announce` lists the announceable features, major ones (`major: true`) first, since a date or on a gate: the only source of release notes, changelog entries and announcements. With `--all` it adds every user-facing feature that is not announceable, with what it lacks. " +
+      "`naima credits` prints the standard credit of everything the project uses from outside — Naima itself, the plugins and stances it loads from elsewhere, what a plugin runs without installing it, the tools the loaded plugins declare — each with where it is published (homepage and source), its authors, its licence and the version used; `--markdown` prints it as the Credits section that `naima announce --gate` and `naima changes` end the release notes with. This is provisional. " +
       "The check `copy-names-only-announceable` fails when a file of the `copy` option names, by its label or its full title, a feature that is not announceable, so the README and the site never promise what is not true.",
     options: [
       { name: "featureTypes", says: "item types whose items are features", default: '["features"]' },
@@ -222,7 +253,7 @@ export default function announce(options: Record<string, unknown> = {}): Plugin 
       { name: "major", kind: "boolean", says: "a feature an announcement leads with", appliesTo: opts.featureTypes, traits: ["archive"] },
     ],
     uses: { types: opts.featureTypes, fields: [DOCS.name, RUN_BY.name, FIXED_ON.name], relations: ["verified-by"] },
-    commands: [command],
+    commands: [command, credits],
     checks: [copyNamesOnlyAnnounceable],
   }
 }

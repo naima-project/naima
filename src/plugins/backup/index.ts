@@ -62,6 +62,8 @@ export const GH = {
   version: "2.103.3",
   licence: "MIT",
   homepage: "https://cli.github.com",
+  source: "https://github.com/cli/cli",
+  authors: ["GitHub"],
   programs: ["gh"],
   verify: { program: "gh", args: ["--version"], expect: "gh version 2.103.3" },
   platforms: {

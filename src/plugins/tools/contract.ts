@@ -44,6 +44,10 @@ export interface ToolDeclaration {
   /** The licence's SPDX identifier, and a sentence when the artefact bundles others. */
   licence: string
   homepage: string
+  /** Where its source is published: part of its attribution, which `naima credits` prints (provisional). */
+  source?: string
+  /** Its authors, by name when they are few, otherwise the team or organisation: part of its attribution (provisional). */
+  authors?: string[]
   /** Tools installed first. */
   needs?: string[]
   /** The programs it provides, by name. */
@@ -86,6 +90,10 @@ export function declarationRefusal(t: unknown): string | null {
   const d = t as Partial<ToolDeclaration> | null
   if (!d || typeof d !== "object" || !nonEmpty(d.name) || !NAME.test(d.name)) return "has no name: one lowercase word"
   for (const k of ["title", "says", "version", "licence", "homepage"] as const) if (!nonEmpty(d[k])) return `has no ${k}`
+  if (d.source !== undefined && !nonEmpty(d.source)) return "has a source that is not a URL"
+  if (d.authors !== undefined && (!Array.isArray(d.authors) || !d.authors.length || !d.authors.every(nonEmpty))) {
+    return "has authors that are not a list of names"
+  }
   if (!Array.isArray(d.programs) || !d.programs.length || !d.programs.every(nonEmpty)) return "has no programs"
   if (d.needs !== undefined && (!Array.isArray(d.needs) || !d.needs.every((n) => typeof n === "string" && NAME.test(n)))) {
     return "has needs that are not tool names"
@@ -107,11 +115,16 @@ export function declarationRefusal(t: unknown): string | null {
 export const toolsPoint: ExtensionPoint<ToolDeclaration> = {
   id: "tools",
   says:
-    "a tool a plugin needs, which `naima tools install` installs into Naima's own directory: name, exact version, licence, programs, how an install is verified, and per platform a source (url, size, sha256, format) or the answer saying why there is none",
+    "a tool a plugin needs, which `naima tools install` installs into Naima's own directory: name, exact version, licence, homepage, source and authors (its attribution, which `naima credits` prints), programs, how an install is verified, and per platform a source (url, size, sha256, format) or the answer saying why there is none",
   noun: "tool",
   key: (t) => t.name,
   validate: declarationRefusal,
-  gaps: (t) => (nonEmpty(t.says) ? [] : ["does not say what it is"]),
+  credit: (t) => ({ name: t.title, homepage: t.homepage, source: t.source ?? "", authors: t.authors ?? [], license: t.licence, version: t.version }),
+  gaps: (t) => [
+    ...(nonEmpty(t.says) ? [] : ["does not say what it is"]),
+    ...(t.authors?.length ? [] : ["does not name its authors, for naima credits"]),
+    ...(nonEmpty(t.source) ? [] : ["does not say where its source is published, for naima credits"]),
+  ],
   document: (ts) => [
     "",
     "**Tools**, installed by `naima tools install`",
