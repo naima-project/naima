@@ -43,7 +43,7 @@ all invariants hold
 Naima is installed in ~/demo.
 
 Next:
-  git add naima-tracker && git commit -m "Track this project with Naima" -m "Naima-Setup: install"
+  git add naima-tracker AGENTS.md && git commit -m "Track this project with Naima" -m "Naima-Setup: install"
   alias naima='deno run -A "$(git rev-parse --show-toplevel)/naima-tracker/naima/naima.ts"'
 
 Agents: read naima-tracker/naima/skills/naima/SKILL.md
@@ -56,7 +56,7 @@ the [data directory](glossary.md#data-directory), `naima-tracker/naima-data/`, [
 Now do the two things it suggests. The alias lets you type `naima` instead of the long command, and if you add it to your shell's startup file it will stay.
 
 ```console
-$ git add naima-tracker && git commit -qm "Track this project with Naima" -m "Naima-Setup: install"
+$ git add naima-tracker AGENTS.md && git commit -qm "Track this project with Naima" -m "Naima-Setup: install"
 $ alias naima='deno run -A "$(git rev-parse --show-toplevel)/naima-tracker/naima/naima.ts"'
 ```
 
