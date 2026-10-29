@@ -157,7 +157,7 @@ function codegenFiles(): string[] {
   return []
 }
 
-/** The grant of `command`: only `ui`, `run`, `wait`, `tools`, `backup create`, `verify` and `guard server` have one; `tools` is the tools directory to write; `rest`, the arguments after the command. */
+/** The grant of `command`: only `ui`, `run`, `wait`, `tools`, `backup create`, `verify`, `stance adopt` and `guard server` have one; `tools` is the tools directory to write; `rest`, the arguments after the command. */
 export function uiGrant(command: string | undefined, os: string, deno: string, tools: string | null = null, rest: readonly string[] = []): UiGrant | null {
   // gh only for guard server, which sends the ruleset; --print sends nothing.
   if (command === "guard") return rest[0] === "server" && !rest.includes("--print") ? { net: [], read: [], runs: ["gh"] } : null
@@ -176,6 +176,8 @@ export function uiGrant(command: string | undefined, os: string, deno: string, t
   if (command === "tools") return { net: [], read: [], runs: [], write: tools ? [tools] : [], netAll: true, runAll: true }
   // naima backup create installs gh through the tools plugin, as naima tools install does, then runs it: the same grant.
   if (command === "backup" && rest[0] === "create") return { net: [], read: [], runs: [], write: tools ? [tools] : [], netAll: true, runAll: true }
+  // naima stance adopt runs the adoption a stance declares, which starts the programs it names (the UI stance's, Deno): the stance is not loaded yet when the grant is made.
+  if (command === "stance" && rest[0] === "adopt") return { net: [], read: [], runs: [], runAll: true }
   // On Windows `naima run` starts its supervisor through WMI, by PowerShell (src/plugins/long-work/launch.ts).
   if (command === "run" || command === "wait") {
     return { net: [], read: [deno], runs: [deno, "ssh", ...(command === "run" && os === "windows" ? ["powershell.exe"] : [])], wholeEnv: true }

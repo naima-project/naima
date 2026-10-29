@@ -56,12 +56,15 @@ function ignoreFetched(tracker: string): void {
 function fetched(where: Where, name: string, git: string, commit: string): string {
   const dir = join(where.tracker, FETCHED, name)
   const at = () => runGit(dir, ["rev-parse", "HEAD"]).out.trim()
+  // A clone made with --no-checkout has HEAD at the branch tip and no files: when the pin is that tip, it is checked out all the same.
+  let fresh = false
   if (!existsSync(join(dir, ".git"))) {
     mkdirSync(dirname(dir), { recursive: true })
     mustGit(where.tracker, "clone", "--quiet", "--no-checkout", "--", git, dir)
     ignoreFetched(where.tracker)
+    fresh = true
   }
-  if (at() !== commit) {
+  if (fresh || at() !== commit) {
     if (!runGit(dir, ["cat-file", "-e", `${commit}^{commit}`]).ok) mustGit(dir, "fetch", "--quiet", "origin")
     if (!runGit(dir, ["cat-file", "-e", `${commit}^{commit}`]).ok) throw new Error(`${DATA_FILE}: plugins.${name}: ${git} has no commit ${commit}`)
     mustGit(dir, "-c", "advice.detachedHead=false", "checkout", "--quiet", "--detach", commit)

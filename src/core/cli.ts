@@ -108,7 +108,7 @@ import { EXIT, isInternal, message, NaimaError } from "./errors.ts"
 import type { Command, Context, GuideSection, Plugin, Setup } from "./types.ts"
 import { asRendered, linesAs } from "./rendered.ts"
 import { shortOrId } from "./names.ts"
-import { apiFor } from "./plugins.ts"
+import { apiFor, FETCHED } from "./plugins.ts"
 import { atSessionStart, goalsAtSessionStart, offersAtSessionStart } from "./base.ts"
 import { committedLock as lockOfLastCommit, type SessionConfig, sessionStartGaps, startSessions, unfinishedUpdate } from "./session-start.ts"
 import { adapter, ADAPTERS } from "./adapters/index.ts"
@@ -128,6 +128,7 @@ import {
 } from "./tick.ts"
 import { startSession } from "./origin.ts"
 import type { TickJob } from "./types.ts"
+import { STANCE_ADOPT, STANCE_KIND, STANCE_MODULE, STANCE_NAME, stanceHead, stancePlugin, type StanceRegistry, stanceRegistry } from "./stances.ts"
 
 export interface CliOptions extends OpenOptions {
   cwd: string
@@ -149,6 +150,8 @@ export interface CliOptions extends OpenOptions {
   tick?: { clock?: () => Date; check?: (signal: AbortSignal) => Promise<JobOutcome> }
   /** What a session-start hook is given on standard input, for a test; launched, it is read from standard input. */
   hookInput?: () => string
+  /** Where stances are found: the Naima project's organisation on GitHub, unless a test gives its own. */
+  stances?: StanceRegistry
 }
 
 /** Standard input, as a session-start hook is given it: nothing from a terminal, or when it cannot be read. */
@@ -1345,6 +1348,92 @@ function commandHelp(cmd: Command, io: IO): number {
   return 0
 }
 
+/** The stances naima.json's plugins table has adopted: each entry named stance-<name> pinned from git. */
+function adoptedStances(raw: Record<string, unknown>): { name: string; plugin: string; git: string; commit: string }[] {
+  const table = (raw["plugins"] as PluginTable | undefined) ?? {}
+  return Object.entries(table).flatMap(([plugin, entry]) => {
+    const source = entry?.["source"] as { git?: unknown; commit?: unknown } | undefined
+    if (!plugin.startsWith("stance-") || typeof source?.git !== "string" || typeof source.commit !== "string") return []
+    return [{ name: plugin.slice("stance-".length), plugin, git: source.git, commit: source.commit }]
+  })
+}
+
+async function stancesCommand(args: string[], opts: CliOptions, place: Place, io: IO): Promise<number> {
+  if (args.length) throw new Error(usage("stances"))
+  let listed
+  try {
+    listed = await (opts.stances ?? stanceRegistry()).list()
+  } catch (e) {
+    io.err(`naima: ${message(e)} — naima stance status still shows the stances adopted here`)
+    return EXIT.FAILED
+  }
+  const adopted = new Set(adoptedStances(readRaw(place.data)).map((s) => s.name))
+  if (!listed.length) io.out("no stance is published yet")
+  for (const s of listed) io.out(`${s.name.padEnd(16)} ${adopted.has(s.name) ? "adopted  " : "         "}${s.says}`)
+  return 0
+}
+
+async function stanceCommand(args: string[], opts: CliOptions, place: Place, io: IO): Promise<number> {
+  const [sub, name, ...rest] = args
+  if (sub === "status") {
+    if (name !== undefined) throw new Error(usage("stance"))
+    const adopted = adoptedStances(readRaw(place.data))
+    if (!adopted.length) io.out("no stance adopted — naima stances lists those available")
+    for (const s of adopted) {
+      const head = stanceHead(place.root, s.git)
+      const said = "reason" in head
+        ? head.reason
+        : head.commit === s.commit
+        ? "up to date"
+        : `a newer commit ${short(head.commit)} — naima stance adopt ${s.name} moves the pin to it`
+      io.out(`${s.name.padEnd(16)} ${short(s.commit)}  ${said}`)
+    }
+    return 0
+  }
+  if ((sub !== STANCE_ADOPT && sub !== "examples") || !name) throw new Error(usage("stance"))
+  if (!STANCE_NAME.test(name)) throw new Error(`a stance's name is lowercase letters, digits and dashes: got ${JSON.stringify(name)}`)
+  const plugin = stancePlugin(name)
+  if (sub === "examples") {
+    if (rest.length) throw new Error(usage("stance"))
+    if (!adoptedStances(readRaw(place.data)).some((s) => s.name === name)) throw new Error(`stance ${name} is not adopted here — naima stance adopt ${name}`)
+    const ctx = await openProject(place, opts, io)
+    const manifest = ctx.registry.plugins.find((p) => p.name === plugin)
+    const examples = manifest?.examples ?? []
+    if (!examples.length) io.out(`stance ${name} declares no examples`)
+    const checkout = join(trackerOf(place.data), FETCHED, plugin)
+    for (const e of examples) io.out(`${e.padEnd(24)} ${posixRelative(place.root, join(checkout, e))}`)
+    return 0
+  }
+  // adopt
+  const registry = opts.stances ?? stanceRegistry()
+  const git = registry.url(name)
+  const head = stanceHead(place.root, git)
+  if ("reason" in head) throw new Error(`stance ${name}: ${head.reason}`)
+  const raw = readRaw(place.data)
+  const entry = { ...pluginEntry(raw, plugin), source: { git, commit: head.commit, path: STANCE_MODULE } }
+  writeValidatedRaw(place.data, withPluginEntry(raw, plugin, entry, false))
+  let ctx: Context
+  try {
+    ctx = await openProject(place, opts, io)
+    const manifest = ctx.registry.plugins.find((p) => p.name === plugin)
+    if (manifest?.kind !== STANCE_KIND) {
+      throw new Error(`${git} at ${short(head.commit)} is a plugin, but not a stance: its manifest does not say kind "${STANCE_KIND}"`)
+    }
+  } catch (e) {
+    writeRaw(place.data, raw)
+    throw new Error(`stance ${name} not adopted, ${DATA_FILE} put back as it was: ${message(e)}`)
+  }
+  io.out(`adopted stance ${name}: ${git} at ${short(head.commit)}, pinned in ${DATA_FILE} as plugins.${plugin}`)
+  // Its adoption, when it declares one: its own command, named as it is, that takes adopt.
+  const hook = ctx.registry.find<Command>("commands", plugin)?.value
+  if (!hook || !hook.usage.split(/[\s|[\]]+/).includes(STANCE_ADOPT)) {
+    io.out(`stance ${name} declares no adoption of its own: its rules and checks are loaded`)
+    return 0
+  }
+  io.out(`running its adoption: naima ${plugin} ${STANCE_ADOPT}${rest.length ? ` ${rest.join(" ")}` : ""}`)
+  return await hook.run([STANCE_ADOPT, ...rest], ctx)
+}
+
 /**
  * Run a command of the entry point's own that may write the tracker (init, update, rollback, plugin) and, when the
  * tracker is a repository of its own, commit what it wrote there, as every other command's writes are.
@@ -1447,6 +1536,11 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     if (command === "plugin") {
       const at = place
       return await committingTracker(data, "plugin", io, () => Promise.resolve(pluginCommand(args, opts, at, at.raw, io)))
+    }
+    if (command === "stances") return await stancesCommand(args, opts, place, io)
+    if (command === "stance") {
+      const at = place
+      return await committingTracker(data, "stance", io, () => stanceCommand(args, opts, at, io))
     }
     const ctx = await openProject(place, opts, io)
     if (isHelp(command)) return help(ctx, data, io)

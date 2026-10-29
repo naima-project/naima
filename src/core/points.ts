@@ -401,4 +401,16 @@ export const CORE_POINTS: readonly ExtensionPoint[] = [
 ]
 
 /** Manifest keys that are not contributions: a point may not take one as its id. */
-export const MANIFEST_KEYS: readonly string[] = ["name", "says", "about", "options", "points", "contributes", "optional", "contract", "uses"]
+export const MANIFEST_KEYS: readonly string[] = [
+  "name",
+  "says",
+  "about",
+  "options",
+  "points",
+  "contributes",
+  "optional",
+  "contract",
+  "uses",
+  "kind",
+  "examples",
+]
