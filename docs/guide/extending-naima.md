@@ -17,6 +17,74 @@ gates, verifiers, commands, summary sections, rank terms and data migrations. A 
 `verifier` plugin was added and needed a completely new concept (a model-checker run). Each extension point says what a contribution to it looks like and how it
 is checked.
 
+## Rules a plugin ships
+
+A plugin can ship [rules](rules.md) that apply in every project that loads it, listed by `naima rules` beside the project's own. A rule is never written in
+code: each one is a Markdown file in a folder of the plugin, and the manifest names the folder.
+
+```ts
+export default (): Plugin => ({ name: "mine", says: "…", home: import.meta.url, contributes: { rules: "rules/" } })
+```
+
+`home` says where the plugin is, so that the folder can be found next to its module. A plugin loaded from a `source` or a `replacedBy` gets its module's
+location without saying so; one that the program imports, like the first-party plugins, sets it to `import.meta.url`.
+
+Each file holds one rule. It starts with a short header between two `---` lines, and the rule follows as plain paragraphs, then its reason under `## Why`:
+
+```markdown
+---
+name: quiet-mode
+title: Quiet mode
+audience: agents
+strength: must
+ack: Quiet mode on
+---
+
+Routine steps stay silent: during a task, speak only to ask before a high-risk step.
+
+## Why
+
+The owner's attention is the scarcest thing in the work.
+```
+
+The header holds these keys, and no others:
+
+| Key          | What it holds                                                                                                                         |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`       | The rule's name, lower case with dashes. Required. Its id is `<plugin>/<name>`, which a project's `retire` option can name.           |
+| `title`      | The rule in one line. Required.                                                                                                       |
+| `audience`   | `agents`, `people` or `everyone`. Required.                                                                                           |
+| `strength`   | `must` or `should`. Required.                                                                                                         |
+| `ack`        | The phrase an agent gives back to acknowledge the rule, when it asks for one.                                                         |
+| `enforcedBy` | The check or gate that enforces it, when one does. `naima check` reports a name that is neither.                                      |
+| `when`       | A condition on the plugin's settings, `<setting>=<value>`, or a list of them that must all hold. Without it, the file always applies. |
+
+The header is a small, strict part of YAML, read by Naima itself with no package: one key per line, `key: value`, or `key:` followed by lines that start with
+`-` for a list. A value is plain text, or a string in double quotes (as in JSON) or single quotes. Put a value in quotes when it contains a colon followed by a
+space or `#`, or starts with a quote, a dash or another YAML indicator. Anything else YAML allows, such as a nested map, a list written in brackets or a
+multi-line value, is refused, and so is an unknown key: the project does not load, and the message names the file, the line and what is wrong.
+
+The body is the rule, then exactly one section `## Why` with its reason. A paragraph may be wrapped over several lines, as a formatter wraps it: its
+lines are joined by a space, as Markdown reads them, and `naima rules` prints each paragraph on one line.
+
+The files are read in the order of their names, and a rule is listed in that order, so a number in front sets it: `01-quiet-mode.md`. Without the number and
+without `.md`, the file's name is the rule's name, which the header's `name` must match.
+
+Some rules depend on how the project configures the plugin. The plugin then names the folder together with its settings, each a piece of text:
+
+```ts
+contributes: { rules: { folder: "rules/", settings: { modelFirst: "advisory", adopted: " at commit 0123abcd4567" } } }
+```
+
+Two things in a rule file can use them. A `when` condition picks which file applies, so one rule can have one file for each setting, named
+`<name>.<variant>.md`: `02-behaviour-designed-from-a-model.md` with `when: modelFirst=strict`, and `02-behaviour-designed-from-a-model.advisory.md` with
+`when: modelFirst=advisory`. A rule with no file whose condition holds is not shipped, which is how the landing rule goes away when the trunk guard is off. And
+`{{setting}}` in the title, the text or the reason is replaced by that setting's value; the plugin gives an empty value where a phrase does not apply. A
+condition or a `{{…}}` that names a setting the plugin does not give is refused, and so are two files that hold the same rule for the same settings.
+
+A plugin written before rule files existed may still list its rules in the manifest, as objects with the same keys plus `text` and `why`; Naima's own plugins
+never do, and a test fails if one does.
+
 ## Sharing a project's vocabulary
 
 When a plugin reads a field, type or relation that it doesn't own itself, for example when `gates` reads the `fixedOn` field that `trackers` declares, it

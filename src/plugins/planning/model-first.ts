@@ -88,53 +88,17 @@ export function readModelFirst(options: Record<string, unknown>): ModelFirstSett
 
 // ── the rule ──────────────────────────────────────────────────────────────────
 
-const RULE_BODY =
-  'When behaviour has states or concurrency (a lifecycle, a protocol, a scheduler, a retry loop, two processes sharing data), it is modelled before any of its code is written, in proportion: each state machine is modelled on its own and kept small, and only what is not obvious is modelled, never the whole system at once and never what a test shows plainly. The model is in mCRL2, or a state machine encoded in mCRL2 (the guide gives a template), or another form a tool checks; a drawing or a description alone is not a model. Each property it must have is a `properties` item, and `naima verify` shows every one holds before the first line of its code is written. Its state space is minimised once and every property is checked on that, the LTS route (`verifierOptions` route lts) wherever the formula allows it, and a run already made on the same model and formula is reused, never recomputed. Where naima-codegen supports the language, every such state machine is generated from its model and checked against it, and the code around it is written to connect to the generated machine; elsewhere the code follows the model, and the model changes in the same change as the code it describes. The rule applies only when the behaviour has states or concurrency: a trivial change needs no model, and skipping one on behaviour that is not trivial is an exception, filed with its reason as a waiver of the model-first check (`naima waive model-first <item> --reason "<why>"`), which naima check lists at any time. Whoever triages a feature or a bug records whether its behaviour has states or concurrency (`naima set <item> stateful=true`, or `false`), and `naima check` notes a stateful change that landed with neither a model linked nor that waiver.'
-
-const SETTINGS =
-  " How strictly a project applies this rule is its own choice, set with `naima model-first`: strict, a must, the default for a new project; advisory, where the rule is a should, a change to code that existed before the setting was adopted is exempt unless it rewrites it, and a new protocol or new concurrency keeps the must (triage records which, `naima set <item> statefulKind=protocol`, `new` or `existing`); or deferred, where model checking is adopted later and a todo for adopting it stands on a gate or by a date the owner names."
-
-const RULE_BASE = {
-  name: "behaviour-designed-from-a-model",
-  title: "Behaviour with states or concurrency is modelled and verified before it is coded",
-  audience: "everyone",
-  why:
-    "behaviour with states fails in the orders of events nobody thought to test, and a model checker explores every order; a model checked only after the code describes the code, defects included, while one verified first is what the code is checked against. Small machines, each modelled alone and minimised once, check in seconds, so the rule costs little where it applies and nothing where it does not. An experiment with ten fresh agents found that, under the softer wording, four wrote a model before coding but none verified it first. A project that joins Naima with a large codebase cannot model it all at once, so it may make the rule advice for what already exists, or plan when to adopt it.",
-  ack: "Model first mode on",
-  enforcedBy: "model-first",
-}
-
-/** The rule that behaviour with states or concurrency starts from a model, as a project that applies it strictly holds it. */
-export const MODEL_FIRST_RULE = { ...RULE_BASE, strength: "must" as const, text: RULE_BODY + SETTINGS }
-
 const short = (commit: string | undefined): string => (commit ? ` at commit ${commit.slice(0, 12)}` : "")
 
-/** The rule as the project's setting words it: one rule, whose strength and opening depend on the setting. */
-export function modelFirstRule(s: ModelFirstSetting): typeof MODEL_FIRST_RULE | (typeof RULE_BASE & { strength: "should"; text: string }) {
-  if (s.mode === "advisory") {
-    return {
-      ...RULE_BASE,
-      strength: "should",
-      text:
-        `This project applies the rule as advice (\`naima model-first advisory\`, adopted${
-          short(s.since)
-        }): for a new protocol or new concurrency it stays a must, exactly as written here; for other new behaviour with states a model is advised, not required; and a change to behaviour that existed before the setting was adopted is exempt unless it rewrites it. Triage records which, \`naima set <item> statefulKind=protocol\`, \`new\` or \`existing\`; without it, a change whose files all existed at the adoption commit and none rewritten counts as existing. ` +
-        RULE_BODY,
-    }
-  }
-  if (s.mode === "deferred") {
-    return {
-      ...RULE_BASE,
-      strength: "should",
-      text:
-        `This project has deferred model checking${
-          s.until ? ` until ${s.until}` : ""
-        } (\`naima model-first deferred\`): until then the rule is advice, the todo for adopting it stands on that gate or by that date, and \`naima hello\` says so until the owner chooses strict or advisory with \`naima model-first\`. ` +
-        RULE_BODY,
-    }
-  }
-  return MODEL_FIRST_RULE
-}
+/**
+ * What the rule's files (rules/*behaviour-designed-from-a-model*.md) depend on: the mode picks the one that holds, and
+ * `adopted` and `until` fill in where the advisory and deferred wordings name the commit and the gate or date.
+ */
+export const modelFirstSettings = (s: ModelFirstSetting): Record<string, string> => ({
+  modelFirst: s.mode,
+  adopted: short(s.since),
+  until: s.until ? ` until ${s.until}` : "",
+})
 
 // ── the fields ────────────────────────────────────────────────────────────────
 

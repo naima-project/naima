@@ -468,20 +468,6 @@ export function diaryCommand(passes: (ctx: Context) => SessionNote[]): Command {
   }
 }
 
-/** The rule this plugin ships: agents keep the diary, sparingly. */
-export const DIARY_RULE = {
-  name: "agents-keep-the-diary",
-  title: "Agents keep the diary: one entry per decision taken with the owner or notable turn, never a log of routine work",
-  audience: "agents",
-  strength: "must",
-  text:
-    'An agent adds a diary entry on its own, without being asked (`naima event <today> "<what, and why>" --kind diary`), when a decision is taken with the owner in conversation (what was decided and why, in a sentence or two, naming the item it concerns), when the direction of the work changes (a plan dropped, a strategy chosen), or when something notable happens outside the tracker (an incident, a repository made private, a request from outside the project). It writes none for routine work, landings, items filed, fixes or test runs, and none for what a session note, a decision item or the timeline already records, since `naima diary` shows those already. A day holds a few entries at most: the related turns of one conversation make one entry, written once that exchange has settled, never one entry per turn and never a second entry that repeats the first.',
-  why:
-    "the diary is where the owner reads why the project went where it did; a decision taken in chat and never written down has to be reconstructed later, and a diary that logs every landing buries the few turns that matter under what the timeline already shows.",
-  ack: "Diary mode on",
-  enforcedBy: "diary-entries",
-}
-
 const DIARY_PER_DAY = 5
 
 /** The coordination option `diaryPerDay`: how many diary entries a day may hold before the check notes it. */
@@ -508,7 +494,7 @@ export function diaryCheck(passes: (ctx: Context) => SessionNote[], perDay: numb
       "as notes, never failing: a day with more diary entries than the coordination option diaryPerDay (5 by default), and a diary entry that only restates a session note of its day or a decision taken that day, which naima diary already shows",
     run(ctx) {
       const out: Finding[] = []
-      const rule = `rule coordination/${DIARY_RULE.name}`
+      const rule = "rule coordination/agents-keep-the-diary"
       const records = readRecords(ctx).filter((r) => r.kind === DIARY)
       const byDay = new Map<string, number>()
       for (const r of records) byDay.set(r.date, (byDay.get(r.date) ?? 0) + 1)

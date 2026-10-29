@@ -291,6 +291,18 @@ export interface ExtensionPoint<T = any> {
   configured?(c: T): boolean
   /** The reference's markdown for one plugin's contributions to this point, those the configuration makes left out. */
   document?(cs: readonly T[], plugin: string): string[]
+  /**
+   * The contributions a folder of files holds, for a plugin that names one under `contributes` instead of listing them:
+   * `dir` is the folder's absolute path, `settings` what the plugin says its files may depend on. Throws, saying which
+   * file and why, when one is not a contribution.
+   */
+  fromFolder?(dir: string, settings: Readonly<Record<string, string>>): T[]
+}
+
+/** A plugin's contributions to a point, kept as files in a folder: its path relative to the plugin's `home`, and the settings the files may depend on. */
+export interface FolderContribution {
+  folder: string
+  settings?: Readonly<Record<string, string>>
 }
 
 /**
@@ -410,8 +422,16 @@ export interface Plugin {
   migrations?: Migration[]
   /** Extension points it declares: new kinds of contribution any plugin can make. */
   points?: ExtensionPoint[]
-  /** Contributions to any point, by point id. A typed key above is the same as its point's entry here. */
-  contributes?: Record<string, readonly unknown[]>
+  /**
+   * Contributions to any point, by point id. A typed key above is the same as its point's entry here. To a point that reads
+   * files (`fromFolder`), a plugin may name a folder instead, relative to its `home`: `"rules/"`, or `{ folder, settings }`.
+   */
+  contributes?: Record<string, readonly unknown[] | string | FolderContribution>
+  /**
+   * Where the plugin is, as a file URL, normally its module's `import.meta.url`: a folder it names under `contributes` is
+   * read relative to it. The loader sets it to the module's own file for a plugin loaded from a source that leaves it out.
+   */
+  home?: string
   /** Points it contributes to only when a loaded plugin declares them: without one, those contributions are dropped rather than refused. */
   optional?: string[]
   /**

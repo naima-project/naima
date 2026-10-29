@@ -665,34 +665,6 @@ const waitCommand = (hosts: Map<string, Host>): Command => ({
   },
 })
 
-/** The rule this plugin ships, active for agents wherever it is loaded (specification §5). */
-export const LONG_WORK_RULE = {
-  name: "long-work-through-naima-run",
-  title: "Long work goes through naima run and naima wait; no hand-written wait loop",
-  audience: "agents",
-  strength: "must",
-  text:
-    "A command expected to outlast a few minutes, or one run on another machine, is started with `naima run <name> --budget-time <duration> -- <command>` — with `--budget-disk` and `--creates` when it writes stores or temporary data, `--host` when it runs elsewhere — waited on with `naima wait <name> --timeout <duration>`, watched with `naima run list`, and cleaned with `naima run clean <name>`. A hand-written wait loop (`while` or `until` with `sleep`) and any process lookup by pattern (`pgrep -f`, `pkill -f`) are forbidden, in a session and in a committed script.",
-  why:
-    "thirteen hand-written wait loops, each matching its own command line through `pgrep -f`, ran for up to 10.5 hours and were shown to the owner as work in progress; others kept polling a remote run that had hung; a third agent filled a remote disk with stores it never cleaned. A run with a budget ends itself, a wait by record ends when the run does, and what a run declares it creates is removed by one command.",
-  ack: "Long work mode on",
-  enforcedBy: "wait-loops",
-}
-
-/** The second rule this plugin ships: long work reports its progress (specs/progress-long-work-says-how-far, §1). */
-export const PROGRESS_RULE = {
-  name: "long-work-reports-progress",
-  title: "Long work reports its progress, or says why it cannot and what it reports instead",
-  audience: "everyone",
-  strength: "must",
-  text:
-    'Work that can last more than a few seconds reports its progress at least every few seconds: how much is done of the total, or the stage it is in with a count, and an estimate of the time left whenever the total is known. Where that is truly impossible — a tool with no progress interface — the work declares so, with the reason, and reports what it can: the elapsed time, the stage, and the tool\'s own log lines. A run started with `naima run` writes its progress to `$NAIMA_RUN_PROGRESS` — one JSON line such as `{"stage":"render","done":12,"total":40,"unit":"frames"}` — or is started with `--no-progress "<reason>"`; a Naima command that can run long declares how it reports, or why it cannot.',
-  why:
-    "`pbessolve` ran for more than 11 hours on each of two properties of a scheduler model, and nothing showed whether it was moving, how fast, or when it would end: a silent run cannot be told apart from a hung one, and the only choices left are to wait blind or to kill work that was nearly done.",
-  ack: "Progress mode on",
-  enforcedBy: "progress-declared",
-}
-
 /** The Naima commands that declare they report progress: a run of one of them reports through it. */
 const reportingCommands = (ctx: Context): Set<string> =>
   new Set([...ctx.registry.commands].filter(([, c]) => c.long !== undefined && "reports" in c.long && !!c.long.reports?.trim()).map(([n]) => n))
@@ -703,7 +675,7 @@ const progressDeclared: Check = {
     "long work is declared with its progress or with why it cannot report one: a command declared long says how it reports or why it cannot and what instead; a naima run in a tracked shell script has --no-progress with a reason, or a command that writes $NAIMA_RUN_PROGRESS or runs a Naima command that reports; a run recorded here silent past its threshold without ever writing progress is noted",
   run(ctx) {
     const out: Finding[] = []
-    const rule = `rule long-work/${PROGRESS_RULE.name}`
+    const rule = "rule long-work/long-work-reports-progress"
     for (const [name, c] of ctx.registry.commands) {
       if (c.long === undefined) continue
       const l = c.long as { reports?: unknown; cannot?: unknown; instead?: unknown }
@@ -755,7 +727,7 @@ const waitLoops: Check = {
     "no tracked shell script holds a hand-written wait — a while/until loop that sleeps, or pgrep -f/pkill -f — and a session note that does is noted; a line marked naima: allow-wait-loop, or the line after it, is exempt",
   run(ctx) {
     const out: Finding[] = []
-    const advice = `— long work goes through naima run and naima wait (rule long-work/${LONG_WORK_RULE.name}); or mark the line \`${ALLOW} <reason>\``
+    const advice = `— long work goes through naima run and naima wait (rule long-work/long-work-through-naima-run); or mark the line \`${ALLOW} <reason>\``
     const tracked = (gitOrNull(ctx.root, "ls-files", "-z") ?? "").split("\0").filter((f) => SCRIPT.test(f))
     for (const f of tracked) {
       let text: string
@@ -817,7 +789,8 @@ export default function longWork(options: Record<string, unknown> = {}): Plugin 
     commands: [runCommand(hosts, declared), waitCommand(hosts)],
     checks: [waitLoops, progressDeclared],
     fields: [DUE_FIELD],
-    contributes: { rules: [LONG_WORK_RULE, PROGRESS_RULE], summary: [dueSection(declared, tracker)], jobs: [dueJob(declared, tracker)] },
+    home: import.meta.url,
+    contributes: { rules: "rules/", summary: [dueSection(declared, tracker)], jobs: [dueJob(declared, tracker)] },
     optional: ["rules"],
   }
 }
