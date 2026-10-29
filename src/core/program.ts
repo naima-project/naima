@@ -16,6 +16,18 @@ import { NaimaError } from "./errors.ts"
 import { writeFileAtomic } from "./files.ts"
 import { gitReason, mustGit, nativePath, runGit } from "./git.ts"
 import { real, RUNTIME_DIR } from "./layout.ts"
+import {
+  archiveCommit,
+  CHECKSUM_MISMATCH,
+  clearDownloads,
+  fetchRelease,
+  listReleases,
+  pickRelease,
+  releaseRepo,
+  RELEASES_UNREACHABLE,
+  sameTree,
+  unpackArchive,
+} from "./releases.ts"
 
 /** Where a project's program is, and what it is locked to. Paths are absolute. */
 export interface Target {
@@ -32,6 +44,8 @@ export interface Target {
   verify?: "signed"
   /** Repositories on this disk that may hold the commit, tried before the source: the running Naima's own clone. */
   seeds?: string[]
+  /** The release the commit is, from the lock: fetched from the network, the commit comes with its release's archive, verified. */
+  release?: { version: string; sha256: string }
 }
 
 /** A URL with its credentials removed: a token in a clone's origin must never reach a committed naima.json. */
@@ -259,7 +273,21 @@ export interface Moved {
  * (`acceptSource`): the program runs whatever that source holds. A commit of
  * the old layout is refused: `naima update` moves the lock past it.
  */
-export function align(t: Target): Moved | null {
+export async function align(t: Target): Promise<Moved | null> {
+  // A commit no repository on this disk holds comes from the network: a release's, with its archive, verified.
+  const held = (isClone(t.program) && readableClone(t.program) && has(t.program, t.commit)) ||
+    seeds(t).some((s) => runGit(t.root, ["-C", s, "cat-file", "-e", `${t.commit}^{commit}`]).ok)
+  const release = !held && t.release && (!isClone(t.program) || runGit(t.program, ["rev-parse", "HEAD"]).out !== t.commit)
+    ? await downloadRelease(t, t.release)
+    : null
+  try {
+    return finishAlign(t, release)
+  } finally {
+    release?.clear()
+  }
+}
+
+function finishAlign(t: Target, release: { check(): void } | null): Moved | null {
   let from: string | null = null
   const repaired: string[] = []
   let restoredFrom: string | null = null
@@ -289,6 +317,7 @@ export function align(t: Target): Moved | null {
     if (from === t.commit) return repaired.length ? { from, repaired } : null
   }
   fetchCommit(t, t.commit)
+  release?.check()
   if (oldLayout(t.program, t.commit)) {
     throw new NaimaError(
       `commit ${short(t.commit)} is of Naima's old layout, its program in ${RUNTIME_DIR}/: naima update moves the lock to the head of the source's main`,
@@ -302,6 +331,54 @@ export function align(t: Target): Moved | null {
   mustGit(t.program, "checkout", "--quiet", "--detach", t.commit)
   if (restoredFrom) repaired.push(`restored ${where(t)} at ${short(t.commit)}, from ${restoredFrom}`)
   return { from, repaired }
+}
+
+/** Where a release's archive is downloaded and unpacked, beside the program in the tracker folder: removed after. */
+export const releaseDir = (tracker: string): string => join(tracker, ".naima-release")
+
+/**
+ * Download the release the lock names, as an install does, and verify it: its checksum the lock's, the commit it
+ * was made from the lock's, and once that commit is fetched (`check`), its tree the archive's files exactly. A
+ * source that publishes no releases here is fetched by git alone. Network failures carry COMMIT_UNAVAILABLE, as a
+ * fetch's do; a checksum that differs is refused.
+ */
+export async function downloadRelease(t: Target, want: { version: string; sha256: string }): Promise<{ check(): void; clear(): void } | null> {
+  const repo = releaseRepo(t.source)
+  if (!repo) return null
+  const dir = releaseDir(t.tracker)
+  clearDownloads(dir)
+  try {
+    const release = pickRelease(await listReleases(repo), { version: want.version })
+    if (!release) throw new NaimaError(`${want.version} is not a release of ${t.source}: naima update moves the lock to one that is`, COMMIT_UNAVAILABLE)
+    const got = await fetchRelease(release, repo.repo, dir, { expected: want.sha256 })
+    return verifiedArchive(t.program, got.archive, t.commit, dir)
+  } catch (e) {
+    clearDownloads(dir)
+    if (e instanceof NaimaError && e.code === RELEASES_UNREACHABLE) throw new NaimaError(e.message, COMMIT_UNAVAILABLE)
+    throw e
+  }
+}
+
+/** An archive checked to be made from `commit`, unpacked: `check` compares it with the commit's tree once git has it. */
+export function verifiedArchive(program: string, archive: string, commit: string, dir: string): { check(): void; clear(): void } {
+  const made = archiveCommit(archive, dir)
+  if (made !== commit) {
+    throw new NaimaError(
+      `the release archive was made from ${made ? short(made) : "no recorded commit"}, and the lock names ${short(commit)} — refused, nothing installed`,
+      CHECKSUM_MISMATCH,
+    )
+  }
+  const tree = join(dir, "tree")
+  unpackArchive(archive, tree)
+  return {
+    check() {
+      const same = sameTree(join(program, ".git"), commit, tree)
+      if (!same.same) {
+        throw new NaimaError(`the release archive is not the files of ${short(commit)}: ${same.why} — refused, nothing installed`, CHECKSUM_MISMATCH)
+      }
+    },
+    clear: () => clearDownloads(dir),
+  }
 }
 
 /** What `naima update` follows: the branch it read, and the commit that branch points at. */

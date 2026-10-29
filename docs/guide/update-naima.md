@@ -5,6 +5,26 @@ someone updates Naima on purpose, and each update is a single commit you can rev
 
 You rarely need to do any of this yourself. The agents check for updates, tell you what a new version would change, and ask you before they apply it.
 
+## Naima updates to releases
+
+Naima moves only from one release to another. A release is a version tag, such as `v1.2.0`, with two files attached on GitHub: `naima-1.2.0.tar.gz`, which
+holds the files of that version, and `naima-1.2.0.tar.gz.sha256`, its checksum. Installing Naima and updating it both download that archive from the release.
+Naima checks the archive against its checksum and against the commit the tag names before it uses anything in it, and refuses an archive that does not match.
+The lock then records the version and the checksum next to the commit.
+
+Downloading the archive is also how the project knows how many people use each version. GitHub counts the downloads of every file attached to a release, so
+the releases page shows how many installs and updates each version had, private projects included. Naima sends nothing else anywhere.
+
+`naima update` takes the newest release. Pre-releases, such as `1.2.0-rc.1`, are left out unless you ask for them with `naima update --pre`, or the project
+already runs one. To move to a particular version, forward or back, name it: `naima update --to 1.2.0`.
+
+A project whose lock still names a commit of Naima's main branch, as every lock did before releases, moves to the newest release on its next update, and the
+update says so once. If that commit is already newer than the newest release, Naima stays where it is and moves at the next release after it.
+
+Some projects follow a branch rather than releases: Naima's own workshop, which runs each change as soon as it lands, or a fork that publishes no releases.
+`naima update --main` moves the lock to the head of the source's main branch, as every update did before releases; the lock then names a commit with no
+version. A source that publishes no releases at all is followed that way by plain `naima update` too.
+
 ## What happens when a session starts
 
 At the start of every conversation, the agent runs this:
@@ -39,7 +59,7 @@ There are three settings:
 | `updates` | What a session start does                                                                                                                        |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `off`     | It doesn't contact the source at all.                                                                                                            |
-| `check`   | It tells you when a newer Naima exists, and how many commits ahead it is. This is the default.                                                   |
+| `check`   | It tells you when a newer release exists, and which version it is. This is the default.                                                          |
 | `update`  | It also tells you what the newer Naima would change, with its change notes and a rehearsal of its check, and the agent asks whether you want it. |
 
 The default is `check` because it only reads, and changes nothing. Even with `update`, nothing is applied until you say yes.
@@ -50,7 +70,8 @@ The default is `check` because it only reads, and changes nothing. Even with `up
 naima update --check
 ```
 
-This tells you whether the [source](glossary.md#source) has a newer Naima than the one you are locked to. It exits with 1 when it does. In that case it also
+This tells you whether the [source](glossary.md#source) has a newer release than the one you are locked to. It exits with 1 when it does, and when the lock
+still names a commit of main that the next update moves to a release. In that case it also
 tells you what would change, in three parts.
 
 First come the change notes. Every change to how Naima behaves comes with a short note written by whoever made it ([change notes](../../changes/README.md)).
@@ -82,15 +103,16 @@ says so, and the check at the end of the update takes its place.
 naima new todos "Update Naima"
 naima open todos/update-naima      # its worktree; run the rest there
 naima update
-git add naima-tracker && git commit -m "Update Naima to <commit>"
+git add naima-tracker && git commit -m "Update Naima to version <version>"
 naima set todos/update-naima status=done
 ```
 
 An update changes what the project holds to, so it gets an item of its own and is made in that item's worktree. The coordinator then lands it from the main
 checkout with `naima land`, like any other change. Committed straight on the trunk, it draws a note from the check `landings-are-markers`.
 
-`naima update` shows what changes, downloads the newer Naima, switches the program to it and records the new commit in the lock. If anything fails along the
-way, the previous version stays in place. Then the newer Naima finishes the update itself:
+`naima update` shows what changes, downloads the newer release's archive and checks it, switches the program to it and records the new version, its checksum
+and its commit in the lock. If anything fails along the way, the previous version stays in place. Without a network the update says it could not reach the
+releases, leaves the lock where it is, and still runs the rest of its work on the version you have. Then the newer Naima finishes the update itself:
 
 - it migrates your data if the format changed;
 - it fixes what is mechanical in `naima.json`: an option a note says was renamed gets its new name and keeps its value, and an option the newer Naima doesn't
@@ -120,7 +142,8 @@ Installed a <tool> session-start hook in <its settings file>: every new conversa
 
 Its last line names every file to commit. You review the change, commit it as one on the item's branch, and land it.
 
-To move to a particular commit of the source's main branch rather than the newest one, use `naima update --to <commit>`.
+To move to a particular release rather than the newest one, use `naima update --to <version>`. To move to a commit of the source's main branch, use
+`naima update --to <commit>`; the lock then names that commit with no version.
 
 ### When the update asks to be run once more
 
@@ -143,8 +166,9 @@ naima check
 git add naima-tracker && git commit -m "Roll Naima back to <commit>"
 ```
 
-`naima rollback` looks through the git history of `naima.json` and puts back the lock that was there before the current one. It first tells you what it undoes.
-It is one commit, just like an update. To go back to some other commit, use `naima update --to <commit>`.
+`naima rollback` looks through the git history of `naima.json` and puts back the lock that was there before the current one, with its version and checksum when
+it named a release. It first tells you what it undoes. It is one commit, just like an update. To go back to some other release, use
+`naima update --to <version>`.
 
 There is one limit. Migrations only run forward, so an older Naima can't read data that a newer one has already migrated. In that case `naima
 rollback` refuses
@@ -166,7 +190,8 @@ in one line what it did:
 | The program at a different commit from the lock          | It switches it to the lock.                                                                               |
 
 A fresh copy comes from somewhere on your own disk when possible, such as another worktree's program or the Naima you are running, so no network is needed. Only
-otherwise does it download from the source.
+otherwise does it download from the source, and when the lock names a release, it downloads that release's archive too and checks it against the checksum in
+the lock.
 
 If someone has changed files in the program by hand, Naima won't touch it. Publish those changes as a fork instead
 ([modifying Naima](install.md#modifying-naima)). And if your project has no program at all, run any copy of Naima you have from inside the project
@@ -212,5 +237,7 @@ A repository that moved, say to another GitHub organization, still answers at it
 | the program directory has local changes, or commits its source does not have | someone changed Naima in place: publish the change as a fork and set `source` ([modifying Naima](install.md#modifying-naima)) |
 | it cannot reach the locked commit                                            | the source was rewritten or deleted: point `source` at a repository that has it                                               |
 | no network, and no copy yet                                                  | connect once; once the commit is in the user's cache every copy of it works offline                                           |
+| an archive whose SHA-256 differs from its checksum file, or from the lock    | nothing was installed: the download was altered or the release was replaced; ask whoever publishes the release                 |
+| Naima stays at its version: it cannot read the releases                      | the network or GitHub is down; the lock did not move, so run the update again later                                            |
 
 Everything about the lock, alignment and the copy: [install](install.md).

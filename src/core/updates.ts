@@ -25,7 +25,7 @@ import type { FirstParty, Plugin } from "./types.ts"
 export const FOLLOW_UP = "follow-up"
 
 /** The options of naima.json an older Naima may not know: dropped, and said, when the lock moves back to one. */
-export const OPTIONAL_KEYS = ["updates", "privateRemotes"] as const
+export const OPTIONAL_KEYS = ["updates", "privateRemotes", "version", "sha256"] as const
 
 /** A naima.json without the options of OPTIONAL_KEYS. */
 export function withoutOptional<T extends Record<string, unknown>>(raw: T): Record<string, unknown> {

@@ -18,14 +18,29 @@ import { FORMAT, formatRefusal, formatsOf } from "./format.ts"
 import { DEFAULT_ENTRY_FILES } from "./pointer.ts"
 import type { Config, Extension, PluginConfig, PluginOptions, PluginSource, Severity } from "./types.ts"
 
-const CORE_KEYS = ["format", "formats", "source", "commit", "verify", "program", "plugins", "rename", "extends", "agents", "entryFiles", "updates"]
+const CORE_KEYS = [
+  "format",
+  "formats",
+  "source",
+  "commit",
+  "version",
+  "sha256",
+  "verify",
+  "program",
+  "plugins",
+  "rename",
+  "extends",
+  "agents",
+  "entryFiles",
+  "updates",
+]
 /** Every key naima.json may hold: the core's, and the owner's answers about the tracker's remotes (core/exposure.ts). */
 const KEYS = new Set([...CORE_KEYS, "privateRemotes"])
 const COMMIT = /^[0-9a-f]{40}$/
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v)
 
-export type Lock = Pick<Config, "source" | "commit" | "verify" | "program">
+export type Lock = Pick<Config, "source" | "commit" | "version" | "sha256" | "verify" | "program">
 
 /**
  * Why a naima.json's `carry`, which data before format 3 may hold, keeps the
@@ -80,7 +95,23 @@ export function parseLock(raw: Record<string, unknown>): Lock {
   if (typeof program !== "string" || !program.trim()) throw new Error(`${DATA_FILE}: program must be a path, relative to the data directory`)
   const verify = raw["verify"]
   if (verify !== undefined && verify !== "signed") throw new Error(`${DATA_FILE}: verify is "signed", or absent`)
-  return { source, commit, ...(verify ? { verify } : {}), program }
+  const { version, sha256 } = raw
+  if ((version === undefined) !== (sha256 === undefined)) {
+    throw new Error(`${DATA_FILE}: version and sha256 go together: the release the commit is, and its archive's checksum`)
+  }
+  if (version !== undefined && (typeof version !== "string" || !/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(version))) {
+    throw new Error(`${DATA_FILE}: version must be the release's version, such as 1.2.0, without the v`)
+  }
+  if (sha256 !== undefined && (typeof sha256 !== "string" || !/^[0-9a-f]{64}$/.test(sha256))) {
+    throw new Error(`${DATA_FILE}: sha256 must be the SHA-256 of the release's archive, 64 hex digits`)
+  }
+  return {
+    source,
+    commit,
+    ...(typeof version === "string" && typeof sha256 === "string" ? { version, sha256 } : {}),
+    ...(verify ? { verify } : {}),
+    program,
+  }
 }
 
 /**
