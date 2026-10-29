@@ -1,4 +1,6 @@
-// What makes an agent run naima hello at the start of every session: for
+// What makes an agent run naima hello at the start of every session: the
+// committed launchers in the tracker folder, which every hook and the pointer
+// line run Naima through (launchers.ts); for
 // every tool, the pointer line in an entry file, which says so; and for each
 // tool the project uses that has a session-start hook, the hook, installed
 // by the tool's adapter (adapters/), and its turn-end hook, which runs the
@@ -20,6 +22,7 @@ import { trackerGitOf } from "./repos.ts"
 import { DATA_FILE, PROGRAM_DIR, trackerOf } from "./layout.ts"
 import { short } from "./program.ts"
 import { agentPointer, AGENTS_FILE, upgradePointer, writePointer } from "./pointer.ts"
+import { launcherGaps, writeLaunchers } from "./launchers.ts"
 
 /** The part of naima.json this reads: the entry files, and the agent tools the project names, if it names them. */
 export interface SessionConfig {
@@ -49,7 +52,7 @@ const programPath = (root: string, tracker: string): string => posixRelative(roo
 
 /** What is missing for naima hello to run at every session start, each said with what adds it. */
 export function sessionStartGaps(root: string, tracker: string, config: SessionConfig): string[] {
-  const out: string[] = []
+  const out: string[] = [...launcherGaps(root, tracker)]
   const p = agentPointer(root, tracker, config.entryFiles)
   if (!p.present) out.push(`no entry file tells agents to run naima hello at the start of a session: naima update writes the line into ${p.file}`)
   else if (!p.current) {
@@ -85,8 +88,10 @@ export function startSessions(
   config: SessionConfig,
   opts: { hooks: boolean },
 ): { said: string[]; wrote: string[]; left: string[] } {
-  const said: string[] = []
-  const wrote: string[] = []
+  // The launchers first: the pointer line and every hook run Naima through them.
+  const launchers = writeLaunchers(root, tracker)
+  const said: string[] = [...launchers.said]
+  const wrote: string[] = [...launchers.wrote]
   const left: string[] = []
   const p = agentPointer(root, tracker, config.entryFiles)
   if (!p.current && !mayWrite(join(root, p.file))) left.push(pointerPart(p.file))

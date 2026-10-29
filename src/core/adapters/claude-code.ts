@@ -1,6 +1,10 @@
 // Claude Code's adapter. Its always-on file is CLAUDE.md, and its project
 // settings, .claude/settings.json, hold hooks by event. Two are Naima's:
 //
+// Every hook that runs Naima runs it through the committed launcher,
+// naima-tracker/naima.sh, which installs Deno and restores the program first
+// when either is missing, as in a fresh clone in a new cloud session.
+//
 //   SessionStart  runs naima hello --hook claude-code, which prints JSON: the
 //                 greeting as a systemMessage, which the owner sees directly,
 //                 and, as additionalContext, what the agent is to say first.
@@ -47,9 +51,21 @@ const isObject = (v: unknown): v is Json => typeof v === "object" && v !== null 
 /** The program's folder, from the launcher's path: what the turn-end script is found under. */
 const programDir = (program: string): string => program.replace(/\/?naima\.ts$/, "") || "."
 
-const helloCommand = (program: string): string => `deno run -A "$CLAUDE_PROJECT_DIR/${program}" hello --hook ${ID}`
+/**
+ * How a hook runs Naima: the committed launcher in the tracker folder, naima.sh beside the program's folder, which
+ * repairs a missing Deno or program first (core/launchers.ts); Deno on the program's own entry when the program has
+ * no tracker folder around it.
+ */
+const runNaima = (program: string): string => {
+  const launcher = /(^|\/)[^/]+\/naima\.ts$/.test(program) ? program.replace(/[^/]+\/naima\.ts$/, "naima.sh") : null
+  return launcher ? `sh "$CLAUDE_PROJECT_DIR/${launcher}"` : `deno run -A "$CLAUDE_PROJECT_DIR/${program}"`
+}
+/** Whether a command runs Naima, through the committed launcher or, as an older hook did, Deno on the program. */
+const runsNaima = (c: string): boolean => c.includes("naima.sh") || c.includes("naima.ts")
+
+const helloCommand = (program: string): string => `${runNaima(program)} hello --hook ${ID}`
 const stopCommand = (program: string): string => `f="$CLAUDE_PROJECT_DIR/${programDir(program)}/${STOP_SCRIPT}"; [ ! -f "$f" ] || sh "$f"`
-const subagentCommand = (program: string): string => `deno run -A "$CLAUDE_PROJECT_DIR/${program}" subagent --hook ${ID}`
+const subagentCommand = (program: string): string => `${runNaima(program)} subagent --hook ${ID}`
 const subagentScript = (mode: string) => (program: string): string =>
   `f="$CLAUDE_PROJECT_DIR/${programDir(program)}/${SUBAGENT_SCRIPT}"; [ ! -f "$f" ] || sh "$f" ${mode}`
 
@@ -115,8 +131,8 @@ const sessionStart = hook(
   "session-start hook",
   "every new conversation starts by running naima hello, and you see its greeting directly: which Naima is active, whether a newer one exists, what waits on your decision",
   helloCommand,
-  (c) => c.includes("naima.ts") && /\shello(\s+--hook\s+\S+)?\s*$/.test(c),
-  (c) => c.includes("naima.ts") && c.trimEnd().endsWith(` hello --hook ${ID}`),
+  (c) => runsNaima(c) && /\shello(\s+--hook\s+\S+)?\s*$/.test(c),
+  (c) => c.includes("naima.sh") && c.trimEnd().endsWith(` hello --hook ${ID}`),
 )
 
 const turnEnd = hook(
@@ -133,8 +149,8 @@ const subagentStart = hook(
   "sub-agent-start hook",
   "every sub-agent the agent starts is given the project's rules as it starts, so a worker obeys them without depending on its brief",
   subagentCommand,
-  (c) => c.includes("naima.ts") && /\ssubagent(\s+--hook\s+\S+)?\s*$/.test(c),
-  (c) => c.includes("naima.ts") && c.trimEnd().endsWith(` subagent --hook ${ID}`),
+  (c) => runsNaima(c) && /\ssubagent(\s+--hook\s+\S+)?\s*$/.test(c),
+  (c) => c.includes("naima.sh") && c.trimEnd().endsWith(` subagent --hook ${ID}`),
 )
 
 const subagentTool = hook(
@@ -168,7 +184,7 @@ const shellWord = (w: string): string => (/^[A-Za-z0-9._\/:=@%+,-]+$/.test(w) ? 
 
 /** The command of a plugin's hook: the naima command `words`, through the launcher at `program`, named by `id`. */
 export const pluginHookCommand = (id: string, program: string, words: readonly string[]): string =>
-  `${PLUGIN_HOOK_VAR}=${id} deno run -A "$CLAUDE_PROJECT_DIR/${program}" ${words.map(shellWord).join(" ")}`
+  `${PLUGIN_HOOK_VAR}=${id} ${runNaima(program)} ${words.map(shellWord).join(" ")}`
 
 /** The id a command names, when it is a plugin's hook; null otherwise. */
 const pluginHookId = (command: string): string | null => {

@@ -13,7 +13,6 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { ADAPTERS } from "./adapters/index.ts"
 import { posixRelative } from "./config.ts"
-import { PROGRAM_DIR } from "./layout.ts"
 
 /** The entry file every tool may read, and the one the pointer goes into first. */
 export const AGENTS_FILE = "AGENTS.md"
@@ -80,7 +79,9 @@ const POINTER_MARK = "(naima/ the program, naima-data/ the data)"
 /** The one line that tells agents where Naima is, and to run naima hello at the start of every session unless a session-start hook already did. */
 export function pointerLine(root: string, tracker: string): string {
   const where = posixRelative(root, tracker)
-  return `Naima is in ${where}/ ${POINTER_MARK}; at the start of every session, run \`deno run -A ${where}/${PROGRAM_DIR}/naima.ts hello\` and pass on what it says, unless its output is already in the conversation because a session-start hook ran it: then pass that on and do not run it again; when a naima command prints a NAIMA-MESSAGE line, tell the owner what it says at once, and never acknowledge a message for them; if you find Naima elsewhere, update this line.`
+  return `Naima is in ${where}/ ${POINTER_MARK}; at the start of every session, run \`sh ${where}/naima.sh hello\` (on Windows \`${
+    where.split("/").join("\\")
+  }\\naima.cmd hello\`), which installs Deno and the program first when either is missing, and pass on what it says, unless its output is already in the conversation because a session-start hook ran it: then pass that on and do not run it again; when a naima command prints a NAIMA-MESSAGE line, tell the owner what it says at once, and never acknowledge a message for them; if you find Naima elsewhere, update this line.`
 }
 
 const textOf = (root: string, entryFile: string): string | null => {

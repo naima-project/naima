@@ -27,7 +27,7 @@
 // `naima guard on` puts it back.
 
 import { existsSync, readFileSync, rmSync } from "node:fs"
-import { isAbsolute, join, relative } from "node:path"
+import { dirname, isAbsolute, join, relative } from "node:path"
 import { isDeepStrictEqual } from "node:util"
 import {
   bool,
@@ -89,9 +89,14 @@ const fromRoot = (ctx: Context, abs: string): string => {
 
 /** The launcher of the program the project runs, from the root: what the hook starts, so the program's permissions apply. */
 export function guardLauncher(ctx: Context): string {
+  const committed = join(dirname(ctx.program), "naima.sh")
+  if (existsSync(committed)) return fromRoot(ctx, committed)
   const launcher = [join(ctx.program, "naima.ts"), join(ctx.program, "naima", "naima.ts")].find(existsSync) ?? join(ctx.program, "naima.ts")
   return fromRoot(ctx, launcher)
 }
+
+/** How the guard runs Naima: the committed launcher, which installs Deno and restores the program first when either is missing, else Deno on the program. */
+const runLauncher = (launcher: string): string => (launcher.endsWith(".sh") ? `sh ${quote(launcher)}` : `deno run -A ${quote(launcher)}`)
 
 /** The tracker's side of the guard in sibling mode: its trunk's name, and the code root from the data directory. */
 export interface TrackerSide {
@@ -135,7 +140,9 @@ export function guardHook(trunkName: string, command: string, opts: { launcher?:
         `if [ ! -f ${
           quote(opts.launcher)
         } ]; then echo "naima: the trunk guard cannot run here (no ${opts.launcher}): ${trunkName} moves unchecked" >&2; exit 0; fi`,
-        `command -v deno >/dev/null 2>&1 || { echo "naima: the trunk guard cannot run (deno is not on PATH): ${trunkName} moves unchecked" >&2; exit 0; }`,
+        ...(opts.launcher.endsWith(".sh") ? [] : [
+          `command -v deno >/dev/null 2>&1 || { echo "naima: the trunk guard cannot run (deno is not on PATH): ${trunkName} moves unchecked" >&2; exit 0; }`,
+        ]),
       ]
       : []),
     "unset GIT_INDEX_FILE",
@@ -149,7 +156,9 @@ const launcherChecks = (launcher: string | undefined, trunkName: string): string
   launcher
     ? [
       `if [ ! -f ${quote(launcher)} ]; then echo "naima: the trunk guard cannot run here (no ${launcher}): ${trunkName} moves unchecked" >&2; exit 0; fi`,
-      `command -v deno >/dev/null 2>&1 || { echo "naima: the trunk guard cannot run (deno is not on PATH): ${trunkName} moves unchecked" >&2; exit 0; }`,
+      ...(launcher.endsWith(".sh") ? [] : [
+        `command -v deno >/dev/null 2>&1 || { echo "naima: the trunk guard cannot run (deno is not on PATH): ${trunkName} moves unchecked" >&2; exit 0; }`,
+      ]),
     ]
     : []
 
@@ -207,7 +216,7 @@ const trackerSide = (ctx: Context): TrackerSide | undefined => {
 export function projectGuardHook(ctx: Context): string {
   const launcher = guardLauncher(ctx)
   const tracker = trackerSide(ctx)
-  return guardHook(guardedTrunk(ctx.root), `deno run -A ${quote(launcher)}`, { launcher, sibling: ctx.sibling, ...(tracker ? { tracker } : {}) })
+  return guardHook(guardedTrunk(ctx.root), runLauncher(launcher), { launcher, sibling: ctx.sibling, ...(tracker ? { tracker } : {}) })
 }
 
 const hookFile = (ctx: Context): string => join(ctx.trackerRoot, HOOKS_DIR, GUARD_HOOK)
