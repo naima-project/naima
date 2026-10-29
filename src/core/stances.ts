@@ -7,6 +7,9 @@
 import { runGit } from "./git.ts"
 import { VISIBILITY_HOST } from "./visibility.ts"
 
+/** The word of a stance's own adoption: its command named like its plugin entry, given `adopt`. Not the adopt plugin's name. */
+export const STANCE_ADOPT = "adopt"
+
 /** The kind a stance's manifest declares. */
 export const STANCE_KIND = "stance"
 

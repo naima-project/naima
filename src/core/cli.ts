@@ -128,7 +128,7 @@ import {
 } from "./tick.ts"
 import { startSession } from "./origin.ts"
 import type { TickJob } from "./types.ts"
-import { STANCE_KIND, STANCE_MODULE, STANCE_NAME, stanceHead, stancePlugin, type StanceRegistry, stanceRegistry } from "./stances.ts"
+import { STANCE_ADOPT, STANCE_KIND, STANCE_MODULE, STANCE_NAME, stanceHead, stancePlugin, type StanceRegistry, stanceRegistry } from "./stances.ts"
 
 export interface CliOptions extends OpenOptions {
   cwd: string
@@ -1390,7 +1390,7 @@ async function stanceCommand(args: string[], opts: CliOptions, place: Place, io:
     }
     return 0
   }
-  if ((sub !== "adopt" && sub !== "examples") || !name) throw new Error(usage("stance"))
+  if ((sub !== STANCE_ADOPT && sub !== "examples") || !name) throw new Error(usage("stance"))
   if (!STANCE_NAME.test(name)) throw new Error(`a stance's name is lowercase letters, digits and dashes: got ${JSON.stringify(name)}`)
   const plugin = stancePlugin(name)
   if (sub === "examples") {
@@ -1426,12 +1426,12 @@ async function stanceCommand(args: string[], opts: CliOptions, place: Place, io:
   io.out(`adopted stance ${name}: ${git} at ${short(head.commit)}, pinned in ${DATA_FILE} as plugins.${plugin}`)
   // Its adoption, when it declares one: its own command, named as it is, that takes adopt.
   const hook = ctx.registry.find<Command>("commands", plugin)?.value
-  if (!hook || !hook.usage.split(/[\s|[\]]+/).includes("adopt")) {
+  if (!hook || !hook.usage.split(/[\s|[\]]+/).includes(STANCE_ADOPT)) {
     io.out(`stance ${name} declares no adoption of its own: its rules and checks are loaded`)
     return 0
   }
-  io.out(`running its adoption: naima ${plugin} adopt${rest.length ? ` ${rest.join(" ")}` : ""}`)
-  return await hook.run(["adopt", ...rest], ctx)
+  io.out(`running its adoption: naima ${plugin} ${STANCE_ADOPT}${rest.length ? ` ${rest.join(" ")}` : ""}`)
+  return await hook.run([STANCE_ADOPT, ...rest], ctx)
 }
 
 /**
