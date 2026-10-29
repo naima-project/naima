@@ -162,6 +162,14 @@ naima land <branch> --repair
 It makes the code's marker from the code commit the tracker's marker names, records it in the items, and does nothing to a landing that is already paired, so
 running it twice is harmless. The same check reports a code marker whose tracker commit isn't on the tracker's trunk, and trailers that don't match.
 
+### Updating Naima
+
+An update changes both repositories: the lock, in the tracker's `naima.json`, and the files of the code it rewrites, such as the agents' settings and the
+pointer line. It lands as one paired landing, like any other change. `naima update` and `naima rollback` run on the code's trunk while the trunk guard runs
+there are refused before anything moves, since the tracker's trunk would take the lock and the code's would refuse the rest. Run them in an item's worktree
+instead ([updating](update-naima.md#updating)): Naima commits the tracker's half on the paired branch, the last line names the code's files to commit on the
+same branch, and `naima land` lands both. Anywhere else, the update first moves the tracker to the branch that pairs with the code's.
+
 `naima prune --branch <branch>` removes both branches and both worktrees, by the same rules: a branch with commits that no trunk and no `archive/<branch>` tag
 holds is refused.
 

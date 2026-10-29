@@ -108,7 +108,10 @@ naima set todos/update-naima status=done
 ```
 
 An update changes what the project holds to, so it gets an item of its own and is made in that item's worktree. The coordinator then lands it from the main
-checkout with `naima land`, like any other change. Committed straight on the trunk, it draws a note from the check `landings-are-markers`.
+checkout with `naima land`, like any other change. Committed straight on the trunk, it draws a note from the check `landings-are-markers`. When the tracker
+is a repository of its own, Naima commits the tracker's half on the item's branch itself, you commit the files of the code it names, and `naima land` lands
+the two together; run on the code's trunk while the trunk guard runs there, the update is refused before anything moves
+([updating Naima in sibling mode](private-tracker.md#updating-naima)).
 
 `naima update` shows what changes, downloads the newer release's archive and checks it, switches the program to it and records the new version, its checksum
 and its commit in the lock. If anything fails along the way, the previous version stays in place. Without a network the update says it could not reach the
