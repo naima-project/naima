@@ -48,6 +48,16 @@ export function readyLines(r: ReadyNow): string[] {
   ]
 }
 
+/** `naima hello`: how many workers may run at once, and that the owner can ask to change it. */
+export const workerLimitSection = (policy: Policy): SummarySection => ({
+  name: "worker limit",
+  hello: true,
+  render: () =>
+    rendered({ maxWorkers: policy.maxWorkers }, () => [
+      `Up to ${policy.maxWorkers} worker${policy.maxWorkers === 1 ? "" : "s"} at once (maxWorkers); ask to change it.`,
+    ]),
+})
+
 /** `naima hello`: the next ready items to start, when a slot is free. */
 export const readySection = (policy: Policy): SummarySection => ({
   name: "ready queue",

@@ -121,7 +121,8 @@ does, because too many expensive workers at once use it up and die in the middle
 worker, one worktree, one branch, opened with `naima open <item> <item>`.
 
 `naima open` enforces the bound: it refuses a new worker worktree once as many are open as the coordination option `maxWorkers` allows (3 by default), and names
-the open ones. Free one that has landed with `naima prune --branch <branch> --write`. Raise the bound only when the owner asks for it, in `naima.json`.
+the open ones. Free one that has landed with `naima prune --branch <branch> --write`. Raise the bound only when the owner asks for it, in `naima.json`;
+`naima hello` states the bound in one line, with the reminder that the owner can ask to change it, and the coordinator passes it on.
 
 Naima feeds itself from the ready queue. When a meeting with the owner closes, the work its decisions call for is approved package by package, queued or to
 start now (`naima meeting <meeting> --close`). Whenever fewer workers are open than `maxWorkers` allows, the coordinator starts the next item of
