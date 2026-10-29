@@ -22,6 +22,7 @@ import {
   type ExtensionPoint,
   filesAt,
   type Finding,
+  flagsOf,
   gitOrNull,
   gitReason,
   type GitRun,
@@ -77,6 +78,12 @@ export const STALE_PROOFS = "Stale-proofs"
 
 /** The trailer of a marker that lands a branch changing only tracker data, closing no item if need be, and why. */
 export const TRACKER_ONLY = "Tracker-only"
+
+/** The trailer of a marker that lands a branch whose work meets a requirement: met by its passed test, never closed. */
+export const MEETS = "Meets"
+
+/** The type whose items a landing meets, rather than closes. */
+const REQUIREMENTS = "requirements"
 
 /** The files of `changed`, paths in the tracker's repository, that lie outside the tracker data. */
 function outsideTracker(ctx: Context, changed: string[]): string[] {
@@ -327,14 +334,16 @@ function preconditions(
   branch: string,
   closes: string[],
   trackerOnly: boolean,
-): { main: string; old: string; tip: string; items: Landed[] } {
+  meets: readonly string[] = [],
+): { main: string; old: string; tip: string; items: Landed[]; met: Landed[] } {
   const { main, old, tip } = sideOf(ctx.root, branch, "", false)
   if (old === tip) throw new Error(`${branch} has nothing ${main} lacks: nothing to land`)
   if (trackerOnly) {
     const refusal = notTrackerOnly(branch, outsideTracker(ctx, changedFiles(ctx.trackerGit, old, tip)))
     if (refusal) throw new Error(refusal)
   }
-  return { main, old, tip, items: landedItems(ctx, branch, closes, old, tip, trackerOnly) }
+  const met = metRequirements(ctx, branch, meets, old, tip)
+  return { main, old, tip, met, items: landedItems(ctx, branch, closes, old, tip, trackerOnly, met.map((m) => m.id)) }
 }
 
 /**
@@ -342,7 +351,15 @@ function preconditions(
  * refused while the branch still holds its claim, when it names no item (unless the landing is tracker-only), or one
  * open and not fixed.
  */
-function landedItems(ctx: Context, branch: string, closes: string[], old: string, tip: string, trackerOnly = false): Landed[] {
+function landedItems(
+  ctx: Context,
+  branch: string,
+  closes: string[],
+  old: string,
+  tip: string,
+  trackerOnly = false,
+  met: readonly string[] = [],
+): Landed[] {
   const held = filesAt(ctx.trackerGit, tip, claimsDir(ctx), ".json").filter((f) => claimOf(f.text)?.branch === branch)
   if (held.length) {
     throw new Error(
@@ -351,11 +368,12 @@ function landedItems(ctx: Context, branch: string, closes: string[], old: string
       }): release it on the branch (naima release, or claim --not-preparing) and commit the deletion`,
     )
   }
-  const ids = closes.length ? closes.map((r) => idOf(ctx, tip, r)) : claimedInHistory(ctx, old, branch).map((e) => e.id)
-  if (!ids.length && trackerOnly) return []
+  // A requirement the landing meets is met by its test, never closed: claimed or named, it is not among what it closes.
+  const ids = (closes.length ? closes.map((r) => idOf(ctx, tip, r)) : claimedInHistory(ctx, old, branch).map((e) => e.id)).filter((id) => !met.includes(id))
+  if (!ids.length && (trackerOnly || met.length)) return []
   if (!ids.length) {
     throw new Error(
-      `${branch} claimed no item in its commits: name what it closes with --closes <item>, or, for a branch that changes only tracker data, land it with --tracker-only "<reason>"`,
+      `${branch} claimed no item in its commits: name what it closes with --closes <item>, for a branch whose work meets a requirement land it with --meets <requirement>, or, for a branch that changes only tracker data, land it with --tracker-only "<reason>"`,
     )
   }
   const items = [...new Set(ids)].map((id) => {
@@ -372,6 +390,91 @@ function landedItems(ctx: Context, branch: string, closes: string[], old: string
     )
   }
   return items
+}
+
+/** An item's meta.json as `rev` has it, found by its id, with the type its folder names; null when there is none. */
+function metaAt(ctx: Context, rev: string, id: string): { type: string; slug: string; meta: Record<string, unknown> } | null {
+  const paths = metaPathsWith(ctx, rev, id)
+  const texts = textsAt(ctx.trackerGit, paths.map((p) => `${rev}:${p}`))
+  for (const [i, text] of texts.entries()) {
+    let meta: Record<string, unknown>
+    try {
+      meta = text === null ? {} : (JSON.parse(text) as Record<string, unknown>)
+    } catch {
+      continue
+    }
+    if (meta["id"] !== id) continue
+    const [dir = "", slug = ""] = (paths[i] ?? "").slice(ctx.trackerPrefix ? ctx.trackerPrefix.length + 1 : 0).split("/")
+    return { type: [...ctx.registry.types.values()].find((t) => t.dir === dir)?.id ?? dir, slug, meta }
+  }
+  return null
+}
+
+/** The links an item's meta.json stores. */
+const linksOf = (meta: Record<string, unknown>): { rel: string; id: string }[] =>
+  Array.isArray(meta["links"]) ? (meta["links"] as { rel: string; id: string }[]).filter((l) => typeof l?.rel === "string" && typeof l?.id === "string") : []
+
+/**
+ * The proofs of requirement `id` as `rev` has them — every item that verifies it, the link stored on either side —
+ * split into those whose status proves it (a passed test) and those whose status refutes it, by label.
+ */
+function proofsAt(ctx: Context, rev: string, id: string): { proving: Map<string, string>; refuting: string[] } {
+  const proving = new Map<string, string>()
+  const refuting: string[] = []
+  const req = metaAt(ctx, rev, id)
+  const ids = new Set(linksOf(req?.meta ?? {}).filter((l) => l.rel === "verified-by").map((l) => l.id))
+  for (const path of metaPathsWith(ctx, rev, id)) {
+    const text = textsAt(ctx.trackerGit, [`${rev}:${path}`])[0]
+    try {
+      const meta = text ? (JSON.parse(text) as Record<string, unknown>) : {}
+      if (typeof meta["id"] === "string" && linksOf(meta).some((l) => l.rel === "verifies" && l.id === id)) ids.add(meta["id"])
+    } catch {
+      // not an item
+    }
+  }
+  for (const pid of ids) {
+    const proof = metaAt(ctx, rev, pid)
+    if (!proof) continue
+    const statuses = ctx.registry.types.get(proof.type)?.statuses
+    const status = String(proof.meta["status"] ?? "")
+    const flags = statuses && Object.hasOwn(statuses, status) ? flagsOf(statuses[status]!) : []
+    const name = `${proof.type}/${proof.slug}`
+    if (flags.includes("refutes")) refuting.push(name)
+    else if (flags.includes("proves")) proving.set(pid, name)
+  }
+  return { proving, refuting }
+}
+
+/**
+ * The ids of the requirements `refs` names that `branch` meets: each a requirement on the branch tip with an item that
+ * verifies it and passed there, which did not prove it on the trunk at `old` (the branch marked it passed or linked
+ * it), and none that refutes it; anything else is refused, nothing written.
+ */
+function metRequirements(ctx: Context, branch: string, refs: readonly string[], old: string, tip: string): Landed[] {
+  return [...new Set(refs.map((r) => idOf(ctx, tip, r)))].map((id) => {
+    const req = metaAt(ctx, tip, id)
+    if (!req) throw new Error(`${id} is not an item on ${branch}: --meets names a requirement that exists`)
+    const ref = `${req.type}/${req.slug}`
+    if (req.type !== REQUIREMENTS) {
+      throw new Error(`${ref} is not a requirement: --meets names a requirement, met by its passed test; a todo or a bug is closed, with --closes`)
+    }
+    const { proving, refuting } = proofsAt(ctx, tip, id)
+    if (refuting.length) throw new Error(`${ref} is refuted on ${branch} by ${refuting.join(", ")}: a landing meets a requirement nothing refutes`)
+    if (!proving.size) {
+      throw new Error(
+        `${ref} has no passed item that verifies it on ${branch}: naima link <test> verifies ${ref}, run it, set it passed on the branch and commit, then land with --meets`,
+      )
+    }
+    const before = proofsAt(ctx, old, id).proving
+    if ([...proving.keys()].every((p) => before.has(p))) {
+      throw new Error(
+        `${ref} was already proven on the trunk, by ${
+          [...before.values()].join(", ")
+        }: ${branch} marked no test of it passed, so its landing does not meet it — name what it closes with --closes`,
+      )
+    }
+    return { id, ref, closable: false, status: String(req.meta["status"] ?? "") }
+  })
 }
 
 /** The field an item names the commits that fixed it in, when a plugin declares it: a list of hashes. */
@@ -485,6 +588,7 @@ async function landBoth(
   noChangeNote: string | undefined,
   stale: string | undefined,
   trackerOnly: string | undefined,
+  meets: readonly string[] = [],
 ): Promise<number> {
   const code = sideOf(ctx.root, branch, "", false)
   const trk = sideOf(ctx.trackerGit, branch, " in the tracker", true)
@@ -494,7 +598,8 @@ async function landBoth(
     const refusal = notTrackerOnly(branch, changedFiles(ctx.root, code.old, code.tip))
     if (refusal) throw new Error(refusal)
   }
-  const items = landedItems(ctx, branch, closes, trk.old, trk.tip, trackerOnly !== undefined)
+  const met = metRequirements(ctx, branch, meets, trk.old, trk.tip)
+  const items = landedItems(ctx, branch, closes, trk.old, trk.tip, trackerOnly !== undefined, met.map((m) => m.id))
   const ids = items.map((i) => i.id)
   const codeMoves = code.old !== code.tip
   const trailers = codeMoves ? changeNoteTrailers(ctx, branch, code.old, code.tip, noChangeNote) : []
@@ -536,6 +641,7 @@ async function landBoth(
       for (const l of notCurrent) ctx.out(`${l} — landed anyway: ${stale!.trim()}`)
     }
     if (trackerOnly !== undefined) own.push(`${TRACKER_ONLY}: ${trackerOnly}`)
+    own.push(...meetsTrailers(met))
     const parents = trk.tip === trk.old ? ["-p", trk.old] : ["-p", trk.old, "-p", trk.tip]
     const made = runGit(ctx.trackerGit, ["commit-tree", trkTree, ...parents, "-F", "-"], {
       input: markerMessage(branch, ids, [`${CODE_TRAILER}: ${code.tip}`, ...own, `${CLI_TRAILER}: land`]),
@@ -549,7 +655,7 @@ async function landBoth(
     ctx.reload()
     throw e
   }
-  ctx.out(`landed ${branch} on the tracker's ${trk.main}: ${tm.slice(0, 12)}, ${closingLine(items, trackerOnly)}`)
+  ctx.out(`landed ${branch} on the tracker's ${trk.main}: ${tm.slice(0, 12)}, ${closingLine(items, trackerOnly, met)}`)
   let cm: string | null = null
   if (codeMoves) {
     try {
@@ -575,10 +681,14 @@ async function landBoth(
   return 0
 }
 
-/** What a landing closes, as its report says it; a tracker-only landing may close nothing. */
-const closingLine = (items: Landed[], trackerOnly: string | undefined): string =>
+/** The trailers naming each requirement a landing meets. */
+const meetsTrailers = (met: readonly Landed[]): string[] => met.map((m) => `${MEETS}: ${m.id}`)
+
+/** What a landing closes and meets, as its report says it; a tracker-only landing, or one that meets a requirement, may close nothing. */
+const closingLine = (items: Landed[], trackerOnly: string | undefined, met: readonly Landed[] = []): string =>
   [
     ...(items.length ? [`closing ${items.map((i) => i.ref).join(", ")}`] : []),
+    ...(met.length ? [`meeting ${met.map((m) => m.ref).join(", ")}`] : []),
     ...(trackerOnly !== undefined ? [`tracker data only: ${trackerOnly}`] : []),
   ].join("; ")
 
@@ -732,8 +842,9 @@ export const land: Command = {
   says:
     "land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor",
   enforces:
-    "runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item (unless --tracker-only gives the reason and the branch changes only tracker data) or an item open and not fixed, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, adds the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right after the marker, so that naima close finds a commit reachable from the trunk; then prints what every landing report says of the files the landing changed, never undoing it",
-  usage: 'land <branch> [--closes <item>]... [--no-change-note "<reason>"] [--stale-proofs "<reason>"] [--tracker-only "<reason>"] | land <branch> --repair',
+    "runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item (unless --tracker-only gives the reason and the branch changes only tracker data, or --meets names a requirement it meets) or an item open and not fixed; refuses --meets for an item that is not a requirement, one with no item that verifies it and passed on the branch tip, one whose proofs all passed on the trunk already, and one an item refutes, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, adds the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right after the marker, so that naima close finds a commit reachable from the trunk; then prints what every landing report says of the files the landing changed, never undoing it",
+  usage:
+    'land <branch> [--closes <item>]... [--no-change-note "<reason>"] [--stale-proofs "<reason>"] [--tracker-only "<reason>"] [--meets <requirement>]... | land <branch> --repair',
   options: [
     {
       name: "--repair",
@@ -756,6 +867,11 @@ export const land: Command = {
       says:
         "why a branch that changes only tracker data lands — notes and decisions of a review, items filed or revised; it may close no item, and is refused when it changes any file outside the tracker data; recorded in the marker as a Tracker-only: trailer",
     },
+    {
+      name: "--meets",
+      says:
+        "a requirement the branch's work meets: met by an item that verifies it and was marked passed on the branch, never closed, so the landing may close no item; refused unless such a test passed on the branch tip, and did not already on the trunk; recorded in the marker as a Meets: trailer; repeat for several",
+    },
   ],
   examples: [
     "land agent/export-alpha",
@@ -763,6 +879,7 @@ export const land: Command = {
     'land agent/tidy-loader --no-change-note "a refactor of the loader: nothing a person or an agent sees changes"',
     'land agent/scheduler --stale-proofs "the liveness property runs for two days: it is due as a long run, and the owner will start it"',
     'land agent/review-notes --tracker-only "the notes and decisions of the review of the last two days"',
+    "land agent/export-speed --meets export-under-a-second",
   ],
   async run(args, ctx) {
     const p = parse(args, {
@@ -770,6 +887,7 @@ export const land: Command = {
       "no-change-note": { type: "string" },
       "stale-proofs": { type: "string" },
       "tracker-only": { type: "string" },
+      meets: { type: "string", multiple: true },
       repair: { type: "boolean" },
     })
     const branch = p.positionals[0]
@@ -779,16 +897,18 @@ export const land: Command = {
     const trackerOnly = str(p, "tracker-only")?.trim()
     if (trackerOnly !== undefined && (!trackerOnly || trackerOnly.includes("\n"))) throw new Error("--tracker-only takes the reason, on one line")
     if (bool(p, "repair")) {
-      if (trackerOnly !== undefined) throw usageError(this)
+      if (trackerOnly !== undefined || strs(p, "meets").length) throw usageError(this)
       if (!ctx.sibling) {
         throw new Error("land --repair finishes a landing of a tracker kept in a repository of its own: this project's tracker is committed with its code")
       }
       return repairLanding(ctx, branch)
     }
-    if (ctx.sibling) return await landBoth(ctx, branch, strs(p, "closes"), str(p, "no-change-note"), stale, trackerOnly)
-    const { main, old, tip, items } = preconditions(ctx, branch, strs(p, "closes"), trackerOnly !== undefined)
+    const meets = strs(p, "meets")
+    if (ctx.sibling) return await landBoth(ctx, branch, strs(p, "closes"), str(p, "no-change-note"), stale, trackerOnly, meets)
+    const { main, old, tip, items, met } = preconditions(ctx, branch, strs(p, "closes"), trackerOnly !== undefined, meets)
     // Tracker data holds no behaviour path: a tracker-only landing asks for no change note, and its reason is its trailer.
     const trailers = trackerOnly !== undefined ? [`${TRACKER_ONLY}: ${trackerOnly}`] : changeNoteTrailers(ctx, branch, old, tip, str(p, "no-change-note"))
+    trailers.push(...meetsTrailers(met))
     const tree = mustGit(ctx.root, "rev-parse", `${tip}^{tree}`)
     const changed = changedFiles(ctx.root, old, tip)
     // The checkout takes the branch tip's files first, the trunk still where it was, refusing to overwrite an untracked
@@ -821,7 +941,7 @@ export const land: Command = {
       back()
       throw e
     }
-    ctx.out(`landed ${branch} on ${main}: ${marker.slice(0, 12)}, ${closingLine(items, trackerOnly)}`)
+    ctx.out(`landed ${branch} on ${main}: ${marker.slice(0, 12)}, ${closingLine(items, trackerOnly, met)}`)
     recordMarker(ctx, marker, items.map((i) => i.id))
     await reportLanding(ctx, { branch, from: old, to: marker, changed })
     const subs = (gitOrNull(ctx.root, "diff-tree", "-r", "--no-commit-id", old, marker) ?? "").split("\n").filter((l) => /^:\d+ 160000 /.test(l))
@@ -845,15 +965,17 @@ export interface FirstParent {
   cli: string
   /** Why a branch that changed only tracker data landed, from its `Tracker-only:` trailer; empty otherwise. */
   trackerOnly: string
+  /** The requirements a landing met, from its `Meets:` trailers. */
+  meets: string[]
 }
 
 /** The trunk's first-parent line, oldest first, in one `git log`. */
 function firstParentLine(root: string, main: string): FirstParent[] {
   const format =
-    `%H%x1f%P%x1f%T%x1f%s%x1f%(trailers:key=${CLOSES},valueonly,separator=%x1d)%x1f%(trailers:key=${CODE_TRAILER},valueonly,separator=%x1d)%x1f%(trailers:key=${TRUNK_REASON},valueonly,separator=%x1d)%x1f%(trailers:key=${CLI_TRAILER},valueonly,separator=%x1d)%x1f%(trailers:key=${TRACKER_ONLY},valueonly,separator=%x1d)%x1e`
+    `%H%x1f%P%x1f%T%x1f%s%x1f%(trailers:key=${CLOSES},valueonly,separator=%x1d)%x1f%(trailers:key=${CODE_TRAILER},valueonly,separator=%x1d)%x1f%(trailers:key=${TRUNK_REASON},valueonly,separator=%x1d)%x1f%(trailers:key=${CLI_TRAILER},valueonly,separator=%x1d)%x1f%(trailers:key=${TRACKER_ONLY},valueonly,separator=%x1d)%x1f%(trailers:key=${MEETS},valueonly,separator=%x1d)%x1e`
   const out = gitOrNull(root, "log", "--first-parent", "--reverse", `--format=${format}`, `refs/heads/${main}`) ?? ""
   return out.split("\x1e").map((r) => r.replace(/^\n/, "")).filter(Boolean).map((r) => {
-    const [sha = "", parents = "", tree = "", subject = "", closes = "", code = "", reason = "", cli = "", trackerOnly = ""] = r.split("\x1f")
+    const [sha = "", parents = "", tree = "", subject = "", closes = "", code = "", reason = "", cli = "", trackerOnly = "", meets = ""] = r.split("\x1f")
     return {
       sha,
       parents: parents.split(" ").filter(Boolean),
@@ -864,6 +986,7 @@ function firstParentLine(root: string, main: string): FirstParent[] {
       reason: reason.split("\x1d").map((c) => c.trim()).filter(Boolean).join("; "),
       cli: cli.split("\x1d")[0]?.trim() ?? "",
       trackerOnly: trackerOnly.split("\x1d")[0]?.trim() ?? "",
+      meets: meets.split("\x1d").map((c) => c.trim()).filter(Boolean),
     }
   })
 }
@@ -1025,7 +1148,12 @@ function notAMarker(ctx: Context, c: FirstParent, trees: Map<string, string>): s
     const changed = (gitOrNull(ctx.trackerGit, "diff", "--name-only", "--no-renames", "-z", first, c.sha) ?? "").split("\0").filter(Boolean)
     const outside = outsideTracker(ctx, changed)
     if (outside.length) why.push(`its ${TRACKER_ONLY}: trailer says it changes only tracker data, yet it changes ${outside.slice(0, 3).join(", ")}`)
-  } else if (!c.closes.length) why.push(`it has no ${CLOSES}: trailer naming the item it closes`)
+  } else if (!c.closes.length && !c.meets.length) why.push(`it has no ${CLOSES}: trailer naming the item it closes`)
+  for (const value of c.meets) {
+    const item = closedItem(ctx, value)
+    if (!item) why.push(`${MEETS}: ${value} names no item`)
+    else if (item.type !== REQUIREMENTS && item.meta["closedFrom"] !== REQUIREMENTS) why.push(`${MEETS}: ${label(item)} is not a requirement`)
+  }
   for (const value of c.closes) {
     const item = closedItem(ctx, value)
     if (!item) why.push(`${CLOSES}: ${value} names no item`)
@@ -1045,7 +1173,7 @@ export interface Guarded {
 export const landingsAreMarkers = (guarded: Guarded | null = null): Check => ({
   name: "landings-are-markers",
   says:
-    "from the first landing marker on the trunk's first-parent line (a merge whose first parent the second contains, whose tree is the second's, with a Closes: or a Tracker-only: trailer), every first-parent commit is a marker: a fast-forward, a commit made on the trunk, a merge not up to date, or one without a Closes: naming an item done or fixed — or a Tracker-only: trailer giving why a merge that changes only tracker data lands, closing nothing if need be — is a note naming it, one note per commit, with the commit as its subject so that a waiver can accept it. A commit made on the trunk that only adds to the tracker data — new files in the data directory outside rules/, waivers/ and naima.json, and lines added to an item's README.md, its meta.json untouched — is accepted without a note, and so is a commit that only closes items as naima close does (each moved whole from its type's folder to the closed archive), the commit right after a marker that only adds the marker to the commits of items it closes, the record naima land makes, and naima init's commit, the one that adds naima.json. Any other tracker step that changes more than it adds (an update of Naima, a waiver, a release record, an epic set done) is made on an item's branch and landed. Before the first marker nothing is asked, unless the trunk guard is on: then the check asks from the commit that added the guard's hook to the trunk, so a project is not noted for what it committed before the guard; a commit the owner let through the guard with a Trunk-reason: trailer is a note that gives the reason. In sibling mode, where Naima commits every write to the tracker itself with a Naima-Command: trailer naming the command, such a commit is accepted, and from the first of them on, a commit of the tracker's trunk without one is a note: it was made by hand",
+    "from the first landing marker on the trunk's first-parent line (a merge whose first parent the second contains, whose tree is the second's, with a Closes:, a Tracker-only: or a Meets: trailer), every first-parent commit is a marker: a fast-forward, a commit made on the trunk, a merge not up to date, or one without a Closes: naming an item done or fixed — or a Tracker-only: trailer giving why a merge that changes only tracker data lands, or a Meets: trailer naming the requirement a merge meets, closing nothing if need be — is a note naming it, one note per commit, with the commit as its subject so that a waiver can accept it. A commit made on the trunk that only adds to the tracker data — new files in the data directory outside rules/, waivers/ and naima.json, and lines added to an item's README.md, its meta.json untouched — is accepted without a note, and so is a commit that only closes items as naima close does (each moved whole from its type's folder to the closed archive), the commit right after a marker that only adds the marker to the commits of items it closes, the record naima land makes, and naima init's commit, the one that adds naima.json. Any other tracker step that changes more than it adds (an update of Naima, a waiver, a release record, an epic set done) is made on an item's branch and landed. Before the first marker nothing is asked, unless the trunk guard is on: then the check asks from the commit that added the guard's hook to the trunk, so a project is not noted for what it committed before the guard; a commit the owner let through the guard with a Trunk-reason: trailer is a note that gives the reason. In sibling mode, where Naima commits every write to the tracker itself with a Naima-Command: trailer naming the command, such a commit is accepted, and from the first of them on, a commit of the tracker's trunk without one is a note: it was made by hand",
   run(ctx) {
     // The markers that close items are the tracker's: the project's trunk, or the tracker's own in sibling mode.
     const repo = ctx.trackerGit
@@ -1055,7 +1183,7 @@ export const landingsAreMarkers = (guarded: Guarded | null = null): Check => ({
     const merges = line.filter((c) => c.parents.length === 2)
     const trees = treesOf(repo, merges.map((c) => c.parents[1] ?? ""))
     const firstMarker = line.findIndex((c) =>
-      c.parents.length === 2 && (c.closes.length > 0 || !!c.trackerOnly) && trees.get(c.parents[1] ?? "") === c.tree &&
+      c.parents.length === 2 && (c.closes.length > 0 || !!c.trackerOnly || c.meets.length > 0) && trees.get(c.parents[1] ?? "") === c.tree &&
       runGit(repo, ["merge-base", "--is-ancestor", c.parents[0] ?? "", c.parents[1] ?? ""]).ok
     )
     // From the first marker, or from the commit that put the guard on the trunk when that is earlier.
