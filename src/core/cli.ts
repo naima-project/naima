@@ -25,7 +25,7 @@ import { AGENT_ID, markRules, SUBAGENT_PREAMBLE } from "./subagents.ts"
 import { FORMAT, formatRefusal, isFormat, migrate, MIGRATIONS, type Step } from "./format.ts"
 import { formatsFor, type OpenOptions, openProject, owed } from "./project.ts"
 import { bool, pairs, parse, str } from "./args.ts"
-import { gitOrNull, gitReason, LAND_IT, nativePath, runGit, runGitAsync, toplevel, trunk } from "./git.ts"
+import { currentBranch, gitOrNull, gitReason, LAND_IT, nativePath, runGit, runGitAsync, setupCommit, toplevel, trunk } from "./git.ts"
 import { githubRepo, remoteVisibility, type Visibility } from "./visibility.ts"
 import {
   clearExposed,
@@ -44,6 +44,7 @@ import { moveTrackerOut } from "./move-tracker.ts"
 import { setWriteGuard } from "./item.ts"
 import {
   commitTrackerWrites,
+  HOOKS_DIR,
   installTrailerHooks,
   missingTracker,
   naimaHooks,
@@ -1121,12 +1122,28 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
     return 0
   }
   const locked = parseLock(readRaw(place.data))
+  const paths = [tracker, ...wrote], subject = `Update Naima to ${lockLabel(locked)}`
   io.out(
-    `${lockLabel(locked)} is the lock — commit it as one change ${LAND_IT}: git add ${[tracker, ...wrote].join(" ")} && git commit -m "Update Naima to ${
-      lockLabel(locked)
-    }"`,
+    bringsHooks(place)
+      ? `${
+        lockLabel(locked)
+      } is the lock, and this update brings the project's git hooks, the trunk guard among them, which the trunk does not carry yet — commit it as one change on ${
+        currentBranch(place.root)
+      }, as the guard takes it: ${setupCommit(paths, subject, "update")}`
+      : `${lockLabel(locked)} is the lock — commit it as one change ${LAND_IT}: git add ${paths.join(" ")} && git commit -m "${subject}"`,
   )
   return failed ? EXIT.FAILED : 0
+}
+
+/**
+ * Whether this update, run on the trunk of a project whose tracker is in the code's repository, wrote the data
+ * directory's git hooks while the trunk's tip does not carry them: the update that brings the trunk guard in, whose
+ * commit goes on the trunk with its Naima-Setup: trailer, since no item could be landed before it.
+ */
+function bringsHooks(place: Place): boolean {
+  if (toplevel(place.data) !== toplevel(place.root) || currentBranch(place.root) !== trunk(place.root)) return false
+  if (!existsSync(join(place.data, HOOKS_DIR))) return false
+  return !gitOrNull(place.root, "ls-tree", "--name-only", "HEAD", "--", posixRelative(place.root, join(place.data, HOOKS_DIR)))
 }
 
 /** What each update policy makes a session start do. */

@@ -220,6 +220,20 @@ export function currentBranch(root: string): string {
 export const LAND_IT = "on the branch of an item of its own, in its worktree, and land it with naima land"
 
 /**
+ * The trailer of a commit Naima's own setup asks for on the trunk: the installer's first commit, its migration of a
+ * copied program, and the update that brings the trunk guard in. The guard takes such a commit when it touches only
+ * the files a setup writes (setupPaths), and, for `update`, only while the trunk does not carry the guard yet.
+ */
+export const SETUP_TRAILER = "Naima-Setup"
+/** The setup steps a `Naima-Setup:` trailer names. */
+export const SETUP_STEPS = ["install", "migrate", "update"] as const
+export type SetupStep = (typeof SETUP_STEPS)[number]
+
+/** The commit a setup step asks for on the trunk, as the line to run: the paths added, the subject, and the trailer the guard takes. */
+export const setupCommit = (paths: readonly string[], subject: string, step: SetupStep): string =>
+  `git add ${paths.join(" ")} && git commit -m "${subject}" -m "${SETUP_TRAILER}: ${step}"`
+
+/**
  * Where to commit what a command just wrote, as the words that follow "commit it": the one place a command's message
  * names a branch to commit on, so that every such message agrees with the trunk guard. A write the guard takes on the
  * trunk (an addition to the tracker, a claim's housekeeping) is committed on the branch checked out, the trunk

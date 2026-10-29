@@ -96,6 +96,10 @@ export {
   readAcrossBranches,
   refsWorthReading,
   runGit,
+  SETUP_STEPS,
+  SETUP_TRAILER,
+  setupCommit,
+  type SetupStep,
   type StagedChange,
   stagedChanges,
   textsAt,
@@ -105,6 +109,7 @@ export {
   worktrees,
 } from "./git.ts"
 export { DATA_FILE, DEFAULT_DATA, TRACKER_DIR } from "./layout.ts"
+export { setupPaths } from "./adapters/index.ts"
 export {
   CLI_TRAILER,
   cliCommitMessage,
