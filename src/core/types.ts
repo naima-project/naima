@@ -380,6 +380,10 @@ export interface Plugin {
   contract?: number
   /** Longer documentation, in markdown: the concepts a reader needs before the reference. */
   about?: string
+  /** What kind of plugin it is, when it is more than a plugin: `"stance"` for a stance, which `naima stance adopt` adopts (docs/guide/stances.md). */
+  kind?: "stance"
+  /** For a stance: example projects or files it ships, as paths inside its repository, which `naima stance examples` lists. */
+  examples?: string[]
   /** The keys the plugin reads from its `options`, each with the default it infers. */
   options?: OptionDoc[]
   types?: TypeDef[]

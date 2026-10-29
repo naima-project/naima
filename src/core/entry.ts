@@ -1,5 +1,5 @@
 // The commands the entry point answers itself, before any plugin is loaded:
-// init, update, rollback, hello, tick, plugin, guide, help. Documented like any plugin's command, so
+// init, update, rollback, hello, tick, plugin, stances, stance, guide, help. Documented like any plugin's command, so
 // the reference lists them, and reserved: no plugin command may take one.
 
 import { DATA_DIR, DATA_FILE, PROGRAM_DIR, TRACKER_DIR } from "./layout.ts"
@@ -158,6 +158,23 @@ export const cliCommands: Omit<Command, "run">[] = [
       "plugin show verifier-mcrl2",
       "plugin show",
     ],
+  },
+  {
+    name: "stances",
+    says:
+      "list the stances available to adopt — plugins of the kind stance, each a set of authored choices and rules a project takes as a whole — with what each says of itself, marking those this project has adopted; for now they are the repositories named naima-stance-<name> of the naima-project organisation on GitHub, asked of GitHub's public API without credentials; with no network, it says it cannot reach it",
+    enforces: "nothing: it only reads",
+    usage: "stances",
+    examples: ["stances"],
+  },
+  {
+    name: "stance",
+    says:
+      "adopt a stance, show the ones adopted, or list a stance's examples. adopt <name> resolves the name to its repository, github.com/naima-project/naima-stance-<name>, pins the commit at the head of its default branch in naima.json's plugins as stance-<name> (its module plugin/index.mjs), loads it, and runs its adoption when it declares one: its own command stance-<name> with adopt, given the arguments after the name; adopting again moves the pin to the newest commit. status shows each adopted stance, its pinned commit, and whether a newer one exists. examples <name> lists the example paths an adopted stance declares, each with where it is in its checkout, from the project's root",
+    enforces:
+      "a stance is pinned by commit, as every plugin from git is, and the whole file is re-validated before it is written; what is adopted must declare the kind stance, or naima.json is put back as it was",
+    usage: "stance adopt <name> [<arguments of its adoption>...] | stance status | stance examples <name>",
+    examples: ["stance adopt ui", "stance adopt ui --mood dusk", "stance status", "stance examples ui"],
   },
   {
     name: "guide",

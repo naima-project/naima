@@ -47,6 +47,8 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`tick`](#naima-tick) | core | run the tick now, as every command does before its own work: each job that is due — the update check once a day, unless updates is off; the jobs plugins contribute, such as the due long runs once an hour — run by whichever naima process wins it, a failed one retried an hour later, a week of failed update checks raising an urgent message; then say what is due to the owner, each message once, an urgent one once an hour until the owner acknowledges it (naima messages). Every other command says them after its own output, on standard error, one line each: NAIMA-MESSAGE, a space, and the message as a JSON object with the keys id, level (info, warning or urgent), text and ack, where ack is the command that acknowledges it, or null for a message said once | no lock: every decision is a file created only if it does not exist, kept outside the repository in the clone's git directory, so any number of naima processes, in any worktree of the clone, run each due job once; nothing is applied and no long work starts: it finds and says |
 | [`subagent`](#naima-subagent) | core | run as the sub-agent-start hook of that agent tool, named as naima.json's agents names it: put the project's rules for agents, as naima rules --audience agents prints them, in the starting sub-agent's context, in the form the tool's adapter gives, and mark, by the sub-agent's id, that it has them, so the tool's guard lets its calls through; the guard holds the calls of a sub-agent with no mark until it runs naima rules, and the hook on its stop sends one that never had them back to read them (docs/agents/read-the-project-rules.md) | it never fails and never blocks a sub-agent from starting: a project that does not open, or an input with no agent id, prints nothing and leaves the guard to hold the sub-agent until it reads the rules; the mark is kept outside the repository, in the clone's git directory |
 | [`plugin`](#naima-plugin) | core | turn a plugin on or off, or set one of its options, in naima.json's plugins table — validated the way the project is validated on every load, instead of a hand-edit of the file | a name must be a first-party plugin (loaded or opt-in) or one the table already names with its own source; an option set on one whose options are known here must be one it declares; the whole file is re-validated before it is written, so nothing a later load would refuse ever reaches disk |
+| [`stances`](#naima-stances) | core | list the stances available to adopt — plugins of the kind stance, each a set of authored choices and rules a project takes as a whole — with what each says of itself, marking those this project has adopted; for now they are the repositories named naima-stance-<name> of the naima-project organisation on GitHub, asked of GitHub's public API without credentials; with no network, it says it cannot reach it | nothing: it only reads |
+| [`stance`](#naima-stance) | core | adopt a stance, show the ones adopted, or list a stance's examples. adopt <name> resolves the name to its repository, github.com/naima-project/naima-stance-<name>, pins the commit at the head of its default branch in naima.json's plugins as stance-<name> (its module plugin/index.mjs), loads it, and runs its adoption when it declares one: its own command stance-<name> with adopt, given the arguments after the name; adopting again moves the pin to the newest commit. status shows each adopted stance, its pinned commit, and whether a newer one exists. examples <name> lists the example paths an adopted stance declares, each with where it is in its checkout, from the project's root | a stance is pinned by commit, as every plugin from git is, and the whole file is re-validated before it is written; what is adopted must declare the kind stance, or naima.json is put back as it was |
 | [`guide`](#naima-guide) | core | inside a project, first print what its plugins contribute to the guide, such as the project's active rules for agents; then where the running Naima's documentation is: the skill, the docs map, the guide for people, the rules, the pages for agents, the format, installing; read them as files | nothing: it only prints |
 | [`help`](#naima-help) | core | list every command the loaded plugins provide, with its usage | nothing: it only prints |
 | [`new`](#naima-new) | core | open an item | every field is validated against its type's declarations before the item exists, and every write hook runs: a typo or a refusal leaves nothing behind; an archive type takes no new item |
@@ -325,6 +327,43 @@ naima plugin set verifier-mcrl2 bin=/usr/local/bin
 naima plugin disable rule-templates
 naima plugin show verifier-mcrl2
 naima plugin show
+```
+
+### naima stances
+
+List the stances available to adopt — plugins of the kind stance, each a set of authored choices and rules a project takes as a whole — with what each says of itself, marking those this project has adopted; for now they are the repositories named naima-stance-<name> of the naima-project organisation on GitHub, asked of GitHub's public API without credentials; with no network, it says it cannot reach it.
+
+**Enforces**: Nothing: it only reads.
+
+```sh
+naima stances
+```
+
+Examples:
+
+```sh
+naima stances
+```
+
+### naima stance
+
+Adopt a stance, show the ones adopted, or list a stance's examples. adopt <name> resolves the name to its repository, github.com/naima-project/naima-stance-<name>, pins the commit at the head of its default branch in naima.json's plugins as stance-<name> (its module plugin/index.mjs), loads it, and runs its adoption when it declares one: its own command stance-<name> with adopt, given the arguments after the name; adopting again moves the pin to the newest commit. status shows each adopted stance, its pinned commit, and whether a newer one exists. examples <name> lists the example paths an adopted stance declares, each with where it is in its checkout, from the project's root.
+
+**Enforces**: A stance is pinned by commit, as every plugin from git is, and the whole file is re-validated before it is written; what is adopted must declare the kind stance, or naima.json is put back as it was.
+
+```sh
+naima stance adopt <name> [<arguments of its adoption>...]
+naima stance status
+naima stance examples <name>
+```
+
+Examples:
+
+```sh
+naima stance adopt ui
+naima stance adopt ui --mood dusk
+naima stance status
+naima stance examples ui
 ```
 
 ### naima guide
