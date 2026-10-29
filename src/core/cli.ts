@@ -1710,7 +1710,7 @@ async function stancesCommand(args: string[], opts: CliOptions, place: Place, io
   }
   const adopted = new Set(adoptedStances(readRaw(place.data)).map((s) => s.name))
   if (!listed.length) io.out("no stance is published yet")
-  // Each one's naima-stance.json, read in the tracker folder's scratch space, which is removed after.
+  // Each one's naima-plugin.json, read in the tracker folder's scratch space, which is removed after.
   const work = join(trackerOf(place.data), STANCES_WORK)
   try {
     const registry = opts.stances ?? stanceRegistry()

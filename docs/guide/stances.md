@@ -19,11 +19,12 @@ naima stances
 This asks GitHub's public API, without any credentials, and prints each stance with a line about it. A stance this project already uses is marked `adopted`. If
 there is no network, it says it cannot reach GitHub and stops; nothing else is affected.
 
-A repository can be named like a stance and not be one. A stance says that it is one in a file at the root of its repository, `naima-stance.json`
-(see [writing a stance](#writing-a-stance)). For each repository it lists, `naima stances` reads that file at the head of the main branch, through git, with
-a shallow clone that fetches that one file and is removed afterwards; only when git cannot reach the repository does it ask GitHub's API for the file. When
-the file is missing, is not valid JSON, or doesn't say `"kind": "stance"`, the line says `not a stance` and why. Adopting the stance loads its plugin and
-checks the kind its manifest declares as well.
+A repository can be named like a stance and not be one. Every plugin published in its own repository describes itself in `naima-plugin.json` at its root
+([describing a plugin](extending-naima.md#describing-a-plugin-naima-pluginjson)), and a stance's says `"kind": "stance"`. For each repository it lists,
+`naima stances` reads that file at the head of the main branch through git, with a shallow clone that fetches that one file and is removed afterwards; only when
+git cannot reach the repository does it ask GitHub's API for the file. When the file is missing, is not a valid description, or doesn't say `"kind": "stance"`,
+the line says `not a stance` and why. Adopting the stance loads its plugin, checks that its manifest declares the kind stance, and checks that it agrees with
+the file.
 
 ## Adopting one
 
@@ -97,21 +98,9 @@ A stance is written like any plugin ([extending Naima](extending-naima.md)), wit
 - `kind: "stance"`, which adoption checks when it loads the plugin;
 - `examples`, an optional list of paths inside its repository.
 
-Its repository also holds `naima-stance.json` at its root, which says as data what the plugin's manifest says in code:
-
-```json
-{
-  "name": "ui",
-  "kind": "stance",
-  "plugin": "plugin/index.mjs",
-  "examples": ["examples/calculator"],
-  "attribution": { "name": "UI stance", "authors": ["make become"], "license": "MIT" }
-}
-```
-
-`name`, `kind` and `plugin` (the path of the plugin's module in the repository) are required. `examples` and `attribution` are optional, and say what the
-manifest's `examples` and the plugin's attribution say. Naima loads the module from `plugin/index.mjs` for now, so `plugin` names that path.
+Its repository also holds `naima-plugin.json` at its root, which says the same as data, with `"kind": "stance"` ([describing a
+plugin](extending-naima.md#describing-a-plugin-naima-pluginjson)). Naima loads the module from `plugin/index.mjs` for now, so `entry` names that path.
 
 For its adoption step, it adds a command named like its plugin entry (`stance-<name>`) whose usage includes `adopt`. Its checks that refuse a landing while
 they fail are `refuses` landing reports, and the hooks it wants in the agent tool are `agent-hooks`; it writes no file of the host's own. To be listed by `naima stances`, it is
-published as `naima-stance-<name>` in the naima-project organisation, with its plugin in `plugin/index.mjs` and its `naima-stance.json` at the root.
+published as `naima-stance-<name>` in the naima-project organisation, with its plugin in `plugin/index.mjs` and its `naima-plugin.json` at the root.
