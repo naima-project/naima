@@ -25,7 +25,7 @@ import { AGENT_ID, markRules, SUBAGENT_PREAMBLE } from "./subagents.ts"
 import { FORMAT, formatRefusal, isFormat, migrate, MIGRATIONS, type Step } from "./format.ts"
 import { formatsFor, type OpenOptions, openProject, owed } from "./project.ts"
 import { bool, pairs, parse, str } from "./args.ts"
-import { gitOrNull, gitReason, LAND_IT, nativePath, runGit, runGitAsync, toplevel, trunk } from "./git.ts"
+import { currentBranch, gitOrNull, gitReason, LAND_IT, nativePath, runGit, runGitAsync, toplevel, trunk } from "./git.ts"
 import { githubRepo, remoteVisibility, type Visibility } from "./visibility.ts"
 import {
   clearExposed,
@@ -55,6 +55,7 @@ import {
   TRACKER_URL_KEY,
   trackerChanges,
   trackerGitOf,
+  trunkGuardRuns,
   writeSiblingMarker,
 } from "./repos.ts"
 import { exclusions } from "./excludes.ts"
@@ -900,11 +901,7 @@ async function moveLock(
   // Forward, the new Naima finishes: it knows the new format, and its own check is the one that ends the update.
   if (!change.back || change.formats.some((f) => f.to > f.from)) return RELAUNCH
   const verb = change.back ? "Roll Naima back to" : "Update Naima to"
-  io.out(
-    `${toLabel} is the lock — commit it as one change ${LAND_IT}: git add ${tracker} && git commit -m "${verb} ${
-      release ? `version ${release.version}` : short(to)
-    }"`,
-  )
+  io.out(`${toLabel} is the lock — ${commitUpdate(place, [], `${verb} ${release ? `version ${release.version}` : short(to)}`)}`)
   return 0
 }
 
@@ -1086,6 +1083,7 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
   }
   const carried = carryRefusal(raw, posixRelative(place.root, place.program))
   if (carried) throw new Error(carried)
+  pairedUpdate(place, "update", io)
   let failed = false
   let followMain = byCommit
   if (!byCommit) {
@@ -1121,12 +1119,52 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
     return 0
   }
   const locked = parseLock(readRaw(place.data))
-  io.out(
-    `${lockLabel(locked)} is the lock — commit it as one change ${LAND_IT}: git add ${[tracker, ...wrote].join(" ")} && git commit -m "Update Naima to ${
-      lockLabel(locked)
-    }"`,
-  )
+  io.out(`${lockLabel(locked)} is the lock — ${commitUpdate(place, wrote, `Update Naima to ${lockLabel(locked)}`)}`)
   return failed ? EXIT.FAILED : 0
+}
+
+/** The tracker's own repository when it is kept apart from the code's (sibling mode); null when it is committed with the code. */
+const siblingGit = (place: Place): string | null => {
+  const git = trackerGitOf(place.root, place.data)
+  return git !== place.root ? git : null
+}
+
+/**
+ * In sibling mode an update is one change in two repositories: the lock in the tracker, and the files of the code it
+ * rewrites (the agents' settings, the pointer line). It lands as one paired landing, never one trunk at a time. From
+ * the code's trunk, while the trunk guard runs there, the update is refused before anything moves, naming the route:
+ * the item's worktree, whose tracker branch pairs with its code branch. Anywhere else the tracker is first paired
+ * with the code's branch, so that the tracker's half, which Naima commits, goes on the branch the code's half does.
+ */
+function pairedUpdate(place: Place, command: string, io: IO): void {
+  const git = siblingGit(place)
+  if (!git) return
+  const branch = currentBranch(place.root)
+  if (branch === trunk(place.root) && trunkGuardRuns(place.root, place.data)) {
+    throw new Error(
+      `naima ${command} moves the lock in the tracker and rewrites files of the code, one change in two repositories, which lands as one paired landing: ` +
+        `not on ${branch}, where the trunk guard would take the tracker's half and refuse the code's. Open an item for it (naima open <item>), ` +
+        `run naima ${command} in its worktree, where Naima commits the tracker's half on the paired branch, commit the code's half there, and land the branch with naima land`,
+    )
+  }
+  const moved = pairTracker(place.root, git, branch)
+  if (moved) io.err(`naima: ${moved}`)
+}
+
+/**
+ * Where an update's change is committed, as the words after "the lock —": with the tracker inside the code, one
+ * commit on an item's branch; in sibling mode, the tracker's half is Naima's to commit on the paired branch, and the
+ * code's half (`paths`) is committed on the same branch, which lands both together.
+ */
+function commitUpdate(place: Place, paths: readonly string[], subject: string): string {
+  const tracker = posixRelative(place.root, trackerOf(place.data))
+  const git = siblingGit(place)
+  if (!git) return `commit it as one change ${LAND_IT}: git add ${[tracker, ...paths].join(" ")} && git commit -m "${subject}"`
+  const branch = currentBranch(place.root)
+  const ours = `Naima commits the tracker's half on the tracker's ${currentBranch(git)} as this command ends`
+  const code = paths.length ? `; commit the code's half on ${branch}: git add ${paths.join(" ")} && git commit -m "${subject}"` : ""
+  const land = branch === trunk(place.root) ? "" : `; then land ${branch} with naima land, which lands both halves as one paired landing`
+  return `${ours}${code}${land}`
 }
 
 /** What each update policy makes a session start do. */
@@ -1141,6 +1179,7 @@ async function rollback(args: string[], opts: CliOptions, place: Place, lock: Lo
   if (parse(args).positionals.length) throw new Error(usage("rollback"))
   const carried = carryRefusal(raw, posixRelative(place.root, place.program))
   if (carried) throw new Error(carried)
+  pairedUpdate(place, "rollback", io)
   const t = targetOf(place, lock, opts)
   const previous = previousLock(place, lock.commit)
   return await moveLock(opts, place, lock, raw, io, resolveCommit(t, previous.commit), previous.release)
