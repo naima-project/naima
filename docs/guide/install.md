@@ -43,10 +43,13 @@ lock, and `naima check`. The download is what counts the install ([Naima updates
 in a project that already has a lock, it clones only when `naima-tracker/naima/` is missing, and then runs `naima check`. It never moves the lock, because that
 is the job of `naima update`.
 
-`NAIMA_VERSION` names the release to install, a pre-release included; without it the installer takes the newest release. `NAIMA_SOURCE` names a different
-repository, such as a fork or a path on this disk, and `NAIMA_RELEASES` where its releases' files are downloaded from. `NAIMA_REF` installs a branch or tag
-with `git clone` instead of a release, as for developing Naima, and so does a source that has no releases. The installer's own tests use these. For agents,
-the site's `llms.txt` says the same thing.
+`NAIMA_VERSION` names the release to install, a pre-release included. Without it the installer takes the newest release it can install from an archive. That
+means a release from `1.1.0-beta.4` on, the first one built for archive installs; older releases are never picked, because their files are laid out the way
+Naima was before. Among those releases it takes the newest stable one. It skips pre-releases only when such a stable release exists, so while none does it
+installs the newest pre-release. The installer asks the releases API which release that is (`NAIMA_RELEASES_API`, GitHub's by default). `NAIMA_SOURCE` names a
+different repository, such as a fork or a path on this disk, and `NAIMA_RELEASES` where its releases' files are downloaded from. `NAIMA_REF` installs a branch
+or tag with `git clone` instead of a release, as for developing Naima, and so does a source that has no releases. The installer's own tests use these. For
+agents, the site's `llms.txt` says the same thing.
 
 To do it by hand, in a git repository that doesn't use Naima yet:
 
@@ -113,19 +116,18 @@ plain `git clone` of Naima into `naima-tracker/naima/` followed by any `naima` c
 ```
 
 `main` is the branch Naima is developed on. Its tests, its site, the rules for working on it and its own tracker live in the workshop, a separate repository
-that is private for now. Cloning `naima-project/naima` gets you none of that, only what runs Naima: `naima.ts`, `src/`, `docs/`, `skills/`, `bin/` (the release step's script), `README.md` and
-`LICENSE`, which is exactly what a project should carry. Tests make sure the clone stays that way. No test runner, type-checker or agent harness that walks the
-file system picks up anything of Naima's own, and every import and relative link in the clone resolves inside it.
+that is private for now. Cloning `naima-project/naima` gets you none of that, only what runs Naima: `naima.ts`, `src/`, `docs/`, `skills/`, `bin/` (the release
+step's script), `README.md` and `LICENSE`, which is exactly what a project should carry. Tests make sure the clone stays that way. No test runner, type-checker
+or agent harness that walks the file system picks up anything of Naima's own, and every import and relative link in the clone resolves inside it.
 
 ## The lock is git
 
 `naima.json` holds `source` (the clone's `origin`, with credentials removed) and `commit` (a commit of Naima's `main`), and together these are the lock. When
 the project runs a release, the lock also holds `version` and `sha256`, the checksum of the release's archive: a fresh copy that has to come from the network
-downloads that archive too, and refuses it when its checksum differs. On
-every run, Naima compares `commit` with the clone's `HEAD`. If they differ, it fetches the commit, first from a local seed (another worktree's
-`naima-tracker/naima/` on this disk) and then from `origin`, checks it out detached, and starts again. If the lock names a commit the source doesn't have, it
-refuses with one line naming both. If the lock names a commit from the old layout before the split (one that still has `naima/src/cli.ts`), `naima update` moves
-it to Naima's product head, and that is how an older version is migrated.
+downloads that archive too, and refuses it when its checksum differs. On every run, Naima compares `commit` with the clone's `HEAD`. If they differ, it fetches
+the commit, first from a local seed (another worktree's `naima-tracker/naima/` on this disk) and then from `origin`, checks it out detached, and starts again.
+If the lock names a commit the source doesn't have, it refuses with one line naming both. If the lock names a commit from the old layout before the split (one
+that still has `naima/src/cli.ts`), `naima update` moves it to Naima's product head, and that is how an older version is migrated.
 
 ## The host's own tools
 
@@ -253,9 +255,10 @@ naima update             # move the lock to it
 
 `update` reads the source's releases, downloads the newest one's archive and checks its checksum, fetches the commit its tag names and checks that the archive
 holds exactly that commit's files, checks it out in the clone, migrates the data forward if its format has changed
-([migrations](../reference/format.md#migrations)), and records the new commit, version and checksum in `naima.json`. A source that publishes no releases, or `naima update --main`, moves the lock to the head of the
-source's `main` instead ([update Naima](update-naima.md#naima-updates-to-releases)). The new checkout is made next to the old one and only swapped in
-once it is complete, so a failed update leaves the previous program in place. The result is one change, which you review and commit like any other:
+([migrations](../reference/format.md#migrations)), and records the new commit, version and checksum in `naima.json`. A source that publishes no releases, or
+`naima update --main`, moves the lock to the head of the source's `main` instead ([update Naima](update-naima.md#naima-updates-to-releases)). The new checkout
+is made next to the old one and only swapped in once it is complete, so a failed update leaves the previous program in place. The result is one change, which
+you review and commit like any other:
 
 ```sh
 git add naima-tracker && git commit -m "Update Naima to version <version>"
@@ -271,12 +274,12 @@ for a newer Naima as the `updates` setting in `naima.json` says. Once the owner 
 `naima.ts` is the launcher. It runs with every permission (`-A`), and all it does is work out where the project and the program are, then run the program under
 Deno with only these permissions:
 
-| Permission | Granted                                                                                                                                                                                                                                                                                           | Why                                                                                                                                                                                                                                                                                         |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| read       | the repository, the program wherever it is, the data directory of every other worktree of the project, and the [tools directory](tools.md#where-the-tools-go)                                                                                                                                     | items, the project's markdown and source (the docs and beta-marker checks read them), git's view of branches, the commits the program is cloned from, and the uncommitted claims and notes of the other worktrees                                                                           |
-| write      | `naima-tracker/`, and the data or program directory if moved out of it; the tick's state, `naima/` in the clone's git directory; for `init` and `update` only, the entry files and the session-start settings of the tools in use, and with `init --write-excludes` the host tools' configuration | items, claims, notes, the program's own alignment, the commits fetched for it; when each job of the tick last ran, and which messages were shown; the pointer line, the session-start hooks and the exclusion lines; nothing else in the project                                            |
-| run        | `git`, `tar`, and the programs the loaded contributions declare, by name or by their absolute path in the [tools directory](tools.md#where-the-tools-go)                                                                                                                                          | alignment, update, and reading claims and notes across branches; unpacking a release's archive to check it; a [verifier](glossary.md#verifier)'s model checker (its `runs`, [the contract](../reference/plugin-contract.md#the-verifier-contract)); a declared [metric](metrics-and-budgets.md)'s program, the first word of its `run` |
-| env        | an allow-list: `HOME`, `PATH`, the user, shell, terminal, locale and temporary-directory variables, the proxy variables, Windows' system ones, and every `NAIMA_*`, `GIT_*`, `SSH_*`, `LC_*` and `DENO_*`                                                                                         | what git needs to reach a source, and Naima's own; nothing else of the environment reaches the program, nor the git it runs                                                                                                                                                                 |
+| Permission | Granted                                                                                                                                                                                                                                                                                           | Why                                                                                                                                                                                                                                                                                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| read       | the repository, the program wherever it is, the data directory of every other worktree of the project, and the [tools directory](tools.md#where-the-tools-go)                                                                                                                                     | items, the project's markdown and source (the docs and beta-marker checks read them), git's view of branches, the commits the program is cloned from, and the uncommitted claims and notes of the other worktrees                                                                                                                                          |
+| write      | `naima-tracker/`, and the data or program directory if moved out of it; the tick's state, `naima/` in the clone's git directory; for `init` and `update` only, the entry files and the session-start settings of the tools in use, and with `init --write-excludes` the host tools' configuration | items, claims, notes, the program's own alignment, the commits fetched for it; when each job of the tick last ran, and which messages were shown; the pointer line, the session-start hooks and the exclusion lines; nothing else in the project                                                                                                           |
+| run        | `git`, `tar`, and the programs the loaded contributions declare, by name or by their absolute path in the [tools directory](tools.md#where-the-tools-go)                                                                                                                                          | alignment, update, and reading claims and notes across branches; unpacking a release's archive to check it; a [verifier](glossary.md#verifier)'s model checker (its `runs`, [the contract](../reference/plugin-contract.md#the-verifier-contract)); a declared [metric](metrics-and-budgets.md)'s program, the first word of its `run`                     |
+| env        | an allow-list: `HOME`, `PATH`, the user, shell, terminal, locale and temporary-directory variables, the proxy variables, Windows' system ones, and every `NAIMA_*`, `GIT_*`, `SSH_*`, `LC_*` and `DENO_*`                                                                                         | what git needs to reach a source, and Naima's own; nothing else of the environment reaches the program, nor the git it runs                                                                                                                                                                                                                                |
 | net        | none, but `api.github.com`, and the hosts a release's archive is downloaded from (`github.com` and the two GitHub redirects it to), or the server `NAIMA_RELEASES_API` names                                                                                                                      | the network is git's, in alignment and update; GitHub is asked whether the tracker's remotes are public, by `init` and then at most once a day ([where the tracker lives](#where-the-tracker-lives)), and for the source's releases, whose archive an install or update downloads ([Naima updates to releases](update-naima.md#naima-updates-to-releases)) |
 
 **`naima tools`, and `naima backup create`, which installs gh through it, and no other command,** may also write to the tools directory, reach any host and run
@@ -311,9 +314,8 @@ commit ([third-party plugins](config.md#third-party-plugins)). Improvements go b
 ## Offline
 
 Installing and `naima update` need the network once, to read the releases, download the archive and reach the source. Without it, `naima update` says why and
-leaves the lock where it is. Aligning a new worktree or a second clone of a project tries a local seed first
-(another worktree's program clone on this disk), so it needs no network when one is available. A fresh clone of a project on another machine needs the network
-once, to fetch the locked commit.
+leaves the lock where it is. Aligning a new worktree or a second clone of a project tries a local seed first (another worktree's program clone on this disk), so
+it needs no network when one is available. A fresh clone of a project on another machine needs the network once, to fetch the locked commit.
 
 ## Other runtimes
 

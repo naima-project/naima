@@ -172,6 +172,13 @@ export function pickRelease(releases: readonly Release[], ask: { version?: strin
   return [...eligible].sort((a, b) => compareVersions(b.version, a.version))[0] ?? null
 }
 
+/**
+ * The first release of Naima built to be installed from its archive: an older release's tree predates the layout
+ * an install unpacks, so neither `naima update` nor the installers (FIRST_ARCHIVE_RELEASE in site/install.sh and
+ * site/install.ps1) ever take one as the newest. A version named explicitly is installed as named.
+ */
+export const FIRST_ARCHIVE_RELEASE = "1.1.0-beta.4"
+
 /** What `naima update` does, given the lock and the source's releases: the decision alone, the downloads apart. */
 export type UpdatePlan =
   | { kind: "main" }
@@ -182,9 +189,10 @@ export type UpdatePlan =
 
 /**
  * Plan an update. No release: the source's main is followed (a fork, a mirror, a repository on this disk). A
- * named version moves there, forward or back. Otherwise the newest release, pre-releases included when asked or
- * when the project already runs one; none when only pre-releases exist and none was asked for. A lock with no
- * version, a commit of main, migrates to releases.
+ * named version moves there, forward or back. Otherwise the newest release from FIRST_ARCHIVE_RELEASE on: the
+ * newest stable one, pre-releases included when asked, when the project already runs one, or while no stable
+ * release qualifies; none when no release qualifies. A lock with no version, a commit of main, migrates to
+ * releases.
  */
 export function planUpdate(
   lock: { version?: string | undefined },
@@ -192,11 +200,15 @@ export function planUpdate(
   ask: { version?: string | undefined; pre?: boolean | undefined } = {},
 ): UpdatePlan {
   if (!releases.length) return { kind: "main" }
-  const pre = ask.pre === true || (lock.version !== undefined && isPrerelease(lock.version))
-  const release = pickRelease(releases, { version: ask.version, pre })
-  if (!release) {
-    return ask.version !== undefined ? { kind: "missing", version: bareVersion(ask.version) } : { kind: "none" }
+  if (ask.version !== undefined) {
+    const named = pickRelease(releases, { version: ask.version })
+    if (!named) return { kind: "missing", version: bareVersion(ask.version) }
+    return lock.version === named.version ? { kind: "current", release: named } : { kind: "move", release: named, migrating: lock.version === undefined }
   }
+  const qualifying = releases.filter((r) => compareVersions(r.version, FIRST_ARCHIVE_RELEASE) >= 0)
+  const pre = ask.pre === true || (lock.version !== undefined && isPrerelease(lock.version)) || !qualifying.some((r) => !r.prerelease)
+  const release = pickRelease(qualifying, { pre })
+  if (!release) return { kind: "none" }
   if (lock.version !== undefined && release.version === lock.version) return { kind: "current", release }
   return { kind: "move", release, migrating: lock.version === undefined }
 }
