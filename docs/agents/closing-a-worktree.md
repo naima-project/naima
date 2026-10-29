@@ -161,7 +161,12 @@ what the branch changed there. Then it moves the trunk, only if the trunk hasn't
   a file with no passing recorded run on the branch's files, models in development left out. The worker runs `naima verify` or `naima metrics run --record` on
   the branch and commits the runs. A proof that can't be made current before landing, such as a suite that runs for days, is landed with
   `--stale-proofs "<reason>"`, and the marker keeps the reason in a `Stale-proofs:` trailer;
+- a plugin's landing check fails on the branch's files, such as a stance's checks on a file they read. No flag lets this through, `--stale-proofs`
+  included: the worker fixes the branch;
 - an untracked file in the main checkout would be overwritten, in which case nothing moves.
+
+After the landing, `naima land` prints what each landing report says. Among them are the reviews recorded with `naima reviewed` that the branch carries, and a
+note for each rule an agent verifies that covers a file the branch changed with no review recorded.
 
 The same commit, made by hand:
 

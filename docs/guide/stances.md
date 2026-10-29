@@ -45,6 +45,9 @@ is adopted. If the stance has its own adoption step (a command with the stance's
 straight away. Anything you write after the name is passed on to that step, so `naima stance adopt ui --mood dusk` copies the UI stance's widget set with the
 dusk mood board.
 
+If the stance asks the agent tool to run something, such as its checks after every edit, Naima installs that hook in the tool's settings as part of the
+adoption ([hooks in the agent tool](extending-naima.md#hooks-in-the-agent-tool)).
+
 Commit the change to `naima.json`, with whatever the adoption step wrote, like any other change.
 
 ## Keeping up with a stance
@@ -75,5 +78,6 @@ A stance is written like any plugin ([extending Naima](extending-naima.md)), wit
 - `kind: "stance"`, which is what makes it a stance;
 - `examples`, an optional list of paths inside its repository.
 
-For its adoption step, it adds a command named like its plugin entry (`stance-<name>`) whose usage includes `adopt`. To be listed by `naima stances`, it is
+For its adoption step, it adds a command named like its plugin entry (`stance-<name>`) whose usage includes `adopt`. Its checks that refuse a landing while
+they fail are `refuses` landing reports, and the hooks it wants in the agent tool are `agent-hooks`; it writes no file of the host's own. To be listed by `naima stances`, it is
 published as `naima-stance-<name>` in the naima-project organisation, with its plugin in `plugin/index.mjs`.

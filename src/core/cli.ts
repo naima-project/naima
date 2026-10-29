@@ -125,6 +125,7 @@ import { asRendered, linesAs } from "./rendered.ts"
 import { shortOrId } from "./names.ts"
 import { apiFor, FETCHED } from "./plugins.ts"
 import { atSessionStart, goalsAtSessionStart, offersAtSessionStart } from "./base.ts"
+import { installPluginHooks } from "./plugin-hooks.ts"
 import { committedLock as lockOfLastCommit, type SessionConfig, sessionStartGaps, startSessions, unfinishedUpdate } from "./session-start.ts"
 import { adapter, ADAPTERS } from "./adapters/index.ts"
 import { itemStore } from "./messages.ts"
@@ -332,6 +333,16 @@ async function setUp(place: Place, opts: CliOptions, io: IO): Promise<void> {
     } catch (e) {
       io.out(`${c.name}: not put in place: ${message(e)}`)
     }
+  }
+  sayPluginHooks(ctx, io)
+}
+
+/** Install the hooks the loaded plugins contribute, remove those of plugins gone, and say each; a failure says why and stops nothing. */
+function sayPluginHooks(ctx: Context, io: IO): void {
+  try {
+    for (const line of installPluginHooks(ctx)) io.out(line)
+  } catch (e) {
+    io.out(`the plugins' agent hooks: not put in place: ${message(e)}`)
   }
 }
 
@@ -1755,6 +1766,7 @@ async function stanceCommand(args: string[], opts: CliOptions, place: Place, io:
   }
   const at = released ? `version ${released.version} (${short(head.commit)}, its archive's checksum verified)` : short(head.commit)
   io.out(`adopted stance ${name}: ${git} at ${at}, pinned in ${DATA_FILE} as plugins.${plugin}`)
+  sayPluginHooks(ctx, io)
   // Its adoption, when it declares one: its own command, named as it is, that takes adopt.
   const hook = ctx.registry.find<Command>("commands", plugin)?.value
   if (!hook || !hook.usage.split(/[\s|[\]]+/).includes(STANCE_ADOPT)) {

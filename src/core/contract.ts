@@ -7,7 +7,7 @@
  * refused when the project loads, and one that says none is read as
  * contract 1, the shape before `contract` existed.
  */
-export const CONTRACT = 3
+export const CONTRACT = 4
 
 /** The oldest contract this core still reads: a plugin written for it keeps working through the shims the contract lists. */
 export const OLDEST_CONTRACT = 1

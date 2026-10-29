@@ -63,13 +63,15 @@ export interface Landing {
 }
 
 /**
- * What a plugin says about a landing. `blocks` runs before the trunk moves, on the branch tip's files in the main
- * checkout, and names what the landing changed whose proofs are not current: any line refuses the landing unless it
- * is given a reason. `report` runs once the landing is made, and never refuses it.
+ * What a plugin says about a landing. `refuses` and `blocks` run before the trunk moves, on the branch tip's files in
+ * the main checkout. `refuses` names what is wrong with the branch, a check that fails: any line refuses the landing,
+ * and no flag lets it through. `blocks` names what the landing changed whose proofs are not current: any line refuses
+ * the landing unless --stale-proofs gives a reason. `report` runs once the landing is made, and never refuses it.
  */
 export interface LandingReport {
   name: string
   says: string
+  refuses?(ctx: Context, landing: Landing): string[] | Promise<string[]>
   blocks?(ctx: Context, landing: Landing): string[] | Promise<string[]>
   report?(ctx: Context, landing: Landing): string[] | Promise<string[]>
 }
@@ -103,22 +105,22 @@ function notTrackerOnly(branch: string, outside: string[]): string | null {
 export const landingReportsPoint: ExtensionPoint<LandingReport> = {
   id: "landing-reports",
   says:
-    "what `naima land` checks before a branch lands and reports once it has: `name`, `says`, and `blocks(ctx, { branch, from, to, changed }) → lines`, what the landing changed whose proofs are not current, any line refusing the landing unless --stale-proofs gives the reason, or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root",
+    "what `naima land` checks before a branch lands and reports once it has: `name`, `says`, and `refuses(ctx, { branch, from, to, changed }) → lines`, what fails on the branch, any line refusing the landing with no flag to let it through; `blocks(ctx, landing) → lines`, what the landing changed whose proofs are not current, any line refusing the landing unless --stale-proofs gives the reason; or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root",
   noun: "landing report",
   key: (r) => r.name,
   validate: (v) => {
     const r = v as Partial<LandingReport> | null
     if (!r || typeof r !== "object" || typeof r.name !== "string") return "has no name"
-    for (const k of ["blocks", "report"] as const) if (r[k] !== undefined && typeof r[k] !== "function") return `has a ${k} that is not a function`
-    return r.blocks || r.report ? null : "has neither a blocks nor a report function"
+    for (const k of ["refuses", "blocks", "report"] as const) if (r[k] !== undefined && typeof r[k] !== "function") return `has a ${k} that is not a function`
+    return r.refuses || r.blocks || r.report ? null : "has no refuses, blocks or report function"
   },
   gaps: (r) => (typeof r.says === "string" && r.says.trim() ? [] : ["does not say what it reports"]),
   document: (
     rs,
   ) => [
     "",
-    "**Landing reports**, checked by `naima land` before a landing (blocks) or printed after it (reports)",
-    ...table(["Report", "When", "What it says"], rs.map((r) => [code(r.name), r.blocks ? "blocks" : "reports", r.says])),
+    "**Landing reports**, checked by `naima land` before a landing (refuses, or blocks until its proofs are current) or printed after it (reports)",
+    ...table(["Report", "When", "What it says"], rs.map((r) => [code(r.name), r.refuses ? "refuses" : r.blocks ? "blocks" : "reports", r.says])),
   ],
 }
 
@@ -126,21 +128,40 @@ export const landingReportsPoint: ExtensionPoint<LandingReport> = {
 const changedFiles = (root: string, from: string, to: string): string[] =>
   (gitOrNull(root, "diff", "--name-only", "--no-renames", "-z", from, to) ?? "").split("\0").filter(Boolean)
 
-/** What every landing check finds not current, each line prefixed with its name; a check that fails says so and blocks nothing. */
-async function blockingLanding(ctx: Context, landing: Landing): Promise<string[]> {
+/**
+ * What the landing checks find before the trunk moves, each line prefixed with its check's name: what fails on the
+ * branch (`refused`, from `refuses`) and what has proofs not current (`notCurrent`, from `blocks`). A `blocks` that
+ * throws says so and blocks nothing; a `refuses` that throws refuses the landing, since the branch was not checked.
+ */
+async function landingChecks(ctx: Context, landing: Landing): Promise<{ refused: string[]; notCurrent: string[] }> {
   ctx.reload()
-  const out: string[] = []
+  const refused: string[] = []
+  const notCurrent: string[] = []
   for (const c of ctx.registry.contributions("landing-reports")) {
     const check = c.value as LandingReport
+    if (check.refuses) {
+      try {
+        for (const line of await check.refuses(ctx, landing)) refused.push(`${c.name}: ${line}`)
+      } catch (e) {
+        refused.push(`${c.name}: could not check: ${message(e)}`)
+      }
+    }
     if (!check.blocks) continue
     try {
-      for (const line of await check.blocks(ctx, landing)) out.push(`${c.name}: ${line}`)
+      for (const line of await check.blocks(ctx, landing)) notCurrent.push(`${c.name}: ${line}`)
     } catch (e) {
       ctx.out(`${c.name}: could not check: ${message(e)}`)
     }
   }
-  return out
+  return { refused, notCurrent }
 }
+
+/** The refusal of a branch a landing check finds failing: no flag lets it through. */
+const refusedLanding = (branch: string, refused: readonly string[]): Error =>
+  new Error(
+    `${branch} fails a landing check:\n${refused.map((l) => `  ${l}`).join("\n")}\n` +
+      `fix it on the branch and commit the fix: --stale-proofs does not let a failing check through, only proofs not yet run: nothing landed`,
+  )
 
 /** Each landing report's lines, each prefixed with the report's name; one that fails says so, and the landing stands. */
 async function reportLanding(ctx: Context, landing: Landing): Promise<void> {
@@ -628,7 +649,8 @@ async function landBoth(
   }
   let tm: string
   try {
-    const notCurrent = await blockingLanding(ctx, { branch, from: code.old, to: code.tip, changed })
+    const { refused, notCurrent } = await landingChecks(ctx, { branch, from: code.old, to: code.tip, changed })
+    if (refused.length) throw refusedLanding(branch, refused)
     const own: string[] = []
     if (notCurrent.length && stale === undefined) {
       throw new Error(
@@ -843,7 +865,7 @@ export const land: Command = {
   says:
     "land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor",
   enforces:
-    "runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item (unless --tracker-only gives the reason and the branch changes only tracker data, or --meets names a requirement it meets) or an item open and not fixed; refuses --meets for an item that is not a requirement, one with no item that verifies it and passed on the branch tip, one whose proofs all passed on the trunk already, and one an item refutes, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, adds the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right after the marker, so that naima close finds a commit reachable from the trunk; then prints what every landing report says of the files the landing changed, never undoing it",
+    "runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item (unless --tracker-only gives the reason and the branch changes only tracker data, or --meets names a requirement it meets) or an item open and not fixed; refuses --meets for an item that is not a requirement, one with no item that verifies it and passed on the branch tip, one whose proofs all passed on the trunk already, and one an item refutes, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch a landing check finds failing, whatever flag is given, and one that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, adds the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right after the marker, so that naima close finds a commit reachable from the trunk; then prints what every landing report says of the files the landing changed, never undoing it",
   usage:
     'land <branch> [--closes <item>]... [--no-change-note "<reason>"] [--stale-proofs "<reason>"] [--tracker-only "<reason>"] [--meets <requirement>]... | land <branch> --repair',
   options: [
@@ -923,7 +945,8 @@ export const land: Command = {
     }
     let marker: string
     try {
-      const notCurrent = await blockingLanding(ctx, { branch, from: old, to: tip, changed })
+      const { refused, notCurrent } = await landingChecks(ctx, { branch, from: old, to: tip, changed })
+      if (refused.length) throw refusedLanding(branch, refused)
       if (notCurrent.length && stale === undefined) {
         throw new Error(
           `${branch} changes what has proofs not current:\n${notCurrent.map((l) => `  ${l}`).join("\n")}\n` +

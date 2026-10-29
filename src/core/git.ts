@@ -34,6 +34,8 @@ export interface GitOptions {
 /** The variables a git hook runs with that bind git to one repository. */
 const REPO_ENV = ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_PREFIX", "GIT_OBJECT_DIRECTORY"]
 const ownGitDirs = new Map<string, boolean>()
+/** Those variables, as the hook gave them: taken out of the process's environment, and handed back only where they belong. */
+const hookEnv: Record<string, string> = {}
 
 const realOrSelf = (path: string): string => {
   try {
@@ -44,28 +46,48 @@ const realOrSelf = (path: string): string => {
 }
 
 /**
+ * Move the hook's repository variables out of the process's environment into `hookEnv`. A child process cannot be
+ * started without them by leaving them out of the environment it is given: Deno's child_process adds the given
+ * environment to its own instead of replacing it, so a variable deleted from a copy is still inherited. Taken out of
+ * the process itself, they reach no child — git, nor a program a plugin starts — unless handed back.
+ */
+function takeHookEnv(): Record<string, string> {
+  for (const k of REPO_ENV) {
+    const v = process.env[k]
+    if (v === undefined) continue
+    hookEnv[k] = v
+    delete process.env[k]
+    ownGitDirs.clear()
+  }
+  return hookEnv
+}
+
+/** Forget the hook's variables taken so far: for a process that runs as one hook, then as another, such as a test's. */
+export function forgetHookEnv(): void {
+  for (const k of Object.keys(hookEnv)) delete hookEnv[k]
+  ownGitDirs.clear()
+}
+
+/**
  * The environment git runs with in `cwd`. Run from a hook, Naima inherits
- * GIT_DIR or GIT_INDEX_FILE of the repository being committed; a call into the
- * other repository of a project whose tracker is a repository of its own must
- * not use them, so they are dropped there — kept only where they belong, the
- * repository whose git directory holds them. Undefined (the process's own)
- * outside a hook.
+ * GIT_DIR or GIT_INDEX_FILE of the repository being committed; a call into
+ * another repository — the tracker's own in a project whose tracker is a
+ * repository of its own, a plugin fetched from git — must not use them, so
+ * they are handed back only where they belong, the repository whose git
+ * directory holds them. Undefined (the process's own) outside a hook.
  */
 function envFor(cwd: string, extra?: Record<string, string>): NodeJS.ProcessEnv | undefined {
-  const env = process.env
-  if (!env["GIT_INDEX_FILE"] && !env["GIT_DIR"]) return extra ? { ...env, ...extra } : undefined
-  const clean: NodeJS.ProcessEnv = { ...env }
-  for (const k of REPO_ENV) delete clean[k]
+  const hook = takeHookEnv()
+  if (!hook["GIT_INDEX_FILE"] && !hook["GIT_DIR"]) return extra ? { ...process.env, ...extra } : undefined
   let own = ownGitDirs.get(cwd)
   if (own === undefined) {
-    const r = spawnSync("git", ["rev-parse", "--absolute-git-dir"], { cwd, env: clean, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })
+    const r = spawnSync("git", ["rev-parse", "--absolute-git-dir"], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })
     const dir = r.status === 0 ? realOrSelf(String(r.stdout).trim()) : null
     const inside = (v: string | undefined) => !v || (dir !== null && (realOrSelf(resolve(v)) === dir || realOrSelf(resolve(v)).startsWith(dir + sep)))
-    own = dir !== null && inside(env["GIT_INDEX_FILE"]) && inside(env["GIT_DIR"])
+    own = dir !== null && inside(hook["GIT_INDEX_FILE"]) && inside(hook["GIT_DIR"])
     ownGitDirs.set(cwd, own)
   }
-  const base = own ? env : clean
-  return extra ? { ...base, ...extra } : own ? undefined : base
+  return own || extra ? { ...process.env, ...(own ? hook : {}), ...(extra ?? {}) } : undefined
 }
 
 function spawnGit(cwd: string, args: string[], opts: GitOptions, encoding: "utf8" | "buffer") {

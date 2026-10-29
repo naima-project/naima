@@ -51,6 +51,7 @@ import {
   globalOptions,
   launcherSet,
   message,
+  pluginHookPaths,
   privateEnv,
   programOf,
   readConfig,
@@ -325,9 +326,11 @@ function sessionConfigOf(data: string | null): SessionConfig {
   }
 }
 
-/** The host files the run may write outside the tracker folder: only init's and update's, the pointer line and the session-start hooks, and init --write-excludes's. */
-function hostFiles(rest: string[], root: string, data: string | null): string[] {
+/** The host files the run may write outside the tracker folder: only init's and update's, the pointer line and the session-start hooks, init --write-excludes's, and stance adopt's, the settings its hooks go to. */
+export function hostFiles(rest: string[], root: string, data: string | null): string[] {
   const [command, ...args] = rest
+  // naima stance adopt installs the hooks the stance contributes, and writes nothing else of the host's.
+  if (command === "stance" && args[0] === "adopt") return pluginHookPaths(root, sessionConfigOf(data))
   if (command !== "init" && command !== "update") return []
   const config = sessionConfigOf(data)
   const hooks = !(command === "init" && args.includes("--no-session-hook"))
