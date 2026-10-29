@@ -3,8 +3,8 @@
 // prints those for agents first, so an agent starting work in any project
 // reads that project's rules before anything else.
 
-import { readFileSync } from "node:fs"
-import { join } from "node:path"
+import { readdirSync, readFileSync, statSync } from "node:fs"
+import { basename, join } from "node:path"
 import {
   bool,
   type Check,
@@ -21,14 +21,17 @@ import {
   type Item,
   label,
   parse,
+  parseFrontMatter,
   type Plugin,
   readReadme,
   type Rendered,
   rendered,
   runGit,
+  sectionsOf,
   str,
   table,
   type TypeDef,
+  unwrapped,
   usageError,
 } from "../../core/api.ts"
 
@@ -99,7 +102,12 @@ export interface ShippedRule {
   ack?: string
   /** The check or gate that enforces it. */
   enforcedBy?: string
+  /** How it is verified: the check or gate that verifies it, or `agent` for a convention an agent verifies by reading its own work; by default its `enforcedBy`. */
+  verifiedBy?: string
 }
+
+/** What `verifiedBy` says of a convention no check verifies: the agent verifies it, by reading its own work against the rule. */
+export const VERIFIED_BY_AGENT = "agent"
 
 const isText = (v: unknown): boolean => typeof v === "string" && !!v.trim()
 
@@ -110,15 +118,113 @@ function shippedError(v: unknown): string | null {
   for (const key of ["name", "title", "text", "why"] as const) if (!isText(r[key])) return `has no ${key}`
   if (!AUDIENCES.includes(r.audience as Audience)) return `has no audience among ${AUDIENCES.join(", ")}`
   if (r.strength !== "must" && r.strength !== "should") return "has no strength, must or should"
+  if (r.verifiedBy !== undefined && !isText(r.verifiedBy)) return `has an empty verifiedBy: a check or gate, or "${VERIFIED_BY_AGENT}"`
   return null
+}
+
+/** The keys of a rule file's front matter: those of a shipped rule but its text and why, and `when`. */
+const RULE_KEYS = ["name", "title", "audience", "strength", "ack", "enforcedBy", "verifiedBy", "when"] as const
+const REQUIRED_KEYS = ["name", "title", "audience", "strength"] as const
+
+/** The rule's name a rule file's name gives: without a leading number and dash, without `.md`, and without a variant after a dot. */
+export const ruleFileName = (file: string): string => basename(file, ".md").replace(/^\d+-/, "").split(".")[0] ?? ""
+
+/** `text` with every `{{setting}}` replaced by the setting's value; an error for one the plugin does not give. */
+function filled(text: string, settings: Readonly<Record<string, string>>): string {
+  return text.replace(/\{\{([a-zA-Z]+)\}\}/g, (_, key: string) => {
+    const v = settings[key]
+    if (v === undefined) throw new Error(`{{${key}}} names a setting the plugin does not give${givenSettings(settings)}`)
+    return v
+  })
+}
+
+const givenSettings = (settings: Readonly<Record<string, string>>): string =>
+  Object.keys(settings).length ? ` — it gives ${Object.keys(settings).join(", ")}` : " — it gives none"
+
+/**
+ * The rule a rule file holds (docs/guide/extending-naima.md#rules-a-plugin-ships), or null when its `when` does not hold
+ * for `settings`; an error saying why when the file is not a rule.
+ */
+export function ruleFromFile(file: string, text: string, settings: Readonly<Record<string, string>> = {}): ShippedRule | null {
+  const { fields, body } = parseFrontMatter(text)
+  for (const key of fields.keys()) {
+    if (!(RULE_KEYS as readonly string[]).includes(key)) throw new Error(`${key} is not a key of a rule file: ${RULE_KEYS.join(", ")}`)
+  }
+  const one = (key: string): string | undefined => {
+    const v = fields.get(key)
+    if (Array.isArray(v)) throw new Error(`${key} is one value, not a list`)
+    return v
+  }
+  for (const key of RULE_KEYS) if (key !== "when") one(key)
+  for (const key of REQUIRED_KEYS) if (!one(key)?.trim()) throw new Error(`the front matter has no ${key}`)
+  if (!AUDIENCES.includes(one("audience") as Audience)) throw new Error(`the rule has no audience among ${AUDIENCES.join(", ")}`)
+  if (one("strength") !== "must" && one("strength") !== "should") throw new Error("the rule has no strength, must or should")
+  const name = one("name") as string
+  if (ruleFileName(file) !== name) {
+    throw new Error(`the file is named for "${ruleFileName(file)}" and holds the rule "${name}" — name it [<number>-]${name}[.<variant>].md`)
+  }
+  const raw = fields.get("when")
+  for (const cond of raw === undefined ? [] : Array.isArray(raw) ? raw : [raw]) {
+    const [key = "", value, ...extra] = cond.split("=")
+    if (!key || value === undefined || extra.length) throw new Error(`when: "${cond}" is not <setting>=<value>`)
+    if (settings[key] === undefined) throw new Error(`when: ${key} is a setting the plugin does not give${givenSettings(settings)}`)
+    if (settings[key] !== value) return null
+  }
+  const { lead, sections } = sectionsOf(body)
+  const why = sections.find((x) => x.heading === "Why")
+  const other = sections.find((x) => x.heading !== "Why")
+  if (other) throw new Error(`the body has a section "${other.heading}": a rule file holds the rule, then one section ## Why`)
+  if (sections.length > 1) throw new Error("the body has ## Why twice")
+  if (!lead) throw new Error("the body has no rule before ## Why")
+  if (!why?.text) throw new Error("the body has no ## Why section with the reason")
+  const rule: ShippedRule = {
+    name,
+    title: filled(one("title") as string, settings),
+    audience: one("audience") as Audience,
+    strength: one("strength") as "must" | "should",
+    text: filled(unwrapped(lead), settings),
+    why: filled(unwrapped(why.text), settings),
+    ...(one("ack") !== undefined ? { ack: one("ack") as string } : {}),
+    ...(one("enforcedBy") !== undefined ? { enforcedBy: one("enforcedBy") as string } : {}),
+    ...(one("verifiedBy") !== undefined ? { verifiedBy: one("verifiedBy") as string } : {}),
+  }
+  const wrong = shippedError(rule)
+  if (wrong) throw new Error(`the rule ${wrong}`)
+  return rule
+}
+
+/** The rules a folder of rule files holds for `settings`, one file per rule, in the order of the files' names. */
+export function rulesFromFolder(dir: string, settings: Readonly<Record<string, string>> = {}): ShippedRule[] {
+  let files: string[]
+  try {
+    files = readdirSync(dir).filter((f) => f.endsWith(".md") && statSync(join(dir, f)).isFile()).sort()
+  } catch {
+    throw new Error(`the rules folder ${basename(dir)}/ cannot be read`)
+  }
+  const out: ShippedRule[] = []
+  for (const f of files) {
+    let rule: ShippedRule | null
+    try {
+      rule = ruleFromFile(f, readFileSync(join(dir, f), "utf8"), settings)
+    } catch (e) {
+      throw new Error(`${basename(dir)}/${f}: ${(e as Error).message}`)
+    }
+    if (!rule) continue
+    if (out.some((r) => r.name === rule.name)) {
+      throw new Error(`${basename(dir)}/${f}: a second file holds the rule "${rule.name}" for the same settings — tell them apart with when`)
+    }
+    out.push(rule)
+  }
+  return out
 }
 
 /** The point this plugin declares: the rules plugins ship. */
 export const rulesPoint: ExtensionPoint<ShippedRule> = {
   id: "rules",
   says:
-    "a rule a plugin ships, active in every project that loads it beside the project's own rules items: `name`, `title`, `audience`, `strength`, `text`, `why`, and optionally `ack` and `enforcedBy`; a project retires one with the rules plugin's `retire` option",
+    "a rule a plugin ships, active in every project that loads it beside the project's own rules items: one Markdown file per rule in a folder the plugin names (`contributes: { rules: \"rules/\" }`), its front matter `name`, `title`, `audience`, `strength`, and optionally `ack`, `enforcedBy`, `verifiedBy` and `when`, its body the rule and a section `## Why`; a project retires one with the rules plugin's `retire` option",
   noun: "shipped rule",
+  fromFolder: rulesFromFolder,
   key: (r) => r.name,
   renamed: (r, name) => ({ ...r, name }),
   validate: shippedError,
@@ -126,8 +232,11 @@ export const rulesPoint: ExtensionPoint<ShippedRule> = {
     "",
     "**Shipped rules**, active in every project that loads the plugin, listed by `naima rules`",
     ...table(
-      ["Rule", "Title", "For", "Strength", "Enforced by", "Ack"],
-      rs.map((r) => [code(r.name), r.title, r.audience, r.strength, r.enforcedBy ? code(r.enforcedBy) : "", r.ack ? code(r.ack) : ""]),
+      ["Rule", "Title", "For", "Strength", "Enforced by", "Verified by", "Ack"],
+      rs.map((r) => {
+        const verified = r.verifiedBy ?? r.enforcedBy
+        return [code(r.name), r.title, r.audience, r.strength, r.enforcedBy ? code(r.enforcedBy) : "", verified ? code(verified) : "", r.ack ? code(r.ack) : ""]
+      }),
     ),
   ],
 }
@@ -139,6 +248,8 @@ export interface Rule {
   audience: string | null
   strength: string | null
   enforcedBy: string | null
+  /** How it is verified: a check or gate, or `agent`; its enforcedBy when it says nothing else, null when neither is set. */
+  verifiedBy: string | null
   ack: string | null
   text: string
   /** The plugin that ships it; absent for the project's own rules items. */
@@ -154,6 +265,7 @@ const asRule = (item: Item): Rule => ({
   audience: fieldValue(item, read(AUDIENCE)) ?? null,
   strength: fieldValue(item, read(STRENGTH)) ?? null,
   enforcedBy: fieldValue(item, read(ENFORCED_BY)) ?? null,
+  verifiedBy: fieldValue(item, read(ENFORCED_BY)) ?? null,
   ack: fieldValue(item, read(ACK)) ?? null,
   text: ruleText(item),
 })
@@ -169,6 +281,7 @@ const fromShipped = (c: Contribution<ShippedRule>): Rule => ({
   audience: c.value.audience,
   strength: c.value.strength,
   enforcedBy: c.value.enforcedBy ?? null,
+  verifiedBy: c.value.verifiedBy ?? c.value.enforcedBy ?? null,
   ack: c.value.ack ?? null,
   text: `${c.value.text}\n\nWhy: ${c.value.why}`,
   shippedBy: c.plugin,
@@ -203,7 +316,7 @@ function rulesRendered(rules: Rule[], heading: string): Rendered<Rule[]> {
           "",
           `${(r.strength ?? "?").toUpperCase()} · ${r.audience ?? "no audience"} · ${r.title} (${r.item}${r.shippedBy ? `, shipped by ${r.shippedBy}` : ""}${
             r.enforcedBy ? `, enforced by ${r.enforcedBy}` : ""
-          }${r.ack ? `, ack ${JSON.stringify(r.ack)}` : ""})`,
+          }${r.verifiedBy && r.verifiedBy !== r.enforcedBy ? `, verified by ${r.verifiedBy}` : ""}${r.ack ? `, ack ${JSON.stringify(r.ack)}` : ""})`,
           ...r.text.split("\n").map((l) => (l ? `    ${l}` : "")),
         ]),
         ...(ackLine(rs) ? ["", ackLine(rs) as string] : []),
@@ -241,7 +354,7 @@ const command = (retired: ReadonlySet<string>): Command => ({
   usage: "rules [--audience <agents|people|everyone>] [--json] | rules check-ack <file|->",
   options: [
     { name: "--audience", says: "only the rules for that audience, and those for everyone" },
-    { name: "--json", says: "print the rules as JSON: item, title, audience, strength, enforcedBy, ack, text" },
+    { name: "--json", says: "print the rules as JSON: item, title, audience, strength, enforcedBy, verifiedBy, ack, text" },
   ],
   examples: ["rules", "rules --audience agents", "rules --audience people --json", "rules check-ack reply.txt", "rules check-ack -"],
   run(args, ctx) {
@@ -296,7 +409,7 @@ export function staleCopies(ctx: Context, retired: ReadonlySet<string>): { file:
 const check = (retired: ReadonlySet<string>): Check => ({
   name: "rules",
   says:
-    "every active rule has its text and a valid audience, and names as enforcedBy only a check or gate that exists; every name the retire option holds is a rule a loaded plugin ships; and a copy of naima rules kept in a markdown file at the repository's root, such as one an agent tool imports, is noted when it is no longer what naima rules prints",
+    "every active rule has its text and a valid audience, and names as enforcedBy only a check or gate that exists, and as verifiedBy only one or agent; every name the retire option holds is a rule a loaded plugin ships; and a copy of naima rules kept in a markdown file at the repository's root, such as one an agent tool imports, is noted when it is no longer what naima rules prints",
   run(ctx) {
     const known = new Set(["checks", "gates"].flatMap((p) => ctx.registry.contributions(p).flatMap((c) => [c.name, c.id])))
     const ships = shipped(ctx)
@@ -308,6 +421,12 @@ const check = (retired: ReadonlySet<string>): Check => ({
       level: "problem",
       message: `${c.id}: the shipped rule names as enforcedBy "${c.value.enforcedBy}", which is no check or gate`,
     }))
+    const badVerified: Finding[] = ships.filter((c) => c.value.verifiedBy && c.value.verifiedBy !== VERIFIED_BY_AGENT && !known.has(c.value.verifiedBy)).map((
+      c,
+    ) => ({
+      level: "problem",
+      message: `${c.id}: the shipped rule names as verifiedBy "${c.value.verifiedBy}", which is no check or gate, nor "${VERIFIED_BY_AGENT}"`,
+    }))
     const stale: Finding[] = staleCopies(ctx, retired).map(({ file, audience }) => ({
       level: "note",
       message: `${file} is a copy of naima rules that is out of date, so whoever reads it misses rules added or changed since — write it again: naima rules${
@@ -317,6 +436,7 @@ const check = (retired: ReadonlySet<string>): Check => ({
     return [
       ...unknown,
       ...badShipped,
+      ...badVerified,
       ...stale,
       ...active(ctx).flatMap((item): Finding[] => {
         const out: Finding[] = []
@@ -362,7 +482,7 @@ export default function rules(options: Record<string, unknown> = {}): Plugin {
       "A rule's page is the rule and its reason; `audience` says whom it binds (`agents`, `people`, `everyone`), `strength` how much (`must`, `should`), and `enforcedBy`, when set, the check or gate that holds it. " +
       "An active rule is shown; a retired one is kept as history. `naima rules --audience agents` is what an agent reads at the start of work, and `naima guide` prints it first. " +
       "`ack`, when a rule sets it, is the exact phrase an agent gives back in acknowledgement; `naima rules` and `naima guide` print every active one's, joined, as the line to give — `naima rules check-ack <file|->` checks that a piece of text carries them all, naming what is missing and exiting 1 if so. " +
-      "A plugin may also ship rules (the `rules` point): each is active in every project that loads the plugin, listed beside the project's own with the plugin that ships it, and retired by naming it in the `retire` option rather than by editing it. " +
+      "A plugin may also ship rules (the `rules` point), one Markdown file each in a folder it names: each is active in every project that loads the plugin, listed beside the project's own with the plugin that ships it, and retired by naming it in the `retire` option rather than by editing it. " +
       "A markdown file at the repository's root whose first line is the heading `naima rules` prints is a copy of its output, kept for an agent tool that imports it; when it no longer matches, as after an update of Naima that ships new rules, `naima check` notes it with the command that writes it again.",
     options: [{ name: "retire", default: "[]", says: "the shipped rules this project does not hold to, each by its name or qualified id (`<plugin>/<name>`)" }],
     points: [rulesPoint],

@@ -429,6 +429,7 @@ export const MANIFEST_KEYS: readonly string[] = [
   "options",
   "points",
   "contributes",
+  "home",
   "optional",
   "contract",
   "uses",

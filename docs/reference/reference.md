@@ -153,7 +153,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `code-languages` | metrics | a language code measures read: `extensions`, `code`, `comments`, `quotes`, `strip(text)` when the generic comment scan cannot read it, and `functions(stripped) → [{ name, line, lines, complexity }]` when it can find them | metrics |
 | `test-formats` | metrics | how a test suite's machine-readable output is read: `parse(text) → [{ name, file, result, seconds, message }] \| { error }` | metrics |
 | `test-suites` | metrics | a test suite: `run` (a program and its arguments), the `format` its report is in, and where the `report` is |  |
-| `rules` | rules | a rule a plugin ships, active in every project that loads it beside the project's own rules items: `name`, `title`, `audience`, `strength`, `text`, `why`, and optionally `ack` and `enforcedBy`; a project retires one with the rules plugin's `retire` option | coordination, planning, long-work, working-rules |
+| `rules` | rules | a rule a plugin ships, active in every project that loads it beside the project's own rules items: one Markdown file per rule in a folder the plugin names (`contributes: { rules: "rules/" }`), its front matter `name`, `title`, `audience`, `strength`, and optionally `ack`, `enforcedBy`, `verifiedBy` and `when`, its body the rule and a section `## Why`; a project retires one with the rules plugin's `retire` option | coordination, planning, long-work, working-rules |
 
 ## core
 
@@ -1453,11 +1453,11 @@ naima event 2026-10-05 "The plan was entered" --kind diary
 
 **Shipped rules**, active in every project that loads the plugin, listed by `naima rules`
 
-| Rule | Title | For | Strength | Enforced by | Ack |
-|---|---|---|---|---|---|
-| `agents-keep-the-diary` | Agents keep the diary: one entry per decision taken with the owner or notable turn, never a log of routine work | agents | must | `diary-entries` | `Diary mode on` |
-| `workers-post-their-step` | Workers post their current step; the coordinator reads them and reports a silent worker | agents | must |  |  |
-| `changes-land-through-items` | Every change goes through an item, its worktree and naima land; the trunk is never committed by hand | agents | must | `landings-are-markers` | `Landing mode on` |
+| Rule | Title | For | Strength | Enforced by | Verified by | Ack |
+|---|---|---|---|---|---|---|
+| `agents-keep-the-diary` | Agents keep the diary: one entry per decision taken with the owner or notable turn, never a log of routine work | agents | must | `diary-entries` | `diary-entries` | `Diary mode on` |
+| `workers-post-their-step` | Workers post their current step; the coordinator reads them and reports a silent worker | agents | must |  | `agent` |  |
+| `changes-land-through-items` | Every change goes through an item, its worktree and naima land; the trunk is never committed by hand | agents | must | `landings-are-markers` | `landings-are-markers` | `Landing mode on` |
 
 ## triage
 
@@ -2164,10 +2164,10 @@ Artifacts: something the project makes and keeps — an analysis, a profile, a r
 
 **Shipped rules**, active in every project that loads the plugin, listed by `naima rules`
 
-| Rule | Title | For | Strength | Enforced by | Ack |
-|---|---|---|---|---|---|
-| `requirements-elicited-at-every-prompt` | Requirements are elicited at every prompt, each with how it is checked or measured | agents | must | `requirements-proven` | `Elicitation mode on` |
-| `behaviour-designed-from-a-model` | Behaviour with states or concurrency is modelled and verified before it is coded | everyone | must | `model-first` | `Model first mode on` |
+| Rule | Title | For | Strength | Enforced by | Verified by | Ack |
+|---|---|---|---|---|---|---|
+| `requirements-elicited-at-every-prompt` | Requirements are elicited at every prompt, each with how it is checked or measured | agents | must | `requirements-proven` | `requirements-proven` | `Elicitation mode on` |
+| `behaviour-designed-from-a-model` | Behaviour with states or concurrency is modelled and verified before it is coded | everyone | must | `model-first` | `model-first` | `Model first mode on` |
 
 ## knowledge
 
@@ -2960,7 +2960,7 @@ The project's own rules, kept as items: shown to agents first by naima guide, li
 
 Its contributions' qualified ids are `rules/<name>`.
 
-A project's rules — how an agent works here (quiet, simple, fast), how it reports, what it asks before doing — are tracker data, one `rules` item each, so every project carries its own. A rule's page is the rule and its reason; `audience` says whom it binds (`agents`, `people`, `everyone`), `strength` how much (`must`, `should`), and `enforcedBy`, when set, the check or gate that holds it. An active rule is shown; a retired one is kept as history. `naima rules --audience agents` is what an agent reads at the start of work, and `naima guide` prints it first. `ack`, when a rule sets it, is the exact phrase an agent gives back in acknowledgement; `naima rules` and `naima guide` print every active one's, joined, as the line to give — `naima rules check-ack <file|->` checks that a piece of text carries them all, naming what is missing and exiting 1 if so. A plugin may also ship rules (the `rules` point): each is active in every project that loads the plugin, listed beside the project's own with the plugin that ships it, and retired by naming it in the `retire` option rather than by editing it. A markdown file at the repository's root whose first line is the heading `naima rules` prints is a copy of its output, kept for an agent tool that imports it; when it no longer matches, as after an update of Naima that ships new rules, `naima check` notes it with the command that writes it again.
+A project's rules — how an agent works here (quiet, simple, fast), how it reports, what it asks before doing — are tracker data, one `rules` item each, so every project carries its own. A rule's page is the rule and its reason; `audience` says whom it binds (`agents`, `people`, `everyone`), `strength` how much (`must`, `should`), and `enforcedBy`, when set, the check or gate that holds it. An active rule is shown; a retired one is kept as history. `naima rules --audience agents` is what an agent reads at the start of work, and `naima guide` prints it first. `ack`, when a rule sets it, is the exact phrase an agent gives back in acknowledgement; `naima rules` and `naima guide` print every active one's, joined, as the line to give — `naima rules check-ack <file|->` checks that a piece of text carries them all, naming what is missing and exiting 1 if so. A plugin may also ship rules (the `rules` point), one Markdown file each in a folder it names: each is active in every project that loads the plugin, listed beside the project's own with the plugin that ships it, and retired by naming it in the `retire` option rather than by editing it. A markdown file at the repository's root whose first line is the heading `naima rules` prints is a copy of its output, kept for an agent tool that imports it; when it no longer matches, as after an update of Naima that ships new rules, `naima check` notes it with the command that writes it again.
 
 Options, each with the default it takes when nothing sets it:
 
@@ -2984,7 +2984,7 @@ naima rules check-ack <file|->
 | Option | Default | What it does |
 |---|---|---|
 | `--audience` |  | only the rules for that audience, and those for everyone |
-| `--json` |  | print the rules as JSON: item, title, audience, strength, enforcedBy, ack, text |
+| `--json` |  | print the rules as JSON: item, title, audience, strength, enforcedBy, verifiedBy, ack, text |
 
 Examples:
 
@@ -3018,7 +3018,7 @@ Rules: a rule of this project, for agents, people or both: its page is the rule 
 
 | Check | What it holds |
 |---|---|
-| `rules` | every active rule has its text and a valid audience, and names as enforcedBy only a check or gate that exists; every name the retire option holds is a rule a loaded plugin ships; and a copy of naima rules kept in a markdown file at the repository's root, such as one an agent tool imports, is noted when it is no longer what naima rules prints |
+| `rules` | every active rule has its text and a valid audience, and names as enforcedBy only a check or gate that exists, and as verifiedBy only one or agent; every name the retire option holds is a rule a loaded plugin ships; and a copy of naima rules kept in a markdown file at the repository's root, such as one an agent tool imports, is noted when it is no longer what naima rules prints |
 
 **Guide sections**, printed first by `naima guide`
 
@@ -3138,10 +3138,10 @@ naima wait models --host lab --timeout 1h
 
 **Shipped rules**, active in every project that loads the plugin, listed by `naima rules`
 
-| Rule | Title | For | Strength | Enforced by | Ack |
-|---|---|---|---|---|---|
-| `long-work-through-naima-run` | Long work goes through naima run and naima wait; no hand-written wait loop | agents | must | `wait-loops` | `Long work mode on` |
-| `long-work-reports-progress` | Long work reports its progress, or says why it cannot and what it reports instead | everyone | must | `progress-declared` | `Progress mode on` |
+| Rule | Title | For | Strength | Enforced by | Verified by | Ack |
+|---|---|---|---|---|---|---|
+| `long-work-through-naima-run` | Long work goes through naima run and naima wait; no hand-written wait loop | agents | must | `wait-loops` | `wait-loops` | `Long work mode on` |
+| `long-work-reports-progress` | Long work reports its progress, or says why it cannot and what it reports instead | everyone | must | `progress-declared` | `progress-declared` | `Progress mode on` |
 
 ## working-rules
 
@@ -3153,19 +3153,19 @@ How an agent works with the owner is the same in every project, so Naima ships i
 
 **Shipped rules**, active in every project that loads the plugin, listed by `naima rules`
 
-| Rule | Title | For | Strength | Enforced by | Ack |
-|---|---|---|---|---|---|
-| `quiet-mode` | Quiet mode | agents | must |  | `Quiet mode on` |
-| `talking-to-the-owner` | Talking to the owner | agents | must |  | `Simple mode on` |
-| `fast-mode` | Fast mode | agents | must |  | `Fast mode on` |
-| `coordinator-delegates` | The agent talking to the owner coordinates; workers do the work | agents | must |  | `Coordinator mode on` |
-| `commands-without-prompts` | Write commands the agent tool runs without asking the owner | agents | must |  | `Clean commands mode on` |
-| `ask-before-irreversible` | Ask before what cannot be undone | agents | must |  | `Irreversible actions mode on` |
-| `capture-with-judgment` | Capture, with judgment | agents | must |  | `Capture mode on` |
-| `never-ask-what-rules-answer` | Never ask what the rules answer | agents | must |  | `Rules answer mode on` |
-| `close-every-loop` | Close every loop | agents | must |  | `Loops closed mode on` |
-| `no-new-status-document` | No new status or summary document: update the authoritative one | everyone | must |  |  |
-| `right-tool-for-the-job` | Use the state-of-the-art method for the job | everyone | must |  |  |
+| Rule | Title | For | Strength | Enforced by | Verified by | Ack |
+|---|---|---|---|---|---|---|
+| `quiet-mode` | Quiet mode | agents | must |  | `agent` | `Quiet mode on` |
+| `talking-to-the-owner` | Talking to the owner | agents | must |  | `agent` | `Simple mode on` |
+| `fast-mode` | Fast mode | agents | must |  | `agent` | `Fast mode on` |
+| `coordinator-delegates` | The agent talking to the owner coordinates; workers do the work | agents | must |  | `agent` | `Coordinator mode on` |
+| `commands-without-prompts` | Write commands the agent tool runs without asking the owner | agents | must |  | `agent` | `Clean commands mode on` |
+| `ask-before-irreversible` | Ask before what cannot be undone | agents | must |  | `agent` | `Irreversible actions mode on` |
+| `capture-with-judgment` | Capture, with judgment | agents | must |  | `agent` | `Capture mode on` |
+| `never-ask-what-rules-answer` | Never ask what the rules answer | agents | must |  | `agent` | `Rules answer mode on` |
+| `close-every-loop` | Close every loop | agents | must |  | `agent` | `Loops closed mode on` |
+| `no-new-status-document` | No new status or summary document: update the authoritative one | everyone | must |  | `agent` |  |
+| `right-tool-for-the-job` | Use the state-of-the-art method for the job | everyone | must |  | `agent` |  |
 
 ## commit-hooks
 

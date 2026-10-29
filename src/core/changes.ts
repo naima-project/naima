@@ -7,13 +7,9 @@
 // target, `naima land` and the check change-notes ask for one, and `naima
 // changes` assembles release notes from them.
 //
-// The front matter is a strict subset of YAML, parsed line by line: a field
-// per line, `name: value`, or `name:` followed by `  - value` lines; a value
-// is plain text, or a double-quoted JSON string, or a single-quoted YAML one.
-// A plain value that YAML would read otherwise (one holding ": " or " #", or
-// starting with a quote or an indicator) is refused, so every note is also
-// valid YAML with the same meaning.
+// The front matter is the strict subset of YAML core/frontmatter.ts reads.
 
+import { parseFrontMatter } from "./frontmatter.ts"
 import { runGit } from "./git.ts"
 
 /** The directory a product's change notes are in. */
@@ -59,62 +55,6 @@ export const isNotePath = (path: string): boolean => {
   if (parts.length !== 2 || parts[0] !== CHANGES) return false
   const name = parts[1] ?? ""
   return /^\d{4}-\d{2}-\d{2}-[a-z0-9][a-z0-9-]*\.md$/.test(name)
-}
-
-/** One scalar of the subset: plain, double-quoted (JSON) or single-quoted. */
-function scalar(raw: string, where: string): string {
-  const v = raw.trim()
-  if (v.startsWith('"')) {
-    try {
-      const s = JSON.parse(v) as unknown
-      if (typeof s === "string") return s
-    } catch {
-      // refused below
-    }
-    throw new Error(`${where}: ${v} is not a double-quoted string`)
-  }
-  if (v.startsWith("'")) {
-    if (v.length < 2 || !v.endsWith("'") || v.slice(1, -1).replace(/''/g, "").includes("'")) throw new Error(`${where}: ${v} is not a single-quoted string`)
-    return v.slice(1, -1).replace(/''/g, "'")
-  }
-  if (v.includes(": ") || v.includes(" #") || v.endsWith(":") || /^[-?:,[\]{}#&*!|>%@`]/.test(v)) {
-    throw new Error(`${where}: quote it — ${JSON.stringify(v)} is not plain text YAML reads the same way`)
-  }
-  return v
-}
-
-/** The front matter of `text`, as fields, and the text after it. */
-export function parseFrontMatter(text: string): { fields: Map<string, string | string[]>; body: string } {
-  const lines = text.replace(/\r\n/g, "\n").split("\n")
-  if (lines[0] !== "---") throw new Error("no front matter: the file starts with a line ---")
-  const end = lines.indexOf("---", 1)
-  if (end === -1) throw new Error("the front matter is not closed by a line ---")
-  const fields = new Map<string, string | string[]>()
-  let list: string[] | null = null
-  for (let i = 1; i < end; i++) {
-    const line = lines[i] ?? ""
-    const where = `line ${i + 1}`
-    if (!line.trim()) continue
-    if (line.startsWith("  - ")) {
-      if (!list) throw new Error(`${where}: a list entry belongs under a field that has no value on its own line`)
-      list.push(scalar(line.slice(4), where))
-      continue
-    }
-    const colon = line.indexOf(":")
-    const name = colon > 0 ? line.slice(0, colon) : ""
-    if (!/^[a-z]+$/.test(name)) throw new Error(`${where}: expected "name: value", "name:" or "  - value"`)
-    if (fields.has(name)) throw new Error(`${where}: ${name} is given twice`)
-    const rest = line.slice(colon + 1)
-    if (!rest.trim()) {
-      list = []
-      fields.set(name, list)
-    } else {
-      if (!rest.startsWith(" ")) throw new Error(`${where}: a space follows the colon`)
-      list = null
-      fields.set(name, scalar(rest, where))
-    }
-  }
-  return { fields, body: lines.slice(end + 1).join("\n").trim() }
 }
 
 /** The change note `text` is, read from `file`; an error saying why when it is not one. */

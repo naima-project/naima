@@ -148,6 +148,7 @@ export { align, cloneIntoNewWorktree, isClone, short, type Target } from "./prog
 export { posixRelative } from "./config.ts"
 export { commandGaps, commandSection, FIELD_KINDS, optionsTable } from "./points.ts"
 export { contributionsOf } from "./manifest.ts"
+export { parseFrontMatter, sectionsOf, unwrapped } from "./frontmatter.ts"
 export { shortOrId } from "./names.ts"
 export { cliCommands } from "./entry.ts"
 export { asRendered, type Format, FORMATS, linesAs, rendered } from "./rendered.ts"

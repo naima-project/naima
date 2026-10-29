@@ -76,20 +76,6 @@ export function readTrunkGuard(options: Record<string, unknown>): boolean {
   return v
 }
 
-/** The rule this plugin ships while the guard is on: work goes through an item, and lands. */
-export const LANDING_RULE = {
-  name: "changes-land-through-items",
-  title: "Every change goes through an item, its worktree and naima land; the trunk is never committed by hand",
-  audience: "agents" as const,
-  strength: "must" as const,
-  text:
-    "Every change goes through an item: `naima open <item>` makes its worktree and branch, the change and its test are committed there, and `naima land` puts it on the trunk. Never commit, merge or fast-forward the trunk by hand. Straight on the trunk only: `naima init`'s commit, the tracker additions the CLI writes (an item filed, a note, a diary entry), and the close after a landing. The trunk guard, a git hook, refuses anything else; the owner alone lets a commit through, with a `Trunk-reason:` trailer that says why.",
-  why:
-    "an agent that was never told this made about ninety plain commits, half of them straight on the trunk, and merged a worktree it made by hand with a fast-forward: no item said what any of it was for, no landing closed one, and nothing stopped it.",
-  ack: "Landing mode on",
-  enforcedBy: "landings-are-markers",
-}
-
 /** The trunk the hook guards: the plugin's trunk (origin's HEAD, else main, else master), else the branch HEAD names, else main. */
 export const guardedTrunk = (root: string): string => trunk(root) ?? gitOrNull(root, "symbolic-ref", "--quiet", "--short", "HEAD") ?? "main"
 

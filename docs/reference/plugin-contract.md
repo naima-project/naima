@@ -45,11 +45,12 @@ may import anything in its repository.
 
 ### The contract version
 
-A manifest says the contract it is written for: `contract`, the `CONTRACT` of `core/api.ts` it was built against — this core speaks **2**. A plugin written for
+A manifest says the contract it is written for: `contract`, the `CONTRACT` of `core/api.ts` it was built against — this core speaks **3**. A plugin written for
 a newer contract is refused when the project loads, naming both versions, instead of running against an API it does not know. One that says none is read as
 contract 1, the shape before `contract` existed, and keeps working: its top-level `gates` or `verifiers` are contributions to those points as any top-level key
 named after a point is, and a view or summary section that returns plain lines is read as text whose data is those lines
-([views and summaries](#views-and-summaries)).
+([views and summaries](#views-and-summaries)). Contract 3 added `home` and contributions named as a folder ([below](#contributions-kept-as-files)); a plugin
+written for 2 keeps working as it is.
 
 ### What a plugin can and cannot do
 
@@ -70,7 +71,8 @@ thing and is typed.
 | `about`       | longer markdown: the concepts a reader needs before the reference                                                                                  |
 | `options`     | the keys the plugin reads from its `options`: `name`, `says`, `default` (a first-party plugin infers each default from the repository)             |
 | `points`      | extension points it declares ([below](#extension-points))                                                                                          |
-| `contributes` | contributions to any point, by point id: `{ "gates": [...] }`                                                                                      |
+| `contributes` | contributions to any point, by point id: `{ "gates": [...] }`; to a point that reads files, a folder instead: `{ "rules": "rules/" }`              |
+| `home`        | where the plugin is, as a file URL, normally `import.meta.url`: a folder named under `contributes` is read relative to it                          |
 | `optional`    | points it contributes to only when some loaded plugin declares them; without one those contributions are dropped instead of refused                |
 | `uses`        | what it reads that another plugin declares, by point: `{ fields: ["fixedOn"], relations: ["verifies"] }` ([below](#cooperation-without-imports))   |
 | `attribution` | for a plugin or stance from outside Naima: `name`, `homepage`, `source`, `authors`, `license`, `version`, printed by `naima credits` (provisional) |
@@ -129,6 +131,15 @@ which the program's reference leaves out. A point whose contributions stand for 
 contribution's attribution, and `naima credits` prints it (provisional). The core's own points are declared exactly this way (`src/core/points.ts`): adding a
 kind of contribution never takes a change to the core. The on-disk layout is not a point: `<type>/<slug>/{README.md,meta.json,attachments/}` is the
 compatibility boundary between forks ([the format](format.md)).
+
+### Contributions kept as files
+
+A point may read its contributions from files: its `fromFolder(dir, settings)` returns those a folder holds, and throws, naming the file and why, for one that
+is not a contribution. A plugin then names the folder under `contributes`, relative to its `home`, either as a path (`"rules/"`) or with the settings its files
+may depend on (`{ folder: "rules/", settings: { trunkGuard: "true" } }`). The folder must be inside the plugin. The registry reads it when the project loads, so
+a malformed file stops the load as a malformed contribution does. A plugin loaded from a `source` or a `replacedBy` that sets no `home` gets its module's
+location. The `rules` point reads rule files this way ([the format](../guide/extending-naima.md#rules-a-plugin-ships)); the core's front-matter reader,
+`parseFrontMatter`, and `sectionsOf`, which cuts a Markdown body at its `##` headings, are in the plugin API for a point of another plugin that does the same.
 
 ## Extending another plugin's types and fields
 

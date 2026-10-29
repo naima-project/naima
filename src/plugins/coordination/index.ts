@@ -79,28 +79,17 @@ import { claimsUiView, notesUiView } from "./ui.ts"
 import { readStaleAfter, staleCommand, type StaleData, staleData, staleSection } from "./stale.ts"
 import { changeNotesCheck, changesCommand } from "./changes.ts"
 import { land, landingReportsPoint, landingsAreMarkers, landingsPaired } from "./land.ts"
-import { guardCheckCommand, guardCommand, guardedFrom, guardOffSection, guardSetup, LANDING_RULE, readTrunkGuard, switchesGuard } from "./guard.ts"
-import { DIARY_RULE, diaryCheck, diaryCommand, eventCommand, EVENTS, frontLines, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
+import { guardCheckCommand, guardCommand, guardedFrom, guardOffSection, guardSetup, readTrunkGuard, switchesGuard } from "./guard.ts"
+import { diaryCheck, diaryCommand, eventCommand, EVENTS, frontLines, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
 
 export { type NextStep, type StaleData, type StaleEntry } from "./stale.ts"
 export { type Timeline, type TimelineEvent, timelineOf } from "./timeline.ts"
 export { claimedInHistory, CLOSES, type Landing, type LandingReport, landingReportsPoint, markerMessage, moveTrunk, STALE_PROOFS } from "./land.ts"
 
-export { GUARD_HOOK, guardHook, installGuard, LANDING_RULE, TRUNK_REASON, trunkRefusal } from "./guard.ts"
+export { GUARD_HOOK, guardHook, installGuard, TRUNK_REASON, trunkRefusal } from "./guard.ts"
 
 export const CLAIMS = "claims"
 
-/** The rule this plugin ships on workers' progress: listed by naima rules, with no acknowledgement phrase. */
-export const PROGRESS_RULE = {
-  name: "workers-post-their-step",
-  title: "Workers post their current step; the coordinator reads them and reports a silent worker",
-  audience: "agents" as const,
-  strength: "must" as const,
-  text:
-    'A worker posts what it is doing now with `naima claim --step "<what>"` at every change of step, and at least every few minutes during long work, which it runs through `naima run` so that its progress is visible too. The coordinator reads `naima claims` at least every few minutes while workers run, says what each one is doing when the owner asks, and reports a worker flagged "silent for N min — possibly stuck" (no step and no commit for longer than the coordination option `silentAfter`) as possibly stuck, after checking its run and its worktree.',
-  why:
-    "a worker that reports only when it finishes is indistinguishable, until then, from one that is stuck: a worker eight minutes into the full test suite looked hung, because nothing it did was visible to the coordinator or the owner.",
-}
 export const PASSES = "passes"
 
 export interface ClaimEntry {
@@ -1187,9 +1176,10 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       diaryCommand(readPasses),
     ],
     views: [timelineView(readPasses)],
+    home: import.meta.url,
     contributes: {
       "ui-views": [claimsUiView((ctx) => claimsData(ctx, undefined, silentAfter)), timelineUiView(readPasses), notesUiView(readPasses)],
-      rules: [DIARY_RULE, PROGRESS_RULE, ...(guarded ? [LANDING_RULE] : [])],
+      rules: { folder: "rules/", settings: { trunkGuard: String(guarded) } },
     },
     // The claims are a panel of naima ui, the timeline and the session notes tabs, when the ui plugin is loaded; without it, still commands and a view.
     // The diary rule is listed by naima rules when the rules plugin is loaded; without it, the check still notes.

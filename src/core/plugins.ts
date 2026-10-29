@@ -115,9 +115,15 @@ export const importFile = (path: string): Promise<Record<string, unknown>> => im
 
 /** A module's default-exported factory, from where its source says, as pinned. */
 async function factoryAt(where: Where, source: PluginSource, name: string): Promise<PluginFactory> {
-  const mod = (await import(pathToFileURL(moduleOf(where, source, name)).href)) as { default?: unknown }
+  const url = pathToFileURL(moduleOf(where, source, name)).href
+  const mod = (await import(url)) as { default?: unknown }
   if (typeof mod.default !== "function") throw new Error(`${DATA_FILE}: plugins.${name}: its module has no default-exported factory`)
-  return mod.default as PluginFactory
+  const factory = mod.default as PluginFactory
+  // A folder the manifest names is read from beside its module, unless it says otherwise.
+  return (options, scope) => {
+    const manifest = factory(options, scope)
+    return manifest && typeof manifest === "object" && manifest.home === undefined ? { ...manifest, home: url } : manifest
+  }
 }
 
 /**

@@ -106,7 +106,7 @@ export function buildRegistry(plugins: Plugin[], opts: RegistryOptions = {}): Re
   const collect = (point: ExtensionPoint): Contribution[] => {
     const out: Contribution[] = []
     for (const p of plugins) {
-      for (const c of contributionsOf(p, point.id)) {
+      for (const c of contributionsOf(p, point.id, point)) {
         const why = point.validate?.(c) || runsRefusal(c)
         if (why) throw new Error(`plugin "${p.name}": a ${point.noun} it contributes ${why}`)
         const declared = point.key(c)
@@ -136,7 +136,7 @@ export function buildRegistry(plugins: Plugin[], opts: RegistryOptions = {}): Re
     for (const [id, to] of Object.entries(table)) {
       const [plugin = "", ...rest] = id.split("/")
       const owner = plugins.find((p) => p.name === plugin)
-      if (!owner || !contributionsOf(owner, k).some((c) => point.key(c) === rest.join("/"))) {
+      if (!owner || !contributionsOf(owner, k, point).some((c) => point.key(c) === rest.join("/"))) {
         throw new Error(`rename.${k}: "${id}" is no ${point.noun} a loaded plugin declares — a qualified id is <plugin>/<name>`)
       }
       if (fixed.has(plugin)) throw new Error(`rename.${k}: "${id}" is ${plugin}'s, which reads its own names as declared — rename the other plugin's instead`)
