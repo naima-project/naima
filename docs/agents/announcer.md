@@ -39,7 +39,9 @@ A unit test alone doesn't make a feature announceable. It proves the code, but n
    ([the rule](../guide/rules.md#the-owners-chat-stays-private)). Where the project keeps change notes (a `changes/` folder with a `config.json`),
    `naima changes --from <previous tag>` gives the changelog part: every change of behaviour in the range, breaking changes and those that need an action first,
    each with what a user has to do. Take what to do from there, and the features to announce from `naima announce`.
-4. Before handing off, run `naima check`. Its `copy-names-only-announceable` check fails if the README, or any other file in the option `copy`, names a feature
+4. End the notes with the Credits section that `naima credits --markdown` prints (`naima changes` already ends with it). If `naima credits` says an attribution
+   is incomplete, hand off what is missing to whoever maintains that plugin, and do not fill it in from memory.
+5. Before handing off, run `naima check`. Its `copy-names-only-announceable` check fails if the README, or any other file in the option `copy`, names a feature
    that isn't announceable, either by its label or by its full title.
 
 ## Safety rules

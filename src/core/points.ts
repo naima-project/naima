@@ -2,11 +2,13 @@
 // has. Declared exactly as a plugin declares one, so the registry, `naima
 // plugins` and the reference treat them and a plugin's alike.
 
+import { attributionGaps } from "./attribution.ts"
 import { code, sentence, table } from "./markdown.ts"
 import { DEFAULT_DATA } from "./layout.ts"
 import { flagsOf } from "./vocabulary.ts"
 import { TICK_FOLDERS } from "./tick.ts"
 import type {
+  Attribution,
   Check,
   Command,
   Extension,
@@ -381,6 +383,24 @@ function extensionLine(e: Extension): string {
   return `- ${e.type !== undefined ? `type ${code(e.type)}` : `field ${code(e.field ?? "")}`}: ${parts.join("; ")}`
 }
 
+export const creditsPoint: ExtensionPoint<Attribution> = {
+  id: "credits",
+  says:
+    "what a plugin runs or builds on without installing it (a program found on PATH, say), credited by `naima credits`: name, homepage, source, authors, license, version (provisional)",
+  noun: "credit",
+  key: (a) => a.name,
+  credit: (a) => a,
+  validate: (v) => {
+    const missing = attributionGaps(v)
+    return missing.length ? `is not a whole attribution: it lacks ${missing.join(", ")}` : null
+  },
+  document: (credits) => [
+    "",
+    "**Credits**, printed by `naima credits`",
+    ...table(["Name", "Version", "Licence", "Authors"], credits.map((a) => [a.name, a.version, a.license, a.authors.join(", ")])),
+  ],
+}
+
 /** The core's points, in the order the reference documents a plugin's contributions. */
 export const CORE_POINTS: readonly ExtensionPoint[] = [
   commandsPoint,
@@ -398,6 +418,7 @@ export const CORE_POINTS: readonly ExtensionPoint[] = [
   hooksPoint,
   setupPoint,
   migrationsPoint,
+  creditsPoint,
 ]
 
 /** Manifest keys that are not contributions: a point may not take one as its id. */
@@ -413,4 +434,5 @@ export const MANIFEST_KEYS: readonly string[] = [
   "uses",
   "kind",
   "examples",
+  "attribution",
 ]

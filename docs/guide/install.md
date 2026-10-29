@@ -104,9 +104,9 @@ plain `git clone` of Naima into `naima-tracker/naima/` followed by any `naima` c
 ```
 
 `main` is the branch Naima is developed on. Its tests, its site, the rules for working on it and its own tracker live in the workshop, a separate repository
-that is private for now. Cloning `naima-project/naima` gets you none of that, only what runs Naima: `naima.ts`, `src/`, `docs/`, `skills/`, `README.md`
-and `LICENSE`, which is exactly what a project should carry. Tests make sure the clone stays that way. No test runner, type-checker or agent harness
-that walks the file system picks up anything of Naima's own, and every import and relative link in the clone resolves inside it.
+that is private for now. Cloning `naima-project/naima` gets you none of that, only what runs Naima: `naima.ts`, `src/`, `docs/`, `skills/`, `README.md` and
+`LICENSE`, which is exactly what a project should carry. Tests make sure the clone stays that way. No test runner, type-checker or agent harness that walks the
+file system picks up anything of Naima's own, and every import and relative link in the clone resolves inside it.
 
 ## The lock is git
 
@@ -164,16 +164,17 @@ message. A tool that can also run a command when the agent ends its turn gets a 
 session (a newer Naima, a long run that is due, an urgent message) is said even when the agent runs no naima command for hours
 ([what Naima tells you while you work](messages.md)). Naima itself works with any agent; an adapter only knows how one tool is configured.
 
-| Tool        | Its id in `agents` | Hooks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Where                                                                                        |
-| ----------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| Tool        | Its id in `agents` | Hooks                                                                                                                                                                                                                                                                                                                                                                        | Where                                                                                        |
+| ----------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
 | Claude Code | `claude-code`      | a `SessionStart` hook running `deno run -A "$CLAUDE_PROJECT_DIR/naima-tracker/naima/naima.ts" hello --hook claude-code`, whose greeting Claude Code shows you directly, with what the agent is to say first; and a `Stop` hook running a small shell script shipped with Naima, which starts Naima only when something can be due and then has the agent tell you what it is | `.claude/settings.json`, merged into what the file holds: every other setting and hook stays |
 
 Claude Code also gets three hooks on sub-agents, so that every sub-agent has the project's rules before it acts
-([sub-agents get the rules too](../agents/read-the-project-rules.md#sub-agents-get-the-rules-too)). A `SubagentStart` hook runs `naima subagent --hook
-claude-code`, which puts the rules in the sub-agent's context. A `PreToolUse` hook on Bash, Write, Edit, MultiEdit and NotebookEdit runs a small shell script
-shipped with Naima, which holds a sub-agent's call until it has the rules. A `SubagentStop` hook runs the same script and sends back, once, a sub-agent that
-never had them. These are the only hooks for sub-agents that Naima knows of. Cursor, GitHub Copilot and Gemini CLI have none, so there a worker's brief has
-to tell it to read the rules.
+([sub-agents get the rules too](../agents/read-the-project-rules.md#sub-agents-get-the-rules-too)). A `SubagentStart` hook runs
+`naima subagent --hook
+claude-code`, which puts the rules in the sub-agent's context. A `PreToolUse` hook on Bash, Write, Edit, MultiEdit and NotebookEdit runs
+a small shell script shipped with Naima, which holds a sub-agent's call until it has the rules. A `SubagentStop` hook runs the same script and sends back, once,
+a sub-agent that never had them. These are the only hooks for sub-agents that Naima knows of. Cursor, GitHub Copilot and Gemini CLI have none, so there a
+worker's brief has to tell it to read the rules.
 
 `naima init` installs the hooks of each tool the project uses: the tools `naima.json`'s `agents` names, or, without it, the tools whose files the project holds
 (Claude Code's `CLAUDE.md` or `.claude/`) and the tool Naima is running inside, so an agent installing Naima in an empty folder gets its own hooks. The `Stop`
@@ -270,8 +271,8 @@ any program. An install downloads from whatever host a redirect points to (a rel
 `unzip`), a Python and the tool it verifies, and none of these exists yet when the launcher starts ([tools](tools.md)).
 
 **`naima verify`, and no other command,** may also run `naima-codegen`, found on `PATH`, the program of the `naima-codegen` verifier that comes with Naima
-([the checks of naima-codegen](prove-and-close.md#the-checks-of-naima-codegen)), and read that script, to find the commit it runs from. With `--host` it may
-run `ssh`, to run the verifier on another machine.
+([the checks of naima-codegen](prove-and-close.md#the-checks-of-naima-codegen)), and read that script, to find the commit it runs from. With `--host` it may run
+`ssh`, to run the verifier on another machine.
 
 The allow-list of variables is `ENV` in `src/launcher.ts`. Deno can't grant a named list of variables and still let the program pass its environment on to git,
 so the launcher enforces the list by giving the program only those variables. An unrelated secret, such as a cloud key, simply isn't there. Deno also splits its

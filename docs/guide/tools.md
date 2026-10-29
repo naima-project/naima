@@ -86,9 +86,10 @@ machine's plan and asks for your yes here, and the tool goes into that machine's
 
 ## For plugin authors
 
-A plugin declares a tool under `contributes.tools`: `name`, `title`, `says`, `version` (one exact version), `licence`, `homepage`, `needs`, `programs`, `verify`
-(a program, its arguments, and what its output must contain), and `platforms`. The `platforms` field has one entry for each of `darwin-arm64`, `darwin-x64`,
-`linux-x64`, `linux-arm64` and `windows-x64`, and each entry is either a source (`url`, `size`, `sha256`, `format`, which is one of `zip`, `tar.gz`, `dmg`,
-`deb` or `pip`, and `bin`) or `{ "unavailable": "<why, and what to do>" }`. If a declaration is missing any of these, the project doesn't load, and the error
+A plugin declares a tool under `contributes.tools`: `name`, `title`, `says`, `version` (one exact version), `licence`, `homepage`, `source` and `authors` (with
+the homepage, licence and version, what [`naima credits`](announce.md#credits) prints; provisional), `needs`, `programs`, `verify` (a program, its arguments,
+and what its output must contain), and `platforms`. The `platforms` field has one entry for each of `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64` and
+`windows-x64`, and each entry is either a source (`url`, `size`, `sha256`, `format`, which is one of `zip`, `tar.gz`, `dmg`, `deb` or `pip`, and `bin`) or
+`{ "unavailable": "<why, and what to do>" }`. If a declaration is missing any of these except `source` and `authors`, the project doesn't load, and the error
 names the plugin. The plugin finds an installed program with `installedProgram(tool, program)` from the plugin API. The [reference](../reference/reference.md)
 lists every declared tool.

@@ -88,10 +88,9 @@ fast-forward of the trunk made by hand, so that work goes through an item, its w
 `naima guard-check`.
 
 `core.hooksPath` is git's setting for one clone, not a file anyone commits, so someone who clones the project has the hooks but not the setting. Their first
-launched run of Naima (`naima hello` or any other command) points `core.hooksPath` at the folder and says so in one line. Pointing it there stops none of
-the clone's own hooks: for every hook name git knows and Naima does not write, the folder holds a small stub that runs the hook of that name in `.git/hooks`
-when there is one, with the same arguments and input, and returns its exit code. After `naima hooks uninstall` it
-stays unset in that clone.
+launched run of Naima (`naima hello` or any other command) points `core.hooksPath` at the folder and says so in one line. Pointing it there stops none of the
+clone's own hooks: for every hook name git knows and Naima does not write, the folder holds a small stub that runs the hook of that name in `.git/hooks` when
+there is one, with the same arguments and input, and returns its exit code. After `naima hooks uninstall` it stays unset in that clone.
 
 ```sh
 naima guard        # on or off, and whether it runs in this clone
@@ -108,9 +107,9 @@ any other commit made there by hand.
 
 ### Guarding the trunk on the server
 
-The hook guards only a clone that runs it. A clone made somewhere else, before its first run of Naima, or a tool that skips hooks can still push the trunk.
-When the code's `origin` is on GitHub, the server can refuse those pushes too, and Naima says so when it installs the guard and in `naima guard`. It never
-turns that protection on by itself: it is the owner's decision, and the owner's command.
+The hook guards only a clone that runs it. A clone made somewhere else, before its first run of Naima, or a tool that skips hooks can still push the trunk. When
+the code's `origin` is on GitHub, the server can refuse those pushes too, and Naima says so when it installs the guard and in `naima guard`. It never turns that
+protection on by itself: it is the owner's decision, and the owner's command.
 
 ```sh
 naima guard server           # make the ruleset on GitHub, with the GitHub CLI
@@ -119,7 +118,7 @@ naima guard server --print   # only say the ruleset, the request and the web pag
 
 `naima guard server` makes a branch ruleset named `naima: only the coordinator pushes the trunk`. The ruleset refuses an update, a deletion or a force-push of
 the trunk from everyone except the repository's admins, and the coordinator pushes as an admin. It needs the GitHub CLI, `gh`, signed in with an account that
-may administer the repository. If the ruleset is already there, the command says so and makes nothing. Without `gh`, or with `--print`, it sends nothing:
-it prints the ruleset as JSON, the `gh api` and `curl` requests that make it, and the page of the repository's settings where it can be made by hand.
+may administer the repository. If the ruleset is already there, the command says so and makes nothing. Without `gh`, or with `--print`, it sends nothing: it
+prints the ruleset as JSON, the `gh api` and `curl` requests that make it, and the page of the repository's settings where it can be made by hand.
 
 Every option is in the [reference](../reference/reference.md#commit-hooks).
