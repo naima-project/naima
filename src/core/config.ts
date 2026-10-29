@@ -18,22 +18,9 @@ import { FORMAT, formatRefusal, formatsOf } from "./format.ts"
 import { DEFAULT_ENTRY_FILES } from "./pointer.ts"
 import type { Config, Extension, PluginConfig, PluginOptions, PluginSource, Severity } from "./types.ts"
 
-const CORE_KEYS = [
-  "format",
-  "formats",
-  "source",
-  "commit",
-  "version",
-  "sha256",
-  "verify",
-  "program",
-  "plugins",
-  "rename",
-  "extends",
-  "agents",
-  "entryFiles",
-  "updates",
-]
+/** The lock's keys: the same names and meanings in every format, the core's own words. */
+export const LOCK_KEYS = ["source", "commit", "version", "sha256", "verify", "program"] as const
+const CORE_KEYS = ["format", "formats", ...LOCK_KEYS, "plugins", "rename", "extends", "agents", "entryFiles", "updates"]
 /** Every key naima.json may hold: the core's, and the owner's answers about the tracker's remotes (core/exposure.ts). */
 const KEYS = new Set([...CORE_KEYS, "privateRemotes"])
 const COMMIT = /^[0-9a-f]{40}$/
