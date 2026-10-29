@@ -104,3 +104,18 @@ export const ADAPTERS: readonly AgentAdapter[] = [
 
 /** The adapter naima.json's `agents` names by `id`. */
 export const adapter = (id: string): AgentAdapter | undefined => ADAPTERS.find((a) => a.id === id)
+
+/**
+ * The files outside the tracker folder that Naima's setup writes in a project, project-root relative: AGENTS.md, each
+ * tool's entry file, and the settings files its hooks live in. A commit Naima's setup asks for on the trunk touches
+ * only these and the tracker folder (git.ts, SETUP_TRAILER).
+ */
+export function setupPaths(): Set<string> {
+  const paths = new Set<string>(["AGENTS.md"])
+  for (const a of ADAPTERS) {
+    paths.add(a.entryFile)
+    for (const hook of [a.sessionStart, a.turnEnd, a.subagentStart, a.subagentTool, a.subagentStop]) if (hook) paths.add(hook.file)
+    if (a.pluginHooks) paths.add(a.pluginHooks.file)
+  }
+  return paths
+}

@@ -25,7 +25,7 @@ import { AGENT_ID, markRules, SUBAGENT_PREAMBLE } from "./subagents.ts"
 import { FORMAT, formatRefusal, isFormat, migrate, MIGRATIONS, type Step } from "./format.ts"
 import { formatsFor, type OpenOptions, openProject, owed } from "./project.ts"
 import { bool, pairs, parse, str } from "./args.ts"
-import { currentBranch, gitOrNull, gitReason, LAND_IT, nativePath, runGit, runGitAsync, toplevel, trunk, worktrees } from "./git.ts"
+import { currentBranch, gitOrNull, gitReason, LAND_IT, nativePath, runGit, runGitAsync, setupCommit, toplevel, trunk, worktrees } from "./git.ts"
 import { githubRepo, remoteVisibility, type Visibility } from "./visibility.ts"
 import {
   clearExposed,
@@ -44,6 +44,7 @@ import { moveTrackerOut } from "./move-tracker.ts"
 import { setWriteGuard } from "./item.ts"
 import {
   commitTrackerWrites,
+  HOOKS_DIR,
   installTrailerHooks,
   missingTracker,
   naimaHooks,
@@ -1177,12 +1178,29 @@ function pairedUpdate(place: Place, command: string, io: IO): void {
 function commitUpdate(place: Place, paths: readonly string[], subject: string): string {
   const tracker = posixRelative(place.root, trackerOf(place.data))
   const git = siblingGit(place)
-  if (!git) return `commit it as one change ${LAND_IT}: git add ${[tracker, ...paths].join(" ")} && git commit -m "${subject}"`
+  if (!git) {
+    return bringsHooks(place)
+      ? `this update brings the project's git hooks, the trunk guard among them, which the trunk does not carry yet — commit it as one change straight on the trunk, which takes it by its trailer: ${
+        setupCommit([tracker, ...paths], subject, "update")
+      }`
+      : `commit it as one change ${LAND_IT}: git add ${[tracker, ...paths].join(" ")} && git commit -m "${subject}"`
+  }
   const branch = currentBranch(place.root)
   const ours = `Naima commits the tracker's half on the tracker's ${currentBranch(git)} as this command ends`
   const code = paths.length ? `; commit the code's half on ${branch}: git add ${paths.join(" ")} && git commit -m "${subject}"` : ""
   const land = branch === trunk(place.root) ? "" : `; then land ${branch} with naima land, which lands both halves as one paired landing`
   return `${ours}${code}${land}`
+}
+
+/**
+ * Whether this update, run on the trunk of a project whose tracker is in the code's repository, wrote the data
+ * directory's git hooks while the trunk's tip does not carry them: the update that brings the trunk guard in, whose
+ * commit goes on the trunk with its Naima-Setup: trailer, since no item could be landed before it.
+ */
+function bringsHooks(place: Place): boolean {
+  if (siblingGit(place) || currentBranch(place.root) !== trunk(place.root)) return false
+  if (!existsSync(join(place.data, HOOKS_DIR))) return false
+  return !gitOrNull(place.root, "ls-tree", "--name-only", "HEAD", "--", posixRelative(place.root, join(place.data, HOOKS_DIR)))
 }
 
 /** What each update policy makes a session start do. */

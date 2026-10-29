@@ -100,6 +100,12 @@ naima guard on     # turn it back on
 
 Commit `naima.json` and the hook after turning the guard on or off; that commit goes straight on the trunk, since the guard lets it through.
 
+The commits Naima's setup asks for go straight on the trunk too, each with a `Naima-Setup:` trailer that the command it prints already carries: the
+installer's first commit (`Naima-Setup: install`), its move of a copied program to a git clone (`Naima-Setup: migrate`), and the update that brings the guard
+into a project whose trunk does not carry it yet (`Naima-Setup: update`). The guard takes such a commit only when it touches nothing but the tracker folder,
+`AGENTS.md` and the files each agent tool's setup writes (its entry file, such as `CLAUDE.md`, and its settings, such as `.claude/settings.json`); an
+update once the guard is on the trunk is landed through an item, like any other change.
+
 When the tracker is kept as a repository of its own ([sibling mode](private-tracker.md#sibling-mode)), the tracker's repository runs the same hook, and its
 trunk is guarded too. Naima commits every write to that tracker itself, and each of those commits carries a `Naima-Command:` trailer naming the command, which
 the hook recognises without starting Naima. The tracker's trunk takes those commits, landing markers and a commit with a `Trunk-reason:` trailer, and refuses

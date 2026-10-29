@@ -7,8 +7,11 @@
 // commit the move adds to the trunk's first-parent line is one the trunk takes
 // directly: a landing marker, the record land makes after it, a commit that
 // only adds to the tracker data (claims, which are coordination state, may also
-// be rewritten or removed) or only closes items, naima init's commit, or one
-// that only switches the guard. A command that tells the user to commit on the
+// be rewritten or removed) or only closes items, naima init's commit, one
+// that only switches the guard, or a commit Naima's setup asks for on the
+// trunk (a `Naima-Setup:` trailer: the installer's first commit, its migration
+// of a copied program, the update that brings the guard in), touching only
+// the files a setup writes. A command that tells the user to commit on the
 // branch checked out says so through commitOn, and only for a write this rule
 // takes on the trunk. A new tip the upstream already holds
 // passes, so a pull of what landed elsewhere works; a rewind passes, and so
@@ -44,6 +47,10 @@ import {
   rendered,
   runGit,
   type Setup,
+  SETUP_STEPS,
+  SETUP_TRAILER,
+  setupPaths,
+  SIBLING_FILE,
   type SummarySection,
   TRACKER_DIR,
   TRACKER_TRAILER,
@@ -292,15 +299,18 @@ interface Added {
   trackerOnly: string
   /** The requirements a marker's landing met, from its `Meets:` trailers. */
   meets: string[]
+  /** The setup step a commit Naima's setup asks for names, in its `Naima-Setup:` trailer; empty otherwise. */
+  setup: string
 }
 
 const FORMAT =
-  `%H%x1f%P%x1f%T%x1f%s%x1f%(trailers:key=${CLOSES},valueonly,separator=%x1d)%x1f%(trailers:key=${TRACKER_TRAILER},valueonly,separator=%x1d)%x1f%(trailers:key=${TRUNK_REASON},valueonly,separator=%x1d)%x1f%(trailers:key=${CLI_TRAILER},valueonly,separator=%x1d)%x1f%(trailers:key=${TRACKER_ONLY},valueonly,separator=%x1d)%x1f%(trailers:key=${MEETS},valueonly,separator=%x1d)%x1e`
+  `%H%x1f%P%x1f%T%x1f%s%x1f%(trailers:key=${CLOSES},valueonly,separator=%x1d)%x1f%(trailers:key=${TRACKER_TRAILER},valueonly,separator=%x1d)%x1f%(trailers:key=${TRUNK_REASON},valueonly,separator=%x1d)%x1f%(trailers:key=${CLI_TRAILER},valueonly,separator=%x1d)%x1f%(trailers:key=${TRACKER_ONLY},valueonly,separator=%x1d)%x1f%(trailers:key=${MEETS},valueonly,separator=%x1d)%x1f%(trailers:key=${SETUP_TRAILER},valueonly,separator=%x1d)%x1e`
 
 function commitsOf(root: string, args: string[]): Added[] {
   const out = gitOrNull(root, "log", `--format=${FORMAT}`, ...args) ?? ""
   return out.split("\x1e").map((r) => r.replace(/^\n/, "")).filter(Boolean).map((r) => {
-    const [sha = "", parents = "", tree = "", subject = "", closes = "", tracker = "", reason = "", cli = "", trackerOnly = "", meets = ""] = r.split("\x1f")
+    const [sha = "", parents = "", tree = "", subject = "", closes = "", tracker = "", reason = "", cli = "", trackerOnly = "", meets = "", setup = ""] = r
+      .split("\x1f")
     return {
       sha,
       parents: parents.split(" ").filter(Boolean),
@@ -312,6 +322,7 @@ function commitsOf(root: string, args: string[]): Added[] {
       cli: cli.split("\x1d")[0]?.trim() ?? "",
       trackerOnly: trackerOnly.split("\x1d").map((c) => c.trim()).filter(Boolean).join("; "),
       meets: meets.split("\x1d").map((c) => c.trim()).filter(Boolean),
+      setup: setup.split("\x1d")[0]?.trim() ?? "",
     }
   })
 }
@@ -370,6 +381,27 @@ export function switchesGuard(ctx: Context, sha: string, files: { status: string
   return !!before && !!after && option(before) !== option(after) && isDeepStrictEqual(strip(before), strip(after))
 }
 
+/**
+ * Whether the trunk takes `c` as the commit Naima's setup asked for (`Naima-Setup: <step>`, git.ts setupCommit): every
+ * file it touches is in the tracker folder or one the setup writes (setupPaths), and the step is one that goes on the
+ * trunk here — `install` adds the tracker, `migrate` (the installer's move of a copied program to a clone) needs no
+ * more, `update` only while the trunk does not carry the guard yet, as the update that brings it in.
+ */
+export function takesSetup(ctx: Context, c: Pick<Added, "sha" | "setup">, files: { status: string; path: string }[]): boolean {
+  if (!(SETUP_STEPS as readonly string[]).includes(c.setup) || !files.length) return false
+  const paths = setupPaths()
+  if (!files.every((f) => f.path.startsWith(`${TRACKER_DIR}/`) || paths.has(f.path))) return false
+  if (c.setup === "install") {
+    return initsTracker(ctx, files) || files.some((f) => f.status === "A" && f.path === `${TRACKER_DIR}/${SIBLING_FILE}`)
+  }
+  if (c.setup === "update") {
+    if (ctx.sibling) return false
+    const hook = [ctx.trackerPrefix, HOOKS_DIR, GUARD_HOOK].filter(Boolean).join("/")
+    return !runGit(ctx.root, ["cat-file", "-e", `${c.sha}^:${hook}`]).ok
+  }
+  return true
+}
+
 /** Why the tracker's trunk, in sibling mode, may not take `c` directly; null when it may. */
 function trackerRefusal(repo: string, c: Added, upstream: string | null): string | null {
   if (c.reason || c.cli) return null
@@ -391,6 +423,7 @@ function refusal(ctx: Context, c: Added, prev: Added | undefined, upstream: stri
     return c.parents.length > 2 ? "a merge of several branches, not a landing marker" : "a merge that is not a landing marker"
   }
   const files = filesOf(root, c.sha)
+  if (c.setup && takesSetup(ctx, c, files)) return null
   if (ctx.sibling) {
     // The code's side of a tracker kept apart: only init's commit of the tracker folder goes straight on it.
     if (files.length && files.every((f) => f.path.startsWith(`${TRACKER_DIR}/`))) return null
@@ -440,7 +473,7 @@ export const guardCheckCommand: Command = {
   name: "guard-check",
   says: "what the trunk guard's git hook runs when the trunk is about to move: exit 0 when it may, else one line saying why not and what to do",
   enforces:
-    "a commit, merge or fast-forward of the trunk made by hand is refused unless every commit it adds to the first-parent line is a landing marker, the record land makes, a commit that only adds to the tracker data (a claim may also be rewritten or removed) or only closes items, naima init's commit, one that only switches the guard, or one with a Trunk-reason: trailer; a tip the upstream holds, a rewind, a ref created or deleted pass",
+    "a commit, merge or fast-forward of the trunk made by hand is refused unless every commit it adds to the first-parent line is a landing marker, the record land makes, a commit that only adds to the tracker data (a claim may also be rewritten or removed) or only closes items, naima init's commit, one that only switches the guard, a commit Naima's setup asks for (a Naima-Setup: trailer: the install, the migration of a copied program, the update that brings the guard in) touching only the tracker folder and the files a setup writes, or one with a Trunk-reason: trailer; a tip the upstream holds, a rewind, a ref created or deleted pass",
   usage: "guard-check [--tracker] <old> <new>",
   examples: ["guard-check 0123abc 4567def", "guard-check --tracker 0123abc 4567def"],
   options: [{ name: "--tracker", says: "the move is of the tracker's trunk, in sibling mode: it takes the commits Naima makes there and landing markers" }],
