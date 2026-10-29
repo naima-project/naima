@@ -54,8 +54,8 @@ git merge --no-edit main
 ```
 
 - `naima release` drops this branch's claim. Run it here, not on the [trunk](glossary.md#trunk).
-- `naima claim` refuses to run on the trunk: a claim there would be copied to every branch that merges the trunk. A claim naming the trunk that an older
-  program wrote is stale, refuses no `naima close`, and `naima prune --write` removes it.
+- `naima claim` refuses to run on the trunk: a claim there would be copied to every branch that merges the trunk. A claim naming the trunk that an older program
+  wrote is stale, refuses no `naima close`, and `naima prune --write` removes it.
 - `naima pass` writes a [session note](glossary.md#session-note) saying what changed, what is proven, and what was **not** verified.
 - Merging the trunk into the branch first makes the trunk its ancestor, which landing requires. Resolve any conflicts here and run the checks again.
 
@@ -82,10 +82,16 @@ nothing lands: the worker runs `naima verify` or `naima metrics run --record` on
 landing, for instance because it takes days, `--stale-proofs "<reason>"` lands the branch anyway, and the marker keeps the reason in a `Stale-proofs:` trailer
 ([when the rules apply](prove-and-close.md#when-the-rules-apply)).
 
-A branch that changes only tracker data, such as the notes and decisions of a review, may close no item. `naima land <branch> --tracker-only "<reason>"`
-lands it anyway, and the marker keeps the reason in a `Tracker-only:` trailer in place of `Closes:`. It still closes the items the branch claimed or that
-`--closes` names, once they are done or fixed. It is refused when the branch changes any file outside the tracker data, and the check that reads the trunk
-notes a `Tracker-only:` marker made by hand that does.
+A branch that changes only tracker data, such as the notes and decisions of a review, may close no item. `naima land <branch> --tracker-only "<reason>"` lands
+it anyway, and the marker keeps the reason in a `Tracker-only:` trailer in place of `Closes:`. It still closes the items the branch claimed or that `--closes`
+names, once they are done or fixed. It is refused when the branch changes any file outside the tracker data, and the check that reads the trunk notes a
+`Tracker-only:` marker made by hand that does.
+
+A branch whose work meets a [requirement](glossary.md#requirement) may also close no item, because a requirement is met by the test that verifies it, not
+closed. `naima land <branch> --meets <requirement>` lands it, and the marker names the requirement in a `Meets:` trailer. Naima checks the branch tip first: the
+requirement needs a test (or another item) that verifies it and has passed, nothing may refute it, and that test must not have passed on the trunk already, so
+the branch is what made it pass. Otherwise nothing lands. The items the branch claimed or that `--closes` names are still closed, and a claimed requirement is
+left out of them.
 
 `prune --branch` deletes a branch only when its commits are held by the trunk or by an `archive/<branch>` tag. `--archive` makes that tag, for work that is set
 aside rather than merged. It removes the worktree only when nothing in it is uncommitted, inside its submodules too; a clean worktree that holds a submodule,
@@ -123,10 +129,10 @@ naima prune            # stale claims, and why each is stale
 naima prune --write    # remove them; commit the deletions
 ```
 
-A claim is stale when its branch is gone, when it names the trunk, when its branch is merged into the trunk and the merge brought its file there, or when every item it claims is done or
-closed. `naima claims` lists stale claims apart, at the end, and `naima
-check` adds a note for each one. A claim that still names an item already closed, next
-to items that are still open, gets a note of its own with the `naima release` that drops the closed item.
+A claim is stale when its branch is gone, when it names the trunk, when its branch is merged into the trunk and the merge brought its file there, or when every
+item it claims is done or closed. `naima claims` lists stale claims apart, at the end, and `naima
+check` adds a note for each one. A claim that still names an
+item already closed, next to items that are still open, gets a note of its own with the `naima release` that drops the closed item.
 
 ## Work left behind
 
