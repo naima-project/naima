@@ -81,6 +81,7 @@ import { changeNotesCheck, changesCommand } from "./changes.ts"
 import { land, landingReportsPoint, landingsAreMarkers, landingsPaired } from "./land.ts"
 import { guardCheckCommand, guardCommand, guardedFrom, guardOffSection, guardSetup, readTrunkGuard, switchesGuard } from "./guard.ts"
 import { diaryCheck, diaryCommand, eventCommand, EVENTS, frontLines, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
+import { readyLines, readyNow, readySection, readyWorkWaiting } from "./ready.ts"
 
 export { type NextStep, type StaleData, type StaleEntry } from "./stale.ts"
 export { type Timeline, type TimelineEvent, timelineOf } from "./timeline.ts"
@@ -490,7 +491,7 @@ export function claimsData(ctx: Context, only?: string, silentAfter: number = SI
   }
 }
 
-const claimsCommand = (silentAfter: number): Command => ({
+const claimsCommand = (silentAfter: number, policy: Policy): Command => ({
   name: "claims",
   says: "who holds what, recombined from every branch, with what each branch's worker is doing now",
   enforces:
@@ -528,6 +529,8 @@ const claimsCommand = (silentAfter: number): Command => ({
       ctx.out("\nclaimed by more than one branch (allowed):")
       for (const c of d.contested) ctx.out(`  ${c.ref} → ${c.branches.join(", ")}`)
     }
+    const ready = readyLines(readyNow(ctx, policy))
+    if (ready.length && !str(p, "branch")) ctx.out(["", ...ready].join("\n"))
     return 0
   },
 })
@@ -1159,12 +1162,13 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       branchesPaired,
       diaryCheck(readPasses, diaryPerDay),
       changeNotesCheck,
+      readyWorkWaiting(policy),
     ],
     commands: [
       openCommand(policy),
       claimCommand,
       release,
-      claimsCommand(silentAfter),
+      claimsCommand(silentAfter, policy),
       land,
       guardCommand(guarded),
       guardCheckCommand,
@@ -1185,7 +1189,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
     // The diary rule is listed by naima rules when the rules plugin is loaded; without it, the check still notes.
     optional: ["ui-views", "rules"],
     points: [landingReportsPoint],
-    summary: [whereWeWere, inHand(silentAfter), staleSection(stale), guardOffSection(guarded)],
+    summary: [whereWeWere, inHand(silentAfter), readySection(policy), staleSection(stale), guardOffSection(guarded)],
     setup: [guardSetup(guarded)],
     hooks: [noClosingOwnWork],
   }

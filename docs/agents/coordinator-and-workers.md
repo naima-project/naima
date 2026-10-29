@@ -123,6 +123,11 @@ worker, one worktree, one branch, opened with `naima open <item> <item>`.
 `naima open` enforces the bound: it refuses a new worker worktree once as many are open as the coordination option `maxWorkers` allows (3 by default), and names
 the open ones. Free one that has landed with `naima prune --branch <branch> --write`. Raise the bound only when the owner asks for it, in `naima.json`.
 
+Naima feeds itself from the ready queue. When a meeting with the owner closes, the work its decisions call for is approved package by package, queued or to
+start now (`naima meeting <meeting> --close`). Whenever fewer workers are open than `maxWorkers` allows, the coordinator starts the next item of
+`naima queue --ready` with a worker, without asking: `naima hello` and `naima claims` name the items to start, and the check `ready-work-waiting` notes a slot
+left idle while approved work waits. Nothing is started while a meeting is on; the model of this is `develop/models/meeting/` in the workshop.
+
 When a worker dies, the coordinator salvages its work before spawning a replacement. The dead worker's worktree still holds everything it hadn't committed.
 Separate the real work from mechanical churn, commit the work as WIP marked unreviewed, and give the replacement that commit to read instead of starting it from
 nothing.

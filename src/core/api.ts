@@ -38,12 +38,13 @@ export {
   type WriteOptions,
 } from "./item.ts"
 export { storedLinks } from "./repo.ts"
+export { READY, readyQueue, type ReadyRecord, readyRecord } from "./ready.ts"
 export { groupBy } from "./collections.ts"
 export { allowanceLine, findPrivate, guardPrivate, type PrivateContext, privateContext, type PrivateFinding, redactPrivate } from "./private.ts"
 export { callerEnv } from "./launched.ts"
 export { EXIT, isInternal, message, NaimaError } from "./errors.ts"
 export { isRegularFile, NEVER_SOURCE, pathMatches, readText, walkFiles, writeFileAtomic } from "./files.ts"
-export { byUrgency, hasFlag, hasTrait, isEvidenceType, isOpen, label, linked, proves, refutes, statusDef, urgency } from "./lifecycle.ts"
+export { byUrgency, FILLED, hasFlag, hasTrait, isEvidenceType, isOpen, label, linked, proves, refutes, statusDef, urgency } from "./lifecycle.ts"
 export { flagsOf } from "./vocabulary.ts"
 export {
   addLink,

@@ -35,6 +35,7 @@ import { flagsOf } from "./vocabulary.ts"
 import { waive, WAIVERS } from "./waivers.ts"
 import { askedByOption, ORIGIN, originCommand, originMatches, originOnce } from "./origin.ts"
 import { LEVEL, messagesCommand, messagesType } from "./messages.ts"
+import { READY_FIELD } from "./ready.ts"
 import type { Command, Context, Contribution, FieldDef, Item, Plugin, Rendered, SummarySection, TypeDef, View, Write, WriteHook } from "./types.ts"
 
 export function typeOrThrow(ctx: Context, id: string | undefined): TypeDef {
@@ -909,6 +910,7 @@ export const corePlugin: Plugin = {
     { name: "tags", kind: "strings", says: "free labels a person puts on an item" },
     ORIGIN,
     LEVEL,
+    READY_FIELD,
   ],
   relations: [
     { name: "relates-to", inverse: "relates-to", says: "is related to" },

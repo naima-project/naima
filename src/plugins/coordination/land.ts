@@ -21,6 +21,7 @@ import {
   DATA_FILE,
   type ExtensionPoint,
   filesAt,
+  FILLED,
   type Finding,
   flagsOf,
   gitOrNull,
@@ -1083,11 +1084,19 @@ export function initsTracker(ctx: Context, files: { status: string; path: string
   return files.some(({ status, path }) => status === "A" && path === `${data}${DATA_FILE}`)
 }
 
-/** Whether the commit changed nothing in the item file at `path` but fields Naima fills (FieldDef.filled). */
+/**
+ * Whether the commit changed nothing in the item file at `path` but fields Naima fills (FieldDef.filled), and perhaps
+ * its status, to one whose type flags it `filled`: a status Naima sets together with such fields, as naima decide does.
+ */
 function onlyFilledChanged(ctx: Context, sha: string, path: string): boolean {
   const before = readJsonAt(ctx, `${sha}^`, path), after = readJsonAt(ctx, sha, path)
   if (!before || !after) return false
-  const kept = (meta: Record<string, unknown>) => Object.fromEntries(Object.entries(meta).filter(([k]) => !ctx.registry.fields.get(k)?.filled))
+  const dir = path.slice(ctx.trackerPrefix ? ctx.trackerPrefix.length + 1 : 0).split("/")[0]
+  const statuses = [...ctx.registry.types.values()].find((t) => t.dir === dir)?.statuses
+  const to = String(after["status"])
+  const filledStatus = !!statuses && Object.hasOwn(statuses, to) && flagsOf(statuses[to]!).includes(FILLED)
+  const kept = (meta: Record<string, unknown>) =>
+    Object.fromEntries(Object.entries(meta).filter(([k]) => !ctx.registry.fields.get(k)?.filled && !(k === "status" && filledStatus)))
   return isDeepStrictEqual(kept(before), kept(after))
 }
 
