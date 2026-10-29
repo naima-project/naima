@@ -17,7 +17,7 @@ action: Nothing to do for a project that follows Naima's releases. A project tha
 ---
 
 Each release of Naima now carries two assets, `naima-<version>.tar.gz` (the files of the release's tag) and its SHA-256, built by
-`scripts/release-assets.sh`. The installer downloads the newest release's archive, checks it, unpacks it into `naima-tracker/naima/` and makes
+`bin/release-assets.sh`. The installer downloads the newest release's archive, checks it, unpacks it into `naima-tracker/naima/` and makes
 that folder a git clone at the tag's commit. `naima update` moves the lock only to releases: the newest one, or the version `--to` names, with
 pre-releases only after `--pre` or when the project already runs one. It downloads the archive, refuses it when its checksum, or the commit
 it was made from, does not match, and records `version` and `sha256` next to `commit` in `naima.json`. Without the network the lock stays

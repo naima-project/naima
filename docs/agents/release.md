@@ -54,7 +54,7 @@ evidence.
    changed ([a release gate](../guide/read-the-board.md#a-release-gate-waits-for-the-full-suite)).
 2. **Private draft** (stage `private draft`). The artifact is built and put somewhere only the release role can see it, such as a draft release or an unlisted
    build, and not yet in the public location. For Naima, a stance or naima-codegen, the artifact is the release's two assets: once the tag `v<version>` is
-   made, `sh scripts/release-assets.sh <version>` (in the product, `naima-tracker/naima/scripts/` in a project) writes `<name>-<version>.tar.gz`, the files of
+   made, `sh bin/release-assets.sh <version>` (in the product, `naima-tracker/naima/bin/` in a project) writes `<name>-<version>.tar.gz`, the files of
    the tag, and `<name>-<version>.tar.gz.sha256`, and prints the command that uploads them: `gh release upload v<version> <both files>`, on a draft release.
    Installs and updates download that archive and refuse a release without it, so a release without its assets cannot be installed
    ([Naima updates to releases](../guide/update-naima.md#naima-updates-to-releases)).

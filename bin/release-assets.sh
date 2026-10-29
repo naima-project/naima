@@ -1,7 +1,7 @@
 #!/bin/sh
 # Build a release's assets: the source tree at the tag, and its SHA-256.
 #
-#   sh scripts/release-assets.sh <version> [<repository>] [<out>]
+#   sh bin/release-assets.sh <version> [<repository>] [<out>]
 #
 # In <repository> (default: the current one), for the tag v<version>, writes
 # into <out> (default: the current folder):
@@ -26,7 +26,7 @@ die() {
 VERSION=${1:-}
 REPO=${2:-.}
 OUT=${3:-.}
-[ -n "$VERSION" ] || die "usage: sh scripts/release-assets.sh <version> [<repository>] [<out>]"
+[ -n "$VERSION" ] || die "usage: sh bin/release-assets.sh <version> [<repository>] [<out>]"
 VERSION=${VERSION#v}
 TAG="v$VERSION"
 

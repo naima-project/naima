@@ -4,7 +4,7 @@
 // A release is a tag v<version> of a repository with two assets: the source
 // tree at the tag, `<name>-<version>.tar.gz`, as `git archive` makes it, and its
 // SHA-256, `<name>-<version>.tar.gz.sha256`. The release step builds both
-// (scripts/release-assets.sh). Installing or updating downloads the archive
+// (bin/release-assets.sh). Installing or updating downloads the archive
 // from the release, so the host's download count per asset counts installs and
 // updates per version, with no telemetry; the archive is checked against its
 // checksum, and against the lock's when the lock records one, before anything
