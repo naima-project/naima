@@ -105,6 +105,32 @@ export function checkoutWork(dir: string): string | null {
   return null
 }
 
+/**
+ * Record the program's HEAD as the source's when it is, and the clone did not know it: a clone made from a
+ * program installed from a release archive, which had no branch, took none of the source's refs, so a
+ * commit it was later moved to, held but reached by no ref of origin, read as work of its own and every run
+ * was refused. Proved by a repository on this disk that knows the commit as the source's, else by the
+ * source's main fetched again; never by the commit alone. Returns the line that says so, or null.
+ */
+export function recordSourced(t: Target): string | null {
+  if (!isClone(t.program) || !readableClone(t.program)) return null
+  if (checkoutWork(t.program) !== "commits its source does not have") return null
+  // Only a detached HEAD: a branch of commits of its own is work, never examined here.
+  if (runGit(t.program, ["rev-list", "-n", "1", "--branches", "--not", "--remotes"]).out) return null
+  const head = runGit(t.program, ["rev-parse", "HEAD"]).out
+  if (!head) return null
+  const proved = seeds(t).find((s) => {
+    const r = runGit(t.root, ["-C", s, "rev-list", "-n", "1", head, "--not", "--remotes"])
+    return r.ok && !r.out && runGit(t.root, ["-C", s, "cat-file", "-e", `${head}^{commit}`]).ok
+  })
+  if (proved) runGit(t.program, ["fetch", "--quiet", "--", proved, seedRemotes])
+  else runGit(t.program, ["fetch", "--quiet", "origin", "+refs/heads/main:refs/remotes/origin/main"])
+  if (checkoutWork(t.program)) return null
+  return `${where(t)} is at ${
+    short(head)
+  }, a commit of its source the clone had not recorded as one (a clone of a program installed from a release archive): recorded`
+}
+
 /** Why the program directory holds work that moving it would destroy, or null. */
 export const localWork = (t: Target): string | null => (isClone(t.program) ? checkoutWork(t.program) : null)
 
@@ -187,16 +213,23 @@ function seeds(t: Target): string[] {
  */
 const lockedRefspec = (commit: string): string => `+${commit}:refs/remotes/origin/naima-locked`
 
+/** The source's refs as a seed knows them, copied into a clone of it: a clone names the seed's branches only. */
+const seedRemotes = "+refs/remotes/origin/*:refs/remotes/origin/*"
+
+/** Whether `repo` knows `commit` as the source's: held, and reachable from a remote-tracking ref of origin. */
+const sourced = (repo: string, commit: string): boolean => has(repo, commit) && !runGit(repo, ["rev-list", "-n", "1", commit, "--not", "--remotes"]).out
+
 /** Fetch `commit` into the program: from a seed on this disk that holds it, else from origin. */
 export function fetchCommit(t: Target, commit: string): void {
-  if (has(t.program, commit)) return
+  // Held is not enough: a commit no ref of origin reaches would read as the clone's own work once checked out.
+  if (sourced(t.program, commit)) return
   for (const seed of seeds(t)) {
     if (!runGit(t.root, ["-C", seed, "cat-file", "-e", `${commit}^{commit}`]).ok) continue
     runGit(t.program, ["fetch", "--quiet", "--", seed, lockedRefspec(commit)])
-    if (has(t.program, commit)) return
+    if (sourced(t.program, commit)) return
   }
   runGit(t.program, ["fetch", "--quiet", "origin"])
-  if (!has(t.program, commit)) runGit(t.program, ["fetch", "--quiet", "origin", lockedRefspec(commit)])
+  if (!sourced(t.program, commit)) runGit(t.program, ["fetch", "--quiet", "origin", lockedRefspec(commit)])
   if (has(t.program, commit)) return
   const reach = runGit(t.root, ["ls-remote", "--", t.source, "HEAD"])
   if (!reach.ok) {
@@ -228,7 +261,7 @@ function cloneProgram(t: Target): string {
   }
   if (!seed) return t.source
   // A clone names the seed's branches, not its remote-tracking refs, and the commit may be only there.
-  runGit(t.program, ["fetch", "--quiet", "--", seed, lockedRefspec(t.commit)])
+  runGit(t.program, ["fetch", "--quiet", "--", seed, seedRemotes, lockedRefspec(t.commit)])
   mustGit(t.program, "remote", "set-url", "origin", t.source)
   return "a copy on this disk"
 }
@@ -246,7 +279,7 @@ export function cloneIntoNewWorktree(t: Target, from: string): void {
   const g = (...args: string[]) => runGit(from, ["-C", t.program, ...args])
   // Always, as cloneProgram does: the seed's own main may lag the lock, and the lock's ref is what makes the commit the source's.
   const steps: string[][] = [
-    ["fetch", "--quiet", "--", seed, lockedRefspec(t.commit)],
+    ["fetch", "--quiet", "--", seed, seedRemotes, lockedRefspec(t.commit)],
     ["remote", "set-url", "origin", t.source],
     ["checkout", "--quiet", "--detach", t.commit],
   ]
@@ -307,6 +340,8 @@ function finishAlign(t: Target, release: { check(): void } | null): Moved | null
   } else {
     const gone = restoreDeleted(t.program)
     if (gone) repaired.push(restoredFiles(gone, where(t)))
+    const recorded = recordSourced(t)
+    if (recorded) repaired.push(recorded)
     refuseLocalWork(t)
     from = runGit(t.program, ["rev-parse", "HEAD"]).out || null
     const origin = runGit(t.program, ["remote", "get-url", "origin"]).out
