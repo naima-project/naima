@@ -36,7 +36,7 @@ follow them, and Naima's own repository does.
 | [Git, handled for the owner](git-for-the-owner.md)                    | always: installing git, starting a repository, the `.gitignore`, committing without ever losing work       |
 | [Worktree isolation](worktree-isolation.md)                           | always: the requirement every other flow obeys                                                             |
 | [The coordinator and the workers](coordinator-and-workers.md)         | how a session is staffed                                                                                   |
-| [Commands that run without a prompt](commands-without-prompts.md) | how to write shell commands the agent tool runs without stopping the owner |
+| [Commands that run without a prompt](commands-without-prompts.md)     | how to write shell commands the agent tool runs without stopping the owner                                 |
 | [Worker protocol](worker-protocol.md)                                 | the report shape every worker owes the coordinator, and how finished workers are merged together           |
 | [Opening a worktree](opening-a-worktree.md)                           | starting a piece of work                                                                                   |
 | [Closing a worktree](closing-a-worktree.md)                           | before a branch is merged                                                                                  |

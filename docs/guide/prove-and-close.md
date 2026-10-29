@@ -255,8 +255,8 @@ naima set <property> 'verifierOptions={"route":"lts","threads":8,"maxStates":500
 - The state space is generated once for each version of the model, kept in Naima's work folder and shared by every property on that model. Changing the model
   produces a new one. The shrunk state space is kept beside it too, so another formula that needs the same method and hides the same actions starts from it.
 - `maxStates` stops generating the state space once it has that many states. The run is then recorded as `unknown`, with an output that begins
-  `state cap reached:`, because a cut-short state space can't give a verdict, and it isn't kept. Use it on a model whose state space may be infinite or too large
-  for the machine. The standard route has no such count, so there the option is an error; bound that route with `timeoutSeconds` instead.
+  `state cap reached:`, because a cut-short state space can't give a verdict, and it isn't kept. Use it on a model whose state space may be infinite or too
+  large for the machine. The standard route has no such count, so there the option is an error; bound that route with `timeoutSeconds` instead.
 - While the state space is generated, `naima verify` reports how many states it has, the level of the search it has reached and the transitions so far, every
   second or so. The other steps report the lines their tools print. Under `naima run`, this is the run's progress.
 - The run record says how the verdict was reached. It gives the route, the size of the state space before and after shrinking, the hidden actions and the
@@ -270,16 +270,16 @@ the run is recorded as an error whose output begins with `tool missing:` and exp
 
 ### The checks of naima-codegen
 
-[naima-codegen](https://github.com/naima-project/naima-codegen) writes a model's state machine as code ([generate the code](design-with-a-model.md#generate-the-code-from-the-model)),
-and its `check-refinement` command checks the generated machine against the model. The verifier `naima-codegen`, which comes with Naima and needs no plugin
-switched on, runs those checks through `naima verify`, so each check leaves a run with its evidence like any other property. The `model` of the property is the
-codegen project's `codegen.toml`, and the codegen project is the directory that holds it (the one above, for a `model/codegen.toml`). The `property` says which
-check to run:
+[naima-codegen](https://github.com/naima-project/naima-codegen) writes a model's state machine as code
+([generate the code](design-with-a-model.md#generate-the-code-from-the-model)), and its `check-refinement` command checks the generated machine against the
+model. The verifier `naima-codegen`, which comes with Naima and needs no plugin switched on, runs those checks through `naima verify`, so each check leaves a
+run with its evidence like any other property. The `model` of the property is the codegen project's `codegen.toml`, and the codegen project is the directory
+that holds it (the one above, for a `model/codegen.toml`). The `property` says which check to run:
 
 - `refines` runs `naima-codegen check-refinement`. The property holds when every check that the generated machine stays inside the model holds, and is violated
   when one fails; the failing checks are the counterexample.
-- `properties` runs `naima-codegen check-refinement --properties`, which checks every property item of the codegen project on the refined systems. It holds
-  when all of them hold.
+- `properties` runs `naima-codegen check-refinement --properties`, which checks every property item of the codegen project on the refined systems. It holds when
+  all of them hold.
 - The path of one of those items' `.mcf` files, from the codegen project, makes the same run but judges the property on that file alone.
 
 ```sh

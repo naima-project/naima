@@ -56,7 +56,7 @@ import {
   writeJson,
 } from "../../core/api.ts"
 import { exampleRegex } from "./adapters/example-regex.ts"
-import { naimaCodegen } from "./adapters/naima-codegen.ts"
+import { CODEGEN_PIN, CODEGEN_REPOSITORY, naimaCodegen } from "./adapters/naima-codegen.ts"
 import { type CompareResult, type Verdict, type Verifier, verifiersPoint, type VerifyRequest, type VerifyResult } from "./contract.ts"
 
 export type { CompareRequest, CompareResult, Verdict, Verifier, VerifyRequest, VerifyResult } from "./contract.ts"
@@ -1240,6 +1240,14 @@ export default function verifier(): Plugin {
   return {
     name: "verifier",
     contract: CONTRACT,
+    credits: [{
+      name: "naima-codegen",
+      homepage: CODEGEN_REPOSITORY,
+      source: CODEGEN_REPOSITORY,
+      authors: ["the Naima team"],
+      license: "MIT",
+      version: `commit ${CODEGEN_PIN.commit.slice(0, 12)}`,
+    }],
     says: "properties checked by formal-methods tools, with each run attached as evidence",
     about:
       "A `properties` item names a `verifier` (an adapter any plugin can contribute), a `model` file (a path from the project root) and a `property` in the verifier's own language. " +

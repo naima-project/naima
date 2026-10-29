@@ -62,6 +62,8 @@ export {
   typeOrThrow,
 } from "./base.ts"
 export { type CheckReport, runChecks } from "./check.ts"
+export { ATTRIBUTION_FIELDS, attributionGaps } from "./attribution.ts"
+export { type Credit, creditsMarkdown, creditsOf, creditsText, NAIMA_ATTRIBUTION } from "./credits.ts"
 export {
   behaviourOf,
   type ChangeNote,

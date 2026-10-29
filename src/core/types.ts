@@ -287,6 +287,8 @@ export interface ExtensionPoint<T = any> {
   validate?(c: unknown): string | null
   /** What a contribution lacks of its documentation, each said after its name: the `docs` plugin's `documented` check reports them. */
   gaps?(c: T): string[]
+  /** The attribution of something from outside Naima a contribution stands for (a tool it installs, say): `naima credits` prints it. Provisional. */
+  credit?(c: T): Partial<Attribution>
   /** True for a contribution the project's configuration makes, not the program: the program's reference leaves it out. */
   configured?(c: T): boolean
   /** The reference's markdown for one plugin's contributions to this point, those the configuration makes left out. */
@@ -416,6 +418,29 @@ export interface Plugin {
    * plugin that declares it is an error, never a silent no-op.
    */
   uses?: Record<string, readonly string[]>
+  /** Who made the plugin, where it is published, its licence and version: what `naima credits` prints. A plugin from outside Naima declares it; a first-party plugin is credited as Naima. Provisional. */
+  attribution?: Attribution
+  /** What the plugin runs or builds on without installing it (a program found on PATH, say): one attribution each, printed by `naima credits`. Provisional. */
+  credits?: Attribution[]
+}
+
+/**
+ * The standard credit for something Naima uses from outside: a tool, a stance, an external plugin. Provisional
+ * (decisions in Naima's tracker: discussions/attribution-what-owner-means-by-what-naima).
+ */
+export interface Attribution {
+  /** What it is called, as its authors call it. */
+  name: string
+  /** Its home page. */
+  homepage: string
+  /** Where its source is published. */
+  source: string
+  /** Its authors, by name when they are few, otherwise the team or organisation that makes it. */
+  authors: string[]
+  /** Its licence: an SPDX identifier, with a sentence when it bundles others. */
+  license: string
+  /** The version Naima uses. */
+  version: string
 }
 
 type Json = Record<string, unknown>

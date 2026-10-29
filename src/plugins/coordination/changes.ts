@@ -17,6 +17,8 @@ import {
   type Command,
   commitExists,
   type Context,
+  creditsMarkdown,
+  creditsOf,
   currentBranch,
   type Finding,
   gitOrNull,
@@ -181,7 +183,7 @@ const lastTag = (dir: string, rev: string): string | null => gitOrNull(dir, "des
 export const changesCommand: Command = {
   name: "changes",
   says:
-    `print the release notes a range of commits makes, assembled from the change notes it adds to ${CHANGES}/, as Markdown: breaking changes first, then those that need an action, then features, behaviour changes and fixes, each with its text and what to do; from the newest version tag (v…) to HEAD unless --from and --to say otherwise, in every repository of the project with a ${CHANGES_CONFIG} (the project itself, a submodule) unless --repo names one`,
+    `print the release notes a range of commits makes, assembled from the change notes it adds to ${CHANGES}/, as Markdown: breaking changes first, then those that need an action, then features, behaviour changes and fixes, each with its text and what to do, and a Credits section last, as naima credits --markdown prints it; from the newest version tag (v…) to HEAD unless --from and --to say otherwise, in every repository of the project with a ${CHANGES_CONFIG} (the project itself, a submodule) unless --repo names one`,
   enforces: "nothing: it only prints; a change note that does not parse is named on stderr",
   usage: "changes [--from <commit>] [--to <commit>] [--repo <path>]",
   options: [
@@ -213,6 +215,7 @@ export const changesCommand: Command = {
       const lines: string[] = notes.length ? releaseNotes(notes as ChangeNote[]) : ["No change notes in this range.", ""]
       for (const line of lines) ctx.out(line)
     }
+    for (const line of creditsMarkdown(creditsOf(ctx))) ctx.out(line)
     return 0
   },
 }

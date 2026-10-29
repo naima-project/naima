@@ -77,7 +77,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`land`](#naima-land) | coordination | land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor | runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item (unless --tracker-only gives the reason and the branch changes only tracker data, or --meets names a requirement it meets) or an item open and not fixed; refuses --meets for an item that is not a requirement, one with no item that verifies it and passed on the branch tip, one whose proofs all passed on the trunk already, and one an item refutes, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, adds the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right after the marker, so that naima close finds a commit reachable from the trunk; then prints what every landing report says of the files the landing changed, never undoing it |
 | [`guard`](#naima-guard) | coordination | the trunk guard: whether it is on and runs in this clone; off turns it off for the project (recorded in naima.json, the hook removed), on turns it back on; server, on the owner's word, makes a GitHub ruleset that lets only the repository's admins push the trunk (with gh, else it says the request and the web page; --print only says them) | while on, the git hook refuses a commit, merge or fast-forward of the trunk made by hand (naima guard-check says what passes); off is the owner's choice, recorded, and update does not put the hook back |
 | [`guard-check`](#naima-guard-check) | coordination | what the trunk guard's git hook runs when the trunk is about to move: exit 0 when it may, else one line saying why not and what to do | a commit, merge or fast-forward of the trunk made by hand is refused unless every commit it adds to the first-parent line is a landing marker, the record land makes, a commit that only adds to the tracker data (a claim may also be rewritten or removed) or only closes items, naima init's commit, one that only switches the guard, or one with a Trunk-reason: trailer; a tip the upstream holds, a rewind, a ref created or deleted pass |
-| [`changes`](#naima-changes) | coordination | print the release notes a range of commits makes, assembled from the change notes it adds to changes/, as Markdown: breaking changes first, then those that need an action, then features, behaviour changes and fixes, each with its text and what to do; from the newest version tag (v…) to HEAD unless --from and --to say otherwise, in every repository of the project with a changes/config.json (the project itself, a submodule) unless --repo names one | nothing: it only prints; a change note that does not parse is named on stderr |
+| [`changes`](#naima-changes) | coordination | print the release notes a range of commits makes, assembled from the change notes it adds to changes/, as Markdown: breaking changes first, then those that need an action, then features, behaviour changes and fixes, each with its text and what to do, and a Credits section last, as naima credits --markdown prints it; from the newest version tag (v…) to HEAD unless --from and --to say otherwise, in every repository of the project with a changes/config.json (the project itself, a submodule) unless --repo names one | nothing: it only prints; a change note that does not parse is named on stderr |
 | [`prune`](#naima-prune) | coordination | list (or with --write remove) stale claim files: their branch is gone, or is the trunk, or merged into the trunk that carries the file, or every item they claim is closed; one only another ref carries is listed with that ref, to be dropped there. With --branch, delete a branch and its worktree, refusing one with unmerged commits that no archive/<branch> tag holds | the trunk is never pruned, and a branch with unmerged commits that no archive/<branch> tag holds is refused, and so is a worktree with anything uncommitted, inside its submodules too; a clean one is removed even when it holds a submodule; nothing is removed without --write |
 | [`stale`](#naima-stale) | coordination | the work left behind: every branch, worktree and claim with no sign of life for staleAfter hours, or whose branch is gone or merged, with what it holds and the next step | nothing: it only reads; a branch counts as stale when its claim is stale (branch gone or merged into the trunk, or every item closed) or nothing happened on it for staleAfter hours (24 here) — no commit, step, session note or file changed; the next step is resume when anything is not committed, land when it is ahead of the trunk, up to date with it and holds open items, resume when it is behind, archive when no open item is claimed, drop when the trunk has all of it or the branch is gone |
 | [`pass`](#naima-pass) | coordination | write this session's note (one new file), or list the newest | a session note is one new file: earlier ones are never rewritten; a note is refused without --ack when the project's active rules ask for an acknowledgement, and --ack is refused unless it carries every phrase they ask for |
@@ -100,6 +100,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`knowledge`](#naima-knowledge) | knowledge | print the established knowledge entries by kind, each with its source or evidence | nothing: it reads the knowledge entries and prints them; `naima check` holds what an entry must stand on |
 | [`roles`](#naima-roles) | roles | every role: what it owns, what it refuses, the kinds and types on its queue, and how many open items are on it | nothing: it only reads; a role that refuses nothing is refused when the plugin loads |
 | [`announce`](#naima-announce) | announce | the features that may be announced — user-facing, shipped, documented and checked by a person or end to end — major first: the source of release notes | nothing: it only lists, and only features user-facing, shipped, documented and checked by a person or end to end |
+| [`credits`](#naima-credits) | announce | every attribution in use in the project — Naima itself, each plugin or stance loaded from outside Naima, what a plugin runs without installing it, and every tool a loaded plugin declares — each with its name, homepage, source, authors, licence and version, and what it fails to declare (provisional) | nothing: it only prints |
 | [`loop`](#naima-loop) | loop | the non-stop loop on a target chosen before starting — a work list, an epic or a gate: done or not, the next agent work, the stop verdict, and once stopped the owner's ordered action list, each line saying why it is his | the loop runs only on a target chosen before starting — a work list, an epic or a gate —; with --check, exit 1 while it is not stopped |
 | [`beta`](#naima-beta) | beta-markers | list what is marked as shipped without proof, and the state of each proof | nothing: it only reads |
 | [`verify`](#naima-verify) | verifier | run the verifier of properties and attach each run as evidence, here or in a declared host's checkout | a property holds only with a run of its verifier on exactly what it has now, attached as evidence; every input is hashed by its committed content, a text file's CRLF line endings read as LF, so every checkout hashes alike; a model or input outside the project is refused; a conclusive run (holds or violated) already recorded on the same identity — every input's digest with the tool's version, and the options — is reused, not repeated, unless --force gives the reason to run it again; --tool-args passes only flags the verifier declares as leaving the verdict alone, recorded with the run; with --host, the run is made in the host's checkout, which writes nothing there, and kept here only when it was made on exactly what this checkout has |
@@ -137,11 +138,12 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done; `beforeText(text, ctx)` may refuse a write of free text or a file that is not an item's (a session note, an event, an attachment) or add to its record | core, coordination, triage, epics, discussions, planning, knowledge, verifier, privacy |
 | `setup` | core | what a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init` and `naima update` after their own work: `install(ctx) → lines`, each said | coordination, planning, backup, metrics |
 | `migrations` | core | a plugin's own data migrations, in order from its format 1, run by `naima update` after the core's | gates |
+| `credits` | core | what a plugin runs or builds on without installing it (a program found on PATH, say), credited by `naima credits`: name, homepage, source, authors, license, version (provisional) | verifier |
 | `landing-reports` | coordination | what `naima land` checks before a branch lands and reports once it has: `name`, `says`, and `blocks(ctx, { branch, from, to, changed }) → lines`, what the landing changed whose proofs are not current, any line refusing the landing unless --stale-proofs gives the reason, or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root | verifier |
 | `gates` | gates | a named release or merge condition, backed by items: `title`, `says`, `decides`, `evaluate(ctx) → { holds, blocking, owed }`; `inFullSuite` makes it part of the full suite a release gate (`fullSuite`) requires | verifier |
 | `roles` | roles | a role of the company of agents: `title`, what it `owns`, what it `refuses` (never empty), the `kinds` and `types` on its queue, and `queue(ctx)`, its open items most urgent first | roles |
 | `verifiers` | verifier | an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest; `toolArgs`, the flags `naima verify --tool-args` may pass, which never change the verdict; and `equivalences` with `compare({ before, after, equivalence }, ctx) → { verdict, output, counterexample?, details? }` and `preserves({ property, options, equivalence }, ctx)`, for `naima equivalent` | verifier, verifier-mcrl2 |
-| `tools` | tools | a tool a plugin needs, which `naima tools install` installs into Naima's own directory: name, exact version, licence, programs, how an install is verified, and per platform a source (url, size, sha256, format) or the answer saying why there is none | backup, verifier-mcrl2 |
+| `tools` | tools | a tool a plugin needs, which `naima tools install` installs into Naima's own directory: name, exact version, licence, homepage, source and authors (its attribution, which `naima credits` prints), programs, how an install is verified, and per platform a source (url, size, sha256, format) or the answer saying why there is none | backup, verifier-mcrl2 |
 | `ui-views` | ui | a view the provisional window shows as a tab, or as a panel of its first screen: `name` (its path), `title`, `says`, `order` (lower first, 0 when absent), `panel` (true: on the first screen, not a tab), `render(params, ctx) → { data, html, css? }`, rendered at each request | coordination, triage, gates, ui, metrics |
 | `metric-kinds` | metrics | how a metric's number is read from its run: `read({ exit, stdout, stderr, seconds }, metric) → number \| { error }`, `readsExit` | metrics |
 | `metrics` | metrics | a named measurement: `run` (a program and its arguments) and `kind`, a code `measure`, a test `suite`'s number or a `file`'s; a bound — `atMost`, `atLeast` or `equals` — and `better` |  |
@@ -1219,7 +1221,7 @@ naima guard-check --tracker 0123abc 4567def
 
 ### naima changes
 
-Print the release notes a range of commits makes, assembled from the change notes it adds to changes/, as Markdown: breaking changes first, then those that need an action, then features, behaviour changes and fixes, each with its text and what to do; from the newest version tag (v…) to HEAD unless --from and --to say otherwise, in every repository of the project with a changes/config.json (the project itself, a submodule) unless --repo names one.
+Print the release notes a range of commits makes, assembled from the change notes it adds to changes/, as Markdown: breaking changes first, then those that need an action, then features, behaviour changes and fixes, each with its text and what to do, and a Credits section last, as naima credits --markdown prints it; from the newest version tag (v…) to HEAD unless --from and --to say otherwise, in every repository of the project with a changes/config.json (the project itself, a submodule) unless --repo names one.
 
 **Enforces**: Nothing: it only prints; a change note that does not parse is named on stderr.
 
@@ -2291,7 +2293,7 @@ Announceability, computed: a feature may be announced only once user-facing, shi
 
 Its contributions' qualified ids are `announce/<name>`.
 
-What may be announced is computed, never declared. A feature is **announceable** when it is user-facing (`facing: user`), shipped (a status in `shippedStatuses`, or closed into the archive), documented (its `docs` field names a page) and checked: a passed item verifies it whose `runBy` is in `checkedBy` — a person, or an agent driving the running software, end to end — or whose `evidenceKind` is in `checkedEvidence`. A refuting proof outweighs any that proves. `naima announce` lists the announceable features, major ones (`major: true`) first, since a date or on a gate: the only source of release notes, changelog entries and announcements. With `--all` it adds every user-facing feature that is not announceable, with what it lacks. The check `copy-names-only-announceable` fails when a file of the `copy` option names, by its label or its full title, a feature that is not announceable, so the README and the site never promise what is not true.
+What may be announced is computed, never declared. A feature is **announceable** when it is user-facing (`facing: user`), shipped (a status in `shippedStatuses`, or closed into the archive), documented (its `docs` field names a page) and checked: a passed item verifies it whose `runBy` is in `checkedBy` — a person, or an agent driving the running software, end to end — or whose `evidenceKind` is in `checkedEvidence`. A refuting proof outweighs any that proves. `naima announce` lists the announceable features, major ones (`major: true`) first, since a date or on a gate: the only source of release notes, changelog entries and announcements. With `--all` it adds every user-facing feature that is not announceable, with what it lacks. `naima credits` prints the standard credit of everything the project uses from outside — Naima itself, the plugins and stances it loads from elsewhere, what a plugin runs without installing it, the tools the loaded plugins declare — each with where it is published (homepage and source), its authors, its licence and the version used; `--markdown` prints it as the Credits section that `naima announce --gate` and `naima changes` end the release notes with. This is provisional. The check `copy-names-only-announceable` fails when a file of the `copy` option names, by its label or its full title, a feature that is not announceable, so the README and the site never promise what is not true.
 
 Options, each with the default it takes when nothing sets it:
 
@@ -2329,6 +2331,30 @@ naima announce
 naima announce --since 2026-09-01
 naima announce --gate v1 --all
 naima announce --json
+```
+
+### naima credits
+
+Every attribution in use in the project — Naima itself, each plugin or stance loaded from outside Naima, what a plugin runs without installing it, and every tool a loaded plugin declares — each with its name, homepage, source, authors, licence and version, and what it fails to declare (provisional).
+
+**Enforces**: Nothing: it only prints.
+
+```sh
+naima credits [--json
+naima --markdown]
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--json` |  | print each credit as JSON: name, homepage, source, authors, license, version, kind, plugin, missing |
+| `--markdown` |  | print the credits as the Credits section of release notes, in Markdown |
+
+Examples:
+
+```sh
+naima credits
+naima credits --json
+naima credits --markdown
 ```
 
 **Fields**
@@ -2572,6 +2598,12 @@ Models: a model, or another artifact properties are verified on, named by its pa
 | `property-reopens-when-changed` | changing a property's property, model, verifier or verifierOptions sets its status back to open: the last run was reached on something else, and says nothing about it |
 | `holds-only-by-verify` | a property becomes holds only with a run that holds for exactly what it has now, as naima verify writes it; holds set by hand without one — naima set, naima new --set — is refused |
 | `leaves-development-proved` | a model leaves development (its models item becomes stable, or is created stable) only when at least one property is verified on it and every one holds on a run of exactly what it has now; refused otherwise, naming each property that does not |
+
+**Credits**, printed by `naima credits`
+
+| Name | Version | Licence | Authors |
+|---|---|---|---|
+| naima-codegen | commit 5aca11dbb1e0 | MIT | the Naima team |
 
 **Landing reports**, checked by `naima land` before a landing (blocks) or printed after it (reports)
 

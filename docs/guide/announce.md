@@ -42,6 +42,25 @@ This prints the release notes for everything since that tag, as Markdown, with b
 other changes of behaviour and fixes. Each one says what changed and, when there is something to do, what to do. Without `--from` it starts at the newest
 version tag. `naima announce` still decides which features an announcement may name.
 
+## Credits
+
+Release notes end with a Credits section: Naima itself, every plugin or stance the project loads from outside Naima, and every tool the loaded plugins install
+or run, each with where it is published (its homepage and its source), who made it, its licence and the version in use. `naima changes` adds it as Markdown
+after the changes, and `naima announce --gate <gate>` prints it after the features. To see it on its own:
+
+```sh
+naima credits             # as text
+naima credits --markdown  # as the Credits section of release notes
+naima credits --json      # one object for each credit
+```
+
+Each credit comes from an attribution its plugin declares: `name`, `homepage`, `source`, `authors`, `license` and `version`. The authors are named when there
+are a few of them, and otherwise the team or organisation that makes it is named. A plugin or stance from outside Naima declares its own under `attribution` in
+its manifest. A tool declares `source` and `authors` beside its `homepage`, `licence` and `version`. Anything a plugin runs without installing it, such as a
+program it finds on the PATH, goes under `credits`. When an attribution is missing a field, `naima credits` says which one is missing.
+
+This way of crediting is provisional: the fields and where they are declared may still change.
+
 `naima announce --all` also lists every user-facing feature that isn't announceable yet, each with what it still lacks:
 
 ```console
