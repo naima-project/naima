@@ -35,6 +35,8 @@ import {
   usageError,
 } from "../../core/api.ts"
 
+import { reviewedCommand, type ReviewedRule, reviewLines, REVIEWS } from "./reviews.ts"
+
 export const AUDIENCES = ["agents", "people", "everyone"] as const
 export type Audience = (typeof AUDIENCES)[number]
 
@@ -104,6 +106,11 @@ export interface ShippedRule {
   enforcedBy?: string
   /** How it is verified: the check or gate that verifies it, or `agent` for a convention an agent verifies by reading its own work; by default its `enforcedBy`. */
   verifiedBy?: string
+  /**
+   * The files it is about, from the project root: a path, which covers what is under it, or a pattern with `*` and `**`.
+   * A landing that changes one of them with no review recorded (`naima reviewed`) is noted, for a rule an agent verifies.
+   */
+  covers?: string[]
 }
 
 /** What `verifiedBy` says of a convention no check verifies: the agent verifies it, by reading its own work against the rule. */
@@ -119,11 +126,14 @@ function shippedError(v: unknown): string | null {
   if (!AUDIENCES.includes(r.audience as Audience)) return `has no audience among ${AUDIENCES.join(", ")}`
   if (r.strength !== "must" && r.strength !== "should") return "has no strength, must or should"
   if (r.verifiedBy !== undefined && !isText(r.verifiedBy)) return `has an empty verifiedBy: a check or gate, or "${VERIFIED_BY_AGENT}"`
+  if (r.covers !== undefined && (!Array.isArray(r.covers) || !r.covers.every(isText))) return "has a covers that is not a list of paths"
   return null
 }
 
 /** The keys of a rule file's front matter: those of a shipped rule but its text and why, and `when`. */
-const RULE_KEYS = ["name", "title", "audience", "strength", "ack", "enforcedBy", "verifiedBy", "when"] as const
+const RULE_KEYS = ["name", "title", "audience", "strength", "ack", "enforcedBy", "verifiedBy", "covers", "when"] as const
+/** The keys of a rule file's front matter that hold a list: one value is read as a list of one. */
+const LIST_KEYS: readonly string[] = ["covers", "when"]
 const REQUIRED_KEYS = ["name", "title", "audience", "strength"] as const
 
 /** The rule's name a rule file's name gives: without a leading number and dash, without `.md`, and without a variant after a dot. */
@@ -155,7 +165,7 @@ export function ruleFromFile(file: string, text: string, settings: Readonly<Reco
     if (Array.isArray(v)) throw new Error(`${key} is one value, not a list`)
     return v
   }
-  for (const key of RULE_KEYS) if (key !== "when") one(key)
+  for (const key of RULE_KEYS) if (!LIST_KEYS.includes(key)) one(key)
   for (const key of REQUIRED_KEYS) if (!one(key)?.trim()) throw new Error(`the front matter has no ${key}`)
   if (!AUDIENCES.includes(one("audience") as Audience)) throw new Error(`the rule has no audience among ${AUDIENCES.join(", ")}`)
   if (one("strength") !== "must" && one("strength") !== "should") throw new Error("the rule has no strength, must or should")
@@ -187,6 +197,7 @@ export function ruleFromFile(file: string, text: string, settings: Readonly<Reco
     ...(one("ack") !== undefined ? { ack: one("ack") as string } : {}),
     ...(one("enforcedBy") !== undefined ? { enforcedBy: one("enforcedBy") as string } : {}),
     ...(one("verifiedBy") !== undefined ? { verifiedBy: one("verifiedBy") as string } : {}),
+    ...(fields.get("covers") !== undefined ? { covers: [fields.get("covers")!].flat().map((c) => filled(c, settings)) } : {}),
   }
   const wrong = shippedError(rule)
   if (wrong) throw new Error(`the rule ${wrong}`)
@@ -222,7 +233,7 @@ export function rulesFromFolder(dir: string, settings: Readonly<Record<string, s
 export const rulesPoint: ExtensionPoint<ShippedRule> = {
   id: "rules",
   says:
-    "a rule a plugin ships, active in every project that loads it beside the project's own rules items: one Markdown file per rule in a folder the plugin names (`contributes: { rules: \"rules/\" }`), its front matter `name`, `title`, `audience`, `strength`, and optionally `ack`, `enforcedBy`, `verifiedBy` and `when`, its body the rule and a section `## Why`; a project retires one with the rules plugin's `retire` option",
+    "a rule a plugin ships, active in every project that loads it beside the project's own rules items: one Markdown file per rule in a folder the plugin names (`contributes: { rules: \"rules/\" }`), its front matter `name`, `title`, `audience`, `strength`, and optionally `ack`, `enforcedBy`, `verifiedBy`, `covers` (the files it is about, for a rule an agent verifies) and `when`, its body the rule and a section `## Why`; a project retires one with the rules plugin's `retire` option",
   noun: "shipped rule",
   fromFolder: rulesFromFolder,
   key: (r) => r.name,
@@ -254,6 +265,8 @@ export interface Rule {
   text: string
   /** The plugin that ships it; absent for the project's own rules items. */
   shippedBy?: string
+  /** The files it is about, from the project root: a landing that changes one is reviewed against it when an agent verifies it. */
+  covers?: string[]
 }
 
 /** A rule's text: its page without the title heading. */
@@ -285,6 +298,7 @@ const fromShipped = (c: Contribution<ShippedRule>): Rule => ({
   ack: c.value.ack ?? null,
   text: `${c.value.text}\n\nWhy: ${c.value.why}`,
   shippedBy: c.plugin,
+  ...(c.value.covers ? { covers: [...c.value.covers] } : {}),
 })
 
 /** The names `retire` holds that retire `c`: its short name or its qualified id. */
@@ -471,6 +485,10 @@ function readRetire(options: Record<string, unknown>): ReadonlySet<string> {
   return new Set(raw as string[])
 }
 
+/** The active rules, as reviews read them. */
+const reviewedRules = (retired: ReadonlySet<string>) => (ctx: Context): ReviewedRule[] =>
+  activeRules(ctx, undefined, retired).map((r) => ({ item: r.item, verifiedBy: r.verifiedBy, covers: r.covers ?? [] }))
+
 export default function rules(options: Record<string, unknown> = {}): Plugin {
   const retired = readRetire(options)
   return {
@@ -488,8 +506,18 @@ export default function rules(options: Record<string, unknown> = {}): Plugin {
     points: [rulesPoint],
     types: [rulesType],
     fields: [AUDIENCE, STRENGTH, ENFORCED_BY, ACK],
-    commands: [command(retired)],
+    commands: [command(retired), reviewedCommand(reviewedRules(retired), VERIFIED_BY_AGENT)],
     checks: [check(retired)],
     guide: [guide(retired)],
+    dirs: [REVIEWS],
+    contributes: {
+      "landing-reports": [{
+        name: "agent-reviews",
+        says:
+          "the reviews an agent recorded with naima reviewed that the landing carries, and a note for each rule an agent verifies that covers a file the landing changed with no review recorded",
+        report: (ctx: Context, landing: { changed: string[] }) => reviewLines(ctx, landing, reviewedRules(retired)(ctx), VERIFIED_BY_AGENT),
+      }],
+    },
+    optional: ["landing-reports"],
   }
 }

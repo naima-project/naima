@@ -45,12 +45,13 @@ may import anything in its repository.
 
 ### The contract version
 
-A manifest says the contract it is written for: `contract`, the `CONTRACT` of `core/api.ts` it was built against — this core speaks **3**. A plugin written for
+A manifest says the contract it is written for: `contract`, the `CONTRACT` of `core/api.ts` it was built against — this core speaks **4**. A plugin written for
 a newer contract is refused when the project loads, naming both versions, instead of running against an API it does not know. One that says none is read as
 contract 1, the shape before `contract` existed, and keeps working: its top-level `gates` or `verifiers` are contributions to those points as any top-level key
 named after a point is, and a view or summary section that returns plain lines is read as text whose data is those lines
-([views and summaries](#views-and-summaries)). Contract 3 added `home` and contributions named as a folder ([below](#contributions-kept-as-files)); a plugin
-written for 2 keeps working as it is.
+([views and summaries](#views-and-summaries)). Contract 3 added `home` and contributions named as a folder ([below](#contributions-kept-as-files)). Contract 4
+added the `agent-hooks` point, `refuses` on a landing report and `runs` on a check; a plugin written for 3 keeps working as it is, and one that uses any of these
+says 4, so an older Naima refuses it by name instead of ignoring them.
 
 ### What a plugin can and cannot do
 
@@ -86,7 +87,8 @@ The core's points, each also a typed key of the manifest:
 | `fields`     | fields with a kind (`string`, `strings`, `date`, `enum`, `boolean`, `number`, `object`), enum values in rank order — or `valuesFrom` a point, and `multiple` for several — and the types they apply to, by name (`appliesTo`) or by trait (`traits`); `configured: true` when the values come from the project's configuration, so the program's reference does not list them; `filled: true` for a record Naima fills on another write (a signature), which the trunk guard takes with it |
 | `extends`    | additive changes to another plugin's types and fields ([extending](#extending-another-plugins-types-and-fields))                                                                                                                                                                                                                                                                                                                                                                           |
 | `relations`  | link relations; each names its inverse, which must also be declared                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `checks`     | `run(ctx) → Finding[]`, or a promise of them; `problem` fails `naima check`, `note` does not; the project may weigh each one `off`, `note` or `problem` ([check severity](../guide/config.md#check-severity)); `staged: true` for one that reads only the change staged for the next commit, which `naima check --staged` — what the pre-commit hook runs — runs alone ([commit hooks](../guide/commit-hooks.md))                                                                          |
+| `checks`     | `run(ctx) → Finding[]`, or a promise of them; `problem` fails `naima check`, `note` does not; the project may weigh each one `off`, `note` or `problem` ([check severity](../guide/config.md#check-severity)); `staged: true` for one that reads only the change staged for the next commit, which `naima check --staged` — what the pre-commit hook runs — runs alone ([commit hooks](../guide/commit-hooks.md)); `runs`, the programs it starts ([below](#programs-it-starts)) |
+| `agent-hooks` | a hook the agent tool runs: `name`, `says`, `tool` (the agent tool, by adapter id), `event` and optionally `matcher` in that tool's terms, and `command`, the naima command it runs as a list of words; Naima installs it in the tool's settings at `naima init`, `naima update` and `naima stance adopt`, and removes it once the plugin is gone ([hooks in the agent tool](../guide/extending-naima.md#hooks-in-the-agent-tool)) |
 | `views`      | `naima view <name>`: a named rendering of derived state, `render(args, ctx) → { data, text() }` ([below](#views-and-summaries))                                                                                                                                                                                                                                                                                                                                                            |
 | `dirs`       | directories under the tracker root the plugin owns that are not item types                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `summary`    | a block of `naima summary`, `render(ctx) → { data, text() }`                                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -97,7 +99,9 @@ The core's points, each also a typed key of the manifest:
 
 First-party plugins declare two more: the `gates` plugin declares `gates` (a named condition: `title`, `says`, `decides`,
 `evaluate(ctx) → { holds,
-blocking, owed }`), the `verifier` plugin `verifiers` ([below](#the-verifier-contract)). The
+blocking, owed }`), the `verifier` plugin `verifiers` ([below](#the-verifier-contract)), and the `coordination` plugin `landing-reports`: `refuses(ctx, landing)`
+for a check that refuses the landing while it fails, with no flag to let it through; `blocks(ctx, landing)` for proofs not current, which
+`naima land --stale-proofs "<reason>"` lets through; and `report(ctx, landing)`, printed after the landing. The
 [reference](reference.md#extension-points) lists every point with who declares it and who contributes to it.
 
 A contribution to a point no loaded plugin declares, and any manifest key the contract does not know, is refused when the project loads: a misspelt key is never
@@ -333,9 +337,11 @@ is refused. Without `inputs`, the model alone is recorded.
 | `error`    | `error`          | the tool could not run or reach a verdict                      |
 | `unknown`  | `error`          | the tool ran and could not decide (a bound was hit)            |
 
-**Programs it starts.** A verifier that runs an external tool declares it: `runs: ["mcrl22lps", "lps2pbes", "pbessolve", "lps2lts"]` — each a name looked up on
+### Programs it starts
+
+A verifier that runs an external tool declares it: `runs: ["mcrl22lps", "lps2pbes", "pbessolve", "lps2lts"]` — each a name looked up on
 `PATH`, or an absolute path; one word, no comma. `runs` is not the verifier's alone: a contribution to any point may declare the programs it starts, and the
-core collects them from every point. The launcher allows the program exactly the declared programs, besides `git`: it asks the program about to run
+core collects them from every point. A check that runs Deno and svelte-check says `runs: ["deno", "svelte-check"]`. The launcher allows the program exactly the declared programs, besides `git`: it asks the program about to run
 (`naima runs --json`, under read permission only) when the project loads a third-party plugin or a replacement, declares metrics, or switches on
 `verifier-mcrl2` — a first-party plugin that is off until `naima.json` names it, since it starts a model checker. Anything undeclared fails with Deno's own
 `Requires run access`.

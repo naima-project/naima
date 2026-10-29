@@ -32,6 +32,29 @@ export interface AgentHook {
   install(root: string, program: string): HookInstall
 }
 
+/** A hook a plugin contributes, as the adapter writes it: its id (`<plugin>/<name>`), event, matcher and the naima command's words. */
+export interface PluginHook {
+  id: string
+  event: string
+  matcher?: string
+  command: string[]
+}
+
+/** What a sync of the plugins' hooks did, each hook by id; or why the settings could not be written. */
+export type PluginHookSync = { added: string[]; updated: string[]; removed: string[] } | { refused: string }
+
+/** Where and how a tool keeps the hooks plugins contribute, told apart from Naima's own hooks and the project's. */
+export interface PluginHookSettings {
+  /** The settings file, project-root relative. */
+  file: string
+  /** The hooks plugins installed there, by id, each with its event, its matcher and the command line written. */
+  installed(root: string): { id: string; event: string; matcher?: string; line: string }[]
+  /** The command line `hook` is written with, for the launcher at `program`. */
+  line(hook: PluginHook, program: string): string
+  /** Make the plugins' hooks in the file exactly `wanted`, for the launcher at `program`: add, update in place, remove the rest; the project's own hooks and Naima's are kept. */
+  sync(root: string, program: string, wanted: readonly PluginHook[]): PluginHookSync
+}
+
 export interface AgentAdapter {
   /** How naima.json's `agents` names the tool. */
   id: string
@@ -57,6 +80,8 @@ export interface AgentAdapter {
   subagentStart?: AgentHook
   subagentTool?: AgentHook
   subagentStop?: AgentHook
+  /** Where the hooks plugins contribute go, when the tool has hooks (core/plugin-hooks.ts). */
+  pluginHooks?: PluginHookSettings
   /** What naima subagent --hook prints for the tool: `context`, put in the starting sub-agent's context. */
   subagentContext?(context: string): string
   /** The sub-agent's id, from what its sub-agent-start hook is given on standard input. */

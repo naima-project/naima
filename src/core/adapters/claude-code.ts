@@ -30,7 +30,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
-import type { AgentAdapter, AgentHook, HookInstall } from "./index.ts"
+import type { AgentAdapter, AgentHook, HookInstall, PluginHookSettings, PluginHookSync } from "./index.ts"
 
 const SETTINGS = ".claude/settings.json"
 const ID = "claude-code"
@@ -156,6 +156,102 @@ const subagentStop = hook(
   (c) => c.includes(SUBAGENT_SCRIPT) && c.trimEnd().endsWith(" stop"),
 )
 
+// The hooks plugins contribute (core/plugin-hooks.ts) are written the same way, each command starting with an
+// assignment that names the hook — NAIMA_PLUGIN_HOOK=<plugin>/<name> — so that Naima tells them from its own and the
+// project's, updates them in place and removes the ones whose plugin is gone.
+
+/** The variable a plugin's hook command starts with, naming the hook. */
+export const PLUGIN_HOOK_VAR = "NAIMA_PLUGIN_HOOK"
+
+/** A word as the shell reads it back unchanged: plain, or in single quotes. */
+const shellWord = (w: string): string => (/^[A-Za-z0-9._\/:=@%+,-]+$/.test(w) ? w : `'${w.replaceAll("'", `'\\''`)}'`)
+
+/** The command of a plugin's hook: the naima command `words`, through the launcher at `program`, named by `id`. */
+export const pluginHookCommand = (id: string, program: string, words: readonly string[]): string =>
+  `${PLUGIN_HOOK_VAR}=${id} deno run -A "$CLAUDE_PROJECT_DIR/${program}" ${words.map(shellWord).join(" ")}`
+
+/** The id a command names, when it is a plugin's hook; null otherwise. */
+const pluginHookId = (command: string): string | null => {
+  const prefix = `${PLUGIN_HOOK_VAR}=`
+  if (!command.startsWith(prefix)) return null
+  const id = command.slice(prefix.length).split(" ")[0]
+  return id ? id : null
+}
+
+const installedPluginHooks = (root: string): { id: string; event: string; matcher?: string; line: string }[] => {
+  const r = read(join(root, SETTINGS))
+  if (!("settings" in r) || !isObject(r.settings["hooks"])) return []
+  return Object.entries(r.settings["hooks"]).flatMap(([event, list]) =>
+    (Array.isArray(list) ? list : []).flatMap((e) =>
+      commandsOf(e).flatMap((line) => {
+        const id = pluginHookId(line)
+        const matcher = isObject(e) && typeof e["matcher"] === "string" ? e["matcher"] : undefined
+        return id ? [{ id, event, ...(matcher !== undefined ? { matcher } : {}), line }] : []
+      })
+    )
+  )
+}
+
+const pluginHooks: PluginHookSettings = {
+  file: SETTINGS,
+  installed: installedPluginHooks,
+  line: (h, program) => pluginHookCommand(h.id, program, h.command),
+  sync(root, program, wanted): PluginHookSync {
+    const path = join(root, SETTINGS)
+    const r = read(path)
+    if (!("settings" in r)) return { refused: r.why }
+    const hooks = r.settings["hooks"] ?? {}
+    if (!isObject(hooks)) return { refused: "its hooks are not an object" }
+    const bad = wanted.find((h) => hooks[h.event] !== undefined && !Array.isArray(hooks[h.event]))
+    if (bad) return { refused: `its hooks.${bad.event} is not a list` }
+    const want = new Map(wanted.map((h) => [h.id, { ...h, line: pluginHookCommand(h.id, program, h.command) }]))
+    const before = installedPluginHooks(root)
+    // A hook already written as it is wanted stays where it is; every other plugin hook is taken out, and what is wanted and missing is appended.
+    const right = (event: string, matcher: unknown, line: string): boolean => {
+      const id = pluginHookId(line)
+      const w = id === null ? undefined : want.get(id)
+      return !!w && w.event === event && w.matcher === (typeof matcher === "string" ? matcher : undefined) && w.line === line
+    }
+    const kept = new Set(before.filter((h) => right(h.event, h.matcher, h.line)).map((h) => h.id))
+    const added = wanted.filter((h) => !before.some((b) => b.id === h.id)).map((h) => h.id)
+    const updated = wanted.filter((h) => before.some((b) => b.id === h.id) && !kept.has(h.id)).map((h) => h.id)
+    const removed = [...new Set(before.filter((b) => !want.has(b.id)).map((b) => b.id))]
+    const doubled = before.length !== new Set(before.map((b) => b.id)).size
+    if (!added.length && !updated.length && !removed.length && !doubled) return { added, updated, removed }
+    const next: Json = {}
+    for (const [event, list] of Object.entries(hooks)) {
+      if (!Array.isArray(list)) {
+        next[event] = list
+        continue
+      }
+      const seen = new Set<string>()
+      const out = list.flatMap((e) => {
+        if (!isObject(e) || !Array.isArray(e["hooks"])) return [e]
+        const left = e["hooks"].filter((h) => {
+          const line = isObject(h) && typeof h["command"] === "string" ? h["command"] : null
+          const id = line === null ? null : pluginHookId(line)
+          if (id === null) return true
+          if (!right(event, e["matcher"], line!) || seen.has(id)) return false
+          seen.add(id)
+          return true
+        })
+        return left.length === e["hooks"].length ? [e] : left.length ? [{ ...e, hooks: left }] : []
+      })
+      if (out.length) next[event] = out
+    }
+    for (const id of [...added, ...updated]) {
+      const h = want.get(id)!
+      const entry = { ...(h.matcher !== undefined ? { matcher: h.matcher } : {}), hooks: [{ type: "command", command: h.line }] }
+      next[h.event] = [...((next[h.event] as unknown[] | undefined) ?? []), entry]
+    }
+    const settings: Json = { ...r.settings, hooks: next }
+    if (!Object.keys(next).length) delete settings["hooks"]
+    if (!existsSync(dirname(path))) mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, JSON.stringify(settings, null, 2) + "\n")
+    return { added, updated, removed }
+  },
+}
+
 const parsed = (input: string): Json | undefined => {
   try {
     const v: unknown = JSON.parse(input)
@@ -177,6 +273,7 @@ export const claudeCode: AgentAdapter = {
   subagentStart,
   subagentTool,
   subagentStop,
+  pluginHooks,
   sessionOf: (input) => {
     const v = parsed(input)?.["session_id"]
     return typeof v === "string" ? v : undefined

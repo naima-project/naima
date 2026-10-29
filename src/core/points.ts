@@ -8,6 +8,7 @@ import { DEFAULT_DATA } from "./layout.ts"
 import { flagsOf } from "./vocabulary.ts"
 import { TICK_FOLDERS } from "./tick.ts"
 import type {
+  AgentHookContribution,
   Attribution,
   Check,
   Command,
@@ -344,6 +345,41 @@ export const setupPoint: ExtensionPoint<Setup> = {
   ],
 }
 
+export const agentHooksPoint: ExtensionPoint<AgentHookContribution> = {
+  id: "agent-hooks",
+  says:
+    "a hook the agent tool runs, which Naima installs in the tool's settings beside its own at `naima init`, `naima update` and `naima stance adopt`, and removes once the plugin is gone: `name`, `says`, `tool` (the agent tool, by adapter id), `event` and optionally `matcher` in that tool's terms, and `command`, the naima command it runs as a list of words",
+  noun: "agent hook",
+  key: (h) => h.name,
+  renamed: (h, name) => ({ ...h, name }),
+  validate: (v) =>
+    shape(
+      v,
+      (h) => text(h, "name"),
+      (h) => text(h, "tool"),
+      (h) => text(h, "event"),
+      (h) => {
+        const c = (h as { command?: unknown }).command
+        return Array.isArray(c) && c.length && c.every((w) => typeof w === "string" && w !== "")
+          ? null
+          : "has no command: the naima command it runs, as a list of words"
+      },
+      (h) => {
+        const m = (h as { matcher?: unknown }).matcher
+        return m !== undefined && typeof m !== "string" ? "has a matcher that is not a string" : null
+      },
+    ),
+  gaps: (h) => says(h, "does"),
+  document: (hooks) => [
+    "",
+    "**Agent hooks**, installed in the agent tool's settings by `naima init`, `naima update` and `naima stance adopt`",
+    ...table(
+      ["Hook", "Event", "Runs", "What it does"],
+      hooks.map((h) => [code(h.name), `${h.event}${h.matcher ? ` (${h.matcher})` : ""}`, code(`naima ${h.command.join(" ")}`), h.says]),
+    ),
+  ],
+}
+
 export const extendsPoint: ExtensionPoint<Extension> = {
   id: "extends",
   says:
@@ -417,6 +453,7 @@ export const CORE_POINTS: readonly ExtensionPoint[] = [
   extendsPoint,
   hooksPoint,
   setupPoint,
+  agentHooksPoint,
   migrationsPoint,
   creditsPoint,
 ]

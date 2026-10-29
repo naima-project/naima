@@ -171,3 +171,15 @@ export function sessionStartPaths(root: string, config: SessionConfig, opts: { h
   }
   return [...new Set(out)]
 }
+
+/** The settings files the hooks plugins contribute go to, absolute, with a folder to create: what the launcher lets naima stance adopt write. */
+export function pluginHookPaths(root: string, config: SessionConfig): string[] {
+  const out: string[] = []
+  for (const a of adaptersInUse(root, config.agents)) {
+    if (!a.pluginHooks) continue
+    const file = join(root, a.pluginHooks.file)
+    out.push(file)
+    if (!existsSync(dirname(file))) out.push(dirname(file))
+  }
+  return out
+}

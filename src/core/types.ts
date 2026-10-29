@@ -153,6 +153,8 @@ export interface Check {
   run(ctx: Context, options?: CheckOptions): Finding[] | Promise<Finding[]>
   /** True for a check that reads only the change staged for the next commit: `naima check --staged`, what a pre-commit hook runs, runs these alone. */
   staged?: boolean
+  /** The external programs the check starts besides git, which the launcher grants (`naima runs` lists them). */
+  runs?: string[]
 }
 
 /** One documented option: a command's `--flag`, or a plugin's configuration key. */
@@ -369,6 +371,24 @@ export interface Setup {
   name: string
   says: string
   install(ctx: Context): string[] | Promise<string[]>
+}
+
+/**
+ * A hook a plugin asks the agent tool to run, which Naima installs in the tool's settings beside its own hooks at
+ * `naima init`, `naima update` and `naima stance adopt`, and removes once the plugin is gone (core/plugin-hooks.ts).
+ * It runs a naima command: Naima writes the line that starts it through the project's launcher.
+ */
+export interface AgentHookContribution {
+  name: string
+  says: string
+  /** The agent tool whose terms `event` and `matcher` are in, by adapter id, as naima.json's `agents` names it. */
+  tool: string
+  /** The tool's event: `PostToolUse`, say. */
+  event: string
+  /** Which occasions of the event it runs on, in the tool's own syntax: `Edit|Write`, say; every one when absent. */
+  matcher?: string
+  /** The naima command it runs, as words after `naima`: `["stance-ui", "hook"]`. */
+  command: string[]
 }
 
 /** A hook on every item write the core's helpers make, run in plugin load order. */
