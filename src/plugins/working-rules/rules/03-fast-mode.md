@@ -4,6 +4,7 @@ title: Fast mode
 audience: agents
 strength: must
 ack: Fast mode on
+verifiedBy: agent
 ---
 
 Run tests and checks at the end of a phase, not after every edit. Run isolated experiments in parallel, in one round. Anything that takes more than a few

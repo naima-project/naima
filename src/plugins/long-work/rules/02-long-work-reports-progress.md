@@ -5,6 +5,7 @@ audience: everyone
 strength: must
 ack: Progress mode on
 enforcedBy: progress-declared
+verifiedBy: progress-declared
 ---
 
 Work that can last more than a few seconds reports its progress at least every few seconds: how much is done of the total, or the stage it is in with a count,

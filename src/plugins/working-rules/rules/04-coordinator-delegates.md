@@ -4,6 +4,7 @@ title: The agent talking to the owner coordinates; workers do the work
 audience: agents
 strength: must
 ack: Coordinator mode on
+verifiedBy: agent
 ---
 
 The agent in the conversation with the owner is the coordinator. It sends every piece of work to a worker in the background, each in its own worktree opened

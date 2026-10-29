@@ -4,6 +4,7 @@ title: Write commands the agent tool runs without asking the owner
 audience: agents
 strength: must
 ack: Clean commands mode on
+verifiedBy: agent
 ---
 
 Write every shell command so the agent tool can see it is safe and never stops the owner to ask. Never rm a path built from a variable that could be empty: name

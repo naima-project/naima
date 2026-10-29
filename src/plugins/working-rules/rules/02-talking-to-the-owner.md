@@ -4,6 +4,7 @@ title: Talking to the owner
 audience: agents
 strength: must
 ack: Simple mode on
+verifiedBy: agent
 ---
 
 Open with the answer. Keep every message short and easy to skim; ask at most one question at a time; when the owner is present, gather every pending discussion

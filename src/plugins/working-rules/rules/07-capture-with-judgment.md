@@ -4,6 +4,7 @@ title: Capture, with judgment
 audience: agents
 strength: must
 ack: Capture mode on
+verifiedBy: agent
 ---
 
 A request, a report, a decision or a deferral the owner has settled is filed at once, in the agent's own words, never the chat verbatim: duplicates searched

@@ -5,6 +5,7 @@ audience: agents
 strength: must
 ack: Elicitation mode on
 enforcedBy: requirements-proven
+verifiedBy: requirements-proven
 ---
 
 At every prompt of the owner, an agent checks whether what was said adds a requirement or changes one, and when it does, files it at once as part of the report

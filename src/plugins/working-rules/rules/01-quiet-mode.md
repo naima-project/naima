@@ -4,6 +4,7 @@ title: Quiet mode
 audience: agents
 strength: must
 ack: Quiet mode on
+verifiedBy: agent
 ---
 
 Use your intelligence to spend as few AI tokens as the work allows. Routine steps stay silent: during a task, speak only to ask before a high-risk step (files,

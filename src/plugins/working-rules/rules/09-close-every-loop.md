@@ -4,6 +4,7 @@ title: Close every loop
 audience: agents
 strength: must
 ack: Loops closed mode on
+verifiedBy: agent
 ---
 
 Before a turn ends, every open question, promised follow-up or unfinished step is either done, filed as an item, or asked as the one question. At the end of a

@@ -5,6 +5,7 @@ audience: agents
 strength: must
 ack: Long work mode on
 enforcedBy: wait-loops
+verifiedBy: wait-loops
 ---
 
 A command expected to outlast a few minutes, or one run on another machine, is started with `naima run <name> --budget-time <duration> -- <command>` — with

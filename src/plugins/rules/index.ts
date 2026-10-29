@@ -102,7 +102,12 @@ export interface ShippedRule {
   ack?: string
   /** The check or gate that enforces it. */
   enforcedBy?: string
+  /** How it is verified: the check or gate that verifies it, or `agent` for a convention an agent verifies by reading its own work; by default its `enforcedBy`. */
+  verifiedBy?: string
 }
+
+/** What `verifiedBy` says of a convention no check verifies: the agent verifies it, by reading its own work against the rule. */
+export const VERIFIED_BY_AGENT = "agent"
 
 const isText = (v: unknown): boolean => typeof v === "string" && !!v.trim()
 
@@ -113,11 +118,12 @@ function shippedError(v: unknown): string | null {
   for (const key of ["name", "title", "text", "why"] as const) if (!isText(r[key])) return `has no ${key}`
   if (!AUDIENCES.includes(r.audience as Audience)) return `has no audience among ${AUDIENCES.join(", ")}`
   if (r.strength !== "must" && r.strength !== "should") return "has no strength, must or should"
+  if (r.verifiedBy !== undefined && !isText(r.verifiedBy)) return `has an empty verifiedBy: a check or gate, or "${VERIFIED_BY_AGENT}"`
   return null
 }
 
 /** The keys of a rule file's front matter: those of a shipped rule but its text and why, and `when`. */
-const RULE_KEYS = ["name", "title", "audience", "strength", "ack", "enforcedBy", "when"] as const
+const RULE_KEYS = ["name", "title", "audience", "strength", "ack", "enforcedBy", "verifiedBy", "when"] as const
 const REQUIRED_KEYS = ["name", "title", "audience", "strength"] as const
 
 /** The rule's name a rule file's name gives: without a leading number and dash, without `.md`, and without a variant after a dot. */
@@ -180,6 +186,7 @@ export function ruleFromFile(file: string, text: string, settings: Readonly<Reco
     why: filled(unwrapped(why.text), settings),
     ...(one("ack") !== undefined ? { ack: one("ack") as string } : {}),
     ...(one("enforcedBy") !== undefined ? { enforcedBy: one("enforcedBy") as string } : {}),
+    ...(one("verifiedBy") !== undefined ? { verifiedBy: one("verifiedBy") as string } : {}),
   }
   const wrong = shippedError(rule)
   if (wrong) throw new Error(`the rule ${wrong}`)
@@ -215,7 +222,7 @@ export function rulesFromFolder(dir: string, settings: Readonly<Record<string, s
 export const rulesPoint: ExtensionPoint<ShippedRule> = {
   id: "rules",
   says:
-    "a rule a plugin ships, active in every project that loads it beside the project's own rules items: one Markdown file per rule in a folder the plugin names (`contributes: { rules: \"rules/\" }`), its front matter `name`, `title`, `audience`, `strength`, and optionally `ack`, `enforcedBy` and `when`, its body the rule and a section `## Why`; a project retires one with the rules plugin's `retire` option",
+    "a rule a plugin ships, active in every project that loads it beside the project's own rules items: one Markdown file per rule in a folder the plugin names (`contributes: { rules: \"rules/\" }`), its front matter `name`, `title`, `audience`, `strength`, and optionally `ack`, `enforcedBy`, `verifiedBy` and `when`, its body the rule and a section `## Why`; a project retires one with the rules plugin's `retire` option",
   noun: "shipped rule",
   fromFolder: rulesFromFolder,
   key: (r) => r.name,
@@ -225,8 +232,11 @@ export const rulesPoint: ExtensionPoint<ShippedRule> = {
     "",
     "**Shipped rules**, active in every project that loads the plugin, listed by `naima rules`",
     ...table(
-      ["Rule", "Title", "For", "Strength", "Enforced by", "Ack"],
-      rs.map((r) => [code(r.name), r.title, r.audience, r.strength, r.enforcedBy ? code(r.enforcedBy) : "", r.ack ? code(r.ack) : ""]),
+      ["Rule", "Title", "For", "Strength", "Enforced by", "Verified by", "Ack"],
+      rs.map((r) => {
+        const verified = r.verifiedBy ?? r.enforcedBy
+        return [code(r.name), r.title, r.audience, r.strength, r.enforcedBy ? code(r.enforcedBy) : "", verified ? code(verified) : "", r.ack ? code(r.ack) : ""]
+      }),
     ),
   ],
 }
@@ -238,6 +248,8 @@ export interface Rule {
   audience: string | null
   strength: string | null
   enforcedBy: string | null
+  /** How it is verified: a check or gate, or `agent`; its enforcedBy when it says nothing else, null when neither is set. */
+  verifiedBy: string | null
   ack: string | null
   text: string
   /** The plugin that ships it; absent for the project's own rules items. */
@@ -253,6 +265,7 @@ const asRule = (item: Item): Rule => ({
   audience: fieldValue(item, read(AUDIENCE)) ?? null,
   strength: fieldValue(item, read(STRENGTH)) ?? null,
   enforcedBy: fieldValue(item, read(ENFORCED_BY)) ?? null,
+  verifiedBy: fieldValue(item, read(ENFORCED_BY)) ?? null,
   ack: fieldValue(item, read(ACK)) ?? null,
   text: ruleText(item),
 })
@@ -268,6 +281,7 @@ const fromShipped = (c: Contribution<ShippedRule>): Rule => ({
   audience: c.value.audience,
   strength: c.value.strength,
   enforcedBy: c.value.enforcedBy ?? null,
+  verifiedBy: c.value.verifiedBy ?? c.value.enforcedBy ?? null,
   ack: c.value.ack ?? null,
   text: `${c.value.text}\n\nWhy: ${c.value.why}`,
   shippedBy: c.plugin,
@@ -302,7 +316,7 @@ function rulesRendered(rules: Rule[], heading: string): Rendered<Rule[]> {
           "",
           `${(r.strength ?? "?").toUpperCase()} · ${r.audience ?? "no audience"} · ${r.title} (${r.item}${r.shippedBy ? `, shipped by ${r.shippedBy}` : ""}${
             r.enforcedBy ? `, enforced by ${r.enforcedBy}` : ""
-          }${r.ack ? `, ack ${JSON.stringify(r.ack)}` : ""})`,
+          }${r.verifiedBy && r.verifiedBy !== r.enforcedBy ? `, verified by ${r.verifiedBy}` : ""}${r.ack ? `, ack ${JSON.stringify(r.ack)}` : ""})`,
           ...r.text.split("\n").map((l) => (l ? `    ${l}` : "")),
         ]),
         ...(ackLine(rs) ? ["", ackLine(rs) as string] : []),
@@ -340,7 +354,7 @@ const command = (retired: ReadonlySet<string>): Command => ({
   usage: "rules [--audience <agents|people|everyone>] [--json] | rules check-ack <file|->",
   options: [
     { name: "--audience", says: "only the rules for that audience, and those for everyone" },
-    { name: "--json", says: "print the rules as JSON: item, title, audience, strength, enforcedBy, ack, text" },
+    { name: "--json", says: "print the rules as JSON: item, title, audience, strength, enforcedBy, verifiedBy, ack, text" },
   ],
   examples: ["rules", "rules --audience agents", "rules --audience people --json", "rules check-ack reply.txt", "rules check-ack -"],
   run(args, ctx) {
@@ -395,7 +409,7 @@ export function staleCopies(ctx: Context, retired: ReadonlySet<string>): { file:
 const check = (retired: ReadonlySet<string>): Check => ({
   name: "rules",
   says:
-    "every active rule has its text and a valid audience, and names as enforcedBy only a check or gate that exists; every name the retire option holds is a rule a loaded plugin ships; and a copy of naima rules kept in a markdown file at the repository's root, such as one an agent tool imports, is noted when it is no longer what naima rules prints",
+    "every active rule has its text and a valid audience, and names as enforcedBy only a check or gate that exists, and as verifiedBy only one or agent; every name the retire option holds is a rule a loaded plugin ships; and a copy of naima rules kept in a markdown file at the repository's root, such as one an agent tool imports, is noted when it is no longer what naima rules prints",
   run(ctx) {
     const known = new Set(["checks", "gates"].flatMap((p) => ctx.registry.contributions(p).flatMap((c) => [c.name, c.id])))
     const ships = shipped(ctx)
@@ -407,6 +421,12 @@ const check = (retired: ReadonlySet<string>): Check => ({
       level: "problem",
       message: `${c.id}: the shipped rule names as enforcedBy "${c.value.enforcedBy}", which is no check or gate`,
     }))
+    const badVerified: Finding[] = ships.filter((c) => c.value.verifiedBy && c.value.verifiedBy !== VERIFIED_BY_AGENT && !known.has(c.value.verifiedBy)).map((
+      c,
+    ) => ({
+      level: "problem",
+      message: `${c.id}: the shipped rule names as verifiedBy "${c.value.verifiedBy}", which is no check or gate, nor "${VERIFIED_BY_AGENT}"`,
+    }))
     const stale: Finding[] = staleCopies(ctx, retired).map(({ file, audience }) => ({
       level: "note",
       message: `${file} is a copy of naima rules that is out of date, so whoever reads it misses rules added or changed since — write it again: naima rules${
@@ -416,6 +436,7 @@ const check = (retired: ReadonlySet<string>): Check => ({
     return [
       ...unknown,
       ...badShipped,
+      ...badVerified,
       ...stale,
       ...active(ctx).flatMap((item): Finding[] => {
         const out: Finding[] = []

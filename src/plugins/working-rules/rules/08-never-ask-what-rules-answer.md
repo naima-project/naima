@@ -4,6 +4,7 @@ title: Never ask what the rules answer
 audience: agents
 strength: must
 ack: Rules answer mode on
+verifiedBy: agent
 ---
 
 Before asking the owner anything, check the project's rules (`naima rules`) and its decisions (`naima decisions <words>`). A question they settle is never put

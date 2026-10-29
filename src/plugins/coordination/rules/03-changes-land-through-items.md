@@ -5,6 +5,7 @@ audience: agents
 strength: must
 ack: Landing mode on
 enforcedBy: landings-are-markers
+verifiedBy: landings-are-markers
 when: trunkGuard=true
 ---
 

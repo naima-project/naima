@@ -3,6 +3,7 @@ name: no-new-status-document
 title: "No new status or summary document: update the authoritative one"
 audience: everyone
 strength: must
+verifiedBy: agent
 ---
 
 Never start a new status page, progress summary or "where things stand" document. Find the authoritative one for that kind of status (`naima guide` prints the

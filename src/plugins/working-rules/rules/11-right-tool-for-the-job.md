@@ -3,6 +3,7 @@ name: right-tool-for-the-job
 title: Use the state-of-the-art method for the job
 audience: everyone
 strength: must
+verifiedBy: agent
 ---
 
 Every action is done with the method made for it: a real parser for a language, a library built for the format, the tool built for the job. An ad-hoc script, a

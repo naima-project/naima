@@ -38,6 +38,7 @@ title: Quiet mode
 audience: agents
 strength: must
 ack: Quiet mode on
+verifiedBy: agent
 ---
 
 Routine steps stay silent: during a task, speak only to ask before a high-risk step.
@@ -49,23 +50,24 @@ The owner's attention is the scarcest thing in the work.
 
 The header holds these keys, and no others:
 
-| Key          | What it holds                                                                                                                         |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`       | The rule's name, lower case with dashes. Required. Its id is `<plugin>/<name>`, which a project's `retire` option can name.           |
-| `title`      | The rule in one line. Required.                                                                                                       |
-| `audience`   | `agents`, `people` or `everyone`. Required.                                                                                           |
-| `strength`   | `must` or `should`. Required.                                                                                                         |
-| `ack`        | The phrase an agent gives back to acknowledge the rule, when it asks for one.                                                         |
-| `enforcedBy` | The check or gate that enforces it, when one does. `naima check` reports a name that is neither.                                      |
-| `when`       | A condition on the plugin's settings, `<setting>=<value>`, or a list of them that must all hold. Without it, the file always applies. |
+| Key          | What it holds                                                                                                                                                                                                                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`       | The rule's name, lower case with dashes. Required. Its id is `<plugin>/<name>`, which a project's `retire` option can name.                                                                                                                                                                      |
+| `title`      | The rule in one line. Required.                                                                                                                                                                                                                                                                  |
+| `audience`   | `agents`, `people` or `everyone`. Required.                                                                                                                                                                                                                                                      |
+| `strength`   | `must` or `should`. Required.                                                                                                                                                                                                                                                                    |
+| `ack`        | The phrase an agent gives back to acknowledge the rule, when it asks for one.                                                                                                                                                                                                                    |
+| `enforcedBy` | The check or gate that enforces it, when one does. `naima check` reports a name that is neither.                                                                                                                                                                                                 |
+| `verifiedBy` | How the rule is verified: the check or gate that verifies it, or `agent` for a convention the agent verifies by reading its own work against the rule. Left out, it is the `enforcedBy` check. `naima rules` shows it when it differs from that check, and `naima rules --json` always gives it. |
+| `when`       | A condition on the plugin's settings, `<setting>=<value>`, or a list of them that must all hold. Without it, the file always applies.                                                                                                                                                            |
 
 The header is a small, strict part of YAML, read by Naima itself with no package: one key per line, `key: value`, or `key:` followed by lines that start with
 `-` for a list. A value is plain text, or a string in double quotes (as in JSON) or single quotes. Put a value in quotes when it contains a colon followed by a
 space or `#`, or starts with a quote, a dash or another YAML indicator. Anything else YAML allows, such as a nested map, a list written in brackets or a
 multi-line value, is refused, and so is an unknown key: the project does not load, and the message names the file, the line and what is wrong.
 
-The body is the rule, then exactly one section `## Why` with its reason. A paragraph may be wrapped over several lines, as a formatter wraps it: its
-lines are joined by a space, as Markdown reads them, and `naima rules` prints each paragraph on one line.
+The body is the rule, then exactly one section `## Why` with its reason. A paragraph may be wrapped over several lines, as a formatter wraps it: its lines are
+joined by a space, as Markdown reads them, and `naima rules` prints each paragraph on one line.
 
 The files are read in the order of their names, and a rule is listed in that order, so a number in front sets it: `01-quiet-mode.md`. Without the number and
 without `.md`, the file's name is the rule's name, which the header's `name` must match.

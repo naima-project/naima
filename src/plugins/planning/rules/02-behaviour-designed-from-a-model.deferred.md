@@ -5,6 +5,7 @@ audience: everyone
 strength: should
 ack: Model first mode on
 enforcedBy: model-first
+verifiedBy: model-first
 when: modelFirst=deferred
 ---
 

@@ -3,6 +3,7 @@ name: workers-post-their-step
 title: Workers post their current step; the coordinator reads them and reports a silent worker
 audience: agents
 strength: must
+verifiedBy: agent
 ---
 
 A worker posts what it is doing now with `naima claim --step "<what>"` at every change of step, and at least every few minutes during long work, which it runs

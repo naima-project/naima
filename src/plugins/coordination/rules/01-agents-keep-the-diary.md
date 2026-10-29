@@ -5,6 +5,7 @@ audience: agents
 strength: must
 ack: Diary mode on
 enforcedBy: diary-entries
+verifiedBy: diary-entries
 ---
 
 An agent adds a diary entry on its own, without being asked (`naima event <today> "<what, and why>" --kind diary`), when a decision is taken with the owner in
