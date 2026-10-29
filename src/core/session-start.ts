@@ -90,8 +90,9 @@ export function startSessions(
 ): { said: string[]; wrote: string[]; left: string[] } {
   // The launchers first: the pointer line and every hook run Naima through them.
   const launchers = writeLaunchers(root, tracker)
+  // They are in the tracker folder, which the update's commit adds whole: not listed among the files written outside it.
   const said: string[] = [...launchers.said]
-  const wrote: string[] = [...launchers.wrote]
+  const wrote: string[] = []
   const left: string[] = []
   const p = agentPointer(root, tracker, config.entryFiles)
   if (!p.current && !mayWrite(join(root, p.file))) left.push(pointerPart(p.file))
