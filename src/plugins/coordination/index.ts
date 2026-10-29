@@ -81,7 +81,7 @@ import { changeNotesCheck, changesCommand } from "./changes.ts"
 import { land, landingReportsPoint, landingsAreMarkers, landingsPaired } from "./land.ts"
 import { guardCheckCommand, guardCommand, guardedFrom, guardOffSection, guardSetup, readTrunkGuard, switchesGuard } from "./guard.ts"
 import { diaryCheck, diaryCommand, eventCommand, EVENTS, frontLines, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
-import { readyLines, readyNow, readySection, readyWorkWaiting } from "./ready.ts"
+import { readyLines, readyNow, readySection, readyWorkWaiting, workerLimitSection } from "./ready.ts"
 
 export { type NextStep, type StaleData, type StaleEntry } from "./stale.ts"
 export { type Timeline, type TimelineEvent, timelineOf } from "./timeline.ts"
@@ -1125,7 +1125,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       {
         name: "maxWorkers",
         says:
-          "how many worker worktrees (folders of the worktrees directory, on a branch the scheme applies to) may be open at once: naima open refuses another, naming the open ones; a positive whole number",
+          "how many worker worktrees (folders of the worktrees directory, on a branch the scheme applies to) may be open at once: naima open refuses another, naming the open ones, and naima hello states it in one line, saying the owner can ask to change it; a positive whole number",
         default: String(MAX_WORKERS),
       },
       {
@@ -1189,7 +1189,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
     // The diary rule is listed by naima rules when the rules plugin is loaded; without it, the check still notes.
     optional: ["ui-views", "rules"],
     points: [landingReportsPoint],
-    summary: [whereWeWere, inHand(silentAfter), readySection(policy), staleSection(stale), guardOffSection(guarded)],
+    summary: [whereWeWere, inHand(silentAfter), workerLimitSection(policy), readySection(policy), staleSection(stale), guardOffSection(guarded)],
     setup: [guardSetup(guarded)],
     hooks: [noClosingOwnWork],
   }
