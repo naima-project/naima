@@ -114,8 +114,8 @@ export function ownerPrivate(trackerRoot: string): string[] {
 /**
  * Ask GitHub again about every remote whose remembered visibility is older than a day (or every one, with
  * `force`), and remember the answers with their time: what the tick calls, at most once a day. A probe with no
- * answer keeps the visibility last known, and its time is still recorded, so an offline project is not asked
- * on every command. Returns the remotes as seen.
+ * answer keeps the visibility last known and records nothing, so a run that cannot reach GitHub neither hides
+ * the real answer nor renews an old one; the next run that can reach it asks. Returns the remotes as seen.
  */
 export async function refreshVisibility(w: Where, opts: { force?: boolean } = {}): Promise<Seen[]> {
   const now = w.now()
@@ -126,14 +126,21 @@ export async function refreshVisibility(w: Where, opts: { force?: boolean } = {}
       continue
     }
     const known = cached(w.trackerGit, r.key)
-    if (known && !opts.force && now.getTime() - known.at.getTime() < REFRESH_MS && known.at.getTime() <= now.getTime()) {
+    // An "unknown" remembered by an earlier version is not an answer: ask again.
+    const answered = known && known.visibility !== "unknown"
+    if (answered && !opts.force && now.getTime() - known.at.getTime() < REFRESH_MS && known.at.getTime() <= now.getTime()) {
       out.push({ ...r, visibility: known.visibility, from: "cache" })
       continue
     }
     const asked = githubRepo(r.url) ? await (probeOverride ?? probeVisibility)(r.url) : "unknown"
-    const visibility = asked === "unknown" && known && known.visibility !== "unknown" ? known.visibility : asked
-    remember(w.trackerGit, r.key, visibility, now)
-    out.push({ ...r, visibility, from: asked === visibility ? "probe" : "cache" })
+    if (asked === "unknown") {
+      // No answer — offline, or a run without network permission, such as the launcher's helper — is
+      // never remembered: it would hide the real answer for a day, or renew a stale one without asking.
+      out.push({ ...r, visibility: known?.visibility ?? "unknown", from: known ? "cache" : "probe" })
+      continue
+    }
+    remember(w.trackerGit, r.key, asked, now)
+    out.push({ ...r, visibility: asked, from: "probe" })
   }
   return out
 }
