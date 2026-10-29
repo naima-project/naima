@@ -8,6 +8,7 @@ import adopt from "./plugins/adopt/index.ts"
 import announce from "./plugins/announce/index.ts"
 import backup from "./plugins/backup/index.ts"
 import betaMarkers from "./plugins/beta-markers/index.ts"
+import discussions from "./plugins/discussions/index.ts"
 import docs from "./plugins/docs/index.ts"
 import epics from "./plugins/epics/index.ts"
 import coordination from "./plugins/coordination/index.ts"
@@ -40,6 +41,7 @@ export const firstParty: readonly FirstParty[] = [
   { name: "triage", factory: triage },
   { name: "gates", factory: gates },
   { name: "epics", factory: epics },
+  { name: "discussions", factory: discussions },
   { name: "planning", factory: planning },
   { name: "knowledge", factory: knowledge },
   { name: "roles", factory: roles },
