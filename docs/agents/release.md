@@ -53,7 +53,11 @@ evidence.
    and test suite to be current: run them first with `naima verify --all` and `naima metrics run --record`, which reuse every result whose inputs haven't
    changed ([a release gate](../guide/read-the-board.md#a-release-gate-waits-for-the-full-suite)).
 2. **Private draft** (stage `private draft`). The artifact is built and put somewhere only the release role can see it, such as a draft release or an unlisted
-   build, and not yet in the public location.
+   build, and not yet in the public location. For Naima, a stance or naima-codegen, the artifact is the release's two assets: once the tag `v<version>` is
+   made, `sh bin/release-assets.sh <version>` (in the product, `naima-tracker/naima/bin/` in a project) writes `<name>-<version>.tar.gz`, the files of
+   the tag, and `<name>-<version>.tar.gz.sha256`, and prints the command that uploads them: `gh release upload v<version> <both files>`, on a draft release.
+   Installs and updates download that archive and refuse a release without it, so a release without its assets cannot be installed
+   ([Naima updates to releases](../guide/update-naima.md#naima-updates-to-releases)).
 3. **Test the artifact, not the code** (stage `test the artifact`). Install or run the thing that was built rather than the source it came from, because a build
    step can quietly drop a file the tests never touched. Write down the gesture as you would for any [proof](../guide/glossary.md#proof): what was run, on what,
    and what appeared.
@@ -63,6 +67,7 @@ evidence.
    itself, the tag goes on the product repository (`naima-project/naima`), never on the workshop that develops it. This step can't be undone, so confirm with
    the owner first if the decision in step 2 of proposing didn't already cover it.
 6. **Post-release checks** (stage `post-release checks`). Fetch or install the public release from where a stranger would get it, not from the build directory.
+   For Naima, run the installer in a scratch git repository: it downloads the release's archive, checks its checksum, and runs `naima check`.
 7. **Announce only what is true** (stage `announce`). The changelog goes out once, after step 6 has passed, and never earlier on the assumption that it will. It
    goes in the project's `CHANGELOG.md`, newest release first, and in the release item's notes; the tag's message may carry it too. The record, `CHANGELOG.md`
    and the item's `status=released`, is made in the release item's worktree and landed with `naima land`, never committed straight on the trunk. Hand off to the

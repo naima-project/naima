@@ -26,7 +26,7 @@ import { FORMAT, formatRefusal, isFormat, migrate, MIGRATIONS, type Step } from 
 import { formatsFor, type OpenOptions, openProject, owed } from "./project.ts"
 import { bool, pairs, parse, str } from "./args.ts"
 import { gitOrNull, gitReason, LAND_IT, nativePath, runGit, runGitAsync, toplevel, trunk } from "./git.ts"
-import { remoteVisibility, type Visibility } from "./visibility.ts"
+import { githubRepo, remoteVisibility, type Visibility } from "./visibility.ts"
 import {
   clearExposed,
   exposureOf,
@@ -69,14 +69,29 @@ import {
   ignoreProgram,
   isClone,
   OLD_LAYOUT,
+  releaseDir,
   remoteHead,
   short,
   SOURCE_CHANGED,
   sourceMoved,
   type Target,
+  verifiedArchive,
   verifySigned,
   withoutCredentials,
 } from "./program.ts"
+import {
+  bareVersion,
+  CHECKSUM_MISMATCH,
+  clearDownloads,
+  fetchRelease,
+  isVersion,
+  listReleases,
+  planUpdate,
+  type Release,
+  type ReleaseRepo,
+  releaseRepo,
+  RELEASES_UNREACHABLE,
+} from "./releases.ts"
 import {
   backwardFormats,
   banner,
@@ -128,7 +143,18 @@ import {
 } from "./tick.ts"
 import { startSession } from "./origin.ts"
 import type { TickJob } from "./types.ts"
-import { STANCE_ADOPT, STANCE_KIND, STANCE_MODULE, STANCE_NAME, stanceHead, stancePlugin, type StanceRegistry, stanceRegistry } from "./stances.ts"
+import {
+  STANCE_ADOPT,
+  STANCE_KIND,
+  STANCE_MODULE,
+  STANCE_NAME,
+  stanceHead,
+  stancePlugin,
+  type StanceRegistry,
+  stanceRegistry,
+  type StanceRelease,
+  stanceRelease,
+} from "./stances.ts"
 
 export interface CliOptions extends OpenOptions {
   cwd: string
@@ -218,7 +244,73 @@ function targetOf(place: Place, lock: Lock, opts: CliOptions): Target {
     commit: lock.commit,
     ...(lock.verify ? { verify: lock.verify } : {}),
     ...(repo ? { seeds: [repo] } : {}),
+    ...(lock.version && lock.sha256 ? { release: { version: lock.version, sha256: lock.sha256 } } : {}),
   }
+}
+
+/** The lock, said: its release when it names one, else its commit. */
+const lockLabel = (lock: Pick<Lock, "commit" | "version">): string => (lock.version ? `version ${lock.version}` : short(lock.commit))
+
+/** The releases the source publishes, read from the API that answers for it; null when it publishes none there. */
+async function releasesOfSource(source: string, timeoutMs?: number): Promise<{ repo: ReleaseRepo; releases: Release[] } | null> {
+  const repo = releaseRepo(source)
+  if (!repo) return null
+  const releases = await listReleases(repo, timeoutMs)
+  return releases.length ? { repo, releases } : null
+}
+
+/** The commit a tag of the source names, read from the source; null when it cannot be read. */
+function tagCommit(t: Target, tag: string): string | null {
+  const r = runGit(t.root, ["ls-remote", "--tags", "--", t.source, tag, `${tag}^{}`])
+  if (!r.ok) return null
+  const lines = r.out.split("\n").map((l) => l.split(/\s+/))
+  const peeled = lines.find((l) => l[1]?.endsWith("^{}")) ?? lines[0]
+  const commit = peeled?.[0] ?? ""
+  return /^[0-9a-f]{40}$/.test(commit) ? commit : null
+}
+
+/** Whether `a` is an ancestor of `b` in the program, both there. */
+const isAncestor = (program: string, a: string, b: string): boolean => runGit(program, ["merge-base", "--is-ancestor", a, b]).ok
+
+/** What the source's releases say against the lock: whether a newer one exists, and whether the lock still names a commit of main. */
+interface News {
+  from: string
+  to: string
+  version: string
+  current: boolean
+  /** The commit of the release, when the source says it. */
+  commit: string | null
+  /** The lock names a commit of main, and the next update moves it to a release. */
+  migrating: boolean
+  /** The lock is a commit of main past the newest release. */
+  ahead: boolean
+}
+
+/** The news of the source's releases for this lock; null when the source publishes none, and its main is what is followed. */
+async function releaseNews(t: Target, lock: Lock, timeoutMs?: number): Promise<News | null> {
+  const found = await releasesOfSource(lock.source, timeoutMs)
+  if (!found) return null
+  const plan = planUpdate(lock, found.releases)
+  if (plan.kind === "main" || plan.kind === "none" || plan.kind === "missing") return null
+  const version = plan.release.version
+  const base = { from: lockLabel(lock), to: `version ${version}`, version }
+  if (plan.kind === "current") return { ...base, current: true, commit: lock.commit, migrating: false, ahead: false }
+  const commit = tagCommit(t, plan.release.tag)
+  const ahead = !lock.version && commit !== null && commit !== lock.commit && isAncestor(t.program, commit, lock.commit)
+  return { ...base, current: ahead || commit === lock.commit, commit, migrating: !ahead, ahead }
+}
+
+/** The lines that say the news. */
+function newsLines(n: News): string[] {
+  if (n.ahead) return [`Naima is at ${n.from}, a commit of the source's main past its newest release, ${n.to}: the next release after it is the next update.`]
+  if (n.current && !n.migrating) return [`Naima is current: ${n.to}, the newest release.`]
+  const out = n.current ? [`Naima is at ${n.to}, the newest release.`] : [`A newer Naima is available: ${n.from} → ${n.to}.`]
+  if (n.migrating) {
+    out.push(
+      `Naima now updates only to releases: naima update moves this project's lock from a commit of the source's main to ${n.to}, with its archive's checksum, once.`,
+    )
+  }
+  return out
 }
 
 export { withoutCredentials }
@@ -300,6 +392,23 @@ function existing(path: string): string {
   return dir
 }
 
+/** The marker the installer leaves in the program's git directory when it installed a release: what the lock records of it. */
+export const RELEASE_MARKER = "naima-release.json"
+
+/** The release the installer unpacked into the program, when it is the commit that runs: its version and checksum. */
+function installedRelease(repo: string, commit: string): { version: string; sha256: string } | Record<never, never> {
+  try {
+    const m = JSON.parse(readFileSync(join(repo, ".git", RELEASE_MARKER), "utf8")) as Record<string, unknown>
+    const { version, sha256 } = m
+    if (m["commit"] === commit && typeof version === "string" && isVersion(version) && typeof sha256 === "string" && /^[0-9a-f]{64}$/.test(sha256)) {
+      return { version: bareVersion(version), sha256 }
+    }
+  } catch {
+    // no marker: a clone of a branch, locked by its commit
+  }
+  return {}
+}
+
 /**
  * Make `data` a Naima project's data, locked to the running Naima: its
  * `naima.json`, and the tracker folder's README.md and .gitignore. What
@@ -345,7 +454,7 @@ function createData(data: string, opts: CliOptions): { root: string; tracker: st
   const readme = join(tracker, "README.md")
   if (!existsSync(readme)) writeFileSync(readme, trackerReadme(parent, source))
   const formats = formatsFor(opts.firstParty.map((p) => p.factory({}, apiFor(p.name, { rename: {} }))))
-  writeRaw(data, { format: FORMAT, ...(Object.keys(formats).length ? { formats } : {}), source, commit: me.commit })
+  writeRaw(data, { format: FORMAT, ...(Object.keys(formats).length ? { formats } : {}), source, commit: me.commit, ...installedRelease(me.repo, me.commit) })
   const program = join(tracker, PROGRAM_DIR)
   ignoreProgram({ tracker, program })
   // A source on this machine's disk goes into the repository with the lock: say so, since it names a private path.
@@ -536,9 +645,11 @@ async function init(args: string[], opts: CliOptions, data: string, io: IO): Pro
   const place: Place = { root: made.root, data: real(data), program: made.program }
   if (answeredInside) await recordPrivate(made.root, place.data, io)
   // Launched from a Naima elsewhere, init clones the program beside the data; run directly, as a test, the first launched run does.
-  const cloned = opts.launched && real(opts.programRoot) !== real(made.program)
-    ? (align({ ...targetOf(place, parseLock(readRaw(place.data)), opts) }), `, and cloned ${PROGRAM_DIR}/`)
-    : ""
+  let cloned = ""
+  if (opts.launched && real(opts.programRoot) !== real(made.program)) {
+    await align({ ...targetOf(place, parseLock(readRaw(place.data)), opts) })
+    cloned = `, and cloned ${PROGRAM_DIR}/`
+  }
   io.out(made.said + cloned)
   io.out(layoutSentence(sibling))
   if (sibling) {
@@ -552,8 +663,24 @@ async function init(args: string[], opts: CliOptions, data: string, io: IO): Pro
   excludeHost(made.root, made.program, write, io)
   sayLeft(startAgents(made.root, made.tracker, parseConfig(readRaw(place.data)), hooks, io).left, io)
   await setUp(place, opts, io)
+  const topic = await topicOffer(made.root, opts)
+  if (topic) io.out(topic)
   io.out(await nextStep(place, opts, io))
   return 0
+}
+
+/** The topic a public project's repository may carry, so that people can find the projects that use Naima. */
+export const NAIMA_TOPIC = "naima"
+
+/**
+ * The offer init makes for a public repository on GitHub: the agent asks the owner whether to add the topic, and
+ * adds it only after their yes. Never for a private one, nor one whose visibility cannot be told.
+ */
+async function topicOffer(root: string, opts: CliOptions): Promise<string | null> {
+  const seen = await remoteVisibility(root, opts.visibility)
+  const repo = seen.visibility === "public" && seen.url ? githubRepo(seen.url) : null
+  if (!repo) return null
+  return `${repo} is public on GitHub: ask the owner whether to add the topic ${NAIMA_TOPIC} to it, so that people can find the projects that use Naima — after their yes: gh repo edit ${repo} --add-topic ${NAIMA_TOPIC}`
 }
 
 /** What `naima update` says it migrated: the core's format, then each plugin's own. */
@@ -654,20 +781,23 @@ async function finish(opts: CliOptions, place: Place, lock: Lock, io: IO, pendin
   for (const p of now.problems) io.out(`  ✗ ${p}`)
 }
 
-/** The commit `naima.json` named before the current lock, in its git history (the uncommitted file first), and the commit that recorded the current one. */
-function previousLock(place: Place, current: string): string {
+/** The lock `naima.json` named before the current one, in its git history (the uncommitted file first): its commit, and its release when it named one. */
+function previousLock(place: Place, current: string): { commit: string; release?: { version: string; sha256: string } } {
   const repo = trackerGitOf(place.root, place.data)
   const rel = posixRelative(repo, join(place.data, DATA_FILE))
   const log = runGit(repo, ["log", "--format=%H", "--", rel])
   for (const c of log.ok ? log.out.split("\n").filter((l) => l) : []) {
     const text = runGit(repo, ["show", `${c}:${rel}`])
-    let commit: unknown
+    let then: { commit?: unknown; version?: unknown; sha256?: unknown }
     try {
-      commit = (JSON.parse(text.out) as { commit?: unknown }).commit
+      then = JSON.parse(text.out) as typeof then
     } catch {
       continue
     }
-    if (typeof commit === "string" && commit !== current) return commit
+    const { commit, version, sha256 } = then
+    if (typeof commit === "string" && commit !== current) {
+      return { commit, ...(typeof version === "string" && typeof sha256 === "string" ? { release: { version, sha256 } } : {}) }
+    }
   }
   throw new Error(`no earlier lock in the history of ${rel} — name the commit: naima update --to <commit>`)
 }
@@ -707,9 +837,18 @@ function resolveCommit(t: Target, commit: string): string {
  * older than the data's formats, drop `updates` when `to` does not know it, align the program, record the
  * lock. Forward across a format, the new Naima finishes (RELAUNCH); otherwise one change to commit.
  */
-async function moveLock(opts: CliOptions, place: Place, lock: Lock, raw: Record<string, unknown>, io: IO, to: string): Promise<number> {
-  const t = targetOf(place, lock, opts)
-  const onMain = runGit(t.program, ["merge-base", "--is-ancestor", to, "refs/remotes/origin/main"]).ok ||
+async function moveLock(
+  opts: CliOptions,
+  place: Place,
+  lock: Lock,
+  raw: Record<string, unknown>,
+  io: IO,
+  to: string,
+  release?: { version: string; sha256: string },
+): Promise<number> {
+  const { release: _was, ...t } = targetOf(place, lock, opts)
+  // A release's commit was checked against its archive; any other must be of the source's main.
+  const onMain = release !== undefined || runGit(t.program, ["merge-base", "--is-ancestor", to, "refs/remotes/origin/main"]).ok ||
     runGit(t.program, ["merge-base", "--is-ancestor", to, lock.commit]).ok
   if (!onMain) throw new Error(`${short(to)} is not a commit of the source's main: the lock names only those`)
   verifySigned(t.program, { ...t, commit: to })
@@ -727,7 +866,8 @@ async function moveLock(opts: CliOptions, place: Place, lock: Lock, raw: Record<
     )
   }
   if (change.unknown && change.back) throw new Error(`cannot tell which data format ${short(to)} reads: ${change.unknown}`)
-  let next: Record<string, unknown> = { ...change.rewritten, commit: to }
+  const { version: _v, sha256: _s, ...rest } = change.rewritten
+  let next: Record<string, unknown> = { ...rest, commit: to, ...(release ?? {}) }
   const notes: string[] = []
   if (change.config) {
     const dropped = OPTIONAL_KEYS.filter((k) => k in next)
@@ -740,24 +880,138 @@ async function moveLock(opts: CliOptions, place: Place, lock: Lock, raw: Record<
   }
   for (const line of describe(change)) io.out(line)
   // Move the program first, and only then the lock: a refusal leaves both where they were.
-  align({ ...t, commit: to })
+  await align({ ...t, commit: to, ...(release ? { release } : {}) })
   writeRaw(place.data, next)
-  io.out(`locked ${short(lock.commit)} → ${short(to)}`)
+  const toLabel = release ? `version ${release.version} (${short(to)})` : short(to)
+  io.out(`locked ${lockLabel(lock)} → ${toLabel}`)
   for (const r of change.rewrites) io.out(r)
   for (const n of notes) io.out(n)
   // Forward, the new Naima finishes: it knows the new format, and its own check is the one that ends the update.
   if (!change.back || change.formats.some((f) => f.to > f.from)) return RELAUNCH
   const verb = change.back ? "Roll Naima back to" : "Update Naima to"
-  io.out(`${short(to)} is the lock — commit it as one change ${LAND_IT}: git add ${tracker} && git commit -m "${verb} ${short(to)}"`)
+  io.out(
+    `${toLabel} is the lock — commit it as one change ${LAND_IT}: git add ${tracker} && git commit -m "${verb} ${
+      release ? `version ${release.version}` : short(to)
+    }"`,
+  )
   return 0
 }
 
+/** What moving to a release came to: follow main instead (no releases), stay where the lock is, or moved. */
+type ReleaseStep = { kind: "main" } | { kind: "stay"; failed: boolean } | { kind: "moved"; code: number }
+
+/**
+ * Move the lock to a release: the named version, else the newest (pre-releases when asked, or when the project runs
+ * one). Its archive is downloaded from the release, checked against its checksum, checked to be made from the
+ * commit the tag names, and that commit's tree compared with the archive's files; only then does the lock move. A
+ * source that publishes no releases is followed by its main; one that cannot be reached leaves the lock as it is.
+ */
+async function toRelease(
+  opts: CliOptions,
+  place: Place,
+  lock: Lock,
+  raw: Record<string, unknown>,
+  io: IO,
+  ask: { version?: string | undefined; pre: boolean },
+): Promise<ReleaseStep> {
+  const t = targetOf(place, lock, opts)
+  const stays = (why: string): ReleaseStep => {
+    io.out(`Naima stays at ${lockLabel(lock)}: ${why}`)
+    return { kind: "stay", failed: true }
+  }
+  let found
+  try {
+    found = await releasesOfSource(lock.source)
+  } catch (e) {
+    return stays(message(e))
+  }
+  if (!found) {
+    if (ask.version !== undefined) throw new Error(`${lock.source} publishes no releases: name a commit with --to <commit>, or follow its main with --main`)
+    return { kind: "main" }
+  }
+  const plan = planUpdate(lock, found.releases, ask)
+  if (plan.kind === "main") return { kind: "main" }
+  if (plan.kind === "missing") {
+    const some = found.releases.slice(0, 5).map((r) => r.version).join(", ")
+    throw new Error(`${plan.version} is not a release of ${lock.source}: its newest are ${some}`)
+  }
+  if (plan.kind === "none") {
+    io.out(`${lock.source} has published only pre-releases so far: naima update --pre installs the newest of them`)
+    return { kind: "stay", failed: false }
+  }
+  if (plan.kind === "current") {
+    io.out(`Naima is at version ${plan.release.version}, the ${ask.version !== undefined ? "version named" : "newest release"}`)
+    return { kind: "stay", failed: false }
+  }
+  const dir = releaseDir(t.tracker)
+  let got
+  try {
+    got = await fetchRelease(plan.release, found.repo.repo, dir)
+  } catch (e) {
+    clearDownloads(dir)
+    if (e instanceof NaimaError && e.code === RELEASES_UNREACHABLE) return stays(message(e))
+    throw e
+  }
+  const commit = got.commit
+  try {
+    if (!commit) {
+      throw new NaimaError(
+        `${got.archive.split(/[\\/]/).pop()} records no commit, so it was not made by git archive from the release's tag — refused`,
+        CHECKSUM_MISMATCH,
+      )
+    }
+    const archive = verifiedArchive(t.program, got.archive, commit, dir)
+    fetchCommit(t, commit)
+    archive.check()
+  } catch (e) {
+    if (e instanceof NaimaError && e.code === COMMIT_UNAVAILABLE) return stays(message(e))
+    throw e
+  } finally {
+    clearDownloads(dir)
+  }
+  const release = { version: plan.release.version, sha256: got.sha256 }
+  if (!lock.version && ask.version === undefined && commit !== lock.commit && isAncestor(t.program, commit, lock.commit)) {
+    io.out(
+      `Naima stays at ${
+        short(lock.commit)
+      }, a commit of the source's main past its newest release, version ${release.version}: the next release after it is the next update`,
+    )
+    return { kind: "stay", failed: false }
+  }
+  if (plan.migrating) {
+    io.out(
+      `Naima now updates only to releases: this project's lock named commit ${
+        short(lock.commit)
+      } of the source's main; it names version ${release.version} from now on, with its archive's checksum`,
+    )
+  }
+  if (commit === lock.commit) {
+    writeRaw(place.data, { ...raw, ...release })
+    io.out(`locked version ${release.version}, the commit already locked (${short(commit)})`)
+    return { kind: "stay", failed: false }
+  }
+  return { kind: "moved", code: await moveLock(opts, place, lock, raw, io, commit, release) }
+}
+
 async function update(args: string[], opts: CliOptions, place: Place, lock: Lock, raw: Record<string, unknown>, io: IO): Promise<number> {
-  const p = parse(args, { check: { type: "boolean" }, "accept-source": { type: "boolean" }, to: { type: "string" }, mode: { type: "string" } })
+  const p = parse(args, {
+    check: { type: "boolean" },
+    "accept-source": { type: "boolean" },
+    to: { type: "string" },
+    mode: { type: "string" },
+    main: { type: "boolean" },
+    pre: { type: "boolean" },
+  })
   const check = bool(p, "check")
   const to = str(p, "to")
   const mode = str(p, "mode")
-  if ([check, bool(p, "accept-source"), to !== undefined, mode !== undefined].filter((x) => x).length > 1 || p.positionals.length) {
+  const main = bool(p, "main")
+  const pre = bool(p, "pre")
+  const accept = bool(p, "accept-source")
+  const exclusive = [check, accept, to !== undefined, mode !== undefined].filter((x) => x).length > 1
+  const mainWith = main && (accept || to !== undefined || mode !== undefined)
+  const preWith = pre && (main || accept || mode !== undefined)
+  if (exclusive || mainWith || preWith || p.positionals.length) {
     throw new Error(usage("update"))
   }
   if (bool(p, "accept-source")) {
@@ -786,12 +1040,30 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
     return 0
   }
   const t = targetOf(place, lock, opts)
+  const named = to !== undefined && isVersion(to) ? bareVersion(to) : undefined
+  // A commit named, or main asked for: the source's main, as for a source that publishes no releases.
+  const byCommit = main || (to !== undefined && named === undefined)
   if (check) {
+    if (!byCommit) {
+      const news = await releaseNews(t, lock)
+      if (news) {
+        for (const line of newsLines(news)) io.out(line)
+        if (!news.current && news.commit) {
+          try {
+            fetchHead(t)
+            for (const line of await said(opts, place, t, raw, news.commit)) io.out(line)
+          } catch (e) {
+            io.out(`what it changes is not known: ${message(e)}`)
+          }
+        }
+        return news.current && !news.migrating ? 0 : 1
+      }
+    }
     const head = remoteHead(t)
     if (head.movedTo) io.out(sourceMoved(lock.source, head.movedTo))
     if (head.commit === lock.commit) io.out(`current: the source's ${head.branch} is the locked commit ${short(head.commit)}`)
     else {
-      io.out(`the source's ${head.branch} moved: ${short(lock.commit)} → ${short(head.commit)} — naima update`)
+      io.out(`the source's ${head.branch} moved: ${short(lock.commit)} → ${short(head.commit)} — naima update${main ? " --main" : ""}`)
       try {
         fetchHead(t)
         for (const line of await said(opts, place, t, raw, head.commit)) io.out(line)
@@ -803,12 +1075,24 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
   }
   const carried = carryRefusal(raw, posixRelative(place.root, place.program))
   if (carried) throw new Error(carried)
-  const head = to !== undefined ? undefined : fetchHead(t)
-  if (head?.movedTo) io.out(sourceMoved(lock.source, head.movedTo))
-  const target = head ? head.commit : resolveCommit(t, to as string)
-  if (target !== lock.commit) return await moveLock(opts, place, lock, raw, io, target)
-  const from = raw["format"]
-  const { all } = await owed(raw, place, opts)
+  let failed = false
+  let followMain = byCommit
+  if (!byCommit) {
+    const step = await toRelease(opts, place, lock, raw, io, { version: named, pre })
+    if (step.kind === "moved") return step.code
+    if (step.kind === "stay") failed = step.failed
+    followMain = step.kind === "main"
+  }
+  let target = lock.commit
+  if (followMain) {
+    const head = to !== undefined ? undefined : fetchHead(t)
+    if (head?.movedTo) io.out(sourceMoved(lock.source, head.movedTo))
+    target = head ? head.commit : resolveCommit(t, to as string)
+    if (target !== lock.commit || (main && lock.version)) return await moveLock(opts, place, lock, raw, io, target)
+  }
+  const now = readRaw(place.data)
+  const from = now["format"]
+  const { all } = await owed(now, place, opts)
   const steps = migrate(place.data, MIGRATIONS, all.slice(1))
   for (const line of migrated(steps, from, all.slice(1))) io.out(line)
   // A mechanical fix, said: what makes agents run naima hello at every session start, where it is missing.
@@ -825,12 +1109,13 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
     io.out(`Naima ${unfinished ? "moved to" : "is at"} ${short(target)}; run naima update once more to finish: ${left.join(" and ")}`)
     return 0
   }
+  const locked = parseLock(readRaw(place.data))
   io.out(
-    `${short(target)} is the lock — commit it as one change ${LAND_IT}: git add ${[tracker, ...wrote].join(" ")} && git commit -m "Update Naima to ${
-      short(target)
+    `${lockLabel(locked)} is the lock — commit it as one change ${LAND_IT}: git add ${[tracker, ...wrote].join(" ")} && git commit -m "Update Naima to ${
+      lockLabel(locked)
     }"`,
   )
-  return 0
+  return failed ? EXIT.FAILED : 0
 }
 
 /** What each update policy makes a session start do. */
@@ -846,7 +1131,8 @@ async function rollback(args: string[], opts: CliOptions, place: Place, lock: Lo
   const carried = carryRefusal(raw, posixRelative(place.root, place.program))
   if (carried) throw new Error(carried)
   const t = targetOf(place, lock, opts)
-  return await moveLock(opts, place, lock, raw, io, resolveCommit(t, previousLock(place, lock.commit)))
+  const previous = previousLock(place, lock.commit)
+  return await moveLock(opts, place, lock, raw, io, resolveCommit(t, previous.commit), previous.release)
 }
 
 /** The update check's schedule: once a day, a short network call, retried an hour after a failure, urgent after a week of them. */
@@ -865,6 +1151,19 @@ function checked(lock: Lock, head: string): JobOutcome {
   return { ok: true, notices: [notice] }
 }
 
+/** What a check of the source's releases found, as the tick records it: a newer release is a message for the owner, said once per version. */
+function checkedRelease(news: News): JobOutcome {
+  if (news.current && !news.migrating) return { ok: true, notices: [] }
+  const notice: Notice = {
+    id: messageId("update-available", news.version),
+    level: "info",
+    text: `${
+      news.current ? `Naima is at ${news.to}, and its lock still names a commit of the source's main` : `A newer Naima is available: ${news.from} → ${news.to}`
+    }. Ask the owner whether to update: naima update --check says what it changes, and nothing is applied without the owner's yes.`,
+  }
+  return { ok: true, notices: [notice] }
+}
+
 /** The update check as a job of the tick; null when naima.json's updates is off. */
 function updateCheck(opts: CliOptions, place: Place, lock: Lock, raw: Record<string, unknown>): TickTask | null {
   if (parseUpdates(raw["updates"]) === "off") return null
@@ -877,6 +1176,12 @@ function updateCheck(opts: CliOptions, place: Place, lock: Lock, raw: Record<str
     }),
     async run(signal) {
       if (opts.tick?.check) return await opts.tick.check(signal)
+      try {
+        const news = await releaseNews(targetOf(place, lock, opts), lock, UPDATE_CHECK.timeoutMs ?? 8_000)
+        if (news) return checkedRelease(news)
+      } catch (e) {
+        return { ok: false, error: message(e) }
+      }
       const r = await runGitAsync(place.root, ["ls-remote", "--", lock.source, "refs/heads/main"], UPDATE_CHECK.timeoutMs ?? 8_000)
       const head = r.ok ? r.out.split(/\s+/)[0] : undefined
       if (!head) return { ok: false, error: r.ok ? "the source has no main branch" : gitReason(r) }
@@ -1058,26 +1363,43 @@ async function hello(args: string[], opts: CliOptions, place: Located, io: IO): 
   else {
     const t = targetOf(place, lock, opts)
     try {
-      // Launched, the program may fetch into its own clone, tags too; the development build only reads the source.
-      const head = opts.launched ? fetchHead(t) : remoteHead(t)
-      recorded(checked(lock, head.commit))
-      if (head.movedTo) lines.push(`${sourceMoved(lock.source, head.movedTo)}.`)
-      if (head.commit === lock.commit) lines.push(`Naima is current: the source's ${head.branch} is the locked commit.`)
-      else {
-        const count = runGit(t.program, ["rev-list", "--count", `${lock.commit}..${head.commit}`])
-        waits = true
-        const n = count.ok ? Number(count.out) : null
-        const commits = n === null ? "" : `, ${counted(n, "commit")}`
-        lines.push(`A newer Naima is available: ${short(lock.commit)} → ${short(head.commit)}${commits}.`)
-        if (policy === "check" || !opts.launched) lines.push("naima update --check says what it changes; updating waits for the owner's yes.")
-        else {
-          lines.push(...await said(opts, place, t, raw, head.commit))
-          lines.push("Ask the owner before naima update: it moves the lock and migrates the data, as one change to commit.")
+      const news = await releaseNews(t, lock)
+      if (news) {
+        recorded(checkedRelease(news))
+        lines.push(...newsLines(news))
+        if (!news.current || news.migrating) waits = true
+        if (!news.current) {
+          if (policy === "check" || !opts.launched || !news.commit) lines.push("naima update --check says what it changes; updating waits for the owner's yes.")
+          else {
+            fetchHead(t)
+            lines.push(...await said(opts, place, t, raw, news.commit))
+            lines.push("Ask the owner before naima update: it moves the lock and migrates the data, as one change to commit.")
+          }
         }
-      }
+      } else await mainNews(t)
     } catch (e) {
       recorded({ ok: false, error: message(e) })
       lines.push(`Could not check for a newer Naima: ${message(e)}.`)
+    }
+  }
+  /** The news of the source's main, for a source that publishes no releases. */
+  async function mainNews(t: Target): Promise<void> {
+    // Launched, the program may fetch into its own clone, tags too; the development build only reads the source.
+    const head = opts.launched ? fetchHead(t) : remoteHead(t)
+    recorded(checked(lock, head.commit))
+    if (head.movedTo) lines.push(`${sourceMoved(lock.source, head.movedTo)}.`)
+    if (head.commit === lock.commit) lines.push(`Naima is current: the source's ${head.branch} is the locked commit.`)
+    else {
+      const count = runGit(t.program, ["rev-list", "--count", `${lock.commit}..${head.commit}`])
+      waits = true
+      const n = count.ok ? Number(count.out) : null
+      const commits = n === null ? "" : `, ${counted(n, "commit")}`
+      lines.push(`A newer Naima is available: ${short(lock.commit)} → ${short(head.commit)}${commits}.`)
+      if (policy === "check" || !opts.launched) lines.push("naima update --check says what it changes; updating waits for the owner's yes.")
+      else {
+        lines.push(...await said(opts, place, t, raw, head.commit))
+        lines.push("Ask the owner before naima update: it moves the lock and migrates the data, as one change to commit.")
+      }
     }
   }
   // What waits on the owner's decision, such as a long run that is due: said, never started. A project that does not
@@ -1407,7 +1729,15 @@ async function stanceCommand(args: string[], opts: CliOptions, place: Place, io:
   // adopt
   const registry = opts.stances ?? stanceRegistry()
   const git = registry.url(name)
-  const head = stanceHead(place.root, git)
+  // Its newest release when it publishes releases, the archive downloaded and verified; else its head commit.
+  let released: StanceRelease | null = null
+  try {
+    released = await stanceRelease(place.root, git, releaseDir(trackerOf(place.data)))
+  } catch (e) {
+    if (!(e instanceof NaimaError && e.code === RELEASES_UNREACHABLE)) throw new Error(`stance ${name}: ${message(e)}`)
+    io.err(`naima: ${message(e)} — pinning the head commit of ${git} instead`)
+  }
+  const head = released ? { commit: released.commit } : stanceHead(place.root, git)
   if ("reason" in head) throw new Error(`stance ${name}: ${head.reason}`)
   const raw = readRaw(place.data)
   const entry = { ...pluginEntry(raw, plugin), source: { git, commit: head.commit, path: STANCE_MODULE } }
@@ -1423,7 +1753,8 @@ async function stanceCommand(args: string[], opts: CliOptions, place: Place, io:
     writeRaw(place.data, raw)
     throw new Error(`stance ${name} not adopted, ${DATA_FILE} put back as it was: ${message(e)}`)
   }
-  io.out(`adopted stance ${name}: ${git} at ${short(head.commit)}, pinned in ${DATA_FILE} as plugins.${plugin}`)
+  const at = released ? `version ${released.version} (${short(head.commit)}, its archive's checksum verified)` : short(head.commit)
+  io.out(`adopted stance ${name}: ${git} at ${at}, pinned in ${DATA_FILE} as plugins.${plugin}`)
   // Its adoption, when it declares one: its own command, named as it is, that takes adopt.
   const hook = ctx.registry.find<Command>("commands", plugin)?.value
   if (!hook || !hook.usage.split(/[\s|[\]]+/).includes(STANCE_ADOPT)) {
@@ -1503,7 +1834,7 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
       const acceptSource = command === "update" && args.includes("--accept-source")
       let moved = null
       try {
-        moved = align({ ...targetOf(place, place.lock, opts), acceptSource })
+        moved = await align({ ...targetOf(place, place.lock, opts), acceptSource })
       } catch (e) {
         // update --check only reads the source: it answers whatever program runs it.
         const readOnly = command === "update" && args.includes("--check")

@@ -4,7 +4,7 @@
 // program's layout. No plugin imports this file: test/arch.test.ts holds it.
 
 export * from "./api.ts"
-export { carryRefusal, type Lock, parseConfig, parseLock, PLUGIN_NAME, programOf, readConfig } from "./config.ts"
+export { carryRefusal, type Lock, LOCK_KEYS, parseConfig, parseLock, PLUGIN_NAME, programOf, readConfig } from "./config.ts"
 export { apiFor, composePlugins, type PluginSource } from "./plugins.ts"
 export { EXCLUDE_FILES, type Exclusion, exclusions } from "./excludes.ts"
 export { agentPointer, AGENTS_FILE, brokenEntryLinks, DEFAULT_ENTRY_FILES, type EntryPointer, pointerLine, upgradePointer, writePointer } from "./pointer.ts"
@@ -29,6 +29,7 @@ export {
 } from "./layout.ts"
 export { consoleIO, createContext, type IO, type Place } from "./context.ts"
 export { githubRepo, isLocalRemote, remoteVisibility, type Visibility, VISIBILITY_HOST } from "./visibility.ts"
+export { apiHost, RELEASE_HOSTS, releasesApi } from "./releases.ts"
 export { installTrailerHooks, pairTracker, projectRootOf, readSiblingMarker, trackerGitOf } from "./repos.ts"
 export { launcherSet } from "./launched.ts"
 export { PRIVATE_ENV, privateEnv, privateWordsFile } from "./private.ts"

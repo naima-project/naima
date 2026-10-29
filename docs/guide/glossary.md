@@ -487,7 +487,8 @@ Where the project's copy of Naima comes from. It is a git repository, either Nai
 
 ### Lock
 
-The `source` and `commit` in `naima.json`, which say exactly which Naima runs the project. Everyone who works on the project runs that one.
+The `source` and `commit` in `naima.json`, which say exactly which Naima runs the project, with the release's `version` and the `sha256` of its archive when
+the project runs a release. Everyone who works on the project runs that one.
 
 ### Alignment
 
@@ -501,7 +502,7 @@ own tracker, which live in a separate repository, the workshop, which is private
 
 ### Update
 
-Moving the [lock](#lock) to a newer Naima with `naima update`, which gives one commit to review ([update Naima](update-naima.md)).
+Moving the [lock](#lock) to a newer release of Naima with `naima update`, which gives one commit to review ([update Naima](update-naima.md)).
 
 ### Format
 

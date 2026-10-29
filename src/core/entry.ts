@@ -10,7 +10,7 @@ export const cliCommands: Omit<Command, "run">[] = [
   {
     name: "init",
     says:
-      `make the git repository around the program a Naima project, as its first run does by itself: beside the program, a git clone of Naima at ${TRACKER_DIR}/${PROGRAM_DIR}/, create ${DATA_DIR}/${DATA_FILE}, locked to the clone's origin and its HEAD, which must be on the origin's main, and the tracker folder's README.md and .gitignore; print the line that keeps the program out of each host tool configuration it finds (deno.json, tsconfig.json, .prettierignore); and write what makes an agent run naima hello at the start of every session: the line that tells agents where Naima is and to run it, into the host's AGENTS.md, else the first entry file it has, else a new AGENTS.md, and the hooks of each agent tool the project uses that has them (naima.json's agents; absent it, those whose files the project holds and the one Naima runs inside): a session-start hook that runs naima hello, and a turn-end hook that runs the tick when the agent ends its turn; nothing else outside ${TRACKER_DIR}/ is touched unless --write-excludes is given`,
+      `make the git repository around the program a Naima project, as its first run does by itself: beside the program, a git clone of Naima at ${TRACKER_DIR}/${PROGRAM_DIR}/, create ${DATA_DIR}/${DATA_FILE}, locked to the clone's origin and its HEAD, which must be on the origin's main — with the release's version and checksum when the installer unpacked a release into it —, and the tracker folder's README.md and .gitignore; print the line that keeps the program out of each host tool configuration it finds (deno.json, tsconfig.json, .prettierignore); and write what makes an agent run naima hello at the start of every session: the line that tells agents where Naima is and to run it, into the host's AGENTS.md, else the first entry file it has, else a new AGENTS.md, and the hooks of each agent tool the project uses that has them (naima.json's agents; absent it, those whose files the project holds and the one Naima runs inside): a session-start hook that runs naima hello, and a turn-end hook that runs the tick when the agent ends its turn; for a repository that is public on GitHub, offer the topic naima, for the agent to ask the owner before adding it (never for a private one); nothing else outside ${TRACKER_DIR}/ is touched unless --write-excludes is given`,
     enforces:
       "the program is locked to a commit of its source's main, with nothing uncommitted; outside the tracker folder, only the pointer line, the session-start hooks and, with --write-excludes, the exclusion lines are written",
     usage: "init [--private-tracker | --tracker <url> [--private-url] | --tracker-inside | --remote-private] [--write-excludes] [--no-session-hook]",
@@ -58,20 +58,29 @@ export const cliCommands: Omit<Command, "run">[] = [
   {
     name: "update",
     says:
-      `move the lock to the head of the source's main, or to the commit --to names: say what changes (the commits, the change notes they add — breaking first, then those that ask an action —, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, rename and remove options in naima.json as the change notes say and remove those it reads nowhere, each said with its value, and record the new commit; moving forward, the new Naima finishes: it migrates the data if its format moved, names the rules agents acknowledge again, runs naima check, and files an item in the type with the trait follow-up for each problem or note that is new since the commit before; writes, and says, what makes agents run naima hello at every session start where it is missing — the pointer line, rewritten when it does not say so, and each session-start hook as naima init installs them; all as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima`,
+      `move the lock to the newest release of the source, or to the version or commit --to names: download the release's archive, check it against its SHA-256 and against the commit its tag names, and record the version and checksum with the commit (a source that publishes no releases, or --main, follows the head of its main instead; a lock that still names a commit of main moves to the newest release once, and says so; a commit of main past the newest release stays until a newer release; with no network the lock stays where it is, and says why); say what changes (the commits, the change notes they add — breaking first, then those that ask an action —, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, rename and remove options in naima.json as the change notes say and remove those it reads nowhere, each said with its value, and record the new commit; moving forward, the new Naima finishes: it migrates the data if its format moved, names the rules agents acknowledge again, runs naima check, and files an item in the type with the trait follow-up for each problem or note that is new since the commit before; writes, and says, what makes agents run naima hello at every session start where it is missing — the pointer line, rewritten when it does not say so, and each session-start hook as naima init installs them; all as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima`,
     enforces:
-      "the lock moves only to a commit of the source's main, with the data migrated forward in the same change; never back past a migration, which runs forward only; a source naima.json names other than the program's origin is refused, by every command, until --accept-source",
-    usage: "update [--check | --to <commit> | --mode off|check|update | --accept-source]",
+      "the lock moves only to a release whose archive matches its checksum and its tag's commit, or, for a source without releases or with --main, to a commit of the source's main, with the data migrated forward in the same change; never back past a migration, which runs forward only; a source naima.json names other than the program's origin is refused, by every command, until --accept-source",
+    usage: "update [--check | --to <version|commit> | --main | --pre | --mode off|check|update | --accept-source]",
     options: [
       {
         name: "--check",
         says:
-          "only say whether the source's main has moved past the locked commit, and what it changes — and rehearse it: its own naima check, run on the project from a temporary copy of it, writing nothing, says what would newly fail or be noted; exit 1 when it has moved",
+          "only say whether a newer release exists (for a source without releases, whether its main has moved past the locked commit), and what it changes — and rehearse it: its own naima check, run on the project from a temporary copy of it, writing nothing, says what would newly fail or be noted; exit 1 when it has moved",
       },
       {
         name: "--to",
         says:
-          "move the lock to this commit of the source's main, forward or back; back across a data format is refused, naming the commit to revert; the option updates is removed when that commit does not know it, and said",
+          "move the lock to this release (1.2.0 or v1.2.0), or to this commit of the source's main, forward or back; back across a data format is refused, naming the commit to revert; the option updates is removed when that commit does not know it, and said",
+      },
+      {
+        name: "--main",
+        says:
+          "follow the head of the source's main rather than its releases, as for Naima's own development or a fork that publishes no releases; the lock then names a commit, with no version, and is not counted as an install of a release",
+      },
+      {
+        name: "--pre",
+        says: "include pre-releases (1.2.0-rc.1) when choosing the newest release; a project that already runs a pre-release includes them without it",
       },
       {
         name: "--mode",
@@ -85,12 +94,12 @@ export const cliCommands: Omit<Command, "run">[] = [
           "trust the source naima.json now names, after reviewing why it changed: every other command refuses to run a program from a source other than its origin; points the program's origin at the new source, checks out the locked commit, and moves nothing else",
       },
     ],
-    examples: ["update --check", "update", "update --to 0123456789ab", "update --mode update", "update --accept-source"],
+    examples: ["update --check", "update", "update --to 1.2.0", "update --to 0123456789ab", "update --main", "update --mode update", "update --accept-source"],
   },
   {
     name: "rollback",
     says:
-      "move the lock back to the one naima.json recorded before it, found in its git history, as one change to commit: what update --to does with that commit",
+      "move the lock back to the one naima.json recorded before it, found in its git history, as one change to commit: what update --to does with that commit, its version and checksum recorded again when it named a release",
     enforces:
       "the lock goes back only to a commit that reads the data's formats: a migration is undone by reverting its commit, never by running an older Naima on newer data",
     usage: "rollback",

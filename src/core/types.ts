@@ -540,6 +540,10 @@ export interface Config {
   source: string
   /** The commit of `source` this project runs: the lock. */
   commit: string
+  /** The release of `source` the commit is, when the project runs one: its version, without the v. */
+  version?: string
+  /** The SHA-256 of that release's archive, as installed: what a later download of it must match. */
+  sha256?: string
   /** `"signed"`: run a locked commit only when git verifies its signature. Absent: no signature is asked for. */
   verify?: "signed"
   /** The program directory, relative to the data directory. */

@@ -4,7 +4,9 @@
 // where a stance named <name> is the repository naima-stance-<name>. A real
 // registry replaces `stanceRegistry` alone.
 
+import { NaimaError } from "./errors.ts"
 import { runGit } from "./git.ts"
+import { CHECKSUM_MISMATCH, clearDownloads, fetchReleaseOf, releaseRepo } from "./releases.ts"
 import { VISIBILITY_HOST } from "./visibility.ts"
 
 /** The word of a stance's own adoption: its command named like its plugin entry, given `adopt`. Not the adopt plugin's name. */
@@ -78,4 +80,38 @@ export function stanceHead(cwd: string, git: string): { commit: string } | { rea
   const commit = r.ok ? r.out.split(/\s/)[0] ?? "" : ""
   if (/^[0-9a-f]{40}$/.test(commit)) return { commit }
   return { reason: r.ok ? `${git} has no HEAD` : `cannot reach ${git}: ${r.err.split("\n")[0] || "git ls-remote failed"}` }
+}
+
+/** A stance's release, as adopt pins it: the commit its verified archive was made from, its version and checksum. */
+export interface StanceRelease {
+  commit: string
+  version: string
+  sha256: string
+}
+
+/**
+ * The newest release of the stance at `git`, its archive downloaded into `dir` and verified — its checksum, and the
+ * commit it was made from being the one its tag names — then removed: the download is what counts the adoption.
+ * Null when the stance publishes no releases, and adopt pins its head commit instead. Throws when the releases
+ * cannot be read, or the archive does not match.
+ */
+export async function stanceRelease(cwd: string, git: string, dir: string): Promise<StanceRelease | null> {
+  const repo = releaseRepo(git)
+  if (!repo) return null
+  try {
+    const got = await fetchReleaseOf(git, repo.repo, dir)
+    if (!got) return null
+    const tag = runGit(cwd, ["ls-remote", "--tags", "--", git, got.release.tag, `${got.release.tag}^{}`])
+    const lines = tag.ok ? tag.out.split("\n").map((l) => l.split(/\s+/)) : []
+    const tagged = (lines.find((l) => l[1]?.endsWith("^{}")) ?? lines[0])?.[0]
+    if (!got.commit || (tagged && tagged !== got.commit)) {
+      throw new NaimaError(
+        `the archive of ${got.release.tag} of ${git} was made from ${got.commit ?? "no recorded commit"}, and the tag names ${tagged} — refused`,
+        CHECKSUM_MISMATCH,
+      )
+    }
+    return { commit: got.commit, version: got.version, sha256: got.sha256 }
+  } finally {
+    clearDownloads(dir)
+  }
 }

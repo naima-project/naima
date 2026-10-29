@@ -25,8 +25,8 @@ export interface GitRun {
 }
 
 export interface GitOptions {
-  /** Written to git's standard input. */
-  input?: string
+  /** Written to git's standard input: text, or bytes (an archive). */
+  input?: string | Uint8Array
   /** Added to the environment git runs with. */
   env?: Record<string, string>
 }

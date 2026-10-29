@@ -25,8 +25,10 @@ there is no network, it says it cannot reach GitHub and stops; nothing else is a
 naima stance adopt ui
 ```
 
-This finds the stance's repository, reads the commit at the head of its main branch, and writes it into `naima.json` as the plugin `stance-ui`, pinned to that
-commit:
+This finds the stance's repository and takes its newest release: it downloads the release's archive, checks it against its checksum and against the commit
+the release's tag names, and writes that commit into `naima.json` as the plugin `stance-ui`, pinned to it. The download is what counts the adoption on the
+stance's releases page, as for Naima itself ([Naima updates to releases](update-naima.md#naima-updates-to-releases)). A stance that publishes no releases is
+pinned to the commit at the head of its main branch instead. Either way the pin looks like this:
 
 ```json
 {

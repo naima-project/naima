@@ -6,10 +6,12 @@
 //   write   the tracker folder (naima-tracker/, the parent of the program), and the data and program if moved out of it;
 //           the tick's state, naima/ in the clone's git directory (core/tick.ts), which it reads too;
 //           for init and update, the entry files and the session-start settings of the agent tools in use (session-start.ts)
-//   run     git, and the programs the loaded contributions declare (`runs`: a verifier's tool, a metric's command), nothing else
+//   run     git, tar (to unpack a release's archive), and the programs the loaded contributions declare (`runs`: a verifier's
+//           tool, a metric's command), nothing else
 //   env     an allow-list of the environment (ENV below): what git needs, and Naima's own,
 //           plus the machine's name and the private word list (core/private.ts), read here
-//   net     GitHub's API host alone, to ask whether the tracker's remotes are public (at most once a day);
+//   net     GitHub's API host, to ask whether the tracker's remotes are public (at most once a day) and to read releases,
+//           and the hosts a release's archive is downloaded from (core/releases.ts), or the server NAIMA_RELEASES_API names;
 //           otherwise the network is git's, for alignment and update — except for `naima ui` (UI below)
 //
 // `naima ui`, and no other command, may also listen on the loopback interface,
@@ -40,6 +42,7 @@ import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:pa
 import { fileURLToPath } from "node:url"
 import {
   ADAPTERS,
+  apiHost,
   DATA_DIR,
   DATA_FILE,
   DEFAULT_ENTRY_FILES,
@@ -53,6 +56,8 @@ import {
   readConfig,
   real,
   RELAUNCH,
+  RELEASE_HOSTS,
+  releasesApi,
   restoreDeleted,
   restoredFiles,
   runtimeOf,
@@ -230,7 +235,7 @@ export function permissions(
       list([p.root, p.data, p.program, p.entry, ...(p.worktrees ?? []).map(real).filter((x) => !x.includes(",")), ...(p.ui?.read ?? []), ...tools, ...tick])
     }`,
     `--allow-write=${list([p.tracker, p.data, p.program, ...tick, ...(p.hostFiles ?? []), ...(p.ui?.write ?? []).filter((w) => tools.includes(w))])}`,
-    p.ui?.runAll ? "--allow-run" : `--allow-run=${[...new Set(["git", ...(p.runs ?? []), ...(p.ui?.runs ?? [])])].join(",")}`,
+    p.ui?.runAll ? "--allow-run" : `--allow-run=${[...new Set(["git", "tar", ...(p.runs ?? []), ...(p.ui?.runs ?? [])])].join(",")}`,
     "--allow-env",
     ...(p.ui?.netAll
       ? ["--allow-net"]
@@ -407,7 +412,8 @@ export async function launch(args: string[], cwd: string): Promise<number> {
         tools,
         tick: tickState,
         // Every command: the tracker's privacy is asked of GitHub at most once a day, before the first write (core/exposure.ts).
-        net: [VISIBILITY_HOST],
+        // And releases: read from the API, their archives downloaded where it redirects them, when an install or update needs one.
+        net: [VISIBILITY_HOST, ...RELEASE_HOSTS, ...[apiHost(releasesApi(Deno.env.toObject()))].filter((h): h is string => !!h)],
       }
       const read = permissions(fence)[0] ?? ""
       flags = permissions({ ...fence, runs: mayRun(data) ? declaredRuns(entry, cwd, read, env) : [], ui })

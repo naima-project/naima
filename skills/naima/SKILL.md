@@ -128,7 +128,9 @@ rules to acknowledge again — read them with `naima rules --audience agents` an
 for each new finding it could not fix. Commit `naima-tracker/` as one change on the item's branch, and land it with `naima land`; `naima rollback` goes back the
 same way. A waiver, a release record and an epic set done are landed the same way, from an item of their own; only `naima init`'s commit and the close after a
 landing go straight on the trunk. Never update without asking ([update Naima](../../docs/guide/update-naima.md)). To check on request, run
-`naima update --check`.
+`naima update --check`. Updates go from one release to another; when the greeting says the lock still names a commit of main and the next update moves it to a
+release, pass that on once. When `naima init` offers the topic `naima` for a public repository, ask the owner, and run the `gh repo edit` it prints only after
+their yes.
 
 ## 4. Read the project's rules
 
