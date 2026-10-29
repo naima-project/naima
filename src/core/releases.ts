@@ -124,7 +124,15 @@ export function compareVersions(a: string, b: string): number {
 }
 
 const unreachable = (what: string, why: string): NaimaError => new NaimaError(`cannot ${what}: ${why}`, RELEASES_UNREACHABLE)
-const why = (e: unknown): string => (e instanceof Error ? e.message : String(e))
+const why = (e: unknown): string => {
+  if (!(e instanceof Error)) return String(e)
+  // Refused by the runtime, not by the network: the launcher that started this run does not grant the host, as a
+  // launcher from before releases does not when an update has just moved the program past it.
+  if (e.name === "NotCapable" || e.name === "PermissionDenied") {
+    return "the launcher that started this run does not let it reach that host (a launcher older than the program it runs): run the command again"
+  }
+  return e.message
+}
 
 /**
  * The published releases of `r`, newest first, drafts left out: one request, ten seconds at most. A repository the

@@ -957,6 +957,16 @@ async function toRelease(
     io.out(`Naima is at version ${plan.release.version}, the ${ask.version !== undefined ? "version named" : "newest release"}`)
     return { kind: "stay", failed: false }
   }
+  // A lock of main past the release stays, decided before anything is downloaded: the release is older than what runs.
+  const tagged = !lock.version && ask.version === undefined ? tagCommit(t, plan.release.tag) : null
+  if (tagged && tagged !== lock.commit && isAncestor(t.program, tagged, lock.commit)) {
+    io.out(
+      `Naima stays at ${
+        short(lock.commit)
+      }, a commit of the source's main past its newest release, version ${plan.release.version}: the next release after it is the next update`,
+    )
+    return { kind: "stay", failed: false }
+  }
   const dir = releaseDir(t.tracker)
   let got
   try {

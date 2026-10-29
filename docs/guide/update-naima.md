@@ -159,6 +159,11 @@ Naima moved to 0fde22566318; run naima update once more to finish: the line in A
 Run `naima update` again. The second time the new version starts it, so it writes what was left and prints the usual last line with the files to commit. Until
 then, `naima hello` and `naima check` both say that the update is unfinished, and what is left.
 
+The same holds for the network. A launcher from before releases doesn't let the new version download a release, so an update that started there moves the lock
+along main and then stops with a line saying that the launcher that started the run does not let it reach the release's host, and to run the command again. Run
+`naima update` again, and it moves on to the release. A launcher that already knows this hands the program over instead: when an update has moved the program to
+another commit, that commit's own launcher runs the rest of it, with that commit's permissions, so one run is enough.
+
 ## Going back to the previous version
 
 ```sh
