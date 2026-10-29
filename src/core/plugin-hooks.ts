@@ -6,6 +6,7 @@
 // Each is named in the file by its id, <plugin>/<name>, so a hook whose plugin
 // is gone is removed at the next of these, and naima check notes it until then.
 
+import { writeLaunchers } from "./launchers.ts"
 import { join } from "node:path"
 import { adapter, type AgentAdapter, type PluginHook } from "./adapters/index.ts"
 import { posixRelative } from "./config.ts"
@@ -55,6 +56,8 @@ export function installPluginHooks(ctx: Context): string[] {
       out.push(`not written, this run may not write it: the plugins' hooks in ${file} — naima update writes them`)
       continue
     }
+    // The hooks run Naima through the committed launchers beside the program's folder: they are there first.
+    if (/(^|\/)[^/]+\/naima\.ts$/.test(program)) out.push(...writeLaunchers(ctx.root, join(ctx.root, program.replace(/[^/]+\/naima\.ts$/, ""))).said)
     const r = settings.sync(ctx.root, program, wanted.map((w) => w.hook))
     if ("refused" in r) {
       out.push(`the plugins' hooks are not written to ${file}: ${r.refused} — fix the file, then run naima update`)

@@ -16,7 +16,7 @@
 // skips it.
 
 import { chmodSync, existsSync, readFileSync } from "node:fs"
-import { isAbsolute, join, relative } from "node:path"
+import { dirname, isAbsolute, join, relative } from "node:path"
 import {
   bool,
   type Check,
@@ -316,6 +316,9 @@ const fromRoot = (ctx: Context, abs: string): string => {
 /** The command the hook runs: the project's `command`, else Deno on the launcher of the program the project runs. */
 function hookCommand(ctx: Context, opts: HooksOptions): string {
   if (opts.command) return opts.command
+  // The committed launcher beside the program's folder installs Deno and restores the program first when either is missing.
+  const committed = join(dirname(ctx.program), "naima.sh")
+  if (existsSync(committed)) return `sh ${quote(fromRoot(ctx, committed))} check --staged`
   const launcher = [join(ctx.program, "naima.ts"), join(ctx.program, "naima", "naima.ts")].find(existsSync) ?? join(ctx.program, "naima.ts")
   return `deno run -A ${quote(fromRoot(ctx, launcher))} check --staged`
 }

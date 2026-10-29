@@ -85,6 +85,7 @@ import {
   CHECKSUM_MISMATCH,
   clearDownloads,
   fetchRelease,
+  FIRST_ARCHIVE_RELEASE,
   isVersion,
   listReleases,
   planUpdate,
@@ -914,8 +915,8 @@ async function moveLock(
 type ReleaseStep = { kind: "main" } | { kind: "stay"; failed: boolean } | { kind: "moved"; code: number }
 
 /**
- * Move the lock to a release: the named version, else the newest (pre-releases when asked, or when the project runs
- * one). Its archive is downloaded from the release, checked against its checksum, checked to be made from the
+ * Move the lock to a release: the named version, else the newest from FIRST_ARCHIVE_RELEASE on (pre-releases when
+ * asked, when the project runs one, or while no stable release qualifies). Its archive is downloaded from the release, checked against its checksum, checked to be made from the
  * commit the tag names, and that commit's tree compared with the archive's files; only then does the lock move. A
  * source that publishes no releases is followed by its main; one that cannot be reached leaves the lock as it is.
  */
@@ -949,11 +950,23 @@ async function toRelease(
     throw new Error(`${plan.version} is not a release of ${lock.source}: its newest are ${some}`)
   }
   if (plan.kind === "none") {
-    io.out(`${lock.source} has published only pre-releases so far: naima update --pre installs the newest of them`)
+    io.out(
+      `${lock.source} has published no release from ${FIRST_ARCHIVE_RELEASE} on, the first an update installs from its archive: naima update --to <version> names an older one`,
+    )
     return { kind: "stay", failed: false }
   }
   if (plan.kind === "current") {
     io.out(`Naima is at version ${plan.release.version}, the ${ask.version !== undefined ? "version named" : "newest release"}`)
+    return { kind: "stay", failed: false }
+  }
+  // A lock of main past the release stays, decided before anything is downloaded: the release is older than what runs.
+  const tagged = !lock.version && ask.version === undefined ? tagCommit(t, plan.release.tag) : null
+  if (tagged && tagged !== lock.commit && isAncestor(t.program, tagged, lock.commit)) {
+    io.out(
+      `Naima stays at ${
+        short(lock.commit)
+      }, a commit of the source's main past its newest release, version ${plan.release.version}: the next release after it is the next update`,
+    )
     return { kind: "stay", failed: false }
   }
   const dir = releaseDir(t.tracker)

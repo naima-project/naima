@@ -17,6 +17,8 @@ case $input in
 esac
 here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd) || exit 0
 launcher="$here/../../../naima.ts"
+# The committed launcher beside the program, which finds the Deno it installed, when there is one.
+committed="$here/../../../../naima.sh"
 root=${CLAUDE_PROJECT_DIR:-$(pwd)}
 common=$(cd "$root" 2>/dev/null && git rev-parse --git-common-dir 2>/dev/null) || exit 0
 case $common in
@@ -59,7 +61,7 @@ if [ -d "$data" ] && tree=$(worktree "$root") && [ -n "$tree" ]; then
   fi
 fi
 
-command -v deno >/dev/null 2>&1 || exit 0
+[ -f "$committed" ] || command -v deno >/dev/null 2>&1 || exit 0
 wake="$common/naima/tick/wake"
 due=yes
 if [ -d "$wake" ]; then
@@ -77,4 +79,8 @@ if [ -d "$wake" ]; then
 fi
 [ "$due" = yes ] || exit 0
 cd "$root" || exit 0
-deno run -A "$launcher" tick --hook claude-code </dev/null || exit 0
+if [ -f "$committed" ]; then
+  sh "$committed" tick --hook claude-code </dev/null || exit 0
+else
+  deno run -A "$launcher" tick --hook claude-code </dev/null || exit 0
+fi
