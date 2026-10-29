@@ -19,6 +19,13 @@ naima stances
 This asks GitHub's public API, without any credentials, and prints each stance with a line about it. A stance this project already uses is marked `adopted`. If
 there is no network, it says it cannot reach GitHub and stops; nothing else is affected.
 
+A repository can be named like a stance and not be one. Every plugin published in its own repository describes itself in `naima-plugin.json` at its root
+([describing a plugin](extending-naima.md#describing-a-plugin-naima-pluginjson)), and a stance's says `"kind": "stance"`. For each repository it lists,
+`naima stances` reads that file at the head of the main branch through git, with a shallow clone that fetches that one file and is removed afterwards; only when
+git cannot reach the repository does it ask GitHub's API for the file. When the file is missing, is not a valid description, or doesn't say `"kind": "stance"`,
+the line says `not a stance` and why. Adopting the stance loads its plugin, checks that its manifest declares the kind stance, and checks that it agrees with
+the file.
+
 ## Adopting one
 
 ```sh
@@ -42,8 +49,21 @@ pinned to the commit at the head of its main branch instead. Either way the pin 
 
 Naima then fetches the stance into the tracker folder and loads it. If what it loaded doesn't say it is a stance, `naima.json` is put back as it was and nothing
 is adopted. If the stance has its own adoption step (a command with the stance's plugin name that takes `adopt`, such as `naima stance-ui adopt`), Naima runs it
-straight away. Anything you write after the name is passed on to that step, so `naima stance adopt ui --mood dusk` copies the UI stance's widget set with the
+straight away.
+
+What you write after the name goes to one of two places. An option the stance declares in its manifest, such as the UI stance's `--app <folder>`, is written
+into the stance's entry in `naima.json`, under `options`, where its checks read it too, and stays there when you adopt it again. Everything else is passed on to
+the adoption step, so `naima stance adopt ui --app web --mood dusk` records that the app is in `web/` and copies the UI stance's widget set into it with the
 dusk mood board.
+
+Before it runs the adoption step, Naima says where it will write: in the app's folder when the stance declares an `app` option, otherwise in the project's
+root. If that would be the root, the root holds no app, and the project has one in a subfolder (a folder with a `package.json` or a Svelte configuration),
+Naima refuses, puts `naima.json` back, and names the folders it found. Give `--app <folder>` to adopt the stance into that app, or `--app .` to adopt it at
+the root anyway.
+
+The adoption writes into the checkout you run it from. Run from another worktree of the project with the trunk checkout's Naima, it is served from that
+worktree's own data, so the pin and the files land on the worktree's branch. If the worktree has no data of its own, Naima refuses and says which Naima to
+run instead.
 
 If the stance asks the agent tool to run something, such as its checks after every edit, Naima installs that hook in the tool's settings as part of the
 adoption ([hooks in the agent tool](extending-naima.md#hooks-in-the-agent-tool)).
@@ -75,9 +95,12 @@ prints each example and where it is in the stance's copy in the tracker folder, 
 
 A stance is written like any plugin ([extending Naima](extending-naima.md)), with two more keys in its manifest:
 
-- `kind: "stance"`, which is what makes it a stance;
+- `kind: "stance"`, which adoption checks when it loads the plugin;
 - `examples`, an optional list of paths inside its repository.
+
+Its repository also holds `naima-plugin.json` at its root, which says the same as data, with `"kind": "stance"` ([describing a
+plugin](extending-naima.md#describing-a-plugin-naima-pluginjson)). Naima loads the module from `plugin/index.mjs` for now, so `entry` names that path.
 
 For its adoption step, it adds a command named like its plugin entry (`stance-<name>`) whose usage includes `adopt`. Its checks that refuse a landing while
 they fail are `refuses` landing reports, and the hooks it wants in the agent tool are `agent-hooks`; it writes no file of the host's own. To be listed by `naima stances`, it is
-published as `naima-stance-<name>` in the naima-project organisation, with its plugin in `plugin/index.mjs`.
+published as `naima-stance-<name>` in the naima-project organisation, with its plugin in `plugin/index.mjs` and its `naima-plugin.json` at the root.

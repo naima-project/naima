@@ -4,15 +4,18 @@
 // where a stance named <name> is the repository naima-stance-<name>. A real
 // registry replaces `stanceRegistry` alone.
 
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs"
+import { join, posix } from "node:path"
+import { parseDescriptor, PLUGIN_DESCRIPTOR } from "./descriptor.ts"
 import { NaimaError } from "./errors.ts"
-import { runGit } from "./git.ts"
+import { projectFiles, runGit } from "./git.ts"
 import { CHECKSUM_MISMATCH, clearDownloads, fetchReleaseOf, releaseRepo } from "./releases.ts"
-import { VISIBILITY_HOST } from "./visibility.ts"
+import { githubRepo, VISIBILITY_HOST } from "./visibility.ts"
 
 /** The word of a stance's own adoption: its command named like its plugin entry, given `adopt`. Not the adopt plugin's name. */
 export const STANCE_ADOPT = "adopt"
 
-/** The kind a stance's manifest declares. */
+/** The kind a plugin's descriptor declares. */
 export const STANCE_KIND = "stance"
 
 /** The organisation stances are published in, for now. */
@@ -114,4 +117,109 @@ export async function stanceRelease(cwd: string, git: string, dir: string): Prom
   } finally {
     clearDownloads(dir)
   }
+}
+
+/** The option a stance declares for the folder of the app its adoption writes into, from the project's root. */
+export const STANCE_APP_OPTION = "app"
+
+/**
+ * The arguments of `naima stance adopt <name>` after the name, split: the stance's own options (those its manifest
+ * declares, given as `--<name> <value>` or `--<name>=<value>`), which go into its plugin entry's options, and the rest,
+ * which its adoption is given.
+ */
+export function stanceOptions(args: readonly string[], declared: ReadonlySet<string>): { options: Record<string, string>; rest: string[] } {
+  const options: Record<string, string> = {}
+  const rest: string[] = []
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!
+    const m = /^--([^=]+)(?:=(.*))?$/.exec(a)
+    if (!m || !declared.has(m[1]!)) {
+      rest.push(a)
+      continue
+    }
+    const value = m[2] ?? args[++i]
+    if (value === undefined || (m[2] === undefined && value.startsWith("--"))) throw new Error(`--${m[1]} needs a value`)
+    options[m[1]!] = value
+  }
+  return { options, rest }
+}
+
+/** The files that make a folder an app: its package.json, or a Svelte configuration. */
+const APP_FILES: readonly string[] = ["package.json", "svelte.config.js", "svelte.config.mjs", "svelte.config.cjs", "svelte.config.ts"]
+
+/** Is the folder `dir` an app: does it hold a package.json or a Svelte configuration? */
+export const isApp = (dir: string): boolean => APP_FILES.some((f) => existsSync(join(dir, f)))
+
+/**
+ * The project's apps below its root: each folder, from the root with forward slashes, that holds a package.json or a
+ * Svelte configuration, among the files git tracks or would track. Never under node_modules, nor under `skip`, the
+ * tracker folder from the root.
+ */
+export function appsBelow(root: string, skip: string): string[] {
+  const apps = new Set<string>()
+  for (const f of projectFiles(root)) {
+    if (f.startsWith(`${skip}/`) || f.split("/").includes("node_modules")) continue
+    const dir = posix.dirname(f)
+    if (dir !== "." && APP_FILES.includes(posix.basename(f))) apps.add(dir)
+  }
+  return [...apps].sort()
+}
+
+/** The answer of reading a plugin's descriptor: its text, absent, or not reached. */
+type DescriptorText = { text: string } | { absent: true } | null
+
+/**
+ * naima-plugin.json at the head of the default branch of `git`, by git: a shallow clone with no file contents, in a
+ * folder of its own under `work`, removed after, from which git fetches that one file alone. Null when the
+ * repository cannot be reached.
+ */
+function descriptorByGit(git: string, work: string): DescriptorText {
+  mkdirSync(work, { recursive: true })
+  const dir = mkdtempSync(join(work, "stance-"))
+  try {
+    const clone = runGit(work, ["clone", "--quiet", "--depth", "1", "--filter=blob:none", "--no-checkout", "--", git, dir])
+    if (!clone.ok) return null
+    if (!runGit(dir, ["cat-file", "-e", `HEAD:${PLUGIN_DESCRIPTOR}`]).ok) return { absent: true }
+    const show = runGit(dir, ["show", `HEAD:${PLUGIN_DESCRIPTOR}`])
+    return show.ok ? { text: show.out } : null
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+/** naima-plugin.json of the GitHub repository `git` names, from GitHub's public API: the last resort, when git cannot reach it. */
+async function descriptorByApi(git: string): Promise<DescriptorText> {
+  const repo = githubRepo(git)
+  if (!repo) return null
+  try {
+    const r = await fetch(`https://${VISIBILITY_HOST}/repos/${repo}/contents/${PLUGIN_DESCRIPTOR}`, {
+      headers: { "user-agent": "naima-stances", accept: "application/vnd.github.raw" },
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (r.status === 404) {
+      await r.body?.cancel()
+      return { absent: true }
+    }
+    if (r.status !== 200) {
+      await r.body?.cancel()
+      return null
+    }
+    return { text: await r.text() }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Why the repository at `git` is not a stance, read from its naima-plugin.json at the head of its default branch — by
+ * git first, GitHub's API only when git cannot reach it — or undefined when it is one, or cannot be read: adopting it
+ * then says. `work` is a folder Naima may write, where the shallow clone is made and removed.
+ */
+export async function notAStance(git: string, work: string): Promise<string | undefined> {
+  const read = descriptorByGit(git, work) ?? (await descriptorByApi(git))
+  if (!read) return undefined
+  if ("absent" in read) return `it has no ${PLUGIN_DESCRIPTOR} at the head of its default branch`
+  const d = parseDescriptor(read.text)
+  if ("refusal" in d) return d.refusal
+  return d.kind === STANCE_KIND ? undefined : `its ${PLUGIN_DESCRIPTOR} does not declare kind "${STANCE_KIND}"`
 }

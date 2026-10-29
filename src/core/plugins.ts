@@ -16,6 +16,7 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
 import * as api from "./api.ts"
 import { sourceRefusal } from "./config.ts"
+import { disagreements, parseDescriptor, PLUGIN_DESCRIPTOR, type PluginDescriptor } from "./descriptor.ts"
 import { writeFileAtomic } from "./files.ts"
 import { mustGit, runGit } from "./git.ts"
 import { DATA_FILE } from "./layout.ts"
@@ -119,11 +120,26 @@ async function factoryAt(where: Where, source: PluginSource, name: string): Prom
   const mod = (await import(url)) as { default?: unknown }
   if (typeof mod.default !== "function") throw new Error(`${DATA_FILE}: plugins.${name}: its module has no default-exported factory`)
   const factory = mod.default as PluginFactory
+  const described = typeof source === "object" && "git" in source ? descriptorOf(join(where.tracker, FETCHED, name), name) : null
   // A folder the manifest names is read from beside its module, unless it says otherwise.
   return (options, scope) => {
     const manifest = factory(options, scope)
+    // A plugin from git that describes itself in naima-plugin.json must be what it says it is.
+    if (described && manifest && typeof manifest === "object" && typeof source === "object" && "git" in source) {
+      const differ = disagreements(described, manifest, source.path)
+      if (differ.length) throw new Error(`${DATA_FILE}: plugins.${name}: its manifest does not agree with its ${PLUGIN_DESCRIPTOR}: ${differ.join("; ")}`)
+    }
     return manifest && typeof manifest === "object" && manifest.home === undefined ? { ...manifest, home: url } : manifest
   }
+}
+
+/** The descriptor at the root of the checkout `dir` of the plugin `name`: null when it has none; throws when it is not one. */
+function descriptorOf(dir: string, name: string): PluginDescriptor | null {
+  const path = join(dir, PLUGIN_DESCRIPTOR)
+  if (!existsSync(path)) return null
+  const d = parseDescriptor(readFileSync(path, "utf8"))
+  if ("refusal" in d) throw new Error(`${DATA_FILE}: plugins.${name}: ${d.refusal}`)
+  return d
 }
 
 /**
