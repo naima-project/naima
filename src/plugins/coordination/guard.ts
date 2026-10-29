@@ -30,7 +30,7 @@
 // `naima guard on` puts it back.
 
 import { existsSync, readFileSync, rmSync } from "node:fs"
-import { isAbsolute, join, relative } from "node:path"
+import { dirname, isAbsolute, join, relative } from "node:path"
 import { isDeepStrictEqual } from "node:util"
 import {
   bool,
@@ -100,6 +100,15 @@ export function guardLauncher(ctx: Context): string {
   return fromRoot(ctx, launcher)
 }
 
+/**
+ * The committed launcher beside the program's folder, from the root, when there is one: the guard runs Naima through
+ * it, which finds the Deno it installed when Deno is not on the PATH, as in a cloud session.
+ */
+const committedLauncher = (ctx: Context): string | null => {
+  const path = join(dirname(ctx.program), "naima.sh")
+  return existsSync(path) ? fromRoot(ctx, path) : null
+}
+
 /** The tracker's side of the guard in sibling mode: its trunk's name, and the code root from the data directory. */
 export interface TrackerSide {
   trunk: string
@@ -113,8 +122,12 @@ export interface TrackerSide {
  * repository runs the same hooks: with `tracker` it guards the tracker's trunk too, letting the CLI's own commits
  * through without starting Naima; without it, it does nothing there.
  */
-export function guardHook(trunkName: string, command: string, opts: { launcher?: string; sibling?: boolean; tracker?: TrackerSide } = {}): string {
-  if (opts.tracker) return trackerGuardHook(trunkName, command, opts.tracker, opts.launcher)
+export function guardHook(
+  trunkName: string,
+  command: string,
+  opts: { launcher?: string; sibling?: boolean; tracker?: TrackerSide; committed?: boolean } = {},
+): string {
+  if (opts.tracker) return trackerGuardHook(trunkName, command, opts.tracker, opts.launcher, opts.committed === true)
   return [
     "#!/bin/sh",
     `${MARK}: rewritten by it, never by hand.`,
@@ -142,7 +155,9 @@ export function guardHook(trunkName: string, command: string, opts: { launcher?:
         `if [ ! -f ${
           quote(opts.launcher)
         } ]; then echo "naima: the trunk guard cannot run here (no ${opts.launcher}): ${trunkName} moves unchecked" >&2; exit 0; fi`,
-        `command -v deno >/dev/null 2>&1 || { echo "naima: the trunk guard cannot run (deno is not on PATH): ${trunkName} moves unchecked" >&2; exit 0; }`,
+        ...(opts.committed ? [] : [
+          `command -v deno >/dev/null 2>&1 || { echo "naima: the trunk guard cannot run (deno is not on PATH): ${trunkName} moves unchecked" >&2; exit 0; }`,
+        ]),
       ]
       : []),
     "unset GIT_INDEX_FILE",
@@ -152,16 +167,18 @@ export function guardHook(trunkName: string, command: string, opts: { launcher?:
 }
 
 /** The launcher's two checks, that it is there and that Deno is: without either, the trunk moves unchecked, and says so. */
-const launcherChecks = (launcher: string | undefined, trunkName: string): string[] =>
+const launcherChecks = (launcher: string | undefined, trunkName: string, committed: boolean): string[] =>
   launcher
     ? [
       `if [ ! -f ${quote(launcher)} ]; then echo "naima: the trunk guard cannot run here (no ${launcher}): ${trunkName} moves unchecked" >&2; exit 0; fi`,
-      `command -v deno >/dev/null 2>&1 || { echo "naima: the trunk guard cannot run (deno is not on PATH): ${trunkName} moves unchecked" >&2; exit 0; }`,
+      ...(committed ? [] : [
+        `command -v deno >/dev/null 2>&1 || { echo "naima: the trunk guard cannot run (deno is not on PATH): ${trunkName} moves unchecked" >&2; exit 0; }`,
+      ]),
     ]
     : []
 
 /** The hook of sibling mode, which both repositories run: each guards its own trunk, the tracker's from the code root. */
-function trackerGuardHook(trunkName: string, command: string, tracker: TrackerSide, launcher?: string): string {
+function trackerGuardHook(trunkName: string, command: string, tracker: TrackerSide, launcher: string | undefined, committed: boolean): string {
   return [
     "#!/bin/sh",
     `${MARK}: rewritten by it, never by hand.`,
@@ -196,7 +213,7 @@ function trackerGuardHook(trunkName: string, command: string, tracker: TrackerSi
     "  unset GIT_DIR GIT_WORK_TREE GIT_PREFIX GIT_COMMON_DIR",
     "fi",
     'cd "$top" || exit 0',
-    ...launcherChecks(launcher, trunkName),
+    ...launcherChecks(launcher, trunkName, committed),
     "unset GIT_INDEX_FILE",
     `exec ${command} guard-check $side "$old" "$new"`,
     "",
@@ -214,7 +231,13 @@ const trackerSide = (ctx: Context): TrackerSide | undefined => {
 export function projectGuardHook(ctx: Context): string {
   const launcher = guardLauncher(ctx)
   const tracker = trackerSide(ctx)
-  return guardHook(guardedTrunk(ctx.root), `deno run -A ${quote(launcher)}`, { launcher, sibling: ctx.sibling, ...(tracker ? { tracker } : {}) })
+  const committed = committedLauncher(ctx)
+  return guardHook(guardedTrunk(ctx.root), committed ? `sh ${quote(committed)}` : `deno run -A ${quote(launcher)}`, {
+    ...(committed ? { committed: true } : {}),
+    launcher,
+    sibling: ctx.sibling,
+    ...(tracker ? { tracker } : {}),
+  })
 }
 
 const hookFile = (ctx: Context): string => join(ctx.trackerRoot, HOOKS_DIR, GUARD_HOOK)

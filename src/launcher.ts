@@ -11,7 +11,8 @@
 //   env     an allow-list of the environment (ENV below): what git needs, and Naima's own,
 //           plus the machine's name and the private word list (core/private.ts), read here
 //   net     GitHub's API host, to ask whether the tracker's remotes are public (at most once a day) and to read releases,
-//           and the hosts a release's archive is downloaded from (core/releases.ts), or the server NAIMA_RELEASES_API names;
+//           and the hosts a release's archive is downloaded from (core/releases.ts), or the servers NAIMA_RELEASES and
+//           NAIMA_RELEASES_API name;
 //           otherwise the network is git's, for alignment and update — except for `naima ui` (UI below)
 //
 // `naima ui`, and no other command, may also listen on the loopback interface,
@@ -32,10 +33,14 @@
 // tool it verifies, none of which exists when the launcher starts.
 //
 // The data is the program's sibling, `dirname(program)/naima-data`, unless
-// --data or NAIMA_DATA names it. When the program exits with RELAUNCH it has
+// --data or NAIMA_DATA names it; `naima stance adopt` run in another worktree of the project is served from that
+// worktree's data (worktreeData). When the program exits with RELAUNCH it has
 // just aligned the program directory, so the code on disk is not the code
 // that ran: the launcher runs the program directory's own code, which is the
-// locked commit.
+// locked commit. When that moved the clone to another commit, the program's
+// own launcher takes over, since this one's permissions are those of the
+// commit it was loaded from: a launcher from before releases cannot let the
+// newer program download one.
 
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs"
 import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path"
@@ -58,6 +63,7 @@ import {
   real,
   RELAUNCH,
   RELEASE_HOSTS,
+  RELEASES_ENV,
   releasesApi,
   restoreDeleted,
   restoredFiles,
@@ -72,6 +78,19 @@ import {
   VISIBILITY_HOST,
   worktrees,
 } from "./core/internal.ts"
+
+/** The commit a program's clone is at; null when it is not a git clone. */
+function headOf(program: string): string | null {
+  try {
+    const r = new Deno.Command("git", { args: ["-C", program, "rev-parse", "HEAD"], stdout: "piped", stderr: "null" }).outputSync()
+    return r.success ? new TextDecoder().decode(r.stdout).trim() : null
+  } catch {
+    return null
+  }
+}
+
+/** The hand-overs made so far, when a launcher hands a moved program to that program's own launcher. */
+const HANDOVERS = "NAIMA_LAUNCH_HANDOVERS"
 
 /** Alignment, an update and its migration: at most three hand-overs, and one to spare. */
 const MAX_RUNS = 4
@@ -193,6 +212,38 @@ export function uiGrant(command: string | undefined, os: string, deno: string, t
 }
 
 /**
+ * Is `program` there to run: a path that exists, or a name found in a directory of PATH (on Windows, with one of
+ * PATHEXT's extensions too). Deno resolves each name of --allow-run when it starts, and says on standard error that
+ * it failed for every one it cannot find: only programs found are granted, so a tool that is not installed is not
+ * named. Deno looks a program up before it checks the grant, so one that is not installed is still not found, and
+ * the plugin that starts it says it is missing.
+ */
+export function runnable(
+  program: string,
+  env: Record<string, string | undefined> = process.env,
+  os: string = process.platform === "win32" ? "windows" : process.platform,
+): boolean {
+  const file = (path: string): boolean => {
+    try {
+      return statSync(path).isFile()
+    } catch {
+      return false
+    }
+  }
+  const exts = os === "windows" ? ["", ...(env["PATHEXT"] ?? env["Pathext"] ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean)] : [""]
+  if (isAbsolute(program) || /[\\/]/.test(program)) return exts.some((e) => file(program + e))
+  const path = env["PATH"] ?? env["Path"] ?? ""
+  return path.split(os === "windows" ? ";" : ":").some((dir) => !!dir && exts.some((e) => file(join(dir, program + e))))
+}
+
+/** --allow-run: every program when `programs` is null, else those of `programs` that are found; none found, no flag. */
+function runFlag(programs: string[] | null, found: (program: string) => boolean): string[] {
+  if (!programs) return ["--allow-run"]
+  const granted = [...new Set(programs)].filter((program) => found(program))
+  return granted.length ? [`--allow-run=${granted.join(",")}`] : []
+}
+
+/**
  * The permissions the program runs with, as Deno flags. Throws when a path cannot be said in one: Deno splits the lists on commas.
  * `worktrees` are the other worktrees' data directories: read-only, and one with a comma is left out — it is read from its branch.
  */
@@ -215,6 +266,8 @@ export function permissions(
     net?: string[]
     /** The tick's state folder in the clone's git directory, read and written by every command: null outside git. */
     tick?: string | null
+    /** Is a program there to run? `runnable` unless a test says otherwise. */
+    found?: (program: string) => boolean
   },
 ): string[] {
   const list = (paths: (string | null)[]) => {
@@ -236,7 +289,7 @@ export function permissions(
       list([p.root, p.data, p.program, p.entry, ...(p.worktrees ?? []).map(real).filter((x) => !x.includes(",")), ...(p.ui?.read ?? []), ...tools, ...tick])
     }`,
     `--allow-write=${list([p.tracker, p.data, p.program, ...tick, ...(p.hostFiles ?? []), ...(p.ui?.write ?? []).filter((w) => tools.includes(w))])}`,
-    p.ui?.runAll ? "--allow-run" : `--allow-run=${[...new Set(["git", "tar", ...(p.runs ?? []), ...(p.ui?.runs ?? [])])].join(",")}`,
+    ...runFlag(p.ui?.runAll ? null : ["git", "tar", ...(p.runs ?? []), ...(p.ui?.runs ?? [])], p.found ?? runnable),
     "--allow-env",
     ...(p.ui?.netAll
       ? ["--allow-net"]
@@ -365,6 +418,20 @@ export function otherProject(cwd: string, own: string): string | undefined {
   return existsSync(join(data, DATA_FILE)) ? data : undefined
 }
 
+/**
+ * The data of the worktree `cwd` is in, when it is another worktree of the project this launcher's program belongs to
+ * and holds its data where the program's checkout does; else undefined. `naima stance adopt` is served from there:
+ * its adoption writes the project's files, which belong in the checkout where the work is, never the trunk's.
+ */
+export function worktreeData(cwd: string, own: string): string | undefined {
+  const here = toplevel(cwd)
+  const home = toplevel(dirname(own))
+  if (!here || !home || real(here) === real(home)) return undefined
+  if (!worktrees(home).some((w) => real(w.path) === real(here))) return undefined
+  const data = join(here, relative(real(home), real(join(dirname(own), DATA_DIR))))
+  return existsSync(join(data, DATA_FILE)) ? data : undefined
+}
+
 export async function launch(args: string[], cwd: string): Promise<number> {
   let parsed: ReturnType<typeof globalOptions>
   try {
@@ -376,7 +443,8 @@ export async function launch(args: string[], cwd: string): Promise<number> {
   const own = real(dirname(dirname(fileURLToPath(import.meta.url))))
   // Run from inside another project that uses Naima — a fresh clone, whose program is not cloned yet — the
   // launcher serves that project, as if named with --data: the data says where its program goes, and it is cloned.
-  const given = parsed.data ?? Deno.env.get("NAIMA_DATA") ?? otherProject(cwd, own)
+  const given = parsed.data ?? Deno.env.get("NAIMA_DATA") ?? otherProject(cwd, own) ??
+    (parsed.rest[0] === "stance" && parsed.rest[1] === "adopt" ? worktreeData(cwd, own) : undefined)
   const data = findData(cwd, own, given)
   // Named, the data says where its program is; beside the program, the data is the program's own and the parent folder bounds the writes.
   const program = given && existsSync(join(data, DATA_FILE)) ? programOf(data) : own
@@ -389,7 +457,9 @@ export async function launch(args: string[], cwd: string): Promise<number> {
     ...(given ? { NAIMA_DATA: real(data) } : {}),
   }
   // Which of them are the launcher's alone, so a command the program starts is handed the caller's environment without them.
-  const env = { ...allowedEnv(Deno.env.toObject()), ...marks, NAIMA_LAUNCHER_SET: launcherSet(marks, Deno.env.toObject()) }
+  const env: Record<string, string> = { ...allowedEnv(Deno.env.toObject()), ...marks, NAIMA_LAUNCHER_SET: launcherSet(marks, Deno.env.toObject()) }
+  // The hand-over count is this launcher's alone: a Naima the program starts counts from zero.
+  delete env[HANDOVERS]
   const others = otherWorktrees(root, data)
   const tools = toolsDir(Deno.env.toObject(), Deno.build.os)
   // The tick's state, naima/ in the clone's git directory, shared by its worktrees; the program is told its tick/ folder.
@@ -401,7 +471,10 @@ export async function launch(args: string[], cwd: string): Promise<number> {
     if (restored) console.error(`naima: ${restoredFiles(restored, relative(root, program).split("\\").join("/"))}`)
   }
   let entry = real(runtimeOf(program) ?? own)
-  for (let run = 0; run < MAX_RUNS; run++) {
+  // The commit the program is at, to tell when a run moved it; and the hand-overs earlier launchers made, which count.
+  const startedAt = headOf(program)
+  const handovers = Number(Deno.env.get(HANDOVERS) ?? "0") || 0
+  for (let run = handovers; run < MAX_RUNS; run++) {
     let flags: string[]
     try {
       const fence = {
@@ -416,7 +489,11 @@ export async function launch(args: string[], cwd: string): Promise<number> {
         tick: tickState,
         // Every command: the tracker's privacy is asked of GitHub at most once a day, before the first write (core/exposure.ts).
         // And releases: read from the API, their archives downloaded where it redirects them, when an install or update needs one.
-        net: [VISIBILITY_HOST, ...RELEASE_HOSTS, ...[apiHost(releasesApi(Deno.env.toObject()))].filter((h): h is string => !!h)],
+        net: [
+          VISIBILITY_HOST,
+          ...RELEASE_HOSTS,
+          ...[apiHost(releasesApi(Deno.env.toObject())), apiHost(Deno.env.get(RELEASES_ENV) ?? "")].filter((h): h is string => !!h),
+        ],
       }
       const read = permissions(fence)[0] ?? ""
       flags = permissions({ ...fence, runs: mayRun(data) ? declaredRuns(entry, cwd, read, env) : [], ui })
@@ -440,6 +517,20 @@ export async function launch(args: string[], cwd: string): Promise<number> {
     if (ui) Deno.removeSignalListener("SIGINT", wait)
     if (code !== RELAUNCH) return code
     entry = real(runtimeOf(program) ?? program) // resolved, as the permissions name it: the program may have just been made
+    // The program moved to another commit: its own launcher, which may grant what this one does not (a release's
+    // download hosts), runs it from here on, counting the hand-overs this one made.
+    const next = join(entry, "naima.ts")
+    if (startedAt !== null && headOf(program) !== startedAt && existsSync(next)) {
+      const child = new Deno.Command(Deno.execPath(), {
+        args: ["run", "-A", next, ...args],
+        cwd,
+        env: { [HANDOVERS]: String(run + 1) },
+        stdin: "inherit",
+        stdout: "inherit",
+        stderr: "inherit",
+      }).spawn()
+      return (await child.status).code
+    }
   }
   console.error(`naima: ${program} did not settle after ${MAX_RUNS} runs — its alignment keeps moving`)
   return 2

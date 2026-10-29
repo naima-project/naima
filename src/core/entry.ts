@@ -60,7 +60,7 @@ export const cliCommands: Omit<Command, "run">[] = [
     says:
       `move the lock to the newest release of the source, or to the version or commit --to names: download the release's archive, check it against its SHA-256 and against the commit its tag names, and record the version and checksum with the commit (a source that publishes no releases, or --main, follows the head of its main instead; a lock that still names a commit of main moves to the newest release once, and says so; a commit of main past the newest release stays until a newer release; with no network the lock stays where it is, and says why); say what changes (the commits, the change notes they add — breaking first, then those that ask an action —, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, rename and remove options in naima.json as the change notes say and remove those it reads nowhere, each said with its value, and record the new commit; moving forward, the new Naima finishes: it migrates the data if its format moved, names the rules agents acknowledge again, runs naima check, and files an item in the type with the trait follow-up for each problem or note that is new since the commit before; writes, and says, what makes agents run naima hello at every session start where it is missing — the pointer line, rewritten when it does not say so, and each session-start hook as naima init installs them; all as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima`,
     enforces:
-      "the lock moves only to a release whose archive matches its checksum and its tag's commit, or, for a source without releases or with --main, to a commit of the source's main, with the data migrated forward in the same change; never back past a migration, which runs forward only; a source naima.json names other than the program's origin is refused, by every command, until --accept-source",
+      "the lock moves only to a release whose archive matches its checksum and its tag's commit, or, for a source without releases or with --main, to a commit of the source's main, with the data migrated forward in the same change; never back past a migration, which runs forward only; a source naima.json names other than the program's origin is refused, by every command, until --accept-source; with the tracker in a repository of its own, an update that moves the lock is refused on the code's trunk while the trunk guard runs there, before anything moves, and is made in an item's worktree, the tracker moved first to the branch that pairs with the code's, so that its two halves land together with naima land",
     usage: "update [--check | --to <version|commit> | --main | --pre | --mode off|check|update | --accept-source]",
     options: [
       {
@@ -101,7 +101,7 @@ export const cliCommands: Omit<Command, "run">[] = [
     says:
       "move the lock back to the one naima.json recorded before it, found in its git history, as one change to commit: what update --to does with that commit, its version and checksum recorded again when it named a release",
     enforces:
-      "the lock goes back only to a commit that reads the data's formats: a migration is undone by reverting its commit, never by running an older Naima on newer data",
+      "the lock goes back only to a commit that reads the data's formats: a migration is undone by reverting its commit, never by running an older Naima on newer data; with the tracker in a repository of its own, refused on the code's trunk while the trunk guard runs there, as update is",
     usage: "rollback",
     examples: ["rollback"],
   },
@@ -171,7 +171,7 @@ export const cliCommands: Omit<Command, "run">[] = [
   {
     name: "stances",
     says:
-      "list the stances available to adopt — plugins of the kind stance, each a set of authored choices and rules a project takes as a whole — with what each says of itself, marking those this project has adopted; for now they are the repositories named naima-stance-<name> of the naima-project organisation on GitHub, asked of GitHub's public API without credentials; with no network, it says it cannot reach it",
+      "list the stances available to adopt — plugins of the kind stance, each a set of authored choices and rules a project takes as a whole — with what each says of itself, marking those this project has adopted, and as not a stance, with why, a repository with no naima-plugin.json, the plugin's description as data, at the head of its default branch, or whose naima-plugin.json is not a valid description or does not declare the kind stance — read by git with a shallow clone that fetches that file alone, or from GitHub's API when git cannot reach it; for now they are the repositories named naima-stance-<name> of the naima-project organisation on GitHub, asked of GitHub's public API without credentials; with no network, it says it cannot reach it",
     enforces: "nothing: it only reads",
     usage: "stances",
     examples: ["stances"],
@@ -179,11 +179,11 @@ export const cliCommands: Omit<Command, "run">[] = [
   {
     name: "stance",
     says:
-      "adopt a stance, show the ones adopted, or list a stance's examples. adopt <name> resolves the name to its repository, github.com/naima-project/naima-stance-<name>, pins the commit at the head of its default branch in naima.json's plugins as stance-<name> (its module plugin/index.mjs), loads it, and runs its adoption when it declares one: its own command stance-<name> with adopt, given the arguments after the name; adopting again moves the pin to the newest commit. status shows each adopted stance, its pinned commit, and whether a newer one exists. examples <name> lists the example paths an adopted stance declares, each with where it is in its checkout, from the project's root",
+      "adopt a stance, show the ones adopted, or list a stance's examples. adopt <name> resolves the name to its repository, github.com/naima-project/naima-stance-<name>, pins the commit at the head of its default branch in naima.json's plugins as stance-<name> (its module plugin/index.mjs), loads it, and runs its adoption when it declares one: its own command stance-<name> with adopt. Of the arguments after the name, the options the stance declares (such as --app <folder>) go into its entry's options in naima.json and the rest to its adoption. Before running the adoption it says where it writes, the folder of the stance's app option or the project's root, and refuses the root when the root holds no app and a subfolder does (a package.json or a Svelte configuration), unless --app . is given. Run in another worktree with the trunk checkout's Naima, it is served from that worktree's data, or refused when the worktree has none. Adopting again moves the pin to the newest commit. status shows each adopted stance, its pinned commit, and whether a newer one exists. examples <name> lists the example paths an adopted stance declares, each with where it is in its checkout, from the project's root",
     enforces:
       "a stance is pinned by commit, as every plugin from git is, and the whole file is re-validated before it is written; what is adopted must declare the kind stance, or naima.json is put back as it was",
-    usage: "stance adopt <name> [<arguments of its adoption>...] | stance status | stance examples <name>",
-    examples: ["stance adopt ui", "stance adopt ui --mood dusk", "stance status", "stance examples ui"],
+    usage: "stance adopt <name> [<its options and the arguments of its adoption>...] | stance status | stance examples <name>",
+    examples: ["stance adopt ui", "stance adopt ui --app web --mood dusk", "stance status", "stance examples ui"],
   },
   {
     name: "guide",

@@ -187,6 +187,33 @@ this way declares the contract version it was written for, so a plugin written a
 against an API it doesn't match. What it can import from the core is a small, explicit set of functions, kept separate from everything the core keeps for
 itself.
 
+### Describing a plugin: naima-plugin.json
+
+A plugin's manifest is what its module returns, so reading it means running the module. A plugin published in its own repository also describes itself as data,
+in `naima-plugin.json` at the root of the repository, so that Naima and the people choosing it can tell what it is without running anything:
+
+```json
+{
+  "name": "stance-ui",
+  "kind": "stance",
+  "entry": "plugin/index.mjs",
+  "contract": 4,
+  "examples": ["examples/calculator"],
+  "attribution": { "name": "UI stance", "authors": ["make become"], "license": "MIT", "version": "0.1.0" }
+}
+```
+
+- `name` is the plugin's name, as its manifest gives it by default.
+- `entry` is the path of its module in the repository, the `path` a project pins.
+- `contract` is the plugin contract the module is written for, as in its manifest.
+- `kind` is optional, and says what sort of plugin it is when it is a particular one: `stance` for a [stance](stances.md).
+- `examples` and `attribution` are optional, and say what the manifest's `examples` and `attribution` say.
+
+The file and the module must agree. When a project loads a plugin from git and its checkout has a `naima-plugin.json`, Naima compares the two: the entry with
+the path the project pinned, and the kind, the contract, the examples and the attribution with the manifest's. If they differ, the plugin isn't loaded, and the
+message names each difference. The name isn't compared, because a manifest takes its name from the project's entry for it. `naima stances` reads the file, and
+only the file, to tell a stance from a repository that is merely named like one.
+
 ## Data migrations
 
 Each plugin keeps its own data-format number next to the core's, in `naima.json`. A plugin that needs to rename a field or change where it keeps something

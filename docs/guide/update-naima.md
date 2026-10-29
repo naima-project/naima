@@ -7,23 +7,25 @@ You rarely need to do any of this yourself. The agents check for updates, tell y
 
 ## Naima updates to releases
 
-Naima moves only from one release to another. A release is a version tag, such as `v1.2.0`, with two files attached on GitHub: `naima-1.2.0.tar.gz`, which
-holds the files of that version, and `naima-1.2.0.tar.gz.sha256`, its checksum. Installing Naima and updating it both download that archive from the release.
-Naima checks the archive against its checksum and against the commit the tag names before it uses anything in it, and refuses an archive that does not match.
-The lock then records the version and the checksum next to the commit.
+Naima moves only from one release to another. A release is a version tag, such as `v1.2.0`, with two files attached on GitHub: `naima-1.2.0.tar.gz`, which holds
+the files of that version, and `naima-1.2.0.tar.gz.sha256`, its checksum. Installing Naima and updating it both download that archive from the release, at its plain address on the releases page. Which releases exist is read from the source's tags with `git ls-remote`, a version with a suffix such as `-rc.1` being a pre-release, so it works wherever git does; GitHub's API is asked only when git cannot read the tags. Naima
+checks the archive against its checksum and against the commit the tag names before it uses anything in it, and refuses an archive that does not match. The lock
+then records the version and the checksum next to the commit.
 
-Downloading the archive is also how the project knows how many people use each version. GitHub counts the downloads of every file attached to a release, so
-the releases page shows how many installs and updates each version had, private projects included. Naima sends nothing else anywhere.
+Downloading the archive is also how the project knows how many people use each version. GitHub counts the downloads of every file attached to a release, so the
+releases page shows how many installs and updates each version had, private projects included. Naima sends nothing else anywhere.
 
-`naima update` takes the newest release. Pre-releases, such as `1.2.0-rc.1`, are left out unless you ask for them with `naima update --pre`, or the project
-already runs one. To move to a particular version, forward or back, name it: `naima update --to 1.2.0`.
+`naima update` takes the newest release from `1.1.0-beta.4` on, the first release built to be installed from its archive, the same one the installer starts
+from; older releases are taken only when named. Pre-releases, such as `1.2.0-rc.1`, are skipped only when such a stable release exists, and then you can still
+ask for them with `naima update --pre`; a project that already runs a pre-release keeps getting them. To move to a particular version, forward or back, name it:
+`naima update --to 1.2.0`.
 
 A project whose lock still names a commit of Naima's main branch, as every lock did before releases, moves to the newest release on its next update, and the
 update says so once. If that commit is already newer than the newest release, Naima stays where it is and moves at the next release after it.
 
 Some projects follow a branch rather than releases: Naima's own workshop, which runs each change as soon as it lands, or a fork that publishes no releases.
-`naima update --main` moves the lock to the head of the source's main branch, as every update did before releases; the lock then names a commit with no
-version. A source that publishes no releases at all is followed that way by plain `naima update` too.
+`naima update --main` moves the lock to the head of the source's main branch, as every update did before releases; the lock then names a commit with no version.
+A source that publishes no releases at all is followed that way by plain `naima update` too.
 
 ## What happens when a session starts
 
@@ -71,8 +73,7 @@ naima update --check
 ```
 
 This tells you whether the [source](glossary.md#source) has a newer release than the one you are locked to. It exits with 1 when it does, and when the lock
-still names a commit of main that the next update moves to a release. In that case it also
-tells you what would change, in three parts.
+still names a commit of main that the next update moves to a release. In that case it also tells you what would change, in three parts.
 
 First come the change notes. Every change to how Naima behaves comes with a short note written by whoever made it ([change notes](../../changes/README.md)).
 Naima lists the notes added between your version and the newer one, grouped so the important ones come first:
@@ -108,11 +109,14 @@ naima set todos/update-naima status=done
 ```
 
 An update changes what the project holds to, so it gets an item of its own and is made in that item's worktree. The coordinator then lands it from the main
-checkout with `naima land`, like any other change. Committed straight on the trunk, it draws a note from the check `landings-are-markers`.
+checkout with `naima land`, like any other change. Committed straight on the trunk, it draws a note from the check `landings-are-markers`. When the tracker
+is a repository of its own, Naima commits the tracker's half on the item's branch itself, you commit the files of the code it names, and `naima land` lands
+the two together; run on the code's trunk while the trunk guard runs there, the update is refused before anything moves
+([updating Naima in sibling mode](private-tracker.md#updating-naima)).
 
-`naima update` shows what changes, downloads the newer release's archive and checks it, switches the program to it and records the new version, its checksum
-and its commit in the lock. If anything fails along the way, the previous version stays in place. Without a network the update says it could not reach the
-releases, leaves the lock where it is, and still runs the rest of its work on the version you have. Then the newer Naima finishes the update itself:
+`naima update` shows what changes, downloads the newer release's archive and checks it, switches the program to it and records the new version, its checksum and
+its commit in the lock. If anything fails along the way, the previous version stays in place. Without a network the update says it could not reach the releases,
+leaves the lock where it is, and still runs the rest of its work on the version you have. Then the newer Naima finishes the update itself:
 
 - it migrates your data if the format changed;
 - it fixes what is mechanical in `naima.json`: an option a note says was renamed gets its new name and keeps its value, and an option the newer Naima doesn't
@@ -158,6 +162,11 @@ Naima moved to 0fde22566318; run naima update once more to finish: the line in A
 Run `naima update` again. The second time the new version starts it, so it writes what was left and prints the usual last line with the files to commit. Until
 then, `naima hello` and `naima check` both say that the update is unfinished, and what is left.
 
+The same holds for the network. A launcher from before releases doesn't let the new version download a release, so an update that started there moves the lock
+along main and then stops with a line saying that the launcher that started the run does not let it reach the release's host, and to run the command again. Run
+`naima update` again, and it moves on to the release. A launcher that already knows this hands the program over instead: when an update has moved the program to
+another commit, that commit's own launcher runs the rest of it, with that commit's permissions, so one run is enough.
+
 ## Going back to the previous version
 
 ```sh
@@ -190,8 +199,8 @@ in one line what it did:
 | The program at a different commit from the lock          | It switches it to the lock.                                                                               |
 
 A fresh copy comes from somewhere on your own disk when possible, such as another worktree's program or the Naima you are running, so no network is needed. Only
-otherwise does it download from the source, and when the lock names a release, it downloads that release's archive too and checks it against the checksum in
-the lock.
+otherwise does it download from the source, and when the lock names a release, it downloads that release's archive too and checks it against the checksum in the
+lock.
 
 If someone has changed files in the program by hand, Naima won't touch it. Publish those changes as a fork instead
 ([modifying Naima](install.md#modifying-naima)). And if your project has no program at all, run any copy of Naima you have from inside the project
@@ -237,7 +246,7 @@ A repository that moved, say to another GitHub organization, still answers at it
 | the program directory has local changes, or commits its source does not have | someone changed Naima in place: publish the change as a fork and set `source` ([modifying Naima](install.md#modifying-naima)) |
 | it cannot reach the locked commit                                            | the source was rewritten or deleted: point `source` at a repository that has it                                               |
 | no network, and no copy yet                                                  | connect once; once the commit is in the user's cache every copy of it works offline                                           |
-| an archive whose SHA-256 differs from its checksum file, or from the lock    | nothing was installed: the download was altered or the release was replaced; ask whoever publishes the release                 |
-| Naima stays at its version: it cannot read the releases                      | the network or GitHub is down; the lock did not move, so run the update again later                                            |
+| an archive whose SHA-256 differs from its checksum file, or from the lock    | nothing was installed: the download was altered or the release was replaced; ask whoever publishes the release                |
+| Naima stays at its version: it cannot read the releases                      | the network or GitHub is down; the lock did not move, so run the update again later                                           |
 
 Everything about the lock, alignment and the copy: [install](install.md).

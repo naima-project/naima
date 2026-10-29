@@ -57,7 +57,9 @@ For a plugin in a git repository, you name the repository, the full commit to ru
 }
 ```
 
-The first run fetches it into `naima-tracker/plugins/ops/`, a folder git ignores. To move to a newer version, change `commit`.
+The first run fetches it into `naima-tracker/plugins/ops/`, a folder git ignores. To move to a newer version, change `commit`. If the repository describes the plugin in a
+`naima-plugin.json` at its root ([describing a plugin](extending-naima.md#describing-a-plugin-naima-pluginjson)), its `entry` is the `path` to pin, and Naima
+refuses to load a module whose manifest says something different from that file.
 
 ## Its options
 

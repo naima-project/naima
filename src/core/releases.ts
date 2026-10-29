@@ -10,9 +10,16 @@
 // checksum, and against the lock's when the lock records one, before anything
 // is unpacked.
 //
-// The releases are read from GitHub's public API, without credentials, or from
-// a server that answers like it, named by NAIMA_RELEASES_API (a mirror, a
-// test's fake server). Nothing here retries or waits long: a host that does not
+// Which releases exist is read the way git reads any repository, so that it
+// works wherever git does, through a proxy that refuses GitHub's API included:
+// the source's tags v<version>, by `git ls-remote --tags`, a version with a
+// pre-release suffix (1.2.0-beta.1) being a pre-release; and each asset is
+// downloaded from its plain address, <releases>/download/v<version>/<file>,
+// where <releases> is the GitHub repository's releases page, or the folder or
+// server NAIMA_RELEASES names. GitHub's public API, or a server that answers
+// like it named by NAIMA_RELEASES_API (a mirror, a test's fake server), is the
+// last resort: for a source whose tags git cannot read, or whose assets have no
+// plain address. Nothing here retries or waits long: a host that does not
 // answer is said, and the caller keeps what it has.
 
 import { createHash } from "node:crypto"
@@ -21,7 +28,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { join } from "node:path"
 import { gunzipSync } from "node:zlib"
 import { NaimaError } from "./errors.ts"
-import { gitReason, runGit } from "./git.ts"
+import { gitReason, runGit, runGitAsync } from "./git.ts"
 import { githubRepo } from "./visibility.ts"
 
 /** The variable that names another server answering like GitHub's releases API. */
@@ -44,12 +51,22 @@ export interface Release {
   assets: Record<string, string>
 }
 
-/** A repository whose releases are read: its owner and name, and the API that answers for it. */
+/**
+ * A repository whose releases are read: its owner and name, and the API that answers for it; with `source` and
+ * `downloads`, its tags are read from the source with git and its assets downloaded from `downloads`, the API unused.
+ */
 export interface ReleaseRepo {
   api: string
   owner: string
   repo: string
+  /** The source git reads the tags of. */
+  source?: string
+  /** Where the assets are, as <downloads>/download/v<version>/<file>. */
+  downloads?: string
 }
+
+/** The environment variable naming where a source's release assets are, as GitHub lays them out: a folder (file://) or a server. */
+export const RELEASES_ENV = "NAIMA_RELEASES"
 
 /** The releases API to ask: NAIMA_RELEASES_API when set, else GitHub's. */
 export function releasesApi(env: Record<string, string | undefined> = process.env): string {
@@ -71,17 +88,19 @@ export function apiHost(api: string): string | null {
  * last two segments of any source's path, as a mirror or a test's server serves them. Null when nothing answers
  * for the source: a path on this disk, or a host other than GitHub, publishes no releases.
  */
-export function releaseRepo(source: string, api = releasesApi()): ReleaseRepo | null {
+export function releaseRepo(source: string, api = releasesApi(), env: Record<string, string | undefined> = process.env): ReleaseRepo | null {
+  const named = env[RELEASES_ENV]?.trim().replace(/\/+$/, "")
   const gh = githubRepo(source)
   if (gh) {
     const [owner, repo] = gh.split("/") as [string, string]
-    return { api, owner, repo }
+    return { api, owner, repo, source, downloads: named || `https://github.com/${owner}/${repo}/releases` }
   }
-  if (api === GITHUB_API) return null
+  if (api === GITHUB_API && !named) return null
   const parts = source.replace(/^file:\/\//, "").replace(/\\/g, "/").replace(/\.git\/?$/, "").split(/[/:]/).filter(Boolean)
   const repo = parts.at(-1)
   const owner = parts.at(-2)
-  return owner && repo ? { api, owner, repo } : null
+  if (!owner || !repo) return null
+  return named ? { api, owner, repo, source, downloads: named } : { api, owner, repo }
 }
 
 const VERSION = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/
@@ -124,14 +143,52 @@ export function compareVersions(a: string, b: string): number {
 }
 
 const unreachable = (what: string, why: string): NaimaError => new NaimaError(`cannot ${what}: ${why}`, RELEASES_UNREACHABLE)
-const why = (e: unknown): string => (e instanceof Error ? e.message : String(e))
+const why = (e: unknown): string => {
+  if (!(e instanceof Error)) return String(e)
+  // Refused by the runtime, not by the network: the launcher that started this run does not grant the host, as a
+  // launcher from before releases does not when an update has just moved the program past it.
+  if (e.name === "NotCapable" || e.name === "PermissionDenied") {
+    return "the launcher that started this run does not let it reach that host (a launcher older than the program it runs): run the command again"
+  }
+  return e.message
+}
 
 /**
- * The published releases of `r`, newest first, drafts left out: one request, ten seconds at most. A repository the
- * API does not know (404: missing, or private to an anonymous reader) publishes none. Throws, with the code
- * RELEASES_UNREACHABLE, when the API cannot be read.
+ * The published releases of `r`, newest first: its tags read by git when its assets have a plain address, else, or
+ * when git cannot read the tags, the API's list, drafts left out; ten seconds at most each. A repository the API
+ * does not know (404: missing, or private to an anonymous reader) publishes none. Throws, with the code
+ * RELEASES_UNREACHABLE, when neither can be read.
  */
 export async function listReleases(r: ReleaseRepo, timeoutMs = 10_000): Promise<Release[]> {
+  if (r.source && r.downloads) {
+    const tagged = await tagReleases(r.source, r.repo, r.downloads, timeoutMs)
+    if (tagged) return tagged
+  }
+  return await apiReleases(r, timeoutMs)
+}
+
+/**
+ * The releases of `source` as git reads them: each tag v<version>, a pre-release when the version has a suffix, with
+ * the plain addresses of its two assets under `downloads`. Null when git cannot read the source's tags.
+ */
+async function tagReleases(source: string, name: string, downloads: string, timeoutMs: number): Promise<Release[] | null> {
+  const r = await runGitAsync(process.cwd(), ["ls-remote", "--tags", "--refs", "--", source, "v*"], timeoutMs)
+  if (!r.ok) return null
+  const out: Release[] = []
+  for (const line of r.out.split("\n")) {
+    const ref = line.split("\t")[1]?.trim() ?? ""
+    const tag = ref.replace(/^refs\/tags\//, "")
+    if (!ref.startsWith("refs/tags/") || !isVersion(tag)) continue
+    const version = bareVersion(tag)
+    const file = archiveName(name, version)
+    const at = `${downloads}/download/${tag}`
+    out.push({ version, tag, prerelease: isPrerelease(version), assets: { [file]: `${at}/${file}`, [`${file}.sha256`]: `${at}/${file}.sha256` } })
+  }
+  return out.sort((a, b) => compareVersions(b.version, a.version))
+}
+
+/** The releases as GitHub's API, or a server that answers like it, lists them: the last resort. */
+async function apiReleases(r: ReleaseRepo, timeoutMs: number): Promise<Release[]> {
   const url = `${r.api}/repos/${r.owner}/${r.repo}/releases?per_page=100`
   let res: Response
   try {
@@ -172,6 +229,13 @@ export function pickRelease(releases: readonly Release[], ask: { version?: strin
   return [...eligible].sort((a, b) => compareVersions(b.version, a.version))[0] ?? null
 }
 
+/**
+ * The first release of Naima built to be installed from its archive: an older release's tree predates the layout
+ * an install unpacks, so neither `naima update` nor the installers (FIRST_ARCHIVE_RELEASE in site/install.sh and
+ * site/install.ps1) ever take one as the newest. A version named explicitly is installed as named.
+ */
+export const FIRST_ARCHIVE_RELEASE = "1.1.0-beta.4"
+
 /** What `naima update` does, given the lock and the source's releases: the decision alone, the downloads apart. */
 export type UpdatePlan =
   | { kind: "main" }
@@ -182,9 +246,10 @@ export type UpdatePlan =
 
 /**
  * Plan an update. No release: the source's main is followed (a fork, a mirror, a repository on this disk). A
- * named version moves there, forward or back. Otherwise the newest release, pre-releases included when asked or
- * when the project already runs one; none when only pre-releases exist and none was asked for. A lock with no
- * version, a commit of main, migrates to releases.
+ * named version moves there, forward or back. Otherwise the newest release from FIRST_ARCHIVE_RELEASE on: the
+ * newest stable one, pre-releases included when asked, when the project already runs one, or while no stable
+ * release qualifies; none when no release qualifies. A lock with no version, a commit of main, migrates to
+ * releases.
  */
 export function planUpdate(
   lock: { version?: string | undefined },
@@ -192,11 +257,15 @@ export function planUpdate(
   ask: { version?: string | undefined; pre?: boolean | undefined } = {},
 ): UpdatePlan {
   if (!releases.length) return { kind: "main" }
-  const pre = ask.pre === true || (lock.version !== undefined && isPrerelease(lock.version))
-  const release = pickRelease(releases, { version: ask.version, pre })
-  if (!release) {
-    return ask.version !== undefined ? { kind: "missing", version: bareVersion(ask.version) } : { kind: "none" }
+  if (ask.version !== undefined) {
+    const named = pickRelease(releases, { version: ask.version })
+    if (!named) return { kind: "missing", version: bareVersion(ask.version) }
+    return lock.version === named.version ? { kind: "current", release: named } : { kind: "move", release: named, migrating: lock.version === undefined }
   }
+  const qualifying = releases.filter((r) => compareVersions(r.version, FIRST_ARCHIVE_RELEASE) >= 0)
+  const pre = ask.pre === true || (lock.version !== undefined && isPrerelease(lock.version)) || !qualifying.some((r) => !r.prerelease)
+  const release = pickRelease(qualifying, { pre })
+  if (!release) return { kind: "none" }
   if (lock.version !== undefined && release.version === lock.version) return { kind: "current", release }
   return { kind: "move", release, migrating: lock.version === undefined }
 }

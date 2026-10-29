@@ -51,8 +51,11 @@ owner (quiet, simple, fast, capture, loops closed) is the shipped working rules,
 In this page, `naima` means, from the project's root:
 
 ```sh
-deno run -A naima-tracker/naima/naima.ts
+sh naima-tracker/naima.sh
 ```
+
+the committed launcher, which installs Deno and the program first when either is missing (`naima-tracker\naima.cmd` on Windows); before `naima init` has
+written it, `deno run -A naima-tracker/naima/naima.ts`.
 
 ## 0. Have git and a repository
 

@@ -3,7 +3,7 @@
 // program itself — init, update, rollback, hello, plugin, guide, help — are answered here,
 // before any plugin is loaded.
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { dirname, join, relative, resolve } from "node:path"
 import {
   carryRefusal,
@@ -25,7 +25,7 @@ import { AGENT_ID, markRules, SUBAGENT_PREAMBLE } from "./subagents.ts"
 import { FORMAT, formatRefusal, isFormat, migrate, MIGRATIONS, type Step } from "./format.ts"
 import { formatsFor, type OpenOptions, openProject, owed } from "./project.ts"
 import { bool, pairs, parse, str } from "./args.ts"
-import { currentBranch, gitOrNull, gitReason, LAND_IT, nativePath, runGit, runGitAsync, setupCommit, toplevel, trunk } from "./git.ts"
+import { currentBranch, gitOrNull, gitReason, LAND_IT, nativePath, runGit, runGitAsync, setupCommit, toplevel, trunk, worktrees } from "./git.ts"
 import { githubRepo, remoteVisibility, type Visibility } from "./visibility.ts"
 import {
   clearExposed,
@@ -56,6 +56,7 @@ import {
   TRACKER_URL_KEY,
   trackerChanges,
   trackerGitOf,
+  trunkGuardRuns,
   writeSiblingMarker,
 } from "./repos.ts"
 import { exclusions } from "./excludes.ts"
@@ -85,6 +86,7 @@ import {
   CHECKSUM_MISMATCH,
   clearDownloads,
   fetchRelease,
+  FIRST_ARCHIVE_RELEASE,
   isVersion,
   listReleases,
   planUpdate,
@@ -146,11 +148,16 @@ import {
 import { startSession } from "./origin.ts"
 import type { TickJob } from "./types.ts"
 import {
+  appsBelow,
+  isApp,
+  notAStance,
   STANCE_ADOPT,
+  STANCE_APP_OPTION,
   STANCE_KIND,
   STANCE_MODULE,
   STANCE_NAME,
   stanceHead,
+  stanceOptions,
   stancePlugin,
   type StanceRegistry,
   stanceRegistry,
@@ -901,11 +908,7 @@ async function moveLock(
   // Forward, the new Naima finishes: it knows the new format, and its own check is the one that ends the update.
   if (!change.back || change.formats.some((f) => f.to > f.from)) return RELAUNCH
   const verb = change.back ? "Roll Naima back to" : "Update Naima to"
-  io.out(
-    `${toLabel} is the lock — commit it as one change ${LAND_IT}: git add ${tracker} && git commit -m "${verb} ${
-      release ? `version ${release.version}` : short(to)
-    }"`,
-  )
+  io.out(`${toLabel} is the lock — ${commitUpdate(place, [], `${verb} ${release ? `version ${release.version}` : short(to)}`)}`)
   return 0
 }
 
@@ -913,8 +916,8 @@ async function moveLock(
 type ReleaseStep = { kind: "main" } | { kind: "stay"; failed: boolean } | { kind: "moved"; code: number }
 
 /**
- * Move the lock to a release: the named version, else the newest (pre-releases when asked, or when the project runs
- * one). Its archive is downloaded from the release, checked against its checksum, checked to be made from the
+ * Move the lock to a release: the named version, else the newest from FIRST_ARCHIVE_RELEASE on (pre-releases when
+ * asked, when the project runs one, or while no stable release qualifies). Its archive is downloaded from the release, checked against its checksum, checked to be made from the
  * commit the tag names, and that commit's tree compared with the archive's files; only then does the lock move. A
  * source that publishes no releases is followed by its main; one that cannot be reached leaves the lock as it is.
  */
@@ -948,11 +951,23 @@ async function toRelease(
     throw new Error(`${plan.version} is not a release of ${lock.source}: its newest are ${some}`)
   }
   if (plan.kind === "none") {
-    io.out(`${lock.source} has published only pre-releases so far: naima update --pre installs the newest of them`)
+    io.out(
+      `${lock.source} has published no release from ${FIRST_ARCHIVE_RELEASE} on, the first an update installs from its archive: naima update --to <version> names an older one`,
+    )
     return { kind: "stay", failed: false }
   }
   if (plan.kind === "current") {
     io.out(`Naima is at version ${plan.release.version}, the ${ask.version !== undefined ? "version named" : "newest release"}`)
+    return { kind: "stay", failed: false }
+  }
+  // A lock of main past the release stays, decided before anything is downloaded: the release is older than what runs.
+  const tagged = !lock.version && ask.version === undefined ? tagCommit(t, plan.release.tag) : null
+  if (tagged && tagged !== lock.commit && isAncestor(t.program, tagged, lock.commit)) {
+    io.out(
+      `Naima stays at ${
+        short(lock.commit)
+      }, a commit of the source's main past its newest release, version ${plan.release.version}: the next release after it is the next update`,
+    )
     return { kind: "stay", failed: false }
   }
   const dir = releaseDir(t.tracker)
@@ -1087,6 +1102,7 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
   }
   const carried = carryRefusal(raw, posixRelative(place.root, place.program))
   if (carried) throw new Error(carried)
+  pairedUpdate(place, "update", io)
   let failed = false
   let followMain = byCommit
   if (!byCommit) {
@@ -1122,17 +1138,58 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
     return 0
   }
   const locked = parseLock(readRaw(place.data))
-  const paths = [tracker, ...wrote], subject = `Update Naima to ${lockLabel(locked)}`
-  io.out(
-    bringsHooks(place)
-      ? `${
-        lockLabel(locked)
-      } is the lock, and this update brings the project's git hooks, the trunk guard among them, which the trunk does not carry yet — commit it as one change straight on the trunk, which takes it by its trailer: ${
-        setupCommit(paths, subject, "update")
-      }`
-      : `${lockLabel(locked)} is the lock — commit it as one change ${LAND_IT}: git add ${paths.join(" ")} && git commit -m "${subject}"`,
-  )
+  io.out(`${lockLabel(locked)} is the lock — ${commitUpdate(place, wrote, `Update Naima to ${lockLabel(locked)}`)}`)
   return failed ? EXIT.FAILED : 0
+}
+
+/** The tracker's own repository when it is kept apart from the code's (sibling mode); null when it is committed with the code. */
+const siblingGit = (place: Place): string | null => {
+  const git = trackerGitOf(place.root, place.data)
+  return git !== place.root ? git : null
+}
+
+/**
+ * In sibling mode an update is one change in two repositories: the lock in the tracker, and the files of the code it
+ * rewrites (the agents' settings, the pointer line). It lands as one paired landing, never one trunk at a time. From
+ * the code's trunk, while the trunk guard runs there, the update is refused before anything moves, naming the route:
+ * the item's worktree, whose tracker branch pairs with its code branch. Anywhere else the tracker is first paired
+ * with the code's branch, so that the tracker's half, which Naima commits, goes on the branch the code's half does.
+ */
+function pairedUpdate(place: Place, command: string, io: IO): void {
+  const git = siblingGit(place)
+  if (!git) return
+  const branch = currentBranch(place.root)
+  if (branch === trunk(place.root) && trunkGuardRuns(place.root, place.data)) {
+    throw new Error(
+      `naima ${command} moves the lock in the tracker and rewrites files of the code, one change in two repositories, which lands as one paired landing: ` +
+        `not on ${branch}, where the trunk guard would take the tracker's half and refuse the code's. Open an item for it (naima open <item>), ` +
+        `run naima ${command} in its worktree, where Naima commits the tracker's half on the paired branch, commit the code's half there, and land the branch with naima land`,
+    )
+  }
+  const moved = pairTracker(place.root, git, branch)
+  if (moved) io.err(`naima: ${moved}`)
+}
+
+/**
+ * Where an update's change is committed, as the words after "the lock —": with the tracker inside the code, one
+ * commit on an item's branch; in sibling mode, the tracker's half is Naima's to commit on the paired branch, and the
+ * code's half (`paths`) is committed on the same branch, which lands both together.
+ */
+function commitUpdate(place: Place, paths: readonly string[], subject: string): string {
+  const tracker = posixRelative(place.root, trackerOf(place.data))
+  const git = siblingGit(place)
+  if (!git) {
+    return bringsHooks(place)
+      ? `this update brings the project's git hooks, the trunk guard among them, which the trunk does not carry yet — commit it as one change straight on the trunk, which takes it by its trailer: ${
+        setupCommit([tracker, ...paths], subject, "update")
+      }`
+      : `commit it as one change ${LAND_IT}: git add ${[tracker, ...paths].join(" ")} && git commit -m "${subject}"`
+  }
+  const branch = currentBranch(place.root)
+  const ours = `Naima commits the tracker's half on the tracker's ${currentBranch(git)} as this command ends`
+  const code = paths.length ? `; commit the code's half on ${branch}: git add ${paths.join(" ")} && git commit -m "${subject}"` : ""
+  const land = branch === trunk(place.root) ? "" : `; then land ${branch} with naima land, which lands both halves as one paired landing`
+  return `${ours}${code}${land}`
 }
 
 /**
@@ -1141,7 +1198,7 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
  * commit goes on the trunk with its Naima-Setup: trailer, since no item could be landed before it.
  */
 function bringsHooks(place: Place): boolean {
-  if (toplevel(place.data) !== toplevel(place.root) || currentBranch(place.root) !== trunk(place.root)) return false
+  if (siblingGit(place) || currentBranch(place.root) !== trunk(place.root)) return false
   if (!existsSync(join(place.data, HOOKS_DIR))) return false
   return !gitOrNull(place.root, "ls-tree", "--name-only", "HEAD", "--", posixRelative(place.root, join(place.data, HOOKS_DIR)))
 }
@@ -1158,6 +1215,7 @@ async function rollback(args: string[], opts: CliOptions, place: Place, lock: Lo
   if (parse(args).positionals.length) throw new Error(usage("rollback"))
   const carried = carryRefusal(raw, posixRelative(place.root, place.program))
   if (carried) throw new Error(carried)
+  pairedUpdate(place, "rollback", io)
   const t = targetOf(place, lock, opts)
   const previous = previousLock(place, lock.commit)
   return await moveLock(opts, place, lock, raw, io, resolveCommit(t, previous.commit), previous.release)
@@ -1708,6 +1766,9 @@ function adoptedStances(raw: Record<string, unknown>): { name: string; plugin: s
   })
 }
 
+/** The scratch folder in the tracker folder where naima stances reads each stance's manifest. */
+const STANCES_WORK = ".naima-stances"
+
 async function stancesCommand(args: string[], opts: CliOptions, place: Place, io: IO): Promise<number> {
   if (args.length) throw new Error(usage("stances"))
   let listed
@@ -1719,7 +1780,18 @@ async function stancesCommand(args: string[], opts: CliOptions, place: Place, io
   }
   const adopted = new Set(adoptedStances(readRaw(place.data)).map((s) => s.name))
   if (!listed.length) io.out("no stance is published yet")
-  for (const s of listed) io.out(`${s.name.padEnd(16)} ${adopted.has(s.name) ? "adopted  " : "         "}${s.says}`)
+  // Each one's naima-plugin.json, read in the tracker folder's scratch space, which is removed after.
+  const work = join(trackerOf(place.data), STANCES_WORK)
+  try {
+    const registry = opts.stances ?? stanceRegistry()
+    for (const s of listed) {
+      const not = await notAStance(registry.url(s.name), work)
+      if (not) io.out(`${s.name.padEnd(16)} not a stance: ${not}${s.says ? ` — ${s.says}` : ""}`)
+      else io.out(`${s.name.padEnd(16)} ${adopted.has(s.name) ? "adopted  " : "         "}${s.says}`)
+    }
+  } finally {
+    rmSync(work, { recursive: true, force: true })
+  }
   return 0
 }
 
@@ -1755,6 +1827,17 @@ async function stanceCommand(args: string[], opts: CliOptions, place: Place, io:
     return 0
   }
   // adopt
+  // Its adoption writes into the checkout this Naima serves: from another worktree of the project, that is not where the work is.
+  const here = toplevel(opts.cwd)
+  if (here && real(nativePath(here)) !== real(place.root) && worktrees(place.root).some((w) => real(nativePath(w.path)) === real(nativePath(here)))) {
+    throw new Error(
+      `stance ${name} not adopted: you are in the worktree ${
+        nativePath(here)
+      }, and this Naima serves the checkout ${place.root}, where it would pin the stance and run its adoption — run the worktree's own Naima from the worktree: deno run -A ${
+        posixRelative(place.root, place.program)
+      }/naima.ts stance adopt ${args.slice(1).join(" ")}`,
+    )
+  }
   const registry = opts.stances ?? stanceRegistry()
   const git = registry.url(name)
   // Its newest release when it publishes releases, the archive downloaded and verified; else its head commit.
@@ -1768,14 +1851,45 @@ async function stanceCommand(args: string[], opts: CliOptions, place: Place, io:
   const head = released ? { commit: released.commit } : stanceHead(place.root, git)
   if ("reason" in head) throw new Error(`stance ${name}: ${head.reason}`)
   const raw = readRaw(place.data)
-  const entry = { ...pluginEntry(raw, plugin), source: { git, commit: head.commit, path: STANCE_MODULE } }
+  let entry: Record<string, unknown> = { ...pluginEntry(raw, plugin), source: { git, commit: head.commit, path: STANCE_MODULE } }
   writeValidatedRaw(place.data, withPluginEntry(raw, plugin, entry, false))
   let ctx: Context
+  let passed: string[] = rest
+  let where = "."
+  let hook: Command | undefined
   try {
     ctx = await openProject(place, opts, io)
     const manifest = ctx.registry.plugins.find((p) => p.name === plugin)
     if (manifest?.kind !== STANCE_KIND) {
       throw new Error(`${git} at ${short(head.commit)} is a plugin, but not a stance: its manifest does not say kind "${STANCE_KIND}"`)
+    }
+    // The stance's own options, such as --app <dir>, go into its entry, where its checks read them too; the rest, to its adoption.
+    const declared = manifest.options ?? []
+    const split = stanceOptions(rest, new Set(declared.map((o) => o.name)))
+    passed = split.rest
+    if (Object.keys(split.options).length) {
+      const options = { ...((entry["options"] as Record<string, unknown> | undefined) ?? {}), ...split.options }
+      entry = { ...entry, options }
+      writeValidatedRaw(place.data, withPluginEntry(raw, plugin, entry, false))
+      ctx = await openProject(place, opts, io)
+    }
+    const found = ctx.registry.find<Command>("commands", plugin)?.value
+    hook = found && found.usage.split(/[\s|[\]]+/).includes(STANCE_ADOPT) ? found : undefined
+    // Where its adoption writes: the folder of the app, when the stance declares the option; else the project's root.
+    const app = declared.find((o) => o.name === STANCE_APP_OPTION)
+    if (hook && app) {
+      const set = (entry["options"] as Record<string, unknown> | undefined)?.[STANCE_APP_OPTION]
+      where = typeof set === "string" ? set : app.default ?? "."
+      const others = resolve(place.root, where) === resolve(place.root) && !isApp(place.root) && split.options[STANCE_APP_OPTION] === undefined
+        ? appsBelow(place.root, posixRelative(place.root, trackerOf(place.data)))
+        : []
+      if (others.length) {
+        throw new Error(
+          `its adoption would write at the project's root, and the project's app is elsewhere: ${
+            others.map((d) => `${d}/`).join(", ")
+          } — give --${STANCE_APP_OPTION} ${others[0]} to adopt it into that app, or --${STANCE_APP_OPTION} . to adopt it at the root all the same`,
+        )
+      }
     }
   } catch (e) {
     writeRaw(place.data, raw)
@@ -1785,13 +1899,13 @@ async function stanceCommand(args: string[], opts: CliOptions, place: Place, io:
   io.out(`adopted stance ${name}: ${git} at ${at}, pinned in ${DATA_FILE} as plugins.${plugin}`)
   sayPluginHooks(ctx, io)
   // Its adoption, when it declares one: its own command, named as it is, that takes adopt.
-  const hook = ctx.registry.find<Command>("commands", plugin)?.value
-  if (!hook || !hook.usage.split(/[\s|[\]]+/).includes(STANCE_ADOPT)) {
+  if (!hook) {
     io.out(`stance ${name} declares no adoption of its own: its rules and checks are loaded`)
     return 0
   }
-  io.out(`running its adoption: naima ${plugin} ${STANCE_ADOPT}${rest.length ? ` ${rest.join(" ")}` : ""}`)
-  return await hook.run([STANCE_ADOPT, ...rest], ctx)
+  const folder = resolve(place.root, where) === resolve(place.root) ? "the project's root" : `${posixRelative(place.root, resolve(place.root, where))}/`
+  io.out(`running its adoption, which writes in ${folder} (${place.root}): naima ${plugin} ${STANCE_ADOPT}${passed.length ? ` ${passed.join(" ")}` : ""}`)
+  return await hook.run([STANCE_ADOPT, ...passed], ctx)
 }
 
 /**

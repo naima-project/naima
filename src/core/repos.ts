@@ -275,6 +275,15 @@ const isDelegate = (data: string, name: string): boolean => {
   }
 }
 
+/**
+ * Whether git runs a trunk guard in this clone: core.hooksPath names the data directory's hooks, and the
+ * reference-transaction hook there is one Naima wrote, not the stub that only delegates to the clone's own.
+ */
+export function trunkGuardRuns(root: string, data: string): boolean {
+  if (gitOrNull(root, "config", "--get", "core.hooksPath") !== `${relativePosix(root, data)}/${HOOKS_DIR}`) return false
+  return naimaHooks(data).includes("reference-transaction") && !isDelegate(data, "reference-transaction")
+}
+
 /** Write the stub of every hook name that has no file in the data directory's hooks yet. Returns the names written. */
 export function writeDelegates(data: string): string[] {
   const out: string[] = []

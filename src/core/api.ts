@@ -57,6 +57,7 @@ export {
   type ItemData,
   itemData,
   type ItemLink,
+  offersAtSessionStart,
   renderBoard,
   setFields,
   summarySections,
