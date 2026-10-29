@@ -200,7 +200,11 @@ export function uiGrant(command: string | undefined, os: string, deno: string, t
  * named. Deno looks a program up before it checks the grant, so one that is not installed is still not found, and
  * the plugin that starts it says it is missing.
  */
-export function runnable(program: string, env: Record<string, string | undefined> = process.env, os: string = Deno.build.os): boolean {
+export function runnable(
+  program: string,
+  env: Record<string, string | undefined> = process.env,
+  os: string = process.platform === "win32" ? "windows" : process.platform,
+): boolean {
   const file = (path: string): boolean => {
     try {
       return statSync(path).isFile()
