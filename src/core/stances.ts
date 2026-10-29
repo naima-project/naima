@@ -4,8 +4,10 @@
 // where a stance named <name> is the repository naima-stance-<name>. A real
 // registry replaces `stanceRegistry` alone.
 
+import { existsSync } from "node:fs"
+import { join, posix } from "node:path"
 import { NaimaError } from "./errors.ts"
-import { runGit } from "./git.ts"
+import { projectFiles, runGit } from "./git.ts"
 import { CHECKSUM_MISMATCH, clearDownloads, fetchReleaseOf, releaseRepo } from "./releases.ts"
 import { VISIBILITY_HOST } from "./visibility.ts"
 
@@ -34,6 +36,8 @@ export const STANCE_NAME = /^[a-z0-9][a-z0-9-]*$/
 export interface StanceListing {
   name: string
   says: string
+  /** Why the repository is not a stance, when it was read and its manifest does not declare the kind stance. */
+  notStance?: string
 }
 
 /** Where stances are found: every one available, and the git repository of each by its name. */
@@ -60,10 +64,56 @@ async function listOrganisation(): Promise<StanceListing[]> {
     throw new Error(`cannot list the stances of ${STANCE_ORG}: GitHub answered ${r.status}`)
   }
   const repos = (await r.json()) as { name?: unknown; description?: unknown }[]
-  return repos
+  const listed = repos
     .filter((x): x is { name: string; description?: unknown } => typeof x.name === "string" && x.name.startsWith(STANCE_REPO_PREFIX))
     .map((x) => ({ name: x.name.slice(STANCE_REPO_PREFIX.length), says: typeof x.description === "string" ? x.description : "" }))
     .sort((a, b) => a.name.localeCompare(b.name))
+  return await Promise.all(listed.map(async (l) => {
+    const notStance = await notAStance(`${STANCE_REPO_PREFIX}${l.name}`)
+    return notStance ? { ...l, notStance } : l
+  }))
+}
+
+/** A GET of GitHub's public API without credentials, ten seconds at most: null when it cannot be reached. */
+async function github(path: string, accept: string): Promise<Response | null> {
+  try {
+    return await fetch(`https://${VISIBILITY_HOST}${path}`, { headers: { "user-agent": "naima-stances", accept }, signal: AbortSignal.timeout(10_000) })
+  } catch {
+    return null
+  }
+}
+
+/** Does the text of a plugin's module declare the kind stance in its manifest: a `kind` key whose value is the string "stance"? */
+export function declaresStance(module: string): boolean {
+  // A flat token pattern, not a parse: a key and a string literal. Adoption loads the module and checks its manifest itself.
+  return /\bkind\s*:\s*(["'`])stance\1/.test(module)
+}
+
+/**
+ * Why the repository `repo` of the organisation is not a stance, read from its module at its newest release, or at the
+ * head of its default branch when it publishes none: it has no module where a stance keeps it, or its manifest does
+ * not declare the kind stance. Undefined when it is one, and when it cannot be read: then adopting it says.
+ * Two requests, the module alone: nothing is cloned.
+ */
+async function notAStance(repo: string): Promise<string | undefined> {
+  const latest = await github(`/repos/${STANCE_ORG}/${repo}/releases/latest`, "application/vnd.github+json")
+  let ref = ""
+  let at = "the head of its default branch"
+  if (latest?.status === 200) {
+    const tag = ((await latest.json()) as { tag_name?: unknown }).tag_name
+    if (typeof tag === "string" && tag) [ref, at] = [`?ref=${encodeURIComponent(tag)}`, `its newest release, ${tag}`]
+  } else await latest?.body?.cancel()
+  const r = await github(`/repos/${STANCE_ORG}/${repo}/contents/${STANCE_MODULE}${ref}`, "application/vnd.github.raw")
+  if (!r) return undefined
+  if (r.status === 404) {
+    await r.body?.cancel()
+    return `it has no ${STANCE_MODULE} at ${at}`
+  }
+  if (r.status !== 200) {
+    await r.body?.cancel()
+    return undefined
+  }
+  return declaresStance(await r.text()) ? undefined : `its manifest at ${at} does not declare kind "${STANCE_KIND}"`
 }
 
 /** The registry stances are found in: the organisation on GitHub, for now. */
@@ -114,4 +164,50 @@ export async function stanceRelease(cwd: string, git: string, dir: string): Prom
   } finally {
     clearDownloads(dir)
   }
+}
+
+/** The option a stance declares for the folder of the app its adoption writes into, from the project's root. */
+export const STANCE_APP_OPTION = "app"
+
+/**
+ * The arguments of `naima stance adopt <name>` after the name, split: the stance's own options (those its manifest
+ * declares, given as `--<name> <value>` or `--<name>=<value>`), which go into its plugin entry's options, and the rest,
+ * which its adoption is given.
+ */
+export function stanceOptions(args: readonly string[], declared: ReadonlySet<string>): { options: Record<string, string>; rest: string[] } {
+  const options: Record<string, string> = {}
+  const rest: string[] = []
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!
+    const m = /^--([^=]+)(?:=(.*))?$/.exec(a)
+    if (!m || !declared.has(m[1]!)) {
+      rest.push(a)
+      continue
+    }
+    const value = m[2] ?? args[++i]
+    if (value === undefined || (m[2] === undefined && value.startsWith("--"))) throw new Error(`--${m[1]} needs a value`)
+    options[m[1]!] = value
+  }
+  return { options, rest }
+}
+
+/** The files that make a folder an app: its package.json, or a Svelte configuration. */
+const APP_FILES: readonly string[] = ["package.json", "svelte.config.js", "svelte.config.mjs", "svelte.config.cjs", "svelte.config.ts"]
+
+/** Is the folder `dir` an app: does it hold a package.json or a Svelte configuration? */
+export const isApp = (dir: string): boolean => APP_FILES.some((f) => existsSync(join(dir, f)))
+
+/**
+ * The project's apps below its root: each folder, from the root with forward slashes, that holds a package.json or a
+ * Svelte configuration, among the files git tracks or would track. Never under node_modules, nor under `skip`, the
+ * tracker folder from the root.
+ */
+export function appsBelow(root: string, skip: string): string[] {
+  const apps = new Set<string>()
+  for (const f of projectFiles(root)) {
+    if (f.startsWith(`${skip}/`) || f.split("/").includes("node_modules")) continue
+    const dir = posix.dirname(f)
+    if (dir !== "." && APP_FILES.includes(posix.basename(f))) apps.add(dir)
+  }
+  return [...apps].sort()
 }

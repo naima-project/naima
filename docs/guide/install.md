@@ -291,6 +291,10 @@ The allow-list of variables is `ENV` in `src/launcher.ts`. Deno can't grant a na
 so the launcher enforces the list by giving the program only those variables. An unrelated secret, such as a cloud key, simply isn't there. Deno also splits its
 permission lists on commas, so a project or program whose path contains a comma is refused with one line naming it.
 
+Only the programs the launcher finds are named in the run permission: a name it finds in a directory of `PATH`, or a path that exists. A tool that is not
+installed, such as one of mCRL2's when the project has switched its verifier on, is left out, so Deno has nothing to warn about when it starts. The program
+that would start it still sees it as missing, and says how to install it.
+
 A command that tries to do anything else fails with Deno's own error, for example `Requires write access to "…/escaped.txt"` or `Requires run access to "ls"`.
 One consequence is that `naima docs --write` can only write inside the tracker folder when it is run through the launcher, so Naima's own repository regenerates
 its reference with the development build (`deno task docs`).

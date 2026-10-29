@@ -25,7 +25,7 @@ import { AGENT_ID, markRules, SUBAGENT_PREAMBLE } from "./subagents.ts"
 import { FORMAT, formatRefusal, isFormat, migrate, MIGRATIONS, type Step } from "./format.ts"
 import { formatsFor, type OpenOptions, openProject, owed } from "./project.ts"
 import { bool, pairs, parse, str } from "./args.ts"
-import { gitOrNull, gitReason, LAND_IT, nativePath, runGit, runGitAsync, toplevel, trunk } from "./git.ts"
+import { gitOrNull, gitReason, LAND_IT, nativePath, runGit, runGitAsync, toplevel, trunk, worktrees } from "./git.ts"
 import { githubRepo, remoteVisibility, type Visibility } from "./visibility.ts"
 import {
   clearExposed,
@@ -145,11 +145,15 @@ import {
 import { startSession } from "./origin.ts"
 import type { TickJob } from "./types.ts"
 import {
+  appsBelow,
+  isApp,
   STANCE_ADOPT,
+  STANCE_APP_OPTION,
   STANCE_KIND,
   STANCE_MODULE,
   STANCE_NAME,
   stanceHead,
+  stanceOptions,
   stancePlugin,
   type StanceRegistry,
   stanceRegistry,
@@ -1702,7 +1706,10 @@ async function stancesCommand(args: string[], opts: CliOptions, place: Place, io
   }
   const adopted = new Set(adoptedStances(readRaw(place.data)).map((s) => s.name))
   if (!listed.length) io.out("no stance is published yet")
-  for (const s of listed) io.out(`${s.name.padEnd(16)} ${adopted.has(s.name) ? "adopted  " : "         "}${s.says}`)
+  for (const s of listed) {
+    if (s.notStance) io.out(`${s.name.padEnd(16)} not a stance: ${s.notStance}${s.says ? ` — ${s.says}` : ""}`)
+    else io.out(`${s.name.padEnd(16)} ${adopted.has(s.name) ? "adopted  " : "         "}${s.says}`)
+  }
   return 0
 }
 
@@ -1738,6 +1745,17 @@ async function stanceCommand(args: string[], opts: CliOptions, place: Place, io:
     return 0
   }
   // adopt
+  // Its adoption writes into the checkout this Naima serves: from another worktree of the project, that is not where the work is.
+  const here = toplevel(opts.cwd)
+  if (here && real(nativePath(here)) !== real(place.root) && worktrees(place.root).some((w) => real(nativePath(w.path)) === real(nativePath(here)))) {
+    throw new Error(
+      `stance ${name} not adopted: you are in the worktree ${
+        nativePath(here)
+      }, and this Naima serves the checkout ${place.root}, where it would pin the stance and run its adoption — run the worktree's own Naima from the worktree: deno run -A ${
+        posixRelative(place.root, place.program)
+      }/naima.ts stance adopt ${args.slice(1).join(" ")}`,
+    )
+  }
   const registry = opts.stances ?? stanceRegistry()
   const git = registry.url(name)
   // Its newest release when it publishes releases, the archive downloaded and verified; else its head commit.
@@ -1751,14 +1769,45 @@ async function stanceCommand(args: string[], opts: CliOptions, place: Place, io:
   const head = released ? { commit: released.commit } : stanceHead(place.root, git)
   if ("reason" in head) throw new Error(`stance ${name}: ${head.reason}`)
   const raw = readRaw(place.data)
-  const entry = { ...pluginEntry(raw, plugin), source: { git, commit: head.commit, path: STANCE_MODULE } }
+  let entry: Record<string, unknown> = { ...pluginEntry(raw, plugin), source: { git, commit: head.commit, path: STANCE_MODULE } }
   writeValidatedRaw(place.data, withPluginEntry(raw, plugin, entry, false))
   let ctx: Context
+  let passed: string[] = rest
+  let where = "."
+  let hook: Command | undefined
   try {
     ctx = await openProject(place, opts, io)
     const manifest = ctx.registry.plugins.find((p) => p.name === plugin)
     if (manifest?.kind !== STANCE_KIND) {
       throw new Error(`${git} at ${short(head.commit)} is a plugin, but not a stance: its manifest does not say kind "${STANCE_KIND}"`)
+    }
+    // The stance's own options, such as --app <dir>, go into its entry, where its checks read them too; the rest, to its adoption.
+    const declared = manifest.options ?? []
+    const split = stanceOptions(rest, new Set(declared.map((o) => o.name)))
+    passed = split.rest
+    if (Object.keys(split.options).length) {
+      const options = { ...((entry["options"] as Record<string, unknown> | undefined) ?? {}), ...split.options }
+      entry = { ...entry, options }
+      writeValidatedRaw(place.data, withPluginEntry(raw, plugin, entry, false))
+      ctx = await openProject(place, opts, io)
+    }
+    const found = ctx.registry.find<Command>("commands", plugin)?.value
+    hook = found && found.usage.split(/[\s|[\]]+/).includes(STANCE_ADOPT) ? found : undefined
+    // Where its adoption writes: the folder of the app, when the stance declares the option; else the project's root.
+    const app = declared.find((o) => o.name === STANCE_APP_OPTION)
+    if (hook && app) {
+      const set = (entry["options"] as Record<string, unknown> | undefined)?.[STANCE_APP_OPTION]
+      where = typeof set === "string" ? set : app.default ?? "."
+      const others = resolve(place.root, where) === resolve(place.root) && !isApp(place.root) && split.options[STANCE_APP_OPTION] === undefined
+        ? appsBelow(place.root, posixRelative(place.root, trackerOf(place.data)))
+        : []
+      if (others.length) {
+        throw new Error(
+          `its adoption would write at the project's root, and the project's app is elsewhere: ${
+            others.map((d) => `${d}/`).join(", ")
+          } — give --${STANCE_APP_OPTION} ${others[0]} to adopt it into that app, or --${STANCE_APP_OPTION} . to adopt it at the root all the same`,
+        )
+      }
     }
   } catch (e) {
     writeRaw(place.data, raw)
@@ -1768,13 +1817,13 @@ async function stanceCommand(args: string[], opts: CliOptions, place: Place, io:
   io.out(`adopted stance ${name}: ${git} at ${at}, pinned in ${DATA_FILE} as plugins.${plugin}`)
   sayPluginHooks(ctx, io)
   // Its adoption, when it declares one: its own command, named as it is, that takes adopt.
-  const hook = ctx.registry.find<Command>("commands", plugin)?.value
-  if (!hook || !hook.usage.split(/[\s|[\]]+/).includes(STANCE_ADOPT)) {
+  if (!hook) {
     io.out(`stance ${name} declares no adoption of its own: its rules and checks are loaded`)
     return 0
   }
-  io.out(`running its adoption: naima ${plugin} ${STANCE_ADOPT}${rest.length ? ` ${rest.join(" ")}` : ""}`)
-  return await hook.run([STANCE_ADOPT, ...rest], ctx)
+  const folder = resolve(place.root, where) === resolve(place.root) ? "the project's root" : `${posixRelative(place.root, resolve(place.root, where))}/`
+  io.out(`running its adoption, which writes in ${folder} (${place.root}): naima ${plugin} ${STANCE_ADOPT}${passed.length ? ` ${passed.join(" ")}` : ""}`)
+  return await hook.run([STANCE_ADOPT, ...passed], ctx)
 }
 
 /**

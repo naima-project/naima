@@ -32,7 +32,8 @@
 // tool it verifies, none of which exists when the launcher starts.
 //
 // The data is the program's sibling, `dirname(program)/naima-data`, unless
-// --data or NAIMA_DATA names it. When the program exits with RELAUNCH it has
+// --data or NAIMA_DATA names it; `naima stance adopt` run in another worktree of the project is served from that
+// worktree's data (worktreeData). When the program exits with RELAUNCH it has
 // just aligned the program directory, so the code on disk is not the code
 // that ran: the launcher runs the program directory's own code, which is the
 // locked commit.
@@ -193,6 +194,34 @@ export function uiGrant(command: string | undefined, os: string, deno: string, t
 }
 
 /**
+ * Is `program` there to run: a path that exists, or a name found in a directory of PATH (on Windows, with one of
+ * PATHEXT's extensions too). Deno resolves each name of --allow-run when it starts, and says on standard error that
+ * it failed for every one it cannot find: only programs found are granted, so a tool that is not installed is not
+ * named. Deno looks a program up before it checks the grant, so one that is not installed is still not found, and
+ * the plugin that starts it says it is missing.
+ */
+export function runnable(program: string, env: Record<string, string | undefined> = process.env, os: string = Deno.build.os): boolean {
+  const file = (path: string): boolean => {
+    try {
+      return statSync(path).isFile()
+    } catch {
+      return false
+    }
+  }
+  const exts = os === "windows" ? ["", ...(env["PATHEXT"] ?? env["Pathext"] ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean)] : [""]
+  if (isAbsolute(program) || /[\\/]/.test(program)) return exts.some((e) => file(program + e))
+  const path = env["PATH"] ?? env["Path"] ?? ""
+  return path.split(os === "windows" ? ";" : ":").some((dir) => !!dir && exts.some((e) => file(join(dir, program + e))))
+}
+
+/** --allow-run: every program when `programs` is null, else those of `programs` that are found; none found, no flag. */
+function runFlag(programs: string[] | null, found: (program: string) => boolean): string[] {
+  if (!programs) return ["--allow-run"]
+  const granted = [...new Set(programs)].filter((program) => found(program))
+  return granted.length ? [`--allow-run=${granted.join(",")}`] : []
+}
+
+/**
  * The permissions the program runs with, as Deno flags. Throws when a path cannot be said in one: Deno splits the lists on commas.
  * `worktrees` are the other worktrees' data directories: read-only, and one with a comma is left out — it is read from its branch.
  */
@@ -215,6 +244,8 @@ export function permissions(
     net?: string[]
     /** The tick's state folder in the clone's git directory, read and written by every command: null outside git. */
     tick?: string | null
+    /** Is a program there to run? `runnable` unless a test says otherwise. */
+    found?: (program: string) => boolean
   },
 ): string[] {
   const list = (paths: (string | null)[]) => {
@@ -236,7 +267,7 @@ export function permissions(
       list([p.root, p.data, p.program, p.entry, ...(p.worktrees ?? []).map(real).filter((x) => !x.includes(",")), ...(p.ui?.read ?? []), ...tools, ...tick])
     }`,
     `--allow-write=${list([p.tracker, p.data, p.program, ...tick, ...(p.hostFiles ?? []), ...(p.ui?.write ?? []).filter((w) => tools.includes(w))])}`,
-    p.ui?.runAll ? "--allow-run" : `--allow-run=${[...new Set(["git", "tar", ...(p.runs ?? []), ...(p.ui?.runs ?? [])])].join(",")}`,
+    ...runFlag(p.ui?.runAll ? null : ["git", "tar", ...(p.runs ?? []), ...(p.ui?.runs ?? [])], p.found ?? runnable),
     "--allow-env",
     ...(p.ui?.netAll
       ? ["--allow-net"]
@@ -365,6 +396,20 @@ export function otherProject(cwd: string, own: string): string | undefined {
   return existsSync(join(data, DATA_FILE)) ? data : undefined
 }
 
+/**
+ * The data of the worktree `cwd` is in, when it is another worktree of the project this launcher's program belongs to
+ * and holds its data where the program's checkout does; else undefined. `naima stance adopt` is served from there:
+ * its adoption writes the project's files, which belong in the checkout where the work is, never the trunk's.
+ */
+export function worktreeData(cwd: string, own: string): string | undefined {
+  const here = toplevel(cwd)
+  const home = toplevel(dirname(own))
+  if (!here || !home || real(here) === real(home)) return undefined
+  if (!worktrees(home).some((w) => real(w.path) === real(here))) return undefined
+  const data = join(here, relative(real(home), real(join(dirname(own), DATA_DIR))))
+  return existsSync(join(data, DATA_FILE)) ? data : undefined
+}
+
 export async function launch(args: string[], cwd: string): Promise<number> {
   let parsed: ReturnType<typeof globalOptions>
   try {
@@ -376,7 +421,8 @@ export async function launch(args: string[], cwd: string): Promise<number> {
   const own = real(dirname(dirname(fileURLToPath(import.meta.url))))
   // Run from inside another project that uses Naima — a fresh clone, whose program is not cloned yet — the
   // launcher serves that project, as if named with --data: the data says where its program goes, and it is cloned.
-  const given = parsed.data ?? Deno.env.get("NAIMA_DATA") ?? otherProject(cwd, own)
+  const given = parsed.data ?? Deno.env.get("NAIMA_DATA") ?? otherProject(cwd, own) ??
+    (parsed.rest[0] === "stance" && parsed.rest[1] === "adopt" ? worktreeData(cwd, own) : undefined)
   const data = findData(cwd, own, given)
   // Named, the data says where its program is; beside the program, the data is the program's own and the parent folder bounds the writes.
   const program = given && existsSync(join(data, DATA_FILE)) ? programOf(data) : own
