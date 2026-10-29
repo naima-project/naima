@@ -1092,7 +1092,7 @@ Options, each with the default it takes when nothing sets it:
 | `who` |  | who works, when `naima open` is given no `--as`: the branch's first segment |
 | `worktrees` | `../<main worktree's folder>-worktrees` | the directory every worktree is a folder of, relative to the main worktree |
 | `exempt` | `[]` | branches the naming scheme does not apply to: names, or patterns with * |
-| `maxWorkers` | `3` | how many worker worktrees (folders of the worktrees directory, on a branch the scheme applies to) may be open at once: naima open refuses another, naming the open ones; a positive whole number |
+| `maxWorkers` | `3` | how many worker worktrees (folders of the worktrees directory, on a branch the scheme applies to) may be open at once: naima open refuses another, naming the open ones, and naima hello states it in one line, saying the owner can ask to change it; a positive whole number |
 | `trunkGuard` | `true` | false turns the trunk guard off: the git hook that refuses a commit, merge or fast-forward of the trunk made by hand is removed and not put back by naima update, the landing rule is not shipped, and landings-are-markers asks only from the first marker; written by naima guard off and naima guard on |
 | `diaryPerDay` | `5` | how many diary entries a day may hold before the check diary-entries notes it: a positive whole number |
 | `silentAfter` | `15` | minutes without a sign of life (a step posted with naima claim --step, or a commit on the branch) after which naima claims and naima summary flag a claim with a step as possibly stuck: a positive whole number |
@@ -1439,7 +1439,7 @@ naima event 2026-10-05 "The plan was entered" --kind diary
 
 **Directories** it owns under the tracker root: `claims/`, `passes/`, `events/`.
 
-**Summary sections**: `where we were`, `in hand`, `ready queue`, `stale work`, `trunk-guard`.
+**Summary sections**: `where we were`, `in hand`, `worker limit`, `ready queue`, `stale work`, `trunk-guard`.
 
 **Write hooks**, run on every item write
 

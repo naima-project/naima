@@ -2,9 +2,11 @@
 //
 // From the code repository's `origin`: none, or a path on this disk, is
 // private; a GitHub repository is asked of GitHub's public API without
-// credentials — 200 is public, 404 private (or not there, which is no more
-// public) —; anything else, or no answer, is unknown, which init treats as
-// public: it asks before it commits a tracker where anyone could read it.
+// credentials — 404 is private (or not there, which is no more public), a 200
+// is what the answer's `private` field says, since a proxy that signs the
+// request sees the owner's private repositories too —; anything else, or no
+// answer, is unknown, which init treats as public: it asks before it commits
+// a tracker where anyone could read it.
 
 import { gitOrNull } from "./git.ts"
 
@@ -31,11 +33,27 @@ export async function probeVisibility(url: string): Promise<Visibility> {
       headers: { "user-agent": "naima-init", accept: "application/vnd.github+json" },
       signal: AbortSignal.timeout(5000),
     })
-    await r.body?.cancel()
-    return r.status === 200 ? "public" : r.status === 404 ? "private" : "unknown"
+    if (r.status !== 200) {
+      await r.body?.cancel()
+      return visibilityOfAnswer(r.status, null)
+    }
+    return visibilityOfAnswer(200, await r.json().catch(() => null))
   } catch {
     return "unknown"
   }
+}
+
+/**
+ * What GitHub's answer about a repository says of its visibility. A 200 is not proof of public: a proxy
+ * that signs the request (a cloud sandbox, a company gateway) is shown the owner's private repositories
+ * too, so the answer's own `private` and `visibility` fields decide.
+ */
+export function visibilityOfAnswer(status: number, body: unknown): Visibility {
+  if (status === 404) return "private"
+  if (status !== 200) return "unknown"
+  const b = (body ?? {}) as { private?: unknown; visibility?: unknown }
+  if (b.private === true || b.visibility === "private" || b.visibility === "internal") return "private"
+  return b.private === false || b.visibility === "public" ? "public" : "unknown"
 }
 
 /** The visibility of the repository at `root`, from its origin; `probe` asks a URL (injected by tests). */
