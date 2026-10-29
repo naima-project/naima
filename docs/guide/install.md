@@ -38,7 +38,7 @@ repository it stops and asks whether this is the root of the project, and if it 
 If Deno is missing, it installs it with Deno's official installer and says so, unless `NAIMA_NO_DENO_INSTALL` is set, in which case it prints that command and
 stops. After that it downloads the newest release's archive, `naima-<version>.tar.gz`, and its checksum from the release on GitHub, checks the one against the
 other and against the commit the release's tag names, unpacks the archive into `naima-tracker/naima/`, and makes that folder a git clone of the source at that
-commit, so that updates and worktrees work as they do for any clone. Then it runs that program's `naima init`, which records the version and the checksum in the
+commit, with a branch `main` at the source's `main` as a clone has, so that updates and worktrees work as they do for any clone. Then it runs that program's `naima init`, which records the version and the checksum in the
 lock, and `naima check`. The download is what counts the install ([Naima updates to releases](update-naima.md#naima-updates-to-releases)). If you run it again
 in a project that already has a lock, it clones only when `naima-tracker/naima/` is missing, and then runs `naima check`. It never moves the lock, because that
 is the job of `naima update`.
@@ -126,6 +126,9 @@ or agent harness that walks the file system picks up anything of Naima's own, an
 the project runs a release, the lock also holds `version` and `sha256`, the checksum of the release's archive: a fresh copy that has to come from the network
 downloads that archive too, and refuses it when its checksum differs. On every run, Naima compares `commit` with the clone's `HEAD`. If they differ, it fetches
 the commit, first from a local seed (another worktree's `naima-tracker/naima/` on this disk) and then from `origin`, checks it out detached, and starts again.
+A worktree's clone takes the seed's view of the source's branches with it. A clone whose `HEAD` is a commit it holds but no ref of `origin` reaches, as a
+worktree's clone of a program installed from an archive could be left, would read as holding commits of its own: when a seed knows that commit as the source's,
+or the source's `main` reaches it, Naima records it so and says it in one line; a commit only the clone has is still refused.
 If the lock names a commit the source doesn't have, it refuses with one line naming both. If the lock names a commit from the old layout before the split (one
 that still has `naima/src/cli.ts`), `naima update` moves it to Naima's product head, and that is how an older version is migrated.
 
