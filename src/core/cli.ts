@@ -1127,9 +1127,9 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
     bringsHooks(place)
       ? `${
         lockLabel(locked)
-      } is the lock, and this update brings the project's git hooks, the trunk guard among them, which the trunk does not carry yet — commit it as one change on ${
-        currentBranch(place.root)
-      }, as the guard takes it: ${setupCommit(paths, subject, "update")}`
+      } is the lock, and this update brings the project's git hooks, the trunk guard among them, which the trunk does not carry yet — commit it as one change straight on the trunk, which takes it by its trailer: ${
+        setupCommit(paths, subject, "update")
+      }`
       : `${lockLabel(locked)} is the lock — commit it as one change ${LAND_IT}: git add ${paths.join(" ")} && git commit -m "${subject}"`,
   )
   return failed ? EXIT.FAILED : 0
