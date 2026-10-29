@@ -4,12 +4,12 @@
 // where a stance named <name> is the repository naima-stance-<name>. A real
 // registry replaces `stanceRegistry` alone.
 
-import { existsSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs"
 import { join, posix } from "node:path"
 import { NaimaError } from "./errors.ts"
 import { projectFiles, runGit } from "./git.ts"
 import { CHECKSUM_MISMATCH, clearDownloads, fetchReleaseOf, releaseRepo } from "./releases.ts"
-import { VISIBILITY_HOST } from "./visibility.ts"
+import { githubRepo, VISIBILITY_HOST } from "./visibility.ts"
 
 /** The word of a stance's own adoption: its command named like its plugin entry, given `adopt`. Not the adopt plugin's name. */
 export const STANCE_ADOPT = "adopt"
@@ -36,8 +36,6 @@ export const STANCE_NAME = /^[a-z0-9][a-z0-9-]*$/
 export interface StanceListing {
   name: string
   says: string
-  /** Why the repository is not a stance, when it was read and its manifest does not declare the kind stance. */
-  notStance?: string
 }
 
 /** Where stances are found: every one available, and the git repository of each by its name. */
@@ -64,56 +62,10 @@ async function listOrganisation(): Promise<StanceListing[]> {
     throw new Error(`cannot list the stances of ${STANCE_ORG}: GitHub answered ${r.status}`)
   }
   const repos = (await r.json()) as { name?: unknown; description?: unknown }[]
-  const listed = repos
+  return repos
     .filter((x): x is { name: string; description?: unknown } => typeof x.name === "string" && x.name.startsWith(STANCE_REPO_PREFIX))
     .map((x) => ({ name: x.name.slice(STANCE_REPO_PREFIX.length), says: typeof x.description === "string" ? x.description : "" }))
     .sort((a, b) => a.name.localeCompare(b.name))
-  return await Promise.all(listed.map(async (l) => {
-    const notStance = await notAStance(`${STANCE_REPO_PREFIX}${l.name}`)
-    return notStance ? { ...l, notStance } : l
-  }))
-}
-
-/** A GET of GitHub's public API without credentials, ten seconds at most: null when it cannot be reached. */
-async function github(path: string, accept: string): Promise<Response | null> {
-  try {
-    return await fetch(`https://${VISIBILITY_HOST}${path}`, { headers: { "user-agent": "naima-stances", accept }, signal: AbortSignal.timeout(10_000) })
-  } catch {
-    return null
-  }
-}
-
-/** Does the text of a plugin's module declare the kind stance in its manifest: a `kind` key whose value is the string "stance"? */
-export function declaresStance(module: string): boolean {
-  // A flat token pattern, not a parse: a key and a string literal. Adoption loads the module and checks its manifest itself.
-  return /\bkind\s*:\s*(["'`])stance\1/.test(module)
-}
-
-/**
- * Why the repository `repo` of the organisation is not a stance, read from its module at its newest release, or at the
- * head of its default branch when it publishes none: it has no module where a stance keeps it, or its manifest does
- * not declare the kind stance. Undefined when it is one, and when it cannot be read: then adopting it says.
- * Two requests, the module alone: nothing is cloned.
- */
-async function notAStance(repo: string): Promise<string | undefined> {
-  const latest = await github(`/repos/${STANCE_ORG}/${repo}/releases/latest`, "application/vnd.github+json")
-  let ref = ""
-  let at = "the head of its default branch"
-  if (latest?.status === 200) {
-    const tag = ((await latest.json()) as { tag_name?: unknown }).tag_name
-    if (typeof tag === "string" && tag) [ref, at] = [`?ref=${encodeURIComponent(tag)}`, `its newest release, ${tag}`]
-  } else await latest?.body?.cancel()
-  const r = await github(`/repos/${STANCE_ORG}/${repo}/contents/${STANCE_MODULE}${ref}`, "application/vnd.github.raw")
-  if (!r) return undefined
-  if (r.status === 404) {
-    await r.body?.cancel()
-    return `it has no ${STANCE_MODULE} at ${at}`
-  }
-  if (r.status !== 200) {
-    await r.body?.cancel()
-    return undefined
-  }
-  return declaresStance(await r.text()) ? undefined : `its manifest at ${at} does not declare kind "${STANCE_KIND}"`
 }
 
 /** The registry stances are found in: the organisation on GitHub, for now. */
@@ -210,4 +162,93 @@ export function appsBelow(root: string, skip: string): string[] {
     if (dir !== "." && APP_FILES.includes(posix.basename(f))) apps.add(dir)
   }
   return [...apps].sort()
+}
+
+/** The file at the root of a stance's repository that says, as data, that it is a stance. */
+export const STANCE_MANIFEST = "naima-stance.json"
+
+/**
+ * What a stance says of itself in naima-stance.json: its name, the kind stance, and where its plugin's module is;
+ * optionally its examples and who made it. Naima reads it to tell a stance from a repository merely named like one;
+ * adopting a stance still loads its module and checks the kind its plugin declares.
+ */
+export interface StanceManifest {
+  name: string
+  kind: typeof STANCE_KIND
+  plugin: string
+  examples?: string[]
+  attribution?: Record<string, unknown>
+}
+
+/** Why `text`, the content of a naima-stance.json, does not make its repository a stance; undefined when it does. */
+export function manifestRefusal(text: string): string | undefined {
+  let m: unknown
+  try {
+    m = JSON.parse(text)
+  } catch {
+    return `its ${STANCE_MANIFEST} is not valid JSON`
+  }
+  if (!m || typeof m !== "object" || Array.isArray(m)) return `its ${STANCE_MANIFEST} is not an object`
+  const o = m as Record<string, unknown>
+  if (o["kind"] !== STANCE_KIND) return `its ${STANCE_MANIFEST} does not declare kind "${STANCE_KIND}"`
+  if (typeof o["name"] !== "string" || !STANCE_NAME.test(o["name"])) return `its ${STANCE_MANIFEST} names no stance`
+  if (typeof o["plugin"] !== "string" || !o["plugin"]) return `its ${STANCE_MANIFEST} names no plugin module`
+  return undefined
+}
+
+/** The answer of reading a stance's manifest: its text, absent, or not reached. */
+type ManifestText = { text: string } | { absent: true } | null
+
+/**
+ * naima-stance.json at the head of the default branch of `git`, by git: a shallow clone with no file contents, in a
+ * folder of its own under `work`, removed after, from which git fetches that one file alone. Null when the
+ * repository cannot be reached.
+ */
+function manifestByGit(git: string, work: string): ManifestText {
+  mkdirSync(work, { recursive: true })
+  const dir = mkdtempSync(join(work, "stance-"))
+  try {
+    const clone = runGit(work, ["clone", "--quiet", "--depth", "1", "--filter=blob:none", "--no-checkout", "--", git, dir])
+    if (!clone.ok) return null
+    if (!runGit(dir, ["cat-file", "-e", `HEAD:${STANCE_MANIFEST}`]).ok) return { absent: true }
+    const show = runGit(dir, ["show", `HEAD:${STANCE_MANIFEST}`])
+    return show.ok ? { text: show.out } : null
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+/** naima-stance.json of the GitHub repository `git` names, from GitHub's public API: the last resort, when git cannot reach it. */
+async function manifestByApi(git: string): Promise<ManifestText> {
+  const repo = githubRepo(git)
+  if (!repo) return null
+  try {
+    const r = await fetch(`https://${VISIBILITY_HOST}/repos/${repo}/contents/${STANCE_MANIFEST}`, {
+      headers: { "user-agent": "naima-stances", accept: "application/vnd.github.raw" },
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (r.status === 404) {
+      await r.body?.cancel()
+      return { absent: true }
+    }
+    if (r.status !== 200) {
+      await r.body?.cancel()
+      return null
+    }
+    return { text: await r.text() }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Why the repository at `git` is not a stance, read from its naima-stance.json at the head of its default branch — by
+ * git first, GitHub's API only when git cannot reach it — or undefined when it is one, or cannot be read: adopting it
+ * then says. `work` is a folder Naima may write, where the shallow clone is made and removed.
+ */
+export async function notAStance(git: string, work: string): Promise<string | undefined> {
+  const read = manifestByGit(git, work) ?? (await manifestByApi(git))
+  if (!read) return undefined
+  if ("absent" in read) return `it has no ${STANCE_MANIFEST} at the head of its default branch`
+  return manifestRefusal(read.text)
 }

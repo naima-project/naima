@@ -171,7 +171,7 @@ export const cliCommands: Omit<Command, "run">[] = [
   {
     name: "stances",
     says:
-      "list the stances available to adopt — plugins of the kind stance, each a set of authored choices and rules a project takes as a whole — with what each says of itself, marking those this project has adopted, and as not a stance, with why, a repository whose plugin/index.mjs is missing or whose manifest does not declare the kind stance, read at its newest release or the head of its default branch and never cloned; for now they are the repositories named naima-stance-<name> of the naima-project organisation on GitHub, asked of GitHub's public API without credentials; with no network, it says it cannot reach it",
+      "list the stances available to adopt — plugins of the kind stance, each a set of authored choices and rules a project takes as a whole — with what each says of itself, marking those this project has adopted, and as not a stance, with why, a repository with no naima-stance.json at the head of its default branch, or whose naima-stance.json does not declare the kind stance, its name and its plugin's module — read by git with a shallow clone that fetches that file alone, or from GitHub's API when git cannot reach it; for now they are the repositories named naima-stance-<name> of the naima-project organisation on GitHub, asked of GitHub's public API without credentials; with no network, it says it cannot reach it",
     enforces: "nothing: it only reads",
     usage: "stances",
     examples: ["stances"],

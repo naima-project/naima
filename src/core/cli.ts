@@ -3,7 +3,7 @@
 // program itself — init, update, rollback, hello, plugin, guide, help — are answered here,
 // before any plugin is loaded.
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { dirname, join, relative, resolve } from "node:path"
 import {
   carryRefusal,
@@ -147,6 +147,7 @@ import type { TickJob } from "./types.ts"
 import {
   appsBelow,
   isApp,
+  notAStance,
   STANCE_ADOPT,
   STANCE_APP_OPTION,
   STANCE_KIND,
@@ -1695,6 +1696,9 @@ function adoptedStances(raw: Record<string, unknown>): { name: string; plugin: s
   })
 }
 
+/** The scratch folder in the tracker folder where naima stances reads each stance's manifest. */
+const STANCES_WORK = ".naima-stances"
+
 async function stancesCommand(args: string[], opts: CliOptions, place: Place, io: IO): Promise<number> {
   if (args.length) throw new Error(usage("stances"))
   let listed
@@ -1706,9 +1710,17 @@ async function stancesCommand(args: string[], opts: CliOptions, place: Place, io
   }
   const adopted = new Set(adoptedStances(readRaw(place.data)).map((s) => s.name))
   if (!listed.length) io.out("no stance is published yet")
-  for (const s of listed) {
-    if (s.notStance) io.out(`${s.name.padEnd(16)} not a stance: ${s.notStance}${s.says ? ` — ${s.says}` : ""}`)
-    else io.out(`${s.name.padEnd(16)} ${adopted.has(s.name) ? "adopted  " : "         "}${s.says}`)
+  // Each one's naima-stance.json, read in the tracker folder's scratch space, which is removed after.
+  const work = join(trackerOf(place.data), STANCES_WORK)
+  try {
+    const registry = opts.stances ?? stanceRegistry()
+    for (const s of listed) {
+      const not = await notAStance(registry.url(s.name), work)
+      if (not) io.out(`${s.name.padEnd(16)} not a stance: ${not}${s.says ? ` — ${s.says}` : ""}`)
+      else io.out(`${s.name.padEnd(16)} ${adopted.has(s.name) ? "adopted  " : "         "}${s.says}`)
+    }
+  } finally {
+    rmSync(work, { recursive: true, force: true })
   }
   return 0
 }
