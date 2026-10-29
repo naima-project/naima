@@ -56,6 +56,8 @@ import {
   type Migration,
   parse,
   type Plugin,
+  readyQueue,
+  readyRecord,
   refutes,
   rendered,
   setFields,
@@ -485,24 +487,53 @@ function roleQueue(ctx: Context, name: string, gate: string | undefined): number
   return 0
 }
 
+/** The ready queue, on a gate when one is named: the approved work in the order the coordinator starts it. */
+function readyList(ctx: Context, gate: string | undefined): number {
+  const on = gate === undefined ? undefined : new Set(gatedItems(ctx, gate))
+  const items = readyQueue(ctx).filter((i) => !on || on.has(i))
+  ctx.out(`ready for implementation${gate ? ` on ${gate}` : ""}: ${items.length}${items.length ? ", in the order they start" : ""}`)
+  items.forEach((i, n) => {
+    const r = readyRecord(i)
+    const priority = fieldValue(i, { name: "priority", kind: "enum" })
+    ctx.out(
+      `  ${n + 1}. ${label(i)}  ${i.meta.title}  (${
+        [r?.start ? "start now" : "queued", ...(priority ? [`priority ${priority}`] : []), `approved ${r?.on}${r?.meeting ? ` in ${r.meeting}` : ""}`].join(
+          "; ",
+        )
+      })`,
+    )
+  })
+  if (!items.length) ctx.out("  nothing approved waits: the close of a meeting fills it (naima meeting <meeting> --close)")
+  return 0
+}
+
 const queue: Command = {
   name: "queue",
   says:
     "open items on a gate, split by whose hands the proof needs; at its foot, the summary sections that stand beside the work, such as the metrics. With --role, one role's queue instead",
   enforces: "nothing: it prints derived state, never stored",
-  usage: "queue [gate] [--human] [--role <role>]",
+  usage: "queue [gate] [--human] [--role <role>] | queue [gate] --ready",
   options: [
     { name: "--human", says: "also list the items that need a person or a build, with why" },
+    {
+      name: "--ready",
+      says:
+        "list the ready queue instead: the open items the owner approved at the close of a meeting, in the order they start — what the owner said to start now first, then by priority",
+    },
     {
       name: "--role",
       says: "list one role's open items, most urgent first — on the gate, when one is named, else every open item: a role any loaded plugin contributes",
     },
   ],
-  examples: ["queue", "queue first-public --human", "queue --role tester", "queue first-public --role implementer"],
+  examples: ["queue", "queue first-public --human", "queue --role tester", "queue first-public --role implementer", "queue --ready"],
   async run(args, ctx) {
-    const p = parse(args, { human: { type: "boolean" }, role: { type: "string" } })
+    const p = parse(args, { human: { type: "boolean" }, role: { type: "string" }, ready: { type: "boolean" } })
     const gate = p.positionals[0]
     const role = str(p, "role")
+    if (bool(p, "ready")) {
+      if (role !== undefined || bool(p, "human")) throw usageError(this)
+      return readyList(ctx, gate)
+    }
     if (role !== undefined) return roleQueue(ctx, role, gate)
     const def = gate === undefined ? undefined : ctx.registry.find<GateDef>("gates", gate)?.value
     const when = def ? timing(ctx, def) : ""

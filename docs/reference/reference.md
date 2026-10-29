@@ -94,7 +94,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`order`](#naima-order) | gates | every open item in an order that puts it after everything it waits on (`blocked-by`), with its depth -- how many waits stand before it; items stuck on a cycle are listed apart | nothing: it prints derived state, never stored |
 | [`epic`](#naima-epic) | epics | each epic with its progress — n of m closed, what it waits for and whose hands — or put items in an epic and take them out | only an epic groups items and never itself, and its status follows its items: setting it against them is refused |
 | [`meeting`](#naima-meeting) | discussions | declare a meeting — who it needs, and a date or whenever they are present — put discussions on its agenda, and show the agenda | only a discussion goes on a meeting's agenda, and a meeting is written to naima.json validated, as the next load reads it |
-| [`decide`](#naima-decide) | discussions | record the decision a discussion reached and mark it decided; a follow-up is filed only with the owner's yes | a discussion is decided only with its decision recorded; follow-up work is filed only with --consent, the owner's yes restated, and linked from the discussion |
+| [`decide`](#naima-decide) | discussions | record the decision a discussion reached and mark it decided — a commit the trunk takes, during a meeting; a follow-up is filed only with the owner's yes | a discussion is decided only with its decision recorded; follow-up work is filed only with --consent, the owner's yes restated, and linked from the discussion |
 | [`spec`](#naima-spec) | planning | each specification: its current version, its drafts, and the open items that follow it; or revise one into its next version | a revision is a new spec item, its next version, that supersedes the old one; the old version is kept as it was |
 | [`decisions`](#naima-decisions) | planning | search the owner's decisions before asking: the settled ones whose title or page hold every word given, newest first | nothing: it only searches, so a settled question is looked up before it is asked again |
 | [`confirm`](#naima-confirm) | planning | record the owner's confirmation of a proposed requirement, one someone other than the owner filed: it becomes stated, and gates count it from then on; the owner's yes, restated, is kept on the item | only a proposed requirement is confirmed, and only with the owner's words restated: an agent runs it after the owner said yes, never on its own judgement |
@@ -136,7 +136,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `guide` | core | a block `naima guide` prints first, inside a project, before the documentation pages | triage, verifier, rules |
 | `rank` | core | an additive term of every item's urgency; lower is more urgent | triage, gates |
 | `jobs` | core | a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it; what it finds is shown to the owner as messages | long-work |
-| `extends` | core | additive changes to another plugin's type — statuses (an existing one only with its category), traits, transitions — or field — enum values, more types or traits it applies to | knowledge, roles |
+| `extends` | core | additive changes to another plugin's type — statuses (an existing one only with its category), traits, transitions — or field — enum values, more types or traits it applies to | discussions, knowledge, roles |
 | `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done; `beforeText(text, ctx)` may refuse a write of free text or a file that is not an item's (a session note, an event, an attachment) or add to its record | core, coordination, triage, epics, discussions, planning, knowledge, verifier, privacy |
 | `setup` | core | what a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init` and `naima update` after their own work: `install(ctx) → lines`, each said | coordination, planning, backup, metrics |
 | `migrations` | core | a plugin's own data migrations, in order from its format 1, run by `naima update` after the core's | gates |
@@ -842,6 +842,7 @@ Moves allowed: `acknowledged` → ; a status not named moves to any.
 | `tags` | strings | every type | free labels a person puts on an item |  |
 | `origin` | object | every type | where the item comes from, written once by naima new and never changed but for who asked: { askedBy: owner, coordinator, worker, agent, person (with person: the name) or unknown; filedBy: { name, role }; session: the session it was filed in; on: the instant; branch; from: the id of the item it was derived from }, with inferred: true and commit when naima origin --backfill read it from git, and corrected: [{ was, by, on }] for each time naima origin --set changed who asked |  |
 | `level` | enum | any type tagged `messages` | how much a message weighs: info and warning are said once, urgent is shown once an hour until acknowledged | `info` worth knowing; `warning` worth acting on; `urgent` the owner should know now: shown once an hour until acknowledged |
+| `ready` | object | every type | the owner's approval of the work, as the close of a meeting records it: { on: the day, start: true when the owner said to start it now, meeting, decisions: the ids of the discussions it carries, consent: the owner's yes restated }; an open item with one is on the ready queue |  |
 
 **Link relations** — only the direction written is stored; the inverse is derived when read.
 
@@ -1420,6 +1421,7 @@ naima event 2026-10-05 "The plan was entered" --kind diary
 | `branches-paired` | with the tracker in a repository of its own, the tracker stands on the branch of the code's name (its trunk on the code's trunk), so work on code branch X writes to tracker branch X — any naima command pairs them, creating the tracker's branch from its trunk; a commit of the branch, in either repository, that does not name the other repository's commit in its Tracker: or Code: trailer is a note, and so is a missing trailer hook |
 | `diary-entries` | as notes, never failing: a day with more diary entries than the coordination option diaryPerDay (5 by default), and a diary entry that only restates a session note of its day or a decision taken that day, which naima diary already shows |
 | `change-notes` | every file of a changes/ directory that has a changes/config.json — the project's own, or a submodule's — is a change note that parses; on a branch other than the trunk, one whose commits change a behaviour path that file names with no change note added is a note, as naima land would refuse it |
+| `ready-work-waiting` | no worker slot is idle while the ready queue holds approved work no branch holds: the coordinator starts the next on its own |
 
 **Views**, printed by `naima view <name>`
 
@@ -1429,7 +1431,7 @@ naima event 2026-10-05 "The plan was entered" --kind diary
 
 **Directories** it owns under the tracker root: `claims/`, `passes/`, `events/`.
 
-**Summary sections**: `where we were`, `in hand`, `stale work`, `trunk-guard`.
+**Summary sections**: `where we were`, `in hand`, `ready queue`, `stale work`, `trunk-guard`.
 
 **Write hooks**, run on every item write
 
@@ -1636,11 +1638,13 @@ Open items on a gate, split by whose hands the proof needs; at its foot, the sum
 
 ```sh
 naima queue [gate] [--human] [--role <role>]
+naima queue [gate] --ready
 ```
 
 | Option | Default | What it does |
 |---|---|---|
 | `--human` |  | also list the items that need a person or a build, with why |
+| `--ready` |  | list the ready queue instead: the open items the owner approved at the close of a meeting, in the order they start — what the owner said to start now first, then by priority |
 | `--role` |  | list one role's open items, most urgent first — on the gate, when one is named, else every open item: a role any loaded plugin contributes |
 
 Examples:
@@ -1650,6 +1654,7 @@ naima queue
 naima queue first-public --human
 naima queue --role tester
 naima queue first-public --role implementer
+naima queue --ready
 ```
 
 ### naima coverage
@@ -1822,7 +1827,7 @@ Discussions: questions that need time with a person, gathered on the agenda of m
 
 Its contributions' qualified ids are `discussions/<name>`.
 
-A discussion is an item of its own (`naima new discussions "<topic>"`): the question, the options, and, once decided, the decision, recorded with `naima decide <discussion> "<decision>"`. It links the items it is about with `concerns`. A meeting is a gate whose agenda is the discussions on it: it names who it needs, takes place whenever they are present unless it has a date, and holds once every discussion on it is decided. `naima meeting new` declares one, `naima meeting add` puts discussions on its agenda, `naima meeting` shows the agendas, and `naima hello` names each meeting with open discussions so the agent opens with its agenda. Deciding files follow-up work only with the owner's yes (`--follow-up` with `--consent`).
+A discussion is an item of its own (`naima new discussions "<topic>"`): the question, the options, and, once decided, the decision, recorded with `naima decide <discussion> "<decision>"`. It links the items it is about with `concerns`. A meeting is a gate whose agenda is the discussions on it: it names who it needs, takes place whenever they are present unless it has a date, and holds once every discussion on it is decided. Like any item a discussion takes a priority, a gate or milestone, and an optional date (`due`): `naima meeting <m>` orders the agenda, what is due or has priority now first, then what blocks a release or a milestone (soonest first), then the rest; a later or parked priority, or a date to come, defers it, and it stays queued, last. `naima meeting new` declares one, `naima meeting add` puts discussions on its agenda, `naima meeting` shows the agendas, and `naima hello` names each meeting with discussions to take so the agent opens with its agenda. Deciding writes only fields Naima fills and the status `decided`, flagged `filled`, so the trunk guard takes it on the trunk; it files follow-up work only with the owner's yes (`--follow-up` with `--consent`), linked from the new item. `naima meeting <m> --close` ends a meeting: it groups the decisions not yet turned into work into packages, one per open item they concern, and proposes them; with `--consent`, the owner's yes restated, it records the choice on each item as a `ready` record, queued by default or to start now (`--start`), nothing for a package `--skip` names, and marks each decision `packaged`. `naima queue --ready` lists the ready queue, and the coordinator starts the next item on it whenever a worker slot is free.
 
 Options, each with the default it takes when nothing sets it:
 
@@ -1830,7 +1835,7 @@ Options, each with the default it takes when nothing sets it:
 |---|---|---|
 | `meetings` | `{}` | `plugins.discussions.options.meetings` in `naima-tracker/naima-data/naima.json`, written by `naima meeting new`: meeting name → { "title", "needs" (who must be present; the owner by default), "on" (a date, YYYY-MM-DD; without one, whenever they are present) }. Each meeting is a gate of that name. |
 
-**Uses**, declared by other plugins: fields `gate`.
+**Uses**, declared by other plugins: fields `gate`, `due`.
 
 ### naima meeting
 
@@ -1840,12 +1845,17 @@ Declare a meeting — who it needs, and a date or whenever they are present — 
 
 ```sh
 naima meeting [<name>]
+naima meeting <name> --close [--consent "<the owner's yes>"] [--start <item>,...] [--skip <item>,...]
 naima meeting new <name> "<title>" [--needs <who>,...] [--on YYYY-MM-DD]
 naima meeting add <meeting> <discussion>...
 ```
 
 | Option | Default | What it does |
 |---|---|---|
+| `--close` |  | end the meeting: group the decisions not yet turned into work into packages, one per open item they concern, and propose them; with --consent, record each package's choice on its item: queued (the default) or to start now |
+| `--consent` |  | --close: the owner's yes to the packages, restated: recorded on each item's ready record |
+| `--start` |  | --close: the packages (their items) the owner said to start now; comma-separated or repeated |
+| `--skip` |  | --close: the packages the owner said not to queue now; comma-separated or repeated |
 | `--needs` |  | meeting new: who must be present, comma-separated; the owner when not given |
 | `--on` |  | meeting new: a fixed date, YYYY-MM-DD; without one, it takes place whenever the people it needs are present |
 
@@ -1857,11 +1867,13 @@ naima meeting new owner "With the owner"
 naima meeting new review "Design review" --needs owner,reviewer --on 2026-11-03
 naima meeting add owner discussions/plugin-names
 naima meeting owner
+naima meeting owner --close
+naima meeting owner --close --consent "yes, queue them; start the export fix now" --start bugs/export-alpha
 ```
 
 ### naima decide
 
-Record the decision a discussion reached and mark it decided; a follow-up is filed only with the owner's yes.
+Record the decision a discussion reached and mark it decided — a commit the trunk takes, during a meeting; a follow-up is filed only with the owner's yes.
 
 **Enforces**: A discussion is decided only with its decision recorded; follow-up work is filed only with --consent, the owner's yes restated, and linked from the discussion.
 
@@ -1888,7 +1900,7 @@ Discussions: a question that needs time with a person, not a quick answer: the t
 | Status | Category | Flags | Meaning |
 |---|---|---|---|
 | `open` | open |  | not decided yet: it waits for a meeting with the people it needs |
-| `decided` | done |  | decided: the decision is recorded in its decision field |
+| `decided` | done | filled | decided: the decision is recorded in its decision field |
 
 **Fields**
 
@@ -1896,6 +1908,7 @@ Discussions: a question that needs time with a person, not a quick answer: the t
 |---|---|---|---|---|
 | `decision` | string | discussions | what the discussion decided, recorded by naima decide |  |
 | `decisionOn` | date | discussions | when the discussion was decided, stamped by naima decide |  |
+| `packaged` | date | discussions | when the decision was turned into work, stamped by naima meeting <m> --close |  |
 
 **Link relations** — only the direction written is stored; the inverse is derived when read.
 
@@ -1908,9 +1921,13 @@ Discussions: a question that needs time with a person, not a quick answer: the t
 
 | Check | What it holds |
 |---|---|
-| `discussions` | a decided discussion records its decision; an open one is on a meeting's agenda, or it waits for no one |
+| `discussions` | a decided discussion records its decision; an open one is on a meeting's agenda, or it waits for no one; a decision taken in a meeting is turned into work when the meeting closes |
 
 **Summary sections**: `meetings`.
+
+**Extensions** of other plugins' types and fields
+
+- field `due`: applies to discussions
 
 **Write hooks**, run on every item write
 

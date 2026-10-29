@@ -11,6 +11,12 @@ export function statusDef(ctx: Context, item: Item): StatusDef | undefined {
 
 export const isOpen = (ctx: Context, item: Item): boolean => statusDef(ctx, item)?.category !== "done"
 
+/**
+ * The flag of a status Naima sets only together with fields it fills (FieldDef.filled), never by hand: a change of an
+ * item confined to those fields and a move to such a status is bookkeeping, which the trunk guard takes on the trunk.
+ */
+export const FILLED = "filled"
+
 /** Does this item's status carry `flag` — one a plugin gave meaning to, or `proves` or `refutes`? */
 export const hasFlag = (ctx: Context, item: Item, flag: string): boolean => {
   const s = statusDef(ctx, item)

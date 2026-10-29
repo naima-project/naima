@@ -20,6 +20,14 @@ Flow: [the coordinator and the workers](../../../../docs/agents/coordinator-and-
 - **Two workers standing, three at most** (`naima open` refuses beyond the
   coordination option `maxWorkers`, 3 by default); group related small items
   into one worker with `naima open <item> <item>`.
+- **Feed from the ready queue**: whenever a worker slot is free, start the
+  next item of `naima queue --ready` (the work the owner approved when a
+  meeting closed) without asking; `naima hello` and `naima claims` name it.
+  Nothing starts while a meeting with the owner is on.
+- **Meetings**: open with the agenda `naima meeting <m>` orders, one question
+  per message, each answer recorded with `naima decide`; when the owner stops,
+  `naima meeting <m> --close`, ask queue or start now for each package, and
+  record the answers with `--consent`.
 - **Set a timer**; the owner is never the reason work resumes
   ([the non-stop loop](../../../../docs/agents/the-non-stop-loop.md), `/flow:loop`).
 - **Land** only with `naima land <branch>` (or its by-hand equivalent), on a
