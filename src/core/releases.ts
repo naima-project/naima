@@ -10,9 +10,16 @@
 // checksum, and against the lock's when the lock records one, before anything
 // is unpacked.
 //
-// The releases are read from GitHub's public API, without credentials, or from
-// a server that answers like it, named by NAIMA_RELEASES_API (a mirror, a
-// test's fake server). Nothing here retries or waits long: a host that does not
+// Which releases exist is read the way git reads any repository, so that it
+// works wherever git does, through a proxy that refuses GitHub's API included:
+// the source's tags v<version>, by `git ls-remote --tags`, a version with a
+// pre-release suffix (1.2.0-beta.1) being a pre-release; and each asset is
+// downloaded from its plain address, <releases>/download/v<version>/<file>,
+// where <releases> is the GitHub repository's releases page, or the folder or
+// server NAIMA_RELEASES names. GitHub's public API, or a server that answers
+// like it named by NAIMA_RELEASES_API (a mirror, a test's fake server), is the
+// last resort: for a source whose tags git cannot read, or whose assets have no
+// plain address. Nothing here retries or waits long: a host that does not
 // answer is said, and the caller keeps what it has.
 
 import { createHash } from "node:crypto"
@@ -21,7 +28,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { join } from "node:path"
 import { gunzipSync } from "node:zlib"
 import { NaimaError } from "./errors.ts"
-import { gitReason, runGit } from "./git.ts"
+import { gitReason, runGit, runGitAsync } from "./git.ts"
 import { githubRepo } from "./visibility.ts"
 
 /** The variable that names another server answering like GitHub's releases API. */
@@ -44,12 +51,22 @@ export interface Release {
   assets: Record<string, string>
 }
 
-/** A repository whose releases are read: its owner and name, and the API that answers for it. */
+/**
+ * A repository whose releases are read: its owner and name, and the API that answers for it; with `source` and
+ * `downloads`, its tags are read from the source with git and its assets downloaded from `downloads`, the API unused.
+ */
 export interface ReleaseRepo {
   api: string
   owner: string
   repo: string
+  /** The source git reads the tags of. */
+  source?: string
+  /** Where the assets are, as <downloads>/download/v<version>/<file>. */
+  downloads?: string
 }
+
+/** The environment variable naming where a source's release assets are, as GitHub lays them out: a folder (file://) or a server. */
+export const RELEASES_ENV = "NAIMA_RELEASES"
 
 /** The releases API to ask: NAIMA_RELEASES_API when set, else GitHub's. */
 export function releasesApi(env: Record<string, string | undefined> = process.env): string {
@@ -71,17 +88,19 @@ export function apiHost(api: string): string | null {
  * last two segments of any source's path, as a mirror or a test's server serves them. Null when nothing answers
  * for the source: a path on this disk, or a host other than GitHub, publishes no releases.
  */
-export function releaseRepo(source: string, api = releasesApi()): ReleaseRepo | null {
+export function releaseRepo(source: string, api = releasesApi(), env: Record<string, string | undefined> = process.env): ReleaseRepo | null {
+  const named = env[RELEASES_ENV]?.trim().replace(/\/+$/, "")
   const gh = githubRepo(source)
   if (gh) {
     const [owner, repo] = gh.split("/") as [string, string]
-    return { api, owner, repo }
+    return { api, owner, repo, source, downloads: named || `https://github.com/${owner}/${repo}/releases` }
   }
-  if (api === GITHUB_API) return null
+  if (api === GITHUB_API && !named) return null
   const parts = source.replace(/^file:\/\//, "").replace(/\\/g, "/").replace(/\.git\/?$/, "").split(/[/:]/).filter(Boolean)
   const repo = parts.at(-1)
   const owner = parts.at(-2)
-  return owner && repo ? { api, owner, repo } : null
+  if (!owner || !repo) return null
+  return named ? { api, owner, repo, source, downloads: named } : { api, owner, repo }
 }
 
 const VERSION = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/
@@ -135,11 +154,41 @@ const why = (e: unknown): string => {
 }
 
 /**
- * The published releases of `r`, newest first, drafts left out: one request, ten seconds at most. A repository the
- * API does not know (404: missing, or private to an anonymous reader) publishes none. Throws, with the code
- * RELEASES_UNREACHABLE, when the API cannot be read.
+ * The published releases of `r`, newest first: its tags read by git when its assets have a plain address, else, or
+ * when git cannot read the tags, the API's list, drafts left out; ten seconds at most each. A repository the API
+ * does not know (404: missing, or private to an anonymous reader) publishes none. Throws, with the code
+ * RELEASES_UNREACHABLE, when neither can be read.
  */
 export async function listReleases(r: ReleaseRepo, timeoutMs = 10_000): Promise<Release[]> {
+  if (r.source && r.downloads) {
+    const tagged = await tagReleases(r.source, r.repo, r.downloads, timeoutMs)
+    if (tagged) return tagged
+  }
+  return await apiReleases(r, timeoutMs)
+}
+
+/**
+ * The releases of `source` as git reads them: each tag v<version>, a pre-release when the version has a suffix, with
+ * the plain addresses of its two assets under `downloads`. Null when git cannot read the source's tags.
+ */
+async function tagReleases(source: string, name: string, downloads: string, timeoutMs: number): Promise<Release[] | null> {
+  const r = await runGitAsync(process.cwd(), ["ls-remote", "--tags", "--refs", "--", source, "v*"], timeoutMs)
+  if (!r.ok) return null
+  const out: Release[] = []
+  for (const line of r.out.split("\n")) {
+    const ref = line.split("\t")[1]?.trim() ?? ""
+    const tag = ref.replace(/^refs\/tags\//, "")
+    if (!ref.startsWith("refs/tags/") || !isVersion(tag)) continue
+    const version = bareVersion(tag)
+    const file = archiveName(name, version)
+    const at = `${downloads}/download/${tag}`
+    out.push({ version, tag, prerelease: isPrerelease(version), assets: { [file]: `${at}/${file}`, [`${file}.sha256`]: `${at}/${file}.sha256` } })
+  }
+  return out.sort((a, b) => compareVersions(b.version, a.version))
+}
+
+/** The releases as GitHub's API, or a server that answers like it, lists them: the last resort. */
+async function apiReleases(r: ReleaseRepo, timeoutMs: number): Promise<Release[]> {
   const url = `${r.api}/repos/${r.owner}/${r.repo}/releases?per_page=100`
   let res: Response
   try {

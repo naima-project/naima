@@ -8,7 +8,7 @@ You rarely need to do any of this yourself. The agents check for updates, tell y
 ## Naima updates to releases
 
 Naima moves only from one release to another. A release is a version tag, such as `v1.2.0`, with two files attached on GitHub: `naima-1.2.0.tar.gz`, which holds
-the files of that version, and `naima-1.2.0.tar.gz.sha256`, its checksum. Installing Naima and updating it both download that archive from the release. Naima
+the files of that version, and `naima-1.2.0.tar.gz.sha256`, its checksum. Installing Naima and updating it both download that archive from the release, at its plain address on the releases page. Which releases exist is read from the source's tags with `git ls-remote`, a version with a suffix such as `-rc.1` being a pre-release, so it works wherever git does; GitHub's API is asked only when git cannot read the tags. Naima
 checks the archive against its checksum and against the commit the tag names before it uses anything in it, and refuses an archive that does not match. The lock
 then records the version and the checksum next to the commit.
 

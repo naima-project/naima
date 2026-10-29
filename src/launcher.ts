@@ -11,7 +11,8 @@
 //   env     an allow-list of the environment (ENV below): what git needs, and Naima's own,
 //           plus the machine's name and the private word list (core/private.ts), read here
 //   net     GitHub's API host, to ask whether the tracker's remotes are public (at most once a day) and to read releases,
-//           and the hosts a release's archive is downloaded from (core/releases.ts), or the server NAIMA_RELEASES_API names;
+//           and the hosts a release's archive is downloaded from (core/releases.ts), or the servers NAIMA_RELEASES and
+//           NAIMA_RELEASES_API name;
 //           otherwise the network is git's, for alignment and update — except for `naima ui` (UI below)
 //
 // `naima ui`, and no other command, may also listen on the loopback interface,
@@ -61,6 +62,7 @@ import {
   real,
   RELAUNCH,
   RELEASE_HOSTS,
+  RELEASES_ENV,
   releasesApi,
   restoreDeleted,
   restoredFiles,
@@ -437,7 +439,11 @@ export async function launch(args: string[], cwd: string): Promise<number> {
         tick: tickState,
         // Every command: the tracker's privacy is asked of GitHub at most once a day, before the first write (core/exposure.ts).
         // And releases: read from the API, their archives downloaded where it redirects them, when an install or update needs one.
-        net: [VISIBILITY_HOST, ...RELEASE_HOSTS, ...[apiHost(releasesApi(Deno.env.toObject()))].filter((h): h is string => !!h)],
+        net: [
+          VISIBILITY_HOST,
+          ...RELEASE_HOSTS,
+          ...[apiHost(releasesApi(Deno.env.toObject())), apiHost(Deno.env.get(RELEASES_ENV) ?? "")].filter((h): h is string => !!h),
+        ],
       }
       const read = permissions(fence)[0] ?? ""
       flags = permissions({ ...fence, runs: mayRun(data) ? declaredRuns(entry, cwd, read, env) : [], ui })
