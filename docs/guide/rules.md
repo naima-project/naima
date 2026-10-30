@@ -212,24 +212,27 @@ Why: the owner's attention and the agent's context are the scarcest things in th
 
 ### Talking to the owner
 
-A message opens with the answer, stays short enough to skim, and asks at most one question. When the owner is present, the agent gathers every pending
-discussion into one meeting. It lists the open questions as the meeting's agenda and goes through them one question per message, without starting work between
-them and without splitting them across separate interruptions, and the owner decides when the meeting stops and when it resumes. The agent acts on the answers
-once the meeting ends, and a question it finds while acting waits for the next meeting unless it blocks the work. Next steps come as now, next and later, and
-the message names the assumptions nobody stated and the loops still open, in a calm and direct tone. An identifier (an item id, a file, an acronym, a label) is
-always said together with what it is. What was measured is kept apart from what is believed, so a guess is never stated as a fact and a claim is checked before
-it is reported, and every number comes with the number it is compared to. When the owner corrects something, the agent fixes the thing itself, not the way it
-described it.
+When the owner asks something, the first reply answers it. Nothing comes before that answer: filing an item, a requirement, a diary entry or a note, and any
+other work the question starts, runs in the background, with a worker or after the reply, unless it truly cannot, and then the reply says why in one line. A
+message stays short enough to skim and asks at most one question. When the owner is present, the agent gathers every pending discussion into one meeting. It
+lists the open questions as the meeting's agenda and goes through them one question per message, without starting work between them and without splitting them
+across separate interruptions, and the owner decides when the meeting stops and when it resumes. The agent acts on the answers once the meeting ends, and a
+question it finds while acting waits for the next meeting unless it blocks the work. Next steps come as now, next and later, and the message names the
+assumptions nobody stated and the loops still open, in a calm and direct tone. An identifier (an item id, a file, an acronym, a label) is always said together
+with what it is. What was measured is kept apart from what is believed, so a guess is never stated as a fact and a claim is checked before it is reported, and
+every number comes with the number it is compared to. When the owner corrects something, the agent fixes the thing itself, not the way it described it.
 
-Why: a message the owner has to decode costs more than the work it reports, questions asked in separate interruptions cost the owner more than one meeting that
-settles them all, and a guess reported as a fact gets acted on as one. Acknowledged as "Simple mode on". **Convention**.
+Why: a message the owner has to decode costs more than the work it reports, an owner kept waiting while the agent files things before answering is interrupted
+for bookkeeping that could run behind the reply, questions asked in separate interruptions cost the owner more than one meeting that settles them all, and a
+guess reported as a fact gets acted on as one. Acknowledged as "Simple mode on". **Convention**.
 
 ### Fast mode
 
-Tests and checks run at the end of a phase, not after every edit, and isolated experiments run in parallel. Anything that takes more than a few seconds runs in
-the background while the conversation goes on, and the next question is asked straight away. An agent waits in the foreground only when the next thing it has to
-say depends on the result, and then it says what is running and how long it takes. No wait is blind: each one checks progress at short intervals (new commits,
-changed files, the process still alive), and spare capacity goes to the next piece of work.
+The owner is answered first, and the work a question starts runs after the answer, never before it. Tests and checks run at the end of a phase, not after every
+edit, and isolated experiments run in parallel. Anything that takes more than a few seconds runs in the background while the conversation goes on, and the next
+question is asked straight away. An agent waits in the foreground only when the next thing it has to say depends on the result, and then it says what is running
+and how long it takes. No wait is blind: each one checks progress at short intervals (new commits, changed files, the process still alive), and spare capacity
+goes to the next piece of work.
 
 Why: time spent waiting is the owner's time too, and a wait nobody checks hides a stalled job while the machine sits idle. Acknowledged as "Fast mode on".
 **Convention** ([long work](../agents/long-work.md)).
@@ -237,8 +240,9 @@ Why: time spent waiting is the owner's time too, and a wait nobody checks hides 
 ### The agent talking to the owner coordinates; workers do the work
 
 The agent in the conversation with the owner is the coordinator. It sends every piece of work to a worker in the background, each in its own worktree opened
-with `naima open`, and stays in the conversation: it answers, asks, lands the workers' branches with `naima land`, and reports. A worker starts no workers of
-its own. Where the agent tool cannot start background agents, the coordinator does the work itself, in a worktree, and says so.
+with `naima open`, and stays in the conversation: it answers first, before filing or starting anything the answer leads to, then asks, lands the workers'
+branches with `naima land`, and reports. A worker starts no workers of its own. Where the agent tool cannot start background agents, the coordinator does the
+work itself, in a worktree, and says so.
 
 Why: an agent that does the work itself keeps the owner waiting for every step, and its context fills with the work instead of the conversation. Acknowledged as
 "Coordinator mode on". **Convention** ([coordinator and workers](../agents/coordinator-and-workers.md)).
@@ -260,13 +264,13 @@ Why: what can't be undone is the owner's decision. Acknowledged as "Irreversible
 
 ### Capture, with judgment
 
-Once the owner has settled a request, a report, a decision or a deferral, the agent files it straight away, in its own words rather than the chat's, after
-searching for a duplicate to link instead, and triages it on the spot. While the owner is thinking aloud or asking in principle, the agent discusses and files
-nothing, and when that exchange has settled it asks once whether to file it. "I already told you" means a report was lost, so the agent files it now and says it
-was missing.
+Once the owner has settled a request, a report, a decision or a deferral, the agent files it in the same turn, after answering the owner and never before, in
+the background where it can (a worker, or right after the reply), in its own words rather than the chat's, after searching for a duplicate to link instead, and
+triages it on the spot. While the owner is thinking aloud or asking in principle, the agent discusses and files nothing, and when that exchange has settled it
+asks once whether to file it. "I already told you" means a report was lost, so the agent answers, then files it and says it was missing.
 
-Why: a request that was never filed has to be made again, and an item filed for a passing thought is noise to review and undo. Acknowledged as "Capture mode
-on". **Convention** ([reporting and triage](../agents/reporting-and-triage.md)).
+Why: a request that was never filed has to be made again, an item filed for a passing thought is noise to review and undo, and filing before answering keeps the
+owner waiting for bookkeeping. Acknowledged as "Capture mode on". **Convention** ([reporting and triage](../agents/reporting-and-triage.md)).
 
 ### Never ask what the rules answer
 
@@ -445,7 +449,7 @@ naima event 2026-10-17 "The owner chose to ship the export before the importer, 
 
 Routine work gets no entry, because landings, items filed, fixes and test runs are already in the tracker. Neither does anything that a session note, a decision
 item or the timeline already records, since `naima diary` shows those by itself. A day holds a few entries at most, and the related turns of one conversation
-make a single entry, written once that exchange has settled.
+make a single entry, written once that exchange has settled and the owner has been answered, never before the answer.
 
 Why: the diary is where the owner reads why the project went where it did. A decision taken in chat and never written down has to be reconstructed later, and a
 diary that logs every landing buries the few turns that matter.
@@ -457,11 +461,11 @@ its day or a decision taken that day. Choosing what deserves an entry is **conve
 ### Requirements are elicited at every prompt
 
 Requirements aren't written once at the start of the work. Whenever the owner says something, the agent checks whether it adds a
-[requirement](glossary.md#requirement) or changes one. A new one is filed straight away, a changed one is revised on its page, and a change to exactly how
-something behaves becomes the next version of its [specification](glossary.md#specification). A vague wish is restated as something a test can decide, and the
-agent works out how it will be checked: by a test, by a [property](glossary.md#property) of a model, or, for anything that can be measured, by a
-[metric](glossary.md#metric) with a budget. The agent proposes the check and asks the owner only for what is theirs to give, such as the number a budget holds
-to.
+[requirement](glossary.md#requirement) or changes one. A new one is filed in the same turn, after the owner has been answered and never before, in the
+background where it can; a changed one is revised on its page, and a change to exactly how something behaves becomes the next version of its
+[specification](glossary.md#specification). A vague wish is restated as something a test can decide, and the agent works out how it will be checked: by a test,
+by a [property](glossary.md#property) of a model, or, for anything that can be measured, by a [metric](glossary.md#metric) with a budget. The agent proposes the
+check and asks the owner only for what is theirs to give, such as the number a budget holds to.
 
 Why: the owner keeps stating needs in passing, long after the work has started. A requirement heard in chat and never filed is lost, and one filed with no way
 to check it can never be met, so people argue about it instead of measuring it.

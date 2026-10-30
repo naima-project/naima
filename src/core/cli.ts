@@ -70,6 +70,7 @@ import {
   fetchHead,
   ignoreProgram,
   isClone,
+  linkedNote,
   OLD_LAYOUT,
   releaseDir,
   remoteHead,
@@ -81,6 +82,7 @@ import {
   verifySigned,
   withoutCredentials,
 } from "./program.ts"
+import { PROMPTED, worktreeHold } from "./worktree-lock.ts"
 import {
   bareVersion,
   CHECKSUM_MISMATCH,
@@ -902,13 +904,17 @@ async function moveLock(
   await align({ ...t, commit: to, ...(release ? { release } : {}) })
   writeRaw(place.data, next)
   const toLabel = release ? `version ${release.version} (${short(to)})` : short(to)
-  io.out(`locked ${lockLabel(lock)} → ${toLabel}`)
+  // The same commit moves nothing: only the lock's form changes, from a release to a commit of main or back.
+  const form = (l: { version?: string | undefined }) => (l.version ? `release ${l.version}` : "commit of the source's main")
+  const sameSaid = change.same ? `, the same commit: only the lock's form changes, from ${form(lock)} to ${form(release ?? {})}` : ""
+  io.out(`locked ${lockLabel(lock)} → ${toLabel}${sameSaid}`)
   for (const r of change.rewrites) io.out(r)
   for (const n of notes) io.out(n)
   // Forward, the new Naima finishes: it knows the new format, and its own check is the one that ends the update.
-  if (!change.back || change.formats.some((f) => f.to > f.from)) return RELAUNCH
-  const verb = change.back ? "Roll Naima back to" : "Update Naima to"
-  io.out(`${toLabel} is the lock — ${commitUpdate(place, [], `${verb} ${release ? `version ${release.version}` : short(to)}`)}`)
+  if ((!change.back && !change.same) || change.formats.some((f) => f.to > f.from)) return RELAUNCH
+  const verb = change.same ? "Lock Naima to" : "Roll Naima back to"
+  const named = release ? `version ${release.version}` : change.same ? `commit ${short(to)} of main` : short(to)
+  io.out(`${toLabel} is the lock — ${commitUpdate(place, [], `${verb} ${named}`)}`)
   return 0
 }
 
@@ -1976,8 +1982,11 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
       if (carried) throw new Error(carried)
       const acceptSource = command === "update" && args.includes("--accept-source")
       let moved = null
+      // A worktree that runs another Naima than the trunk's, or a program that is a link: no commit is checked out, and the prompt says how to fix it.
+      const held = worktreeHold({ root: place.root, data: place.data, program: place.program, commit: place.lock.commit })
+      if (held && PROMPTED.has(command ?? "")) io.err(held.prompt)
       try {
-        moved = await align({ ...targetOf(place, place.lock, opts), acceptSource })
+        moved = await align({ ...targetOf(place, place.lock, opts), acceptSource, stay: !!held })
       } catch (e) {
         // update --check only reads the source: it answers whatever program runs it.
         const readOnly = command === "update" && args.includes("--check")
@@ -1987,6 +1996,8 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
         if (!((readOnly && code === SOURCE_CHANGED) || (moving && (code === COMMIT_UNAVAILABLE || code === OLD_LAYOUT)))) throw e
       }
       for (const line of moved?.repaired ?? []) io.err(`naima: ${line}`)
+      const linked = held ? null : linkedNote(targetOf(place, place.lock, opts))
+      if (linked) io.err(`naima: ${linked}`)
       if (moved?.from && moved.from !== place.lock.commit) io.err(`naima: locked commit moved ${short(moved.from)} → ${short(place.lock.commit)}`)
       const target = runtimeOf(place.program)
       if (moved || (target && real(opts.programRoot) !== real(target))) return RELAUNCH

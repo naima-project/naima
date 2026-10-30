@@ -26,27 +26,29 @@ saying Naima cannot tell whether a remote is public, is the owner's to hear: rel
 work around it ([the rule](../../docs/guide/rules.md#the-tracker-is-never-exposed)).
 
 **Capture now, act later — always, not only on `/flow:report`.** Whenever the owner, in chat, asks for a feature, reports a problem, makes a decision or defers
-something, file it at once, in the background, without derailing whatever you are doing: restated in your own words, never the chat verbatim; duplicates
-searched first (`naima list`, or `naima new --dedupe`, which prints likely duplicates of the same type before writing and still writes) and linked instead of
-refiled; triaged on the spot (impact, priority, confidence); a decision recorded with `naima new decisions`, a deferral with its reason. Every item records who
-asked for it: pass `--asked-by owner` only for what the owner said, asked, reported or decided, and leave the default, `agent`, for what you found yourself;
-`--from <item>` names the item a finding came from. A requirement you add on your own stays `proposed`, counted by no gate, until the owner says yes and you run
-`naima confirm <requirement> --words "<their yes, restated>"` ([origins](../../docs/guide/working-with-agents.md#where-each-item-comes-from)). A choice you make
-yourself because the owner left it open (a language, a default, leaving something out) is a decision too: record it, and tell the owner they can change it. "I
-already told you" means a report was lost: file it now and say so — never argue that it was already said. The full shape of a report is
-[reporting and triage](../../docs/agents/reporting-and-triage.md); this line is so it happens even when nobody typed `/flow:report`.
+something, answer the owner first, then file it in the same turn, in the background (a worker, or right after the reply), never before the answer and without
+derailing whatever you are doing: restated in your own words, never the chat verbatim; duplicates searched first (`naima list`, or `naima new --dedupe`, which
+prints likely duplicates of the same type before writing and still writes) and linked instead of refiled; triaged on the spot (impact, priority, confidence); a
+decision recorded with `naima new decisions`, a deferral with its reason. Every item records who asked for it: pass `--asked-by owner` only for what the owner
+said, asked, reported or decided, and leave the default, `agent`, for what you found yourself; `--from <item>` names the item a finding came from. A requirement
+you add on your own stays `proposed`, counted by no gate, until the owner says yes and you run `naima confirm <requirement> --words "<their yes, restated>"`
+([origins](../../docs/guide/working-with-agents.md#where-each-item-comes-from)). A choice you make yourself because the owner left it open (a language, a
+default, leaving something out) is a decision too: record it, and tell the owner they can change it. "I already told you" means a report was lost: answer, then
+file it and say so — never argue that it was already said. The full shape of a report is [reporting and triage](../../docs/agents/reporting-and-triage.md); this
+line is so it happens even when nobody typed `/flow:report`.
 
 The same holds for requirements: check every prompt for a requirement it adds or changes, file or revise it, and settle how it is checked — a test, a property
 of a model, or a metric with a budget ([elicit](../../docs/agents/reporting-and-triage.md#elicit-the-requirements-it-carries)). A fact the owner gives, a
 finding an investigation reaches, and a lesson a mistake teaches are each a `knowledge` entry with its basis and its evidence linked, a lesson with kind
 `lesson` ([knowledge](../../docs/guide/knowledge.md)). Behaviour with states or concurrency is modelled and verified before it is coded
-([design with a model](../../docs/guide/design-with-a-model.md)): when triaging a feature or a bug, record `stateful=true` or `false`, and where the project applies it as advice (`naima model-first`), `statefulKind`. Once the model holds its
-properties, offer to generate the state machine's code from it with naima-codegen, in Rust, Python or TypeScript with Svelte, checked against the model
-([generate the code](../../docs/guide/design-with-a-model.md#generate-the-code-from-the-model)); check it with `naima verify` on a property whose verifier
-is `naima-codegen`, early and after every change, never with `naima-codegen check-refinement` alone, so the run is recorded. A decision taken with the owner, a change of direction or a
-notable event outside the tracker gets one diary entry, never routine work ([the rule](../../docs/guide/rules.md#agents-keep-the-diary)). How to work with the
-owner (quiet, simple, fast, capture, loops closed) is the shipped working rules, printed by `naima rules --audience agents`
-([working with the owner](../../docs/guide/rules.md#working-with-the-owner)).
+([design with a model](../../docs/guide/design-with-a-model.md)): when triaging a feature or a bug, record `stateful=true` or `false`, and where the project
+applies it as advice (`naima model-first`), `statefulKind`. Once the model holds its properties, offer to generate the state machine's code from it with
+naima-codegen, in Rust, Python or TypeScript with Svelte, checked against the model
+([generate the code](../../docs/guide/design-with-a-model.md#generate-the-code-from-the-model)); check it with `naima verify` on a property whose verifier is
+`naima-codegen`, early and after every change, never with `naima-codegen check-refinement` alone, so the run is recorded. A decision taken with the owner, a
+change of direction or a notable event outside the tracker gets one diary entry, never routine work
+([the rule](../../docs/guide/rules.md#agents-keep-the-diary)). How to work with the owner (quiet, simple, fast, capture, loops closed) is the shipped working
+rules, printed by `naima rules --audience agents` ([working with the owner](../../docs/guide/rules.md#working-with-the-owner)).
 
 In this page, `naima` means, from the project's root:
 
@@ -54,8 +56,8 @@ In this page, `naima` means, from the project's root:
 sh naima-tracker/naima.sh
 ```
 
-the committed launcher, which installs Deno and the program first when either is missing (`naima-tracker\naima.cmd` on Windows); before `naima init` has
-written it, `deno run -A naima-tracker/naima/naima.ts`.
+the committed launcher, which installs Deno and the program first when either is missing (`naima-tracker\naima.cmd` on Windows); before `naima init` has written
+it, `deno run -A naima-tracker/naima/naima.ts`.
 
 ## 0. Have git and a repository
 
