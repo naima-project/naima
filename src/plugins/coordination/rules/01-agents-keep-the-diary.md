@@ -12,8 +12,8 @@ An agent adds a diary entry on its own, without being asked (`naima event <today
 conversation (what was decided and why, in a sentence or two, naming the item it concerns), when the direction of the work changes (a plan dropped, a strategy
 chosen), or when something notable happens outside the tracker (an incident, a repository made private, a request from outside the project). It writes none for
 routine work, landings, items filed, fixes or test runs, and none for what a session note, a decision item or the timeline already records, since `naima diary`
-shows those already. A day holds a few entries at most: the related turns of one conversation make one entry, written once that exchange has settled, never one
-entry per turn and never a second entry that repeats the first.
+shows those already. A day holds a few entries at most: the related turns of one conversation make one entry, written once that exchange has settled and the
+owner has been answered, never before the answer, never one entry per turn and never a second entry that repeats the first.
 
 ## Why
 
