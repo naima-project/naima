@@ -28,7 +28,7 @@ Every contribution below has a qualified id, `<plugin>/<name>`, and goes by its 
 - [metrics](#metrics) — named measurements — a command's number, a code-quality number taken in process, a test suite's results — recorded per commit, held to a budget, a floor or a baseline, and read back along the commit timeline
 - [rules](#rules) — the project's own rules, kept as items: shown to agents first by naima guide, listed by naima rules
 - [long-work](#long-work) — long work, run and waited on by Naima: naima run starts a command detached, with budgets and a progress channel, locally or on a host; naima wait blocks on it by its record; naima run list, status, stop and clean; a long run that is due reported and filed, never started on its own; shipped rules make them mandatory for agents and make long work report its progress
-- [working-rules](#working-rules) — the working rules every project ships for its agents: quiet, talking to the owner, fast, the coordinator delegating to workers, asking before what cannot be undone, capturing with judgment, never asking what the rules answer, closing every loop; and for everyone, no new status document and the right tool for the job
+- [working-rules](#working-rules) — the working rules every project ships for its agents: quiet, talking to the owner, fast, the coordinator delegating to workers, asking before what cannot be undone, capturing with judgment, never asking what the rules answer, closing every loop, reporting a problem in Naima upstream only when it is real and on the owner's yes; and for everyone, no new status document and the right tool for the job
 - [commit-hooks](#commit-hooks) — companion records required in the commit that makes a change, and the path-scoped pre-commit hook that holds them
 - [privacy](#privacy) — the owner's material enters the repository only with their recorded yes, and no secret enters it at all
 - [adopt](#adopt) — adopt a board the project already keeps as items, in reviewed phases, without losing a line of it or deleting it
@@ -3199,11 +3199,11 @@ naima wait models --host lab --timeout 1h
 
 ## working-rules
 
-The working rules every project ships for its agents: quiet, talking to the owner, fast, the coordinator delegating to workers, asking before what cannot be undone, capturing with judgment, never asking what the rules answer, closing every loop; and for everyone, no new status document and the right tool for the job.
+The working rules every project ships for its agents: quiet, talking to the owner, fast, the coordinator delegating to workers, asking before what cannot be undone, capturing with judgment, never asking what the rules answer, closing every loop, reporting a problem in Naima upstream only when it is real and on the owner's yes; and for everyone, no new status document and the right tool for the job.
 
 Its contributions' qualified ids are `working-rules/<name>`.
 
-How an agent works with the owner is the same in every project, so Naima ships it as rules rather than leaving each project to write them: spend few tokens and stay silent through routine steps, talk so the owner reads little and decodes nothing, never keep the owner waiting, send the work to workers in the background while the coordinator stays in the conversation, ask before what cannot be undone, file what the owner settles and nothing they are still thinking through, never ask what the rules already answer, and leave no loop open when a turn or a session ends. Two more bind everyone: no new status document beside the authoritative one, and the state-of-the-art method for every job. Each is a shipped rule, listed by `naima rules --audience agents` beside the project's own, most with the phrase an agent gives back. A project drops one by naming it in the rules plugin's `retire` option, and changes one by retiring it and writing its own `rules` item in its place; switching this plugin off drops them all.
+How an agent works with the owner is the same in every project, so Naima ships it as rules rather than leaving each project to write them: spend few tokens and stay silent through routine steps, talk so the owner reads little and decodes nothing, never keep the owner waiting, send the work to workers in the background while the coordinator stays in the conversation, ask before what cannot be undone, file what the owner settles and nothing they are still thinking through, never ask what the rules already answer, leave no loop open when a turn or a session ends, and report a problem in Naima upstream only when it is reproduced or blocks the work, searched first and sent only on the owner's yes. Two more bind everyone: no new status document beside the authoritative one, and the state-of-the-art method for every job. Each is a shipped rule, listed by `naima rules --audience agents` beside the project's own, most with the phrase an agent gives back. A project drops one by naming it in the rules plugin's `retire` option, and changes one by retiring it and writing its own `rules` item in its place; switching this plugin off drops them all.
 
 **Shipped rules**, active in every project that loads the plugin, listed by `naima rules`
 
@@ -3220,6 +3220,7 @@ How an agent works with the owner is the same in every project, so Naima ships i
 | `close-every-loop` | Close every loop | agents | must |  | `agent` | `Loops closed mode on` |
 | `no-new-status-document` | No new status or summary document: update the authoritative one | everyone | must |  | `agent` |  |
 | `right-tool-for-the-job` | Use the state-of-the-art method for the job | everyone | must |  | `agent` |  |
+| `report-upstream-only-real-problems` | Report a problem in Naima upstream only when it is real, and only on the owner's yes | agents | must |  | `agent` | `Upstream reports mode on` |
 
 ## commit-hooks
 

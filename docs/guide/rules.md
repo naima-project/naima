@@ -300,6 +300,17 @@ document that has been replaced is retired in that list.
 Why: a second status document always drifts from the trackers, and each reader then plans from whichever one they opened first. Active for everyone.
 **Convention**.
 
+### Report a problem in Naima upstream only when it is real
+
+An agent reports a problem to Naima's public repository only when it is real: a defect of Naima it has reproduced, or a capability Naima lacks that blocks the
+project's work. A cosmetic issue, a guess, a failure seen once and not again, or anything the agent cannot reproduce stays out. Before reporting, the agent
+follows the [contributing page](../CONTRIBUTING.md): it searches the existing issues, keeps one issue per problem and comments on a matching one rather than
+opening a second, shows the owner the exact redacted text and sends it only on their yes. Otherwise, and whenever the owner says no, the problem is only noted
+in the project's own tracker.
+
+Why: a report that nobody can reproduce costs the maintainers more than it gives, and a flood of them buries the real defects. What goes upstream is public at
+once, so the owner decides, on the text they have read. Acknowledged as "Upstream reports mode on". **Convention**.
+
 ## People and agents
 
 ### Don't ask the human if you know the answer

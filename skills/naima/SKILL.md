@@ -189,4 +189,6 @@ Read the rules before acting, then the flow that applies. They are plain files i
 
 When you find a problem in Naima, or the owner wants something Naima does not do, read the contributing page live, from
 `https://raw.githubusercontent.com/naima-project/naima/main/docs/CONTRIBUTING.md`, and follow it; the local [copy](../../docs/CONTRIBUTING.md) is only the
-fallback when it cannot be fetched. Nothing is sent to the public repository without the owner's yes on the exact text.
+fallback when it cannot be fetched. The shipped rule `working-rules/report-upstream-only-real-problems` (`naima rules`) says which problems go upstream and how:
+only one reproduced, or a missing capability that blocks the work, searched first, sent only on the owner's yes on the exact redacted text, and otherwise noted
+in the project's own tracker.
