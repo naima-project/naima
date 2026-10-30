@@ -8,9 +8,11 @@ You rarely need to do any of this yourself. The agents check for updates, tell y
 ## Naima updates to releases
 
 Naima moves only from one release to another. A release is a version tag, such as `v1.2.0`, with two files attached on GitHub: `naima-1.2.0.tar.gz`, which holds
-the files of that version, and `naima-1.2.0.tar.gz.sha256`, its checksum. Installing Naima and updating it both download that archive from the release, at its plain address on the releases page. Which releases exist is read from the source's tags with `git ls-remote`, a version with a suffix such as `-rc.1` being a pre-release, so it works wherever git does; GitHub's API is asked only when git cannot read the tags. Naima
-checks the archive against its checksum and against the commit the tag names before it uses anything in it, and refuses an archive that does not match. The lock
-then records the version and the checksum next to the commit.
+the files of that version, and `naima-1.2.0.tar.gz.sha256`, its checksum. Installing Naima and updating it both download that archive from the release, at its
+plain address on the releases page. Which releases exist is read from the source's tags with `git ls-remote`, a version with a suffix such as `-rc.1` being a
+pre-release, so it works wherever git does; GitHub's API is asked only when git cannot read the tags. Naima checks the archive against its checksum and against
+the commit the tag names before it uses anything in it, and refuses an archive that does not match. The lock then records the version and the checksum next to
+the commit.
 
 Downloading the archive is also how the project knows how many people use each version. GitHub counts the downloads of every file attached to a release, so the
 releases page shows how many installs and updates each version had, private projects included. Naima sends nothing else anywhere.
@@ -22,6 +24,9 @@ ask for them with `naima update --pre`; a project that already runs a pre-releas
 
 A project whose lock still names a commit of Naima's main branch, as every lock did before releases, moves to the newest release on its next update, and the
 update says so once. If that commit is already newer than the newest release, Naima stays where it is and moves at the next release after it.
+
+A release of Naima is tagged only after its release gate has installed and updated it, end to end, on macOS, Linux and Windows, so `naima update` and the
+installer never offer a version that has not passed it. A project that wants every change as it lands, a rolling release, follows the main branch instead.
 
 Some projects follow a branch rather than releases: Naima's own workshop, which runs each change as soon as it lands, or a fork that publishes no releases.
 `naima update --main` moves the lock to the head of the source's main branch, as every update did before releases; the lock then names a commit with no version.
@@ -109,9 +114,9 @@ naima set todos/update-naima status=done
 ```
 
 An update changes what the project holds to, so it gets an item of its own and is made in that item's worktree. The coordinator then lands it from the main
-checkout with `naima land`, like any other change. Committed straight on the trunk, it draws a note from the check `landings-are-markers`. When the tracker
-is a repository of its own, Naima commits the tracker's half on the item's branch itself, you commit the files of the code it names, and `naima land` lands
-the two together; run on the code's trunk while the trunk guard runs there, the update is refused before anything moves
+checkout with `naima land`, like any other change. Committed straight on the trunk, it draws a note from the check `landings-are-markers`. When the tracker is a
+repository of its own, Naima commits the tracker's half on the item's branch itself, you commit the files of the code it names, and `naima land` lands the two
+together; run on the code's trunk while the trunk guard runs there, the update is refused before anything moves
 ([updating Naima in sibling mode](private-tracker.md#updating-naima)).
 
 `naima update` shows what changes, downloads the newer release's archive and checks it, switches the program to it and records the new version, its checksum and
