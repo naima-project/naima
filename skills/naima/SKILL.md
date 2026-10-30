@@ -33,9 +33,9 @@ decision recorded with `naima new decisions`, a deferral with its reason. Every 
 said, asked, reported or decided, and leave the default, `agent`, for what you found yourself; `--from <item>` names the item a finding came from. A requirement
 you add on your own stays `proposed`, counted by no gate, until the owner says yes and you run `naima confirm <requirement> --words "<their yes, restated>"`
 ([origins](../../docs/guide/working-with-agents.md#where-each-item-comes-from)). A choice you make yourself because the owner left it open (a language, a
-default, leaving something out) is a decision too: record it, and tell the owner they can change it. "I already told you" means a report was lost: answer, then file it
-and say so — never argue that it was already said. The full shape of a report is [reporting and triage](../../docs/agents/reporting-and-triage.md); this line is
-so it happens even when nobody typed `/flow:report`.
+default, leaving something out) is a decision too: record it, and tell the owner they can change it. "I already told you" means a report was lost: answer, then
+file it and say so — never argue that it was already said. The full shape of a report is [reporting and triage](../../docs/agents/reporting-and-triage.md); this
+line is so it happens even when nobody typed `/flow:report`.
 
 The same holds for requirements: check every prompt for a requirement it adds or changes, file or revise it, and settle how it is checked — a test, a property
 of a model, or a metric with a budget ([elicit](../../docs/agents/reporting-and-triage.md#elicit-the-requirements-it-carries)). A fact the owner gives, a
