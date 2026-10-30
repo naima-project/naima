@@ -33,12 +33,17 @@ echo '{"stage":"render","done":12,"total":40,"unit":"frames"}' >> "$NAIMA_RUN_PR
 ```
 
 - `stage` is what the command is doing now, and `done`, `total` and `unit` say how much of it is done, out of how much, and counted in what.
+- `estimate`, set to `true`, says the total is only a guess, such as the count the same work reached last time. It is shown with a `~`, as
+  `12/~40 frames (~30%) · ETA ~14s`, and when the work goes past it the total grows instead of passing 100%.
 - `note` is for anything else worth saying.
 - `overall` takes `{ "done", "total", "unit" }` for the larger piece of work the stage belongs to, such as scenes around frames.
 
 Any other line is shown as it is. Naima works out the rate and, when the total is known, the time left, and shows them as
 `render: 12/40 frames (30%) · 2/s · ETA 14s`. Some of Naima's own commands (`naima verify`, `naima metrics run` and `naima tools install`) write these lines by
-themselves when they run inside `naima run`. Otherwise they print them on the terminal, once they have been running for a couple of seconds.
+themselves when they run inside `naima run`. Otherwise they print them on the terminal, once they have been running for a couple of seconds. The mCRL2 tools
+never say how many states or BES equations there will be, so `naima verify` keeps the count each step ended on with the run it records. The next run of the same
+property, on the same model and options, shows that count as an estimated total, with a percentage and the time left; the first run shows the count and the rate
+only.
 
 Some commands really can't say how far along they are, such as a solver that prints nothing while it works. Such a command is started with the reason instead:
 

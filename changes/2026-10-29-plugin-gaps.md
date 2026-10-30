@@ -13,14 +13,14 @@ commands:
   - changed stance
 ---
 
-A plugin can now ask the agent tool to run one of its commands, under the new `agent-hooks` point: an event, an optional matcher and the naima command.
-Naima installs the hook in the tool's settings beside its own and the project's at `naima init`, `naima update` and `naima stance adopt`, rewrites it in place
-when it changes, and removes it once the plugin is gone; `naima check` notes one missing or left behind. A plugin no longer needs to write
-`.claude/settings.json` itself.
+A plugin can now ask the agent tool to run one of its commands, under the new `agent-hooks` point: an event, an optional matcher and the naima command. Naima
+installs the hook in the tool's settings beside its own and the project's at `naima init`, `naima update` and `naima stance adopt`, rewrites it in place when it
+changes, and removes it once the plugin is gone; `naima check` notes one missing or left behind. A plugin no longer needs to write `.claude/settings.json`
+itself.
 
 A landing report can now `refuse` a landing, for a check that fails on the branch's files. `naima land` reports this as a failing check rather than as proofs
-not current, and `--stale-proofs` no longer lets it through. A check can declare the programs it starts with `runs`, which the launcher allows, as a
-verifier's could. These three are contract 4.
+not current, and `--stale-proofs` no longer lets it through. A check can declare the programs it starts with `runs`, which the launcher allows, as a verifier's
+could. These three are contract 4.
 
 `naima reviewed <rule> --item <item> "<what was checked>"` records that an agent did the review a rule verified by `agent` asks for. `naima land` prints the
 reviews a branch carries, and notes a landing that changes a file such a rule `covers` with no review recorded.

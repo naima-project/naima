@@ -661,7 +661,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
         mkdirSync(d)
         return d
       }
-      const lps = await lpsRoute(model, formula, sub("lps"), seconds, { ...progress, stage: (n, t, u) => progress.stage(`lps: ${n}`, t, u) }, toolArgs)
+      const lps = await lpsRoute(model, formula, sub("lps"), seconds, { ...progress, stage: (n, t, u, e) => progress.stage(`lps: ${n}`, t, u, e) }, toolArgs)
       const lts = await ltsRoute(
         model,
         formula,
@@ -669,7 +669,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
         ctx,
         seconds,
         explore,
-        { ...progress, stage: (n, t, u) => progress.stage(`lts: ${n}`, t, u) },
+        { ...progress, stage: (n, t, u, e) => progress.stage(`lts: ${n}`, t, u, e) },
         toolArgs,
       )
       return crossCheck(lps, lts)
@@ -685,7 +685,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner } = {}): Veri
     }
     const dir = mkdtempSync(join(workBase(ctx.program), "compare-"))
     let phase = "before"
-    const s = steps(undefined, dir, { ...progress, stage: (n, t, u) => progress.stage(`${phase}: ${n}`, t, u) })
+    const s = steps(undefined, dir, { ...progress, stage: (n, t, u, e) => progress.stage(`${phase}: ${n}`, t, u, e) })
     const failed = async (r: VerifyResult, details: Record<string, unknown>): Promise<CompareResult> => ({
       verdict: "error",
       output: r.output,
@@ -768,7 +768,7 @@ export function mcrl2Plugin(options: Record<string, unknown> = {}, run: Runner =
       "Off until `naima.json` names it under `plugins`, since it starts programs. Contributes the `mcrl2` verifier and the `mcrl2` tool. `model` is an mCRL2 specification; `property` is a modal mu-calculus formula, inline, or the path of an `.mcf` file from the project root, which is then an input of the run. " +
       "A property chooses its route in `verifierOptions.route`. `lps`, the default, is the standard route: `mcrl22lps`, `lps2pbes --counter-example`, and `pbessolve` with an evidence file: `true` holds; `false` is violated, and the evidence, printed by `lps2lts` as an `.aut` labelled transition system, is the counterexample; any other answer, or `verifierOptions.timeoutSeconds` reached by a step, is unknown. " +
       "`lts`, the LTS route, is for a model whose state space is small but whose data makes the standard route slow. `mcrl22lps` and `lps2lts` (with `--threads` from `verifierOptions.threads`) make the LTS once per model version, kept in the run work folder under a key over the model's contents, the toolset's version and the recipe, and shared by every property of that model. `verifierOptions.maxStates` caps the states `lps2lts` may explore (`--max`): a state space larger than the cap makes the run unknown, its output beginning `state cap reached:`, and the LTS cut short is not kept; on the standard route the option is an error, since that route explores with `pbessolve`. Each formula is then reduced only by an equivalence that preserves and reflects it, the coarsest of three: `branching-bisim` for a formula of the fragment the branching equivalences preserve — every visible step right after a star over an action formula that includes tau, no single step that includes tau, fixpoints only as the four inevitability patterns — when it has no fixpoint and no deadlock through a star; `dpbranching-bisim` when it has one of those, which see divergence; `bisim`, strong bisimilarity, for every other formula. With a branching equivalence, `ltsconvert` first hides every action the formula does not mention, unless a label joins such an action to another, in which case the formula takes `bisim` and nothing is hidden. The output says which equivalence was used and why; the reduced LTS is kept beside the LTS, one per equivalence and set of hidden actions, for every formula that needs the same. On the reduced LTS, `lts2pbes --counter-example` and one `pbessolve` with an evidence file decide; on false, the evidence, printed by `ltsconvert` as an `.aut` labelled transition system, is the counterexample, over the reduced LTS, where the hidden actions appear as tau. " +
-      "`cross-check` runs both routes and gives a verdict only when they agree; a disagreement is an error whose output begins `the routes disagree:`. Each run records in its `details` the route, the version of every tool it started, and for the LTS route the LTS's key, reuse and size, the mentioned and hidden actions, the equivalence it reduced by and why, the reduced size and whether it was reused, and on false that the counterexample comes from the reduced LTS. While a step runs, every line it prints is the run's progress: `lps2lts` its states, level and transitions, `pbessolve` its BES equations, `ltsconvert` and `lts2pbes`, started with `--verbose`, their stages. " +
+      "`cross-check` runs both routes and gives a verdict only when they agree; a disagreement is an error whose output begins `the routes disagree:`. Each run records in its `details` the route, the version of every tool it started, and for the LTS route the LTS's key, reuse and size, the mentioned and hidden actions, the equivalence it reduced by and why, the reduced size and whether it was reused, and on false that the counterexample comes from the reduced LTS. While a step runs, every line it prints is the run's progress: `lps2lts` its states, level and transitions, `pbessolve` its BES equations, `ltsconvert` and `lts2pbes`, started with `--verbose`, their stages; a counting step's total is estimated from the count it ended on in the previous run of the same property, model and options. " +
       "The tools are taken from `bin` when it is given and exists on this machine, otherwise from the mCRL2 202607.0 that `naima tools install mcrl2` installed on this machine, otherwise from PATH; a `bin` that does not exist on this machine, as when a shared `naima.json` names another machine's path, is said once and passed over. The plugin declares that tool, so `naima tools` reports it. A tool that is not there is an error run whose output begins `tool missing:`; a tool that fails is an error with its output. The version recorded is the first line of `mcrl22lps --version`. " +
       "For `naima equivalent`, it compares two versions of a model modulo `bisim` (strong bisimilarity, the default, which preserves every formula) or `dpbranching-bisim` (divergence-preserving branching bisimilarity, which preserves the formulas the LTS route accepts): `mcrl22lps`, `lps2lts` and `ltsinfo` for each version, the new one through the LTS cache, then `ltscompare --counter-example`; on false, the distinguishing formula it writes is what tells them apart.",
     options: [

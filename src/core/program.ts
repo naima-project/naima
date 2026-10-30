@@ -7,9 +7,13 @@
 // the Naima that runs — then from the clone's origin. It never overwrites
 // work: a clone with uncommitted changes, or with commits its source does not
 // have, is refused, never reset. It never pulls on its own: only `naima
-// update` asks the source where its main is.
+// update` asks the source where its main is. A program that is a symbolic link
+// is never moved: it is someone's own setup, or one clone shared by checkouts
+// that lock different commits, which each run would pull to its own lock; every
+// run says when it is not at the lock (linkedNote, and worktreeHold for a
+// worktree).
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from "node:fs"
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, statSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { posixRelative } from "./config.ts"
 import { NaimaError } from "./errors.ts"
@@ -46,6 +50,8 @@ export interface Target {
   seeds?: string[]
   /** The release the commit is, from the lock: fetched from the network, the commit comes with its release's archive, verified. */
   release?: { version: string; sha256: string }
+  /** Repair and refuse as usual, clone a missing program, but never check out another commit: a worktree held by worktreeHold. */
+  stay?: boolean
 }
 
 /** A URL with its credentials removed: a token in a clone's origin must never reach a committed naima.json. */
@@ -307,10 +313,12 @@ export interface Moved {
  * the old layout is refused: `naima update` moves the lock past it.
  */
 export async function align(t: Target): Promise<Moved | null> {
+  // A link is someone's own setup, or a clone shared with another checkout that locks another commit: never moved.
+  if (linkOf(t)) return null
   // A commit no repository on this disk holds comes from the network: a release's, with its archive, verified.
   const held = (isClone(t.program) && readableClone(t.program) && has(t.program, t.commit)) ||
     seeds(t).some((s) => runGit(t.root, ["-C", s, "cat-file", "-e", `${t.commit}^{commit}`]).ok)
-  const release = !held && t.release && (!isClone(t.program) || runGit(t.program, ["rev-parse", "HEAD"]).out !== t.commit)
+  const release = !held && t.release && !(t.stay && isClone(t.program)) && (!isClone(t.program) || runGit(t.program, ["rev-parse", "HEAD"]).out !== t.commit)
     ? await downloadRelease(t, t.release)
     : null
   try {
@@ -318,6 +326,42 @@ export async function align(t: Target): Promise<Moved | null> {
   } finally {
     release?.clear()
   }
+}
+
+/**
+ * The program, when it is a symbolic link: what it points to, and whether that is the program of another
+ * checkout of this same repository (a worktree, or the main one). Such a link shares one clone between
+ * checkouts that lock different commits, and every run in either moved it to its own lock: a run in an
+ * older worktree put the trunk's program back at the older commit, and nothing said so.
+ */
+export function linkOf(t: Pick<Target, "root" | "program">): { target: string; shared: boolean } | null {
+  let target: string
+  try {
+    if (!lstatSync(t.program).isSymbolicLink()) return null
+    target = resolve(dirname(t.program), readlinkSync(t.program))
+  } catch {
+    return null
+  }
+  // Asked of git, a subprocess: the other checkout is outside what Naima may read.
+  const common = (dir: string) => runGit(t.root, ["-C", dir, "rev-parse", "--path-format=absolute", "--git-common-dir"])
+  const there = common(dirname(target))
+  const here = common(t.root)
+  const shared = there.ok && here.ok && resolve(nativePath(there.out)) === resolve(nativePath(here.out))
+  return { target, shared }
+}
+
+/**
+ * What to say about a program that is a link Naima does not move, when it is not at the locked commit;
+ * null when it is, or when the program is no such link.
+ */
+export function linkedNote(t: Pick<Target, "root" | "program" | "commit">): string | null {
+  const link = linkOf(t)
+  if (!link) return null
+  const head = runGit(t.root, ["-C", t.program, "rev-parse", "HEAD"]).out
+  if (head === t.commit) return null
+  return `${posixRelative(t.root, t.program)} is a link to ${posixRelative(t.root, link.target)}, which Naima never moves: it is at ${
+    head ? short(head) : "no commit"
+  }, and the lock names ${short(t.commit)} — the program running is not the locked one; remove the link and run naima again to get a clone at the lock`
 }
 
 function finishAlign(t: Target, release: { check(): void } | null): Moved | null {
@@ -350,6 +394,8 @@ function finishAlign(t: Target, release: { check(): void } | null): Moved | null
       mustGit(t.program, "remote", "set-url", "origin", t.source)
     }
     if (from === t.commit) return repaired.length ? { from, repaired } : null
+    // Held: what the run repaired is said, and the clone stays where it is.
+    if (t.stay) return repaired.length ? { from: null, repaired } : null
   }
   fetchCommit(t, t.commit)
   release?.check()

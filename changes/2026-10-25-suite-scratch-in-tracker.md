@@ -5,8 +5,6 @@ affects:
   - usage
 ---
 
-A suite's `{tmp}` was a folder in the system's temporary directory, which the
-launcher does not let Naima write, so `naima metrics run --record` failed on
-every suite in a real project. It is now `.tmp/` in the tracker folder, which
-git ignores, and it is emptied after each run. Errors met while measuring
-are said in plain words too.
+A suite's `{tmp}` was a folder in the system's temporary directory, which the launcher does not let Naima write, so `naima metrics run --record` failed on every
+suite in a real project. It is now `.tmp/` in the tracker folder, which git ignores, and it is emptied after each run. Errors met while measuring are said in
+plain words too.
