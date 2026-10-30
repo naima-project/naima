@@ -38,18 +38,19 @@ repository it stops and asks whether this is the root of the project, and if it 
 If Deno is missing, it installs it with Deno's official installer and says so, unless `NAIMA_NO_DENO_INSTALL` is set, in which case it prints that command and
 stops. After that it downloads the newest release's archive, `naima-<version>.tar.gz`, and its checksum from the release on GitHub, checks the one against the
 other and against the commit the release's tag names, unpacks the archive into `naima-tracker/naima/`, and makes that folder a git clone of the source at that
-commit, with a branch `main` at the source's `main` as a clone has, so that updates and worktrees work as they do for any clone. Then it runs that program's `naima init`, which records the version and the checksum in the
-lock, and `naima check`. The download is what counts the install ([Naima updates to releases](update-naima.md#naima-updates-to-releases)). If you run it again
-in a project that already has a lock, it clones only when `naima-tracker/naima/` is missing, and then runs `naima check`. It never moves the lock, because that
-is the job of `naima update`.
+commit, with a branch `main` at the source's `main` as a clone has, so that updates and worktrees work as they do for any clone. Then it runs that program's
+`naima init`, which records the version and the checksum in the lock, and `naima check`. The download is what counts the install
+([Naima updates to releases](update-naima.md#naima-updates-to-releases)). If you run it again in a project that already has a lock, it clones only when
+`naima-tracker/naima/` is missing, and then runs `naima check`. It never moves the lock, because that is the job of `naima update`.
 
 `NAIMA_VERSION` names the release to install, a pre-release included. Without it the installer takes the newest release it can install from an archive. That
 means a release from `1.1.0-beta.4` on, the first one built for archive installs; older releases are never picked, because their files are laid out the way
 Naima was before. Among those releases it takes the newest stable one. It skips pre-releases only when such a stable release exists, so while none does it
-installs the newest pre-release. The installer reads which releases exist from the source's tags with `git ls-remote`, a version with a suffix such as `-beta.4` being a pre-release, and downloads the archive from its plain address on the releases page, so it works wherever git does, behind a proxy that refuses GitHub's API too. `NAIMA_SOURCE` names a
-different repository, such as a fork or a path on this disk, and `NAIMA_RELEASES` where its releases' files are downloaded from. `NAIMA_REF` installs a branch
-or tag with `git clone` instead of a release, as for developing Naima, and so does a source that has no releases. The installer's own tests use these. For
-agents, the site's `llms.txt` says the same thing.
+installs the newest pre-release. The installer reads which releases exist from the source's tags with `git ls-remote`, a version with a suffix such as `-beta.4`
+being a pre-release, and downloads the archive from its plain address on the releases page, so it works wherever git does, behind a proxy that refuses GitHub's
+API too. `NAIMA_SOURCE` names a different repository, such as a fork or a path on this disk, and `NAIMA_RELEASES` where its releases' files are downloaded from.
+`NAIMA_REF` installs a branch or tag with `git clone` instead of a release, as for developing Naima, and so does a source that has no releases. The installer's
+own tests use these. For agents, the site's `llms.txt` says the same thing.
 
 To do it by hand, in a git repository that doesn't use Naima yet:
 
@@ -125,12 +126,12 @@ or agent harness that walks the file system picks up anything of Naima's own, an
 `naima.json` holds `source` (the clone's `origin`, with credentials removed) and `commit` (a commit of Naima's `main`), and together these are the lock. When
 the project runs a release, the lock also holds `version` and `sha256`, the checksum of the release's archive: a fresh copy that has to come from the network
 downloads that archive too, and refuses it when its checksum differs. On every run, Naima compares `commit` with the clone's `HEAD`. If they differ, it fetches
-the commit, first from a local seed (another worktree's `naima-tracker/naima/` on this disk) and then from `origin`, checks it out detached, and starts again.
-A worktree's clone takes the seed's view of the source's branches with it. A clone whose `HEAD` is a commit it holds but no ref of `origin` reaches, as a
+the commit, first from a local seed (another worktree's `naima-tracker/naima/` on this disk) and then from `origin`, checks it out detached, and starts again. A
+worktree's clone takes the seed's view of the source's branches with it. A clone whose `HEAD` is a commit it holds but no ref of `origin` reaches, as a
 worktree's clone of a program installed from an archive could be left, would read as holding commits of its own: when a seed knows that commit as the source's,
-or the source's `main` reaches it, Naima records it so and says it in one line; a commit only the clone has is still refused.
-If the lock names a commit the source doesn't have, it refuses with one line naming both. If the lock names a commit from the old layout before the split (one
-that still has `naima/src/cli.ts`), `naima update` moves it to Naima's product head, and that is how an older version is migrated.
+or the source's `main` reaches it, Naima records it so and says it in one line; a commit only the clone has is still refused. If the lock names a commit the
+source doesn't have, it refuses with one line naming both. If the lock names a commit from the old layout before the split (one that still has
+`naima/src/cli.ts`), `naima update` moves it to Naima's product head, and that is how an older version is migrated.
 
 ## The host's own tools
 
@@ -168,8 +169,9 @@ plain-text path and markdown link in each configured entry file that exists, and
 there is none. The line reads "Naima is in `naima-tracker/` (`naima/` the program, `naima-data/` the data); at the start of every session, run
 `sh naima-tracker/naima.sh hello` (on Windows `naima-tracker\naima.cmd hello`), which installs Deno and the program first when either is missing, and pass on
 what it says, unless its output is already in the conversation because a session-start hook ran it: then pass that on and do not run it again; when a naima
-command prints a NAIMA-MESSAGE line, tell the owner what it says at once, and never acknowledge a message for them; if you find Naima elsewhere, update this line". It is appended only if no entry file holds it already. The versioned `naima-tracker/README.md`
-holds the two commands that restore a missing program ([below](#fresh-clones-and-worktrees)).
+command prints a NAIMA-MESSAGE line, tell the owner what it says at once, and never acknowledge a message for them; if you find Naima elsewhere, update this
+line". It is appended only if no entry file holds it already. The versioned `naima-tracker/README.md` holds the two commands that restore a missing program
+([below](#fresh-clones-and-worktrees)).
 
 ### Running naima hello at every session start
 
@@ -179,8 +181,8 @@ message. A tool that can also run a command when the agent ends its turn gets a 
 session (a newer Naima, a long run that is due, an urgent message) is said even when the agent runs no naima command for hours
 ([what Naima tells you while you work](messages.md)). Naima itself works with any agent; an adapter only knows how one tool is configured.
 
-| Tool        | Its id in `agents` | Hooks                                                                                                                                                                                                                                                                                                                                                                        | Where                                                                                        |
-| ----------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Tool        | Its id in `agents` | Hooks                                                                                                                                                                                                                                                                                                                                                         | Where                                                                                        |
+| ----------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
 | Claude Code | `claude-code`      | a `SessionStart` hook running `sh "$CLAUDE_PROJECT_DIR/naima-tracker/naima.sh" hello --hook claude-code`, whose greeting Claude Code shows you directly, with what the agent is to say first; and a `Stop` hook running a small shell script shipped with Naima, which starts Naima only when something can be due and then has the agent tell you what it is | `.claude/settings.json`, merged into what the file holds: every other setting and hook stays |
 
 Claude Code also gets three hooks on sub-agents, so that every sub-agent has the project's rules before it acts
@@ -206,9 +208,9 @@ the files go in the same commit as the update. An update started by a version wh
 ### The committed launchers
 
 Every hook Naima installs, and the line in the entry file, run Naima through a launcher that is committed with the project in `naima-tracker/`: `naima.sh` on
-macOS and Linux (and under Git Bash on Windows, where it hands over to `naima.ps1`), and `naima.cmd`, which runs `naima.ps1`, from cmd or PowerShell on
-Windows. Git's hooks run it too (the trunk guard and the pre-commit checks). `naima init` writes the three files, `naima update` rewrites them when the program
-holds a newer copy, and `naima check` notes one that is missing or has been changed by hand.
+macOS and Linux (and under Git Bash on Windows, where it hands over to `naima.ps1`), and `naima.cmd`, which runs `naima.ps1`, from cmd or PowerShell on Windows.
+Git's hooks run it too (the trunk guard and the pre-commit checks). `naima init` writes the three files, `naima update` rewrites them when the program holds a
+newer copy, and `naima check` notes one that is missing or has been changed by hand.
 
 When Deno and the program are both there, the launcher only runs Naima with the same arguments, and says nothing. A fresh clone in a new cloud session, or any
 machine set up from scratch, has neither: the program is gitignored, and Deno lived in the old machine's home folder. The launcher then repairs both before
@@ -221,15 +223,15 @@ naima: the program was missing: restored version 1.2.0 from its release, SHA-256
 
 Deno is pinned in the launcher by version and by the SHA-256 of each platform's archive, and goes into `naima-tracker/.bin/`, which is gitignored; nothing is
 installed outside the project and no administrator rights are needed. Deno found on the `PATH` or where its own installer puts it is used instead. The program
-comes from the lock: the locked release's archive, checked against the checksum in `naima.json` and against the commit its tag names, as the installer does;
-a lock with no release clones the lock's source, and Naima then aligns it to the locked commit. On Windows, `naima.cmd` starts PowerShell with
+comes from the lock: the locked release's archive, checked against the checksum in `naima.json` and against the commit its tag names, as the installer does; a
+lock with no release clones the lock's source, and Naima then aligns it to the locked commit. On Windows, `naima.cmd` starts PowerShell with
 `-ExecutionPolicy Bypass`, so the machine's script policy doesn't stop it, and every path is quoted, so a project in a folder whose name has spaces works.
 
 ## Fresh clones and worktrees
 
-A fresh clone of a project that uses Naima has `naima-data/` but no `naima/`. Any command through the committed launcher, `sh naima-tracker/naima.sh check`
-for instance, restores it ([above](#the-committed-launchers)). Otherwise run the installer again, which sees the lock and clones Naima at the locked commit, or
-use the two commands in the tracker's own `README.md`:
+A fresh clone of a project that uses Naima has `naima-data/` but no `naima/`. Any command through the committed launcher, `sh naima-tracker/naima.sh check` for
+instance, restores it ([above](#the-committed-launchers)). Otherwise run the installer again, which sees the lock and clones Naima at the locked commit, or use
+the two commands in the tracker's own `README.md`:
 
 ```sh
 git clone <source> naima-tracker/naima
@@ -269,7 +271,29 @@ inside the project, for example the main worktree's, or a clone's as the install
   In the meantime `naima update --check` still answers, because it only reads the source.
 - **It checks signatures, if asked to.** With `"verify": "signed"` in `naima.json`, a commit is run, or updated to, only if `git verify-commit` verifies it with
   the keys git is configured to trust (gpg, or ssh with `gpg.ssh.allowedSignersFile`). Otherwise it is refused and the program stays where it was.
+- **It leaves a worktree that differs from the trunk alone.** In a worktree whose lock names another commit than the trunk's lock, or whose program is a
+  symbolic link rather than a clone of its own, nothing is moved ([below](#worktrees-and-the-lock)). In the main checkout, a program that is a link is never
+  moved either, and every run says when it is not at the lock.
 - **It never pulls.** Running whatever lands on a branch would be a supply chain risk, so only `naima update` asks the source for anything.
+
+## Worktrees and the lock
+
+Each worktree runs the Naima its own lock names, in its own clone. A worktree whose branch was made before the trunk's last `naima update` still locks the older
+commit, so it runs the older Naima until the trunk is merged into it. A worktree whose `naima-tracker/naima` is a symbolic link to another checkout's program
+shares that clone, and aligning it there would move the shared clone to the worktree's own lock, putting the trunk's program back at an older commit.
+
+In both cases Naima moves nothing. `naima hello`, `naima verify` and `naima run` print a prompt instead, ready to paste into a conversation on the main
+checkout. It names the worktree, its branch, the Naima it runs and the trunk's, and says what to do:
+
+- **The worktree's lock is older than the trunk's:** merge the trunk into the worktree's branch, then run `naima hello` there, which moves the worktree's own
+  clone to the new lock; a finished branch is then landed with `naima land`.
+- **The worktree's lock is newer than the trunk's:** the branch carries an update of Naima. Merge the trunk into it and land it if the update is meant to land,
+  or merge the trunk and keep the trunk's lock if not.
+- **The worktree's program is a link:** remove the link (only the link, never what it points to) and run the worktree's launcher,
+  `sh
+  naima-tracker/naima.sh hello`, which clones the program at the worktree's lock from a copy on this disk.
+
+A worktree made with `naima open` has a clone of its own at the trunk's lock, so none of this applies until the trunk's lock moves on.
 
 ## Updating
 
@@ -305,7 +329,7 @@ Deno with only these permissions:
 | write      | `naima-tracker/`, and the data or program directory if moved out of it; the tick's state, `naima/` in the clone's git directory; for `init` and `update` only, the entry files and the session-start settings of the tools in use, and with `init --write-excludes` the host tools' configuration | items, claims, notes, the program's own alignment, the commits fetched for it; when each job of the tick last ran, and which messages were shown; the pointer line, the session-start hooks and the exclusion lines; nothing else in the project                                                                                                           |
 | run        | `git`, `tar`, and the programs the loaded contributions declare, by name or by their absolute path in the [tools directory](tools.md#where-the-tools-go)                                                                                                                                          | alignment, update, and reading claims and notes across branches; unpacking a release's archive to check it; a [verifier](glossary.md#verifier)'s model checker (its `runs`, [the contract](../reference/plugin-contract.md#the-verifier-contract)); a declared [metric](metrics-and-budgets.md)'s program, the first word of its `run`                     |
 | env        | an allow-list: `HOME`, `PATH`, the user, shell, terminal, locale and temporary-directory variables, the proxy variables, Windows' system ones, and every `NAIMA_*`, `GIT_*`, `SSH_*`, `LC_*` and `DENO_*`                                                                                         | what git needs to reach a source, and Naima's own; nothing else of the environment reaches the program, nor the git it runs                                                                                                                                                                                                                                |
-| net        | none, but `api.github.com`, and the hosts a release's archive is downloaded from (`github.com` and the two GitHub redirects it to), or the servers `NAIMA_RELEASES` and `NAIMA_RELEASES_API` name                                                                                                                      | the network is git's, in alignment and update; GitHub is asked whether the tracker's remotes are public, by `init` and then at most once a day ([where the tracker lives](#where-the-tracker-lives)), and for the source's releases, whose archive an install or update downloads ([Naima updates to releases](update-naima.md#naima-updates-to-releases)) |
+| net        | none, but `api.github.com`, and the hosts a release's archive is downloaded from (`github.com` and the two GitHub redirects it to), or the servers `NAIMA_RELEASES` and `NAIMA_RELEASES_API` name                                                                                                 | the network is git's, in alignment and update; GitHub is asked whether the tracker's remotes are public, by `init` and then at most once a day ([where the tracker lives](#where-the-tracker-lives)), and for the source's releases, whose archive an install or update downloads ([Naima updates to releases](update-naima.md#naima-updates-to-releases)) |
 
 **`naima tools`, and `naima backup create`, which installs gh through it, and no other command,** may also write to the tools directory, reach any host and run
 any program. An install downloads from whatever host a redirect points to (a release's content server), and runs the unpackers (`tar`, `hdiutil`, `ditto`,
@@ -320,8 +344,8 @@ so the launcher enforces the list by giving the program only those variables. An
 permission lists on commas, so a project or program whose path contains a comma is refused with one line naming it.
 
 Only the programs the launcher finds are named in the run permission: a name it finds in a directory of `PATH`, or a path that exists. A tool that is not
-installed, such as one of mCRL2's when the project has switched its verifier on, is left out, so Deno has nothing to warn about when it starts. The program
-that would start it still sees it as missing, and says how to install it.
+installed, such as one of mCRL2's when the project has switched its verifier on, is left out, so Deno has nothing to warn about when it starts. The program that
+would start it still sees it as missing, and says how to install it.
 
 A command that tries to do anything else fails with Deno's own error, for example `Requires write access to "…/escaped.txt"` or `Requires run access to "ls"`.
 One consequence is that `naima docs --write` can only write inside the tracker folder when it is run through the launcher, so Naima's own repository regenerates
