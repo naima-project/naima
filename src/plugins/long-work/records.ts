@@ -7,7 +7,7 @@
 
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from "node:fs"
 import { basename, dirname, join } from "node:path"
-import { estimate, type ProgressEstimate, type ProgressSample, readProgressLine, showDuration } from "../../core/api.ts"
+import { estimate, type ProgressEstimate, type ProgressSample, readProgressLine, showDuration, stageTotal } from "../../core/api.ts"
 
 export { showDuration }
 
@@ -205,7 +205,8 @@ export function progressOf(line: string, at: number, status: RunStatus | null, n
   Object.assign(out, p)
   if (p.done !== undefined) {
     const from = status?.progressFrom
-    const same = from && from.stage === p.stage && from.unit === p.unit && from.total === p.total
+    // An estimated total grows as the stage passes it: the same stage still (§3.1).
+    const same = from && from.stage === p.stage && from.unit === p.unit && from.total === stageTotal(p)
     const e = estimate(same ? from : undefined, p.done, at, p.total, now)
     if (e.rate !== undefined) out.rate = e.rate
     if (e.etaMs !== undefined) out.etaMs = e.etaMs
@@ -232,11 +233,12 @@ export function sampleProgress(
   const out = { ...kept }
   if (p.done !== undefined) {
     const k = kept.progressFrom
-    if (!k || k.stage !== p.stage || k.unit !== p.unit || k.total !== p.total) {
+    if (!k || k.stage !== p.stage || k.unit !== p.unit || k.total !== stageTotal(p)) {
+      const total = stageTotal(p)
       out.progressFrom = {
         ...(p.stage !== undefined ? { stage: p.stage } : {}),
         ...(p.unit !== undefined ? { unit: p.unit } : {}),
-        ...(p.total !== undefined ? { total: p.total } : {}),
+        ...(total !== undefined ? { total } : {}),
         done: p.done,
         at,
       }

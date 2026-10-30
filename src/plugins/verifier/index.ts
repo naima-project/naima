@@ -107,6 +107,11 @@ export interface RunRecord {
   carried?: Carried
   /** The declared host whose checkout the run was made in (`naima verify --host`); absent for a run made here. */
   host?: string
+  /**
+   * The count each step that finished ended on, by the step's name as the adapter said it (`lps2lts`, `lts: pbessolve`):
+   * the estimated total of that step in the next run of the same property, model and options. Absent when no step counted.
+   */
+  counts?: Record<string, number>
   /** The flags `--tool-args` passed to the tool, which change what it prints, never the verdict; absent when none. Not part of the run's identity. */
   toolArgs?: string[]
   at: string
@@ -222,6 +227,13 @@ function asRun(value: unknown): RunRecord | string {
     if (r[k] !== undefined && typeof r[k] !== "string") return `${k} is not text`
   }
   if (r["details"] !== undefined && !isObject(r["details"])) return "details is not a JSON object"
+  const counts = r["counts"]
+  if (
+    counts !== undefined &&
+    (!isObject(counts) || !Object.values(counts as Record<string, unknown>).every((n) => typeof n === "number" && Number.isFinite(n) && n >= 0))
+  ) {
+    return "counts is not an object of counts"
+  }
   const toolArgs = r["toolArgs"]
   if (toolArgs !== undefined && (!Array.isArray(toolArgs) || !toolArgs.every((a) => typeof a === "string"))) return "toolArgs is not a list of text"
   const carried = r["carried"] as Record<string, unknown> | undefined
@@ -320,6 +332,60 @@ const madeOn = (run: RunRecord, identity: Identity): boolean =>
   (run.optionsSha256 ?? optionsHash({})) === identity.optionsSha256 && run.inputsSha256 === identity.inputsSha256 &&
   run.inputs !== undefined && digestOf(run.inputs, run.toolVersion) === run.inputsSha256
 
+/**
+ * The count each step ended on in the earlier runs of `item` on the same verifier, model, property and options — the
+ * same instance, whatever its inputs now hold — the latest run that counted a step giving its count.
+ */
+export function previousCounts(item: Item, same: Omit<Identity, "inputsSha256">): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const { run } of runsOf(item)) {
+    if (!run.counts || run.carried) continue
+    if (run.verifier !== same.verifier || run.model !== same.model || run.property !== same.property) continue
+    if ((run.optionsSha256 ?? optionsHash({})) !== same.optionsSha256) continue
+    Object.assign(out, run.counts)
+  }
+  return out
+}
+
+/**
+ * The adapter's steps reported as the property's, `<own>: <step>`, each counting step given as its estimated total
+ * the count it ended on before (`previous`); `counts` gives what each step ended on in this run: every step that a
+ * later one followed, and the last one too when `finished` (a conclusive verdict), never one cut short.
+ */
+export function countedSteps(
+  progress: Progress,
+  own: string,
+  previous: Record<string, number>,
+): { within: Progress; counts(finished: boolean): Record<string, number> } {
+  const ended: Record<string, number> = {}
+  let current: { name: string; done?: number } | undefined
+  const close = (): void => {
+    if (current?.done !== undefined) ended[current.name] = current.done
+  }
+  const within: Progress = {
+    ...progress,
+    stage(name, total, unit, estimate) {
+      close()
+      current = { name }
+      const before = previous[name]
+      if (total === undefined && before !== undefined && before > 0) progress.stage(`${own}: ${name}`, before, unit, true)
+      else progress.stage(`${own}: ${name}`, total, unit, estimate)
+    },
+    at(done) {
+      if (current) current.done = done
+      progress.at(done)
+    },
+  }
+  return {
+    within,
+    counts(finished) {
+      const out = { ...ended }
+      if (finished && current?.done !== undefined) out[current.name] = current.done
+      return out
+    },
+  }
+}
+
 /** What `verifyItem` did: the verdict, and the recorded run it reused instead of running, when it did. */
 export interface VerifyOutcome {
   verdict: Verdict
@@ -380,9 +446,11 @@ export async function decideItem(ctx: Context, item: Item, progress: Progress = 
   const refused = refusedToolArgs(verifier, toolArgs)
   if (refused) throw new Error(`${label(item)}: ${refused}`)
   const options = optionsOf(item)
-  // The adapter's stages are reported as the property's: `<property>: <stage>` (specs/progress-long-work-says-how-far, §6).
+  // The adapter's stages are reported as the property's: `<property>: <stage>` (specs/progress-long-work-says-how-far, §6),
+  // each counting one with the count it ended on in the previous run of the same instance as its estimated total.
   const own = label(item)
-  const within: Progress = { ...progress, stage: (name, total, unit) => progress.stage(`${own}: ${name}`, total, unit) }
+  const steps = countedSteps(progress, own, previousCounts(item, { verifier: id, model, property, optionsSha256: optionsHash(options) }))
+  const within = steps.within
   progress.stage(own)
   const request: VerifyRequest = { model: path, property, options, progress: within, ...(toolArgs.length ? { toolArgs } : {}) }
   const inputs = (await inputsOf(ctx, verifier, item, request)).map((rel): RunInput => {
@@ -410,6 +478,7 @@ export async function decideItem(ctx: Context, item: Item, progress: Progress = 
   } catch (e) {
     result = { verdict: "error", output: e instanceof Error ? e.message : String(e) }
   }
+  const counts = steps.counts(conclusive(result.verdict))
   return {
     record: {
       verifier: id,
@@ -427,6 +496,7 @@ export async function decideItem(ctx: Context, item: Item, progress: Progress = 
       ...(result.details !== undefined ? { details: result.details } : {}),
       ...(opts.force !== undefined ? { forced: opts.force } : {}),
       ...(toolArgs.length ? { toolArgs } : {}),
+      ...(Object.keys(counts).length ? { counts } : {}),
     },
   }
 }
@@ -1253,7 +1323,7 @@ export default function verifier(): Plugin {
       "A `properties` item names a `verifier` (an adapter any plugin can contribute), a `model` file (a path from the project root) and a `property` in the verifier's own language. " +
       "`naima verify` runs the adapter and attaches the run — verdict, output, the adapter's `details` of how it reached the verdict when it gives them, the model's sha256, and one digest over every file the run read (the model and what the adapter's `inputs` says it includes) and the tool's version (the adapter's `version`) — and the counterexample as its own file, then sets the status from the verdict. Every file is hashed by the content git commits: a text file's CRLF line endings are read as LF, so a run made on a Windows checkout with core.autocrlf is current on any other. " +
       "`--tool-args=<flags>` passes the tool flags the adapter declares in `toolArgs` as changing what it prints, never the verdict, and keeps them with the run, outside its identity. `--host <host>` runs the verifier in the checkout of a host the long-work plugin declares, through that host's Naima (`naima verify --emit`, which prints the run and writes nothing), and attaches the run here, marked with the host, only when it was made on exactly what this checkout has. " +
-      'A conclusive run (holds or violated) already recorded on the property with the same identity — verifier, model, property, `verifierOptions`, and the one digest over every input and the tool\'s version — is reused instead of repeated: `naima verify` says `reused` and names the run, and `--force "<reason>"` runs it again, keeping the reason with the new run. An error is never reused. Every run is kept, two made in the same instant included. ' +
+      'A conclusive run (holds or violated) already recorded on the property with the same identity — verifier, model, property, `verifierOptions`, and the one digest over every input and the tool\'s version — is reused instead of repeated: `naima verify` says `reused` and names the run, and `--force "<reason>"` runs it again, keeping the reason with the new run. An error is never reused. Every run is kept, two made in the same instant included. A run records in `counts` the count each step that finished ended on (the states explored, the BES equations generated); the next run of the same property, model and `verifierOptions`, whatever the inputs now hold, reports that count as the estimated total of the step (`estimate: true` in its progress line, `~` in its text), which grows as the step passes it. ' +
       "A property that holds is evidence exactly as a passed test is: it can `verify` a bug and close it. A verdict is only as good as what it was reached on, so `naima check` fails when a property claims to hold and its property, verifier, model path, `verifierOptions`, model contents, any file it includes, the set of files it reads, or the tool's version have changed since the run. " +
       "A property that holds and proves a change — it verifies or satisfies a bug, a todo or a feature — is expected to carry a violated run of the same property, with its counterexample, on other inputs (`property-failed-first`), and to be backed by a witness property that holds, linked by `witnesses` (`property-witnessed`); both are notes that name the property, so either can be waived with its reason. " +
       "A `models` item marks a model, by its path in `model`, as in development: while it is, the staleness of its properties is a note rather than a problem and the two change checks ask nothing of them; it leaves development (status `stable`) only when every property verified on it holds on a run of exactly what it has now. " +
