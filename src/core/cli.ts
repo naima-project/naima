@@ -902,13 +902,17 @@ async function moveLock(
   await align({ ...t, commit: to, ...(release ? { release } : {}) })
   writeRaw(place.data, next)
   const toLabel = release ? `version ${release.version} (${short(to)})` : short(to)
-  io.out(`locked ${lockLabel(lock)} → ${toLabel}`)
+  // The same commit moves nothing: only the lock's form changes, from a release to a commit of main or back.
+  const form = (l: { version?: string | undefined }) => (l.version ? `release ${l.version}` : "commit of the source's main")
+  const sameSaid = change.same ? `, the same commit: only the lock's form changes, from ${form(lock)} to ${form(release ?? {})}` : ""
+  io.out(`locked ${lockLabel(lock)} → ${toLabel}${sameSaid}`)
   for (const r of change.rewrites) io.out(r)
   for (const n of notes) io.out(n)
   // Forward, the new Naima finishes: it knows the new format, and its own check is the one that ends the update.
-  if (!change.back || change.formats.some((f) => f.to > f.from)) return RELAUNCH
-  const verb = change.back ? "Roll Naima back to" : "Update Naima to"
-  io.out(`${toLabel} is the lock — ${commitUpdate(place, [], `${verb} ${release ? `version ${release.version}` : short(to)}`)}`)
+  if ((!change.back && !change.same) || change.formats.some((f) => f.to > f.from)) return RELAUNCH
+  const verb = change.same ? "Lock Naima to" : "Roll Naima back to"
+  const named = release ? `version ${release.version}` : change.same ? `commit ${short(to)} of main` : short(to)
+  io.out(`${toLabel} is the lock — ${commitUpdate(place, [], `${verb} ${named}`)}`)
   return 0
 }
 
