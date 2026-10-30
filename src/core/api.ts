@@ -162,6 +162,7 @@ export { asRendered, type Format, FORMATS, linesAs, rendered } from "./rendered.
 export {
   type Count,
   estimate,
+  grownEstimate,
   NO_PROGRESS,
   type Progress,
   PROGRESS_TIMING,
@@ -178,5 +179,6 @@ export {
   showDuration,
   showProgress,
   showRate,
+  stageTotal,
 } from "./progress.ts"
 export { type JobOutcome, type Level, messageId, type Notice } from "./tick.ts"

@@ -21,6 +21,8 @@ export interface ProgressLine {
   done?: number
   total?: number
   unit?: string
+  /** True when `total` is an estimate (the count a previous run of the same work ended on), not a known total. */
+  estimate?: boolean
   note?: string
   overall?: Count
 }
@@ -77,6 +79,7 @@ export function readProgressLine(line: string): ProgressLine | null {
   if (total !== undefined) out.total = total
   const unit = text(v["unit"])
   if (unit !== undefined) out.unit = unit
+  if (v["estimate"] === true && total !== undefined) out.estimate = true
   const note = text(v["note"])
   if (note !== undefined) out.note = note
   const overall = countOf(v["overall"])
@@ -87,9 +90,17 @@ export function readProgressLine(line: string): ProgressLine | null {
 /** The line a writer puts in the progress file for `p`: one JSON object. */
 export const progressLineOf = (p: ProgressLine): string => JSON.stringify(p)
 
-/** Whether `b` begins a new stage after `a`: its stage, unit or total differ (§3.1). */
-export const sameStage = (a: { stage?: string; unit?: string; total?: number }, b: { stage?: string; unit?: string; total?: number }): boolean =>
-  a.stage === b.stage && a.unit === b.unit && a.total === b.total
+/** The total that tells a stage from another: a known total; an estimate, which may grow as the stage goes past it, is none. */
+export const stageTotal = (p: { total?: number; estimate?: boolean }): number | undefined => (p.estimate ? undefined : p.total)
+
+/** Whether `b` is the same stage as `a`: its stage, unit and known total are the same (§3.1); an estimated total is no part of it. */
+export const sameStage = (
+  a: { stage?: string; unit?: string; total?: number; estimate?: boolean },
+  b: { stage?: string; unit?: string; total?: number; estimate?: boolean },
+): boolean => a.stage === b.stage && a.unit === b.unit && stageTotal(a) === stageTotal(b)
+
+/** The total an estimate becomes once `done` has reached it: a tenth more than the count, so a stage never shows more than 100%. */
+export const grownEstimate = (total: number, done: number): number => (done < total ? total : Math.ceil(done + done / 10) || 1)
 
 /** The rate since `from` and, with a total, the time left at `now`: what can be computed, nothing else (§3.2). */
 export function estimate(
@@ -117,11 +128,12 @@ export function showDuration(ms: number): string {
 
 const number = (n: number): string => (Number.isInteger(n) ? n.toLocaleString("en-US") : n.toLocaleString("en-US", { maximumFractionDigits: 1 }))
 
-/** A count as `done/total unit (p%)`, or `done unit` without a total (§3.4). */
-export function showCount(c: Count): string {
+/** A count as `done/total unit (p%)`, or `done unit` without a total (§3.4); an estimated total as `done/~total unit (~p%)`. */
+export function showCount(c: Count & { estimate?: boolean }): string {
   const unit = c.unit ? ` ${c.unit}` : ""
   if (c.total === undefined) return `${number(c.done)}${unit}`
-  return `${number(c.done)}/${number(c.total)}${unit} (${Math.floor((c.done / c.total) * 100)}%)`
+  const est = c.estimate ? "~" : ""
+  return `${number(c.done)}/${est}${number(c.total)}${unit} (${est}${Math.min(100, Math.floor((c.done / c.total) * 100))}%)`
 }
 
 /** A rate per second as `/s`, `/min` or `/h`, whichever gives a number of at least 1 (§3.4). */
@@ -148,10 +160,16 @@ export function showProgress(p: ProgressEstimate): string {
   const stage = [
     p.stage !== undefined ? `${p.stage}${p.done !== undefined ? ":" : ""}` : "",
     p.done !== undefined
-      ? showCount({ done: p.done, ...(p.total !== undefined ? { total: p.total } : {}), ...(p.unit !== undefined ? { unit: p.unit } : {}) })
+      ? showCount({
+        done: p.done,
+        ...(p.total !== undefined ? { total: p.total } : {}),
+        ...(p.unit !== undefined ? { unit: p.unit } : {}),
+        ...(p.estimate && p.total !== undefined ? { estimate: true } : {}),
+      })
       : "",
   ].filter(Boolean).join(" ")
-  const rest = [stage, p.rate !== undefined ? showRate(p.rate) : "", p.etaMs !== undefined ? `ETA ${showDuration(p.etaMs)}` : ""].filter(Boolean).join(" · ")
+  const eta = p.etaMs !== undefined ? `ETA ${p.estimate ? "~" : ""}${showDuration(p.etaMs)}` : ""
+  const rest = [stage, p.rate !== undefined ? showRate(p.rate) : "", eta].filter(Boolean).join(" · ")
   if (rest) parts.push(rest)
   const head = parts.join(" — ")
   return p.note ? (head ? `${head} — ${p.note}` : p.note) : head
@@ -161,8 +179,11 @@ export function showProgress(p: ProgressEstimate): string {
 export interface Progress {
   /** The whole work around the stages: how much is done of how much. */
   overall(done: number, total?: number, unit?: string): void
-  /** A new stage: its name and, when known, its total and unit. */
-  stage(name: string, total?: number, unit?: string): void
+  /**
+   * A new stage: its name and, when known, its total and unit. `estimate` true says the total is an estimate (the count
+   * a previous run of the same work ended on): it is shown as one, and grows when the count goes past it.
+   */
+  stage(name: string, total?: number, unit?: string, estimate?: boolean): void
   /** How much of the stage is done. */
   at(done: number): void
   /** Anything else worth saying: the tool's last log line, the item being worked on. */
@@ -202,7 +223,7 @@ export function progressReporter(err: (line: string) => void, options: ReporterO
   const file = options.file
   const started = now()
   let overall: (Count & { from: ProgressSample }) | undefined
-  let stage: { name: string; total?: number; unit?: string; done?: number; from: ProgressSample; since: number } | undefined
+  let stage: { name: string; total?: number; unit?: string; estimate?: boolean; done?: number; from: ProgressSample; since: number } | undefined
   let note: string | undefined
   let said = 0
   let saidText = ""
@@ -213,6 +234,7 @@ export function progressReporter(err: (line: string) => void, options: ReporterO
     ...(stage?.done !== undefined ? { done: stage.done } : {}),
     ...(stage?.total !== undefined ? { total: stage.total } : {}),
     ...(stage?.unit !== undefined ? { unit: stage.unit } : {}),
+    ...(stage?.estimate ? { estimate: true } : {}),
     ...(note !== undefined ? { note } : {}),
     ...(overall
       ? { overall: { done: overall.done, ...(overall.total !== undefined ? { total: overall.total } : {}), ...(overall.unit ? { unit: overall.unit } : {}) } }
@@ -275,15 +297,23 @@ export function progressReporter(err: (line: string) => void, options: ReporterO
       overall = { ...next, from }
       report("count")
     },
-    stage(name, total, unit) {
+    stage(name, total, unit, estimate) {
       const at = now()
-      stage = { name, ...(total !== undefined ? { total } : {}), ...(unit !== undefined ? { unit } : {}), from: { done: 0, at }, since: at }
+      stage = {
+        name,
+        ...(total !== undefined ? { total } : {}),
+        ...(unit !== undefined ? { unit } : {}),
+        ...(estimate && total !== undefined ? { estimate: true } : {}),
+        from: { done: 0, at },
+        since: at,
+      }
       note = undefined
       report("stage")
     },
     at(done) {
       if (!stage) return
       stage.done = done
+      if (stage.estimate && stage.total !== undefined) stage.total = grownEstimate(stage.total, done)
       report("count")
     },
     note(text) {

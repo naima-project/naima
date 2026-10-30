@@ -114,7 +114,9 @@ export interface FormatChange {
 export interface Change {
   from: string
   to: string
-  /** `to` is behind `from`: the commits listed are undone. */
+  /** `to` is `from`: no commit moves, only the lock's form may (a release named, or a commit of main). */
+  same: boolean
+  /** `to` is behind `from`: the commits listed are undone. Never true when `same`. */
   back: boolean
   /** Their subjects, newest first. */
   commits: string[]
@@ -226,7 +228,11 @@ const refusalOf = (parse: (raw: unknown) => unknown, raw: unknown): string | nul
  * `program`'s git.
  */
 export async function changeOf(program: string, raw: Record<string, unknown>, from: string, to: string): Promise<Change> {
-  const back = runGit(program, ["merge-base", "--is-ancestor", to, from]).ok
+  // The direction is the commits' own: the same commit is neither forward nor back, though it is its own ancestor.
+  const head = (c: string) => runGit(program, ["rev-parse", "--verify", "--quiet", `${c}^{commit}`])
+  const resolved = [head(from), head(to)]
+  const same = from === to || resolved.every((r) => r.ok) && resolved[0]?.out === resolved[1]?.out
+  const back = !same && runGit(program, ["merge-base", "--is-ancestor", to, from]).ok
   const log = runGit(program, ["log", "--format=%s", back ? `${to}..${from}` : `${from}..${to}`])
   const commits = log.ok ? log.out.split("\n").filter((l) => l) : []
   const page = (c: string) => {
@@ -237,8 +243,9 @@ export async function changeOf(program: string, raw: Record<string, unknown>, fr
   const change: Change = {
     from,
     to,
+    same,
     back,
-    commits,
+    commits: same ? [] : commits,
     notes: between.notes,
     unreadableNotes: between.unreadable,
     rewritten: raw,
@@ -293,7 +300,9 @@ export const backwardFormats = (c: Change): FormatChange[] => c.formats.filter((
 export function describe(c: Change, limit = 10): string[] {
   const n = c.commits.length
   const commits = `${counted(n, "commit")}${c.back ? " undone" : ""}`
-  const out = [`What changes: ${short(c.from)} → ${short(c.to)}, ${commits}:`]
+  const out = c.same
+    ? [`What changes: nothing of the program, ${short(c.to)} is the commit already locked; only the lock's form changes:`]
+    : [`What changes: ${short(c.from)} → ${short(c.to)}, ${commits}:`]
   for (const s of c.commits.slice(0, limit)) out.push(`  - ${s}`)
   if (n > limit) out.push(`  - and ${n - limit} more`)
   if (c.back && c.notes.length) out.push(`  change notes undone: ${c.notes.map((x) => x.title).join("; ")}`)

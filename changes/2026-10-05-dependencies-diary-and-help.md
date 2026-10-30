@@ -12,8 +12,6 @@ checks:
   - added dependencies-acyclic
 ---
 
-`naima ready` lists the work nothing blocks any more, and `naima order` puts
-the open work in the order its dependencies allow. A cycle of dependencies is
-reported by `naima check`. `naima diary` tells what happened, day by day, from
-the session notes. Every command answers `--help` with its usage, options and
+`naima ready` lists the work nothing blocks any more, and `naima order` puts the open work in the order its dependencies allow. A cycle of dependencies is
+reported by `naima check`. `naima diary` tells what happened, day by day, from the session notes. Every command answers `--help` with its usage, options and
 examples.
