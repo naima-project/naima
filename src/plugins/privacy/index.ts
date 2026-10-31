@@ -18,6 +18,7 @@ import {
   type Command,
   type Context,
   CONTRACT,
+  DATA_FILE,
   type FieldDef,
   type Finding,
   findPrivate,
@@ -34,7 +35,11 @@ import {
   type Plugin,
   type PluginApi,
   posixRelative,
+  PRIVATE_DATA_MODES,
+  PRIVATE_DATA_OPTION,
   privateContext,
+  type PrivateData,
+  privateDataOf,
   projectFiles,
   readReadme,
   saveMeta,
@@ -42,12 +47,14 @@ import {
   splitProse,
   str,
   today,
+  trackerExposure,
   trackerPath,
   trunk,
   usageError,
   walkFiles,
   type Write,
   type WriteHook,
+  writeJson,
 } from "../../core/api.ts"
 
 /** One secret shape: its name, said after an article, and how it is found. */
@@ -219,6 +226,66 @@ function blobsOf(ctx: Context, paths: string[]): Map<string, string> {
   return out
 }
 
+/** Write the project's choice on private data into the privacy plugin's options in naima.json. */
+function writePrivateData(ctx: Context, self: string, mode: PrivateData): void {
+  const path = join(ctx.trackerRoot, DATA_FILE)
+  const raw = JSON.parse(readFileSync(path, "utf8")) as { [k: string]: unknown }
+  const plugins = isObject(raw["plugins"]) ? raw["plugins"] : {}
+  const entry = isObject(plugins[self]) ? plugins[self] : {}
+  const options = { ...(isObject(entry["options"]) ? entry["options"] : {}), [PRIVATE_DATA_OPTION]: mode }
+  writeJson(path, { ...raw, plugins: { ...plugins, [self]: { ...entry, options } } })
+}
+
+/** What leaves the project, scrubbed whatever the project chose. */
+const LEAVES =
+  "what leaves the project (a report sent upstream to Naima, a published site, a public code repository, evidence a tool redacts) is scrubbed either way"
+
+/** `naima privacy`: show or set the project's choice on private data, warning before keep on a tracker that is or may be public. */
+function privacyCommand(self: string): Command {
+  return {
+    name: "privacy",
+    says:
+      "show or set what the project does with private data (machine names, addresses, home paths, user names) in its tracker (privacy option privateData): scrub, the default, refuses it; keep lets it through while the tracker is private; what leaves the project is scrubbed either way",
+    enforces:
+      "the choice is the owner's, asked once the first time private data is refused: an agent sets it only after the owner said which; keep is refused on a tracker that is or may be public unless --despite-public restates why",
+    usage: 'privacy [scrub | keep [--despite-public "<why>"]]',
+    options: [{ name: "--despite-public", says: "with keep: the tracker is or may be public, and the owner still chose keep; why, restated" }],
+    examples: ["privacy", "privacy keep", "privacy scrub"],
+    async run(args, ctx) {
+      const p = parse(args, { "despite-public": { type: "string" } })
+      const [mode, ...rest] = p.positionals
+      const despite = str(p, "despite-public")?.trim()
+      if (rest.length || (mode !== undefined && !PRIVATE_DATA_MODES.includes(mode as PrivateData))) throw usageError(this)
+      if (despite !== undefined && mode !== "keep") throw usageError(this)
+      if (mode === undefined) {
+        const now = privateDataOf(ctx.config)
+        ctx.out(
+          now === undefined
+            ? "private data: scrub (the default: the project has not chosen — the next refusal asks the owner once)"
+            : `private data: ${now}${now === "keep" ? ", while the tracker is private" : ""}; ${LEAVES}`,
+        )
+        return 0
+      }
+      if (mode === "keep") {
+        const exposure = await trackerExposure(ctx)
+        if (exposure.state !== "private" && !despite) {
+          throw new Error(
+            `the tracker is ${
+              exposure.state === "exposed" ? "public" : "possibly public"
+            }: keeping private data there publishes it — ${exposure.message}\nIf the owner still chooses keep, run naima privacy keep --despite-public "<why, restated>"`,
+          )
+        }
+        if (!ctx.sibling) {
+          ctx.out("warning: the tracker is committed with the code, so publishing the code repository publishes what the tracker keeps")
+        }
+      }
+      writePrivateData(ctx, self, mode as PrivateData)
+      ctx.out(`private data: ${mode}${mode === "keep" ? ", while the tracker is private" : ""}; ${LEAVES}`)
+      return 0
+    },
+  }
+}
+
 /** Who writes: `--by`, else git's user.name; refused when neither says. */
 function author(ctx: Context, by: string | undefined): string {
   const who = by?.trim() || (isGitRepo(ctx.root) ? gitOrNull(ctx.root, "config", "user.name") : null)
@@ -231,6 +298,7 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
   const generated = (Array.isArray(options["generated"]) ? options["generated"].map(String) : GENERATED).map(glob)
   const exceptions: unknown[] = Array.isArray(options["exceptions"]) ? options["exceptions"] : []
   const signing = options["signed"] !== false
+  privateDataOf({ plugins: { privacy: { options } } })
 
   /** The checklist's path as the project names it: under its program directory. */
   const checklistPath = (ctx: Context): string => posixRelative(ctx.root, join(ctx.program, CHECKLIST)) || CHECKLIST
@@ -479,7 +547,9 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
       "A file that must keep one is an exception in the plugin's options, with a reason and the item that tracks it; an exception the trunk's configuration does not hold is refused, so the list only shrinks. " +
       "Every write of free text or a file — a title, a description, a note, a free-text field, a session note, an event, an attachment — is signed against the no-leaks checklist the program ships, `docs/agents/NOLEAKS.md`: the writer passes its path with `--revised`, and the write hook `signed-writes` compares the file with the program's own copy, byte for byte, and refuses the write without it or with any other file. " +
       "The signature, the checklist's hash with who signed and the day, goes in the item's field `revised`, in a session note's or an event's front matter, and in an attachment's record, so every write shows which version of the checklist it was checked against. " +
-      "Statuses, enums, dates, links, claims, the fields Naima fills and the records it generates need no signature. The option `signed: false` turns the requirement off for a project.",
+      "Statuses, enums, dates, links, claims, the fields Naima fills and the records it generates need no signature. The option `signed: false` turns the requirement off for a project. " +
+      "Private data (machine names, addresses, home paths, user names) is refused by default; whether the project scrubs it is the owner's choice, asked once: the first refusals carry the question, and the answer is the option `privateData`, set with `naima privacy scrub` or `naima privacy keep`. " +
+      "With `keep` the tracker's writes let it through, with the reason recorded, while the tracker is private; `naima privacy keep` warns that a tracker committed with the code is published with it, and refuses on a tracker that is or may be public unless `--despite-public` restates why. What leaves the project is scrubbed either way.",
     options: [
       {
         name: "exceptions",
@@ -488,6 +558,12 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
       },
       { name: "generated", says: "attachment names a tool writes itself, which need no record: shell-style patterns", default: JSON.stringify(GENERATED) },
       {
+        name: PRIVATE_DATA_OPTION,
+        says:
+          "what the project does with private data in its tracker: scrub refuses it, keep lets it through while the tracker is private; set with naima privacy, after asking the owner once; what leaves the project is scrubbed either way",
+        default: "scrub (unchosen: a refusal asks the owner)",
+      },
+      {
         name: "signed",
         says: "every write of free text or a file needs --revised naming the no-leaks checklist the program ships; false lets unsigned writes through",
         default: "true",
@@ -495,7 +571,7 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
     ],
     fields: [ATTACHED, SIGNED],
     hooks: [signedWrites],
-    commands: [attach],
+    commands: [attach, privacyCommand(self)],
     checks: [consentCheck, secretsCheck],
   }
 }

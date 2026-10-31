@@ -113,7 +113,8 @@ If the owner asks what Naima can do, start from the basics, in this order: set a
 showing what is still missing); publish (a release, a gate with a version: when it holds, the tag, the release notes from `naima announce
 --gate <gate>` (and
 from the change notes via `naima changes`, where the project keeps them), and the published site where there is one). Point to
-[the basics](../../docs/guide/the-basics.md). Tests, proofs, workers and models come only when the owner asks further.
+[the basics](../../docs/guide/the-basics.md). Tests, proofs, workers and models come only when the owner asks further, or one at a time along the way: when one
+plainly helps at a turning point of the work, use it and say so in one line, naming it and what it is for.
 
 ### Messages during the session
 

@@ -40,7 +40,20 @@ export {
 export { storedLinks } from "./repo.ts"
 export { READY, readyQueue, type ReadyRecord, readyRecord } from "./ready.ts"
 export { groupBy } from "./collections.ts"
-export { allowanceLine, findPrivate, guardPrivate, type PrivateContext, privateContext, type PrivateFinding, redactPrivate } from "./private.ts"
+export {
+  allowanceLine,
+  findPrivate,
+  guardPrivate,
+  PRIVATE_DATA_MODES,
+  PRIVATE_DATA_OPTION,
+  type PrivateContext,
+  privateContext,
+  type PrivateData,
+  privateDataOf,
+  type PrivateFinding,
+  redactPrivate,
+} from "./private.ts"
+export { trackerExposure } from "./exposure.ts"
 export { callerEnv } from "./launched.ts"
 export { EXIT, isInternal, message, NaimaError } from "./errors.ts"
 export { isRegularFile, NEVER_SOURCE, pathMatches, readText, walkFiles, writeFileAtomic } from "./files.ts"

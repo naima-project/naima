@@ -291,6 +291,15 @@ note and the tracker are the handover.
 Why: a loop left open in a chat is forgotten when the chat ends, and a handover kept outside the tracker drifts away from it. Acknowledged as "Loops closed mode
 on". **Convention**.
 
+### Introduce a Naima feature along the way
+
+The owner learns Naima's features as the work needs them, not from a tour. When a feature (a gate, a milestone, an epic, a metric, a model, and the like) would
+really and unequivocally help at a turning point of the owner's work, the agent uses it and says so in one line, naming the feature and what it is for. It never
+does this as a tour, never for a feature that is merely possible, and never with more than one new feature at a time.
+
+Why: an owner shown every feature at once remembers none of them, and one never shown a feature never asks for it. Acknowledged as "Discovery mode on".
+**Convention**.
+
 ### No new status document
 
 Nobody starts a new status page, progress summary or "where things stand" document. The authoritative one for that kind of status is updated in place instead:
@@ -354,14 +363,23 @@ together with the counts by kind but never the values. The private list holds on
 `$XDG_CONFIG_HOME/naima/private-words`, or else `~/.config/naima/private-words`, or `%APPDATA%\naima\private-words` on Windows. That is outside every
 repository, so the names it holds are never committed. What the CLI doesn't write (code, docs, commit messages) is **convention**.
 
+Scrubbing is the project's choice, asked of the owner once. A company's internal tracker may want its machine names and paths kept, so while the project has not
+chosen, every refusal ends with the question the agent puts to the owner: keep scrubbing, or keep the information. The answer is the privacy plugin's option
+`privateData`, set with `naima privacy scrub` (the default) or `naima privacy keep`, and once it is set the refusal stops asking. With `keep`, the tracker's
+writes let private data through while the tracker is private, each recorded as an allowance with the reason. `naima privacy keep` warns that a tracker committed
+with the code is published with it, and refuses on a tracker that is or may be public unless `--despite-public "<why>"` restates the owner's choice. Whatever
+the project chose, what leaves it is scrubbed: a report sent upstream to Naima, a published site, a public code repository, and the evidence a tool redacts.
+**Enforced by** `naima privacy` and the refusal's question; scrubbing what leaves the project is **convention**.
+
 ### Free text and files are signed against the no-leaks checklist
 
 Before an agent writes free text or a file into the tracker (a title, a description, a note, a free-text field, a session note, an event or an attachment), it
 reads the text against the [no-leaks checklist](../agents/NOLEAKS.md) that the program ships and fixes what the checklist rules out. The owner is paraphrased
 and never quoted. Nothing goes in about the owner's other private projects, unpublished papers or venues, business, money or clients, or about any person other
-than the owner. Machine names, addresses, home paths and user names are replaced by placeholders, and every log or file is read line by line, its metadata
-included, before it is attached. When in doubt, the agent leaves it out and asks the owner. Only the agent talking to the owner writes text taken from what the
-owner said. A worker writes its own observations, because it never heard the owner and can't judge what in a relayed message is private.
+than the owner. Machine names, addresses, home paths and user names are replaced by placeholders, unless the owner chose to keep them in the tracker, and every
+log or file is read line by line, its metadata included, before it is attached. When in doubt, the agent leaves it out and asks the owner. Only the agent
+talking to the owner writes text taken from what the owner said. A worker writes its own observations, because it never heard the owner and can't judge what in
+a relayed message is private.
 
 Why: the private-infrastructure check catches the shapes a machine can recognise, but a client's name, an unpublished venue or a quoted sentence of the owner's
 has no shape. Signing makes the agent stop and check before every write, and the recorded hash shows afterwards which version of the checklist each write was

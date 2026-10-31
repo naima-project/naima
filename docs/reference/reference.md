@@ -28,7 +28,7 @@ Every contribution below has a qualified id, `<plugin>/<name>`, and goes by its 
 - [metrics](#metrics) — named measurements — a command's number, a code-quality number taken in process, a test suite's results — recorded per commit, held to a budget, a floor or a baseline, and read back along the commit timeline
 - [rules](#rules) — the project's own rules, kept as items: shown to agents first by naima guide, listed by naima rules
 - [long-work](#long-work) — long work, run and waited on by Naima: naima run starts a command detached, with budgets and a progress channel, locally or on a host; naima wait blocks on it by its record; naima run list, status, stop and clean; a long run that is due reported and filed, never started on its own; shipped rules make them mandatory for agents and make long work report its progress
-- [working-rules](#working-rules) — the working rules every project ships for its agents: quiet, talking to the owner, fast, the coordinator delegating to workers, asking before what cannot be undone, capturing with judgment, never asking what the rules answer, closing every loop; and for everyone, no new status document and the right tool for the job
+- [working-rules](#working-rules) — the working rules every project ships for its agents: quiet, talking to the owner, fast, the coordinator delegating to workers, asking before what cannot be undone, capturing with judgment, never asking what the rules answer, closing every loop, introducing a Naima feature along the way; and for everyone, no new status document and the right tool for the job
 - [commit-hooks](#commit-hooks) — companion records required in the commit that makes a change, and the path-scoped pre-commit hook that holds them
 - [privacy](#privacy) — the owner's material enters the repository only with their recorded yes, and no secret enters it at all
 - [adopt](#adopt) — adopt a board the project already keeps as items, in reviewed phases, without losing a line of it or deleting it
@@ -117,6 +117,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`wait`](#naima-wait) | long-work | block until a run started by naima run ends, or the timeout passes, saying how it goes meanwhile, then print its state, exit status, budgets, last progress line and the log's tail: found by its record, never by a process pattern | a wait is always bounded: it ends at its --timeout (default 10m) and says the run is still running, exiting 1, so waiting again is a decision; it exits 0 only for a run that succeeded |
 | [`hooks`](#naima-hooks) | commit-hooks | the pre-commit hook and the companion rules it holds: list them, install the hook — tracked in the data directory, named by core.hooksPath once per clone — or uninstall it | the installed pre-commit hook runs the staged checks and the companion rules before every commit; install refuses to take over a core.hooksPath that is not Naima's unless --force |
 | [`attach`](#naima-attach) | privacy | copy a file into an item's attachments with a record of whose it is: the owner's, only with their explicit yes restated in --consent, or your own with --own; a file holding a secret is refused | an owner's file is attached only with their yes restated in --consent, or the writer's own with --own; a file holding a secret, a hidden or path-like name, or a name already used is refused, and so is a text holding private infrastructure (a machine name, an IP address, a URI with a port, a home-directory path, the user's name, a word of the private list) unless --allow-private "<reason>" is given, which the item's notes record |
+| [`privacy`](#naima-privacy) | privacy | show or set what the project does with private data (machine names, addresses, home paths, user names) in its tracker (privacy option privateData): scrub, the default, refuses it; keep lets it through while the tracker is private; what leaves the project is scrubbed either way | the choice is the owner's, asked once the first time private data is refused: an agent sets it only after the owner said which; keep is refused on a tracker that is or may be public unless --despite-public restates why |
 | [`adopt`](#naima-adopt) | adopt | adopt a board the project already keeps (a TODO.md, an issue list in markdown) as items, without losing a line: propose markers, split, audit, links — each a dry run until --write; the source is never deleted | no line of the source is lost and the source is never deleted; nothing is written without --write, and the only edit to the source is adding marker lines |
 | [`docs`](#naima-docs) | docs | print the reference generated from the loaded manifests; write it, or check that a file matches it | with --check, the file is what the manifests generate and every loaded contribution is documented, this field included: exit 1 otherwise |
 
@@ -3199,11 +3200,11 @@ naima wait models --host lab --timeout 1h
 
 ## working-rules
 
-The working rules every project ships for its agents: quiet, talking to the owner, fast, the coordinator delegating to workers, asking before what cannot be undone, capturing with judgment, never asking what the rules answer, closing every loop; and for everyone, no new status document and the right tool for the job.
+The working rules every project ships for its agents: quiet, talking to the owner, fast, the coordinator delegating to workers, asking before what cannot be undone, capturing with judgment, never asking what the rules answer, closing every loop, introducing a Naima feature along the way; and for everyone, no new status document and the right tool for the job.
 
 Its contributions' qualified ids are `working-rules/<name>`.
 
-How an agent works with the owner is the same in every project, so Naima ships it as rules rather than leaving each project to write them: spend few tokens and stay silent through routine steps, talk so the owner reads little and decodes nothing, never keep the owner waiting, send the work to workers in the background while the coordinator stays in the conversation, ask before what cannot be undone, file what the owner settles and nothing they are still thinking through, never ask what the rules already answer, and leave no loop open when a turn or a session ends. Two more bind everyone: no new status document beside the authoritative one, and the state-of-the-art method for every job. Each is a shipped rule, listed by `naima rules --audience agents` beside the project's own, most with the phrase an agent gives back. A project drops one by naming it in the rules plugin's `retire` option, and changes one by retiring it and writing its own `rules` item in its place; switching this plugin off drops them all.
+How an agent works with the owner is the same in every project, so Naima ships it as rules rather than leaving each project to write them: spend few tokens and stay silent through routine steps, talk so the owner reads little and decodes nothing, never keep the owner waiting, send the work to workers in the background while the coordinator stays in the conversation, ask before what cannot be undone, file what the owner settles and nothing they are still thinking through, never ask what the rules already answer, leave no loop open when a turn or a session ends, and let the owner meet a feature of Naima at the moment it plainly helps, one at a time and in one line. Two more bind everyone: no new status document beside the authoritative one, and the state-of-the-art method for every job. Each is a shipped rule, listed by `naima rules --audience agents` beside the project's own, most with the phrase an agent gives back. A project drops one by naming it in the rules plugin's `retire` option, and changes one by retiring it and writing its own `rules` item in its place; switching this plugin off drops them all.
 
 **Shipped rules**, active in every project that loads the plugin, listed by `naima rules`
 
@@ -3220,6 +3221,7 @@ How an agent works with the owner is the same in every project, so Naima ships i
 | `close-every-loop` | Close every loop | agents | must |  | `agent` | `Loops closed mode on` |
 | `no-new-status-document` | No new status or summary document: update the authoritative one | everyone | must |  | `agent` |  |
 | `right-tool-for-the-job` | Use the state-of-the-art method for the job | everyone | must |  | `agent` |  |
+| `discovery-along-the-way` | Introduce a Naima feature along the way, when it plainly helps | agents | must |  | `agent` | `Discovery mode on` |
 
 ## commit-hooks
 
@@ -3278,7 +3280,7 @@ The owner's material enters the repository only with their recorded yes, and no 
 
 Its contributions' qualified ids are `privacy/<name>`.
 
-The conversation between the owner and an agent is private: nothing from it is copied into the repository without the owner's explicit yes. A file enters an item's `attachments/` through `naima attach`, which records on the item, in the field `attached`, whose it is: the owner's (`--consent`, their yes restated) or the writer's own (`--own`). The check `attachment-consent` flags an attachment with no record — one copied in by hand — unless the trunk already holds it, or a tool of the program writes it itself (a property's run records). The check `secrets` reads every project file and every attachment for six shapes of secret: a private key with its body (a header alone is not one), and AWS, GitHub, Slack, API-secret and Google keys; `naima attach` refuses a file holding one. A file that must keep one is an exception in the plugin's options, with a reason and the item that tracks it; an exception the trunk's configuration does not hold is refused, so the list only shrinks. Every write of free text or a file — a title, a description, a note, a free-text field, a session note, an event, an attachment — is signed against the no-leaks checklist the program ships, `docs/agents/NOLEAKS.md`: the writer passes its path with `--revised`, and the write hook `signed-writes` compares the file with the program's own copy, byte for byte, and refuses the write without it or with any other file. The signature, the checklist's hash with who signed and the day, goes in the item's field `revised`, in a session note's or an event's front matter, and in an attachment's record, so every write shows which version of the checklist it was checked against. Statuses, enums, dates, links, claims, the fields Naima fills and the records it generates need no signature. The option `signed: false` turns the requirement off for a project.
+The conversation between the owner and an agent is private: nothing from it is copied into the repository without the owner's explicit yes. A file enters an item's `attachments/` through `naima attach`, which records on the item, in the field `attached`, whose it is: the owner's (`--consent`, their yes restated) or the writer's own (`--own`). The check `attachment-consent` flags an attachment with no record — one copied in by hand — unless the trunk already holds it, or a tool of the program writes it itself (a property's run records). The check `secrets` reads every project file and every attachment for six shapes of secret: a private key with its body (a header alone is not one), and AWS, GitHub, Slack, API-secret and Google keys; `naima attach` refuses a file holding one. A file that must keep one is an exception in the plugin's options, with a reason and the item that tracks it; an exception the trunk's configuration does not hold is refused, so the list only shrinks. Every write of free text or a file — a title, a description, a note, a free-text field, a session note, an event, an attachment — is signed against the no-leaks checklist the program ships, `docs/agents/NOLEAKS.md`: the writer passes its path with `--revised`, and the write hook `signed-writes` compares the file with the program's own copy, byte for byte, and refuses the write without it or with any other file. The signature, the checklist's hash with who signed and the day, goes in the item's field `revised`, in a session note's or an event's front matter, and in an attachment's record, so every write shows which version of the checklist it was checked against. Statuses, enums, dates, links, claims, the fields Naima fills and the records it generates need no signature. The option `signed: false` turns the requirement off for a project. Private data (machine names, addresses, home paths, user names) is refused by default; whether the project scrubs it is the owner's choice, asked once: the first refusals carry the question, and the answer is the option `privateData`, set with `naima privacy scrub` or `naima privacy keep`. With `keep` the tracker's writes let it through, with the reason recorded, while the tracker is private; `naima privacy keep` warns that a tracker committed with the code is published with it, and refuses on a tracker that is or may be public unless `--despite-public` restates why. What leaves the project is scrubbed either way.
 
 Options, each with the default it takes when nothing sets it:
 
@@ -3286,6 +3288,7 @@ Options, each with the default it takes when nothing sets it:
 |---|---|---|
 | `exceptions` | `[]` | files allowed to hold a secret: a list of { path, reason, item }, path from the project root; one not on the trunk is refused |
 | `generated` | `["run-*.json","test-run-*.json","counterexample-*.txt"]` | attachment names a tool writes itself, which need no record: shell-style patterns |
+| `privateData` | `scrub (unchosen: a refusal asks the owner)` | what the project does with private data in its tracker: scrub refuses it, keep lets it through while the tracker is private; set with naima privacy, after asking the owner once; what leaves the project is scrubbed either way |
 | `signed` | `true` | every write of free text or a file needs --revised naming the no-leaks checklist the program ships; false lets unsigned writes through |
 
 ### naima attach
@@ -3311,6 +3314,29 @@ Examples:
 ```sh
 naima attach export-drops ~/Desktop/alpha.png --consent "Yes, attach my screenshot of the export"
 naima attach export-drops test-run.out --own --as proof.out
+```
+
+### naima privacy
+
+Show or set what the project does with private data (machine names, addresses, home paths, user names) in its tracker (privacy option privateData): scrub, the default, refuses it; keep lets it through while the tracker is private; what leaves the project is scrubbed either way.
+
+**Enforces**: The choice is the owner's, asked once the first time private data is refused: an agent sets it only after the owner said which; keep is refused on a tracker that is or may be public unless --despite-public restates why.
+
+```sh
+naima privacy [scrub
+naima keep [--despite-public "<why>"]]
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--despite-public` |  | with keep: the tracker is or may be public, and the owner still chose keep; why, restated |
+
+Examples:
+
+```sh
+naima privacy
+naima privacy keep
+naima privacy scrub
 ```
 
 **Fields**

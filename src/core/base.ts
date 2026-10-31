@@ -877,7 +877,7 @@ const privateInfrastructure: WriteHook = {
     if (!found.length) return
     const all = found.flatMap((f) => f.findings)
     if (ctx.allowPrivate === undefined) {
-      return found.map((f) => privateRefusal(`${label(write.item)} ${f.what}`, f.findings)).join("\n")
+      return found.map((f, i) => privateRefusal(`${label(write.item)} ${f.what}`, f.findings, i < found.length - 1 ? true : undefined)).join("\n")
     }
     allowed.set(write, allowanceLine(ctx.allowPrivate, all))
   },

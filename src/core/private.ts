@@ -4,7 +4,11 @@
 // CLI makes is checked before anything is on disk and refused when it holds
 // one; the author rewrites it with placeholders, or lets a deliberate mention
 // through with `--allow-private "<reason>"`, which is recorded. Nothing is
-// ever rewritten silently (docs/guide/rules.md#no-machine-names-or-private-infrastructure-in-a-repository).
+// ever rewritten silently. Scrubbing is the project's choice, asked of the
+// owner once: the privacy plugin's option `privateData`, `scrub` (the default)
+// or `keep`, which lets the tracker's writes through while the tracker is
+// private; what leaves the project is scrubbed either way
+// (docs/guide/rules.md#no-machine-names-or-private-infrastructure-in-a-repository).
 
 import { readFileSync } from "node:fs"
 import { isIPv6 } from "node:net"
@@ -280,16 +284,67 @@ export function countsOf(findings: PrivateFinding[]): string {
   return [...n].map(([k, c]) => `${c} ${c > 1 ? KINDS[k].plural : KINDS[k].says}`).join(", ")
 }
 
+/** What a project does with private data in its tracker: `scrub` refuses it (the default), `keep` lets it through. */
+export type PrivateData = "scrub" | "keep"
+
+/** The choices, in the order they are offered. */
+export const PRIVATE_DATA_MODES: readonly PrivateData[] = ["scrub", "keep"]
+
+/** The privacy plugin's option that holds the project's choice; absent, the project has not chosen and scrubs. */
+export const PRIVATE_DATA_OPTION = "privateData"
+
+/** The project's choice, read from its configuration: undefined while it has not chosen; refused when it is neither choice. */
+export function privateDataOf(config: { plugins: Record<string, { options?: Record<string, unknown> } | undefined> }): PrivateData | undefined {
+  const value = config.plugins["privacy"]?.options?.[PRIVATE_DATA_OPTION]
+  if (value === undefined) return undefined
+  if (!PRIVATE_DATA_MODES.includes(value as PrivateData)) {
+    throw new NaimaError(`privacy: option ${PRIVATE_DATA_OPTION} must be ${PRIVATE_DATA_MODES.join(" or ")}; got ${JSON.stringify(value)}`, "usage")
+  }
+  return value as PrivateData
+}
+
+/** The reason recorded when a write goes through because the project keeps private data. */
+export const KEEP_REASON = `the project keeps private data in its tracker (privacy option ${PRIVATE_DATA_OPTION}: keep)`
+
+/** The question a refusal carries while the project has not chosen: the agent puts it to the owner once. */
+export const PRIVATE_DATA_QUESTION =
+  `This project has not chosen whether Naima scrubs private data: ask the owner once whether to keep scrubbing it (naima privacy scrub, the default) or to keep it in this project's tracker (naima privacy keep), and record the answer; what leaves the project (a report sent upstream, a published site, a public repository) is scrubbed either way.`
+
+/** Whether this command's project has chosen, set by the CLI before a command runs; a refusal asks only while it has not. */
+let chosen = false
+
+/** Record whether the project running the command has chosen what to do with private data. */
+export function setPrivateDataChosen(value: boolean): void {
+  chosen = value
+}
+
+/**
+ * Apply the project's choice to the command about to run: a refusal asks the owner while the project has not
+ * chosen; with keep, and the tracker private, every write goes through with KEEP_REASON recorded, unless the
+ * command gave its own reason.
+ */
+export function applyPrivateData(
+  ctx: { config: Parameters<typeof privateDataOf>[0]; allowPrivate?: string | undefined },
+  trackerPrivate: boolean,
+): PrivateData | undefined {
+  const choice = privateDataOf(ctx.config)
+  setPrivateDataChosen(choice !== undefined)
+  if (choice === "keep" && trackerPrivate && ctx.allowPrivate === undefined) ctx.allowPrivate = KEEP_REASON
+  return choice
+}
+
 /**
  * The refusal of a write that holds private infrastructure: each finding with its line and what replaces it, and
- * how to go on. `what` names the text ("the note", "field title").
+ * how to go on; while the project has not chosen whether to scrub, the question for the owner. `what` names the
+ * text ("the note", "field title").
  */
-export function privateRefusal(what: string, findings: PrivateFinding[]): string {
+export function privateRefusal(what: string, findings: PrivateFinding[], hasChosen: boolean = chosen): string {
   const list = findings.map((f) => `  ${what}, line ${f.line}: ${KINDS[f.kind].says} ${JSON.stringify(f.text)} — write ${KINDS[f.kind].placeholder}`)
   return [
-    `nothing written: the text holds private infrastructure, which no repository carries — rewrite it with placeholders and run the command again:`,
+    `nothing written: the text holds private infrastructure, which this project's tracker does not carry — rewrite it with placeholders and run the command again:`,
     ...list,
     `A deliberate mention goes through with ${ALLOW_PRIVATE} "<reason>", and the reason is recorded.`,
+    ...(hasChosen ? [] : [PRIVATE_DATA_QUESTION]),
   ].join("\n")
 }
 

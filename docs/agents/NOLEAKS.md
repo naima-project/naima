@@ -8,7 +8,9 @@ copy and refuses the write without it ([the rule](../guide/rules.md#free-text-an
    owner said; a worker writes its own observations.
 2. Nothing about the owner's other private projects, unpublished papers or venues, business, money or clients, and no person other than the owner, by name or by
    description.
-3. No machine names, IP addresses, addresses with a port, home-directory paths or user names. Write `<host>`, `<ip>`, `<path>` and `<user>` instead.
+3. No machine names, IP addresses, addresses with a port, home-directory paths or user names. Write `<host>`, `<ip>`, `<path>` and `<user>` instead. Only a
+   project whose owner chose to keep them (`naima privacy` says `keep`) holds them in its tracker, and never in what leaves the project: a report sent upstream,
+   a published site, a public repository.
 4. Every log and every file you attach is read line by line before it goes in, its metadata included (an image's location and camera data, a document's author
    and history). Redact what this list rules out, or leave the file out.
 5. When in doubt, leave it out and ask the owner whether it may go in.

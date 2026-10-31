@@ -60,7 +60,7 @@ import {
   writeSiblingMarker,
 } from "./repos.ts"
 import { exclusions } from "./excludes.ts"
-import { ALLOW_PRIVATE, allowPrivateOption, findPrivate, guardPrivate, privateContext, REVISED, revisedOption } from "./private.ts"
+import { ALLOW_PRIVATE, allowPrivateOption, applyPrivateData, findPrivate, guardPrivate, privateContext, REVISED, revisedOption } from "./private.ts"
 import { DATA_DIR, DATA_FILE, DEFAULT_DATA, findData, globalOptions, PROGRAM_DIR, real, RELAUNCH, runtimeOf, trackerOf, trackerReadme } from "./layout.ts"
 import {
   align,
@@ -2062,6 +2062,8 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
       clearExposed(ctx.trackerGit)
     }
     setWriteGuard(writeGuard(ctx.trackerRoot, exposure, io.err))
+    // The project's choice on private data: a refusal asks it of the owner until it is made; keep lets the tracker's writes through while the tracker is private.
+    applyPrivateData(ctx, exposure.state === "private")
     // A tracker kept as a repository of its own is committed by Naima: what this command writes there is one commit.
     const before = ctx.sibling ? trackerChanges(ctx.trackerGit) : null
     // The tick: what is due starts now, beside the command, and what it has for the owner is said after it, on standard error.
