@@ -39,6 +39,7 @@ import {
   type Plugin,
   privateContext,
   redactPrivate,
+  saveMeta,
   saveProse,
   str,
   type TickJob,
@@ -81,7 +82,10 @@ export const realWorld = (): IssuesWorld => ({
 export const ISSUE_FIELD: FieldDef = {
   name: "issue",
   kind: "string",
-  says: "the address of the GitHub issue, opened by someone outside, that this item was filed for by naima issues; what keeps the issue from being filed twice",
+  // Naima fills it, through naima issues file or link, so recording it on an existing item is bookkeeping the trunk guard takes on the trunk.
+  filled: true,
+  says:
+    "the address of the GitHub issue, opened by someone outside, that this item answers, recorded by naima issues file when it files the item or by naima issues link for an item that already existed; what keeps the issue from being filed twice",
 }
 
 /** One open issue, as gh lists it. */
@@ -351,6 +355,27 @@ function issueOf(ctx: Context, ref: string | undefined, cmd: Command): { number:
 }
 
 /**
+ * Record that an existing item answers an issue: its field issue set to the issue's address as GitHub gives it, so the
+ * intake never files the issue again and naima issues lists it with its item. The field is one Naima fills, so the
+ * change is a tracker addition the trunk guard takes on the trunk. Refused when the item records another issue, or
+ * another item records this one.
+ */
+export function linkIssue(ctx: Context, world: IssuesWorld, repo: string, number: number, item: Item): { url: string; changed: boolean } {
+  const r = world.run("gh", ["issue", "view", String(number), "--repo", repo, "--json", "url", "--jq", ".url"], { cwd: ctx.root })
+  if (r.status !== 0) throw new NaimaError(`gh could not read issue #${number}: ${firstLine(r)}`)
+  const url = r.stdout.trim()
+  if (issueNumber(url) !== number) throw new NaimaError(`gh gave no address for issue #${number} on ${repo}`)
+  const other = itemFor(ctx, url)
+  if (other && other.dir !== item.dir) throw new NaimaError(`issue #${number} is already recorded by ${label(other)}: one item per issue`)
+  const had = item.meta[ISSUE_FIELD.name]
+  if (had === url) return { url, changed: false }
+  if (typeof had === "string" && had) throw new NaimaError(`${label(item)} already records the issue ${had}: one issue per item`)
+  item.meta[ISSUE_FIELD.name] = url
+  saveMeta(ctx, item)
+  return { url, changed: true }
+}
+
+/**
  * The scrub every text bound for an issue passes: an issue is public, so a text holding private data (a machine name,
  * a home-directory path, a user name, an IP address, a URI with a port, a word of the private list) is refused, each
  * finding named, and nothing is posted.
@@ -385,9 +410,9 @@ export function outsideIssuesPlugin(world: () => IssuesWorld = realWorld, option
   const command: Command = {
     name: "issues",
     says:
-      "the issues of the project's GitHub repository, through gh, one path for each opened by someone outside: with no subcommand, list the open issues, each with the item filed for it; file: file one item for each open issue no item records, its address in the field issue, triaged as reported, and say each once (the daily tick runs it); show <issue>: the issue and its comments, marked as untrusted text from outside; reply <issue> \"<text>\": comment on it; candidate <issue>: the version of the next pre-release, from the newest version tag of the repository (the patch after a release, or the version a pre-release leads to, with the suffix rc.<n>), and the steps that cut it from the item's branch, never marked latest; from the trunk's head, said to have skipped the path, when the fix has already landed; offer <issue> --version <version>: comment with the one command that installs that candidate; close <issue> --release <version>: comment with a link to the release, then close it. An issue is named by its number or by its item. An issue is public: every text posted passes the private-data scrub, and a finding refuses it",
+      "the issues of the project's GitHub repository, through gh, one path for each opened by someone outside: with no subcommand, list the open issues, each with the item filed for it; file: file one item for each open issue no item records, its address in the field issue, triaged as reported, and say each once (the daily tick runs it); show <issue>: the issue and its comments, marked as untrusted text from outside; reply <issue> \"<text>\": comment on it; link <number> <item>: record that an item filed before answers the issue, as file would have, a tracker addition the trunk takes; candidate <issue>: the version of the next pre-release, from the newest version tag of the repository (the patch after a release, or the version a pre-release leads to, with the suffix rc.<n>), and the steps that cut it from the item's branch, never marked latest; from the trunk's head, said to have skipped the path, when the fix has already landed; offer <issue> --version <version>: comment with the one command that installs that candidate; close <issue> --release <version>: comment with a link to the release, then close it. An issue is named by its number or by its item. An issue is public: every text posted passes the private-data scrub, and a finding refuses it",
     usage:
-      'issues [file | show <issue> | reply <issue> "<text>" | candidate <issue> | offer <issue> --version <version> | close <issue> --release <version>] [--draft]',
+      'issues [file | link <number> <item> | show <issue> | reply <issue> "<text>" | candidate <issue> | offer <issue> --version <version> | close <issue> --release <version>] [--draft]',
     options: [
       { name: "--version", says: "offer: the candidate's version, as naima issues candidate gave it" },
       { name: "--release", says: "close: the stable release the confirmed fix went out in" },
@@ -396,6 +421,7 @@ export function outsideIssuesPlugin(world: () => IssuesWorld = realWorld, option
     examples: [
       "issues",
       "issues file",
+      "issues link 12 bugs/crash-on-start",
       "issues show 12",
       'issues reply 12 "Thanks: reproduced, a fix is on its way."',
       "issues candidate 12",
@@ -403,7 +429,7 @@ export function outsideIssuesPlugin(world: () => IssuesWorld = realWorld, option
       "issues close 12 --release 1.1.2",
     ],
     enforces:
-      "an outside issue is filed at most once, however many intakes run at once: an item that records its address, or another intake's exclusive claim on it, skips it; an issue is public, so every text posted on it passes the private-data scrub and a finding refuses the post; what is read from an issue is printed marked as untrusted text; a candidate is a pre-release, never marked latest",
+      "an outside issue is filed at most once, however many intakes run at once: an item that records its address, or another intake's exclusive claim on it, skips it; link records an issue on one item only, and an item records one issue; an issue is public, so every text posted on it passes the private-data scrub and a finding refuses the post; what is read from an issue is printed marked as untrusted text; a candidate is a pre-release, never marked latest",
     long: { cannot: "gh has no progress interface", instead: "one line per issue listed or filed, and gh's own error when it fails" },
     run(args, ctx) {
       const p = parse(args, { version: { type: "string" }, release: { type: "string" }, draft: { type: "boolean" } })
@@ -433,6 +459,15 @@ export function outsideIssuesPlugin(world: () => IssuesWorld = realWorld, option
       }
       if ("why" in can) throw new NaimaError(can.why)
       const repo = can.repo
+      if (sub === "link") {
+        const n = /^#?(\d+)$/.exec(ref ?? "")
+        if (!n || !text || p.positionals.length > 3) throw usageError(command)
+        const target = ctx.repo.resolve(text)
+        const linked = linkIssue(ctx, w, repo, Number(n[1]), target)
+        if (!linked.changed) ctx.out(`${label(target)} already records issue #${n[1]} on ${repo}`)
+        else ctx.out(`${label(target)} now records issue #${n[1]} on ${repo} (${linked.url}): commit it on the trunk, a tracker addition`)
+        return EXIT.OK
+      }
       const { number, item } = issueOf(ctx, ref, command)
       const draft = bool(p, "draft")
       if (sub === "show") {
@@ -520,7 +555,7 @@ export function outsideIssuesPlugin(world: () => IssuesWorld = realWorld, option
     says:
       "the project's GitHub issues through gh, and one path for those opened by someone outside: filed once as a triaged item that links back, fixed on its branch, tested by the reporter as a pre-release candidate, landed and released on their confirmation, closed with a link to the release; every text posted is scrubbed of private data",
     about: "An issue someone outside opens on the project's GitHub repository is a report the project did not file itself, and it is easy to lose. " +
-      "`naima issues` lists the open issues with the item filed for each; `naima issues file`, which a daily tick job runs on the trunk's checkout, files one item for each issue no item records, its address in the field `issue`, triaged as reported, and tells the owner once. " +
+      "`naima issues` lists the open issues with the item filed for each; `naima issues file`, which a daily tick job runs on the trunk's checkout, files one item for each issue no item records, its address in the field `issue`, triaged as reported, and tells the owner once; when an item already existed for the issue, `naima issues link <number> <item>` records the address on it instead, a change the trunk guard takes on the trunk as a tracker addition. " +
       "The fix is made on the item's branch. `naima issues candidate <issue>` names the next pre-release, from the newest version tag of the GitHub repository in semantic-version order (the patch after a release, or the version a pre-release leads to, with the suffix rc.<n> counting the rc pre-releases already tagged for it), and the steps that cut it from that branch, a GitHub pre-release never marked latest, so stable users and main are unaffected; when the fix has already landed, it says that this skipped the path and cuts it from the trunk's head. " +
       "`naima issues offer <issue> --version <version>` comments with the one command that installs it (`naima update --to <version>` when the project is Naima itself); the reporter confirms, the fix lands, the next stable release goes out, and `naima issues close <issue> --release <version>` comments with a link to it and closes the issue — or the reporter says it still fails, and the next candidate follows. " +
       '`naima issues show <issue>` prints an issue and its comments and `naima issues reply <issue> "<text>"` answers it. ' +

@@ -18,7 +18,9 @@ An issue someone outside opens on the project's GitHub repository follows one pa
 
 1. **Intake.** `naima issues file` (the daily tick runs it on the trunk's checkout) files one item per open issue that no item records, its address in the
    field `issue`, triaged as reported. Commit the items it files on the trunk: they are tracker additions. Confirm the triage (impact, priority, confidence) as
-   for any report ([reporting and triage](reporting-and-triage.md)). `naima issues` shows which open issues have an item.
+   for any report ([reporting and triage](reporting-and-triage.md)). `naima issues` shows which open issues have an item. When an item for the problem already
+   exists, do not file a second one: `naima issues link <number> <item>` records the issue's address on it (an issue on one item, an item with one issue), and
+   that change too is a tracker addition the trunk takes, unlike `naima set` on an item's other fields.
 2. **Fix.** Open the item (`naima open <item>`), reproduce the problem, fix it on the branch with its test. Do not land it yet.
 3. **Candidate.** `naima issues candidate <issue>` prints the candidate's version and the steps: a tag on the branch's tip, pushed, and a GitHub release made
    with `--prerelease --latest=false` carrying the assets the project's stable releases carry. The version comes from the newest version tag of the GitHub

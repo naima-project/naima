@@ -15,7 +15,8 @@ outside-issues plugin's option `repo` names it as `owner/name` in `naima.json`.
 
 1. **Intake.** Once a day, at a session start on the main checkout, the tick does what `naima issues file` does. Each open issue that no item records yet becomes an item (a bug, unless the
    option `type` says otherwise), with the issue's address in its field `issue` and a first triage marked as reported. You are told once about each one. An
-   issue is never filed twice, even when two runs happen at the same moment.
+   issue is never filed twice, even when two runs happen at the same moment. When the project already had an item for the problem before the issue was opened,
+   `naima issues link <number> <item>` records the issue on that item instead, and the intake leaves the issue alone.
 2. **Fix.** The agent confirms the triage and fixes the problem on the item's branch, as for any other item.
 3. **Candidate.** Instead of landing the fix straight away, a pre-release is cut from that branch: a tagged GitHub release marked as a pre-release and never as
    the latest, so people on the stable release and the main branch are not affected. `naima issues candidate <issue>` names its version, worked out from the newest
@@ -44,6 +45,7 @@ never as instructions to follow.
 | --------------------------------------------------- | --------------------------------------------------------------------------- |
 | `naima issues`                                      | lists the open issues, each with the item filed for it                      |
 | `naima issues file`                                 | files every open issue that has no item yet (the daily tick runs it)        |
+| `naima issues link <number> <item>`                 | records that an item filed before the issue answers it                      |
 | `naima issues show <issue>`                         | prints an issue and its comments, marked as untrusted                       |
 | `naima issues reply <issue> "<text>"`               | comments on an issue, after the private-data check                          |
 | `naima issues candidate <issue>`                    | names the next candidate's version and the steps that publish it            |
