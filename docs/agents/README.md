@@ -42,6 +42,7 @@ follow them, and Naima's own repository does.
 | [Closing a worktree](closing-a-worktree.md)                           | before a branch is merged                                                                                  |
 | [Commit messages](commit-messages.md)                                 | writing the message for any commit, and the records a change must carry in it                              |
 | [Reporting and triage](reporting-and-triage.md)                       | when something is said, seen or found, and at every prompt of the owner, for the requirements it carries   |
+| [Handling outside issues](outside-issues.md)                          | an issue opened outside on the GitHub repository: intake, a candidate the reporter tests, scrubbed replies |
 | [Adopting an existing board](adopting-an-existing-board.md)           | when a project that starts using Naima already keeps a TODO.md, a notes file or an issue list              |
 | [Planning: epics, milestones and gates](plan-with-epics-and-gates.md) | when the owner names a body of work, a release or a date                                                   |
 | [Long work](long-work.md)                                             | before starting any command expected to outlast a few minutes, or to run on another machine                |

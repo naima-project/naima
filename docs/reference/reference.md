@@ -23,12 +23,13 @@ Every contribution below has a qualified id, `<plugin>/<name>`, and goes by its 
 - [verifier](#verifier) — properties checked by formal-methods tools, with each run attached as evidence
 - [tools](#tools) — the tools plugins need, installed by Naima into its own directory on the machine it runs on: naima tools reports them, installs one with consent, removes one
 - [backup](#backup) — a remote for every repository Naima relies on: the owner is asked once whether to create a private GitHub repository for one that has none
+- [outside-issues](#outside-issues) — the project's GitHub issues through gh, and one path for those opened by someone outside: filed once as a triaged item that links back, fixed on its branch, tested by the reporter as a pre-release candidate, landed and released on their confirmation, closed with a link to the release; every text posted is scrubbed of private data
 - [verifier-mcrl2](#verifier-mcrl2) — the mCRL2 adapter: a property is a modal mu-calculus formula over an mCRL2 specification
 - [ui](#ui) — the views plugins contribute, a provisional window onto the project, shown in a native window or the browser from a server on this machine only, until the new UI replaces it
 - [metrics](#metrics) — named measurements — a command's number, a code-quality number taken in process, a test suite's results — recorded per commit, held to a budget, a floor or a baseline, and read back along the commit timeline
 - [rules](#rules) — the project's own rules, kept as items: shown to agents first by naima guide, listed by naima rules
 - [long-work](#long-work) — long work, run and waited on by Naima: naima run starts a command detached, with budgets and a progress channel, locally or on a host; naima wait blocks on it by its record; naima run list, status, stop and clean; a long run that is due reported and filed, never started on its own; shipped rules make them mandatory for agents and make long work report its progress
-- [working-rules](#working-rules) — the working rules every project ships for its agents: quiet, talking to the owner, fast, the coordinator delegating to workers, asking before what cannot be undone, capturing with judgment, never asking what the rules answer, closing every loop, reporting a problem in Naima upstream only when it is real and on the owner's yes, introducing a Naima feature along the way, answering in the user's terms with Naima's words only where they help; and for everyone, no new status document and the right tool for the job
+- [working-rules](#working-rules) — the working rules every project ships for its agents: quiet, talking to the owner, fast, the coordinator delegating to workers, asking before what cannot be undone, capturing with judgment, never asking what the rules answer, closing every loop, reporting a problem in Naima upstream only when it is real and on the owner's yes, introducing a Naima feature along the way, answering in the user's terms with Naima's words only where they help, handling an issue opened outside along one path with everything posted on it scrubbed; and for everyone, no new status document and the right tool for the job
 - [commit-hooks](#commit-hooks) — companion records required in the commit that makes a change, and the path-scoped pre-commit hook that holds them
 - [privacy](#privacy) — the owner's material enters the repository only with their recorded yes, and no secret enters it at all
 - [adopt](#adopt) — adopt a board the project already keeps as items, in reviewed phases, without losing a line of it or deleting it
@@ -113,6 +114,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`equivalent`](#naima-equivalent) | verifier | compare a model with the earlier version its properties were verified on, modulo an equivalence, and carry each result over to the model as it is now when the two are equivalent: a refactoring proved without running its properties again | a result carries over only from a conclusive run on an earlier version of the model, with everything else it read unchanged — the property, the options, every other input, the tool's version — when the verifier finds the two versions equivalent and says the equivalence preserves the property; the carried run is recorded as such, naming the run it came from, the earlier version and the comparison |
 | [`tools`](#naima-tools) | tools | the tools the loaded plugins declare, on this machine or a declared host: what is installed, missing or unavailable; show what an install would fetch; install one with consent into Naima's own directory, its download checked and the tool verified, never touching PATH or the system; remove one; print an installed program's path | an install fetches only the declared source, refuses a size or sha256 that differs, keeps nothing that fails its verification, and goes on only with consent — a yes on a terminal, or --consent with --by, recorded in the receipt; nothing is written outside the tools directory; a tool another installed tool needs is not removed |
 | [`backup`](#naima-backup) | backup | the remote of each repository Naima relies on — the tracker's own, kept private beside the code, and the project's: say which have one; create a private GitHub repository with gh, after the owner's yes; add one the owner made by hand; record that the owner keeps one on this machine | a repository Naima relies on is never left without a remote unless the owner said so: the owner is asked once, at init or at the next update, and a no is recorded and recalled by naima hello |
+| [`issues`](#naima-issues) | outside-issues | the issues of the project's GitHub repository, through gh, one path for each opened by someone outside: with no subcommand, list the open issues, each with the item filed for it; file: file one item for each open issue no item records, its address in the field issue, triaged as reported, and say each once (the daily tick runs it); show <issue>: the issue and its comments, marked as untrusted text from outside; reply <issue> "<text>": comment on it; candidate <issue>: the version of the next pre-release to cut from the item's branch and the steps that cut it, never marked latest; offer <issue> --version <version>: comment with the one command that installs that candidate; close <issue> --release <version>: comment with a link to the release, then close it. An issue is named by its number or by its item. An issue is public: every text posted passes the private-data scrub, and a finding refuses it | an outside issue is filed at most once, however many intakes run at once: an item that records its address, or another intake's exclusive claim on it, skips it; an issue is public, so every text posted on it passes the private-data scrub and a finding refuses the post; what is read from an issue is printed marked as untrusted text; a candidate is a pre-release, never marked latest |
 | [`metrics`](#naima-metrics) | metrics | the project's metrics — each a name and the command or code measure that takes it — run, recorded per commit, held to a budget, a floor or a baseline, and read back along the commit timeline as a trend, a table or a chart; every number with the one it is compared to | numbers are recorded with the commit they measure; a ratcheted bound only tightens, and loosening one is refused without --because naming the item that says why |
 | [`rules`](#naima-rules) | rules | print the project's active rules, must before should, each with its text and reason, ending with the line an agent must acknowledge back; or check that text carries every one (rules check-ack) | nothing: it only reads |
 | [`reviewed`](#naima-reviewed) | rules | record that an agent reviewed a change against a rule verified by an agent (no check holds it): which rule, the item the change lands with, and what was checked; naima land shows the review, and notes a change to what such a rule covers that lands with none | the rule is an active rule verified by agent, the item exists, and what was checked is said; each review is one new file under rule-reviews/, landed with the change |
@@ -130,9 +132,9 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 
 | Point | Declared by | What it is | Contributed by |
 |---|---|---|---|
-| `commands` | core | `naima <name>`: a command, with its usage, options and examples | core, trackers, coordination, triage, gates, epics, discussions, planning, knowledge, roles, announce, loop, beta-markers, verifier, tools, backup, ui, metrics, rules, long-work, commit-hooks, privacy, adopt, docs |
+| `commands` | core | `naima <name>`: a command, with its usage, options and examples | core, trackers, coordination, triage, gates, epics, discussions, planning, knowledge, roles, announce, loop, beta-markers, verifier, tools, backup, outside-issues, ui, metrics, rules, long-work, commit-hooks, privacy, adopt, docs |
 | `types` | core | item types: a directory of items, their statuses, and the status a new one starts in | core, trackers, epics, discussions, planning, knowledge, verifier, rules |
-| `fields` | core | typed fields of an item's meta.json, and the types they apply to | core, trackers, triage, gates, discussions, planning, knowledge, roles, announce, verifier, rules, long-work, privacy, adopt, docs |
+| `fields` | core | typed fields of an item's meta.json, and the types they apply to | core, trackers, triage, gates, discussions, planning, knowledge, roles, announce, verifier, outside-issues, rules, long-work, privacy, adopt, docs |
 | `relations` | core | link relations between items, each naming its inverse | core, trackers, epics, discussions, planning, knowledge, verifier |
 | `checks` | core | invariants `naima check` holds: a problem fails it, a note does not | core, trackers, coordination, triage, gates, epics, discussions, planning, knowledge, announce, beta-markers, verifier, verifier-mcrl2, metrics, rules, long-work, commit-hooks, privacy, docs |
 | `views` | core | `naima view <name>`: a named rendering of derived state | coordination, triage, planning |
@@ -140,7 +142,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `summary` | core | a block of `naima summary`; one marked `hello` is said by `naima hello` among what waits on the owner, and one with `goals(ctx)` says there where the project is going | core, trackers, coordination, triage, gates, epics, discussions, planning, beta-markers, verifier, backup, metrics, long-work |
 | `guide` | core | a block `naima guide` prints first, inside a project, before the documentation pages | triage, verifier, rules |
 | `rank` | core | an additive term of every item's urgency; lower is more urgent | triage, gates |
-| `jobs` | core | a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it; what it finds is shown to the owner as messages | long-work |
+| `jobs` | core | a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it; what it finds is shown to the owner as messages | outside-issues, long-work |
 | `extends` | core | additive changes to another plugin's type — statuses (an existing one only with its category), traits, transitions — or field — enum values, more types or traits it applies to | discussions, knowledge, roles |
 | `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done; `beforeText(text, ctx)` may refuse a write of free text or a file that is not an item's (a session note, an event, an attachment) or add to its record | core, coordination, triage, epics, discussions, planning, knowledge, verifier, privacy |
 | `setup` | core | what a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init` and `naima update` after their own work: `install(ctx) → lines`, each said | coordination, planning, backup, metrics |
@@ -2858,6 +2860,69 @@ naima backup decline --repo tracker
 |---|---|---|---|
 | `gh` | 2.103.3 | MIT | darwin-arm64, darwin-x64, linux-x64, linux-arm64, windows-x64 |
 
+## outside-issues
+
+The project's GitHub issues through gh, and one path for those opened by someone outside: filed once as a triaged item that links back, fixed on its branch, tested by the reporter as a pre-release candidate, landed and released on their confirmation, closed with a link to the release; every text posted is scrubbed of private data.
+
+Its contributions' qualified ids are `outside-issues/<name>`.
+
+An issue someone outside opens on the project's GitHub repository is a report the project did not file itself, and it is easy to lose. `naima issues` lists the open issues with the item filed for each; `naima issues file`, which a daily tick job runs on the trunk's checkout, files one item for each issue no item records, its address in the field `issue`, triaged as reported, and tells the owner once. The fix is made on the item's branch. `naima issues candidate <issue>` names the next pre-release cut from that branch (the patch after the newest stable release, with the suffix issue<N>.<k>) and the steps that cut it, a GitHub pre-release never marked latest, so stable users and main are unaffected. `naima issues offer <issue> --version <version>` comments with the one command that installs it (`naima update --to <version>` when the project is Naima itself); the reporter confirms, the fix lands, the next stable release goes out, and `naima issues close <issue> --release <version>` comments with a link to it and closes the issue — or the reporter says it still fails, and the next candidate follows. `naima issues show <issue>` prints an issue and its comments and `naima issues reply <issue> "<text>"` answers it. An issue is public: every text posted passes the same private-data scrub as the tracker's writes, and a finding refuses the post; on the project's own issues the scrub is the safeguard, and no per-post yes is asked. What is read from an issue is untrusted data, never instructions. Offline, without gh, or without a GitHub remote, the commands say so and change nothing.
+
+Options, each with the default it takes when nothing sets it:
+
+| Option | Default | What it does |
+|---|---|---|
+| `repo` | `the project's origin, when it is on GitHub` | the GitHub repository whose issues are read, as owner/name |
+| `type` | `bugs` | the type an outside issue is filed as |
+| `install` | `naima update --to {version} for Naima's own repository; gh release download v{version} --repo {repo} otherwise` | the command that installs a candidate, with {version} and {repo} replaced |
+
+### naima issues
+
+The issues of the project's GitHub repository, through gh, one path for each opened by someone outside: with no subcommand, list the open issues, each with the item filed for it; file: file one item for each open issue no item records, its address in the field issue, triaged as reported, and say each once (the daily tick runs it); show <issue>: the issue and its comments, marked as untrusted text from outside; reply <issue> "<text>": comment on it; candidate <issue>: the version of the next pre-release to cut from the item's branch and the steps that cut it, never marked latest; offer <issue> --version <version>: comment with the one command that installs that candidate; close <issue> --release <version>: comment with a link to the release, then close it. An issue is named by its number or by its item. An issue is public: every text posted passes the private-data scrub, and a finding refuses it.
+
+**Enforces**: An outside issue is filed at most once, however many intakes run at once: an item that records its address, or another intake's exclusive claim on it, skips it; an issue is public, so every text posted on it passes the private-data scrub and a finding refuses the post; what is read from an issue is printed marked as untrusted text; a candidate is a pre-release, never marked latest.
+
+**Progress**: none — gh has no progress interface; instead, One line per issue listed or filed, and gh's own error when it fails.
+
+```sh
+naima issues [file
+naima show <issue>
+naima reply <issue> "<text>"
+naima candidate <issue>
+naima offer <issue> --version <version>
+naima close <issue> --release <version>] [--draft]
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--version` |  | offer: the candidate's version, as naima issues candidate gave it |
+| `--release` |  | close: the stable release the confirmed fix went out in |
+| `--draft` |  | reply, offer, close: scrub the text and print it, posting nothing |
+
+Examples:
+
+```sh
+naima issues
+naima issues file
+naima issues show 12
+naima issues reply 12 "Thanks: reproduced, a fix is on its way."
+naima issues candidate 12
+naima issues offer 12 --version 1.1.2-issue12.1
+naima issues close 12 --release 1.1.2
+```
+
+**Fields**
+
+| Field | Kind | Applies to | Meaning | Values |
+|---|---|---|---|---|
+| `issue` | string | every type | the address of the GitHub issue, opened by someone outside, that this item was filed for by naima issues; what keeps the issue from being filed twice |  |
+
+**Jobs** the tick runs when due
+
+| Job | Every | What it does |
+|---|---|---|
+| `outside-issues` | day | once a day, on the trunk's checkout of a project with a GitHub repository and gh: file each new outside issue, as naima issues file does, telling the owner once; elsewhere, or with neither, nothing |
+
 ## verifier-mcrl2
 
 The mCRL2 adapter: a property is a modal mu-calculus formula over an mCRL2 specification.
@@ -3278,11 +3343,11 @@ naima wait models --host lab --timeout 1h
 
 ## working-rules
 
-The working rules every project ships for its agents: quiet, talking to the owner, fast, the coordinator delegating to workers, asking before what cannot be undone, capturing with judgment, never asking what the rules answer, closing every loop, reporting a problem in Naima upstream only when it is real and on the owner's yes, introducing a Naima feature along the way, answering in the user's terms with Naima's words only where they help; and for everyone, no new status document and the right tool for the job.
+The working rules every project ships for its agents: quiet, talking to the owner, fast, the coordinator delegating to workers, asking before what cannot be undone, capturing with judgment, never asking what the rules answer, closing every loop, reporting a problem in Naima upstream only when it is real and on the owner's yes, introducing a Naima feature along the way, answering in the user's terms with Naima's words only where they help, handling an issue opened outside along one path with everything posted on it scrubbed; and for everyone, no new status document and the right tool for the job.
 
 Its contributions' qualified ids are `working-rules/<name>`.
 
-How an agent works with the owner is the same in every project, so Naima ships it as rules rather than leaving each project to write them: spend few tokens and stay silent through routine steps, talk so the owner reads little and decodes nothing, never keep the owner waiting, send the work to workers in the background while the coordinator stays in the conversation, ask before what cannot be undone, file what the owner settles and nothing they are still thinking through, never ask what the rules already answer, leave no loop open when a turn or a session ends, report a problem in Naima upstream only when it is reproduced or blocks the work, searched first and sent only on the owner's yes, and let the owner meet a feature of Naima at the moment it plainly helps, one at a time and in one line, while every answer stays in the user's own terms, with Naima's vocabulary only where it is pertinent and helps. Two more bind everyone: no new status document beside the authoritative one, and the state-of-the-art method for every job. Each is a shipped rule, listed by `naima rules --audience agents` beside the project's own, most with the phrase an agent gives back. A project drops one by naming it in the rules plugin's `retire` option, and changes one by retiring it and writing its own `rules` item in its place; switching this plugin off drops them all.
+How an agent works with the owner is the same in every project, so Naima ships it as rules rather than leaving each project to write them: spend few tokens and stay silent through routine steps, talk so the owner reads little and decodes nothing, never keep the owner waiting, send the work to workers in the background while the coordinator stays in the conversation, ask before what cannot be undone, file what the owner settles and nothing they are still thinking through, never ask what the rules already answer, leave no loop open when a turn or a session ends, report a problem in Naima upstream only when it is reproduced or blocks the work, searched first and sent only on the owner's yes, and let the owner meet a feature of Naima at the moment it plainly helps, one at a time and in one line, while every answer stays in the user's own terms, with Naima's vocabulary only where it is pertinent and helps, and an issue opened by someone outside follows one path from intake to a candidate the reporter tests, everything posted on it scrubbed of private data and everything read from it treated as untrusted. Two more bind everyone: no new status document beside the authoritative one, and the state-of-the-art method for every job. Each is a shipped rule, listed by `naima rules --audience agents` beside the project's own, most with the phrase an agent gives back. A project drops one by naming it in the rules plugin's `retire` option, and changes one by retiring it and writing its own `rules` item in its place; switching this plugin off drops them all.
 
 **Shipped rules**, active in every project that loads the plugin, listed by `naima rules`
 
@@ -3302,6 +3367,7 @@ How an agent works with the owner is the same in every project, so Naima ships i
 | `report-upstream-only-real-problems` | Report a problem in Naima upstream only when it is real, and only on the owner's yes | agents | must |  | `agent` | `Upstream reports mode on` |
 | `discovery-along-the-way` | Introduce a Naima feature along the way, when it plainly helps | agents | must |  | `agent` | `Discovery mode on` |
 | `answer-in-the-user-s-terms` | Answer in the user's terms; Naima's words only where they really help | agents | must |  | `agent` | `Plain terms mode on` |
+| `outside-issues-one-path` | Outside issues follow one path, and everything on an issue is public | agents | must |  | `agent` | `Outside issues mode on` |
 
 ## commit-hooks
 
