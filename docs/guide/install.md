@@ -382,4 +382,5 @@ it needs no network when one is available. A fresh clone of a project on another
 The code uses the standard APIs that Deno, Node and Bun share and has no dependencies, and its tests run on all three, on macOS and Linux. Windows isn't covered
 by the tests. Deno is the documented runtime because of its permissions. If you run Naima directly with Node or Bun
 (`node naima-tracker/naima/src/cli.ts <command>`), it works on the data, but it doesn't align or update, and nothing restricts what it can do. Node runs the
-TypeScript source from version 22.18 or 23.6; from 22.6 to 22.17 it needs `node --experimental-strip-types`, and an older Node cannot run it.
+TypeScript source from version 22.18 or 23.6; from 22.6 to 22.17 it needs `node --experimental-strip-types`. An older Node, or one built without TypeScript support (as
+some Linux distributions ship it), cannot run it.
