@@ -30,8 +30,8 @@ owner is still thinking aloud about gets one question at the end, asking whether
 
 ## At the start of a session
 
-`naima hello` lists the urgent messages after what it says about updates and long runs. With a session-start hook, the owner has already seen the greeting; pass
-on what in it waits on the owner's decision.
+`naima hello` lists the urgent messages after what it says about updates and long runs. With a session-start hook, the owner has already seen its one line;
+answer their message and pass on, one plain line each, what waits on the owner's decision.
 
 ## Listing and acknowledging
 

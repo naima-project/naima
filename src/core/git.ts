@@ -234,7 +234,19 @@ export const setupCommit = (paths: readonly string[], subject: string, step: Set
   `git add ${paths.join(" ")} && git commit -m "${subject}" -m "${SETUP_TRAILER}: ${step}"`
 
 /**
- * Where to commit what a command just wrote, as the words that follow "commit it": the one place a command's message
+ * In a repository with no commit yet, the first commit Naima's setup asks for, as the line to run: the tracker folder
+ * and each of `setup` (the files outside it a setup writes) that git sees changed, with the `install` trailer the trunk
+ * guard takes. Null once the repository has a commit. No branch and no worktree can start before that commit, so it is
+ * the first step in such a repository, whatever Naima command comes next.
+ */
+export function firstCommit(root: string, tracker: string, setup: Iterable<string>): string | null {
+  if (gitOrNull(root, "rev-parse", "--verify", "--quiet", "HEAD") !== null) return null
+  const changed = [...setup].filter((f) => (gitOrNull(root, "status", "--porcelain", "--", f) ?? "") !== "").sort()
+  return setupCommit([tracker, ...changed], "Track this project with Naima", "install")
+}
+
+/**
+ * Where to commit what a command just wrote, as the words that follow "commit it":the one place a command's message
  * names a branch to commit on, so that every such message agrees with the trunk guard. A write the guard takes on the
  * trunk (an addition to the tracker, a claim's housekeeping) is committed on the branch checked out, the trunk
  * included; one that `lands` (it changes more than it adds) is committed on an item's branch and landed, never on the

@@ -29,6 +29,7 @@ import {
   filesAt,
   type Finding,
   findPrivate,
+  firstCommit,
   gitOrNull,
   guardPrivate,
   isAncestor,
@@ -45,11 +46,13 @@ import {
   readAcrossBranches,
   readText,
   rendered,
+  setupPaths,
   short,
   str,
   type SummarySection,
   today,
   TRACKER_TRAILER,
+  trackerOf,
   trackerPath,
   trailerHookCurrent,
   trunk,
@@ -768,6 +771,12 @@ function openCommand(policy: Policy): Command {
       const branch = `${who}/${what}`
       const trees = worktrees(ctx.root)
       const path = join(worktreesDir(policy, home(ctx.root, trees)), what)
+      const first = firstCommit(ctx.root, posixRelative(ctx.root, trackerOf(ctx.trackerRoot)), setupPaths())
+      if (first) {
+        throw new Error(
+          `the repository has no commit yet, and a branch can only start from one: commit what Naima wrote first, straight on the trunk, then run naima open again: ${first}`,
+        )
+      }
       const base = trunk(ctx.root) ?? "HEAD"
       // An existing branch is never reused: it may be an old one, landed and behind the trunk.
       if (gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`) !== null) {
