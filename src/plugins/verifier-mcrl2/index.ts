@@ -72,7 +72,6 @@ import {
   storeReduced,
 } from "./lts-cache.ts"
 import { type ConditionLint, lintConditions, lintLine } from "./lps-lint.ts"
-import { chooseRewriter, compileSecondsIn, cxxCompiler, jittycUnavailable, readTimings, recordTimings, type RewriterOption, REWRITERS } from "./rewriter.ts"
 import { MCRL2 } from "./tool.ts"
 
 export { MCRL2 } from "./tool.ts"
@@ -274,8 +273,8 @@ export const EQUIVALENCES: Record<string, string> = {
 
 /**
  * The arguments of the steps that make an LTS, beyond its files: part of the cache key. Linearising without rewriting
- * makes another LPS, so `--no-rewrite` is here; `--threads`, `--cached` and the rewriter change how fast lps2lts
- * explores, never the LTS it writes, so they are not.
+ * makes another LPS, so `--no-rewrite` is here; `--threads` and `--cached` change how fast lps2lts explores,
+ * never the LTS it writes, so they are not.
  */
 export const recipeOf = (pipeline: Pipeline): LtsRecord["recipe"] => ({ mcrl22lps: pipeline.noRewrite ? ["--no-rewrite"] : [], lps2lts: [] })
 
@@ -290,18 +289,16 @@ export const VERIFIER_OPTIONS: Record<string, string> = {
   maxStates: "the most states lps2lts may explore (--max), on the LTS route; reached, the run is unknown",
   noRewrite: "linearise without rewriting (mcrl22lps --no-rewrite), on every route; default true",
   cached: "lps2lts caches its enumerations (--cached), on the LTS route; default true",
-  rewriter: 'the rewriter lps2lts explores with: "auto" (the default), "jitty" or "jittyc" (compiled)',
 }
 
 /** How the tools run beyond the route: the verdict-preserving options of the allow-list. */
 export interface Pipeline {
   noRewrite: boolean
   cached: boolean
-  rewriter: RewriterOption
 }
 
 /** The defaults of a run with no options, also what `naima equivalent` uses. */
-export const DEFAULT_PIPELINE: Pipeline = { noRewrite: true, cached: true, rewriter: "auto" }
+export const DEFAULT_PIPELINE: Pipeline = { noRewrite: true, cached: true }
 
 /** The pipeline options of `options`, or why one is not in the allow-list or not of its kind. */
 export function pipelineOf(options: Record<string, unknown>): Pipeline | { wrong: string } {
@@ -319,11 +316,7 @@ export function pipelineOf(options: Record<string, unknown>): Pipeline | { wrong
   if (typeof noRewrite === "object") return noRewrite
   const cached = flag("cached")
   if (typeof cached === "object") return cached
-  const rewriter = options["rewriter"] ?? DEFAULT_PIPELINE.rewriter
-  if (!(REWRITERS as readonly unknown[]).includes(rewriter)) {
-    return { wrong: `verifierOptions.rewriter must be ${REWRITERS.map((r) => JSON.stringify(r)).join(", ")}, not ${JSON.stringify(rewriter)}` }
-  }
-  return { noRewrite, cached, rewriter: rewriter as RewriterOption }
+  return { noRewrite, cached }
 }
 
 /** The default size above which a summand's condition is reported, in operator and variable occurrences (lps-lint.ts). */
@@ -612,32 +605,15 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
       const linearised = await s.step("mcrl22lps", [...recipe["mcrl22lps"]!, model, lps], folder)
       if ("stop" in linearised) return linearised
       const lint = await lintOf(s, lps, folder)
-      // The rewriter: asked for, or chosen on what the earlier explorations of this model measured (rewriter.ts).
-      const choice = await chooseRewriter(explore.pipeline.rewriter, () => jittycOff(work), readTimings(work)[rel])
-      s.log.push(`lps2lts rewrites with ${choice.rewriter}: ${choice.why}`)
-      if (choice.why.includes("instead")) console.error(`verifier-mcrl2: ${choice.why}`)
       const args = [
         ...(explore.threads > 1 ? [`--threads=${explore.threads}`] : []),
         ...(explore.pipeline.cached ? ["--cached"] : []),
-        ...(choice.rewriter === "jittyc" ? ["--rewriter=jittyc"] : []),
       ]
       // The cap changes no complete LTS, so it is no part of the key; an LTS it cut short is never kept.
       const capped = explore.maxStates !== undefined ? [`--max=${explore.maxStates}`] : []
-      const exploring = Date.now()
       const explored = await s.step("lps2lts", [...args, ...capped, lps, lts], folder)
-      // An exploration cut short by the time limit or the state cap still says how long this rewriter takes at least:
-      // kept, so a model that never finishes with jitty is explored with jittyc the next time.
-      const cutShort = (said: string): void => {
-        const compile = choice.rewriter === "jittyc" ? compileSecondsIn(said) : undefined
-        const exploreSeconds = Math.round(Math.max(0, (Date.now() - exploring) / 1000 - (compile ?? 0)) * 10) / 10
-        recordTimings(work, rel, choice.rewriter, { exploreSeconds, states: 0, compileSeconds: compile, at: new Date().toISOString() })
-      }
-      if ("stop" in explored) {
-        if (explored.stop.verdict === "unknown") cutShort(explored.stop.output)
-        return explored
-      }
+      if ("stop" in explored) return explored
       if (CAPPED.exec(`${explored.out.stdout}\n${explored.out.stderr}`)) {
-        cutShort(`${explored.out.stdout}\n${explored.out.stderr}`)
         return {
           stop: {
             verdict: "unknown",
@@ -653,25 +629,14 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
       if ("stop" in info) return info
       const read = readLtsInfo(`${info.out.stdout}\n${info.out.stderr}`)
       if (!read) return { stop: { verdict: "error", output: [...s.log, "ltsinfo printed no number of states and transitions"].join("\n") } }
-      // The exploration's own time: lps2lts's, without the rewriter's compile time when it compiled one.
-      const compileSeconds = choice.rewriter === "jittyc" ? compileSecondsIn(`${explored.out.stdout}\n${explored.out.stderr}`) : undefined
-      const exploreSeconds = Math.round(Math.max(0, explored.seconds - (compileSeconds ?? 0)) * 10) / 10
+      const exploreSeconds = Math.round(explored.seconds * 10) / 10
       const rate = rateOf("lps2lts", "states", read.states, exploreSeconds)
-      recordTimings(work, rel, choice.rewriter, { exploreSeconds, states: read.states, compileSeconds, at: new Date().toISOString() })
-      s.log.push(
-        `lps2lts explored ${read.states} states in ${exploreSeconds} s, ${rate.perSecond} states per second${
-          compileSeconds !== undefined ? `, after compiling the rewriter in ${compileSeconds} s` : ""
-        }`,
-      )
+      s.log.push(`lps2lts explored ${read.states} states in ${exploreSeconds} s, ${rate.perSecond} states per second`)
       const exploration: Record<string, unknown> = {
         mcrl22lps: recipe["mcrl22lps"],
         lps2lts: args,
         threads: explore.threads,
         cached: explore.pipeline.cached,
-        rewriter: choice.rewriter,
-        rewriterAsked: explore.pipeline.rewriter,
-        rewriterWhy: choice.why,
-        ...(compileSeconds !== undefined ? { compileSeconds } : {}),
         rate,
       }
       const record: LtsRecord = {
@@ -694,15 +659,6 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
     } finally {
       if (!earlier && existsSync(folder)) discard(folder)
     }
-  }
-
-  let jittycReason: string | null | undefined
-  /** Why jittyc cannot run on this host, asked of the toolset once per verifier: null when it can. */
-  const jittycOff = async (work: string): Promise<string | null> => {
-    if (jittycReason !== undefined) return jittycReason
-    const help = await run(path("lps2lts"), ["--help"], work)
-    jittycReason = jittycUnavailable(`${help.stdout}\n${help.stderr}`, cxxCompiler())
-    return jittycReason
   }
 
   /**
@@ -1017,7 +973,7 @@ export function mcrl2Plugin(options: Record<string, unknown> = {}, run: Runner =
       "A property chooses its route in `verifierOptions.route`. `lps`, the default, is the standard route: `mcrl22lps`, `lps2pbes --counter-example`, and `pbessolve` with an evidence file: `true` holds; `false` is violated, and the evidence, printed by `lps2lts` as an `.aut` labelled transition system, is the counterexample; any other answer, or `verifierOptions.timeoutSeconds` reached by a step, is unknown. " +
       "`lts`, the LTS route, is for a model whose state space is small but whose data makes the standard route slow. `mcrl22lps` and `lps2lts` (with `--threads` from `verifierOptions.threads`) make the LTS once per model version, kept in the run work folder under a key over the model's contents, the toolset's version and the recipe, and shared by every property of that model. `verifierOptions.maxStates` caps the states `lps2lts` may explore (`--max`): a state space larger than the cap makes the run unknown, its output beginning `state cap reached:`, and the LTS cut short is not kept; on the standard route the option is an error, since that route explores with `pbessolve`. Each formula is then reduced only by an equivalence that preserves and reflects it, the coarsest of three: `branching-bisim` for a formula of the fragment the branching equivalences preserve — every visible step right after a star over an action formula that includes tau, no single step that includes tau, fixpoints only as the four inevitability patterns — when it has no fixpoint and no deadlock through a star; `dpbranching-bisim` when it has one of those, which see divergence; `bisim`, strong bisimilarity, for every other formula. With a branching equivalence, `ltsconvert` first hides every action the formula does not mention, unless a label joins such an action to another, in which case the formula takes `bisim` and nothing is hidden. The output says which equivalence was used and why; the reduced LTS is kept beside the LTS, one per equivalence and set of hidden actions, for every formula that needs the same. On the reduced LTS, `lts2pbes --counter-example` and one `pbessolve` with an evidence file decide; on false, the evidence, printed by `ltsconvert` as an `.aut` labelled transition system, is the counterexample, over the reduced LTS, where the hidden actions appear as tau. " +
       "`cross-check` runs both routes and gives a verdict only when they agree; a disagreement is an error whose output begins `the routes disagree:`. Each run records in its `details` the route, the version of every tool it started, and for the LTS route the LTS's key, reuse and size, the mentioned and hidden actions, the equivalence it reduced by and why, the reduced size and whether it was reused, and on false that the counterexample comes from the reduced LTS. While a step runs, every line it prints is the run's progress: `lps2lts` its states, level and transitions, `pbessolve` its BES equations, `ltsconvert` and `lts2pbes`, started with `--verbose`, their stages; a counting step's total is estimated from the count it ended on in the previous run of the same property, model and options. " +
-      "`verifierOptions` is an allow-list: `route`, `timeoutSeconds`, `threads`, `maxStates`, `noRewrite`, `cached` and `rewriter`, every one leaving the verdict as it is; any other key is an error that names the ones it takes. `noRewrite`, true by default, linearises with `mcrl22lps --no-rewrite` on every route, so the verdict never depends on the route; it makes another LPS, so it is part of the LTS's cache key. `cached`, true by default, explores with `lps2lts --cached`; `threads` stays on `lps2lts` alone. `rewriter` is `auto` (the default), `jitty` or `jittyc`: with `auto`, `lps2lts` explores with the compiled rewriter `jittyc` when the last `jitty` exploration of the same model on this host took longer than the compile time last measured there (240 s assumed until one is measured; an exploration cut short by `timeoutSeconds` or `maxStates` counts for the time it ran), and with `jitty` otherwise; when this mCRL2 build has no `jittyc` (the Windows one) or no C++ compiler is on the host, it explores with `jitty` and prints why. The times are kept per model in the run work folder (`timings.json`). The compiled rewriter is compiled again by every run: the C++ that mCRL2 generates names memory addresses of the process that generated it, so it cannot be kept. `--threads`, `--cached` and the rewriter change how fast the LTS is made, never the LTS, so they are no part of the key. Every run records the options it used and its rate: on the LTS route `details.lts.exploration` (the `mcrl22lps` and `lps2lts` arguments, the rewriter, why, and the compile time) and `details.rate`, the states `lps2lts` explored per second without the compile time (`reused: true` when the LTS came from the cache); on the standard route `details.rate`, the BES equations `pbessolve` generated per second. " +
+      "`verifierOptions` is an allow-list: `route`, `timeoutSeconds`, `threads`, `maxStates`, `noRewrite` and `cached`, every one leaving the verdict as it is; any other key is an error that names the ones it takes. `noRewrite`, true by default, linearises with `mcrl22lps --no-rewrite` on every route, so the verdict never depends on the route; it makes another LPS, so it is part of the LTS's cache key. `cached`, true by default, explores with `lps2lts --cached`; `threads` stays on `lps2lts` alone. `lps2lts` rewrites with `jitty`, mCRL2's default rewriter. `--threads` and `--cached` change how fast the LTS is made, never the LTS, so they are no part of the key. Every run records the options it used and its rate: on the LTS route `details.lts.exploration` (the `mcrl22lps` and `lps2lts` arguments) and `details.rate`, the states `lps2lts` explored per second (`reused: true` when the LTS came from the cache); on the standard route `details.rate`, the BES equations `pbessolve` generated per second. " +
       "After linearising, `lpspp --format=internal` prints the LPS and each summand's condition is measured in operator and variable occurrences; the summands over the plugin option `summandConditionLimit` (10000 by default, 0 turns it off) are named in the run's output, in a line beginning `lint:`, and in `details.lint`, and the check `mcrl2-summand-conditions` notes each model whose last run found some. " +
       "The tools are taken from `bin` when it is given and exists on this machine, otherwise from the mCRL2 202607.0 that `naima tools install mcrl2` installed on this machine, otherwise from PATH; a `bin` that does not exist on this machine, as when a shared `naima.json` names another machine's path, is said once and passed over. The plugin declares that tool, so `naima tools` reports it. A tool that is not there is an error run whose output begins `tool missing:`; a tool that fails is an error with its output. The version recorded is the first line of `mcrl22lps --version`. " +
       "For `naima equivalent`, it compares two versions of a model modulo `bisim` (strong bisimilarity, the default, which preserves every formula) or `dpbranching-bisim` (divergence-preserving branching bisimilarity, which preserves the formulas the LTS route accepts): `mcrl22lps`, `lps2lts` and `ltsinfo` for each version, the new one through the LTS cache, then `ltscompare --counter-example`; on false, the distinguishing formula it writes is what tells them apart.",
