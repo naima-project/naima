@@ -265,6 +265,25 @@ naima set <property> 'verifierOptions={"route":"lts","threads":8,"maxStates":500
   enough for the standard route, to see that the two give the same answers, before relying on the LTS route alone for the large models.
 - `threads` speeds up generating the state space. On macOS, more than one thread can crash on some models, as mCRL2 itself warns.
 
+`verifierOptions` takes only the options listed here, and each of them leaves the answer as it is. Any other key is an error that names the accepted ones, so a
+flag that could change a verdict never reaches the tools. Two of them make large generated models faster, and the defaults already use them:
+
+- `noRewrite` (true unless set to false) linearises the model with `mcrl22lps --no-rewrite`, on every route. Rewriting while linearising can blow up the
+  conditions of a model, and without it the tools that read the result are faster. It produces a different linear process, so it is part of the key the state
+  space is kept under.
+- `cached` (true unless set to false) generates the state space with `lps2lts --cached`, which remembers what it has already enumerated.
+
+The state space is generated with `jitty`, mCRL2's default rewriter.
+
+The run record keeps the options that were used and the speed. On the LTS route, `details.lts.exploration` gives the arguments of `mcrl22lps` and `lps2lts`, and
+`details.rate` gives the states generated per second. On the standard route, `details.rate` gives the equations `pbessolve` generated per second. A rate that
+stays very low tells a slow model apart from one that hangs.
+
+After linearising, the verifier also measures the condition of every summand, counting the operators and variables in it. Summands above the plugin option
+`summandConditionLimit` (10000 unless set; 0 switches the measurement off) are listed in the run's output on a line that begins with `lint:`, and in
+`details.lint`. `naima check` then notes each such model with the check `mcrl2-summand-conditions`. How to keep conditions small is in
+[design with a model](design-with-a-model.md#keep-generated-models-small).
+
 A `verifierOptions` of `{ "timeoutSeconds": 600 }` stops a run that takes longer than that and records it as `error` (undecided). If the tool isn't installed,
 the run is recorded as an error whose output begins with `tool missing:` and explains how to install it, and the property is never reported as holding.
 

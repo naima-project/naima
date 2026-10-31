@@ -99,6 +99,7 @@ export {
   commitOn,
   currentBranch,
   filesAt,
+  firstCommit,
   gitOrNull,
   gitPath,
   gitReason,
@@ -122,7 +123,7 @@ export {
   type Worktree,
   worktrees,
 } from "./git.ts"
-export { DATA_FILE, DEFAULT_DATA, TRACKER_DIR } from "./layout.ts"
+export { DATA_FILE, DEFAULT_DATA, TRACKER_DIR, trackerOf } from "./layout.ts"
 export { setupPaths } from "./adapters/index.ts"
 export {
   CLI_TRAILER,

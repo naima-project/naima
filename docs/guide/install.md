@@ -60,6 +60,10 @@ deno run -A naima-tracker/naima/naima.ts init
 git add naima-tracker && git commit -m "Track this project with Naima"
 ```
 
+In a repository with no commit yet, that commit comes first: no branch or worktree can start before the trunk has one. `init` then prints it as its next step,
+`git add` with the tracker folder and the agent files it wrote, and the `Naima-Setup: install` trailer the trunk guard takes; `naima open` refuses with the same
+line until it is made. The project's own files are left out of it, for an item of their own.
+
 `init` writes `naima-tracker/README.md`, `naima-tracker/.gitignore` (which ignores `naima/`) and `naima-tracker/naima-data/naima.json`, locked to the source and
 commit of the clone that ran it ([data discovery and self-init](#data-discovery-and-self-init)). Outside `naima-tracker/` it writes only what makes an agent run
 `naima hello` at the start of every session ([below](#the-agent-harness-entry-point)), and the lines that keep the program out of the host's own tools
@@ -181,9 +185,9 @@ message. A tool that can also run a command when the agent ends its turn gets a 
 session (a newer Naima, a long run that is due, an urgent message) is said even when the agent runs no naima command for hours
 ([what Naima tells you while you work](messages.md)). Naima itself works with any agent; an adapter only knows how one tool is configured.
 
-| Tool        | Its id in `agents` | Hooks                                                                                                                                                                                                                                                                                                                                                         | Where                                                                                        |
-| ----------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Claude Code | `claude-code`      | a `SessionStart` hook running `sh "$CLAUDE_PROJECT_DIR/naima-tracker/naima.sh" hello --hook claude-code`, whose greeting Claude Code shows you directly, with what the agent is to say first; and a `Stop` hook running a small shell script shipped with Naima, which starts Naima only when something can be due and then has the agent tell you what it is | `.claude/settings.json`, merged into what the file holds: every other setting and hook stays |
+| Tool        | Its id in `agents` | Hooks                                                                                                                                                                                                                                                                                                                                                                                                                        | Where                                                                                        |
+| ----------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Claude Code | `claude-code`      | a `SessionStart` hook running `sh "$CLAUDE_PROJECT_DIR/naima-tracker/naima.sh" hello --hook claude-code`, whose greeting Claude Code shows you directly as one line, with the rest, and every command written as it runs in the project, given to the agent; and a `Stop` hook running a small shell script shipped with Naima, which starts Naima only when something can be due and then has the agent tell you what it is | `.claude/settings.json`, merged into what the file holds: every other setting and hook stays |
 
 Claude Code also gets three hooks on sub-agents, so that every sub-agent has the project's rules before it acts
 ([sub-agents get the rules too](../agents/read-the-project-rules.md#sub-agents-get-the-rules-too)). A `SubagentStart` hook runs

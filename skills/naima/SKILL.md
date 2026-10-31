@@ -101,7 +101,9 @@ naima hello
 ```
 
 Run it at the start of every session, unless its output is already in the conversation because a session-start hook ran it: then pass that output on and don't
-run it again. Open your first reply with its first line, keeping the name in bold and what it stands for, for example
+run it again. A hook shows the owner one line only: then answer the owner's message, without repeating the greeting, pass on, one plain line each, what waits on
+their decision, and run every command as the greeting writes it (`sh naima-tracker/naima.sh <command>`). Otherwise, open your first reply with its first line,
+keeping the name in bold and what it stands for, for example
 `**I'm Naima**, the
 No-guesswork Artificial Intelligence Meta-Agent, active in this repository:
 version 1.0.0, commit 45ba22c1134c.` (the terminal prints it
@@ -115,6 +117,10 @@ showing what is still missing); publish (a release, a gate with a version: when 
 from the change notes via `naima changes`, where the project keeps them), and the published site where there is one). Point to
 [the basics](../../docs/guide/the-basics.md). Tests, proofs, workers and models come only when the owner asks further, or one at a time along the way: when one
 plainly helps at a turning point of the work, use it and say so in one line, naming it and what it is for.
+
+Answer the owner in their own terms. Naima's words (gate, claim, land, item, worktree and the rest of [the glossary](../../docs/guide/glossary.md)) appear in an
+answer only when they are pertinent and really help, whether or not the owner asked about Naima; a question unrelated to Naima gets a short answer with none of
+them. The work underneath does not change: every change still has its item.
 
 ### Messages during the session
 
@@ -148,7 +154,8 @@ The project's own rules for agents — how to work and report here — kept as i
 first too ([read the project's rules](../../docs/agents/read-the-project-rules.md)).
 
 Every change goes through an item: `naima open <item>`, commit the change and its test in its worktree, then `naima land`. A small fix already made goes the
-whole way with `naima fix "<title>"`: on the trunk it files, opens, commits and lands; on a worker's branch it files, commits and hands the branch over. Never
+whole way with `naima fix "<title>"`: on the trunk it files, opens, commits and lands; on a worker's branch it files, commits and hands the branch over. Commit
+as these rules say without asking the owner whether to: the rules answer that question, and a change is never left uncommitted waiting for a reply. Never
 commit, merge or fast-forward the trunk by hand: a git hook, the trunk guard, refuses it, and only the owner lets a commit through or turns the guard off
 ([the rule](../../docs/guide/rules.md#every-change-goes-through-an-item-and-lands)). When the guard is installed, tell the owner it is on, and that
 `naima guard off` turns it off for committing by hand or a mixed flow: as information, never as a question to answer. Write every shell command so the agent
