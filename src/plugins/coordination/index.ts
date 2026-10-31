@@ -86,6 +86,7 @@ import { land, landingReportsPoint, landingsAreMarkers, landingsPaired } from ".
 import { fixCommand } from "./fix.ts"
 import { guardCheckCommand, guardCommand, guardedFrom, guardOffSection, guardSetup, readTrunkGuard, switchesGuard } from "./guard.ts"
 import { diaryCheck, diaryCommand, eventCommand, EVENTS, frontLines, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
+import { recoverCommand } from "./recover.ts"
 import { readyLines, readyNow, readySection, readyWorkWaiting, workerLimitSection } from "./ready.ts"
 
 export { type NextStep, type StaleData, type StaleEntry } from "./stale.ts"
@@ -1196,6 +1197,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       claimCommand,
       release,
       claimsCommand(silentAfter, policy),
+      recoverCommand((ctx, branch) => claimsData(ctx, branch, silentAfter)),
       land,
       fixCommand(policy, openWork),
       guardCommand(guarded),

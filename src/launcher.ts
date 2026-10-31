@@ -25,7 +25,9 @@
 // command inherits as the caller's. `naima verify`, and no other command, may
 // run naima-codegen, the program of the first-party naima-codegen verifier
 // (VERIFY_PROGRAM), and with --host ssh too, to run the verifier in the host's
-// checkout. Every command may read the tools
+// checkout. `naima recover`, and no other command, may read the folders the
+// agent tools keep their transcripts in (core/adapters, TranscriptReader), to
+// brief the worker that resumes a dead or stuck one. Every command may read the tools
 // directory, where an installed tool's programs are (src/core/tools.ts);
 // `naima tools`, and `naima backup create`, which installs gh through it, and no
 // other command, may write it, use the network and run any program: an install
@@ -75,6 +77,7 @@ import {
   toplevel,
   TRACKER_DIR,
   trackerOf,
+  transcriptRoots,
   VISIBILITY_HOST,
   worktrees,
 } from "./core/internal.ts"
@@ -255,6 +258,8 @@ export function permissions(
     program: string
     entry: string
     hostFiles?: string[]
+    /** The folders outside the project the command may read besides: naima recover's agent transcripts. */
+    hostReads?: string[]
     worktrees?: string[]
     /** The programs the loaded contributions start, besides git: a verifier's `runs`, a metric's program. */
     runs?: string[]
@@ -284,9 +289,21 @@ export function permissions(
   const tools = p.tools && !real(p.tools).includes(",") ? [p.tools] : []
   // So is a tick folder: the commands then run without a tick.
   const tick = p.tick && !real(p.tick).includes(",") ? [p.tick] : []
+  // And a transcript folder: recover then finds no transcript there.
+  const hostReads = (p.hostReads ?? []).filter((x) => !real(x).includes(","))
   return [
     `--allow-read=${
-      list([p.root, p.data, p.program, p.entry, ...(p.worktrees ?? []).map(real).filter((x) => !x.includes(",")), ...(p.ui?.read ?? []), ...tools, ...tick])
+      list([
+        p.root,
+        p.data,
+        p.program,
+        p.entry,
+        ...(p.worktrees ?? []).map(real).filter((x) => !x.includes(",")),
+        ...(p.ui?.read ?? []),
+        ...tools,
+        ...tick,
+        ...hostReads,
+      ])
     }`,
     `--allow-write=${list([p.tracker, p.data, p.program, ...tick, ...(p.hostFiles ?? []), ...(p.ui?.write ?? []).filter((w) => tools.includes(w))])}`,
     ...runFlag(p.ui?.runAll ? null : ["git", "tar", ...(p.runs ?? []), ...(p.ui?.runs ?? [])], p.found ?? runnable),
@@ -484,6 +501,7 @@ export async function launch(args: string[], cwd: string): Promise<number> {
         program,
         entry,
         hostFiles: hostFiles(parsed.rest, root, data),
+        hostReads: parsed.rest[0] === "recover" ? transcriptRoots(Deno.env.toObject()) : [],
         worktrees: others,
         tools,
         tick: tickState,

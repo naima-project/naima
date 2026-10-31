@@ -41,6 +41,14 @@ it has been fetched and checked out.
 step and how many minutes ago it was posted. When neither a step nor a commit on the branch is newer than the coordination option `silentAfter` (15 minutes by
 default), the claim is marked "silent for N min — possibly stuck".
 
+When a worker has died or is stuck, `naima recover <branch>` gathers what the worker that takes over needs: the claim's items and last step, the commits the
+trunk lacks, what is not committed in its worktree, and the last entries of the stuck worker's agent transcript. Those entries hold what it had found or decided
+but not yet written down. Only the last few are printed (12 unless `--tail <n>` says otherwise), each cut to a line, so the new worker's context stays small.
+The transcript is found the way each agent tool keeps them: a session started in the branch's worktree, or a sub-agent of a session in the main checkout whose
+transcript names the worktree or the branch. Each agent tool has a reader of its own beside its adapter; a tool with none yet gets the rest of the report and no transcript. The transcript is read
+only to continue the work. Nothing of it is written to a file, and it is never copied into the repository, because
+[the owner's chat stays private](rules.md#the-owners-chat-stays-private).
+
 ## Finish a piece of work
 
 From inside the worktree:

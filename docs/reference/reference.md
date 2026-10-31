@@ -76,6 +76,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`claim`](#naima-claim) | coordination | record that this branch is working on items (writes one file on this branch) | a claim belongs to a branch, never to a detached HEAD nor to the trunk, and is one file on that branch; it never locks anything: several branches may claim one item |
 | [`release`](#naima-release) | coordination | drop this branch's claim on items; the last one removes the file, unless the branch is being prepared (claim --preparing) | only this branch's own claim is dropped, and only on items it holds; while the branch is being prepared, the emptied file is kept |
 | [`claims`](#naima-claims) | coordination | who holds what, recombined from every branch, with what each branch's worker is doing now | nothing: it only reads; a claim whose last sign of life (its step, or its branch's last commit) is more than silentAfter minutes old (15 here) is flagged possibly stuck; a stale claim (branch gone or merged into the trunk, or every item closed) is listed apart, at the end, and released by naima prune --write |
+| [`recover`](#naima-recover) | coordination | brief the worker that resumes a dead or stuck one: its claim and last step, the commits the trunk lacks, what is not committed in its worktree, and the last entries of its agent transcript | nothing: it only reads; the transcript, found by the agent tool's reader, is printed only to continue the work and never written to a file, since the owner's chat stays private |
 | [`land`](#naima-land) | coordination | land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor | runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item (unless --tracker-only gives the reason and the branch changes only tracker data, or --meets names a requirement it meets) or an item open and not fixed; refuses --meets for an item that is not a requirement, one with no item that verifies it and passed on the branch tip, one whose proofs all passed on the trunk already, and one an item refutes, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch a landing check finds failing, whatever flag is given, and one that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, adds the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right after the marker, so that naima close finds a commit reachable from the trunk; then prints what every landing report says of the files the landing changed, never undoing it |
 | [`fix`](#naima-fix) | coordination | take a small fix from filing to landing in one step: on the main checkout, on the trunk, file the item, open its worktree, move the change there, commit it and land it; on a worker's branch, file the item, commit the change on the branch and hand it over to the coordinator | the change is what the checkout holds uncommitted outside the tracker data, and there must be one; the item's type has fixedOn, which is set on the branch; the command makes its own claim and releases it on every path that made it, before it stops and before a landing; a worker's run never touches the trunk; the coordinator's commits on the trunk are the new item (tracker data only) and the landing marker; a refusal stops it where it is and says what is left: a landing refused leaves the branch committed and handed over |
 | [`guard`](#naima-guard) | coordination | the trunk guard: whether it is on and runs in this clone; off turns it off for the project (recorded in naima.json, the hook removed), on turns it back on; server, on the owner's word, makes a GitHub ruleset that lets only the repository's admins push the trunk (with gh, else it says the request and the web page; --print only says them) | while on, the git hook refuses a commit, merge or fast-forward of the trunk made by hand (naima guard-check says what passes); off is the owner's choice, recorded, and update does not put the hook back |
@@ -1188,6 +1189,28 @@ Examples:
 naima claims
 naima claims --branch fix/export-alpha
 naima claims --json
+```
+
+### naima recover
+
+Brief the worker that resumes a dead or stuck one: its claim and last step, the commits the trunk lacks, what is not committed in its worktree, and the last entries of its agent transcript.
+
+**Enforces**: Nothing: it only reads; the transcript, found by the agent tool's reader, is printed only to continue the work and never written to a file, since the owner's chat stays private.
+
+```sh
+naima recover <branch> [--tail <n>] [--json]
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--tail` |  | how many of the transcript's last entries to print (12 unless given): its last steps and commands, cut short |
+| `--json` |  | print the same as JSON |
+
+Examples:
+
+```sh
+naima recover worker/export-alpha
+naima recover worker/export-alpha --tail 30
 ```
 
 ### naima land

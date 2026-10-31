@@ -36,6 +36,9 @@ Flow: [the coordinator and the workers](../../../../docs/agents/coordinator-and-
 - **Work left behind**: `naima stale` at the start of every session and
   before ending one; each entry names its next step (resume, land, archive,
   drop) and the command; a worktree with uncommitted files is never discarded.
+- **A dead or stuck worker**: brief the one that resumes it from
+  `naima recover <branch>` (claim, commits, uncommitted files, the tail of its
+  agent transcript); those lines go in the brief only, never into a file.
 - **After each landing**: what changed, then `naima queue`, then one question or none.
 - **Every report starts with the acknowledgement line**; check it with
   `naima rules check-ack <file|->` and report a breach to the owner.

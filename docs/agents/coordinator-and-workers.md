@@ -168,6 +168,11 @@ another number) is flagged "silent for N min — possibly stuck". The last sign 
 checks that worker's run and worktree, then reports it to the owner as possibly stuck. The rule is shipped by the coordination plugin, so `naima rules` lists
 it.
 
+When a worker is dead or stuck, the coordinator briefs the worker that resumes it from `naima recover <branch>`. It prints the claim's items and last step, the
+commits the trunk lacks, what is not committed in the worktree, and the last entries of the stuck worker's agent transcript (its last steps and commands, each
+cut to a line; `--tail <n>` asks for more). The transcript holds what the stuck worker found or decided and never wrote down. The coordinator passes those lines
+to the new worker in its brief and nowhere else: never into an item, a note, a commit or any other file, since the owner's chat stays private.
+
 A claim whose work is done is listed apart, at the end of `naima claims`, as stale, and is not counted as work in hand. A claim is stale when its branch is
 gone, when its branch is merged into the trunk and the trunk carries the claim file the merge brought, or when every item it claims is done or closed.
 `naima check` adds one note per stale claim with the command that releases it, `naima prune --write`, and the branch to run it on when the file is not on the

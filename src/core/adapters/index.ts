@@ -66,7 +66,7 @@ export interface AgentAdapter {
   footprint: readonly string[]
   /** Whether a command runs inside the tool, told by the environment the tool gives the commands it runs. */
   runningIn?(env: Record<string, string | undefined>): boolean
-  /** The variables `runningIn` reads: the launcher hands them to the program, which sees no others but its own list. */
+  /** The variables the adapter reads (`runningIn`, its transcripts): the launcher hands them to the program, which sees no others but its own list. */
   env?: readonly string[]
   /** Its session-start hook, when the tool has one: it runs naima hello. */
   sessionStart?: AgentHook
@@ -92,6 +92,59 @@ export interface AgentAdapter {
   sessionOf?(hookInput: string): string | undefined
   /** What naima tick --hook prints for the tool when the owner has to be told something: `reason`, for the agent. */
   stopFor?(reason: string): string
+  /** How the tool keeps its agents' transcripts, when Naima can read them: naima recover reads a worker's last entries. */
+  transcripts?: TranscriptReader
+}
+
+/** Where a worker ran, as naima recover looks for its transcript. */
+export interface WorkerPlace {
+  /** The branch's worktree, when it has one. */
+  worktree?: string
+  /** The main checkout, where a coordinator's session starts its sub-agents. */
+  main?: string
+  branch: string
+  /** The instant the branch was claimed, ISO 8601: an older transcript is not this worker's. */
+  since?: string
+}
+
+/** One entry of a transcript, cut short: what was asked, what the agent said, a command it ran, what a command gave back. */
+export interface TranscriptEntry {
+  at?: string
+  kind: "asked" | "said" | "ran" | "result"
+  text: string
+}
+
+/** The last entries of a worker's transcript, and the file they were read from. */
+export interface TranscriptTail {
+  file: string
+  entries: TranscriptEntry[]
+}
+
+/**
+ * A tool's transcripts, read only to brief the worker that resumes a dead or stuck one: never copied anywhere, since the
+ * owner's chat stays private. One reader per tool, so another tool is added beside the first.
+ */
+export interface TranscriptReader {
+  /** The folders the reader reads: the launcher lets naima recover read them, and no other command. */
+  roots(env: Record<string, string | undefined>): string[]
+  /** The last `count` entries of the latest transcript of the worker that ran at `place`, or undefined when there is none. */
+  tail(env: Record<string, string | undefined>, place: WorkerPlace, count: number): TranscriptTail | undefined
+}
+
+/** The folders every tool's transcripts are in, for the environment `env`. */
+export const transcriptRoots = (env: Record<string, string | undefined>): string[] => ADAPTERS.flatMap((a) => a.transcripts?.roots(env) ?? [])
+
+/** The latest transcript tail of the worker that ran at `place`, across every tool whose transcripts Naima reads, with the tool's name. */
+export function workerTranscript(
+  env: Record<string, string | undefined>,
+  place: WorkerPlace,
+  count: number,
+): (TranscriptTail & { tool: string }) | undefined {
+  const found = ADAPTERS.flatMap((a) => {
+    const t = a.transcripts?.tail(env, place, count)
+    return t ? [{ ...t, tool: a.name }] : []
+  })
+  return found.sort((a, b) => (b.entries.at(-1)?.at ?? "").localeCompare(a.entries.at(-1)?.at ?? ""))[0]
 }
 
 /** The tools, in the order their entry files are checked after AGENTS.md. */
