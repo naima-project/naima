@@ -147,6 +147,18 @@ The model describes the code, so the two change together, in the same change. Wh
 properties again, and then changes the code to match. A property whose model or formula has changed since its last run is reported by `naima check` as no longer
 current, and `naima verify` runs it again.
 
+## Keep generated models small
+
+A model written by a generator can grow large without anyone noticing, and every tool that reads it pays for its size. The usual cause is a condition repeated
+in every summand. Suppose a policy says that some outputs take priority over others: an output may fire only when no output of higher priority is enabled. The
+easy way to generate that is to copy, into the guard of each output, the negation of every higher-priority output's guard. Each summand then carries a copy of
+the others' conditions, and linearising expands them further, so in one generated scheduler model nearly all of the linear process was summand conditions.
+
+Write the order once instead. Define one derived predicate over the state, a mapping such as `higher_enabled(s, o)` with equations that say when an output of
+higher priority than `o` can fire, and let each summand's guard call it. The behaviour is the same, the guards stay short, and the tools linearise, generate and
+solve much faster. After linearising, `naima verify` measures every summand's condition and lists the ones above the limit, and `naima check` notes the model
+([prove and close](prove-and-close.md#properties-proven-by-a-tool)).
+
 ## Generate the code from the model
 
 Once the model of a state machine holds its properties, the code that runs it can be generated from the model instead of written by hand.

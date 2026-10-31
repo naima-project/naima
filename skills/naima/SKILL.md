@@ -101,7 +101,9 @@ naima hello
 ```
 
 Run it at the start of every session, unless its output is already in the conversation because a session-start hook ran it: then pass that output on and don't
-run it again. Open your first reply with its first line, keeping the name in bold and what it stands for, for example
+run it again. A hook shows the owner one line only: then answer the owner's message, without repeating the greeting, pass on, one plain line each, what waits on
+their decision, and run every command as the greeting writes it (`sh naima-tracker/naima.sh <command>`). Otherwise, open your first reply with its first line,
+keeping the name in bold and what it stands for, for example
 `**I'm Naima**, the
 No-guesswork Artificial Intelligence Meta-Agent, active in this repository:
 version 1.0.0, commit 45ba22c1134c.` (the terminal prints it

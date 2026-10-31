@@ -62,6 +62,7 @@ import {
 import { exclusions } from "./excludes.ts"
 import { ALLOW_PRIVATE, allowPrivateOption, applyPrivateData, findPrivate, guardPrivate, privateContext, REVISED, revisedOption } from "./private.ts"
 import { DATA_DIR, DATA_FILE, DEFAULT_DATA, findData, globalOptions, PROGRAM_DIR, real, RELAUNCH, runtimeOf, trackerOf, trackerReadme } from "./layout.ts"
+import { SH_LAUNCHER } from "./launchers.ts"
 import {
   align,
   checkoutWork,
@@ -1398,17 +1399,47 @@ async function tickCommand(args: string[], opts: CliOptions, place: Located, io:
   return 0
 }
 
-/** What an agent is told at a session start, beside the greeting the owner has just seen. */
-export const greetingContext = (shown: string): string =>
-  [
-    "Naima's session-start greeting (naima hello) has just been shown to the owner directly:",
-    "",
-    shown,
-    "",
-    `In your first reply, open with the banner's first words as "${INTRODUCTION_BOLD}", keeping the bold and the expansion, and say in the same line which version is active; pass on the next goal and release, if the greeting names them, and, in plain words, anything above that waits on the owner's decision — a newer Naima, a long run that is due, an urgent message — asking before acting on it. Do not run naima hello again in this session.`,
-    "",
-    BASICS_INSTRUCTION,
-  ].join("\n")
+/**
+ * What an agent is told at a session start: the one line the owner has just seen, then what it stands on, for the
+ * agent alone, and how to answer. Every command it names is written as `launcher` runs it in this project.
+ */
+export const greetingContext = (shown: string, detail: readonly string[], launcher: string): string =>
+  runnable(
+    [
+      "Naima's session-start greeting (naima hello) has just been shown to the owner directly, as one line:",
+      "",
+      shown,
+      "",
+      "What it stands on, for you:",
+      "",
+      ...detail,
+      "",
+      `In your first reply, answer the owner's message: do not repeat the greeting. Only when their message is a greeting alone, introduce yourself in one line as "${INTRODUCTION_BOLD}", keeping the bold and the expansion, with the version that is active. Pass on, in one plain line each, anything above that waits on the owner's decision — a newer Naima, a long run that is due, an urgent message — asking before acting on it; mention the next goal and release only when asked or when they bear on the request. Do not run naima hello again in this session.`,
+      "",
+      BASICS_INSTRUCTION,
+    ].join("\n"),
+    launcher,
+  )
+
+/**
+ * `text` with every Naima command it names (`naima <command>`, lower case, as the greeting writes them) as
+ * `launcher` runs it, so that no command an agent is told to run is a bare `naima` that the machine may not have.
+ */
+export const runnable = (text: string, launcher: string): string => text.replace(/(?<![\w./-])naima (?=[a-z])/g, `${launcher} `)
+
+/**
+ * How Naima is run in this project, as an agent types it: the committed POSIX launcher of the tracker folder, which
+ * every hook runs too; where the project has none (a development build), the program run with Deno.
+ */
+export function launcherOf(place: Located, programRoot: string): string {
+  const tracker = trackerOf(place.data)
+  if (existsSync(join(tracker, SH_LAUNCHER))) return `sh ${posixRelative(place.root, join(tracker, SH_LAUNCHER))}`
+  return `deno run -A ${posixRelative(place.root, join(programRoot, "naima.ts"))}`
+}
+
+/** The one line the owner sees at a session start: the banner, then whether anything waits on their decision. */
+const greetingLine = (bannerLine: string, waits: boolean): string =>
+  `${bannerLine} ${waits ? "Something waits on your decision: your agent says what." : NOTHING_WAITS}`
 
 /**
  * `naima hello`: the banner, what the update policy finds, what waits on the owner (the summary sections marked
@@ -1522,18 +1553,15 @@ async function hello(args: string[], opts: CliOptions, place: Located, io: IO): 
   lines.push(...decisions)
   if (!waits && !decisions.length) lines.push(NOTHING_WAITS)
   // The banner first, read after the check: a fetch brings the tags that name the version.
-  const all = [
-    me
-      ? banner(versionOf(me.repo, me.commit), me.commit)
-      : `${INTRODUCTION}, active in this repository: a development build, its lock commit ${short(lock.commit)}.`,
-    ...lines,
-    RULES_FIRST,
-    ...offers,
-    OFFERS,
-    BASICS_OFFER,
-  ]
-  if (tool?.greeting) io.out(tool.greeting(all.join("\n"), greetingContext(all.join("\n"))))
-  else for (const line of all) io.out(line)
+  const head = me
+    ? banner(versionOf(me.repo, me.commit), me.commit)
+    : `${INTRODUCTION}, active in this repository: a development build, its lock commit ${short(lock.commit)}.`
+  const detail = [...lines, RULES_FIRST, ...offers, OFFERS, BASICS_OFFER]
+  // As a hook, the owner sees one line and the agent the rest, every command in it written as it runs here.
+  if (tool?.greeting) {
+    const shown = greetingLine(head, waits || decisions.length > 0)
+    io.out(tool.greeting(shown, greetingContext(shown, detail, launcherOf(place, opts.programRoot))))
+  } else for (const line of [head, ...detail]) io.out(line)
   return 0
 }
 
