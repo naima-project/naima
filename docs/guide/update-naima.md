@@ -45,8 +45,10 @@ The first line it prints is the one the agent shows you, for example
 release tag at or before the locked commit. After that comes what Naima found about newer versions, then one line for each long run that is due
 ([long work](long-work.md#when-a-long-run-is-due)), one line for each repository you chose to keep without a remote
 ([a remote for every repository](private-tracker.md#a-remote-for-every-repository)), and a reminder of what you can ask for: an explanation of Naima and its
-documentation, a check for an update, or an update. With an agent tool that has a session-start hook, you see this greeting directly. `naima hello` never
-changes the lock and never starts a run. Its check for a newer Naima counts as the day's update check.
+documentation, a check for an update, or an update. With an agent tool that has a session-start hook, you see one line of it directly: the first line, and
+whether anything waits on your decision. The rest goes to the agent, which answers your message and tells you, one line each, only what waits on you; every
+command it is told to run is written as it runs in the project, `sh naima-tracker/naima.sh <command>`. `naima hello` never changes the lock and never starts a
+run. Its check for a newer Naima counts as the day's update check.
 
 ## During a long session
 

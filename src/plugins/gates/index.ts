@@ -28,7 +28,7 @@
 // Any plugin may contribute gates through the contract; `naima gates` lists
 // them all, whoever declared them.
 
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import {
   alongside,
@@ -302,6 +302,35 @@ function goalStatus(r: GateResult): string {
 }
 
 /**
+ * A version as a release compares it: no leading v, and its numbers padded with zeros to major.minor.patch, so that
+ * 1.1, v1.1 and v1.1.0 are one version; a pre-release suffix is kept, so v1.1.0-rc.1 is not 1.1.
+ */
+export function versionKey(version: string): string {
+  const m = /^v?(\d+(?:\.\d+)*)(.*)$/.exec(version.trim())
+  if (!m) return version.trim()
+  const nums = m[1]!.split(".").map(Number)
+  while (nums.length < 3) nums.push(0)
+  return nums.join(".") + m[2]
+}
+
+/** The tags of a repository, one per line, none when it is no repository. */
+const tagsOf = (repo: string): string[] => (gitOrNull(repo, "tag", "--list") ?? "").split("\n").map((t) => t.trim()).filter(Boolean)
+
+/**
+ * Every tag a release may be marked with, as version keys: the project's own, the tracker's repository's when it has
+ * one of its own, and each submodule's, such as a product kept as a submodule of the repository that tracks it.
+ */
+function releaseTags(ctx: Context): Set<string> {
+  const repos = new Set([ctx.root, ctx.trackerGit])
+  const paths = gitOrNull(ctx.root, "config", "--file", ".gitmodules", "--get-regexp", "^submodule\\..*\\.path$") ?? ""
+  for (const line of paths.split("\n")) {
+    const path = line.trim().split(/\s+/)[1]
+    if (path && existsSync(join(ctx.root, path, ".git"))) repos.add(join(ctx.root, path))
+  }
+  return new Set([...repos].flatMap(tagsOf).map(versionKey))
+}
+
+/**
  * Where the project is going, as `naima hello` says it: the nearest gate(s) with a due date, and the next release
  * (a gate with a version), each in one line with its verdict. A gate past its date that holds is behind the project,
  * not ahead of it. Nothing when the project has no such gate.
@@ -311,8 +340,8 @@ export async function goals(ctx: Context): Promise<string[]> {
   const all: Goal[] = []
   for (const { value: gate } of gatesOf(ctx)) if (gate.due || gate.version) all.push({ gate, result: await gate.evaluate(ctx) })
   // A release already tagged is behind the project too: its version names a tag in git.
-  const tags = new Set((gitOrNull(ctx.root, "tag", "--list") ?? "").split("\n").map((t) => t.trim()).filter(Boolean))
-  const released = (g: GateDef): boolean => !!g.version && (tags.has(`v${g.version}`) || tags.has(g.version))
+  const tags = releaseTags(ctx)
+  const released = (g: GateDef): boolean => !!g.version && tags.has(versionKey(g.version))
   const live = all.filter((g) => ahead(g.gate, g.result) && !released(g.gate))
   const byDate = (a: Goal, b: Goal): number => (a.gate.due ?? "9999-99-99").localeCompare(b.gate.due ?? "9999-99-99")
   const dated = live.filter((g) => g.gate.due).sort(byDate)

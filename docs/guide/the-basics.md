@@ -9,8 +9,8 @@ A goal in Naima is called a gate. It has a name and a short description, such as
 that has to be finished before it is reached. Every piece of work that matters for it, a feature to build or a bug to fix, is placed on the gate. The gate holds
 when all of that work is done and checked, and not before.
 
-You don't need to create gates yourself. Tell your agent what you want to reach and by when, and it sets up the gate and puts the work on it. At the start of
-every session it tells you the next goal and how far away it is.
+You don't need to create gates yourself. Tell your agent what you want to reach and by when, and it sets up the gate and puts the work on it. It knows the next
+goal and how far away it is from the start of every session, and tells you when you ask or when it bears on what you asked.
 
 ## Reach it in steps
 
@@ -21,8 +21,10 @@ milestone that passes its date without holding is pointed out to you.
 ## Publish
 
 A release is a gate with a version number, such as 1.0. When it holds, everything it needed is done and checked, and what you publish follows from it. The
-version is tagged in the project's history. The release notes are put together from what the release did and proved (`naima announce`), and from the short notes
-written with each change where the project keeps them, so nobody has to remember afterwards what went in. Where the project has a website, it is published too.
+version is tagged in the project's history, and from then on the release is behind you: Naima names the next one. A tag counts however the version is written
+(v1.1.0 is version 1.1), in the project or in a submodule it holds, such as a product the project tracks. The release notes are put together from what the
+release did and proved (`naima announce`), and from the short notes written with each change where the project keeps them, so nobody has to remember afterwards
+what went in. Where the project has a website, it is published too.
 
 ## Everything else
 
