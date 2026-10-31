@@ -43,6 +43,7 @@ import {
   HOOKS_DIR,
   isAncestor,
   parse,
+  pointHooksPath,
   posixRelative,
   rendered,
   runGit,
@@ -67,6 +68,9 @@ export { TRUNK_REASON }
 
 /** The git hook the guard is: run for every ref update, in the states prepared, committed and aborted. */
 export const GUARD_HOOK = "reference-transaction"
+
+/** The git hook the guard installs beside it: run before a push, it refuses commits whose messages carry private infrastructure. */
+export const PUSH_HOOK = "pre-push"
 /** The coordination option that turns the guard off for the project. */
 export const GUARD_OPTION = "trunkGuard"
 /** The plugin's key in naima.json's plugins table, where `guard off` records the choice. */
@@ -152,6 +156,8 @@ export function guardHook(
     'cd "$top" || exit 0',
     ...(opts.launcher
       ? [
+        "# A submodule pointing at the project's hooks has no launcher of its own: its trunk is not this guard's.",
+        `if [ ! -f ${quote(opts.launcher)} ] && [ -n "$(git rev-parse --show-superproject-working-tree 2>/dev/null)" ]; then exit 0; fi`,
         `if [ ! -f ${
           quote(opts.launcher)
         } ]; then echo "naima: the trunk guard cannot run here (no ${opts.launcher}): ${trunkName} moves unchecked" >&2; exit 0; fi`,
@@ -162,6 +168,47 @@ export function guardHook(
       : []),
     "unset GIT_INDEX_FILE",
     `exec ${command} guard-check "$old" "$new"`,
+    "",
+  ].join("\n")
+}
+
+/**
+ * The pre-push hook: shell that runs the clone's own pre-push hook first, then hands every local and remote tip the
+ * push names to `command push-check`, from the project root — the superproject's when the push is from a submodule
+ * with no launcher of its own — with the repository the push is from.
+ */
+export function pushHook(command: string, opts: { launcher?: string; committed?: boolean } = {}): string {
+  return [
+    "#!/bin/sh",
+    `${MARK}: rewritten by it, never by hand.`,
+    "# Refuses a push whose commits carry private infrastructure in their messages: a home path, a machine or user name.",
+    "# git push --no-verify skips it, on the owner's word. naima guard off turns it off for the project.",
+    "",
+    "input=$(cat)",
+    "# A hook the clone had before core.hooksPath pointed here still runs, first, with the same lines.",
+    `legacy="$(git rev-parse --git-common-dir)/hooks/${PUSH_HOOK}"`,
+    `if [ -x "$legacy" ]; then printf '%s\\n' "$input" | "$legacy" "$@" || exit $?; fi`,
+    'repo="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0',
+    "set --",
+    "while read -r lref lsha rref rsha; do",
+    '  if [ -n "$lsha" ]; then set -- "$@" "$lsha" "$rsha"; fi',
+    "done <<EOF",
+    "$input",
+    "EOF",
+    '[ "$#" -gt 0 ] || exit 0',
+    'top="$repo"',
+    ...(opts.launcher
+      ? [
+        `if [ ! -f "$top/"${quote(opts.launcher)} ]; then`,
+        '  sup="$(git rev-parse --show-superproject-working-tree 2>/dev/null)"',
+        '  if [ -n "$sup" ]; then top="$sup"; fi',
+        "fi",
+      ]
+      : []),
+    'cd "$top" || exit 0',
+    ...launcherChecks(opts.launcher, "the push", opts.committed === true).map((l) => l.replace(/: the push moves unchecked/g, ": the push goes unchecked")),
+    "unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE",
+    `exec ${command} push-check --repo "$repo" "$@"`,
     "",
   ].join("\n")
 }
@@ -227,12 +274,18 @@ const trackerSide = (ctx: Context): TrackerSide | undefined => {
   return main ? { trunk: main, back: posixRelative(ctx.trackerRoot, ctx.root) || "." } : undefined
 }
 
+/** The command the project's hooks start: the committed launcher where there is one, else Deno on the program's launcher. */
+function projectCommand(ctx: Context): { command: string; launcher: string; committed: boolean } {
+  const launcher = guardLauncher(ctx)
+  const committed = committedLauncher(ctx)
+  return { command: committed ? `sh ${quote(committed)}` : `deno run -A ${quote(launcher)}`, launcher, committed: committed !== null }
+}
+
 /** The hook as the project's setup writes it: Deno on the program's launcher. */
 export function projectGuardHook(ctx: Context): string {
-  const launcher = guardLauncher(ctx)
+  const { command, launcher, committed } = projectCommand(ctx)
   const tracker = trackerSide(ctx)
-  const committed = committedLauncher(ctx)
-  return guardHook(guardedTrunk(ctx.root), committed ? `sh ${quote(committed)}` : `deno run -A ${quote(launcher)}`, {
+  return guardHook(guardedTrunk(ctx.root), command, {
     ...(committed ? { committed: true } : {}),
     launcher,
     sibling: ctx.sibling,
@@ -241,6 +294,13 @@ export function projectGuardHook(ctx: Context): string {
 }
 
 const hookFile = (ctx: Context): string => join(ctx.trackerRoot, HOOKS_DIR, GUARD_HOOK)
+const pushHookFile = (ctx: Context): string => join(ctx.trackerRoot, HOOKS_DIR, PUSH_HOOK)
+
+/** The submodules checked out in `root`, by path from it. */
+function submodulesOf(root: string): string[] {
+  const out = gitOrNull(root, "ls-files", "--stage", "-z") ?? ""
+  return out.split("\0").filter((e) => e.startsWith("160000 ")).map((e) => e.slice(e.indexOf("\t") + 1)).filter((p) => existsSync(join(root, p, ".git")))
+}
 const hooksPathOf = (ctx: Context): string => `${posixRelative(ctx.root, ctx.trackerRoot) || "."}/${HOOKS_DIR}`
 /** Whether the guard itself is in the hooks folder, not absent nor the stub that only runs the clone's own hook. */
 const hasGuard = (ctx: Context): boolean => existsSync(hookFile(ctx)) && readFileSync(hookFile(ctx), "utf8").includes(MARK)
@@ -264,6 +324,13 @@ export function installGuard(ctx: Context, command?: string): string[] {
   const tracker = trackerSide(ctx)
   const text = command ? guardHook(guardedTrunk(ctx.root), command, { sibling: ctx.sibling, ...(tracker ? { tracker } : {}) }) : projectGuardHook(ctx)
   const lines = writeGitHook(ctx.root, ctx.trackerRoot, GUARD_HOOK, text)
+  // The pre-push hook, in sibling mode too: the code's pushes are read, and each submodule's, which points at the same hooks.
+  const project = projectCommand(ctx)
+  const push = command ? pushHook(command) : pushHook(project.command, { launcher: project.launcher, committed: project.committed })
+  lines.push(...writeGitHook(ctx.root, ctx.trackerRoot, PUSH_HOOK, push).filter((l) => !l.startsWith("core.hooksPath")))
+  for (const sub of submodulesOf(ctx.root)) {
+    lines.push(...pointHooksPath(join(ctx.root, sub), ctx.trackerRoot, { quietWhenSet: true }).map((l) => `${sub}: ${l}`))
+  }
   if (!had && guardRuns(ctx)) lines.push(announce(ctx.root, guardedTrunk(ctx.root)))
   return lines
 }
@@ -272,7 +339,7 @@ export function installGuard(ctx: Context, command?: string): string[] {
 export const guardSetup = (on: boolean): Setup => ({
   name: "trunk-guard",
   says:
-    "the trunk guard, a git reference-transaction hook in the data directory's hooks, which refuses a commit, merge or fast-forward of the trunk made by hand; core.hooksPath pointed there where unset. Nothing while the option trunkGuard is false",
+    "the trunk guard, a git reference-transaction hook in the data directory's hooks, which refuses a commit, merge or fast-forward of the trunk made by hand, and a pre-push hook beside it, which refuses a push whose commits carry private infrastructure in their messages; core.hooksPath pointed there where unset, in the clone and in each submodule checked out. Nothing while the option trunkGuard is false",
   install: (ctx) => (on ? installGuard(ctx) : []),
 })
 
@@ -353,7 +420,8 @@ export function switchesGuard(ctx: Context, sha: string, files: { status: string
   const data = ctx.trackerPrefix ? `${ctx.trackerPrefix}/` : ""
   const config = `${data}${DATA_FILE}`
   if (!files.some((f) => f.path === config && f.status === "M")) return false
-  if (!files.every((f) => f.path === config || f.path === `${data}${HOOKS_DIR}/${GUARD_HOOK}`)) return false
+  const hooks = [GUARD_HOOK, PUSH_HOOK].map((h) => `${data}${HOOKS_DIR}/${h}`)
+  if (!files.every((f) => f.path === config || hooks.includes(f.path))) return false
   const read = (rev: string): Record<string, unknown> | null => {
     const r = runGit(ctx.trackerGit, ["show", `${rev}:${config}`])
     try {
@@ -543,7 +611,8 @@ export const guardCommand = (on: boolean): Command => ({
     if (sub === "off") {
       recordGuard(ctx, false)
       rmSync(hookFile(ctx), { force: true })
-      writeDelegates(ctx.trackerRoot) // the clone's own reference-transaction hook keeps running
+      rmSync(pushHookFile(ctx), { force: true })
+      writeDelegates(ctx.trackerRoot) // the clone's own reference-transaction and pre-push hooks keep running
       ctx.out(
         `the trunk guard is off: commits on ${main} made by hand are not refused, landings-are-markers asks only from the first landing marker, and the landing rule is not shipped. ` +
           `Commit ${config} and the removed ${hook}; naima guard on turns it back on`,

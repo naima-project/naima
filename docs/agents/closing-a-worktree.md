@@ -161,8 +161,8 @@ what the branch changed there. Then it moves the trunk, only if the trunk hasn't
   a file with no passing recorded run on the branch's files, models in development left out. The worker runs `naima verify` or `naima metrics run --record` on
   the branch and commits the runs. A proof that can't be made current before landing, such as a suite that runs for days, is landed with
   `--stale-proofs "<reason>"`, and the marker keeps the reason in a `Stale-proofs:` trailer;
-- a plugin's landing check fails on the branch's files, such as a stance's checks on a file they read. No flag lets this through, `--stale-proofs`
-  included: the worker fixes the branch;
+- a plugin's landing check fails on the branch's files, such as a stance's checks on a file they read. No flag lets this through, `--stale-proofs` included: the
+  worker fixes the branch;
 - an untracked file in the main checkout would be overwritten, in which case nothing moves.
 
 After the landing, `naima land` prints what each landing report says. Among them are the reviews recorded with `naima reviewed` that the branch carries, and a
@@ -183,7 +183,19 @@ item once its proof has been checked, and then step 8.
 
 Some projects keep the product they ship in a git submodule and track it from the repository around it, as Naima's own workshop holds Naima in `naima/`. The
 work is then two branches: one in the submodule with the code and its change note, and one in the project with the tracker changes and the new pointer. The
-product's own history lands the same way, as markers, so each change note arrives together with the items its landing closes. The coordinator lands the product
+product's own history lands the same way, as markers, so each change note arrives together with the items its landing closes.
+
+The worker brings the product's main into its submodule branch before handing it over. It fetches it and merges `FETCH_HEAD` with a message of its own, since
+git's default message for a merge fetched from a path names that path, a home directory with the user name in it, and a merge commit on the product's main
+cannot be reworded once it is published:
+
+```sh
+git -C naima fetch <the main checkout>/naima main
+git -C naima merge --no-ff -m "Merge product main" FETCH_HEAD
+```
+
+`naima land` refuses a branch whose commits, in the project or in a submodule whose pointer it moves, carry a home path, a machine or user name in their
+messages, and the trunk guard's `pre-push` hook refuses a push that would send one, from the project or from its submodule. The coordinator lands the product
 first, then the project:
 
 ```sh

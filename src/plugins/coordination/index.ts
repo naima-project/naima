@@ -82,6 +82,7 @@ import { claimsUiView, notesUiView } from "./ui.ts"
 import { readStaleAfter, staleCommand, type StaleData, staleData, staleSection } from "./stale.ts"
 import { changeNotesCheck, changesCommand } from "./changes.ts"
 import { land, landingReportsPoint, landingsAreMarkers, landingsPaired } from "./land.ts"
+import { pushCheckCommand } from "./messages.ts"
 import { guardCheckCommand, guardCommand, guardedFrom, guardOffSection, guardSetup, readTrunkGuard, switchesGuard } from "./guard.ts"
 import { diaryCheck, diaryCommand, eventCommand, EVENTS, frontLines, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
 import { readyLines, readyNow, readySection, readyWorkWaiting, workerLimitSection } from "./ready.ts"
@@ -1181,6 +1182,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       land,
       guardCommand(guarded),
       guardCheckCommand,
+      pushCheckCommand,
       changesCommand,
       prune,
       staleCommand(stale, staleAfter),

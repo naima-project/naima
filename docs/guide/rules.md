@@ -276,9 +276,9 @@ owner waiting for bookkeeping. Acknowledged as "Capture mode on". **Convention**
 
 Before asking the owner anything, an agent checks the project's rules (`naima rules`) and its decisions (`naima decisions <words>`). A question they settle is
 not put to the owner, even when the editor or app the agent runs in offers buttons for it, such as which branch to use, whether to commit, or whether to keep a
-safeguard. The agent answers it from the rules and says the answer in one line. In particular it commits as the rules say, on the item's branch and then
-landed, and never asks whether to commit, so no change is left uncommitted waiting for that answer. Something the owner should know, such as how to turn a safeguard off, is told as
-information, not offered as a choice.
+safeguard. The agent answers it from the rules and says the answer in one line. In particular it commits as the rules say, on the item's branch and then landed,
+and never asks whether to commit, so no change is left uncommitted waiting for that answer. Something the owner should know, such as how to turn a safeguard
+off, is told as information, not offered as a choice.
 
 Why: a question the rules already answer costs the owner's attention and makes them think the choice is theirs again. Acknowledged as "Rules answer mode on".
 **Convention** ([asking the human](../agents/asking-the-human.md)).
@@ -382,7 +382,12 @@ finding is listed with its line and the placeholder to write instead. Nothing is
 A deliberate mention can go through with `--allow-private "<reason>"`, and then the reason is recorded in the item's notes, the session note or the event,
 together with the counts by kind but never the values. The private list holds one word per line (`#` starts a comment) and lives in
 `$XDG_CONFIG_HOME/naima/private-words`, or else `~/.config/naima/private-words`, or `%APPDATA%\naima\private-words` on Windows. That is outside every
-repository, so the names it holds are never committed. What the CLI doesn't write (code, docs, commit messages) is **convention**.
+repository, so the names it holds are never committed. Commit messages are read with the same patterns twice: `naima land` refuses a branch whose commits carry
+one in their messages, in the project or in a submodule whose pointer it moves (`--allow-private "<reason>"` lands a deliberate mention), and while the trunk
+guard is on, its `pre-push` hook runs `naima push-check`, which refuses a push that would send such a commit, from the clone or from a submodule checked out in
+it; only the owner sends one anyway, with `git push --no-verify`. A commit already on a remote is not read again, since it cannot be reworded without rewriting
+what was published. A merge of another clone's branch is made path-free, because git's default message names the path it was fetched from:
+`git fetch <checkout> main`, then `git merge --no-ff -m "Merge product main" FETCH_HEAD`. What the CLI doesn't write or read (code, docs) is **convention**.
 
 Scrubbing is the project's choice, asked of the owner once. A company's internal tracker may want its machine names and paths kept, so while the project has not
 chosen, every refusal ends with the question the agent puts to the owner: keep scrubbing, or keep the information. The answer is the privacy plugin's option

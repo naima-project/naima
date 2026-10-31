@@ -44,6 +44,8 @@ export {
   allowanceLine,
   findPrivate,
   guardPrivate,
+  KEEP_REASON,
+  KINDS,
   PRIVATE_DATA_MODES,
   PRIVATE_DATA_OPTION,
   type PrivateContext,

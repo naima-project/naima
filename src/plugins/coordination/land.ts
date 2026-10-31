@@ -50,6 +50,7 @@ import {
   worktrees,
 } from "../../core/api.ts"
 import { changeNoteTrailers } from "./changes.ts"
+import { guardLandingMessages } from "./messages.ts"
 import { CLAIMS } from "./index.ts"
 import { plural } from "./worktrees.ts"
 
@@ -624,6 +625,7 @@ async function landBoth(
   const items = landedItems(ctx, branch, closes, trk.old, trk.tip, trackerOnly !== undefined, met.map((m) => m.id))
   const ids = items.map((i) => i.id)
   const codeMoves = code.old !== code.tip
+  if (codeMoves) guardLandingMessages(ctx, branch, code.old, code.tip)
   const trailers = codeMoves ? changeNoteTrailers(ctx, branch, code.old, code.tip, noChangeNote) : []
   const codeTree = mustGit(ctx.root, "rev-parse", `${code.tip}^{tree}`)
   const trkTree = mustGit(ctx.trackerGit, "rev-parse", `${trk.tip}^{tree}`)
@@ -865,7 +867,7 @@ export const land: Command = {
   says:
     "land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor",
   enforces:
-    "runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one that names no item (unless --tracker-only gives the reason and the branch changes only tracker data, or --meets names a requirement it meets) or an item open and not fixed; refuses --meets for an item that is not a requirement, one with no item that verifies it and passed on the branch tip, one whose proofs all passed on the trunk already, and one an item refutes, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch a landing check finds failing, whatever flag is given, and one that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, adds the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right after the marker, so that naima close finds a commit reachable from the trunk; then prints what every landing report says of the files the landing changed, never undoing it",
+    "runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one whose commits carry private infrastructure in their messages — a home-directory path, a machine or user name — in the project or in a submodule whose pointer it moves (commits no remote-tracking branch holds), unless --allow-private gives the reason; one that names no item (unless --tracker-only gives the reason and the branch changes only tracker data, or --meets names a requirement it meets) or an item open and not fixed; refuses --meets for an item that is not a requirement, one with no item that verifies it and passed on the branch tip, one whose proofs all passed on the trunk already, and one an item refutes, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch a landing check finds failing, whatever flag is given, and one that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, adds the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right after the marker, so that naima close finds a commit reachable from the trunk; then prints what every landing report says of the files the landing changed, never undoing it",
   usage:
     'land <branch> [--closes <item>]... [--no-change-note "<reason>"] [--stale-proofs "<reason>"] [--tracker-only "<reason>"] [--meets <requirement>]... | land <branch> --repair',
   options: [
@@ -929,6 +931,7 @@ export const land: Command = {
     const meets = strs(p, "meets")
     if (ctx.sibling) return await landBoth(ctx, branch, strs(p, "closes"), str(p, "no-change-note"), stale, trackerOnly, meets)
     const { main, old, tip, items, met } = preconditions(ctx, branch, strs(p, "closes"), trackerOnly !== undefined, meets)
+    guardLandingMessages(ctx, branch, old, tip)
     // Tracker data holds no behaviour path: a tracker-only landing asks for no change note, and its reason is its trailer.
     const trailers = trackerOnly !== undefined ? [`${TRACKER_ONLY}: ${trackerOnly}`] : changeNoteTrailers(ctx, branch, old, tip, str(p, "no-change-note"))
     trailers.push(...meetsTrailers(met))

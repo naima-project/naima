@@ -40,7 +40,7 @@ export const NO_CHANGE_NOTE = "No-change-note"
 const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 /** The submodules `root` records at `rev`, by path: the commit each pointer names. */
-function gitlinks(root: string, rev: string): Map<string, string> {
+export function gitlinks(root: string, rev: string): Map<string, string> {
   const out = new Map<string, string>()
   for (const entry of (gitOrNull(root, "ls-tree", "-r", "-z", rev) ?? "").split("\0")) {
     const tab = entry.indexOf("\t")
