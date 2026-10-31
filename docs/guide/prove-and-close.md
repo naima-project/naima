@@ -266,18 +266,23 @@ naima set <property> 'verifierOptions={"route":"lts","threads":8,"maxStates":500
 - `threads` speeds up generating the state space. On macOS, more than one thread can crash on some models, as mCRL2 itself warns.
 
 `verifierOptions` takes only the options listed here, and each of them leaves the answer as it is. Any other key is an error that names the accepted ones, so a
-flag that could change a verdict never reaches the tools. Two of them make large generated models faster, and the defaults already use them:
+flag that could change a verdict never reaches the tools. Two of them decide how fast the tools go on large generated models:
 
-- `noRewrite` (true unless set to false) linearises the model with `mcrl22lps --no-rewrite`, on every route. Rewriting while linearising can blow up the
-  conditions of a model, and without it the tools that read the result are faster. It produces a different linear process, so it is part of the key the state
-  space is kept under.
+- `linearise` says how `mcrl22lps` turns the model into a linear process, on every route. `"rewrite"`, the default, is `mcrl22lps` as it is. `"no-rewrite"` runs
+  `mcrl22lps --no-rewrite`: rewriting while linearising can blow up the conditions of some models, and without it the tools that read the result can be about
+  twice as fast. On other models, refined ones generated from a larger model for instance, the terms left unrewritten make `lps2lts` overflow its stack or slow
+  down by hours, so choose it model by model, after trying it on that model: `naima set <property> 'verifierOptions={"linearise":"no-rewrite"}'`. The two
+  produce different linear processes, so the choice is part of the key the state space is kept under, and part of what identifies a run: a run made one way is
+  never reused for the other. The earlier boolean `noRewrite` is still read, `true` as `"no-rewrite"` and `false` as `"rewrite"`.
 - `cached` (true unless set to false) generates the state space with `lps2lts --cached`, which remembers what it has already enumerated.
 
-The state space is generated with `jitty`, mCRL2's default rewriter.
+The state space is generated with `jitty`, mCRL2's default rewriter. On macOS and Linux, `lps2lts` and `pbessolve` are started with the stack limit raised
+(unlimited, or the system's hard limit where unlimited is refused), since rewriting deep terms recurses deeply; on Windows a program's stack is fixed when it is
+built, so they start as they are. A tool killed by a signal makes the run an error whose output says `<tool> crashed (signal N, NAME) on <model>`.
 
-The run record keeps the options that were used and the speed. On the LTS route, `details.lts.exploration` gives the arguments of `mcrl22lps` and `lps2lts`, and
-`details.rate` gives the states generated per second. On the standard route, `details.rate` gives the equations `pbessolve` generated per second. A rate that
-stays very low tells a slow model apart from one that hangs.
+The run record keeps the options that were used and the speed. Every run gives `details.linearise`. On the LTS route, `details.lts.exploration` gives the
+arguments of `mcrl22lps` and `lps2lts`, and `details.rate` gives the states generated per second. On the standard route, `details.rate` gives the equations
+`pbessolve` generated per second. A rate that stays very low tells a slow model apart from one that hangs.
 
 After linearising, the verifier also measures the condition of every summand, counting the operators and variables in it. Summands above the plugin option
 `summandConditionLimit` (10000 unless set; 0 switches the measurement off) are listed in the run's output on a line that begins with `lint:`, and in

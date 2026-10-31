@@ -72,12 +72,17 @@ export interface Verifier {
   compare?(request: CompareRequest, ctx: Context): Promise<CompareResult>
   /** Why a result of `property` does not carry over modulo `equivalence`; null when it does. Absent: every result does. */
   preserves?(request: { property: string; options: Record<string, unknown>; equivalence: string }, ctx: Context): string | null
+  /**
+   * The options as they identify a run, for the run cache and staleness: the defaults the adapter applies made explicit
+   * where they change how the tool runs, so a run made one way is never reused for another. Absent: the options as written.
+   */
+  identityOptions?(options: Record<string, unknown>): Record<string, unknown>
 }
 
 export const verifiersPoint: ExtensionPoint<Verifier> = {
   id: "verifiers",
   says:
-    "an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest; `toolArgs`, the flags `naima verify --tool-args` may pass, which never change the verdict; and `equivalences` with `compare({ before, after, equivalence }, ctx) → { verdict, output, counterexample?, details? }` and `preserves({ property, options, equivalence }, ctx)`, for `naima equivalent`",
+    "an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest; `toolArgs`, the flags `naima verify --tool-args` may pass, which never change the verdict; and `equivalences` with `compare({ before, after, equivalence }, ctx) → { verdict, output, counterexample?, details? }` and `preserves({ property, options, equivalence }, ctx)`, for `naima equivalent`; `identityOptions(options)`, the options as they identify a run, so a run made with other effective options is never reused",
   noun: "verifier",
   stored: true,
   key: (v) => v.id,
@@ -86,7 +91,7 @@ export const verifiersPoint: ExtensionPoint<Verifier> = {
     const a = v as Partial<Verifier> | null
     if (!a || typeof a !== "object" || typeof a.id !== "string") return "has no id"
     if (typeof a.verify !== "function") return "has no verify function"
-    for (const k of ["inputs", "version", "compare", "preserves"] as const) {
+    for (const k of ["inputs", "version", "compare", "preserves", "identityOptions"] as const) {
       if (a[k] !== undefined && typeof a[k] !== "function") return `has a ${k} that is not a function`
     }
     const e = a.equivalences

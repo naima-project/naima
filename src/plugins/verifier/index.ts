@@ -193,6 +193,14 @@ const optionsOf = (item: Item): Record<string, unknown> => {
   return raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
 }
 const optionsHash = (options: Record<string, unknown>): string => createHash("sha256").update(canonical(options)).digest("hex")
+/** The digest of the options as they identify a run of `verifier`: its `identityOptions` of them, when it has one, or the options as written. */
+const identityHash = (verifier: Verifier | undefined, options: Record<string, unknown>): string =>
+  optionsHash(verifier?.identityOptions ? verifier.identityOptions(options) : options)
+/** The digest of the options `item` is verified with, as they identify a run of its verifier. */
+const itemOptionsHash = (ctx: Context, item: Item): string => {
+  const id = item.meta["verifier"]
+  return identityHash(typeof id === "string" ? verifierOf(ctx, id) : undefined, optionsOf(item))
+}
 
 /** The one digest a run keeps over everything it read and the tool that read it. */
 export const digestOf = (inputs: readonly RunInput[], toolVersion: string | undefined): string =>
@@ -449,7 +457,7 @@ export async function decideItem(ctx: Context, item: Item, progress: Progress = 
   // The adapter's stages are reported as the property's: `<property>: <stage>` (specs/progress-long-work-says-how-far, §6),
   // each counting one with the count it ended on in the previous run of the same instance as its estimated total.
   const own = label(item)
-  const steps = countedSteps(progress, own, previousCounts(item, { verifier: id, model, property, optionsSha256: optionsHash(options) }))
+  const steps = countedSteps(progress, own, previousCounts(item, { verifier: id, model, property, optionsSha256: identityHash(verifier, options) }))
   const within = steps.within
   progress.stage(own)
   const request: VerifyRequest = { model: path, property, options, progress: within, ...(toolArgs.length ? { toolArgs } : {}) }
@@ -466,7 +474,7 @@ export async function decideItem(ctx: Context, item: Item, progress: Progress = 
   } catch (e) {
     unversioned = e instanceof Error ? e.message : String(e)
   }
-  const identity: Identity = { verifier: id, model, property, optionsSha256: optionsHash(options), inputsSha256: digestOf(inputs, toolVersion) }
+  const identity: Identity = { verifier: id, model, property, optionsSha256: identityHash(verifier, options), inputsSha256: digestOf(inputs, toolVersion) }
   if (opts.force === undefined && unversioned === undefined) {
     const known = runsOf(item).filter((k) => conclusive(k.run.verdict) && madeOn(k.run, identity)).pop()
     if (known) return { reused: known }
@@ -781,11 +789,11 @@ function earlierVersions(ctx: Context, path: string, wanted: Set<string>, from?:
 }
 
 /** Why `run`, on an earlier version of the model, cannot carry over to what `item` reads now beyond the model: anything but the model changed. */
-function carryBlockers(item: Item, run: RunRecord, inputs: RunInput[], toolVersion: string | undefined): string[] {
+function carryBlockers(ctx: Context, item: Item, run: RunRecord, inputs: RunInput[], toolVersion: string | undefined): string[] {
   const { verifier, model, property } = item.meta
   const out: string[] = []
   if (run.property !== property || run.verifier !== verifier || run.model !== model) out.push("its run was made on another property, verifier or model path")
-  if ((run.optionsSha256 ?? optionsHash({})) !== optionsHash(optionsOf(item))) out.push("its run was made with other verifierOptions")
+  if ((run.optionsSha256 ?? optionsHash({})) !== itemOptionsHash(ctx, item)) out.push("its run was made with other verifierOptions")
   if (!run.inputs || run.inputsSha256 !== digestOf(run.inputs, run.toolVersion)) {
     out.push("its run record lists no inputs, or a digest that does not match them")
   } else {
@@ -881,7 +889,7 @@ const equivalent: Command = {
         const abs = resolve(ctx.root, rel)
         return { path: rel, sha256: existsSync(abs) ? sha256(abs) : "" }
       })
-      const blockers = carryBlockers(item, run, inputs, toolVersion)
+      const blockers = carryBlockers(ctx, item, run, inputs, toolVersion)
       if (blockers.length) {
         refuse(item, blockers.join("; "))
         continue
@@ -937,7 +945,7 @@ const equivalent: Command = {
             model: c.run.model,
             modelSha256: now,
             property: c.run.property,
-            optionsSha256: optionsHash(optionsOf(c.item)),
+            optionsSha256: itemOptionsHash(ctx, c.item),
             inputs: c.inputs,
             ...(toolVersion !== undefined ? { toolVersion } : {}),
             inputsSha256: digestOf(c.inputs, toolVersion),
@@ -1019,7 +1027,7 @@ export function staleness(ctx: Context, item: Item, run: RunRecord): string[] {
   const path = typeof model === "string" ? modelPath(ctx.root, model) : null
   if (run.model !== model) out.push(`holds on model ${run.model}, not ${String(model)}`)
   else if (path && existsSync(path) && run.modelSha256 !== sha256(path)) out.push("holds on a model that has changed since")
-  if ((run.optionsSha256 ?? optionsHash({})) !== optionsHash(optionsOf(item))) out.push("holds with other verifierOptions than it has now")
+  if ((run.optionsSha256 ?? optionsHash({})) !== itemOptionsHash(ctx, item)) out.push("holds with other verifierOptions than it has now")
   if (run.inputs) {
     if (run.inputsSha256 !== digestOf(run.inputs, run.toolVersion)) out.push("its run record's digest does not match the inputs and tool version it lists")
     const changed = run.inputs.filter((i) => i.path !== run.model).filter((i) => {
