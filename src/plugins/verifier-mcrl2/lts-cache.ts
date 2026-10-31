@@ -24,6 +24,10 @@ export interface LtsRecord {
   transitions: number
   labels: string[]
   generationSeconds: number
+  /** How lps2lts explored: its arguments, the rewriter and why, the compile time apart, and the states per second. Absent in entries made before it was kept. */
+  exploration?: Record<string, unknown>
+  /** The lint of the LPS's summand conditions (lps-lint.ts); absent when the lint was off. */
+  lint?: Record<string, unknown>
   at: string
 }
 
