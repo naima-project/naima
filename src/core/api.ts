@@ -123,7 +123,7 @@ export {
   worktrees,
 } from "./git.ts"
 export { DATA_FILE, DEFAULT_DATA, TRACKER_DIR } from "./layout.ts"
-export { setupPaths } from "./adapters/index.ts"
+export { setupPaths, type TranscriptEntry, transcriptRoots, type TranscriptTail, type WorkerPlace, workerTranscript } from "./adapters/index.ts"
 export {
   CLI_TRAILER,
   cliCommitMessage,

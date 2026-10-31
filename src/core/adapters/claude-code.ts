@@ -35,6 +35,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import type { AgentAdapter, AgentHook, HookInstall, PluginHookSettings, PluginHookSync } from "./index.ts"
+import { claudeCodeTranscripts } from "./claude-code-transcripts.ts"
 
 const SETTINGS = ".claude/settings.json"
 const ID = "claude-code"
@@ -283,7 +284,8 @@ export const claudeCode: AgentAdapter = {
   entryFile: "CLAUDE.md",
   footprint: ["CLAUDE.md", ".claude"],
   runningIn: (env) => env["CLAUDECODE"] === "1",
-  env: ["CLAUDECODE"],
+  env: ["CLAUDECODE", "CLAUDE_CONFIG_DIR"],
+  transcripts: claudeCodeTranscripts,
   sessionStart,
   turnEnd,
   subagentStart,
