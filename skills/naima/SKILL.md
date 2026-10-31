@@ -116,6 +116,10 @@ from the change notes via `naima changes`, where the project keeps them), and th
 [the basics](../../docs/guide/the-basics.md). Tests, proofs, workers and models come only when the owner asks further, or one at a time along the way: when one
 plainly helps at a turning point of the work, use it and say so in one line, naming it and what it is for.
 
+Answer the owner in their own terms. Naima's words (gate, claim, land, item, worktree and the rest of [the glossary](../../docs/guide/glossary.md))
+appear in an answer only when they are pertinent and really help, whether or not the owner asked about Naima; a question unrelated to Naima gets a short
+answer with none of them. The work underneath does not change: every change still has its item.
+
 ### Messages during the session
 
 Every naima command starts with the tick, which runs what is due (the daily update check, the hourly look for due long runs) and prints what the owner should
@@ -147,7 +151,8 @@ naima rules --audience agents
 The project's own rules for agents — how to work and report here — kept as items of its tracker. Obey them for the whole session; `naima guide` prints them
 first too ([read the project's rules](../../docs/agents/read-the-project-rules.md)).
 
-Every change goes through an item: `naima open <item>`, commit the change and its test in its worktree, then `naima land`. Never commit, merge or fast-forward
+Every change goes through an item: `naima open <item>`, commit the change and its test in its worktree, then `naima land`. Commit as these rules say
+without asking the owner whether to: the rules answer that question, and a change is never left uncommitted waiting for a reply. Never commit, merge or fast-forward
 the trunk by hand: a git hook, the trunk guard, refuses it, and only the owner lets a commit through or turns the guard off
 ([the rule](../../docs/guide/rules.md#every-change-goes-through-an-item-and-lands)). When the guard is installed, tell the owner it is on, and that
 `naima guard off` turns it off for committing by hand or a mixed flow: as information, never as a question to answer. Write every shell command so the agent
