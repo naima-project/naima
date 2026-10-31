@@ -17,13 +17,13 @@ outside-issues plugin's option `repo` names it as `owner/name` in `naima.json`.
    option `type` says otherwise), with the issue's address in its field `issue` and a first triage marked as reported. You are told once about each one. An
    issue is never filed twice, even when two runs happen at the same moment.
 2. **Fix.** The agent confirms the triage and fixes the problem on the item's branch, as for any other item.
-3. **Candidate.** Instead of landing the fix straight away, a pre-release is cut from that branch: a tagged GitHub release marked as a pre-release and never as
-   the latest, so people on the stable release and the main branch are not affected. `naima issues candidate <issue>` names its version (the next patch with a
-   suffix such as `1.1.2-issue12.1`) and the steps that publish it.
+3. **Candidate.** Once the fix has landed, a pre-release is cut from the head of the main branch: a tagged GitHub release marked as a pre-release and never as
+   the latest, so people on the stable release are not affected. `naima issues candidate <issue>` names its version, worked out from the newest version tag of
+   the GitHub repository (after the release `1.1.2`, the first candidate is `1.1.3-rc.1`; after `1.1.3-rc.1`, it is `1.1.3-rc.2`), and the steps that publish it.
 4. **Offer.** `naima issues offer <issue> --version <version>` answers the issue with the one command that installs the candidate. For Naima itself that is
    `naima update --to <version>`; for another project, the option `install` says what it is.
-5. **Confirmation.** If the reporter says it works, the fix lands, the next stable release goes out, and `naima issues close <issue> --release <version>`
-   comments with a link to that release and closes the issue. If it still fails, the agent fixes again and the next candidate (`…-issue12.2`) follows.
+5. **Confirmation.** If the reporter says it works, the next stable release goes out, and `naima issues close <issue> --release <version>`
+   comments with a link to that release and closes the issue. If it still fails, the agent fixes again and the next candidate (`…-rc.3`) follows.
 
 You can also close an issue yourself at any point, for example when it will not be fixed.
 
