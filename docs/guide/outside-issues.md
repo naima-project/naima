@@ -7,12 +7,13 @@ one path until the person who reported it has tested the fix. This page explains
 ## What you need
 
 The project's repository is on GitHub, and gh, GitHub's command-line tool, is installed and signed in on the machine where the agents work. Without either,
-Naima says so and leaves the issues alone. When the issues live in another repository than the project's `origin` (Naima's own development is one example), the
+Naima says so and leaves the issues alone. Naima may start gh only for `naima issues` and, in a project whose `origin` is on GitHub, for the session start;
+a project that never uses issues never grants it. When the issues live in another repository than the project's `origin` (Naima's own development is one example), the
 outside-issues plugin's option `repo` names it as `owner/name` in `naima.json`.
 
 ## The path
 
-1. **Intake.** Once a day, the tick runs `naima issues file` on the main checkout. Each open issue that no item records yet becomes an item (a bug, unless the
+1. **Intake.** Once a day, at a session start on the main checkout, the tick does what `naima issues file` does. Each open issue that no item records yet becomes an item (a bug, unless the
    option `type` says otherwise), with the issue's address in its field `issue` and a first triage marked as reported. You are told once about each one. An
    issue is never filed twice, even when two runs happen at the same moment.
 2. **Fix.** The agent confirms the triage and fixes the problem on the item's branch, as for any other item.

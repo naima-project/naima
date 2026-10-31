@@ -113,6 +113,12 @@ export function issueRepo(ctx: Context, opts: Options): string | null {
   return url ? githubRepo(url) : null
 }
 
+/** Whether gh is installed but this process may not start it: Deno refuses the run for want of the grant. */
+export function notGranted(world: IssuesWorld, cwd: string): boolean {
+  const v = world.run("gh", ["--version"], { cwd })
+  return v.status === null && /Requires run access|NotCapable|PermissionDenied|--allow-run/i.test(v.stderr)
+}
+
 /** Why intake cannot run here, or null when it can: a GitHub repository to read, and gh. */
 function unavailable(ctx: Context, world: IssuesWorld, opts: Options): { why: string } | { repo: string } {
   const repo = issueRepo(ctx, opts)
@@ -358,7 +364,6 @@ export function outsideIssuesPlugin(world: () => IssuesWorld = realWorld, option
     enforces:
       "an outside issue is filed at most once, however many intakes run at once: an item that records its address, or another intake's exclusive claim on it, skips it; an issue is public, so every text posted on it passes the private-data scrub and a finding refuses the post; what is read from an issue is printed marked as untrusted text; a candidate is a pre-release, never marked latest",
     long: { cannot: "gh has no progress interface", instead: "one line per issue listed or filed, and gh's own error when it fails" },
-    runs: ["gh"],
     run(args, ctx) {
       const p = parse(args, { version: { type: "string" }, release: { type: "string" }, draft: { type: "boolean" } })
       const [sub, ref, text] = p.positionals
@@ -439,15 +444,20 @@ export function outsideIssuesPlugin(world: () => IssuesWorld = realWorld, option
   const job: TickJob = {
     name: "outside-issues",
     says:
-      "once a day, on the trunk's checkout of a project with a GitHub repository and gh: file each new outside issue, as naima issues file does, telling the owner once; elsewhere, or with neither, nothing",
+      "once a day, on the trunk's checkout of a project with a GitHub repository and gh: file each new outside issue, as naima issues file does, telling the owner once; gh is granted to naima issues and to the session start (naima hello) of a project whose origin is on GitHub, so a tick in another command that cannot start gh tries again later in the day; elsewhere, or without gh or a GitHub repository, nothing",
     every: "day",
     timeoutMs: 60_000,
+    retryAfterMs: 10 * 60_000,
     run(ctx) {
       const t = trunk(ctx.root)
       if (!t || currentBranch(ctx.root) !== t) return { ok: true }
       const w = world()
       const can = unavailable(ctx, w, opts)
-      if ("why" in can) return { ok: true }
+      if ("why" in can) {
+        // gh installed but not granted to this command (the launcher grants it to naima issues and the session start): try again in this
+        // day's slot, from a command that has it, rather than spend the day here.
+        return notGranted(w, ctx.root) ? { ok: false, error: "gh is not granted to this command: the intake runs at the next session start" } : { ok: true }
+      }
       try {
         const got = intake(ctx, w, opts, can.repo)
         return { ok: true, notices: got.filed.map((f) => filedNotice(can.repo, f)) }

@@ -185,10 +185,34 @@ function codegenFiles(): string[] {
   return []
 }
 
-/** The grant of `command`: only `ui`, `run`, `wait`, `tools`, `backup create`, `verify`, `stance adopt` and `guard server` have one; `tools` is the tools directory to write; `rest`, the arguments after the command. */
-export function uiGrant(command: string | undefined, os: string, deno: string, tools: string | null = null, rest: readonly string[] = []): UiGrant | null {
+/** Whether the project at `root` has an origin on GitHub: what lets the session start read its outside issues with gh. */
+export function githubOrigin(root: string): boolean {
+  try {
+    const r = new Deno.Command("git", { args: ["-C", root, "remote", "get-url", "origin"], stdout: "piped", stderr: "null" }).outputSync()
+    return r.success && /(^|[@/.])github\.com[:/]/.test(new TextDecoder().decode(r.stdout).trim())
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The grant of `command`: only `ui`, `run`, `wait`, `tools`, `backup create`, `verify`, `stance adopt`, `guard server`, `issues` and, in a project
+ * whose origin is on GitHub, `hello` have one; `tools` is the tools directory to write; `rest`, the arguments after the command; `github`, whether
+ * the project's origin is on GitHub.
+ */
+export function uiGrant(
+  command: string | undefined,
+  os: string,
+  deno: string,
+  tools: string | null = null,
+  rest: readonly string[] = [],
+  github = false,
+): UiGrant | null {
   // gh only for guard server, which sends the ruleset; --print sends nothing.
   if (command === "guard") return rest[0] === "server" && !rest.includes("--print") ? { net: [], read: [], runs: ["gh"] } : null
+  // gh for naima issues, the outside-issues plugin's command; and for the session start of a project on GitHub, whose tick runs its daily intake.
+  // A project that never uses issues is granted gh nowhere else: no loaded contribution declares it.
+  if (command === "issues" || (command === "hello" && github)) return { net: [], read: [], runs: ["gh"] }
   // naima-codegen, the verifier plugin's naima-codegen adapter (adapters/naima-codegen.ts): a first-party verifier's program, granted to verify alone.
   if (command === "verify") {
     return {
@@ -481,7 +505,7 @@ export async function launch(args: string[], cwd: string): Promise<number> {
   const tools = toolsDir(Deno.env.toObject(), Deno.build.os)
   // The tick's state, naima/ in the clone's git directory, shared by its worktrees; the program is told its tick/ folder.
   const tickState = tickFolder(root)
-  const ui = uiGrant(parsed.rest[0], Deno.build.os, Deno.execPath(), tools, parsed.rest.slice(1))
+  const ui = uiGrant(parsed.rest[0], Deno.build.os, Deno.execPath(), tools, parsed.rest.slice(1), parsed.rest[0] === "hello" && githubOrigin(root))
   // A program whose own entry is gone cannot repair itself: when files deleted from its clone are all that differs, git restores them.
   if (!runtimeOf(program)) {
     const restored = restoreDeleted(program)

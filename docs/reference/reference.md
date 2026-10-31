@@ -2921,7 +2921,7 @@ naima issues close 12 --release 1.1.2
 
 | Job | Every | What it does |
 |---|---|---|
-| `outside-issues` | day | once a day, on the trunk's checkout of a project with a GitHub repository and gh: file each new outside issue, as naima issues file does, telling the owner once; elsewhere, or with neither, nothing |
+| `outside-issues` | day | once a day, on the trunk's checkout of a project with a GitHub repository and gh: file each new outside issue, as naima issues file does, telling the owner once; gh is granted to naima issues and to the session start (naima hello) of a project whose origin is on GitHub, so a tick in another command that cannot start gh tries again later in the day; elsewhere, or without gh or a GitHub repository, nothing |
 
 ## verifier-mcrl2
 
