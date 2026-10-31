@@ -60,6 +60,10 @@ deno run -A naima-tracker/naima/naima.ts init
 git add naima-tracker && git commit -m "Track this project with Naima"
 ```
 
+In a repository with no commit yet, that commit comes first: no branch or worktree can start before the trunk has one. `init` then prints it as its next step,
+`git add` with the tracker folder and the agent files it wrote, and the `Naima-Setup: install` trailer the trunk guard takes; `naima open` refuses with the same
+line until it is made. The project's own files are left out of it, for an item of their own.
+
 `init` writes `naima-tracker/README.md`, `naima-tracker/.gitignore` (which ignores `naima/`) and `naima-tracker/naima-data/naima.json`, locked to the source and
 commit of the clone that ran it ([data discovery and self-init](#data-discovery-and-self-init)). Outside `naima-tracker/` it writes only what makes an agent run
 `naima hello` at the start of every session ([below](#the-agent-harness-entry-point)), and the lines that keep the program out of the host's own tools

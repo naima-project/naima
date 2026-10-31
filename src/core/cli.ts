@@ -25,7 +25,7 @@ import { AGENT_ID, markRules, SUBAGENT_PREAMBLE } from "./subagents.ts"
 import { FORMAT, formatRefusal, isFormat, migrate, MIGRATIONS, type Step } from "./format.ts"
 import { formatsFor, type OpenOptions, openProject, owed } from "./project.ts"
 import { bool, pairs, parse, str } from "./args.ts"
-import { currentBranch, gitOrNull, gitReason, LAND_IT, nativePath, runGit, runGitAsync, setupCommit, toplevel, trunk, worktrees } from "./git.ts"
+import { currentBranch, firstCommit, gitOrNull, gitReason, LAND_IT, nativePath, runGit, runGitAsync, setupCommit, toplevel, trunk, worktrees } from "./git.ts"
 import { githubRepo, remoteVisibility, type Visibility } from "./visibility.ts"
 import {
   clearExposed,
@@ -132,7 +132,7 @@ import { apiFor, FETCHED } from "./plugins.ts"
 import { atSessionStart, goalsAtSessionStart, offersAtSessionStart } from "./base.ts"
 import { installPluginHooks } from "./plugin-hooks.ts"
 import { committedLock as lockOfLastCommit, type SessionConfig, sessionStartGaps, startSessions, unfinishedUpdate } from "./session-start.ts"
-import { adapter, ADAPTERS } from "./adapters/index.ts"
+import { adapter, ADAPTERS, setupPaths } from "./adapters/index.ts"
 import { itemStore } from "./messages.ts"
 import {
   HOUR,
@@ -356,8 +356,20 @@ function sayPluginHooks(ctx: Context, io: IO): void {
   }
 }
 
-/** The command init names as the next step: a type the loaded plugins really let one create. */
+/**
+ * The command init names as the next step: a type the loaded plugins really let one create. In a repository with no
+ * commit yet, the first commit comes before it: no branch, worktree or landing can start until the trunk has one.
+ */
 async function nextStep(place: Place, opts: CliOptions, io: IO): Promise<string> {
+  const first = firstCommit(place.root, posixRelative(place.root, trackerOf(place.data)), setupPaths())
+  const then = await followUp(place, opts, io)
+  return first
+    ? `next: the repository has no commit yet, so commit what Naima wrote first, straight on the trunk: ${first}\nthen: ${then.slice("next: ".length)}`
+    : then
+}
+
+/** The first thing init names once the repository has a commit. */
+async function followUp(place: Place, opts: CliOptions, io: IO): Promise<string> {
   try {
     const ctx = await openProject(place, opts, io)
     const creatable = [...ctx.registry.types.values()].filter((t) => t.creatable !== false)
