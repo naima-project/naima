@@ -290,21 +290,28 @@ export type PrivateData = "scrub" | "keep"
 /** The choices, in the order they are offered. */
 export const PRIVATE_DATA_MODES: readonly PrivateData[] = ["scrub", "keep"]
 
-/** The privacy plugin's option that holds the project's choice; absent, the project has not chosen and scrubs. */
+/** The option that holds the project's choice, declared by the plugin that offers it; absent, the project has not chosen and scrubs. */
 export const PRIVATE_DATA_OPTION = "privateData"
 
-/** The project's choice, read from its configuration: undefined while it has not chosen; refused when it is neither choice. */
-export function privateDataOf(config: { plugins: Record<string, { options?: Record<string, unknown> } | undefined> }): PrivateData | undefined {
-  const value = config.plugins["privacy"]?.options?.[PRIVATE_DATA_OPTION]
+/** The configuration a choice is read from: each plugin's options, by plugin name. */
+type PluginOptionsByName = { plugins: Record<string, { options?: Record<string, unknown> } | undefined> }
+
+/** The name of the loaded plugin that declares the option privateData, if one does: the core names no plugin itself. */
+export const privateDataOwner = (plugins: readonly { name: string; options?: readonly { name: string }[] | undefined }[]): string | undefined =>
+  plugins.find((p) => p.options?.some((o) => o.name === PRIVATE_DATA_OPTION))?.name
+
+/** The project's choice, read from the options of the plugin `owner`: undefined while it has not chosen, or with no owner; refused when it is neither choice. */
+export function privateDataOf(config: PluginOptionsByName, owner: string | undefined): PrivateData | undefined {
+  const value = owner === undefined ? undefined : config.plugins[owner]?.options?.[PRIVATE_DATA_OPTION]
   if (value === undefined) return undefined
   if (!PRIVATE_DATA_MODES.includes(value as PrivateData)) {
-    throw new NaimaError(`privacy: option ${PRIVATE_DATA_OPTION} must be ${PRIVATE_DATA_MODES.join(" or ")}; got ${JSON.stringify(value)}`, "usage")
+    throw new NaimaError(`${owner}: option ${PRIVATE_DATA_OPTION} must be ${PRIVATE_DATA_MODES.join(" or ")}; got ${JSON.stringify(value)}`, "usage")
   }
   return value as PrivateData
 }
 
 /** The reason recorded when a write goes through because the project keeps private data. */
-export const KEEP_REASON = `the project keeps private data in its tracker (privacy option ${PRIVATE_DATA_OPTION}: keep)`
+export const KEEP_REASON = `the project keeps private data in its tracker (option ${PRIVATE_DATA_OPTION}: keep)`
 
 /** The question a refusal carries while the project has not chosen: the agent puts it to the owner once. */
 export const PRIVATE_DATA_QUESTION =
@@ -324,10 +331,10 @@ export function setPrivateDataChosen(value: boolean): void {
  * command gave its own reason.
  */
 export function applyPrivateData(
-  ctx: { config: Parameters<typeof privateDataOf>[0]; allowPrivate?: string | undefined },
+  ctx: { config: PluginOptionsByName; registry: { plugins: Parameters<typeof privateDataOwner>[0] }; allowPrivate?: string | undefined },
   trackerPrivate: boolean,
 ): PrivateData | undefined {
-  const choice = privateDataOf(ctx.config)
+  const choice = privateDataOf(ctx.config, privateDataOwner(ctx.registry.plugins))
   setPrivateDataChosen(choice !== undefined)
   if (choice === "keep" && trackerPrivate && ctx.allowPrivate === undefined) ctx.allowPrivate = KEEP_REASON
   return choice

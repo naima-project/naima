@@ -258,7 +258,7 @@ function privacyCommand(self: string): Command {
       if (rest.length || (mode !== undefined && !PRIVATE_DATA_MODES.includes(mode as PrivateData))) throw usageError(this)
       if (despite !== undefined && mode !== "keep") throw usageError(this)
       if (mode === undefined) {
-        const now = privateDataOf(ctx.config)
+        const now = privateDataOf(ctx.config, self)
         ctx.out(
           now === undefined
             ? "private data: scrub (the default: the project has not chosen — the next refusal asks the owner once)"
@@ -298,7 +298,7 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
   const generated = (Array.isArray(options["generated"]) ? options["generated"].map(String) : GENERATED).map(glob)
   const exceptions: unknown[] = Array.isArray(options["exceptions"]) ? options["exceptions"] : []
   const signing = options["signed"] !== false
-  privateDataOf({ plugins: { privacy: { options } } })
+  privateDataOf({ plugins: { [self]: { options } } }, self)
 
   /** The checklist's path as the project names it: under its program directory. */
   const checklistPath = (ctx: Context): string => posixRelative(ctx.root, join(ctx.program, CHECKLIST)) || CHECKLIST
