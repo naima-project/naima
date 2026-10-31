@@ -18,6 +18,7 @@ import knowledge from "./plugins/knowledge/index.ts"
 import loop from "./plugins/loop/index.ts"
 import longWork from "./plugins/long-work/index.ts"
 import metrics from "./plugins/metrics/index.ts"
+import outsideIssues from "./plugins/outside-issues/index.ts"
 import packAnalyses from "./plugins/pack-analyses/index.ts"
 import packPapers from "./plugins/pack-papers/index.ts"
 import planning from "./plugins/planning/index.ts"
@@ -51,6 +52,7 @@ export const firstParty: readonly FirstParty[] = [
   { name: "verifier", factory: verifier },
   { name: "tools", factory: tools },
   { name: "backup", factory: backup },
+  { name: "outside-issues", factory: outsideIssues },
   { name: "verifier-mcrl2", factory: verifierMcrl2, optIn: true },
   { name: "storm", factory: storm, optIn: true },
   { name: "pack-analyses", factory: packAnalyses, optIn: true },
