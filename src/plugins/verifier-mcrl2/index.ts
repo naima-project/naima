@@ -31,14 +31,16 @@
 //
 // `pbessolve` printing `true` holds, `false` is violated and the evidence is
 // the counterexample; anything else, or a time limit hit, is unknown. A tool
-// that is not there, or that fails, is an error that says which.
+// that is not there, or that fails, is an error that says which; a tool killed
+// by a signal is reported as crashed, with the signal, the tool and the model.
+// lps2lts and pbessolve are started with the stack limit raised (stackRaised).
 //
 // The verifier point belongs to the verifier plugin, and plugins never import
 // each other: the shapes it takes are declared here.
 
 import { spawn } from "node:child_process"
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { constants, tmpdir } from "node:os"
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import {
   ATTACHMENTS,
@@ -76,7 +78,10 @@ import { MCRL2 } from "./tool.ts"
 
 export { MCRL2 } from "./tool.ts"
 
-/** What a run of one program gave: its exit status and output, and whether it was not there or ran out of time. */
+/**
+ * What a run of one program gave: its exit status and output, and whether it was not there, ran out of time, or was
+ * killed by a signal (`signal`, its number, with `signalName` when the platform names it).
+ */
 export interface ToolRun {
   exit: number
   stdout: string
@@ -84,10 +89,50 @@ export interface ToolRun {
   missing?: boolean
   timedOut?: boolean
   error?: string
+  signal?: number
+  signalName?: string
 }
 
-/** Runs one program: the real one starts it; a test replays recorded output. `onStderr` is given its standard error as it comes. */
-export type Runner = (program: string, args: string[], cwd: string, timeoutMs?: number, onStderr?: (chunk: string) => void) => ToolRun | Promise<ToolRun>
+/**
+ * Runs one program: the real one starts it; a test replays recorded output. `onStderr` is given its standard error as
+ * it comes; `raiseStack` asks for the program to be started with the stack limit raised (stackRaised).
+ */
+export type Runner = (
+  program: string,
+  args: string[],
+  cwd: string,
+  timeoutMs?: number,
+  onStderr?: (chunk: string) => void,
+  raiseStack?: boolean,
+) => ToolRun | Promise<ToolRun>
+
+/**
+ * The tools started with the stack limit raised: lps2lts and pbessolve rewrite deep terms recursively (the jitty
+ * rewriter on a model linearised without rewriting, say), and the default stack of 8 MB overflows on them.
+ */
+export const RAISED_STACK: ReadonlySet<string> = new Set(["lps2lts", "pbessolve"])
+
+/** The POSIX shell that raises the stack limit before it becomes the tool; declared in the verifier's `runs`, so the launcher grants it. */
+export const SHELL = "/bin/sh"
+
+/** What the shell prints when the tool it was to become is not there: read back as a missing tool. */
+const NOT_FOUND = "naima-stack: program not found"
+
+/**
+ * The command that starts `program` with the stack limit raised: on POSIX, the shell sets the soft limit to unlimited,
+ * or to the hard limit where unlimited is refused (macOS caps it), then `exec`s the program, which keeps the shell's
+ * process, so a signal that kills the tool is the run's own. On Windows the stack of a program is fixed when it is
+ * linked, not set by its parent, so the program is started as it is.
+ */
+export function stackRaised(program: string, args: string[], platform: string = process.platform): [string, string[]] {
+  if (platform === "win32") return [program, args]
+  const script =
+    `ulimit -s unlimited 2>/dev/null || ulimit -s hard 2>/dev/null; command -v "$1" >/dev/null 2>&1 || { echo "${NOT_FOUND}" >&2; exit 127; }; exec "$@"`
+  return [SHELL, ["-c", script, "sh", program, ...args]]
+}
+
+/** The number of a signal named by Node (`SIGSEGV`), or null when the platform does not know it. */
+const signalNumber = (name: string): number | null => (constants.signals as Record<string, number | undefined>)[name] ?? null
 
 interface VerifyRequest {
   model: string
@@ -125,10 +170,11 @@ interface Verifier {
   equivalences: Record<string, string>
   compare(request: CompareRequest, ctx: Context): Promise<CompareResult>
   preserves(request: { property: string; options: Record<string, unknown>; equivalence: string }, ctx: Context): string | null
+  identityOptions(options: Record<string, unknown>): Record<string, unknown>
 }
 
 /** The program, started for real: colour off, no shell; its standard error handed to `onStderr` as it comes, so a long step reports while it runs. */
-export const realRun: Runner = (program, args, cwd, timeoutMs, onStderr) =>
+export const realRun: Runner = (program, args, cwd, timeoutMs, onStderr, raiseStack) =>
   new Promise<ToolRun>((done) => {
     let settled = false
     const finish = (r: ToolRun): void => {
@@ -140,7 +186,8 @@ export const realRun: Runner = (program, args, cwd, timeoutMs, onStderr) =>
     let timer: ReturnType<typeof setTimeout> | undefined
     let child: ReturnType<typeof spawn>
     try {
-      child = spawn(program, args, { cwd, env: { ...process.env, NO_COLOR: "1" }, stdio: ["ignore", "pipe", "pipe"], windowsHide: true })
+      const [command, argv] = raiseStack ? stackRaised(program, args) : [program, args]
+      child = spawn(command, argv, { cwd, env: { ...process.env, NO_COLOR: "1" }, stdio: ["ignore", "pipe", "pipe"], windowsHide: true })
     } catch (e) {
       // Deno refuses a program the launcher did not grant by throwing, not by an error on the result.
       finish({ exit: -1, stdout: "", stderr: "", error: message(e) })
@@ -166,9 +213,13 @@ export const realRun: Runner = (program, args, cwd, timeoutMs, onStderr) =>
       if (e.code === "ENOENT") finish({ exit: -1, stdout: "", stderr: "", missing: true })
       else finish({ exit: -1, stdout, stderr, error: message(e) })
     })
-    child.once("close", (code: number | null) => {
+    child.once("close", (code: number | null, signal: string | null) => {
       if (timedOut) finish({ exit: -1, stdout, stderr, timedOut: true })
-      else finish({ exit: code ?? -1, stdout, stderr })
+      else if (raiseStack && code === 127 && stderr.includes(NOT_FOUND)) finish({ exit: -1, stdout: "", stderr: "", missing: true })
+      else if (signal) {
+        const n = signalNumber(signal)
+        finish({ exit: -1, stdout, stderr, signal: n ?? -1, signalName: signal })
+      } else finish({ exit: code ?? -1, stdout, stderr })
     })
   })
 
@@ -276,7 +327,14 @@ export const EQUIVALENCES: Record<string, string> = {
  * makes another LPS, so `--no-rewrite` is here; `--threads` and `--cached` change how fast lps2lts explores,
  * never the LTS it writes, so they are not.
  */
-export const recipeOf = (pipeline: Pipeline): LtsRecord["recipe"] => ({ mcrl22lps: pipeline.noRewrite ? ["--no-rewrite"] : [], lps2lts: [] })
+export const recipeOf = (pipeline: Pipeline): LtsRecord["recipe"] => ({ mcrl22lps: lineariseArgs(pipeline), lps2lts: [] })
+
+/** The arguments of mcrl22lps beyond its files: `--no-rewrite` when the property chose to linearise without rewriting. */
+export const lineariseArgs = (pipeline: Pipeline): string[] => (pipeline.linearise === "no-rewrite" ? ["--no-rewrite"] : [])
+
+/** How mcrl22lps may linearise: rewriting the data as it goes, its default, or not (`--no-rewrite`). */
+export const LINEARISE = ["rewrite", "no-rewrite"] as const
+export type Linearise = (typeof LINEARISE)[number]
 
 /**
  * The options a property's `verifierOptions` may hold, each with what it does: an allow-list, never free-form flags,
@@ -287,18 +345,20 @@ export const VERIFIER_OPTIONS: Record<string, string> = {
   timeoutSeconds: "the time limit of each step, in seconds; reached, the run is unknown",
   threads: "the threads lps2lts explores with (--threads), on the LTS route; default 1",
   maxStates: "the most states lps2lts may explore (--max), on the LTS route; reached, the run is unknown",
-  noRewrite: "linearise without rewriting (mcrl22lps --no-rewrite), on every route; default true",
+  linearise:
+    'how mcrl22lps linearises, on every route: "rewrite" (the default, mcrl22lps as it is) or "no-rewrite" (mcrl22lps --no-rewrite, faster on some models, a stack overflow or a stall on others)',
+  noRewrite: 'the earlier form of linearise, still read: true is "no-rewrite", false is "rewrite"',
   cached: "lps2lts caches its enumerations (--cached), on the LTS route; default true",
 }
 
 /** How the tools run beyond the route: the verdict-preserving options of the allow-list. */
 export interface Pipeline {
-  noRewrite: boolean
+  linearise: Linearise
   cached: boolean
 }
 
 /** The defaults of a run with no options, also what `naima equivalent` uses. */
-export const DEFAULT_PIPELINE: Pipeline = { noRewrite: true, cached: true }
+export const DEFAULT_PIPELINE: Pipeline = { linearise: "rewrite", cached: true }
 
 /** The pipeline options of `options`, or why one is not in the allow-list or not of its kind. */
 export function pipelineOf(options: Record<string, unknown>): Pipeline | { wrong: string } {
@@ -308,15 +368,40 @@ export function pipelineOf(options: Record<string, unknown>): Pipeline | { wrong
       wrong: `verifierOptions ${unknown.map((k) => JSON.stringify(k)).join(", ")}: the mcrl2 verifier takes only ${Object.keys(VERIFIER_OPTIONS).join(", ")}`,
     }
   }
-  const flag = (name: "noRewrite" | "cached"): boolean | { wrong: string } => {
-    const v = options[name] ?? DEFAULT_PIPELINE[name]
+  const flag = (name: "noRewrite" | "cached", fallback: boolean): boolean | { wrong: string } => {
+    const v = options[name] ?? fallback
     return typeof v === "boolean" ? v : { wrong: `verifierOptions.${name} must be true or false, not ${JSON.stringify(v)}` }
   }
-  const noRewrite = flag("noRewrite")
-  if (typeof noRewrite === "object") return noRewrite
-  const cached = flag("cached")
+  const given = options["linearise"]
+  if (given !== undefined && !LINEARISE.includes(given as Linearise)) {
+    return { wrong: `verifierOptions.linearise must be ${LINEARISE.map((x) => JSON.stringify(x)).join(" or ")}, not ${JSON.stringify(given)}` }
+  }
+  let linearise: Linearise = (given as Linearise | undefined) ?? DEFAULT_PIPELINE.linearise
+  if (options["noRewrite"] !== undefined) {
+    const old = flag("noRewrite", false)
+    if (typeof old === "object") return old
+    const said: Linearise = old ? "no-rewrite" : "rewrite"
+    if (given !== undefined && given !== said) {
+      return { wrong: `verifierOptions.noRewrite ${old} says "${said}" and verifierOptions.linearise says ${JSON.stringify(given)}: keep linearise alone` }
+    }
+    linearise = said
+  }
+  const cached = flag("cached", DEFAULT_PIPELINE.cached)
   if (typeof cached === "object") return cached
-  return { noRewrite, cached }
+  return { linearise, cached }
+}
+
+/**
+ * The options as they identify a run, for the run cache: `linearise` made explicit when it is not the default, and the
+ * earlier `noRewrite` read as it. `{}` and `{ linearise: "rewrite" }` are one identity, `{ linearise: "no-rewrite" }`
+ * another, so a run made under one way of linearising is never reused for the other. Options that are wrong are kept
+ * as they are: the run is an error that says why.
+ */
+export function identityOptions(options: Record<string, unknown>): Record<string, unknown> {
+  const pipeline = pipelineOf(options)
+  if ("wrong" in pipeline) return options
+  const { linearise: _l, noRewrite: _n, ...rest } = options
+  return pipeline.linearise === DEFAULT_PIPELINE.linearise ? rest : { ...rest, linearise: pipeline.linearise }
 }
 
 /** The default size above which a summand's condition is reported, in operator and variable occurrences (lps-lint.ts). */
@@ -394,6 +479,14 @@ function threadsOf(options: Record<string, unknown>): number | string {
   return typeof t === "number" && Number.isInteger(t) && t > 0 ? t : `verifierOptions.threads must be a positive integer, not ${JSON.stringify(t)}`
 }
 
+/** What a run killed by a signal says: the tool crashed, with the signal, on which model. */
+export const crashed = (tool: string, model: string, r: ToolRun): string =>
+  `${tool} crashed (signal ${r.signal !== undefined && r.signal >= 0 ? r.signal : "?"}${r.signalName ? `, ${r.signalName}` : ""}) on ${model}${
+    r.signalName === "SIGSEGV" || r.signal === 11
+      ? ': a segmentation fault, often a stack overflow; on a model linearised with no-rewrite, try verifierOptions.linearise "rewrite"'
+      : ""
+  }`
+
 const shown = (r: ToolRun): string => [r.stdout.trim(), r.stderr.trim()].filter(Boolean).join("\n")
 
 /** The last word `pbessolve` printed: its answer. */
@@ -452,7 +545,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
    * Each step is a stage of `progress`; a counting tool is started with `--verbose`, its counting lines read as the
    * stage's count and left out of the log (specs/progress-long-work-says-how-far, §6).
    */
-  function steps(seconds: number | undefined, cwd: string, progress: Progress, extra: readonly string[] = []) {
+  function steps(seconds: number | undefined, cwd: string, progress: Progress, extra: readonly string[] = [], model = "the model") {
     const log: string[] = []
     const used = new Set<Tool>()
     /** One step: its output kept in the log; a failure is the result to return. */
@@ -479,7 +572,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
       }
       sayAbsent()
       const started = Date.now()
-      const raw = await run(path(tool), args, at, seconds ? seconds * 1000 : undefined, onStderr)
+      const raw = await run(path(tool), args, at, seconds ? seconds * 1000 : undefined, onStderr, RAISED_STACK.has(tool))
       const took = (Date.now() - started) / 1000
       // A runner that hands the output only at the end: the last counting line in it is the count.
       if (counting && last === undefined) {
@@ -491,6 +584,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
       log.push(`$ ${tool} ${args.join(" ")}`, ...(shown(r) ? [shown(r)] : []))
       if (r.timedOut) return { stop: { verdict: "unknown", output: [...log, `${tool} did not finish in ${seconds} s`].join("\n") } }
       if (r.error) return { stop: { verdict: "error", output: [...log, `${tool} could not start: ${r.error}`].join("\n") } }
+      if (r.signal !== undefined) return { stop: { verdict: "error", output: [...log, crashed(tool, model, r)].join("\n") } }
       if (r.exit !== 0) return { stop: { verdict: "error", output: [...log, `${tool} exited ${r.exit}`].join("\n") } }
       return { out: r, seconds: took, ...(last !== undefined ? { count: last } : {}) }
     }
@@ -528,9 +622,6 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
     }
   }
 
-  /** The arguments of mcrl22lps beyond its files: `--no-rewrite` unless the item turned it off. */
-  const linearise = (pipeline: Pipeline): string[] => (pipeline.noRewrite ? ["--no-rewrite"] : [])
-
   /** The standard route: the formula against the linearised model. */
   async function lpsRoute(
     model: string,
@@ -540,14 +631,15 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
     progress: Progress,
     extra: readonly string[] = [],
     pipeline: Pipeline = DEFAULT_PIPELINE,
+    name?: string,
   ): Promise<Outcome> {
-    const s = steps(seconds, dir, progress, extra)
-    const details: Record<string, unknown> = { route: "lps", options: { mcrl22lps: linearise(pipeline) } }
+    const s = steps(seconds, dir, progress, extra, name)
+    const details: Record<string, unknown> = { route: "lps", linearise: pipeline.linearise, options: { mcrl22lps: lineariseArgs(pipeline) } }
     const done = async (r: VerifyResult): Promise<Outcome> => ({ ...r, details: { ...details, tools: await s.tools() } })
     const lps = join(dir, "model.lps")
     const pbes = join(dir, "model.pbes")
     const evidence = join(dir, "evidence.lps")
-    const linearised = await s.step("mcrl22lps", [...linearise(pipeline), model, lps])
+    const linearised = await s.step("mcrl22lps", [...lineariseArgs(pipeline), model, lps])
     if ("stop" in linearised) return done(linearised.stop)
     const lint = await lintOf(s, lps, dir)
     if (lint) details["lint"] = lint
@@ -633,6 +725,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
       const rate = rateOf("lps2lts", "states", read.states, exploreSeconds)
       s.log.push(`lps2lts explored ${read.states} states in ${exploreSeconds} s, ${rate.perSecond} states per second`)
       const exploration: Record<string, unknown> = {
+        linearise: explore.pipeline.linearise,
         mcrl22lps: recipe["mcrl22lps"],
         lps2lts: args,
         threads: explore.threads,
@@ -675,9 +768,10 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
     explore: Explore,
     progress: Progress,
     extra: readonly string[] = [],
+    name?: string,
   ): Promise<Outcome> {
-    const s = steps(seconds, dir, progress, extra)
-    const details: Record<string, unknown> = { route: "lts" }
+    const s = steps(seconds, dir, progress, extra, name)
+    const details: Record<string, unknown> = { route: "lts", linearise: explore.pipeline.linearise }
     const done = async (r: VerifyResult): Promise<Outcome> => ({ ...r, details: { ...details, tools: await s.tools() } })
 
     let chosen = reductionFor(readFileSync(formula, "utf8"))
@@ -797,13 +891,15 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
     if ("wrong" in pipeline) return { verdict: "error", output: pipeline.wrong }
     const explore: Explore = { threads, maxStates, pipeline }
     const seconds = timeoutOf(options)
+    // The model as a crash names it: its path in the project, never the machine's.
+    const name = relative(ctx.root, model).split(sep).join("/")
     const dir = mkdtempSync(join(workBase(ctx.program), "run-"))
     try {
       let formula = formulaFile(property, ctx.root)
       if (formula && !existsSync(formula)) return { verdict: "error", output: `the formula file ${property.trim()} does not exist` }
       if (!formula) writeFileSync(formula = join(dir, "property.mcf"), property.trim() + "\n")
-      if (chosen.route === "lps") return await lpsRoute(model, formula, dir, seconds, progress, toolArgs, pipeline)
-      if (chosen.route === "lts") return await ltsRoute(model, formula, dir, ctx, seconds, explore, progress, toolArgs)
+      if (chosen.route === "lps") return await lpsRoute(model, formula, dir, seconds, progress, toolArgs, pipeline, name)
+      if (chosen.route === "lts") return await ltsRoute(model, formula, dir, ctx, seconds, explore, progress, toolArgs, name)
       const sub = (name: string): string => {
         const d = join(dir, name)
         mkdirSync(d)
@@ -817,6 +913,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
         { ...progress, stage: (n, t, u, e) => progress.stage(`lps: ${n}`, t, u, e) },
         toolArgs,
         pipeline,
+        name,
       )
       const lts = await ltsRoute(
         model,
@@ -827,6 +924,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
         explore,
         { ...progress, stage: (n, t, u, e) => progress.stage(`lts: ${n}`, t, u, e) },
         toolArgs,
+        name,
       )
       return crossCheck(lps, lts)
     } finally {
@@ -841,7 +939,13 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
     }
     const dir = mkdtempSync(join(workBase(ctx.program), "compare-"))
     let phase = "before"
-    const s = steps(undefined, dir, { ...progress, stage: (n, t, u, e) => progress.stage(`${phase}: ${n}`, t, u, e) })
+    const s = steps(
+      undefined,
+      dir,
+      { ...progress, stage: (n, t, u, e) => progress.stage(`${phase}: ${n}`, t, u, e) },
+      [],
+      relative(ctx.root, after).split(sep).join("/"),
+    )
     const failed = async (r: VerifyResult, details: Record<string, unknown>): Promise<CompareResult> => ({
       verdict: "error",
       output: r.output,
@@ -891,8 +995,10 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
     id: "mcrl2",
     says:
       "an mCRL2 specification against a modal mu-calculus formula, inline or an .mcf file: by the standard route (mcrl22lps, lps2pbes, pbessolve), by the LTS route (the state space once per model, reduced per formula by the coarsest equivalence that preserves it, lts2pbes, pbessolve), or both, cross-checked; the evidence is the counterexample",
-    runs: TOOLS.map(path),
+    // On POSIX the shell that raises the stack limit is started too (stackRaised), so the launcher must grant it.
+    runs: [...TOOLS.map(path), ...(process.platform === "win32" ? [] : [SHELL])],
     verify: (request, ctx) => check(request, ctx),
+    identityOptions,
     toolArgs: TOOL_ARGS,
     equivalences: EQUIVALENCES,
     compare,
@@ -973,9 +1079,9 @@ export function mcrl2Plugin(options: Record<string, unknown> = {}, run: Runner =
       "A property chooses its route in `verifierOptions.route`. `lps`, the default, is the standard route: `mcrl22lps`, `lps2pbes --counter-example`, and `pbessolve` with an evidence file: `true` holds; `false` is violated, and the evidence, printed by `lps2lts` as an `.aut` labelled transition system, is the counterexample; any other answer, or `verifierOptions.timeoutSeconds` reached by a step, is unknown. " +
       "`lts`, the LTS route, is for a model whose state space is small but whose data makes the standard route slow. `mcrl22lps` and `lps2lts` (with `--threads` from `verifierOptions.threads`) make the LTS once per model version, kept in the run work folder under a key over the model's contents, the toolset's version and the recipe, and shared by every property of that model. `verifierOptions.maxStates` caps the states `lps2lts` may explore (`--max`): a state space larger than the cap makes the run unknown, its output beginning `state cap reached:`, and the LTS cut short is not kept; on the standard route the option is an error, since that route explores with `pbessolve`. Each formula is then reduced only by an equivalence that preserves and reflects it, the coarsest of three: `branching-bisim` for a formula of the fragment the branching equivalences preserve — every visible step right after a star over an action formula that includes tau, no single step that includes tau, fixpoints only as the four inevitability patterns — when it has no fixpoint and no deadlock through a star; `dpbranching-bisim` when it has one of those, which see divergence; `bisim`, strong bisimilarity, for every other formula. With a branching equivalence, `ltsconvert` first hides every action the formula does not mention, unless a label joins such an action to another, in which case the formula takes `bisim` and nothing is hidden. The output says which equivalence was used and why; the reduced LTS is kept beside the LTS, one per equivalence and set of hidden actions, for every formula that needs the same. On the reduced LTS, `lts2pbes --counter-example` and one `pbessolve` with an evidence file decide; on false, the evidence, printed by `ltsconvert` as an `.aut` labelled transition system, is the counterexample, over the reduced LTS, where the hidden actions appear as tau. " +
       "`cross-check` runs both routes and gives a verdict only when they agree; a disagreement is an error whose output begins `the routes disagree:`. Each run records in its `details` the route, the version of every tool it started, and for the LTS route the LTS's key, reuse and size, the mentioned and hidden actions, the equivalence it reduced by and why, the reduced size and whether it was reused, and on false that the counterexample comes from the reduced LTS. While a step runs, every line it prints is the run's progress: `lps2lts` its states, level and transitions, `pbessolve` its BES equations, `ltsconvert` and `lts2pbes`, started with `--verbose`, their stages; a counting step's total is estimated from the count it ended on in the previous run of the same property, model and options. " +
-      "`verifierOptions` is an allow-list: `route`, `timeoutSeconds`, `threads`, `maxStates`, `noRewrite` and `cached`, every one leaving the verdict as it is; any other key is an error that names the ones it takes. `noRewrite`, true by default, linearises with `mcrl22lps --no-rewrite` on every route, so the verdict never depends on the route; it makes another LPS, so it is part of the LTS's cache key. `cached`, true by default, explores with `lps2lts --cached`; `threads` stays on `lps2lts` alone. `lps2lts` rewrites with `jitty`, mCRL2's default rewriter. `--threads` and `--cached` change how fast the LTS is made, never the LTS, so they are no part of the key. Every run records the options it used and its rate: on the LTS route `details.lts.exploration` (the `mcrl22lps` and `lps2lts` arguments) and `details.rate`, the states `lps2lts` explored per second (`reused: true` when the LTS came from the cache); on the standard route `details.rate`, the BES equations `pbessolve` generated per second. " +
+      '`verifierOptions` is an allow-list: `route`, `timeoutSeconds`, `threads`, `maxStates`, `linearise`, `noRewrite` and `cached`, every one leaving the verdict as it is; any other key is an error that names the ones it takes. `linearise`, `"rewrite"` by default, is how `mcrl22lps` linearises on every route, so the verdict never depends on the route: `"no-rewrite"` adds `--no-rewrite`, faster on some models and a stack overflow or a stall of `lps2lts` on others, so it is chosen per model. It makes another LPS, so it is part of the LTS\'s cache key, and it is part of a run\'s identity (`identityOptions`): a run made under one choice is never reused for the other. `noRewrite`, the earlier boolean form, is still read: true is `"no-rewrite"`, false `"rewrite"`; given with a `linearise` that says otherwise, it is an error. `cached`, true by default, explores with `lps2lts --cached`; `threads` stays on `lps2lts` alone. `lps2lts` rewrites with `jitty`, mCRL2\'s default rewriter. `--threads` and `--cached` change how fast the LTS is made, never the LTS, so they are no part of the key. On POSIX, `lps2lts` and `pbessolve` are started through `/bin/sh` with the stack limit raised to unlimited, or to the hard limit where unlimited is refused; on Windows a program\'s stack is fixed when it is linked, so they start as they are. Every run records `details.linearise` and the options it used and its rate: on the LTS route `details.lts.exploration` (the `mcrl22lps` and `lps2lts` arguments) and `details.rate`, the states `lps2lts` explored per second (`reused: true` when the LTS came from the cache); on the standard route `details.rate`, the BES equations `pbessolve` generated per second. ' +
       "After linearising, `lpspp --format=internal` prints the LPS and each summand's condition is measured in operator and variable occurrences; the summands over the plugin option `summandConditionLimit` (10000 by default, 0 turns it off) are named in the run's output, in a line beginning `lint:`, and in `details.lint`, and the check `mcrl2-summand-conditions` notes each model whose last run found some. " +
-      "The tools are taken from `bin` when it is given and exists on this machine, otherwise from the mCRL2 202607.0 that `naima tools install mcrl2` installed on this machine, otherwise from PATH; a `bin` that does not exist on this machine, as when a shared `naima.json` names another machine's path, is said once and passed over. The plugin declares that tool, so `naima tools` reports it. A tool that is not there is an error run whose output begins `tool missing:`; a tool that fails is an error with its output. The version recorded is the first line of `mcrl22lps --version`. " +
+      "The tools are taken from `bin` when it is given and exists on this machine, otherwise from the mCRL2 202607.0 that `naima tools install mcrl2` installed on this machine, otherwise from PATH; a `bin` that does not exist on this machine, as when a shared `naima.json` names another machine's path, is said once and passed over. The plugin declares that tool, so `naima tools` reports it. A tool that is not there is an error run whose output begins `tool missing:`; a tool that fails is an error with its output; a tool killed by a signal is an error whose output ends `<tool> crashed (signal <n>, <name>) on <model>`, the model by its path in the project. The version recorded is the first line of `mcrl22lps --version`. " +
       "For `naima equivalent`, it compares two versions of a model modulo `bisim` (strong bisimilarity, the default, which preserves every formula) or `dpbranching-bisim` (divergence-preserving branching bisimilarity, which preserves the formulas the LTS route accepts): `mcrl22lps`, `lps2lts` and `ltsinfo` for each version, the new one through the LTS cache, then `ltscompare --counter-example`; on false, the distinguishing formula it writes is what tells them apart.",
     options: [
       {
