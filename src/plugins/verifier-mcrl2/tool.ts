@@ -17,7 +17,7 @@ export const MCRL2 = {
   homepage: "https://www.mcrl2.org",
   source: "https://github.com/mCRL2org/mCRL2",
   authors: ["the mCRL2 team at Eindhoven University of Technology"],
-  programs: ["mcrl22lps", "lps2pbes", "pbessolve", "lps2lts", "ltsinfo", "ltsconvert", "lts2pbes", "ltscompare"],
+  programs: ["mcrl22lps", "lps2pbes", "pbessolve", "lps2lts", "ltsinfo", "ltsconvert", "lts2pbes", "ltscompare", "lpspp"],
   verify: { program: "mcrl22lps", args: ["--version"], expect: "202607.0" },
   platforms: {
     "darwin-arm64": {
