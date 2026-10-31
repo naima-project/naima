@@ -8,13 +8,16 @@ copy in `naima-tracker/naima/`, so it can change without a Naima update. If it c
 
 ## Before sending anything
 
+- **Only a real problem.** An agent reports only a defect of Naima it has reproduced, or a capability Naima lacks that blocks the project's work. A cosmetic
+  issue, a guess, a failure seen once and not again, or anything the agent cannot reproduce is never reported: it is noted in the project's own tracker instead,
+  as is anything the owner does not want sent ([the rule](guide/rules.md#report-a-problem-in-naima-upstream-only-when-it-is-real)).
 - **The owner says yes first.** An agent drafts the issue or the pull request, shows the owner the exact text, and sends it only after the owner agrees. Sending
   it publishes it.
 - **Redact it.** Nothing from the owner's chat, and no machine name, IP address, home-directory path, user name, secret or private project detail, as in
   [the rules](guide/rules.md#no-machine-names-or-private-infrastructure-in-a-repository). Never paste a tracker item, a session note or an attachment of a
   private project.
 - **Search first.** Look at the open [issues](https://github.com/naima-project/naima/issues) and [pull requests](https://github.com/naima-project/naima/pulls);
-  comment on an existing one instead of opening a second.
+  comment on an existing one instead of opening a second. One issue per problem.
 
 ## Reporting a problem
 
