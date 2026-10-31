@@ -274,9 +274,10 @@ flag that could change a verdict never reaches the tools. Three of them make lar
 - `cached` (true unless set to false) generates the state space with `lps2lts --cached`, which remembers what it has already enumerated.
 - `rewriter` is `auto` by default, or `jitty` or `jittyc`. `jittyc` compiles the model's data rewriting to C++ before generating the state space. On a large
   model that is many times faster, but the compilation takes minutes. With `auto`, Naima uses `jittyc` when the last generation with `jitty` of the same model
-  on this machine took longer than the last compilation it measured there (four minutes are assumed until one has been measured). The compiled code can't be
-  kept from one run to the next, because mCRL2 writes memory addresses of the running program into it, so every run compiles again. The Windows build of mCRL2
-  has no `jittyc`, and it also needs a C++ compiler on the machine; without either, the run uses `jitty` and prints why.
+  on this machine took longer than the last compilation it measured there (four minutes are assumed until one has been measured). A generation stopped by
+  `timeoutSeconds` or `maxStates` counts for the time it ran, so a model that never finishes with `jitty` gets `jittyc` the next time. The compiled code can't
+  be kept from one run to the next, because mCRL2 writes memory addresses of the running program into it, so every run compiles again. The Windows build of
+  mCRL2 has no `jittyc`, and it also needs a C++ compiler on the machine; without either, the run uses `jitty` and prints why.
 
 The run record keeps the options that were used and the speed. On the LTS route, `details.lts.exploration` gives the arguments of `mcrl22lps` and `lps2lts`, the
 rewriter with the reason it was chosen, and the compilation time, and `details.rate` gives the states generated per second, compilation left out. On the

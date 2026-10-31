@@ -30,7 +30,7 @@ export const COMPILE_ESTIMATE_SECONDS = 240
 
 /** What the work folder keeps of one model's explorations on this host. */
 export interface Timings {
-  /** The last exploration with jitty: its seconds and states. */
+  /** The last exploration with jitty: its seconds and states; states 0 when it was cut short, its seconds then a lower bound. */
   jitty?: { exploreSeconds: number; states: number; at: string }
   /** The last exploration with jittyc, its compile time apart. */
   jittyc?: { exploreSeconds: number; states: number; at: string }
