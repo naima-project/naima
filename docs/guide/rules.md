@@ -414,10 +414,12 @@ checked against. It does not make a write perfect, and the private-infrastructur
 **Enforced by** the write hook `signed-writes` of the `privacy` plugin, for `naima new`, `describe`, `note`, `set` of a free-text field (the title, or a text
 field with no list of values), `pass`, `event` and `attach`. Each of them refuses the write unless `--revised` names the checklist, as in
 `naima note export-drops "..." --revised naima-tracker/naima/docs/agents/NOLEAKS.md`, and the file it names is byte for byte the one the running program ships.
-The refusal names the checklist's path. A signed write records the checklist's hash, who signed (git's `user.name`) and the day: in the item's field `revised`,
-in the front matter of a session note or an event, and in an attachment's record. Statuses, enums, dates, links, claims, the fields Naima fills and the records
-it generates need no signature. A project can turn the requirement off with the plugin's option `signed: false`
-([configure the project](configure-the-project.md)). Reading the text against the checklist, and who writes the owner's words, are **convention**.
+The refusal names the checklist's path. The first unsigned write in a worktree is not refused: the checklist is printed to the writer and the write goes on, its
+signature marked `shown`, and the worktree's own git directory remembers it, so every later unsigned write there is refused until the checklist changes. A
+signed write records the checklist's hash, who signed (git's `user.name`) and the day: in the item's field `revised`, in the front matter of a session note or
+an event, and in an attachment's record. Statuses, enums, dates, links, claims, the fields Naima fills and the records it generates need no signature. A project
+can turn the requirement off with the plugin's option `signed: false` ([configure the project](configure-the-project.md)). Reading the text against the
+checklist, and who writes the owner's words, are **convention**.
 
 ### Git is the agent's job, done safely
 

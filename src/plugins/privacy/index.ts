@@ -4,10 +4,12 @@
 // a secret; `naima check` flags an attachment a branch adds with no such
 // record, and any secret in the project's files or attachments. Every write of
 // free text or a file is signed against the no-leaks checklist the program
-// ships (docs/agents/NOLEAKS.md): `--revised <its path>`, or it is refused.
+// ships (docs/agents/NOLEAKS.md): `--revised <its path>`, or it is refused —
+// except a worktree's first unsigned write, which prints the checklist and
+// goes on, signed as shown (develop/models/small-fix/checklist.mcrl2).
 
 import { createHash } from "node:crypto"
-import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs"
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { basename, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
@@ -149,7 +151,12 @@ export interface Signature {
   checklist: string
   by?: string
   on: string
+  /** The write was the worktree's first unsigned one: the checklist was shown to the writer rather than named with --revised. */
+  shown?: true
 }
+
+/** The mark, in a worktree's own git directory, that its first unsigned write was let through with the checklist shown. */
+export const SHOWN_MARK = "naima-checklist-shown"
 
 const hashOf = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex").slice(0, 16)
 
@@ -158,7 +165,7 @@ const SIGNED: FieldDef = {
   kind: "object",
   filled: true,
   says:
-    "the last no-leaks signature on the item's free text, which naima fills on a signed write: { checklist: the first 16 hex digits of the checklist's SHA-256, by: who, when git says, on: the day }; git's history holds the earlier ones",
+    "the last no-leaks signature on the item's free text, which naima fills on a signed write: { checklist: the first 16 hex digits of the checklist's SHA-256, by: who, when git says, on: the day, shown: true when the write was the worktree's first unsigned one and the checklist was shown instead }; git's history holds the earlier ones",
 }
 
 /** Fields that hold free text: the title, a string field with no list of values, and any string field no plugin declares. */
@@ -308,6 +315,8 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
     const path = checklistPath(ctx)
     const how = `read ${path}, check the text against every point of it, and run the command again with --revised ${path}`
     if (ctx.revised === undefined) {
+      const shown = showOnce(ctx, path)
+      if (shown) return shown
       return `nothing written: ${what} is free text, which enters the tracker only signed against the no-leaks checklist — ${how}`
     }
     let given: Uint8Array
@@ -324,10 +333,30 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
     return { checklist: shipped, ...(by ? { by } : {}), on: today(ctx) }
   }
 
+  /**
+   * A worktree's first unsigned write: the checklist printed and a signature marked shown, the worktree's git directory
+   * remembering it for the checklist's version; null for every later one, and outside git, where nothing can remember.
+   */
+  function showOnce(ctx: Context, path: string): Signature | null {
+    const dir = isGitRepo(ctx.root) ? gitOrNull(ctx.root, "rev-parse", "--absolute-git-dir")?.trim() : undefined
+    if (!dir) return null
+    const bytes = readFileSync(SHIPPED)
+    const shipped = hashOf(bytes)
+    const mark = join(dir, SHOWN_MARK)
+    if (existsSync(mark) && readFileSync(mark, "utf8").trim() === shipped) return null
+    writeFileSync(mark, `${shipped}\n`)
+    ctx.out(
+      `first write of free text in this worktree: the no-leaks checklist (${path}) is shown once and the write goes on — from now on, check each one against it and sign it with --revised ${path}`,
+    )
+    for (const line of new TextDecoder().decode(bytes).trimEnd().split("\n")) ctx.out(`  ${line}`)
+    const by = gitOrNull(ctx.root, "config", "user.name")?.trim()
+    return { checklist: shipped, ...(by ? { by } : {}), on: today(ctx), shown: true }
+  }
+
   const signedWrites: WriteHook = {
     name: "signed-writes",
     says:
-      "a write of free text the writer authored (naima new, describe, note, a free-text field with naima set) is refused unless --revised names the no-leaks checklist the program ships, byte for byte; the signature (the checklist's hash, who, the day) goes in the item's field revised. Session notes, events and attachments are held the same way and carry it in their own record. Statuses, links, claims and what Naima fills or generates need none; the option signed: false turns it off",
+      "a write of free text the writer authored (naima new, describe, note, a free-text field with naima set) is refused unless --revised names the no-leaks checklist the program ships, byte for byte — except the first unsigned one in a worktree, which prints the checklist and goes on, signed as shown; the signature (the checklist's hash, who, the day) goes in the item's field revised. Session notes, events and attachments are held the same way and carry it in their own record. Statuses, links, claims and what Naima fills or generates need none; the option signed: false turns it off",
     beforeWrite(write, ctx) {
       if (!signing || !write.authored || !freeText(write, ctx)) return
       const s = sign(ctx, `the text of ${label(write.item)}`)
@@ -546,6 +575,7 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
       "The check `secrets` reads every project file and every attachment for six shapes of secret: a private key with its body (a header alone is not one), and AWS, GitHub, Slack, API-secret and Google keys; `naima attach` refuses a file holding one. " +
       "A file that must keep one is an exception in the plugin's options, with a reason and the item that tracks it; an exception the trunk's configuration does not hold is refused, so the list only shrinks. " +
       "Every write of free text or a file — a title, a description, a note, a free-text field, a session note, an event, an attachment — is signed against the no-leaks checklist the program ships, `docs/agents/NOLEAKS.md`: the writer passes its path with `--revised`, and the write hook `signed-writes` compares the file with the program's own copy, byte for byte, and refuses the write without it or with any other file. " +
+      "The first unsigned write in a worktree is not refused: the checklist is printed to the writer and the write goes on, its signature marked `shown`; the worktree's own git directory remembers it (`naima-checklist-shown`, the checklist's hash), so every later unsigned write there is refused, until the checklist changes. " +
       "The signature, the checklist's hash with who signed and the day, goes in the item's field `revised`, in a session note's or an event's front matter, and in an attachment's record, so every write shows which version of the checklist it was checked against. " +
       "Statuses, enums, dates, links, claims, the fields Naima fills and the records it generates need no signature. The option `signed: false` turns the requirement off for a project. " +
       "Private data (machine names, addresses, home paths, user names) is refused by default; whether the project scrubs it is the owner's choice, asked once: the first refusals carry the question, and the answer is the option `privateData`, set with `naima privacy scrub` or `naima privacy keep`. " +

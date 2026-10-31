@@ -76,7 +76,9 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`claim`](#naima-claim) | coordination | record that this branch is working on items (writes one file on this branch) | a claim belongs to a branch, never to a detached HEAD nor to the trunk, and is one file on that branch; it never locks anything: several branches may claim one item |
 | [`release`](#naima-release) | coordination | drop this branch's claim on items; the last one removes the file, unless the branch is being prepared (claim --preparing) | only this branch's own claim is dropped, and only on items it holds; while the branch is being prepared, the emptied file is kept |
 | [`claims`](#naima-claims) | coordination | who holds what, recombined from every branch, with what each branch's worker is doing now | nothing: it only reads; a claim whose last sign of life (its step, or its branch's last commit) is more than silentAfter minutes old (15 here) is flagged possibly stuck; a stale claim (branch gone or merged into the trunk, or every item closed) is listed apart, at the end, and released by naima prune --write |
+| [`recover`](#naima-recover) | coordination | brief the worker that resumes a dead or stuck one: its claim and last step, the commits the trunk lacks, what is not committed in its worktree, and the last entries of its agent transcript | nothing: it only reads; the transcript, found by the agent tool's reader, is printed only to continue the work and never written to a file, since the owner's chat stays private |
 | [`land`](#naima-land) | coordination | land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor | runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one whose commits carry private infrastructure in their messages — a home-directory path, a machine or user name — in the project or in a submodule whose pointer it moves (commits no remote-tracking branch holds), unless --allow-private gives the reason; one that names no item (unless --tracker-only gives the reason and the branch changes only tracker data, or --meets names a requirement it meets) or an item open and not fixed; refuses --meets for an item that is not a requirement, one with no item that verifies it and passed on the branch tip, one whose proofs all passed on the trunk already, and one an item refutes, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch a landing check finds failing, whatever flag is given, and one that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, adds the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right after the marker, so that naima close finds a commit reachable from the trunk; then prints what every landing report says of the files the landing changed, never undoing it |
+| [`fix`](#naima-fix) | coordination | take a small fix from filing to landing in one step: on the main checkout, on the trunk, file the item, open its worktree, move the change there, commit it and land it; on a worker's branch, file the item, commit the change on the branch and hand it over to the coordinator | the change is what the checkout holds uncommitted outside the tracker data, and there must be one; the item's type has fixedOn, which is set on the branch; the command makes its own claim and releases it on every path that made it, before it stops and before a landing; a worker's run never touches the trunk; the coordinator's commits on the trunk are the new item (tracker data only) and the landing marker; a refusal stops it where it is and says what is left: a landing refused leaves the branch committed and handed over |
 | [`guard`](#naima-guard) | coordination | the trunk guard: whether it is on and runs in this clone; off turns it off for the project (recorded in naima.json, the hook removed), on turns it back on; server, on the owner's word, makes a GitHub ruleset that lets only the repository's admins push the trunk (with gh, else it says the request and the web page; --print only says them) | while on, the git hook refuses a commit, merge or fast-forward of the trunk made by hand (naima guard-check says what passes); off is the owner's choice, recorded, and update does not put the hook back |
 | [`guard-check`](#naima-guard-check) | coordination | what the trunk guard's git hook runs when the trunk is about to move: exit 0 when it may, else one line saying why not and what to do | a commit, merge or fast-forward of the trunk made by hand is refused unless every commit it adds to the first-parent line is a landing marker, the record land makes, a commit that only adds to the tracker data (a claim may also be rewritten or removed) or only closes items, naima init's commit, one that only switches the guard, a commit Naima's setup asks for (a Naima-Setup: trailer: the install, the migration of a copied program, the update that brings the guard in) touching only the tracker folder and the files a setup writes, or one with a Trunk-reason: trailer; a tip the upstream holds, a rewind, a ref created or deleted pass |
 | [`push-check`](#naima-push-check) | coordination | what the trunk guard's pre-push hook runs: exit 0 when no commit the push sends carries private infrastructure in its message, else each one with what to write instead | a push is refused when a commit it sends — one the remote's tip does not hold, or no remote-tracking branch holds when that tip is new or unknown here — has a home-directory path, a machine or user name, an IP address, a URI with a port or a word of the private list in its message; a deletion sends nothing; git push --no-verify skips the hook, on the owner's word |
@@ -1190,6 +1192,28 @@ naima claims --branch fix/export-alpha
 naima claims --json
 ```
 
+### naima recover
+
+Brief the worker that resumes a dead or stuck one: its claim and last step, the commits the trunk lacks, what is not committed in its worktree, and the last entries of its agent transcript.
+
+**Enforces**: Nothing: it only reads; the transcript, found by the agent tool's reader, is printed only to continue the work and never written to a file, since the owner's chat stays private.
+
+```sh
+naima recover <branch> [--tail <n>] [--json]
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--tail` |  | how many of the transcript's last entries to print (12 unless given): its last steps and commands, cut short |
+| `--json` |  | print the same as JSON |
+
+Examples:
+
+```sh
+naima recover worker/export-alpha
+naima recover worker/export-alpha --tail 30
+```
+
 ### naima land
 
 Land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor.
@@ -1219,6 +1243,31 @@ naima land agent/tidy-loader --no-change-note "a refactor of the loader: nothing
 naima land agent/scheduler --stale-proofs "the liveness property runs for two days: it is due as a long run, and the owner will start it"
 naima land agent/review-notes --tracker-only "the notes and decisions of the review of the last two days"
 naima land agent/export-speed --meets export-under-a-second
+```
+
+### naima fix
+
+Take a small fix from filing to landing in one step: on the main checkout, on the trunk, file the item, open its worktree, move the change there, commit it and land it; on a worker's branch, file the item, commit the change on the branch and hand it over to the coordinator.
+
+**Enforces**: The change is what the checkout holds uncommitted outside the tracker data, and there must be one; the item's type has fixedOn, which is set on the branch; the command makes its own claim and releases it on every path that made it, before it stops and before a landing; a worker's run never touches the trunk; the coordinator's commits on the trunk are the new item (tracker data only) and the landing marker; a refusal stops it where it is and says what is left: a landing refused leaves the branch committed and handed over.
+
+```sh
+naima fix "<title>" [--type <type>] [--message "<commit message>"] [--as <who>] [--asked-by <role>] [--no-change-note "<reason>"]
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--type` | `bugs` | the item's type: one with fixedOn |
+| `--message` | `the item's title` | the commit message of the change |
+| `--as` |  | who works, for the coordinator's branch: its first segment |
+| `--asked-by` | `agent` | who asked for it, recorded in the item's origin, as naima new takes it |
+| `--no-change-note` |  | why the fix changes behaviour paths with no change note, passed to naima land |
+
+Examples:
+
+```sh
+naima fix "The board drops the last column" --asked-by owner
+naima fix "A typo in the help of naima land" --no-change-note "a typo in a help line"
 ```
 
 ### naima guard
@@ -3311,7 +3360,7 @@ The owner's material enters the repository only with their recorded yes, and no 
 
 Its contributions' qualified ids are `privacy/<name>`.
 
-The conversation between the owner and an agent is private: nothing from it is copied into the repository without the owner's explicit yes. A file enters an item's `attachments/` through `naima attach`, which records on the item, in the field `attached`, whose it is: the owner's (`--consent`, their yes restated) or the writer's own (`--own`). The check `attachment-consent` flags an attachment with no record — one copied in by hand — unless the trunk already holds it, or a tool of the program writes it itself (a property's run records). The check `secrets` reads every project file and every attachment for six shapes of secret: a private key with its body (a header alone is not one), and AWS, GitHub, Slack, API-secret and Google keys; `naima attach` refuses a file holding one. A file that must keep one is an exception in the plugin's options, with a reason and the item that tracks it; an exception the trunk's configuration does not hold is refused, so the list only shrinks. Every write of free text or a file — a title, a description, a note, a free-text field, a session note, an event, an attachment — is signed against the no-leaks checklist the program ships, `docs/agents/NOLEAKS.md`: the writer passes its path with `--revised`, and the write hook `signed-writes` compares the file with the program's own copy, byte for byte, and refuses the write without it or with any other file. The signature, the checklist's hash with who signed and the day, goes in the item's field `revised`, in a session note's or an event's front matter, and in an attachment's record, so every write shows which version of the checklist it was checked against. Statuses, enums, dates, links, claims, the fields Naima fills and the records it generates need no signature. The option `signed: false` turns the requirement off for a project. Private data (machine names, addresses, home paths, user names) is refused by default; whether the project scrubs it is the owner's choice, asked once: the first refusals carry the question, and the answer is the option `privateData`, set with `naima privacy scrub` or `naima privacy keep`. With `keep` the tracker's writes let it through, with the reason recorded, while the tracker is private; `naima privacy keep` warns that a tracker committed with the code is published with it, and refuses on a tracker that is or may be public unless `--despite-public` restates why. What leaves the project is scrubbed either way.
+The conversation between the owner and an agent is private: nothing from it is copied into the repository without the owner's explicit yes. A file enters an item's `attachments/` through `naima attach`, which records on the item, in the field `attached`, whose it is: the owner's (`--consent`, their yes restated) or the writer's own (`--own`). The check `attachment-consent` flags an attachment with no record — one copied in by hand — unless the trunk already holds it, or a tool of the program writes it itself (a property's run records). The check `secrets` reads every project file and every attachment for six shapes of secret: a private key with its body (a header alone is not one), and AWS, GitHub, Slack, API-secret and Google keys; `naima attach` refuses a file holding one. A file that must keep one is an exception in the plugin's options, with a reason and the item that tracks it; an exception the trunk's configuration does not hold is refused, so the list only shrinks. Every write of free text or a file — a title, a description, a note, a free-text field, a session note, an event, an attachment — is signed against the no-leaks checklist the program ships, `docs/agents/NOLEAKS.md`: the writer passes its path with `--revised`, and the write hook `signed-writes` compares the file with the program's own copy, byte for byte, and refuses the write without it or with any other file. The first unsigned write in a worktree is not refused: the checklist is printed to the writer and the write goes on, its signature marked `shown`; the worktree's own git directory remembers it (`naima-checklist-shown`, the checklist's hash), so every later unsigned write there is refused, until the checklist changes. The signature, the checklist's hash with who signed and the day, goes in the item's field `revised`, in a session note's or an event's front matter, and in an attachment's record, so every write shows which version of the checklist it was checked against. Statuses, enums, dates, links, claims, the fields Naima fills and the records it generates need no signature. The option `signed: false` turns the requirement off for a project. Private data (machine names, addresses, home paths, user names) is refused by default; whether the project scrubs it is the owner's choice, asked once: the first refusals carry the question, and the answer is the option `privateData`, set with `naima privacy scrub` or `naima privacy keep`. With `keep` the tracker's writes let it through, with the reason recorded, while the tracker is private; `naima privacy keep` warns that a tracker committed with the code is published with it, and refuses on a tracker that is or may be public unless `--despite-public` restates why. What leaves the project is scrubbed either way.
 
 Options, each with the default it takes when nothing sets it:
 
@@ -3375,7 +3424,7 @@ naima privacy scrub
 | Field | Kind | Applies to | Meaning | Values |
 |---|---|---|---|---|
 | `attached` | object | every type | whose each attachment is, as naima attach records it: file name → { from: owner or agent, consent: the owner's yes restated (for the owner's), by, on } |  |
-| `revised` | object | every type | the last no-leaks signature on the item's free text, which naima fills on a signed write: { checklist: the first 16 hex digits of the checklist's SHA-256, by: who, when git says, on: the day }; git's history holds the earlier ones |  |
+| `revised` | object | every type | the last no-leaks signature on the item's free text, which naima fills on a signed write: { checklist: the first 16 hex digits of the checklist's SHA-256, by: who, when git says, on: the day, shown: true when the write was the worktree's first unsigned one and the checklist was shown instead }; git's history holds the earlier ones |  |
 
 **Checks**, run by `naima check`
 
@@ -3388,7 +3437,7 @@ naima privacy scrub
 
 | Hook | What it does |
 |---|---|
-| `signed-writes` | a write of free text the writer authored (naima new, describe, note, a free-text field with naima set) is refused unless --revised names the no-leaks checklist the program ships, byte for byte; the signature (the checklist's hash, who, the day) goes in the item's field revised. Session notes, events and attachments are held the same way and carry it in their own record. Statuses, links, claims and what Naima fills or generates need none; the option signed: false turns it off |
+| `signed-writes` | a write of free text the writer authored (naima new, describe, note, a free-text field with naima set) is refused unless --revised names the no-leaks checklist the program ships, byte for byte — except the first unsigned one in a worktree, which prints the checklist and goes on, signed as shown; the signature (the checklist's hash, who, the day) goes in the item's field revised. Session notes, events and attachments are held the same way and carry it in their own record. Statuses, links, claims and what Naima fills or generates need none; the option signed: false turns it off |
 
 ## adopt
 

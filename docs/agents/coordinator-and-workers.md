@@ -50,6 +50,13 @@ A worker can't ask questions, so the coordinator gives it everything it needs to
 - **no sub-agents of its own**, because a worker that spawns workers loses all of their work when it stops;
 - **the acknowledgement line to give back**, which starts every report ([read the project's rules](read-the-project-rules.md#giving-the-acknowledgement-back)).
 
+### A small fix
+
+A fix small enough to need no plan goes through `naima fix "<title>"`, run where the change was made and not committed: by the coordinator on the main checkout,
+it files the item, opens its worktree, commits the change there and lands it; by a worker on its branch, it files the item, commits the change and the item
+there and hands the branch over, never touching the trunk. The command makes its own claim and releases it on every path, so a claim is never left behind as a
+lock ([a small fix in one command](../guide/several-branches.md#a-small-fix-in-one-command)).
+
 ## The jobs
 
 | Job                | Owns                                                                                                                                                                  | Refuses                                                                                                              |
@@ -160,6 +167,11 @@ its step and how long ago it was posted. A claim whose last sign of life is olde
 another number) is flagged "silent for N min — possibly stuck". The last sign of life is the later of the step and the branch's last commit. The coordinator
 checks that worker's run and worktree, then reports it to the owner as possibly stuck. The rule is shipped by the coordination plugin, so `naima rules` lists
 it.
+
+When a worker is dead or stuck, the coordinator briefs the worker that resumes it from `naima recover <branch>`. It prints the claim's items and last step, the
+commits the trunk lacks, what is not committed in the worktree, and the last entries of the stuck worker's agent transcript (its last steps and commands, each
+cut to a line; `--tail <n>` asks for more). The transcript holds what the stuck worker found or decided and never wrote down. The coordinator passes those lines
+to the new worker in its brief and nowhere else: never into an item, a note, a commit or any other file, since the owner's chat stays private.
 
 A claim whose work is done is listed apart, at the end of `naima claims`, as stale, and is not counted as work in hand. A claim is stale when its branch is
 gone, when its branch is merged into the trunk and the trunk carries the claim file the merge brought, or when every item it claims is done or closed.

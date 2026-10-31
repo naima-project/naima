@@ -20,8 +20,8 @@ git add naima-tracker && git commit -m "Claim export-drops"
   running anything.
 - `naima open` refuses a new worktree once as many worker worktrees are open as the coordination option `maxWorkers` allows (3 by default), because every worker
   is paid for while it runs. The refusal lists the open ones; remove one that has landed with `naima prune --branch <branch> --write`, give related items to one
-  worker, or raise the bound in `naima.json`: `"plugins": { "coordination": { "options": { "maxWorkers": 4 } } }`.
-  `naima hello` states the bound in one line, so the owner knows it and can ask to change it.
+  worker, or raise the bound in `naima.json`: `"plugins": { "coordination": { "options": { "maxWorkers": 4 } } }`. `naima hello` states the bound in one line,
+  so the owner knows it and can ask to change it.
 - The first `naima` command run in the new worktree fetches its own copy of Naima from the main checkout's copy, at the same locked commit.
 - The claim is a single file belonging to this branch, saying what it works on, and `naima claim` adds items to it. Others see it straight away, but nobody is
   locked out. Several branches may claim the same [item](glossary.md#item), and `claim` tells you who else holds it.
@@ -40,6 +40,14 @@ it has been fetched and checked out.
 `naima claim --step` writes what the branch is doing now into its claim, with the time, replacing the previous step. `naima claims` and `naima summary` show the
 step and how many minutes ago it was posted. When neither a step nor a commit on the branch is newer than the coordination option `silentAfter` (15 minutes by
 default), the claim is marked "silent for N min — possibly stuck".
+
+When a worker has died or is stuck, `naima recover <branch>` gathers what the worker that takes over needs: the claim's items and last step, the commits the
+trunk lacks, what is not committed in its worktree, and the last entries of the stuck worker's agent transcript. Those entries hold what it had found or decided
+but not yet written down. Only the last few are printed (12 unless `--tail <n>` says otherwise), each cut to a line, so the new worker's context stays small.
+The transcript is found the way each agent tool keeps them: a session started in the branch's worktree, or a sub-agent of a session in the main checkout whose
+transcript names the worktree or the branch. Each agent tool has a reader of its own beside its adapter; a tool with none yet gets the rest of the report and no transcript. The transcript is read
+only to continue the work. Nothing of it is written to a file, and it is never copied into the repository, because
+[the owner's chat stays private](rules.md#the-owners-chat-stays-private).
 
 ## Finish a piece of work
 
@@ -100,6 +108,16 @@ which git removes only when forced, is then removed with `git worktree remove --
 
 If `naima land` refuses because the trunk is not an ancestor of the branch, stop, because the trunk has moved. Merge it into the branch again, on the branch
 ([the rule](rules.md#every-landing-is-a-marker-naming-the-items-it-closes)).
+
+## A small fix in one command
+
+For a fix small enough to need no plan, `naima fix "<title>"` takes the whole way in one step, starting from the change already made and not committed. On the
+main checkout, on the trunk, it files the item (a bug unless `--type` names another type with `fixedOn`) and commits it on the trunk, opens its worktree and
+branch, moves the change there, sets the item's `fixedOn`, releases its claim, commits, lands the branch and prunes it. On a worker's branch it files the item,
+claims it, sets `fixedOn`, releases the claim, commits everything on the branch and says the branch is handed over, with the `naima land` line the coordinator
+runs; it never touches the trunk. Its claim is its own, made and released in the same run. When the landing is refused, the branch stays committed and handed
+over, and the refusal says what to fix. The item still needs its proof checked before `naima close`. With the tracker in a repository of its own, the steps are
+taken one by one.
 
 ## One writer: no locks
 
