@@ -72,16 +72,7 @@ import {
   storeReduced,
 } from "./lts-cache.ts"
 import { type ConditionLint, lintConditions, lintLine } from "./lps-lint.ts"
-import {
-  chooseRewriter,
-  compileSecondsIn,
-  cxxCompiler,
-  jittycUnavailable,
-  readTimings,
-  recordTimings,
-  type RewriterOption,
-  REWRITERS,
-} from "./rewriter.ts"
+import { chooseRewriter, compileSecondsIn, cxxCompiler, jittycUnavailable, readTimings, recordTimings, type RewriterOption, REWRITERS } from "./rewriter.ts"
 import { MCRL2 } from "./tool.ts"
 
 export { MCRL2 } from "./tool.ts"
