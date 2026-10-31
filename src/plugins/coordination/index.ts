@@ -34,6 +34,7 @@ import {
   isAncestor,
   isClone,
   isOpen,
+  type Item,
   label,
   mustGit,
   pairedBranch,
@@ -79,6 +80,7 @@ import { claimsUiView, notesUiView } from "./ui.ts"
 import { readStaleAfter, staleCommand, type StaleData, staleData, staleSection } from "./stale.ts"
 import { changeNotesCheck, changesCommand } from "./changes.ts"
 import { land, landingReportsPoint, landingsAreMarkers, landingsPaired } from "./land.ts"
+import { fixCommand } from "./fix.ts"
 import { guardCheckCommand, guardCommand, guardedFrom, guardOffSection, guardSetup, readTrunkGuard, switchesGuard } from "./guard.ts"
 import { diaryCheck, diaryCommand, eventCommand, EVENTS, frontLines, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
 import { readyLines, readyNow, readySection, readyWorkWaiting, workerLimitSection } from "./ready.ts"
@@ -764,76 +766,92 @@ function openCommand(policy: Policy): Command {
       for (const [flag, value] of [["--as", who], ["--name", what]] as const) {
         if (!SEGMENT.test(value)) throw new Error(`${flag} ${value}: each part of a branch name is a ${SEGMENT_SAYS}`)
       }
-      const branch = `${who}/${what}`
-      const trees = worktrees(ctx.root)
-      const path = join(worktreesDir(policy, home(ctx.root, trees)), what)
-      const base = trunk(ctx.root) ?? "HEAD"
-      // An existing branch is never reused: it may be an old one, landed and behind the trunk.
-      if (gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`) !== null) {
-        const n = ahead(ctx.root, base, branch)
-        throw new Error(
-          n === 0
-            ? `branch ${branch} already exists and is merged into ${base}: delete it with naima prune --branch ${branch} --write, or pick another --name`
-            : `branch ${branch} already exists with ${plural(n, "commit")} not on ${base}: pick another --name, or work in it where it stands`,
-        )
-      }
-      if (exists(path)) throw new Error(`${path} already exists: pick another --name`)
-      const bound = workerBoundReason(ctx.root, policy, trees)
-      if (bound) throw new Error(bound)
-      const trackerBase = ctx.sibling ? trunk(ctx.trackerGit) : null
-      if (ctx.sibling) {
-        if (!trackerBase) throw new Error("the tracker repository has no trunk (main, master, or origin's HEAD): commit the tracker first")
-        if (gitOrNull(ctx.trackerGit, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`) !== null) {
-          throw new Error(`branch ${branch} already exists in the tracker repository: pick another --name, or prune it there`)
-        }
-      }
-      mustGit(ctx.root, "worktree", "add", "-q", "-b", branch, path, base)
-      // The tracker's own worktree, on the branch of the same name, where the code's worktree keeps its data.
-      const trackerTree = join(path, ctx.trackerDir)
-      if (trackerBase) mustGit(ctx.trackerGit, "worktree", "add", "-q", "-b", branch, trackerTree, trackerBase)
-      const newProgram = join(path, posixRelative(ctx.root, ctx.program))
-      if (!isClone(ctx.program)) {
-        ctx.out(`${posixRelative(ctx.root, ctx.program)} is not a program clone yet: ${path} will align its own on its first run (naima check)`)
-      } else {
-        const newData = join(path, ctx.trackerDir)
-        cloneIntoNewWorktree({
-          root: path,
-          tracker: dirname(newData),
-          program: newProgram,
-          source: ctx.config.source,
-          commit: ctx.config.commit,
-          ...(ctx.config.verify ? { verify: ctx.config.verify } : {}),
-          seeds: [ctx.program],
-        }, ctx.root)
-        ctx.out(`cloned ${posixRelative(path, newProgram)} from ${posixRelative(ctx.root, ctx.program)}, at ${short(ctx.config.commit)} — no network`)
-      }
-      const others = readClaims(ctx)
-      const claim: Claim = { branch, claimedAt: today(ctx), items: [], file: `${randomUUID()}.json`, ref: branch, local: true }
-      const note = str(p, "note")
-      if (note) claim.note = note
-      for (const item of items) {
-        if (claim.items.some((e) => e.id === item.meta.id)) continue
-        const holders = others.filter((c) => c.items.some((e) => e.id === item.meta.id)).map((c) => c.branch)
-        if (holders.length) ctx.out(`note: ${label(item)} is also claimed by ${holders.join(", ")} — allowed, and worth knowing`)
-        claim.items.push({ id: item.meta.id, ref: label(item), title: item.meta.title })
-      }
-      // The new worktree is outside what this run may write: git writes the claim there.
-      const { file: name, ref: _ref, local: _local, ...body } = claim
-      const file = `${rel(ctx, CLAIMS)}/${name}`
-      // A tracker of its own is committed by Naima: the claim is the first commit of the tracker's branch.
-      const claimed = `${inGit(ctx, CLAIMS)}/${name}`
-      if (trackerBase) writeThroughGit(trackerTree, claimed, JSON.stringify(body, null, 2) + "\n")
-      else writeThroughGit(path, file, JSON.stringify(body, null, 2) + "\n")
-      const unsaved = trackerBase ? commitTrackerPaths(trackerTree, "open", [claimed]) : null
-      ctx.out(`opened ${path} on ${branch}, from ${base}${trackerBase ? `, and its tracker on ${branch}, from the tracker's ${trackerBase}` : ""}`)
-      const refs = claim.items.map((e) => e.ref).join(", ")
-      if (!trackerBase) ctx.out(`claimed ${refs} in ${file} — commit it on ${branch} with the work`)
-      else if (unsaved) ctx.out(`claimed ${refs} in ${file}, not committed (${unsaved}): commit it on the tracker's ${branch}`)
-      else ctx.out(`claimed ${refs} in ${file}, committed on the tracker's ${branch}`)
+      const { path } = openWork(ctx, policy, items, who, what, str(p, "note"))
       ctx.out(`next: cd ${path}, and install the dependencies a fresh checkout lacks`)
       return 0
     },
   }
+}
+
+/**
+ * The worktree `<worktrees>/<what>` on a new branch `<who>/<what>` from the trunk, with its claim on `items`: what
+ * `open` does, and `fix` reuses. The claim file is written in the new worktree, not committed unless the tracker is
+ * a repository of its own.
+ */
+export function openWork(
+  ctx: Context,
+  policy: Policy,
+  items: Item[],
+  who: string,
+  what: string,
+  note?: string,
+): { path: string; branch: string; claimFile: string } {
+  const branch = `${who}/${what}`
+  const trees = worktrees(ctx.root)
+  const path = join(worktreesDir(policy, home(ctx.root, trees)), what)
+  const base = trunk(ctx.root) ?? "HEAD"
+  // An existing branch is never reused: it may be an old one, landed and behind the trunk.
+  if (gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`) !== null) {
+    const n = ahead(ctx.root, base, branch)
+    throw new Error(
+      n === 0
+        ? `branch ${branch} already exists and is merged into ${base}: delete it with naima prune --branch ${branch} --write, or pick another --name`
+        : `branch ${branch} already exists with ${plural(n, "commit")} not on ${base}: pick another --name, or work in it where it stands`,
+    )
+  }
+  if (exists(path)) throw new Error(`${path} already exists: pick another --name`)
+  const bound = workerBoundReason(ctx.root, policy, trees)
+  if (bound) throw new Error(bound)
+  const trackerBase = ctx.sibling ? trunk(ctx.trackerGit) : null
+  if (ctx.sibling) {
+    if (!trackerBase) throw new Error("the tracker repository has no trunk (main, master, or origin's HEAD): commit the tracker first")
+    if (gitOrNull(ctx.trackerGit, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`) !== null) {
+      throw new Error(`branch ${branch} already exists in the tracker repository: pick another --name, or prune it there`)
+    }
+  }
+  mustGit(ctx.root, "worktree", "add", "-q", "-b", branch, path, base)
+  // The tracker's own worktree, on the branch of the same name, where the code's worktree keeps its data.
+  const trackerTree = join(path, ctx.trackerDir)
+  if (trackerBase) mustGit(ctx.trackerGit, "worktree", "add", "-q", "-b", branch, trackerTree, trackerBase)
+  const newProgram = join(path, posixRelative(ctx.root, ctx.program))
+  if (!isClone(ctx.program)) {
+    ctx.out(`${posixRelative(ctx.root, ctx.program)} is not a program clone yet: ${path} will align its own on its first run (naima check)`)
+  } else {
+    const newData = join(path, ctx.trackerDir)
+    cloneIntoNewWorktree({
+      root: path,
+      tracker: dirname(newData),
+      program: newProgram,
+      source: ctx.config.source,
+      commit: ctx.config.commit,
+      ...(ctx.config.verify ? { verify: ctx.config.verify } : {}),
+      seeds: [ctx.program],
+    }, ctx.root)
+    ctx.out(`cloned ${posixRelative(path, newProgram)} from ${posixRelative(ctx.root, ctx.program)}, at ${short(ctx.config.commit)} — no network`)
+  }
+  const others = readClaims(ctx)
+  const claim: Claim = { branch, claimedAt: today(ctx), items: [], file: `${randomUUID()}.json`, ref: branch, local: true }
+  if (note) claim.note = note
+  for (const item of items) {
+    if (claim.items.some((e) => e.id === item.meta.id)) continue
+    const holders = others.filter((c) => c.items.some((e) => e.id === item.meta.id)).map((c) => c.branch)
+    if (holders.length) ctx.out(`note: ${label(item)} is also claimed by ${holders.join(", ")} — allowed, and worth knowing`)
+    claim.items.push({ id: item.meta.id, ref: label(item), title: item.meta.title })
+  }
+  // The new worktree is outside what this run may write: git writes the claim there.
+  const { file: name, ref: _ref, local: _local, ...body } = claim
+  const file = `${rel(ctx, CLAIMS)}/${name}`
+  // A tracker of its own is committed by Naima: the claim is the first commit of the tracker's branch.
+  const claimed = `${inGit(ctx, CLAIMS)}/${name}`
+  if (trackerBase) writeThroughGit(trackerTree, claimed, JSON.stringify(body, null, 2) + "\n")
+  else writeThroughGit(path, file, JSON.stringify(body, null, 2) + "\n")
+  const unsaved = trackerBase ? commitTrackerPaths(trackerTree, "open", [claimed]) : null
+  ctx.out(`opened ${path} on ${branch}, from ${base}${trackerBase ? `, and its tracker on ${branch}, from the tracker's ${trackerBase}` : ""}`)
+  const refs = claim.items.map((e) => e.ref).join(", ")
+  if (!trackerBase) ctx.out(`claimed ${refs} in ${file} — commit it on ${branch} with the work`)
+  else if (unsaved) ctx.out(`claimed ${refs} in ${file}, not committed (${unsaved}): commit it on the tracker's ${branch}`)
+  else ctx.out(`claimed ${refs} in ${file}, committed on the tracker's ${branch}`)
+  return { path, branch, claimFile: file }
 }
 
 /** Who holds each branch, for the policy: a claim with items, or a session note written on it. */
@@ -1170,6 +1188,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       release,
       claimsCommand(silentAfter, policy),
       land,
+      fixCommand(policy, openWork),
       guardCommand(guarded),
       guardCheckCommand,
       changesCommand,

@@ -20,10 +20,10 @@ event, description or attachment: no machine name, IP address, URI with a port, 
 the CLI refuses such a write ([the rule](../../docs/guide/rules.md#no-machine-names-or-private-infrastructure-in-a-repository)). Before every write of free text
 or a file to the tracker (`new`, `describe`, `note`, `set` of a title or text field, `pass`, `event`, `attach`), read the text against the
 [no-leaks checklist](../../docs/agents/NOLEAKS.md) and then sign it by adding `--revised naima-tracker/naima/docs/agents/NOLEAKS.md`; without it the CLI refuses
-the write. Only the agent talking to the owner writes text taken from the owner's words; a worker writes its own observations
-([the rule](../../docs/guide/rules.md#free-text-and-files-are-signed-against-the-no-leaks-checklist)). A write refused because the tracker is exposed, or a line
-saying Naima cannot tell whether a remote is public, is the owner's to hear: relay it as it says, then run the fix it names once the owner answers, and never
-work around it ([the rule](../../docs/guide/rules.md#the-tracker-is-never-exposed)).
+the write, except the first one in a worktree, which prints the checklist and goes on. Only the agent talking to the owner writes text taken from the owner's
+words; a worker writes its own observations ([the rule](../../docs/guide/rules.md#free-text-and-files-are-signed-against-the-no-leaks-checklist)). A write
+refused because the tracker is exposed, or a line saying Naima cannot tell whether a remote is public, is the owner's to hear: relay it as it says, then run the
+fix it names once the owner answers, and never work around it ([the rule](../../docs/guide/rules.md#the-tracker-is-never-exposed)).
 
 **Capture now, act later — always, not only on `/flow:report`.** Whenever the owner, in chat, asks for a feature, reports a problem, makes a decision or defers
 something, answer the owner first, then file it in the same turn, in the background (a worker, or right after the reply), never before the answer and without
@@ -147,8 +147,9 @@ naima rules --audience agents
 The project's own rules for agents — how to work and report here — kept as items of its tracker. Obey them for the whole session; `naima guide` prints them
 first too ([read the project's rules](../../docs/agents/read-the-project-rules.md)).
 
-Every change goes through an item: `naima open <item>`, commit the change and its test in its worktree, then `naima land`. Never commit, merge or fast-forward
-the trunk by hand: a git hook, the trunk guard, refuses it, and only the owner lets a commit through or turns the guard off
+Every change goes through an item: `naima open <item>`, commit the change and its test in its worktree, then `naima land`. A small fix already made goes the
+whole way with `naima fix "<title>"`: on the trunk it files, opens, commits and lands; on a worker's branch it files, commits and hands the branch over. Never
+commit, merge or fast-forward the trunk by hand: a git hook, the trunk guard, refuses it, and only the owner lets a commit through or turns the guard off
 ([the rule](../../docs/guide/rules.md#every-change-goes-through-an-item-and-lands)). When the guard is installed, tell the owner it is on, and that
 `naima guard off` turns it off for committing by hand or a mixed flow: as information, never as a question to answer. Write every shell command so the agent
 tool runs it without asking the owner: no `rm` on a path built from a variable that could be empty, no `cd` chained with other commands, scripts as files

@@ -20,8 +20,8 @@ git add naima-tracker && git commit -m "Claim export-drops"
   running anything.
 - `naima open` refuses a new worktree once as many worker worktrees are open as the coordination option `maxWorkers` allows (3 by default), because every worker
   is paid for while it runs. The refusal lists the open ones; remove one that has landed with `naima prune --branch <branch> --write`, give related items to one
-  worker, or raise the bound in `naima.json`: `"plugins": { "coordination": { "options": { "maxWorkers": 4 } } }`.
-  `naima hello` states the bound in one line, so the owner knows it and can ask to change it.
+  worker, or raise the bound in `naima.json`: `"plugins": { "coordination": { "options": { "maxWorkers": 4 } } }`. `naima hello` states the bound in one line,
+  so the owner knows it and can ask to change it.
 - The first `naima` command run in the new worktree fetches its own copy of Naima from the main checkout's copy, at the same locked commit.
 - The claim is a single file belonging to this branch, saying what it works on, and `naima claim` adds items to it. Others see it straight away, but nobody is
   locked out. Several branches may claim the same [item](glossary.md#item), and `claim` tells you who else holds it.
@@ -100,6 +100,16 @@ which git removes only when forced, is then removed with `git worktree remove --
 
 If `naima land` refuses because the trunk is not an ancestor of the branch, stop, because the trunk has moved. Merge it into the branch again, on the branch
 ([the rule](rules.md#every-landing-is-a-marker-naming-the-items-it-closes)).
+
+## A small fix in one command
+
+For a fix small enough to need no plan, `naima fix "<title>"` takes the whole way in one step, starting from the change already made and not committed. On the
+main checkout, on the trunk, it files the item (a bug unless `--type` names another type with `fixedOn`) and commits it on the trunk, opens its worktree and
+branch, moves the change there, sets the item's `fixedOn`, releases its claim, commits, lands the branch and prunes it. On a worker's branch it files the item,
+claims it, sets `fixedOn`, releases the claim, commits everything on the branch and says the branch is handed over, with the `naima land` line the coordinator
+runs; it never touches the trunk. Its claim is its own, made and released in the same run. When the landing is refused, the branch stays committed and handed
+over, and the refusal says what to fix. The item still needs its proof checked before `naima close`. With the tracker in a repository of its own, the steps are
+taken one by one.
 
 ## One writer: no locks
 

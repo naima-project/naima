@@ -50,6 +50,13 @@ A worker can't ask questions, so the coordinator gives it everything it needs to
 - **no sub-agents of its own**, because a worker that spawns workers loses all of their work when it stops;
 - **the acknowledgement line to give back**, which starts every report ([read the project's rules](read-the-project-rules.md#giving-the-acknowledgement-back)).
 
+### A small fix
+
+A fix small enough to need no plan goes through `naima fix "<title>"`, run where the change was made and not committed: by the coordinator on the main checkout,
+it files the item, opens its worktree, commits the change there and lands it; by a worker on its branch, it files the item, commits the change and the item
+there and hands the branch over, never touching the trunk. The command makes its own claim and releases it on every path, so a claim is never left behind as a
+lock ([a small fix in one command](../guide/several-branches.md#a-small-fix-in-one-command)).
+
 ## The jobs
 
 | Job                | Owns                                                                                                                                                                  | Refuses                                                                                                              |
