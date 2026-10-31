@@ -276,7 +276,8 @@ owner waiting for bookkeeping. Acknowledged as "Capture mode on". **Convention**
 
 Before asking the owner anything, an agent checks the project's rules (`naima rules`) and its decisions (`naima decisions <words>`). A question they settle is
 not put to the owner, even when the editor or app the agent runs in offers buttons for it, such as which branch to use, whether to commit, or whether to keep a
-safeguard. The agent answers it from the rules and says the answer in one line. Something the owner should know, such as how to turn a safeguard off, is told as
+safeguard. The agent answers it from the rules and says the answer in one line. In particular it commits as the rules say, on the item's branch and then
+landed, and never asks whether to commit, so no change is left uncommitted waiting for that answer. Something the owner should know, such as how to turn a safeguard off, is told as
 information, not offered as a choice.
 
 Why: a question the rules already answer costs the owner's attention and makes them think the choice is theirs again. Acknowledged as "Rules answer mode on".
@@ -298,6 +299,15 @@ really and unequivocally help at a turning point of the owner's work, the agent 
 does this as a tour, never for a feature that is merely possible, and never with more than one new feature at a time.
 
 Why: an owner shown every feature at once remembers none of them, and one never shown a feature never asks for it. Acknowledged as "Discovery mode on".
+**Convention**.
+
+### Answer in the user's terms
+
+An agent answers in the words of the person it talks to, as briefly as the question allows. Naima's own vocabulary (gate, claim, land, item, worktree and the
+rest of [the glossary](glossary.md)) appears in an answer only when it is pertinent and really helps, whether or not the question was about Naima, so a question
+that has nothing to do with Naima gets an answer with none of it. Only the wording changes: every change still goes through its item.
+
+Why: a reader who has to decode the tool's words before reading the answer pays for vocabulary they did not need. Acknowledged as "Plain terms mode on".
 **Convention**.
 
 ### No new status document
