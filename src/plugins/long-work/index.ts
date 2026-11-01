@@ -261,6 +261,9 @@ async function start(ctx: Context, hosts: Map<string, Host>, cmd: Command, args:
   if (noProgress !== undefined && !noProgress.trim()) {
     throw refuse('naima run: --no-progress needs the reason the command cannot report progress — --no-progress "<reason>"')
   }
+  if (noProgress !== undefined && str(p, "stale") === undefined) {
+    throw refuse("naima run: --no-progress needs --stale <duration> too — how long silence is normal for this command, such as --stale 10m")
+  }
   const every = duration(str(p, "every"), DEFAULTS.everyMs, "--every")!
   const stale = duration(str(p, "stale"), DEFAULTS.staleMs, "--stale")!
   const hostName = str(p, "host")
@@ -682,14 +685,14 @@ const runCommand = (hosts: Map<string, Host>, declared: LongRun[]): Command => (
     {
       name: "--stale",
       says:
-        "how long with no output at all, neither a log line nor a progress line, before the run is reported stuck, and with a log that grows while its progress does not move before it is reported not advancing, a warning (default 1m)",
+        "how long with no output at all, neither a log line nor a progress line, before the run is reported stuck, and with a log that grows while its progress does not move before it is reported not advancing, a warning (default 1m); required with --no-progress",
     },
     { name: "--host", says: "run it on this host, declared in the plugin's hosts option, through the host's own Naima over ssh" },
     { name: "--guard-tracked", says: "fail the run if a tracked file changes while it runs; always on for a remote run" },
     {
       name: "--no-progress",
       says:
-        "declare that the command cannot report progress, and why: the run is then shown with its elapsed time, the log's last line and the reason, and judged stuck on its log alone",
+        "declare that the command cannot report progress, and why: the run is then shown with its elapsed time, the log's last line and the reason, and judged stuck on its log alone; needs --stale, how long silence is normal for it",
     },
     { name: "--tail", says: "how many of the log's last lines to print (default 20)" },
     { name: "--json", says: "print the run, or every run, as JSON" },
@@ -697,7 +700,7 @@ const runCommand = (hosts: Map<string, Host>, declared: LongRun[]): Command => (
   examples: [
     "run bench --budget-time 2h --budget-disk 20G --creates /tmp/bench-stores -- 'deno task bench > results.csv'",
     "run models --budget-time 30m -- naima verify --all",
-    'run solve --budget-time 12h --no-progress "the solver has no progress interface" -- ./solve.sh',
+    'run solve --budget-time 12h --stale 15m --no-progress "the solver has no progress interface" -- ./solve.sh',
     "run bench --host lab --budget-time 6h -- 'deno task bench'",
     "run list",
     "run status bench --tail 50",
@@ -806,7 +809,7 @@ const progressDeclared: Check = {
           level: "problem",
           message: `${f}:${r.line}: naima run of ${
             r.command.length ? JSON.stringify(r.command.join(" ")) : "no command"
-          } declares no progress — have the command write $NAIMA_RUN_PROGRESS, or run it with --no-progress "<why it cannot>" (${rule})`,
+          } declares no progress — have the command write $NAIMA_RUN_PROGRESS, or run it with --stale <duration> --no-progress "<why it cannot>" (${rule})`,
         })
       }
     }
@@ -876,8 +879,8 @@ export default function longWork(options: Record<string, unknown> = {}): Plugin 
       "Every reader — `naima wait`, `naima run list`, `naima claims` — reports a run stuck when it wrote no output at all, neither log nor progress, for `--stale` (default 1 minute); not advancing, a warning, when its log grows while its progress does not move for as long; and crashed when its supervisor is gone with no end recorded, seen at once by its process id, or when its heartbeat stopped. `naima wait` returns when the run turns stuck. " +
       "`naima run list` shows every run against its budgets, stuck and crashed runs in capitals; `naima run clean` removes what a run declared, never a tracked file, never while it runs. " +
       "A host declared in the `hosts` option is reached over ssh, and a run there is a run of the host's own Naima, always `--guard-tracked`: a tracked file it changes fails it. " +
-      "A run's progress is the last line of its progress file: a JSON object — `stage`, `done`, `total`, `unit`, `note`, `overall` — or free text. The supervisor keeps the first sample of each stage, and every reader shows the count with its rate and, when the total is known, its ETA. A command that cannot report says so with `--no-progress \"<reason>\"`, and is shown with its elapsed time, the log's last line and the reason; it is judged stuck on its log alone, and never not advancing. " +
-      "Nothing runs unattended: no run starts on a schedule, since a run nobody watches competes with the work on the same machine. A long run is declared in the `longRuns` option — `command` and `budgetTime`, optionally `budgetDisk` with `creates`, `host` and `noProgress` as `naima run` takes them — with what makes it due: `within`, a threshold its last success must be younger than; `fullSuite`, every gate of the full suite; `gates`, by name; `model`, every property verified on that model; `items`, by reference. The full suite is a long run named `full-suite` even when nothing declares it, whenever some gate is part of it. A long run is due when an item it covers is not current (a gate of the full suite names it, or it is open; one whose last verdict refutes it waits on a fix instead), when a gate it covers does not hold, or when it has not succeeded here within its threshold; a run of it in progress is not due. `naima summary` and `naima hello` say each due run in one line; `naima run due` files each as one todo, marked by the field `dueRun` and linked to the items it covers, leaves one already open as it is, marks it done once the run is current, and drops it when the run is no longer declared. `naima run <long run>` starts a declared one with its budgets, its finished record cleaned first; the agent asks the owner before running it. A run's success is remembered when its record is cleaned. " +
+      "A run's progress is the last line of its progress file: a JSON object — `stage`, `done`, `total`, `unit`, `note`, `overall` — or free text. The supervisor keeps the first sample of each stage, and every reader shows the count with its rate and, when the total is known, its ETA. A command that cannot report says so with `--no-progress \"<reason>\"`, given with `--stale`, how long silence is normal for it, and is shown with its elapsed time, the log's last line and the reason; it is judged stuck on its log alone, and never not advancing. " +
+      "Nothing runs unattended: no run starts on a schedule, since a run nobody watches competes with the work on the same machine. A long run is declared in the `longRuns` option — `command` and `budgetTime`, optionally `budgetDisk` with `creates`, `host`, `stale` and `noProgress` (which needs `stale`) as `naima run` takes them — with what makes it due: `within`, a threshold its last success must be younger than; `fullSuite`, every gate of the full suite; `gates`, by name; `model`, every property verified on that model; `items`, by reference. The full suite is a long run named `full-suite` even when nothing declares it, whenever some gate is part of it. A long run is due when an item it covers is not current (a gate of the full suite names it, or it is open; one whose last verdict refutes it waits on a fix instead), when a gate it covers does not hold, or when it has not succeeded here within its threshold; a run of it in progress is not due. `naima summary` and `naima hello` say each due run in one line; `naima run due` files each as one todo, marked by the field `dueRun` and linked to the items it covers, leaves one already open as it is, marks it done once the run is current, and drops it when the run is no longer declared. `naima run <long run>` starts a declared one with its budgets, its finished record cleaned first; the agent asks the owner before running it. A run's success is remembered when its record is cleaned. " +
       "The plugin ships the rule that makes these mandatory for agents, enforced by the check `wait-loops`, and the rule that long work reports its progress, enforced by the check `progress-declared`.",
     options: [
       {
@@ -890,7 +893,7 @@ export default function longWork(options: Record<string, unknown> = {}): Plugin 
         name: "longRuns",
         default: "{}",
         says:
-          'the long runs reported when due, never started on their own: name → { "command": a shell line or [program, ...args], "budgetTime": the time budget of one run, and what makes it due — "within": <n>s|m|h|d since its last success, "fullSuite": true, "gates": [gate names], "model": a model path, "items": [item references]; "budgetDisk" with "creates", "host", "noProgress" as naima run takes them }',
+          'the long runs reported when due, never started on their own: name → { "command": a shell line or [program, ...args], "budgetTime": the time budget of one run, and what makes it due — "within": <n>s|m|h|d since its last success, "fullSuite": true, "gates": [gate names], "model": a model path, "items": [item references]; "budgetDisk" with "creates", "host", "stale", "noProgress" (with "stale") as naima run takes them }',
       },
     ],
     commands: [runCommand(hosts, declared), waitCommand(hosts)],

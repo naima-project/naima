@@ -45,11 +45,15 @@ never say how many states or BES equations there will be, so `naima verify` keep
 property, on the same model and options, shows that count as an estimated total, with a percentage and the time left; the first run shows the count and the rate
 only.
 
-Some commands really can't say how far along they are, such as a solver that prints nothing while it works. Such a command is started with the reason instead:
+Some commands really can't say how far along they are, such as a solver that prints nothing while it works. Such a command is started with the reason instead,
+and with `--stale`, how long it can normally go without printing anything:
 
 ```sh
-naima run solve --budget-time 12h --no-progress "the solver prints nothing until it ends" -- ./solve.sh
+naima run solve --budget-time 12h --stale 15m --no-progress "the solver prints nothing until it ends" -- ./solve.sh
 ```
+
+`naima run` refuses `--no-progress` without `--stale`, because only whoever starts such a command knows how long its silence is normal. A run that reports
+progress keeps the one-minute default.
 
 It is then shown with its elapsed time, the last line of its log and the reason.
 
@@ -62,8 +66,8 @@ naima run status bench --tail 50  # one run, with the end of its log
 naima run stop bench              # end it now
 ```
 
-`naima run` returns only once it has seen the command running. If the command never starts, because the program does not exist, the supervisor died
-before starting it or the host cannot be reached, `naima run` says why and exits 1, within a few seconds.
+`naima run` returns only once it has seen the command running. If the command never starts, because the program does not exist, the supervisor died before
+starting it or the host cannot be reached, `naima run` says why and exits 1, within a few seconds.
 
 While it waits, `naima wait` prints how long the run has been going and its progress, every 30 seconds (`--report`). When the run ends, it prints how it ended
 (succeeded, failed with its exit code, killed by a budget, or stopped) together with the end of its log, and it exits 0 only if the run succeeded. If the run is
@@ -71,11 +75,12 @@ still going when the timeout passes, it says so and exits 1, so waiting again ha
 
 Naima watches every run itself, and `naima wait`, `naima run list` and `naima claims` all show what it finds:
 
-- A **STUCK** run is still running but has written nothing at all, neither a log line nor a progress line, for its `--stale` window, one minute by default.
-  `naima wait` stops waiting as soon as a run is stuck and says so, so you can look at its log and decide whether to stop it.
-- A run is **not advancing** when its log keeps growing but its progress has not moved for the same window. That is only a warning: the run is alive and
-  saying something, it just isn't counting. A run started with `--no-progress` has no progress to compare, so it is never "not advancing", only stuck when its
-  log goes quiet.
+- A **STUCK** run is still running but has written nothing at all, neither a log line nor a progress line, for its `--stale` window, one minute by default, and
+  as long as it was started with when it reports no progress. `naima wait` stops waiting as soon as a run is stuck and says so, so you can look at its log and
+  decide whether to stop it.
+- A run is **not advancing** when its log keeps growing but its progress has not moved for the same window. That is only a warning: the run is alive and saying
+  something, it just isn't counting. A run started with `--no-progress` has no progress to compare, so it is never "not advancing", only stuck when its log goes
+  quiet.
 - A **CRASHED** run is one whose supervisor is gone without recording how the run ended, because it was killed or the machine restarted. Naima sees this within
   seconds and never shows such a run as running.
 
@@ -141,8 +146,8 @@ You declare another machine once, in `naima.json`.
 ```
 
 `naima.json` is committed, so the machine's address ends up in the repository. To keep a private machine out of it, you declare the host in `hosts.json` in your
-own Naima config folder instead: `~/.config/naima/hosts.json` (or under `$XDG_CONFIG_HOME`), `%APPDATA%\naima\hosts.json` on Windows. That folder also holds
-the [private word list](rules.md#no-machine-names-or-private-infrastructure-in-a-repository). The file holds the same object as the `hosts` option, and its hosts
+own Naima config folder instead: `~/.config/naima/hosts.json` (or under `$XDG_CONFIG_HOME`), `%APPDATA%\naima\hosts.json` on Windows. That folder also holds the
+[private word list](rules.md#no-machine-names-or-private-infrastructure-in-a-repository). The file holds the same object as the `hosts` option, and its hosts
 are added to the committed ones. A host declared in both is taken from the private file, since that file describes this machine's own view of it. Each machine
 it names also counts as a private word, so a tracker write that mentions it is refused.
 

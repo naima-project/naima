@@ -461,7 +461,7 @@ tracked shell script, and a session note that records such a wait gets a note. T
 Work that can last more than a few seconds reports its progress at least every few seconds. It says how much of the total is done, or which stage it is in with
 a count, and it estimates the time left whenever the total is known. Where that really is impossible, as with a tool that has no progress interface, the work
 says so and gives the reason, and it reports what it can instead: the elapsed time, the stage, and the tool's own log lines. A run started with `naima run`
-writes its progress to `$NAIMA_RUN_PROGRESS`, or is started with `--no-progress "<reason>"`. A Naima command that can run long declares how it reports progress,
+writes its progress to `$NAIMA_RUN_PROGRESS`, or is started with `--stale <duration> --no-progress "<reason>"`, the window saying how long its silence is normal. A Naima command that can run long declares how it reports progress,
 or why it cannot.
 
 Why: a solver ran for more than 11 hours on each of two properties, with nothing to show whether it was moving, how fast, or when it would end, and a silent run
