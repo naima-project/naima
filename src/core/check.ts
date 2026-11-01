@@ -171,7 +171,12 @@ const templateBody: Check = {
       const type = ctx.registry.types.get(item.type)
       const live = isOpen(ctx, item) || item.meta.status === type?.initialStatus
       if (!type || !live || !stillTemplate(type, item)) return []
-      return [{ level: "note" as const, message: `${label(item)}: its description is still its type's template — naima describe ${item.slug} "<what it is about>"`, item, subject: label(item) }]
+      return [{
+        level: "note" as const,
+        message: `${label(item)}: its description is still its type's template — naima describe ${item.slug} "<what it is about>"`,
+        item,
+        subject: label(item),
+      }]
     }),
 }
 
