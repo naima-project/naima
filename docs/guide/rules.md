@@ -392,7 +392,9 @@ checked before anything reaches the disk, and it is refused if it adds a machine
 than the loopback or an example domain, a path under `/Users/`, `/home/` or `C:\Users\`, the user's login name, or a word from the user's private list. Each
 finding is listed with its line and the placeholder to write instead. Nothing is rewritten silently, so the author rewrites the text and runs the command again.
 A deliberate mention can go through with `--allow-private "<reason>"`, and then the reason is recorded in the item's notes, the session note or the event,
-together with the counts by kind but never the values. The private list holds one word per line (`#` starts a comment) and lives in
+together with the counts by kind but never the values. What reached the tracker some other way, a file copied in by hand or one a tool wrote, is caught by
+the check `private-data`: `naima check` reads every tracker file, attachments included, with the same patterns and fails on each finding, naming its file, line,
+kind and placeholder, unless an allowance is recorded in the file or its item's notes, or the project keeps private data. The private list holds one word per line (`#` starts a comment) and lives in
 `$XDG_CONFIG_HOME/naima/private-words`, or else `~/.config/naima/private-words`, or `%APPDATA%\naima\private-words` on Windows. That is outside every
 repository, so the names it holds are never committed. Commit messages are read with the same patterns twice: `naima land` refuses a branch whose commits carry
 one in their messages, in the project or in a submodule whose pointer it moves (`--allow-private "<reason>"` lands a deliberate mention), and while the trunk

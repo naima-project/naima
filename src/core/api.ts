@@ -41,6 +41,7 @@ export { storedLinks } from "./repo.ts"
 export { READY, readyQueue, type ReadyRecord, readyRecord } from "./ready.ts"
 export { groupBy } from "./collections.ts"
 export {
+  ALLOW_PRIVATE,
   allowanceLine,
   findPrivate,
   guardPrivate,

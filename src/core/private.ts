@@ -146,8 +146,24 @@ export const platform = (): string => (process.platform === "win32" ? "windows" 
 
 const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 
-/** A name no detector reports: too short, or a word every machine has. */
-const GENERIC = new Set(["localhost", "root", "user", "users", "admin", "runner", "ubuntu", "debian", "home", "shared", "public", "default", "guest", "test"])
+/** A name no detector reports: too short, or a word every machine has (macOS names a new machine "Mac"). */
+const GENERIC = new Set([
+  "localhost",
+  "mac",
+  "root",
+  "user",
+  "users",
+  "admin",
+  "runner",
+  "ubuntu",
+  "debian",
+  "home",
+  "shared",
+  "public",
+  "default",
+  "guest",
+  "test",
+])
 
 /** Hosts a document may name with a port: the loopback and the names reserved for examples (RFC 2606, RFC 6761). */
 function publicHost(host: string): boolean {

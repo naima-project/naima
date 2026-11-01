@@ -13,6 +13,7 @@ import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, rmSync, s
 import { basename, dirname, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
+  ALLOW_PRIVATE,
   ATTACHMENTS,
   beforeTextWrite,
   bool,
@@ -31,6 +32,7 @@ import {
   isRegularFile,
   type Item,
   joinProse,
+  KINDS,
   label,
   NOTES_HEADING,
   parse,
@@ -568,6 +570,49 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
     },
   }
 
+  const privateDataCheck: Check = {
+    name: "private-data",
+    says:
+      "no tracker file or attachment holds private infrastructure (a home-directory path, a machine or user name, an IP address, a URI with a port, a word of the private list), unless a mention let through with --allow-private is recorded in the file or its item's notes, or the project keeps private data (privateData: keep)",
+    run(ctx) {
+      if (privateDataOf({ plugins: { [self]: { options } } }, self) === "keep") return []
+      const pc = privateContext()
+      const out: Finding[] = []
+      const prefix = ctx.trackerPrefix ? `${ctx.trackerPrefix}/` : ""
+      const files = isGitRepo(ctx.trackerGit)
+        ? projectFiles(ctx.trackerGit).filter((f) => f.startsWith(prefix)).map((f) => join(ctx.trackerGit, f))
+        : walkFiles(ctx.trackerRoot, { skipHidden: true })
+      const owner = new Map<string, Item>()
+      for (const item of ctx.repo.items) owner.set(resolve(item.dir), item)
+      const itemOf = (file: string): Item | undefined => {
+        for (let dir = dirname(resolve(file)); dir.length > 1 && dir !== dirname(dir); dir = dirname(dir)) {
+          const item = owner.get(dir)
+          if (item) return item
+        }
+        return undefined
+      }
+      const allowedIn = (text: string): boolean => text.includes(`(${ALLOW_PRIVATE})`)
+      for (const file of files.sort()) {
+        const text = textOf(file)
+        if (text === null) continue
+        const found = findPrivate(text, pc)
+        if (!found.length || allowedIn(text)) continue
+        const item = itemOf(file)
+        if (item && allowedIn(readReadme(item))) continue
+        const where = gitPath(relative(ctx.root, file))
+        for (const f of found) {
+          out.push({
+            level: "problem",
+            ...(item ? { item } : {}),
+            subject: where,
+            message: `${where}:${f.line}: ${KINDS[f.kind].says} — write ${KINDS[f.kind].placeholder} instead; history keeps what was committed`,
+          })
+        }
+      }
+      return out
+    },
+  }
+
   /** The exception paths in the trunk's configuration, or null when there is no trunk to compare with. */
   function trunkExceptions(ctx: Context): { name: string; paths: Set<string> } | null {
     if (!isGitRepo(ctx.trackerGit)) return null
@@ -592,6 +637,7 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
       "A file enters an item's `attachments/` through `naima attach`, which records on the item, in the field `attached`, whose it is: the owner's (`--consent`, their yes restated) or the writer's own (`--own`). " +
       "The check `attachment-consent` flags an attachment with no record — one copied in by hand — unless the trunk already holds it, or a tool of the program writes it itself (a property's run records). " +
       "The check `secrets` reads every project file and every attachment for six shapes of secret: a private key with its body (a header alone is not one), and AWS, GitHub, Slack, API-secret and Google keys; `naima attach` refuses a file holding one. " +
+      "The check `private-data` reads every tracker file, attachments included, for private infrastructure: a home-directory path, the machine's or the user's name, an IP address, a URI with a port, a word of the private list; it names each finding's file, line, kind and placeholder, never the value. A mention let through with `--allow-private` is not flagged: its allowance line is in the file itself or in its item's notes. With `privateData: keep` the check flags nothing. " +
       "A file that must keep one is an exception in the plugin's options, with a reason and the item that tracks it; an exception the trunk's configuration does not hold is refused, so the list only shrinks. " +
       "Every write of free text or a file — a title, a description, a note, a free-text field, a session note, an event, an attachment — is signed against the no-leaks checklist the program ships, `docs/agents/NOLEAKS.md`: the writer passes its path with `--revised`, and the write hook `signed-writes` compares the file with the program's own copy, byte for byte, and refuses the write without it or with any other file. " +
       "The first unsigned write in a worktree is not refused: the checklist is printed to the writer and the write goes on, its signature marked `shown`; the checkout's mark remembers it (the checklist's hash, in `checklist-shown/` of Naima's state folder `naima/` in the clone's git directory, which the launcher lets every command write: `main` for the clone's own checkout, `worktree-<name>` for each linked worktree), so every later unsigned write there is refused, until the checklist changes. " +
@@ -621,6 +667,6 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
     fields: [ATTACHED, SIGNED],
     hooks: [signedWrites],
     commands: [attach, privacyCommand(self)],
-    checks: [consentCheck, secretsCheck],
+    checks: [consentCheck, secretsCheck, privateDataCheck],
   }
 }
