@@ -60,7 +60,7 @@ import {
   writeJsonAtomic,
 } from "./records.ts"
 import { windowsLaunch } from "./launch.ts"
-import { type Host, readHosts, sshArgs } from "./remote.ts"
+import { type Host, noHost, projectHosts, sshArgs } from "./remote.ts"
 
 const SUPERVISOR = fileURLToPath(new URL("./supervisor.ts", import.meta.url))
 const isDeno = typeof (globalThis as { Deno?: unknown }).Deno !== "undefined"
@@ -119,9 +119,7 @@ function hostOf(hosts: Map<string, Host>, name: string): Host {
   const h = hosts.get(name)
   if (!h) {
     throw refuse(
-      `no host "${name}" — declare it in naima.json: plugins.long-work.options.hosts.${name} = { "ssh": "<destination>", "dir": "<project on the host>" }${
-        hosts.size ? `; declared: ${[...hosts.keys()].join(", ")}` : ""
-      }`,
+      noHost(name, hosts),
     )
   }
   return h
@@ -755,7 +753,7 @@ const waitLoops: Check = {
 }
 
 export default function longWork(options: Record<string, unknown> = {}): Plugin {
-  const hosts = readHosts(options)
+  const hosts = projectHosts(options)
   const declared = readLongRuns(options, hosts)
   return {
     name: "long-work",
@@ -777,7 +775,7 @@ export default function longWork(options: Record<string, unknown> = {}): Plugin 
         name: "hosts",
         default: "{}",
         says:
-          'the machines a run may go to: name → { "ssh": the destination ssh is given, "dir": the project\'s checkout there, "naima": the command that runs its Naima from dir (default `deno run -A naima-tracker/naima/naima.ts`), "shell": the shell its sshd runs a command through, which every word is quoted for — "posix" (default) or "cmd", the stock Windows OpenSSH server\'s }',
+          'the machines a run may go to: name → { "ssh": the destination ssh is given, "dir": the project\'s checkout there, "naima": the command that runs its Naima from dir (default `deno run -A naima-tracker/naima/naima.ts`), "shell": the shell its sshd runs a command through, which every word is quoted for — "posix" (default) or "cmd", the stock Windows OpenSSH server\'s }; hosts declared the same way in hosts.json in the user\'s Naima config folder are added, outside every repository, and win over a committed one of the same name',
       },
       {
         name: "longRuns",

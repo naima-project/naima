@@ -90,6 +90,21 @@ const alive = (pid: number, groups: boolean): boolean => {
 
 const delay = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms))
 
+/**
+ * A wait for a child's output to be read to its end, started when the child is: the child's `exit` may come while its
+ * output is still in the pipes (Node's documented order, seen under Bun and under load), and a log ended then loses the
+ * last lines, which `naima wait` prints. The wait is bounded, since a process the command left behind may hold a pipe
+ * open: it says whether the output closed within `ms`.
+ */
+export function outputClosed(child: { once(event: "close", listener: () => void): unknown }): (ms: number) => Promise<boolean> {
+  let closed = false
+  const done = new Promise<void>((resolve) => child.once("close", () => (closed = true, resolve())))
+  return async (ms) => {
+    if (!closed) await Promise.race([done, delay(ms)])
+    return closed
+  }
+}
+
 /** End the command's tree: SIGTERM (taskkill /T), then SIGKILL (/F) after the grace if anything of it is left. */
 export async function endTree(pid: number, p: Platform, graceMs: number): Promise<void> {
   const send = (force: boolean): void => {
@@ -145,6 +160,7 @@ export async function supervise(dir: string, graceMs: number = DEFAULTS.graceMs)
   }
   child.stdout?.pipe(log, { end: false })
   child.stderr?.pipe(log, { end: false })
+  const drained = outputClosed(child)
   let reason: Reason | null = null
   const exited = new Promise<{ code: number | null; signal: string | null; error?: string }>((done) => {
     child.once("error", (e) => done({ code: null, signal: null, error: e.message }))
@@ -179,6 +195,8 @@ export async function supervise(dir: string, graceMs: number = DEFAULTS.graceMs)
   clearInterval(timer)
   // A run leaves nothing running: what the command left in its group is ended too.
   if (child.pid !== undefined && p.groups) await endTree(child.pid, p, graceMs)
+  // The run's end is recorded only once its whole output is in the log: a reader that sees "ended" reads the last line too.
+  await drained(2_000)
   await Promise.race([new Promise((done) => log.end(done)), delay(2_000)])
   const after = before !== null ? trackedChanges(spec.cwd) : null
   const changed = before !== null && after !== null ? after.filter((f) => !before.includes(f)) : []

@@ -44,16 +44,31 @@ export interface PrivateContext {
 }
 
 /** The environment variables the launcher hands the program, which may not ask the system or read the user's config itself. */
-export const PRIVATE_ENV = { host: "NAIMA_PRIVATE_HOST", user: "NAIMA_PRIVATE_USER", words: "NAIMA_PRIVATE_WORDS" } as const
+export const PRIVATE_ENV = { host: "NAIMA_PRIVATE_HOST", user: "NAIMA_PRIVATE_USER", words: "NAIMA_PRIVATE_WORDS", hosts: "NAIMA_PRIVATE_HOSTS" } as const
+
+/** The user's Naima config folder, outside every repository: `$XDG_CONFIG_HOME/naima`, else `~/.config/naima`; on Windows `%APPDATA%\naima`. */
+export function userConfigDir(env: Record<string, string | undefined>, os: string): string {
+  if (os === "windows" && env["APPDATA"]) return join(env["APPDATA"], "naima")
+  const config = env["XDG_CONFIG_HOME"] || join(env["HOME"] || env["USERPROFILE"] || safe(homedir) || ".", ".config")
+  return join(config, "naima")
+}
 
 /**
  * Where the private word list is: one word or name per line, `#` starting a comment.
  * `$XDG_CONFIG_HOME/naima/private-words`, else `~/.config/naima/private-words`; on Windows `%APPDATA%\naima\private-words`.
  */
-export function privateWordsFile(env: Record<string, string | undefined>, os: string): string {
-  if (os === "windows" && env["APPDATA"]) return join(env["APPDATA"], "naima", "private-words")
-  const config = env["XDG_CONFIG_HOME"] || join(env["HOME"] || env["USERPROFILE"] || safe(homedir) || ".", ".config")
-  return join(config, "naima", "private-words")
+export const privateWordsFile = (env: Record<string, string | undefined>, os: string): string => join(userConfigDir(env, os), "private-words")
+
+/** Where the private hosts are declared: `hosts.json` in the user's Naima config folder, the same shape as the long-work plugin's `hosts` option. */
+export const privateHostsFile = (env: Record<string, string | undefined>, os: string): string => join(userConfigDir(env, os), "hosts.json")
+
+/** A file's text, or null when it cannot be read. */
+export function readText(file: string): string | null {
+  try {
+    return readFileSync(file, "utf8")
+  } catch {
+    return null
+  }
 }
 
 /** The words of a private list's text: one per line, blank lines and `#` comments left out. */
@@ -76,7 +91,7 @@ function readWords(file: string): string[] {
 }
 
 /**
- * What the launcher adds to the program's environment: the machine's name and the private list, read with the
+ * What the launcher adds to the program's environment: the machine's name, the private list and the private hosts, read with the
  * launcher's permissions. A value the caller already set is kept.
  */
 export function privateEnv(env: Record<string, string | undefined>, os: string): Record<string, string> {
@@ -86,6 +101,8 @@ export function privateEnv(env: Record<string, string | undefined>, os: string):
   const user = env[PRIVATE_ENV.user] ?? env["USER"] ?? env["USERNAME"] ?? env["LOGNAME"]
   if (user) out[PRIVATE_ENV.user] = user
   out[PRIVATE_ENV.words] = env[PRIVATE_ENV.words] ?? readWords(privateWordsFile(env, os)).join("\n")
+  const hosts = env[PRIVATE_ENV.hosts] ?? readText(privateHostsFile(env, os))
+  if (hosts !== null) out[PRIVATE_ENV.hosts] = hosts
   return out
 }
 
@@ -95,10 +112,29 @@ export function privateContext(env: Record<string, string | undefined> = process
   const user = env[PRIVATE_ENV.user] ?? env["USER"] ?? env["USERNAME"] ?? env["LOGNAME"]
   const given = env[PRIVATE_ENV.words]
   const words = given !== undefined ? wordsOf(given) : readWords(privateWordsFile(env, os))
-  return { host, user, words }
+  return { host, user, words: [...words, ...privateHostWords(env[PRIVATE_ENV.hosts] ?? readText(privateHostsFile(env, os)))] }
 }
 
-function processEnv(): Record<string, string | undefined> {
+/** The machines the private hosts name, each a private word: what ssh reaches, without its user, which is caught as a user name. */
+export function privateHostWords(text: string | null): string[] {
+  let raw: unknown
+  try {
+    raw = text ? JSON.parse(text) : null
+  } catch {
+    return []
+  }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return []
+  const out = new Set<string>()
+  for (const h of Object.values(raw as Record<string, unknown>)) {
+    const ssh = h && typeof h === "object" ? (h as { ssh?: unknown }).ssh : undefined
+    if (typeof ssh !== "string") continue
+    const machine = ssh.trim().replace(/^[^@]*@/, "")
+    if (machine) out.add(machine)
+  }
+  return [...out]
+}
+
+export function processEnv(): Record<string, string | undefined> {
   try {
     return { ...process.env }
   } catch {
@@ -106,7 +142,7 @@ function processEnv(): Record<string, string | undefined> {
   }
 }
 
-const platform = (): string => (process.platform === "win32" ? "windows" : process.platform)
+export const platform = (): string => (process.platform === "win32" ? "windows" : process.platform)
 
 const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 

@@ -174,6 +174,8 @@ export {
   type Host,
   type HostAnswer,
   type HostShell,
+  noHost,
+  projectHosts,
   readHosts,
   remoteCommand,
   shellQuote,
