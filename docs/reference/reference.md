@@ -8,7 +8,7 @@ Every contribution below has a qualified id, `<plugin>/<name>`, and goes by its 
 ## Contents
 
 - [core](#core) — items, fields, links and the invariants every project has
-- [trackers](#trackers) — bugs, todos, features, tests, and the archive of closed bugs
+- [trackers](#trackers) — bugs, todos, features, tests, and the archive of closed and retired items
 - [coordination](#coordination) — claims and session notes, one file per session, recombined from every branch; the timeline, derived from the items and git
 - [triage](#triage) — priority, impact, effort, confidence; the urgency ranking built from them; parked, wontfix and dropped deferrals; authoritative documents
 - [gates](#gates) — named release conditions backed by items
@@ -72,6 +72,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`messages`](#naima-messages) | core | list what Naima has to tell the owner: the urgent messages not yet acknowledged, which the tick shows at most once an hour, then what it said once, such as a newer Naima; with ack, the owner acknowledges a message, which stops it being shown, in every worktree and, once the tracker is committed, on every machine | a message is acknowledged only by the owner's command, never on their behalf; an acknowledgement is never undone |
 | [`origin`](#naima-origin) | core | say the session this worktree is in; with a session id, list what that session filed (each with who asked) and every other item it changed, to review a session that drifted and undo it item by item; with --backfill, give every item with no origin one inferred from git; with --set, settle who asked for an item, such as one the backfill left unknown | an origin is never changed but for who asked, and only through --set, which keeps the rest as it was and records each correction in the origin: what it was, who set it, when; the backfill writes only to items with none, marks each inferred: true with askedBy unknown, for the owner to settle in a review; the session's log is read from outside the repository and never committed |
 | [`close`](#naima-close) | trackers | archive a resolved item: fixed, and proven by an item that has passed; or a finished review or decision, with the reason | an item is archived only when fixed and proven: fixedOn set and a verified-by item that has passed, with every write hook agreeing; --force takes a hook's refusal on, for the one who owns the evidence. --reason closes, without fixedOn, proof or commit, only a todo whose kind is review or decision and whose status is done or dropped; the reason is kept in closedBecause and naima check lists it |
+| [`retire`](#naima-retire) | trackers | end an item of any type that no longer applies, on the owner's word: archived with the reason, the consent and what replaced it | an item is retired only with a reason and the owner's consent, each on one line, and with every write hook agreeing; it moves to the archive with status retired, the reason in retiredBecause, the consent in retiredConsent, the type it came from in closedFrom and the day in closedOn; --replaced-by links it to an item that exists and is not itself; an item already in the archive is refused; nothing is deleted |
 | [`bugs`](#naima-bugs) | trackers | how many bugs have no code written, and how many are fixed but unproven | nothing: it only counts |
 | [`open`](#naima-open) | coordination | start a piece of work: a worktree <worktrees>/<what> on a new branch <who>/<what> from the trunk, and its claim on the items, in one step | work happens on its own branch and worktree from the trunk, and its claim on the items is recorded in the same step; a branch that already exists is never reused, and the refusal says whether it is merged into the trunk; no worker worktree is opened beyond the option maxWorkers, and the refusal names the open ones and how to raise the bound |
 | [`claim`](#naima-claim) | coordination | record that this branch is working on items (writes one file on this branch) | a claim belongs to a branch, never to a detached HEAD nor to the trunk, and is one file on that branch; it never locks anything: several branches may claim one item |
@@ -88,7 +89,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`stale`](#naima-stale) | coordination | the work left behind: every branch, worktree and claim with no sign of life for staleAfter hours, or whose branch is gone or merged, with what it holds and the next step | nothing: it only reads; a branch counts as stale when its claim is stale (branch gone or merged into the trunk, or every item closed) or nothing happened on it for staleAfter hours (24 here) — no commit, step, session note or file changed; the next step is resume when anything is not committed, land when it is ahead of the trunk, up to date with it and holds open items, resume when it is behind, archive when no open item is claimed, drop when the trunk has all of it or the branch is gone |
 | [`pass`](#naima-pass) | coordination | write this session's note (one new file), or list the newest | a session note is one new file: earlier ones are never rewritten; a note is refused without --ack when the project's active rules ask for an acknowledgement, and --ack is refused unless it carries every phrase they ask for |
 | [`event`](#naima-event) | coordination | record an event the timeline cannot derive — a decision taken elsewhere, a build handed out, a policy, an outside fact — as one new file; everything else on `naima view timeline` is derived | an event has a YYYY-MM-DD date and a one-word kind, and is one new file; what the timeline derives is never recorded |
-| [`diary`](#naima-diary) | coordination | the project's story, day by day and in order: events recorded with --kind diary, every decision with its reason, every artifact delivered, every session note; nothing stored but those files | nothing: it reads the records, the decisions, the artifacts and the session notes, and writes nothing |
+| [`diary`](#naima-diary) | coordination | the project's story, day by day and in order: events recorded with --kind diary, every decision with its reason, every artifact delivered, every item retired with its reason, every session note; nothing stored but those files | nothing: it reads the records, the decisions, the artifacts, the retired items and the session notes, and writes nothing |
 | [`triage`](#naima-triage) | triage | coverage of the four fields; set them; list what needs a human; derive what the page proves | the four fields take only their declared values, through the write hooks; derive writes only with --write |
 | [`gates`](#naima-gates) | gates | every gate, whoever declared it, and whether it holds; --check exits 1 if one does not | with --check, every listed gate holds: exit 1 if one does not |
 | [`gate`](#naima-gate) | gates | declare a gate — a milestone, with a date and a version — put items on it or take them off, and show one; writes go to naima.json and to the items, validated, through the write hooks | writes to naima.json and to the items are validated and pass the write hooks |
@@ -144,7 +145,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `rank` | core | an additive term of every item's urgency; lower is more urgent | triage, gates |
 | `jobs` | core | a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it, among those its canRunHere admits (a process it does not claims no attempt); what it finds is shown to the owner as messages | outside-issues, long-work |
 | `extends` | core | additive changes to another plugin's type — statuses (an existing one only with its category), traits, transitions — or field — enum values, more types or traits it applies to | discussions, knowledge, roles |
-| `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done; `beforeText(text, ctx)` may refuse a write of free text or a file that is not an item's (a session note, an event, an attachment) or add to its record | core, coordination, triage, epics, discussions, planning, knowledge, verifier, privacy |
+| `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done; `beforeText(text, ctx)` may refuse a write of free text or a file that is not an item's (a session note, an event, an attachment) or add to its record | core, trackers, coordination, triage, epics, discussions, planning, knowledge, verifier, privacy |
 | `setup` | core | what a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init` and `naima update` after their own work: `install(ctx) → lines`, each said | coordination, planning, backup, metrics |
 | `agent-hooks` | core | a hook the agent tool runs, which Naima installs in the tool's settings beside its own at `naima init`, `naima update` and `naima stance adopt`, and removes once the plugin is gone: `name`, `says`, `tool` (the agent tool, by adapter id), `event` and optionally `matcher` in that tool's terms, and `command`, the naima command it runs as a list of words |  |
 | `migrations` | core | a plugin's own data migrations, in order from its format 1, run by `naima update` after the core's | gates |
@@ -152,7 +153,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `landing-reports` | coordination | what `naima land` checks before a branch lands and reports once it has: `name`, `says`, and `refuses(ctx, { branch, from, to, changed }) → lines`, what fails on the branch, any line refusing the landing with no flag to let it through; `blocks(ctx, landing) → lines`, what the landing changed whose proofs are not current, any line refusing the landing unless --stale-proofs gives the reason; or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root | verifier, rules |
 | `gates` | gates | a named release or merge condition, backed by items: `title`, `says`, `decides`, `evaluate(ctx) → { holds, blocking, owed }`; `inFullSuite` makes it part of the full suite a release gate (`fullSuite`) requires | verifier |
 | `roles` | roles | a role of the company of agents: `title`, what it `owns`, what it `refuses` (never empty), the `kinds` and `types` on its queue, and `queue(ctx)`, its open items most urgent first | roles |
-| `verifiers` | verifier | an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest; `toolArgs`, the flags `naima verify --tool-args` may pass, which never change the verdict; and `equivalences` with `compare({ before, after, equivalence }, ctx) → { verdict, output, counterexample?, details? }` and `preserves({ property, options, equivalence }, ctx)`, for `naima equivalent`; `identityOptions(options)`, the options as they identify a run, so a run made with other effective options is never reused | verifier, verifier-mcrl2 |
+| `verifiers` | verifier | an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest; `toolArgs`, the flags `naima verify --tool-args` may pass, which never change the verdict; and `equivalences` with `compare({ before, after, equivalence }, ctx) → { verdict, output, counterexample?, details? }` and `preserves({ property, options, equivalence }, ctx)`, for `naima equivalent`; `identityOptions(options)`, the options as they identify a run, so a run made with other effective options is never reused; `propertyFile(property, root)`, the file a property names when it is not inline, so a missing one is said as missing | verifier, verifier-mcrl2 |
 | `tools` | tools | a tool a plugin needs, which `naima tools install` installs into Naima's own directory: name, exact version, licence, homepage, source and authors (its attribution, which `naima credits` prints), programs, how an install is verified, and per platform a source (url, size, sha256, format) or the answer saying why there is none | backup, verifier-mcrl2 |
 | `ui-views` | ui | a view the provisional window shows as a tab, or as a panel of its first screen: `name` (its path), `title`, `says`, `order` (lower first, 0 when absent), `panel` (true: on the first screen, not a tab), `render(params, ctx) → { data, html, css? }`, rendered at each request | coordination, triage, gates, ui, metrics |
 | `metric-kinds` | metrics | how a metric's number is read from its run: `read({ exit, stdout, stderr, seconds }, metric) → number \| { error }`, `readsExit` | metrics |
@@ -472,12 +473,13 @@ List items, most urgent first.
 **Enforces**: Nothing: it only reads.
 
 ```sh
-naima list [type] [--open] [--origin <role|session|date range>]
+naima list [type] [--open] [--status <status>] [--origin <role|session|date range>]
 ```
 
 | Option | Default | What it does |
 |---|---|---|
 | `--open` |  | only items whose status is in the open category |
+| `--status` |  | only items whose status is this one: list closed --status retired lists the retired items |
 | `--origin` |  | only items whose origin matches: a role who asked (owner, coordinator, worker, agent, person, unknown), a day or a range of days filed (2026-10-27, 2026-10-01..2026-10-27, either end open), else a session id |
 
 Examples:
@@ -485,6 +487,7 @@ Examples:
 ```sh
 naima list
 naima list bugs --open
+naima list closed --status retired
 naima list requirements --origin agent
 naima list --origin 2026-10-01..
 naima list --origin 2026-10-27-1a2b3c4d
@@ -899,7 +902,7 @@ Moves allowed: `acknowledged` → ; a status not named moves to any.
 
 ## trackers
 
-Bugs, todos, features, tests, and the archive of closed bugs.
+Bugs, todos, features, tests, and the archive of closed and retired items.
 
 Its contributions' qualified ids are `trackers/<name>`.
 
@@ -910,6 +913,8 @@ Three words that are not synonyms:
 - **closed** — resolved, and moved to `closed/` by `naima close`, carrying its proof.
 
 A todo whose work is a judgement with no code, a review or a decision (its `kind` says which), has nothing to fix and no test to pass. Once its status is `done` or `dropped`, `naima close <item> --reason "<what was settled, and where it is written>"` archives it without a proof. The reason is kept in `closedBecause`, and `naima check` lists every such item as a note, `closed-without-proof`, so nothing is closed this way unseen.
+
+An item of any type that no longer applies (a property whose model was replaced, a requirement given up, a todo filed by mistake) is ended with `naima retire <item> --reason "<why>" [--replaced-by <item>] --consent "<the owner's yes, restated>"`, and only on the owner's word. It is moved to `closed/` with status `retired`, keeping the reason in `retiredBecause`, the consent in `retiredConsent`, the type it came from in `closedFrom` and the day in `closedOn`; `--replaced-by` links it to what replaced it, and the replacement shows the inverse, `replaces`. There is no delete: an item filed by mistake is retired with that reason. A retired item leaves every queue, gate and long run, and stays readable (`naima show`, `naima list closed --status retired`). So that a retirement never hides a failing proof, `naima check` lists every retired item (`retired-items`), a gate that depended on a retired item or proof shows it, and a requirement whose proof was retired is no longer counted as proven and is flagged.
 
 "How many bugs are left" means the unfixed count; `naima bugs` never adds the three together.
 
@@ -962,6 +967,29 @@ Examples:
 naima close export-drops
 naima close export-drops --force
 naima close review-last-two-days --reason "each change reviewed with the owner; the decisions are in the item's notes"
+```
+
+### naima retire
+
+End an item of any type that no longer applies, on the owner's word: archived with the reason, the consent and what replaced it.
+
+**Enforces**: An item is retired only with a reason and the owner's consent, each on one line, and with every write hook agreeing; it moves to the archive with status retired, the reason in retiredBecause, the consent in retiredConsent, the type it came from in closedFrom and the day in closedOn; --replaced-by links it to an item that exists and is not itself; an item already in the archive is refused; nothing is deleted.
+
+```sh
+naima retire <item> --reason "<why>" [--replaced-by <item>] --consent "<the owner's yes, restated>"
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--reason` |  | why it no longer applies, on one line: kept in retiredBecause, and said wherever it was counted on |
+| `--consent` |  | the owner's yes, restated, on one line: kept in retiredConsent; an agent retires nothing without it |
+| `--replaced-by` |  | the item that replaced it: linked replaced-by, and the replacement shows replaces |
+
+Examples:
+
+```sh
+naima retire scheduler-no-deadlock --reason "its model was deleted with the old scheduler design" --replaced-by scheduler-v2-no-deadlock --consent "yes, retire the two old scheduler properties"
+naima retire export-twice --reason "filed by mistake: a duplicate of bugs/export-drops" --consent "yes, retire it"
 ```
 
 ### naima bugs
@@ -1032,13 +1060,14 @@ Tests: a gesture that proves something, and its result. Items live in `naima-tra
 
 ### type: closed
 
-Closed: the archive: resolved items, each with its proof. Items live in `naima-tracker/naima-data/closed/`; a new one starts as `closed`; it is an archive: items arrive by being moved there, never by being opened.
+Closed: the archive: resolved items, each with its proof, and retired items, each with its reason. Items live in `naima-tracker/naima-data/closed/`; a new one starts as `closed`; it is an archive: items arrive by being moved there, never by being opened.
 
 Traits: `fixable`, `archive`.
 
 | Status | Category | Flags | Meaning |
 |---|---|---|---|
 | `closed` | done |  | fixed, proven, archived |
+| `retired` | done | retired | no longer applies: archived by naima retire on the owner's word, with the reason, the consent and what replaced it |
 
 **Fields**
 
@@ -1048,6 +1077,8 @@ Traits: `fixable`, `archive`.
 | `closedOn` | date | closed | when the item was archived |  |
 | `closedFrom` | string | closed | the type the item was archived from |  |
 | `closedBecause` | string | closed | why an item was closed without a proof: a todo of kind review or decision, closed by naima close --reason |  |
+| `retiredBecause` | string | closed | why a retired item no longer applies, as naima retire --reason gave it |  |
+| `retiredConsent` | string | closed | the owner's yes to retiring it, restated, as naima retire --consent gave it |  |
 | `runBy` | enum | tests, bugs, todos | who can perform the proving gesture — the instrument, not the effort | `agent` settled by a command: a unit test, a grep, an API call; `agent-hands` settled by an agent driving the running software; `human` needs a person: a judgement of how it looks, a physical act, a reserved decision; `build` needs an artifact nobody here makes: a signed build, a second machine |
 | `humanBecause` | enum | tests, bugs, todos | why only a person can perform the proof, when runBy is human | `judgement` how it looks, sounds or feels: no instrument can settle it; `decision` a decision reserved to the owner; `credential` a secret, an account or a signature only a person holds; `physical` a physical act or a machine only a person has at hand |
 | `evidenceKind` | enum | tests | what the test's evidence is, from the ranking: strongest first | `owner-gesture` the owner performed the gesture and saw the result; `observation` a screenshot, a log line or a number, kept with the item; `live-read` the live state, read by tooling: a query, an API call, the running program's own answer; `diff` a before-and-after comparison: counts, sizes, outputs; `inspection` the code looks right — which proves nothing |
@@ -1062,6 +1093,8 @@ Traits: `fixable`, `archive`.
 |---|---|---|
 | `verifies` | `verified-by` | is the gesture that proves |
 | `verified-by` | `verifies` | is proven by |
+| `replaced-by` | `replaces` | was retired, and replaced by |
+| `replaces` | `replaced-by` | replaces the retired item |
 
 **Checks**, run by `naima check`
 
@@ -1070,11 +1103,12 @@ Traits: `fixable`, `archive`.
 | `partial-says-what-is-left` | a partial item carries at least one unticked `- [ ]` clause |
 | `proven-but-open` | an open item whose proof has passed is reported so it can be closed |
 | `fix-names-its-gesture` | a fixed item names the gesture that would prove it |
-| `closed-carries-proof` | every archived item is verified by an item that has passed, unless it was closed with a reason as a review or a decision |
+| `closed-carries-proof` | every archived item is verified by an item that has passed, unless it was closed with a reason as a review or a decision, or retired |
 | `closed-without-proof` | every item closed with a reason instead of a proof (a todo of kind review or decision, naima close --reason) is listed as a note with its reason |
+| `retired-items` | every retired item is listed as a note, with its reason and what replaced it, so nothing is retired unseen; one that does not carry the reason and the owner's consent naima retire records is a problem |
 | `human-says-why` | an open item whose proof needs a person (runBy human) says why in humanBecause |
 | `commits-are-real` | every hash an item's commits field names is a commit git has |
-| `closed-names-its-commits` | an item closed on or after 2026-10-01 names a commit reachable from the trunk, unless it was closed with a reason as a review or a decision |
+| `closed-names-its-commits` | an item closed on or after 2026-10-01 names a commit reachable from the trunk, unless it was closed with a reason as a review or a decision, or retired |
 | `regression-test-saw-red` | a passed test that verifies a bug records the day it was seen failing first, in redSeen |
 | `inspection-proves-nothing` | a passed test whose evidenceKind is inspection is noted: reading the code is no evidence |
 | `passed-test-carries-evidence` | a passed test an agent performed by driving the running software (runBy agent-hands) carries what shows it passed, an attachment of what was run and what it printed; one with none is noted |
@@ -1082,6 +1116,12 @@ Traits: `fixable`, `archive`.
 | `test-excuses-itself` | an open test marked runBy agent whose page says a resource was held (the option excusePhrases) is noted: an agent's gesture waits on no one |
 
 **Summary sections**: `bugs`.
+
+**Write hooks**, run on every item write
+
+| Hook | What it does |
+|---|---|
+| `retired-only-by-retire` | an item's status becomes retired only by naima retire, with the reason and the owner's consent, and a retired item's status is never changed by hand |
 
 ## coordination
 
@@ -1465,9 +1505,9 @@ naima event 2026-10-05 "Work on the new engine starts from its requirements" --k
 
 ### naima diary
 
-The project's story, day by day and in order: events recorded with --kind diary, every decision with its reason, every artifact delivered, every session note; nothing stored but those files.
+The project's story, day by day and in order: events recorded with --kind diary, every decision with its reason, every artifact delivered, every item retired with its reason, every session note; nothing stored but those files.
 
-**Enforces**: Nothing: it reads the records, the decisions, the artifacts and the session notes, and writes nothing.
+**Enforces**: Nothing: it reads the records, the decisions, the artifacts, the retired items and the session notes, and writes nothing.
 
 ```sh
 naima diary [--from <YYYY-MM-DD>] [--to <YYYY-MM-DD>] [--json]
@@ -2230,7 +2270,7 @@ Artifacts: something the project makes and keeps — an analysis, a profile, a r
 
 | Check | What it holds |
 |---|---|
-| `requirements-proven` | a requirement marked met has a proof that passed and none that refutes it; one proven but still stated is noted; one that nothing satisfies or verifies is noted; one proposed by someone other than the owner and never confirmed is noted |
+| `requirements-proven` | a requirement marked met has a proof that passed and none that refutes it; one whose proof was retired is flagged, never counted as proven by it — a problem while it is met with no other passed proof, a note otherwise; one proven but still stated is noted; one that nothing satisfies or verifies is noted; one proposed by someone other than the owner and never confirmed is noted |
 | `specs-versioned` | one version of a specification is current; a version superseded by a current one is marked superseded; a spec supersedes only an earlier version of itself; an open item following a superseded version is noted |
 | `decisions-settled` | an open item waiting on the owner's decision (runBy human, humanBecause decision) that a settled decision settles is noted, to be acted on rather than asked; a decision superseded by a settled one is marked superseded |
 | `release-stages` | a release marked released has every stage recorded or skipped with who decided; one hand-edited past the hook is a problem |
@@ -2721,7 +2761,7 @@ Models: a model, or another artifact properties are verified on, named by its pa
 | `property-witnessed` | a property that holds and proves a change is backed by a witness property that holds — one linked to it by witnesses, showing the new behaviour is reachable, so the property does not hold only because the situation never arises. A note, naming the property as its subject, so it can be waived with a reason; a witnesses link with an item that is not a property at either end is noted too |
 | `model-development` | every models item names one model, and no two name the same; a stable model whose property does not hold on a run of what it has now is noted, since it either needs verifying or is in development again |
 
-**Summary sections**: `codegen`.
+**Summary sections**: `codegen`, `missing-model-files`.
 
 **Guide sections**, printed first by `naima guide`
 
@@ -2753,7 +2793,7 @@ Models: a model, or another artifact properties are verified on, named by its pa
 
 | Gate | Title | What it is for | How it decides | In the full suite |
 |---|---|---|---|---|
-| `properties` | Every property holds | every property holds on a run of what the project has now, outside models in development | blocked by every properties item that is open, violated or in error, or that holds on a run its property, verifier, model, options or input files have changed since; a property of a model in development is owed instead. Part of the full suite a release gate requires; the tool's version is checked by naima check. | yes |
+| `properties` | Every property holds | every property holds on a run of what the project has now, outside models in development | blocked by every properties item that is open, violated or in error, or that holds on a run its property, verifier, model, options or input files have changed since; a property of a model in development is owed instead. A property whose model or property file is missing blocks too, said as missing with naima retire offered, and is marked stuck: no long run can bring it current. A retired property is listed with its reason. Part of the full suite a release gate requires; the tool's version is checked by naima check. | yes |
 
 **Verifiers**, used by `naima verify`
 

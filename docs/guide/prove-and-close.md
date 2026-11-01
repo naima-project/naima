@@ -167,6 +167,35 @@ and no commit, and keeps the reason in its `closedBecause` field. `naima check` 
 reason, so none of them goes unseen. The notes of such a review usually reach the trunk on a branch that changes nothing but tracker data, landed with
 `naima land <branch> --tracker-only "<reason>"` ([several branches](several-branches.md)).
 
+## Retire what no longer applies
+
+Sometimes an item will never be fixed or proven because it stopped applying: a property whose model was deleted when the design changed, a requirement the owner
+gave up, a todo filed twice by mistake. Such an item is retired, and only when the owner says so:
+
+```sh
+naima retire scheduler-no-deadlock --reason "its model was deleted with the old scheduler design" \
+  --replaced-by scheduler-v2-no-deadlock --consent "yes, retire the two old scheduler properties"
+```
+
+Any type of item can be retired. It moves to `closed/` with the status `retired`. Its `retiredBecause` field keeps the reason, `retiredConsent` keeps the
+owner's yes in the agent's words, `closedFrom` keeps the type it came from and `closedOn` the day. `--replaced-by` is optional: it links the item to whatever
+took its place, and that item shows the link back as `replaces`. There is no delete. An item filed by mistake is retired with "filed by mistake" as the reason.
+
+A retired item drops out of every queue, gate and long run, and `naima hello` stops mentioning it. You can still read it with `naima show`, and
+`naima list closed --status retired` lists them all. The timeline and `naima diary` show each one on the day it was retired, with its reason.
+
+Retiring a proof should never be a quiet way to get rid of a failing one, so three things keep it visible:
+
+- `naima check` lists every retired item as a note (`retired-items`) with its reason and the consent.
+- A gate that depended on a retired item, or on a proof of one of its items, shows it under `naima gates` as `! depended on …`, with the reason.
+- A requirement stops counting a retired test or property as its proof. If the requirement is `met` and has no other proof that passed, `naima check` reports a
+  problem that names the retired proof.
+
+The status `retired` is set only by `naima retire`. Setting it by hand, or taking it off, is refused.
+
+When a property's model file or formula file no longer exists, no run can bring it up to date. `naima verify`, `naima check`, `naima gates` and `naima hello`
+then say "model file missing" (or "property file missing") and suggest `naima retire`, rather than calling the property stale or saying a long run is due.
+
 ## Properties, proven by a tool
 
 A [property](glossary.md#property) is proven by a [verifier](glossary.md#verifier), which is a model checker, instead of by hand. `naima verifiers` lists the
