@@ -472,12 +472,19 @@ function existing(path: string): string {
   return dir
 }
 
-/** The data of the project `cwd` is in, when it is not the one this launcher's program belongs to; else undefined. */
+/**
+ * The data of the project `cwd` is in, when it is not the one this launcher's program belongs to and either has no
+ * program of its own yet (a fresh clone) or its program is a link to this one; else undefined. A project with a program
+ * of its own is served by its own launcher, so another project's launcher run by its path from inside it serves that
+ * other project.
+ */
 export function otherProject(cwd: string, own: string): string | undefined {
   const here = toplevel(cwd)
   if (!here || real(here) === real(toplevel(dirname(own)) ?? dirname(own))) return undefined
   const data = join(here, TRACKER_DIR, DATA_DIR)
-  return existsSync(join(data, DATA_FILE)) ? data : undefined
+  if (!existsSync(join(data, DATA_FILE))) return undefined
+  const program = programOf(data)
+  return !existsSync(join(program, "naima.ts")) || real(program) === real(own) ? data : undefined
 }
 
 /**
@@ -503,7 +510,7 @@ export async function launch(args: string[], cwd: string): Promise<number> {
   }
   // Resolved: Deno grants real paths, and the program reads its own directory, which may not be the project's.
   const own = real(dirname(dirname(fileURLToPath(import.meta.url))))
-  // Run from inside another project that uses Naima — a fresh clone, whose program is not cloned yet — the
+  // Run from inside another project that uses Naima and has no program yet — a fresh clone — the
   // launcher serves that project, as if named with --data: the data says where its program goes, and it is cloned.
   const given = parsed.data ?? Deno.env.get("NAIMA_DATA") ?? otherProject(cwd, own) ??
     (parsed.rest[0] === "stance" && parsed.rest[1] === "adopt" ? worktreeData(cwd, own) : undefined)
