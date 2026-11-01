@@ -22,6 +22,7 @@ import {
   CONTRACT,
   EXIT,
   gitOrNull,
+  gitReason,
   installDirOf,
   NaimaError,
   parse,
@@ -176,7 +177,7 @@ export function answerOf(dir: string): "asked" | "declined" | null {
 
 const record = (dir: string, value: "asked" | "declined"): void => {
   const r = runGit(dir, ["config", "--local", ANSWER_KEY, value])
-  if (!r.ok) throw new NaimaError(`cannot record the answer in ${dir}'s git config: ${r.err || "git failed"}`)
+  if (!r.ok) throw new NaimaError(`cannot record the answer in ${dir}'s git config: ${gitReason(r)}`)
 }
 
 const forget = (dir: string): void => void runGit(dir, ["config", "--local", "--unset", ANSWER_KEY])
@@ -241,7 +242,7 @@ function pushFirst(dir: string): string {
   const r = runGit(dir, ["push", "--quiet", "-u", "origin", "HEAD"])
   if (!r.ok) {
     throw new NaimaError(
-      `the remote is set, but the push failed: ${r.err.split("\n").find((l) => l.trim()) ?? "git failed"} — fix it, then git push -u origin HEAD`,
+      `the remote is set, but the push failed: ${gitReason(r)} — fix it, then git push -u origin HEAD`,
     )
   }
   return `pushed ${gitOrNull(dir, "rev-parse", "--abbrev-ref", "HEAD") ?? "HEAD"}`
@@ -341,7 +342,7 @@ function add(ctx: Context, args: string[]): number {
   const remote = remoteOf(s.dir)
   if (remote) throw new NaimaError(`${s.name} already has a remote, ${remote}: nothing added`)
   const r = runGit(s.dir, ["remote", "add", "origin", url])
-  if (!r.ok) throw new NaimaError(`cannot add the remote: ${r.err || "git failed"}`)
+  if (!r.ok) throw new NaimaError(`cannot add the remote: ${gitReason(r)}`)
   forget(s.dir)
   ctx.out(`added ${remoteOf(s.dir)} as the remote of ${s.name}; ${pushFirst(s.dir)}`)
   return EXIT.OK
