@@ -195,6 +195,8 @@ interface GateOutcome {
   blocking: Item[]
   owed: Item[]
   reasons?: string[]
+  /** Blocking items no run can bring current (a property whose model file is gone): never what makes a run due. */
+  stuck?: Item[]
 }
 
 /** A long run that is due: why, the items it covers that are not current, and when it last succeeded here. */
@@ -228,8 +230,14 @@ export async function dueRuns(ctx: Context, declared: readonly LongRun[], tracke
   }
   const suite = gates.filter((g) => g.inFullSuite === true)
   const behind = new Set<string>()
-  for (const g of suite) for (const i of [...(await outcome(g)).blocking, ...(await outcome(g)).owed]) behind.add(String(i.meta.id))
-  const stale = (i: Item): boolean => !refutes(ctx, i) && (behind.has(String(i.meta.id)) || isOpen(ctx, i))
+  const stuck = new Set<string>()
+  for (const g of suite) {
+    const r = await outcome(g)
+    for (const i of [...r.blocking, ...r.owed]) behind.add(String(i.meta.id))
+    for (const i of r.stuck ?? []) stuck.add(String(i.meta.id))
+  }
+  // A stuck item (a property whose model file is gone) waits on a decision, not a run: the gate that marks it says so.
+  const stale = (i: Item): boolean => !refutes(ctx, i) && !stuck.has(String(i.meta.id)) && (behind.has(String(i.meta.id)) || isOpen(ctx, i))
   const runs = [...declared]
   if (suite.length && !declared.some((r) => r.fullSuite || r.name === FULL_SUITE)) {
     runs.push({ name: FULL_SUITE, command: [], budgetTime: "", creates: [], fullSuite: true, gates: [], items: [], implied: true })
@@ -250,7 +258,10 @@ export async function dueRuns(ctx: Context, declared: readonly LongRun[], tracke
       const r = await outcome(g)
       if (r.holds) continue
       covered.push(...r.blocking, ...r.owed)
-      reasons.push(...(r.reasons ?? []))
+      for (const i of r.stuck ?? []) stuck.add(String(i.meta.id))
+      // A stuck item's reason (a missing model file) is said by its own line in hello, never as why a run is due.
+      const stuckHere = (r.stuck ?? []).map(label)
+      reasons.push(...(r.reasons ?? []).filter((why) => !stuckHere.some((l) => why.startsWith(`${l}:`))))
     }
     if (run.model !== undefined) covered.push(...ctx.repo.items.filter((i) => i.type === "properties" && i.meta["model"] === run.model))
     for (const ref of run.items) {

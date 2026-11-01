@@ -4,6 +4,10 @@
 //   fixed     the code change exists (`fixedOn` is set). Nothing is proven.
 //   resolved  fixed, and proven by an item that `verifies` it and has passed.
 //   closed    resolved, and moved to the archive with its proof.
+//
+// And one way out that is no resolution: retired, an item of any type that
+// no longer applies, archived on the owner's word with the reason, the
+// owner's consent and what replaced it (`naima retire`).
 
 import { existsSync, readdirSync } from "node:fs"
 import { join } from "node:path"
@@ -20,6 +24,7 @@ import {
   type Finding,
   isAncestor,
   isOpen,
+  isRetired,
   type Item,
   label,
   linked,
@@ -30,6 +35,7 @@ import {
   readReadme,
   refutes,
   rendered,
+  RETIRED,
   runChecks,
   setFieldValue,
   str,
@@ -38,7 +44,19 @@ import {
   trunk,
   typeOrThrow,
   usageError,
+  type WriteHook,
 } from "../../core/api.ts"
+
+/**
+ * A retired item in words — `closed/x (title) retired on 2026-11-01: why; replaced by features/y` — from the fields and
+ * the relation naima retire writes, read by name: plugins never import each other.
+ */
+function retiredSays(ctx: Context, item: Item): string {
+  const on = typeof item.meta["closedOn"] === "string" ? ` on ${item.meta["closedOn"]}` : ""
+  const why = typeof item.meta["retiredBecause"] === "string" ? `: ${item.meta["retiredBecause"]}` : ""
+  const by = linked(ctx, item, "replaced-by").map(label)
+  return `${label(item)} (${item.meta.title}) retired${on}${why}${by.length ? `; replaced by ${by.join(", ")}` : ""}`
+}
 
 /** The evidence ranking, strongest first: the values of a test's `evidenceKind`. */
 export const EVIDENCE: ReadonlyArray<readonly [string, string]> = [
@@ -56,6 +74,8 @@ const ABOUT = `Three words that are not synonyms:
 - **closed** — resolved, and moved to \`closed/\` by \`naima close\`, carrying its proof.
 
 A todo whose work is a judgement with no code, a review or a decision (its \`kind\` says which), has nothing to fix and no test to pass. Once its status is \`done\` or \`dropped\`, \`naima close <item> --reason "<what was settled, and where it is written>"\` archives it without a proof. The reason is kept in \`closedBecause\`, and \`naima check\` lists every such item as a note, \`closed-without-proof\`, so nothing is closed this way unseen.
+
+An item of any type that no longer applies (a property whose model was replaced, a requirement given up, a todo filed by mistake) is ended with \`naima retire <item> --reason "<why>" [--replaced-by <item>] --consent "<the owner's yes, restated>"\`, and only on the owner's word. It is moved to \`closed/\` with status \`retired\`, keeping the reason in \`retiredBecause\`, the consent in \`retiredConsent\`, the type it came from in \`closedFrom\` and the day in \`closedOn\`; \`--replaced-by\` links it to what replaced it, and the replacement shows the inverse, \`replaces\`. There is no delete: an item filed by mistake is retired with that reason. A retired item leaves every queue, gate and long run, and stays readable (\`naima show\`, \`naima list closed --status retired\`). So that a retirement never hides a failing proof, \`naima check\` lists every retired item (\`retired-items\`), a gate that depended on a retired item or proof shows it, and a requirement whose proof was retired is no longer counted as proven and is flagged.
 
 "How many bugs are left" means the unfixed count; \`naima bugs\` never adds the three together.
 
@@ -92,6 +112,10 @@ const RUN_BY = { name: "runBy", kind: "enum" } as const
 const HUMAN_BECAUSE = { name: "humanBecause", kind: "enum" } as const
 const COMMITS = { name: "commits", kind: "strings" } as const
 const CLOSED_BECAUSE = { name: "closedBecause", kind: "string" } as const
+const RETIRED_BECAUSE = { name: "retiredBecause", kind: "string" } as const
+const RETIRED_CONSENT = { name: "retiredConsent", kind: "string" } as const
+/** The relation from a retired item to what replaced it; the replacement shows the inverse. */
+export const REPLACED_BY = "replaced-by"
 const KIND = { name: "kind", kind: "string" } as const
 
 /** The kinds of todo whose work is a judgement with no code — a review, a decision — closed with a reason instead of a proof. */
@@ -191,10 +215,10 @@ const fixNamesGesture: Check = {
 
 const closedHasProof: Check = {
   name: "closed-carries-proof",
-  says: "every archived item is verified by an item that has passed, unless it was closed with a reason as a review or a decision",
+  says: "every archived item is verified by an item that has passed, unless it was closed with a reason as a review or a decision, or retired",
   run: (ctx) =>
     ctx.repo.items
-      .filter((i) => i.type === "closed" && !closedWithReason(i) && !linked(ctx, i, "verified-by").some((p) => proves(ctx, p)))
+      .filter((i) => i.type === "closed" && !closedWithReason(i) && !isRetired(ctx, i) && !linked(ctx, i, "verified-by").some((p) => proves(ctx, p)))
       .map((i): Finding => ({ level: "problem", message: `${label(i)} is closed without a passed proof`, item: i })),
 }
 
@@ -209,6 +233,32 @@ const closedWithoutProof: Check = {
         message: `${label(i)} was closed without a proof, as a ${fieldValue(i, KIND) ?? "todo"}: ${fieldValue(i, CLOSED_BECAUSE)}`,
         item: i,
       })),
+}
+
+const retiredItems: Check = {
+  name: "retired-items",
+  says:
+    "every retired item is listed as a note, with its reason and what replaced it, so nothing is retired unseen; one that does not carry the reason and the owner's consent naima retire records is a problem",
+  run: (ctx) =>
+    ctx.repo.items.filter((i) => isRetired(ctx, i)).map((i): Finding => {
+      const lacks = [RETIRED_BECAUSE, RETIRED_CONSENT].filter((f) => !fieldValue(i, f)).map((f) => f.name)
+      return lacks.length
+        ? { level: "problem", item: i, message: `${label(i)} is retired without ${lacks.join(" and ")}: only naima retire retires, with the owner's consent` }
+        : { level: "note", item: i, message: `${retiredSays(ctx, i)} — consent: ${fieldValue(i, RETIRED_CONSENT)}` }
+    }),
+}
+
+/** A status that only naima retire sets: never set, nor taken off, by hand. */
+const retiredOnlyByRetire: WriteHook = {
+  name: "retired-only-by-retire",
+  says: "an item's status becomes retired only by naima retire, with the reason and the owner's consent, and a retired item's status is never changed by hand",
+  beforeWrite(write) {
+    const { item, before } = write
+    if (write.kind !== "update" || !before) return
+    if ((item.meta.status === RETIRED) !== (before.status === RETIRED)) {
+      return `${label(item)}: the status retired is set only by naima retire, with the reason and the owner's consent, and never taken off by hand`
+    }
+  },
 }
 
 const humanSaysWhy: Check = {
@@ -399,6 +449,55 @@ const close: Command = {
   },
 }
 
+const retire: Command = {
+  name: "retire",
+  says: "end an item of any type that no longer applies, on the owner's word: archived with the reason, the consent and what replaced it",
+  enforces:
+    "an item is retired only with a reason and the owner's consent, each on one line, and with every write hook agreeing; it moves to the archive with status retired, the reason in retiredBecause, the consent in retiredConsent, the type it came from in closedFrom and the day in closedOn; --replaced-by links it to an item that exists and is not itself; an item already in the archive is refused; nothing is deleted",
+  usage: 'retire <item> --reason "<why>" [--replaced-by <item>] --consent "<the owner\'s yes, restated>"',
+  options: [
+    { name: "--reason", says: "why it no longer applies, on one line: kept in retiredBecause, and said wherever it was counted on" },
+    { name: "--consent", says: "the owner's yes, restated, on one line: kept in retiredConsent; an agent retires nothing without it" },
+    { name: "--replaced-by", says: "the item that replaced it: linked replaced-by, and the replacement shows replaces" },
+  ],
+  examples: [
+    'retire scheduler-no-deadlock --reason "its model was deleted with the old scheduler design" --replaced-by scheduler-v2-no-deadlock --consent "yes, retire the two old scheduler properties"',
+    'retire export-twice --reason "filed by mistake: a duplicate of bugs/export-drops" --consent "yes, retire it"',
+  ],
+  run(args, ctx) {
+    const p = parse(args, { reason: { type: "string" }, consent: { type: "string" }, "replaced-by": { type: "string" } })
+    const ref = p.positionals[0]
+    if (!ref?.trim() || p.positionals.length > 1) throw usageError(this)
+    const oneLine = (flag: string, what: string): string => {
+      const v = str(p, flag)?.trim()
+      if (!v) throw new Error(`--${flag} is required: ${what}`)
+      if (v.includes("\n")) throw new Error(`--${flag} takes ${what}, on one line`)
+      return v
+    }
+    const reason = oneLine("reason", "why it no longer applies")
+    const consent = oneLine("consent", "the owner's yes, restated — an item is retired only on the owner's word")
+    const item = ctx.repo.resolve(ref)
+    if (item.type === "closed") {
+      throw new Error(isRetired(ctx, item) ? `${label(item)} is already retired` : `${label(item)} is already in the archive, closed with its proof`)
+    }
+    const by = str(p, "replaced-by")
+    const replacement = by === undefined ? undefined : ctx.repo.resolve(by)
+    if (replacement && replacement.meta.id === item.meta.id) throw new Error(`${label(item)} cannot be replaced by itself`)
+    if (replacement && isRetired(ctx, replacement)) throw new Error(`${label(replacement)} is retired itself: name what replaced it now`)
+    // One write: the move carries the new fields and the link, so a refusal leaves the item as it was, where it was.
+    // The link is stored on the retired item alone; the replacement reads it as its inverse, so nothing else changes.
+    const links = replacement ? [...(item.meta.links ?? []), { rel: REPLACED_BY, id: replacement.meta.id }] : item.meta.links
+    const archived: Item = { ...item, meta: { ...item.meta, status: RETIRED, ...(links ? { links } : {}) } }
+    setFieldValue(archived, CLOSED_FROM, item.type)
+    setFieldValue(archived, CLOSED_ON, today(ctx))
+    setFieldValue(archived, RETIRED_BECAUSE, reason)
+    setFieldValue(archived, RETIRED_CONSENT, consent)
+    const moved = moveItem(ctx, archived, typeOrThrow(ctx, "closed"))
+    ctx.out(`retired → ${label(moved)}: ${reason}${replacement ? `; replaced by ${label(replacement)}` : ""}`)
+    return 0
+  },
+}
+
 /**
  * Close a todo whose work is a judgement with no code — a review, a decision — with the reason instead of a proof:
  * it has no fixedOn, no test and no commit to show, and its status (done or dropped) already says it is finished.
@@ -459,11 +558,12 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
   const closedNamesCommits: Check = {
     name: "closed-names-its-commits",
     says:
-      `an item closed on or after ${commitsRequiredFrom} names a commit reachable from the trunk, unless it was closed with a reason as a review or a decision`,
+      `an item closed on or after ${commitsRequiredFrom} names a commit reachable from the trunk, unless it was closed with a reason as a review or a decision, or retired`,
     run: (ctx) =>
       ctx.repo.items
         .filter((i) =>
-          i.type === "closed" && (fieldValue(i, CLOSED_ON) ?? "") >= commitsRequiredFrom && !closedWithReason(i) && !hasCommitFromTrunk(ctx, i) &&
+          i.type === "closed" && (fieldValue(i, CLOSED_ON) ?? "") >= commitsRequiredFrom && !closedWithReason(i) && !isRetired(ctx, i) &&
+          !hasCommitFromTrunk(ctx, i) &&
           !isGrandfathered(i)
         )
         .map((i): Finding => ({ level: "problem", message: `${label(i)} is closed without a commit reachable from the trunk`, item: i })),
@@ -472,7 +572,7 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
   return {
     name: "trackers",
     contract: CONTRACT,
-    says: "bugs, todos, features, tests, and the archive of closed bugs",
+    says: "bugs, todos, features, tests, and the archive of closed and retired items",
     about: ABOUT,
     options: [{
       name: "excusePhrases",
@@ -543,8 +643,15 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
         id: "closed",
         dir: "closed",
         title: "Closed",
-        says: "the archive: resolved items, each with its proof",
-        statuses: { closed: { category: "done", says: "fixed, proven, archived" } },
+        says: "the archive: resolved items, each with its proof, and retired items, each with its reason",
+        statuses: {
+          closed: { category: "done", says: "fixed, proven, archived" },
+          retired: {
+            category: "done",
+            flags: [RETIRED],
+            says: "no longer applies: archived by naima retire on the owner's word, with the reason, the consent and what replaced it",
+          },
+        },
         initialStatus: "closed",
         creatable: false,
         // archive: fields that describe what an item was (whom a feature is for, where it is documented) may apply here too.
@@ -559,6 +666,13 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
         name: "closedBecause",
         kind: "string",
         says: "why an item was closed without a proof: a todo of kind review or decision, closed by naima close --reason",
+        appliesTo: ["closed"],
+      },
+      { name: "retiredBecause", kind: "string", says: "why a retired item no longer applies, as naima retire --reason gave it", appliesTo: ["closed"] },
+      {
+        name: "retiredConsent",
+        kind: "string",
+        says: "the owner's yes to retiring it, restated, as naima retire --consent gave it",
         appliesTo: ["closed"],
       },
       {
@@ -606,6 +720,8 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
     relations: [
       { name: "verifies", inverse: "verified-by", says: "is the gesture that proves" },
       { name: "verified-by", inverse: "verifies", says: "is proven by" },
+      { name: REPLACED_BY, inverse: "replaces", says: "was retired, and replaced by" },
+      { name: "replaces", inverse: REPLACED_BY, says: "replaces the retired item" },
     ],
     checks: [
       partialWithoutClause,
@@ -613,6 +729,7 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
       fixNamesGesture,
       closedHasProof,
       closedWithoutProof,
+      retiredItems,
       humanSaysWhy,
       commitsAreReal,
       closedNamesCommits,
@@ -622,7 +739,8 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
       untickedNamesPassed,
       excusesItself(phrases),
     ],
-    commands: [close, bugs],
+    commands: [close, retire, bugs],
+    hooks: [retiredOnlyByRetire],
     summary: [bugCounts],
   }
 }

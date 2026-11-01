@@ -31,6 +31,7 @@ import {
   type GuideSection,
   hasTrait,
   type Host,
+  isRetired,
   type Item,
   label,
   linked,
@@ -59,6 +60,17 @@ import { exampleRegex } from "./adapters/example-regex.ts"
 import { CODEGEN_PIN, CODEGEN_REPOSITORY, naimaCodegen } from "./adapters/naima-codegen.ts"
 import { type CompareResult, type Verdict, type Verifier, verifiersPoint, type VerifyRequest, type VerifyResult } from "./contract.ts"
 
+/**
+ * A retired item in words — `closed/x (title) retired on 2026-11-01: why; replaced by features/y` — from the fields and
+ * the relation naima retire writes, read by name: plugins never import each other.
+ */
+function retiredSays(ctx: Context, item: Item): string {
+  const on = typeof item.meta["closedOn"] === "string" ? ` on ${item.meta["closedOn"]}` : ""
+  const why = typeof item.meta["retiredBecause"] === "string" ? `: ${item.meta["retiredBecause"]}` : ""
+  const by = linked(ctx, item, "replaced-by").map(label)
+  return `${label(item)} (${item.meta.title}) retired${on}${why}${by.length ? `; replaced by ${by.join(", ")}` : ""}`
+}
+
 export type { CompareRequest, CompareResult, Verdict, Verifier, VerifyRequest, VerifyResult } from "./contract.ts"
 
 /** The gate this plugin contributes to the gates point: the shape that point takes, declared here since plugins never import each other. */
@@ -68,7 +80,7 @@ interface Gate {
   says: string
   decides: string
   inFullSuite: boolean
-  evaluate(ctx: Context): { holds: boolean; blocking: Item[]; owed: Item[] }
+  evaluate(ctx: Context): { holds: boolean; blocking: Item[]; owed: Item[]; reasons?: string[]; stuck?: Item[]; retired?: string[] }
 }
 
 const verifierOf = (ctx: Context, id: string): Verifier | undefined => ctx.registry.find<Verifier>("verifiers", id)?.value
@@ -439,7 +451,8 @@ function prepared(ctx: Context, item: Item): { id: string; verifier: Verifier; m
   if (!verifier) throw new Error(`${label(item)}: no verifier "${id}" — verifiers: ${verifierIds(ctx).join(", ")}`)
   const path = modelPath(ctx.root, model)
   if (!path) throw new Error(`${label(item)}: model ${model} is outside the project — model is a path from the project root`)
-  if (!existsSync(path)) throw new Error(`${label(item)}: model ${model} does not exist`)
+  const missing = missingFiles(ctx, item)
+  if (missing.length) throw new Error(`${label(item)}: ${missing.join("; ")} — ${retireHint(item)}`)
   return { id, verifier, model, property, path }
 }
 
@@ -641,8 +654,38 @@ const sameModel = (ctx: Context, a: unknown, b: unknown): boolean => {
 export const developing = (ctx: Context, model: unknown): Item | undefined =>
   ctx.repo.items.find((i) => i.type === MODELS && i.meta.status === DEVELOPMENT && sameModel(ctx, i.meta["model"], model))
 
+/**
+ * The files a property names that no longer exist: its model, and the file its property names when the verifier says
+ * it names one (an mCRL2 `.mcf` file). Each as `model file missing: <path>` or `property file missing: <path>`. No run
+ * can bring such a property current, so it is said as missing, never as stale or due, with `naima retire` offered.
+ */
+export function missingFiles(ctx: Context, item: Item): string[] {
+  const { verifier: id, model, property } = item.meta
+  const out: string[] = []
+  const path = typeof model === "string" ? modelPath(ctx.root, model) : null
+  if (path && !existsSync(path)) out.push(`model file missing: ${model}`)
+  const adapter = typeof id === "string" ? verifierOf(ctx, id) : undefined
+  const file = adapter?.propertyFile && typeof property === "string" ? adapter.propertyFile(property, ctx.root) : null
+  if (file && !existsSync(file)) out.push(`property file missing: ${String(property).trim()}`)
+  return out
+}
+
+/** What to do about a property whose files are gone: retire it, if it no longer applies, on the owner's word. */
+export const retireHint = (item: Item): string =>
+  `if it no longer applies: naima retire ${label(item)} --reason "<why>" --consent "<the owner's yes, restated>"`
+
+/** Every property whose model or property file is missing, with what is missing. */
+const withMissingFiles = (ctx: Context): { item: Item; missing: string[] }[] =>
+  properties(ctx).map((item) => ({ item, missing: missingFiles(ctx, item) })).filter((m) => m.missing.length > 0)
+
+/** The line `naima hello` and `naima summary` give a property whose files are gone: missing, not stale, and retire offered. */
+const missingLine = (m: { item: Item; missing: string[] }): string =>
+  `${label(m.item)}: ${m.missing.join("; ")} — it cannot be verified, so no run brings it current; ${retireHint(m.item)}`
+
 /** Why `item` is not a property holding on a run of exactly what it has now; empty when it is. Only what can be said without starting the tool. */
 function notCurrent(ctx: Context, item: Item): string[] {
+  const missing = missingFiles(ctx, item)
+  if (missing.length) return [`${label(item)}: ${missing.join("; ")}`]
   if (item.meta.status !== "holds") return [`${label(item)} [${item.meta.status}]`]
   const run = readRun(item)
   if (!run || run.verdict !== "holds") return [`${label(item)}: holds, but carries no holding run`]
@@ -725,6 +768,16 @@ const verify: Command = {
     try {
       for (const [i, item] of items.entries()) {
         progress.overall(i, items.length, "properties")
+        // A property whose verifier is not loaded is refused as such first, by prepared(): that is what to fix.
+        const known = typeof item.meta["verifier"] === "string" && verifierOf(ctx, item.meta["verifier"]) !== undefined
+        const missing = known ? missingFiles(ctx, item) : []
+        if (missing.length) {
+          // Nothing can run on a file that is gone: said as missing, and the rest of --all still runs.
+          failing++
+          if (!emit) ctx.out(`${"missing".padEnd(9)} ${label(item)}  ${missing.join("; ")} — ${retireHint(item)}`)
+          else ctx.out(JSON.stringify({ item: label(item), missing }))
+          continue
+        }
         if (emit) {
           const decided = await decideItem(ctx, item, progress, opts)
           const out: Emitted = "reused" in decided
@@ -990,7 +1043,12 @@ const evidence: Check = {
       if (typeof verifier === "string" && !verifierIds(ctx).includes(verifier)) problem(item, `verifier "${verifier}" is not loaded`)
       const path = typeof model === "string" ? modelPath(ctx.root, model) : null
       if (typeof model === "string" && !path) problem(item, `model ${model} is outside the project — model is a path from the project root`)
-      else if (path && !existsSync(path)) problem(item, `model ${String(model)} does not exist`)
+      const missing = missingFiles(ctx, item)
+      if (missing.length) {
+        // A run on a file that is gone says nothing either way: missing, never stale.
+        problem(item, `${missing.join("; ")} — it cannot be verified; ${retireHint(item)}`)
+        continue
+      }
       const loaded = loadRun(item)
       if (loaded && "problem" in loaded && !loaded.problem.startsWith("its run record")) problem(item, loaded.problem)
       if (item.meta.status !== "holds") continue
@@ -1226,6 +1284,13 @@ function codegenLine(ctx: Context): string[] {
   ]
 }
 
+/** In `naima summary` and `naima hello`: each property whose model or property file is gone, as missing, with retire offered. */
+const missingSection: SummarySection = {
+  name: "missing-model-files",
+  hello: true,
+  render: (ctx) => rendered(withMissingFiles(ctx).map(missingLine), (l) => l),
+}
+
 /** In `naima summary` and among `naima hello`'s offers, never as something that waits on the owner. */
 const codegenSection: SummarySection = {
   name: "codegen",
@@ -1304,13 +1369,24 @@ const allHold: Gate = {
   title: "Every property holds",
   says: "every property holds on a run of what the project has now, outside models in development",
   decides:
-    "blocked by every properties item that is open, violated or in error, or that holds on a run its property, verifier, model, options or input files have changed since; a property of a model in development is owed instead. Part of the full suite a release gate requires; the tool's version is checked by naima check.",
+    "blocked by every properties item that is open, violated or in error, or that holds on a run its property, verifier, model, options or input files have changed since; a property of a model in development is owed instead. A property whose model or property file is missing blocks too, said as missing with naima retire offered, and is marked stuck: no long run can bring it current. A retired property is listed with its reason. Part of the full suite a release gate requires; the tool's version is checked by naima check.",
   inFullSuite: true,
   evaluate(ctx) {
     const behind = properties(ctx).filter((i) => notCurrent(ctx, i).length > 0)
-    const owed = behind.filter((i) => developing(ctx, i.meta["model"]))
+    const gone = withMissingFiles(ctx)
+    const stuck = gone.map((m) => m.item)
+    const owed = behind.filter((i) => developing(ctx, i.meta["model"]) && !stuck.includes(i))
     const blocking = behind.filter((i) => !owed.includes(i))
-    return { holds: blocking.length === 0, blocking, owed }
+    const reasons = gone.map((m) => `${label(m.item)}: ${m.missing.join("; ")} — ${retireHint(m.item)}`)
+    // Every property was part of this gate: one retired is shown with its reason, never dropped from sight.
+    const retired = ctx.repo.items.filter((i) => isRetired(ctx, i) && i.meta["closedFrom"] === TYPE).map((i) => retiredSays(ctx, i))
+    return {
+      holds: blocking.length === 0,
+      blocking,
+      owed,
+      ...(reasons.length ? { reasons, stuck } : {}),
+      ...(retired.length ? { retired } : {}),
+    }
   },
 }
 
@@ -1378,7 +1454,12 @@ export default function verifier(): Plugin {
       { name: "verifierOptions", kind: "object", says: "options handed to the verifier with the model and the property, as a JSON object", appliesTo: [TYPE] },
     ],
     points: [verifiersPoint],
-    contributes: { verifiers: [exampleRegex, naimaCodegen], gates: [allHold], "landing-reports": [propertiesCurrent], summary: [codegenSection] },
+    contributes: {
+      verifiers: [exampleRegex, naimaCodegen],
+      gates: [allHold],
+      "landing-reports": [propertiesCurrent],
+      summary: [codegenSection, missingSection],
+    },
     // Its gate is there when a gates plugin is, its landing report when the coordination plugin is: without them, nothing lists either.
     optional: ["gates", "landing-reports"],
     relations: [

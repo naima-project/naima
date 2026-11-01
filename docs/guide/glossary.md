@@ -305,6 +305,12 @@ A status that counts as evidence against what the item verifies, namely `failed`
 
 Resolved, and moved by `naima close` into the archive, `closed/`, together with its proof, so that a regression can be recognised if it comes back.
 
+### Retired
+
+An item of any type that no longer applies, moved by `naima retire` into `closed/` with the status `retired`, on the owner's word. It keeps the reason, the
+owner's consent and, when there is one, the item that replaced it. It leaves every queue, gate and long run, and `naima check` still lists it
+([retire what no longer applies](prove-and-close.md#retire-what-no-longer-applies)).
+
 ### Evidence
 
 What backs a claim, such as a log line, a number, a screenshot or a command's output, kept in the item's `attachments/`. Saying "it works" without any of it is
@@ -487,8 +493,8 @@ Where the project's copy of Naima comes from. It is a git repository, either Nai
 
 ### Lock
 
-The `source` and `commit` in `naima.json`, which say exactly which Naima runs the project, with the release's `version` and the `sha256` of its archive when
-the project runs a release. Everyone who works on the project runs that one.
+The `source` and `commit` in `naima.json`, which say exactly which Naima runs the project, with the release's `version` and the `sha256` of its archive when the
+project runs a release. Everyone who works on the project runs that one.
 
 ### Alignment
 

@@ -285,23 +285,33 @@ const list: Command = {
   name: "list",
   says: "list items, most urgent first",
   enforces: "nothing: it only reads",
-  usage: "list [type] [--open] [--origin <role|session|date range>]",
+  usage: "list [type] [--open] [--status <status>] [--origin <role|session|date range>]",
   options: [
     { name: "--open", says: "only items whose status is in the open category" },
+    { name: "--status", says: "only items whose status is this one: list closed --status retired lists the retired items" },
     {
       name: "--origin",
       says:
         "only items whose origin matches: a role who asked (owner, coordinator, worker, agent, person, unknown), a day or a range of days filed (2026-10-27, 2026-10-01..2026-10-27, either end open), else a session id",
     },
   ],
-  examples: ["list", "list bugs --open", "list requirements --origin agent", "list --origin 2026-10-01..", "list --origin 2026-10-27-1a2b3c4d"],
+  examples: [
+    "list",
+    "list bugs --open",
+    "list closed --status retired",
+    "list requirements --origin agent",
+    "list --origin 2026-10-01..",
+    "list --origin 2026-10-27-1a2b3c4d",
+  ],
   run(args, ctx) {
-    const p = parse(args, { open: { type: "boolean" }, origin: { type: "string" } })
+    const p = parse(args, { open: { type: "boolean" }, status: { type: "string" }, origin: { type: "string" } })
     const typeId = p.positionals[0]
     if (typeId) typeOrThrow(ctx, typeId)
     const origin = str(p, "origin")
+    const status = str(p, "status")?.trim()
     const items = ctx.repo.items.filter((i) =>
-      (!typeId || i.type === typeId) && (!bool(p, "open") || isOpen(ctx, i)) && (origin === undefined || originMatches(i, origin))
+      (!typeId || i.type === typeId) && (!bool(p, "open") || isOpen(ctx, i)) && (status === undefined || i.meta.status === status) &&
+      (origin === undefined || originMatches(i, origin))
     )
     for (const item of byUrgency(ctx, items)) ctx.out(line(item))
     ctx.out(`${items.length} item${items.length === 1 ? "" : "s"}`)
