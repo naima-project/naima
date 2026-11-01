@@ -115,11 +115,14 @@ For a fix small enough to need no plan, `naima fix "<title>"` takes the whole wa
 main checkout, on the trunk, it files the item (a bug unless `--type` names another type with `fixedOn`) and commits it on the trunk, opens its worktree and
 branch, moves the change there, sets the item's `fixedOn`, releases its claim, commits, lands the branch and prunes it. On a worker's branch it files the item,
 claims it, sets `fixedOn`, releases the claim, commits everything on the branch and says the branch is handed over, with the `naima land` line the coordinator
-runs; it never touches the trunk. Its claim is its own, made and released in the same run. On the trunk the branch is `<who>/<what>`: `--as` names who, or the
-coordination plugin's `who` option, or `coordinator` when an agent runs it; when none says, it asks for `--as` before writing anything. A run on the trunk that
-stops once the worktree is open, a refused landing included, rolls back: the change is back in the main checkout, uncommitted, with no branch, worktree or claim
-left, and the refusal says what to fix. Running `naima fix` again with the same title reuses the item the first run filed. The item still needs its proof
-checked before `naima close`. With the tracker in a repository of its own, the steps are taken one by one.
+runs; it never touches the trunk. Its claim is its own, released before the landing. On the trunk the branch is `<who>/<what>`: `--as` names who, or the
+coordination plugin's `who` option, or `coordinator` when an agent runs it; when none says, it asks for `--as` before writing anything. It takes the same steps
+as the normal path and stops where that path stops. When the landing is refused because the trunk moved since the branch was made, it merges the trunk into the
+branch and tries the landing once more. When a step is refused once the worktree is open, the branch, the worktree and what was committed stay, with the claim
+held in the worktree; a refused landing has its reason added as a note on the item, committed on the branch, and the run says what to do next. Running
+`naima fix` again with the same title, once the cause is fixed, takes up that branch and worktree, with any new change made in the main checkout, and lands it;
+landing it by hand is `naima release` in the worktree, then `naima land`. The item still needs its proof checked before `naima close`. With the tracker in a
+repository of its own, the steps are taken one by one.
 
 ## One writer: no locks
 

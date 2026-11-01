@@ -54,9 +54,10 @@ A worker can't ask questions, so the coordinator gives it everything it needs to
 
 A fix small enough to need no plan goes through `naima fix "<title>"`, run where the change was made and not committed: by the coordinator on the main checkout,
 it files the item, opens its worktree, commits the change there and lands it; by a worker on its branch, it files the item, commits the change and the item
-there and hands the branch over, never touching the trunk. The command makes its own claim and releases it on every path, so a claim is never left behind as a
-lock; the coordinator's run needs no `--as`, and one that stops leaves no branch or worktree, so the same command run again starts clean
-([a small fix in one command](../guide/several-branches.md#a-small-fix-in-one-command)).
+there and hands the branch over, never touching the trunk. The coordinator's run needs no `--as` and stops where the normal path would: a landing refused
+because the trunk moved is retried once after merging the trunk into the branch; any other refusal leaves the branch, the worktree, the commit and the claim in
+place, notes a refused landing's reason on the item, and says what to do next. Running the same command again, once the cause is fixed, takes up that branch and
+lands it ([a small fix in one command](../guide/several-branches.md#a-small-fix-in-one-command)).
 
 ## The jobs
 
