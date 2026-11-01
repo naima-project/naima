@@ -51,6 +51,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`stances`](#naima-stances) | core | list the stances available to adopt — plugins of the kind stance, each a set of authored choices and rules a project takes as a whole — with what each says of itself, marking those this project has adopted, and as not a stance, with why, a repository with no naima-plugin.json, the plugin's description as data, at the head of its default branch, or whose naima-plugin.json is not a valid description or does not declare the kind stance — read by git with a shallow clone that fetches that file alone, or from GitHub's API when git cannot reach it; for now they are the repositories named naima-stance-<name> of the naima-project organisation on GitHub, asked of GitHub's public API without credentials; with no network, it says it cannot reach it | nothing: it only reads |
 | [`stance`](#naima-stance) | core | adopt a stance, show the ones adopted, or list a stance's examples. adopt <name> resolves the name to its repository, github.com/naima-project/naima-stance-<name>, pins the commit at the head of its default branch in naima.json's plugins as stance-<name> (its module plugin/index.mjs), loads it, and runs its adoption when it declares one: its own command stance-<name> with adopt. Of the arguments after the name, the options the stance declares (such as --app <folder>) go into its entry's options in naima.json and the rest to its adoption. Before running the adoption it says where it writes, the folder of the stance's app option or the project's root, and refuses the root when the root holds no app and a subfolder does (a package.json or a Svelte configuration), unless --app . is given. Run in another worktree with the trunk checkout's Naima, it is served from that worktree's data, or refused when the worktree has none. Adopting again moves the pin to the newest commit. status shows each adopted stance, its pinned commit, and whether a newer one exists. examples <name> lists the example paths an adopted stance declares, each with where it is in its checkout, from the project's root | a stance is pinned by commit, as every plugin from git is, and the whole file is re-validated before it is written; what is adopted must declare the kind stance, or naima.json is put back as it was |
 | [`guide`](#naima-guide) | core | inside a project, first print what its plugins contribute to the guide, such as the project's active rules for agents; then where the running Naima's documentation is: the skill, the docs map, the guide for people, the rules, the pages for agents, the format, installing; read them as files | nothing: it only prints |
+| [`version`](#naima-version) | core | print the banner naima hello opens with: the running Naima's version and commit; naima --version prints the same | nothing: it only prints |
 | [`help`](#naima-help) | core | list every command the loaded plugins provide, with its usage | nothing: it only prints |
 | [`new`](#naima-new) | core | open an item | every field is validated against its type's declarations before the item exists, and every write hook runs: a typo or a refusal leaves nothing behind; an archive type takes no new item |
 | [`show`](#naima-show) | core | print one item: fields, links in both directions, attachments, prose | nothing: it only reads |
@@ -398,6 +399,23 @@ Examples:
 
 ```sh
 naima guide
+```
+
+### naima version
+
+Print the banner naima hello opens with: the running Naima's version and commit; naima --version prints the same.
+
+**Enforces**: Nothing: it only prints.
+
+```sh
+naima version
+```
+
+Examples:
+
+```sh
+naima version
+naima --version
 ```
 
 ### naima help

@@ -1456,6 +1456,12 @@ export function launcherOf(place: Located, programRoot: string): string {
 const greetingLine = (bannerLine: string, waits: boolean): string =>
   `${bannerLine} ${waits ? "Something waits on your decision: your agent says what." : NOTHING_WAITS}`
 
+/** The banner: the running Naima's version and commit, or, for a development build, the lock's commit. What hello opens with and --version prints. */
+const bannerLine = (me: Running | null, lock: Lock): string =>
+  me
+    ? banner(versionOf(me.repo, me.commit), me.commit)
+    : `${INTRODUCTION}, active in this repository: a development build, its lock commit ${short(lock.commit)}.`
+
 /**
  * `naima hello`: the banner, what the update policy finds, what waits on the owner (the summary sections marked
  * `hello`, such as the long runs that are due, and the urgent messages the tick holds), and the offers, the summary
@@ -1568,9 +1574,7 @@ async function hello(args: string[], opts: CliOptions, place: Located, io: IO): 
   lines.push(...decisions)
   if (!waits && !decisions.length) lines.push(NOTHING_WAITS)
   // The banner first, read after the check: a fetch brings the tags that name the version.
-  const head = me
-    ? banner(versionOf(me.repo, me.commit), me.commit)
-    : `${INTRODUCTION}, active in this repository: a development build, its lock commit ${short(lock.commit)}.`
+  const head = bannerLine(me, lock)
   const detail = [...lines, RULES_FIRST, ...offers, OFFERS, BASICS_OFFER]
   // As a hook, the owner sees one line and the agent the rest, every command in it written as it runs here.
   if (tool?.greeting) {
@@ -2050,6 +2054,11 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     // The commands the entry point runs itself answer --help as every other command does.
     const own = cliCommands.find((c) => c.name === command)
     if (own && (args.includes("--help") || args.includes("-h"))) return commandHelp(own as Command, io)
+    if (command === "version" || command === "--version") {
+      if (args.length) throw new Error(usage("version"))
+      io.out(bannerLine(running(opts.programRoot), place.lock))
+      return 0
+    }
     if (command === "update") {
       if (!opts.launched) throw new Error(`naima update moves the program, so it runs through the launcher: deno run -A <the program>/naima.ts update`)
       return await committingTracker(data, "update", io, () => update(args, opts, place!, place!.lock, place!.raw, io))

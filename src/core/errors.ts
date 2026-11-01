@@ -41,7 +41,7 @@ function fenced(e: Error): string | undefined {
   if (kind === "read" && /^\/dev\/(stdin|fd\/0)$/.test(what ?? "")) return `${what} cannot be read by path: give --file - to read standard input`
   if (kind === "read" || kind === "write") {
     return kind === "read"
-      ? `${what} is outside the project: Naima reads only inside it, and describe, note and attach the system's temporary folder too — copy the file into one of them first`
+      ? `${what} is outside the project: Naima reads only inside it, and describe, note, attach and pass the system's temporary folder too — copy the file into one of them first`
       : `${what} may not be written: Naima writes only in its tracker folder and the few files it manages — give a path there`
   }
   return kind === "run"
