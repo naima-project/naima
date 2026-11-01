@@ -38,6 +38,7 @@ export {
   type WriteOptions,
 } from "./item.ts"
 export { storedLinks } from "./repo.ts"
+export { filerRole } from "./origin.ts"
 export { READY, readyQueue, type ReadyRecord, readyRecord } from "./ready.ts"
 export { groupBy } from "./collections.ts"
 export {

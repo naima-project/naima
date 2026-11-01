@@ -2,17 +2,23 @@
 // coordinator on the main checkout, on the trunk, it files the item, opens its
 // worktree, commits the change there and lands it; run by a worker on its
 // branch, it files, commits and hands the branch over. It makes its own claim
-// and releases it on every path that made it. The protocol is the model
+// and releases it on every path that made it, and a coordinator's run that
+// stops once the worktree is open rolls back: the change returns to the main
+// checkout, the worktree, the branch and the claim are removed, and a retry
+// reuses the item already filed. The protocol is the model
 // develop/models/small-fix/fix.mcrl2, verified before this code.
 
-import { readFileSync, unlinkSync } from "node:fs"
+import { existsSync, readFileSync, unlinkSync } from "node:fs"
 import { join } from "node:path"
 import {
   appliesTo,
   type Command,
   type Context,
   currentBranch,
+  filerRole,
   gitOrNull,
+  isAncestor,
+  isOpen,
   type Item,
   label,
   message,
@@ -25,7 +31,7 @@ import {
   usageError,
   writeJson,
 } from "../../core/api.ts"
-import type { Policy } from "./worktrees.ts"
+import { type Policy, SEGMENT, SEGMENT_SAYS } from "./worktrees.ts"
 
 /** What `fix` needs of `open`: the worktree, its branch and the claim file, as `open` makes them. */
 export type OpenWork = (
@@ -62,8 +68,21 @@ async function run(ctx: Context, name: string, ...args: string[]): Promise<void>
   if (code !== 0) throw new Error(`naima ${name} ended with exit code ${code}`)
 }
 
-/** File the item through `naima new`, every write hook included, and return it. */
+/**
+ * The item a retry reuses: one of `type` with exactly `title`, open and not fixed, which an earlier run of fix filed
+ * before it stopped; none, and the item is filed anew.
+ */
+function filedBefore(ctx: Context, type: string, title: string): Item | undefined {
+  return ctx.repo.items.find((i) => i.type === type && i.meta.title === title && isOpen(ctx, i) && !i.meta["fixedOn"])
+}
+
+/** File the item through `naima new`, every write hook included, and return it; an earlier run's item is reused. */
 async function file(ctx: Context, type: string, title: string, asked: string | undefined): Promise<Item> {
+  const earlier = filedBefore(ctx, type, title)
+  if (earlier) {
+    ctx.out(`reusing ${label(earlier)}, filed by an earlier run of fix that stopped`)
+    return earlier
+  }
   const before = new Set(ctx.repo.items.map((i) => i.meta.id))
   await run(ctx, "new", type, title, ...(asked ? ["--asked-by", asked] : []))
   const item = ctx.repo.items.find((i) => !before.has(i.meta.id))
@@ -77,12 +96,16 @@ export function fixCommand(policy: Policy, openWork: OpenWork): Command {
     says:
       "take a small fix from filing to landing in one step: on the main checkout, on the trunk, file the item, open its worktree, move the change there, commit it and land it; on a worker's branch, file the item, commit the change on the branch and hand it over to the coordinator",
     enforces:
-      "the change is what the checkout holds uncommitted outside the tracker data, and there must be one; the item's type has fixedOn, which is set on the branch; the command makes its own claim and releases it on every path that made it, before it stops and before a landing; a worker's run never touches the trunk; the coordinator's commits on the trunk are the new item (tracker data only) and the landing marker; a refusal stops it where it is and says what is left: a landing refused leaves the branch committed and handed over",
+      "the change is what the checkout holds uncommitted outside the tracker data, and there must be one; the item's type has fixedOn, which is set on the branch; the command makes its own claim and releases it on every path that made it, before it stops and before a landing; a worker's run never touches the trunk; the coordinator's commits on the trunk are the new item (tracker data only) and the landing marker; who works is --as, the coordination plugin's who option, or coordinator when an agent runs it on the trunk, and otherwise it refuses before writing anything; a coordinator's run that stops once the worktree is open, a landing refused included, rolls back: the change is back in the main checkout uncommitted and no branch, worktree or claim is left, so a retry starts clean and reuses the item already filed",
     usage: 'fix "<title>" [--type <type>] [--message "<commit message>"] [--as <who>] [--asked-by <role>] [--no-change-note "<reason>"]',
     options: [
       { name: "--type", says: "the item's type: one with fixedOn", default: "bugs" },
       { name: "--message", says: "the commit message of the change", default: "the item's title" },
-      { name: "--as", says: "who works, for the coordinator's branch: its first segment", ...(policy.who ? { default: policy.who } : {}) },
+      {
+        name: "--as",
+        says: "who works, for the coordinator's branch: its first segment",
+        default: policy.who ?? "coordinator, when an agent runs it on the trunk",
+      },
       { name: "--asked-by", says: "who asked for it, recorded in the item's origin, as naima new takes it", default: "agent" },
       { name: "--no-change-note", says: "why the fix changes behaviour paths with no change note, passed to naima land" },
     ],
@@ -118,8 +141,13 @@ export function fixCommand(policy: Policy, openWork: OpenWork): Command {
       const asked = str(p, "asked-by")
       const coordinator = branch === trunk(ctx.root)
       if (!coordinator) return await asWorker(ctx, branch, type, title, commitMessage, asked)
-      const who = str(p, "as") ?? policy.who
-      if (!who) throw new Error("fix needs --as <who>, the branch's first segment, or the coordination plugin's who option")
+      const who = str(p, "as") ?? policy.who ?? (filerRole(ctx.root) === "coordinator" ? "coordinator" : undefined)
+      if (!who) {
+        throw new Error(
+          "fix cannot tell who runs it, which names the branch <who>/<what>: give --as <who>, or set the coordination plugin's who option — nothing was written",
+        )
+      }
+      if (!SEGMENT.test(who)) throw new Error(`--as ${who}: each part of a branch name is a ${SEGMENT_SAYS} — nothing was written`)
       const dirty = gitOrNull(ctx.root, "status", "--porcelain", "--untracked-files=no", "--", ctx.trackerDir) ?? ""
       if (dirty.trim()) throw new Error(`the tracker data has changes not committed, which a landing refuses: commit them first, then run naima fix`)
       return await asCoordinator(ctx, branch, who, type, title, commitMessage, asked, str(p, "no-change-note"))
@@ -156,31 +184,38 @@ export function fixCommand(policy: Policy, openWork: OpenWork): Command {
     const ref = label(item)
     const itemDir = posixRelative(ctx.root, item.dir)
     // Tracker data only: the trunk guard lets the new item onto the trunk, and the branch opened next starts from it.
-    mustGit(ctx.root, "add", "--", itemDir)
-    mustGit(ctx.root, "commit", "-q", "-m", `File ${ref}`, "--", itemDir)
-    const { path, branch, claimFile } = openWork(ctx, policy, [item], who, item.slug)
-    const release = (): void => unlinkSync(join(path, claimFile))
+    if ((gitOrNull(ctx.root, "status", "--porcelain", "--", itemDir) ?? "").trim()) {
+      mustGit(ctx.root, "add", "--", itemDir)
+      mustGit(ctx.root, "commit", "-q", "-m", `File ${ref}`, "--", itemDir)
+    }
+    const base = mustGit(ctx.root, "rev-parse", "HEAD").trim()
+    const work = opened(ctx, who, item)
+    const { path, branch } = work
+    // Where the change stands, for the rollback: in the main checkout, in the stash between the two, or in the worktree.
+    let at: "checkout" | "stash" | "worktree" = "checkout"
+    const stop = (e: unknown): never => {
+      throw new Error(`${message(e)}\n${rollback(ctx, work, base, at)}`)
+    }
     try {
       mustGit(ctx.root, "stash", "push", "-q", "--include-untracked", "-m", `naima fix ${ref}`, "--", ":/", `:(top,exclude)${ctx.trackerDir}`)
+      at = "stash"
       mustGit(path, "stash", "pop", "-q")
+      at = "worktree"
+      const meta = join(path, itemDir, "meta.json")
+      writeJson(meta, { ...JSON.parse(readFileSync(meta, "utf8")) as Record<string, unknown>, fixedOn: today(ctx) })
+      unlinkSync(join(path, work.claimFile))
+      ctx.out(`moved the change to ${path}, set ${ref} fixed and released its claim`)
+      mustGit(path, "add", "-A")
+      mustGit(path, "commit", "-q", "-m", commitMessage)
     } catch (e) {
-      release()
-      throw new Error(`${message(e)}\nthe change could not move to ${path}: git stash list shows it if it is not there; ${branch}'s claim is released`)
+      stop(e)
     }
-    const meta = join(path, itemDir, "meta.json")
-    writeJson(meta, { ...JSON.parse(readFileSync(meta, "utf8")) as Record<string, unknown>, fixedOn: today(ctx) })
-    release()
-    ctx.out(`moved the change to ${path}, set ${ref} fixed and released its claim`)
-    mustGit(path, "add", "-A")
-    mustGit(path, "commit", "-q", "-m", commitMessage)
     try {
       await run(ctx, "land", branch, "--closes", item.meta.id, ...(noChangeNote ? ["--no-change-note", noChangeNote] : []))
     } catch (e) {
-      throw new Error(
-        `${
-          message(e)
-        }\nhanded over: ${branch} is committed in ${path}, its claim released — fix what the landing refused, then naima land ${branch} --closes ${ref}`,
-      )
+      const trunkNow = trunk(ctx.root)
+      if (!trunkNow || !isAncestor(ctx.root, branch, trunkNow)) stop(e)
+      ctx.out(`landed, and the landing then stopped: ${message(e)}`)
     }
     try {
       await run(ctx, "prune", "--branch", branch, "--write")
@@ -190,4 +225,51 @@ export function fixCommand(policy: Policy, openWork: OpenWork): Command {
     ctx.out(`fixed: ${ref} landed on ${main}`)
     return 0
   }
+
+  /** `openWork`, all or nothing: a refusal midway removes the branch and the worktree it made, never ones that were there before. */
+  function opened(ctx: Context, who: string, item: Item): Work {
+    const branch = `${who}/${item.slug}`
+    const hadBranch = gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`) !== null
+    const trees = new Set(worktreePaths(ctx.root))
+    try {
+      return openWork(ctx, policy, [item], who, item.slug)
+    } catch (e) {
+      for (const path of worktreePaths(ctx.root)) if (!trees.has(path)) gitOrNull(ctx.root, "worktree", "remove", "--force", path)
+      if (!hadBranch) gitOrNull(ctx.root, "branch", "-D", branch)
+      throw e
+    }
+  }
+}
+
+type Work = ReturnType<OpenWork>
+
+/** The worktrees git lists for the repository at `root`. */
+function worktreePaths(root: string): string[] {
+  return (gitOrNull(root, "worktree", "list", "--porcelain") ?? "").split("\n").filter((l) => l.startsWith("worktree ")).map((l) => l.slice(9))
+}
+
+/**
+ * Undo a coordinator's run that stopped once its worktree was open: the change back in the main checkout,
+ * uncommitted, and the worktree, the branch and the claim removed. Returns what it did, or what is left and where.
+ */
+function rollback(ctx: Context, work: Work, base: string, at: "checkout" | "stash" | "worktree"): string {
+  const { path, branch } = work
+  const left: string[] = []
+  try {
+    if (at === "worktree") {
+      // The branch's commit, if any, undone in the worktree, and the change outside the tracker data carried back.
+      mustGit(path, "reset", "-q", base)
+      mustGit(path, "stash", "push", "-q", "--include-untracked", "-m", `naima fix rollback ${branch}`, "--", ":/", `:(top,exclude)${ctx.trackerDir}`)
+      at = "stash"
+    }
+    if (at === "stash") mustGit(ctx.root, "stash", "pop", "-q")
+  } catch (e) {
+    left.push(`the change could not return to the main checkout (${message(e)}): git stash list shows it, or it is in ${path}`)
+    return `stopped, and rolled back only in part: ${left.join("; ")}; ${branch} and its worktree are kept so nothing is lost`
+  }
+  if (existsSync(path) && gitOrNull(ctx.root, "worktree", "remove", "--force", path) === null) left.push(`the worktree ${path}`)
+  if (gitOrNull(ctx.root, "branch", "-D", branch) === null) left.push(`the branch ${branch}`)
+  return left.length
+    ? `rolled back: the change is back in the main checkout, uncommitted; still there, to remove by hand: ${left.join(", ")}`
+    : `rolled back: the change is back in the main checkout, uncommitted, with no branch, worktree or claim left — run naima fix again once the refusal is fixed`
 }

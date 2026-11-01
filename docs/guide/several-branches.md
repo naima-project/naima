@@ -45,8 +45,8 @@ When a worker has died or is stuck, `naima recover <branch>` gathers what the wo
 trunk lacks, what is not committed in its worktree, and the last entries of the stuck worker's agent transcript. Those entries hold what it had found or decided
 but not yet written down. Only the last few are printed (12 unless `--tail <n>` says otherwise), each cut to a line, so the new worker's context stays small.
 The transcript is found the way each agent tool keeps them: a session started in the branch's worktree, or a sub-agent of a session in the main checkout whose
-transcript names the worktree or the branch. Each agent tool has a reader of its own beside its adapter; a tool with none yet gets the rest of the report and no transcript. The transcript is read
-only to continue the work. Nothing of it is written to a file, and it is never copied into the repository, because
+transcript names the worktree or the branch. Each agent tool has a reader of its own beside its adapter; a tool with none yet gets the rest of the report and no
+transcript. The transcript is read only to continue the work. Nothing of it is written to a file, and it is never copied into the repository, because
 [the owner's chat stays private](rules.md#the-owners-chat-stays-private).
 
 ## Finish a piece of work
@@ -115,9 +115,11 @@ For a fix small enough to need no plan, `naima fix "<title>"` takes the whole wa
 main checkout, on the trunk, it files the item (a bug unless `--type` names another type with `fixedOn`) and commits it on the trunk, opens its worktree and
 branch, moves the change there, sets the item's `fixedOn`, releases its claim, commits, lands the branch and prunes it. On a worker's branch it files the item,
 claims it, sets `fixedOn`, releases the claim, commits everything on the branch and says the branch is handed over, with the `naima land` line the coordinator
-runs; it never touches the trunk. Its claim is its own, made and released in the same run. When the landing is refused, the branch stays committed and handed
-over, and the refusal says what to fix. The item still needs its proof checked before `naima close`. With the tracker in a repository of its own, the steps are
-taken one by one.
+runs; it never touches the trunk. Its claim is its own, made and released in the same run. On the trunk the branch is `<who>/<what>`: `--as` names who, or the
+coordination plugin's `who` option, or `coordinator` when an agent runs it; when none says, it asks for `--as` before writing anything. A run on the trunk that
+stops once the worktree is open, a refused landing included, rolls back: the change is back in the main checkout, uncommitted, with no branch, worktree or claim
+left, and the refusal says what to fix. Running `naima fix` again with the same title reuses the item the first run filed. The item still needs its proof
+checked before `naima close`. With the tracker in a repository of its own, the steps are taken one by one.
 
 ## One writer: no locks
 
