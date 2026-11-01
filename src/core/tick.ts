@@ -72,6 +72,11 @@ export interface Schedule {
 
 /** A job the tick can run: its schedule, and the run. */
 export interface TickTask extends Schedule {
+  /**
+   * Whether this process can do the job at all (the checkout it needs, the programs it is granted): false, the tick
+   * claims no attempt, so none is spent, and a process that can takes the slot. Absent, every process can.
+   */
+  canRunHere?(): boolean
   run(signal: AbortSignal): Promise<JobOutcome> | JobOutcome
   /** The urgent message a failing streak since `since` (YYYY-MM-DD) raises. */
   escalation?(since: string): { title: string; text: string }
@@ -255,7 +260,14 @@ export async function runIfDue(job: TickTask, tick: string, clock: () => Date): 
   const dir = join(tick, job.name)
   const now = clock()
   const { claim } = decide(job, dir, now)
-  if (!claim || !publish(join(dir, claim), JSON.stringify({ at: now.toISOString(), pid: process.pid }))) return null
+  if (!claim) return null
+  // A process that cannot do the job leaves its attempt to one that can: a run here would spend the slot for nothing.
+  try {
+    if (job.canRunHere && !job.canRunHere()) return null
+  } catch {
+    return null
+  }
+  if (!publish(join(dir, claim), JSON.stringify({ at: now.toISOString(), pid: process.pid }))) return null
   if (claim === slotOf(job.every, now)) prune(job, dir, now)
   const outcome = await bounded(job, (signal) => job.run(signal))
   publish(join(dir, `${claim}.done`), JSON.stringify({ ...outcome, at: clock().toISOString() }))

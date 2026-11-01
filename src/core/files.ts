@@ -20,6 +20,25 @@ export function mayWrite(path: string): boolean {
   return granted(path) && (existsSync(dirname(path)) || granted(dirname(path)))
 }
 
+/** What Deno answers when asked whether a program may be started. */
+type RunQuery = { querySync(d: { name: "run"; command: string }): { state: string } }
+
+/**
+ * May this process start `program`? Under Deno, what the permissions it was started with grant: the launcher grants
+ * some programs to some commands only. Asked before starting it, since Deno's `node:child_process` refuses a program
+ * outside the grant by returning an empty result, with no status and no error, which looks like nothing at all. Under
+ * another runtime nothing fences the programs.
+ */
+export function mayRun(program: string): boolean {
+  const permissions = (globalThis as { Deno?: { permissions?: RunQuery } }).Deno?.permissions
+  if (!permissions) return true
+  try {
+    return permissions.querySync({ name: "run", command: program }).state === "granted"
+  } catch {
+    return false
+  }
+}
+
 /** Never a project's own source, wherever they sit: version control, dependencies, build output. */
 export const NEVER_SOURCE: ReadonlySet<string> = new Set([".git", "node_modules", "dist", "build"])
 

@@ -58,7 +58,7 @@ export {
 export { trackerExposure } from "./exposure.ts"
 export { callerEnv } from "./launched.ts"
 export { EXIT, isInternal, message, NaimaError } from "./errors.ts"
-export { isRegularFile, NEVER_SOURCE, pathMatches, readText, walkFiles, writeFileAtomic } from "./files.ts"
+export { isRegularFile, mayRun, NEVER_SOURCE, pathMatches, readText, walkFiles, writeFileAtomic } from "./files.ts"
 export { byUrgency, FILLED, hasFlag, hasTrait, isEvidenceType, isOpen, label, linked, proves, refutes, statusDef, urgency } from "./lifecycle.ts"
 export { flagsOf } from "./vocabulary.ts"
 export {

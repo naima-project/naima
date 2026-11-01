@@ -1296,7 +1296,10 @@ function updateCheck(opts: CliOptions, place: Place, lock: Lock, raw: Record<str
 }
 
 /** A plugin's job as the tick runs it, in the project's context. */
-const asTask = (ctx: Context, job: TickJob): TickTask => ({ ...job, run: (signal) => job.run(ctx, signal) })
+const asTask = (ctx: Context, job: TickJob): TickTask => {
+  const { canRunHere, ...rest } = job
+  return { ...rest, ...(canRunHere ? { canRunHere: () => canRunHere(ctx) } : {}), run: (signal) => job.run(ctx, signal) }
+}
 
 /** Whether this run ticks: launched, always; run directly, only when a test asks. */
 const ticks = (opts: CliOptions): boolean => opts.launched === true || opts.tick !== undefined

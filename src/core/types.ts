@@ -252,6 +252,12 @@ export interface TickJob {
   /** A failing streak this many days long raises an urgent message: the one `escalation` says. */
   escalateAfterDays?: number
   escalation?(since: string): { title: string; text: string }
+  /**
+   * Whether this command can do the job at all (the checkout it needs, the programs the launcher granted it): false,
+   * the tick claims no attempt here, so the day or hour is not spent, and a command that can takes it. Absent, every
+   * command can.
+   */
+  canRunHere?(ctx: Context): boolean
   run(ctx: Context, signal: AbortSignal): Promise<JobOutcome> | JobOutcome
 }
 
