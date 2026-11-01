@@ -4,9 +4,9 @@ kind: feature
 affects:
   - usage
 commands:
-  - run
-  - wait
-  - claims
+  - changed run
+  - changed wait
+  - changed claims
 ---
 
 `naima run` now returns only once the command is seen running; a command that never starts (a program not found, a supervisor that died, a host that cannot be
