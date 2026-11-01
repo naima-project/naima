@@ -130,11 +130,17 @@ here on its own, and this step is already done.
 
 ## 5. Close it
 
+When the item lands with `naima land`, the landing closes it on its own if it is fixed and its proof has passed, in a commit on the trunk right after the
+marker. If its proof has not passed yet, the landing says it is waiting for its proof, and the later landing that marks the proof passed closes it. To close it
+by hand:
+
 ```sh
 naima close export-drops
 ```
 
-The item moves to `closed/`, taking its [proof](glossary.md#proof) with it. Naima refuses to close it in these cases.
+The item moves to `closed/`, taking its [proof](glossary.md#proof) with it. `naima check` fails on an item that is fixed, proven and landed but still open
+(`proven-but-open`), lists each item fixed and waiting for its proof as a note (`fixed-waiting-for-proof`), and `naima hello` says both. Naima refuses to close
+an item in these cases, by hand or in a landing.
 
 - It isn't fixed, or nothing that verifies it has passed.
 - Something that verifies it refutes it, such as a failed test.

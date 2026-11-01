@@ -160,8 +160,22 @@ export function gitReason(r: GitRun): string {
   return r.status === undefined || r.status === null ? "git ended without saying why" : `git exited with status ${r.status} and printed no reason`
 }
 
+/**
+ * The user's home folder, from the environment first: under the launcher, Deno lets the program read the
+ * environment but not ask the system, and on Windows `os.homedir()` asks it (HOME is usually unset there).
+ */
+export function homeFolder(env: Record<string, string | undefined> = process.env, ask: () => string = homedir): string {
+  const given = env["HOME"] || env["USERPROFILE"]
+  if (given) return given
+  try {
+    return ask()
+  } catch {
+    return ""
+  }
+}
+
 /** A line with the user's home folder written `~`, so a reason carries no home path. */
-export function scrubHome(line: string, home: string = homedir()): string {
+export function scrubHome(line: string, home: string = homeFolder()): string {
   if (!home || home === "/") return line
   const forms = new Set([home, home.split(sep).join("/")])
   let out = line
@@ -339,7 +353,8 @@ export function worktrees(root: string): Worktree[] {
     const path = block.match(/^worktree (.+)$/m)?.[1]
     if (!path || /^(bare|prunable)\b/m.test(block)) continue
     out.push({
-      path,
+      // In this platform's own form: on Windows git writes C:/a/b, and a path compared with one Naima built is C:\a\b.
+      path: resolve(path),
       branch: block.match(/^branch refs\/heads\/(.+)$/m)?.[1] ?? null,
       head: block.match(/^HEAD ([0-9a-f]+)$/m)?.[1] ?? null,
       self: realOr(path) === self,

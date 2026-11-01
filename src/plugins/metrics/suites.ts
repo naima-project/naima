@@ -309,6 +309,8 @@ function rootsOf(root: string): string[] {
   } catch {
     // the root as given is enough
   }
+  // And each as git and most tools print it on Windows, with forward slashes: C:/a/b for C:\a\b.
+  for (const r of [...out]) out.add(r.split(sep).join("/"))
   return [...out].sort((a, b) => b.length - a.length)
 }
 

@@ -6,7 +6,7 @@
 // alone writing it.
 
 import { existsSync } from "node:fs"
-import { isAbsolute, join } from "node:path"
+import { isAbsolute, join, posix, win32 } from "node:path"
 
 /** The platforms a tool declaration names, as `<os>-<arch>`. */
 export const PLATFORMS = ["darwin-arm64", "darwin-x64", "linux-x64", "linux-arm64", "windows-x64"] as const
@@ -34,14 +34,16 @@ export function toolsDir(env: Record<string, string | undefined> = process.env, 
   const own = env["NAIMA_TOOLS"]
   if (own && isAbsolute(own)) return own
   const o = osOf(os)
+  // Paths in the form of the system asked about, whatever system this runs on.
+  const at = o === "windows" ? win32.join : posix.join
   if (o === "windows") {
-    const local = env["LOCALAPPDATA"] ?? (env["USERPROFILE"] ? join(env["USERPROFILE"], "AppData", "Local") : undefined)
-    return local ? join(local, "naima", "tools") : null
+    const local = env["LOCALAPPDATA"] ?? (env["USERPROFILE"] ? at(env["USERPROFILE"], "AppData", "Local") : undefined)
+    return local ? at(local, "naima", "tools") : null
   }
   const home = env["HOME"]
-  if (o === "darwin") return home ? join(home, "Library", "Application Support", "naima", "tools") : null
-  const data = env["XDG_DATA_HOME"] && isAbsolute(env["XDG_DATA_HOME"]) ? env["XDG_DATA_HOME"] : home ? join(home, ".local", "share") : null
-  return data ? join(data, "naima", "tools") : null
+  if (o === "darwin") return home ? at(home, "Library", "Application Support", "naima", "tools") : null
+  const data = env["XDG_DATA_HOME"] && isAbsolute(env["XDG_DATA_HOME"]) ? env["XDG_DATA_HOME"] : home ? at(home, ".local", "share") : null
+  return data ? at(data, "naima", "tools") : null
 }
 
 /** A program's file name on `os`: Windows adds `.exe`. */

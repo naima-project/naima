@@ -16,6 +16,7 @@ import {
   code,
   CODE_TRAILER,
   type Command,
+  commitTrackerPaths,
   type Context,
   currentBranch,
   DATA_FILE,
@@ -28,14 +29,16 @@ import {
   gitReason,
   type GitRun,
   isAncestor,
-  isOpen,
   isUuid,
   type Item,
   label,
+  linked,
   message,
   META,
   mustGit,
   parse,
+  proves,
+  refutes,
   runGit,
   saveMeta,
   str,
@@ -43,6 +46,7 @@ import {
   table,
   textsAt,
   TRACKER_TRAILER,
+  trackerChanges,
   trackerPath,
   trunk,
   usageError,
@@ -699,10 +703,11 @@ async function landBoth(
     ctx.out(`${branch} changes no code: ${code.main} stays at ${code.old.slice(0, 12)}, which the tracker's marker names`)
   }
   recordMarker(ctx, cm ?? code.tip, ids)
+  await closeLanded(ctx, ids, changedFiles(ctx.trackerGit, trk.old, trk.tip))
   await reportLanding(ctx, { branch, from: code.old, to: cm ?? code.old, changed })
   const subs = cm ? (gitOrNull(ctx.root, "diff-tree", "-r", "--no-commit-id", code.old, cm) ?? "").split("\n").filter((l) => /^:\d+ 160000 /.test(l)) : []
   if (subs.length) ctx.out(`${plural(subs.length, "submodule")} moved: git submodule update --init`)
-  ctx.out(nextAfterLanding(ctx, ids, branch))
+  ctx.out(nextAfterLanding(branch))
   return 0
 }
 
@@ -717,13 +722,70 @@ const closingLine = (items: Landed[], trackerOnly: string | undefined, met: read
     ...(trackerOnly !== undefined ? [`tracker data only: ${trackerOnly}`] : []),
   ].join("; ")
 
-/** What follows a landing: closing those of its items that are closed with a proof (a release, say, is not), then the prune. */
-function nextAfterLanding(ctx: Context, ids: readonly string[], branch: string): string {
-  ctx.reload()
+/** What follows a landing: the prune. Closing its proven items is the landing's own last step (closeLanded). */
+const nextAfterLanding = (branch: string): string => `next: naima prune --branch ${branch} --write`
+
+/** Whether `item` is fixed and its proof has passed: fixedOn set, an item verifying it proves it and none refutes it. */
+function provenFix(ctx: Context, item: Item): boolean {
   const fixable = ctx.registry.fields.get("fixedOn")
-  const closable = ids.map((id) => ctx.repo.byId.get(id)).filter((i): i is Item => !!i && !!fixable && appliesTo(fixable, i.type) && isOpen(ctx, i))
-  const prune = `naima prune --branch ${branch} --write`
-  return closable.length ? `next: naima close ${closable.map(label).join(", ")} once each one's proof is checked, then ${prune}` : `next: ${prune}`
+  if (!fixable || !appliesTo(fixable, item.type) || !item.meta["fixedOn"]) return false
+  const proofs = linked(ctx, item, "verified-by")
+  return proofs.some((p) => proves(ctx, p)) && !proofs.some((p) => refutes(ctx, p))
+}
+
+/**
+ * The last step of a landing: close, through naima close and every check it makes, each item the landing names, or
+ * whose proof it changed (`changed`, the tracker's files it changed, from its repository), that is fixed and whose
+ * proof has passed, and commit the closes on the trunk in one commit that only closes items, as the trunk takes it.
+ * An item it names that is fixed and whose proof has not passed is said, waiting for its proof: the landing of that
+ * proof closes it. A close refused leaves the landing standing and says why.
+ */
+async function closeLanded(ctx: Context, ids: readonly string[], changed: readonly string[]): Promise<void> {
+  const close = ctx.registry.commands.get("close")
+  const fixable = ctx.registry.fields.get("fixedOn")
+  if (!close || !fixable) return
+  ctx.reload()
+  const touched = new Set(changed)
+  const changedItem = (i: Item): boolean => {
+    const dir = relative(ctx.trackerGit, i.dir).replaceAll("\\", "/")
+    return [...touched].some((f) => f.startsWith(`${dir}/`))
+  }
+  const named = new Set(ids)
+  const live = ctx.repo.items.filter((i) => i.type !== "closed" && appliesTo(fixable, i.type) && !!i.meta["fixedOn"])
+  const candidates = live.filter((i) => named.has(i.meta.id) || linked(ctx, i, "verified-by").some(changedItem))
+  const ready = candidates.filter((i) => provenFix(ctx, i))
+  for (const i of candidates.filter((c) => named.has(c.meta.id) && !ready.includes(c))) {
+    const proofs = linked(ctx, i, "verified-by")
+    ctx.out(
+      proofs.length
+        ? `${label(i)} is fixed, waiting for its proof (${
+          proofs.map((p) => `${label(p)} [${p.meta.status}]`).join(", ")
+        }): the landing that marks it passed closes it`
+        : `${label(i)} is fixed, and nothing verifies it: link the test that proves it (verifies), and its landing closes it`,
+    )
+  }
+  if (!ready.length) return
+  const data = ctx.trackerPrefix ? `${ctx.trackerPrefix}/` : ""
+  const before = trackerChanges(ctx.trackerGit)
+  const closed: string[] = []
+  for (const i of ready) {
+    try {
+      ctx.reload()
+      const code = await close.run([i.meta.id], ctx)
+      if (code === 0) closed.push(label(i))
+      else ctx.err(`${label(i)} is fixed and proven, and naima close ended with exit code ${code}: naima close ${label(i)}`)
+    } catch (e) {
+      ctx.err(`${label(i)} is fixed and proven, and was not closed (${message(e)}): naima close ${label(i)}`)
+    }
+  }
+  ctx.reload()
+  const after = trackerChanges(ctx.trackerGit)
+  const paths = [...after].filter(([p, s]) => before.get(p) !== s && p.startsWith(data)).map(([p]) => p)
+  if (!closed.length || !paths.length) return
+  const failed = commitTrackerPaths(ctx.trackerGit, "close", paths)
+  if (failed) ctx.err(`closed ${closed.join(", ")}, and the close is not committed (${failed}): commit it on the trunk, as naima close made it`)
+  else ctx.out(`closed ${closed.join(", ")}: fixed, and proven by a passed proof`)
+  ctx.reload()
 }
 
 /** The ids of the items a tracker marker closes whose type records commits and that do not record `commit` yet. */
@@ -867,7 +929,7 @@ export const land: Command = {
   says:
     "land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor",
   enforces:
-    "runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one whose commits carry private infrastructure in their messages — a home-directory path, a machine or user name — in the project or in a submodule whose pointer it moves (commits no remote-tracking branch holds), unless --allow-private gives the reason; one that names no item (unless --tracker-only gives the reason and the branch changes only tracker data, or --meets names a requirement it meets) or an item open and not fixed; refuses --meets for an item that is not a requirement, one with no item that verifies it and passed on the branch tip, one whose proofs all passed on the trunk already, and one an item refutes, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch a landing check finds failing, whatever flag is given, and one that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, adds the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right after the marker, so that naima close finds a commit reachable from the trunk; then prints what every landing report says of the files the landing changed, never undoing it",
+    "runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one whose commits carry private infrastructure in their messages — a home-directory path, a machine or user name — in the project or in a submodule whose pointer it moves (commits no remote-tracking branch holds), unless --allow-private gives the reason; one that names no item (unless --tracker-only gives the reason and the branch changes only tracker data, or --meets names a requirement it meets) or an item open and not fixed; refuses --meets for an item that is not a requirement, one with no item that verifies it and passed on the branch tip, one whose proofs all passed on the trunk already, and one an item refutes, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch a landing check finds failing, whatever flag is given, and one that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, adds the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right after the marker, so that naima close finds a commit reachable from the trunk; then closes, through naima close and every check it makes, each item it names, or whose proof it changed, that is fixed and whose proof has passed, in one commit on the trunk that only closes items, and says each item it names that is fixed and still waits for its proof, which the landing of that proof closes; then prints what every landing report says of the files the landing changed, never undoing it",
   usage:
     'land <branch> [--closes <item>]... [--no-change-note "<reason>"] [--stale-proofs "<reason>"] [--tracker-only "<reason>"] [--meets <requirement>]... | land <branch> --repair',
   options: [
@@ -970,10 +1032,11 @@ export const land: Command = {
     }
     ctx.out(`landed ${branch} on ${main}: ${marker.slice(0, 12)}, ${closingLine(items, trackerOnly, met)}`)
     recordMarker(ctx, marker, items.map((i) => i.id))
+    await closeLanded(ctx, items.map((i) => i.id), changed)
     await reportLanding(ctx, { branch, from: old, to: marker, changed })
     const subs = (gitOrNull(ctx.root, "diff-tree", "-r", "--no-commit-id", old, marker) ?? "").split("\n").filter((l) => /^:\d+ 160000 /.test(l))
     if (subs.length) ctx.out(`${plural(subs.length, "submodule")} moved: git submodule update --init`)
-    ctx.out(nextAfterLanding(ctx, items.map((i) => i.id), branch))
+    ctx.out(nextAfterLanding(branch))
     return 0
   },
 }

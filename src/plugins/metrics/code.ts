@@ -19,7 +19,7 @@
 
 import { spawnSync } from "node:child_process"
 import { existsSync, readFileSync, statSync } from "node:fs"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import { pathMatches } from "../../core/api.ts"
 
 /** A function a language found in a file. */
@@ -1014,9 +1014,10 @@ const gitDirLines = (gitDir: string, args: string[]): string[] => {
 
 /** Where a submodule at `path` keeps its objects — `.git/modules/<path>` under root's common git directory, or the submodule's own checked-out `.git` — whichever exists; null when neither does (never cloned, or deinited). */
 function submoduleGitDir(root: string, path: string): string | null {
-  const common = gitLines(root, ["rev-parse", "--git-common-dir"])[0] ?? ".git"
-  const commonAbs = common.startsWith("/") ? common : join(root, common)
-  const modules = join(commonAbs, "modules", path)
+  // One line, not NUL-separated: its newline trimmed, or the path never exists and only the gitfile below is found,
+  // which git on Windows cannot follow when it is named from another directory.
+  const common = gitLines(root, ["rev-parse", "--path-format=absolute", "--git-common-dir"])[0]?.trim() || join(root, ".git")
+  const modules = join(resolve(root, common), "modules", path)
   if (existsSync(join(modules, "HEAD"))) return modules
   const own = join(root, path, ".git")
   if (existsSync(own)) return own

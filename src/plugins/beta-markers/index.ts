@@ -15,7 +15,7 @@
 // "pattern": "<regex with groups ref and what>" }
 
 import { readFileSync } from "node:fs"
-import { join, relative } from "node:path"
+import { join } from "node:path"
 import {
   bool,
   type Check,
@@ -30,6 +30,7 @@ import {
   NEVER_SOURCE,
   parse,
   type Plugin,
+  posixRelative,
   projectFiles,
   proves,
   rendered,
@@ -82,7 +83,7 @@ export function scanMarkers(root: string, opts: MarkerOptions, program?: string)
       .forEach((text, i) => {
         const m = text.match(opts.pattern)
         const ref = m?.groups?.["ref"]
-        if (ref) out.push({ file: relative(root, path), line: i + 1, ref, what: (m?.groups?.["what"] ?? "").trim() })
+        if (ref) out.push({ file: posixRelative(root, path), line: i + 1, ref, what: (m?.groups?.["what"] ?? "").trim() })
       })
   }
   return out
