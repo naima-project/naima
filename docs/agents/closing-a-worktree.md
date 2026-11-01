@@ -176,8 +176,9 @@ git merge-base --is-ancestor main <branch> && \
 ```
 
 A hosting platform's merge button, with branches required to be up to date, produces the same shape. If either of them refuses, stop
-([worktree isolation](worktree-isolation.md#3-a-branch-lands-up-to-date-as-a-marker)). `naima land` then prints the next steps, which are to `naima close` each
-item once its proof has been checked, and then step 8.
+([worktree isolation](worktree-isolation.md#3-a-branch-lands-up-to-date-as-a-marker)). `naima land` then closes, through `naima close` and its checks, each item
+it names that is fixed and whose proof has passed, says each one still waiting for its proof (the landing that marks that proof passed closes it), and prints
+the next step, step 8.
 
 ### When the work is in a product held as a submodule
 
@@ -233,9 +234,9 @@ tracker, where many items are closed, moved or deleted in one go, tag the point 
 ## Not part of closing
 
 - **Closing the branch's own items.** An item is closed once it is fixed _and_ proven by a gesture. A branch that closes its own items because its own tests are
-  green is marking its own homework. `naima close` refuses anything that isn't resolved, and it refuses an item claimed by the branch you are on. Close it from
-  the trunk after the landing, once someone else has checked the proof. `naima close --force` is for whoever owns the [evidence](../guide/glossary.md#evidence),
-  to record a proof that someone else performed.
+  green is marking its own homework. `naima close` refuses anything that isn't resolved, and it refuses an item claimed by the branch you are on. The landing
+  closes it on the trunk, run by the coordinator, once its proof has passed. `naima close --force` is for whoever owns the
+  [evidence](../guide/glossary.md#evidence), to record a proof that someone else performed.
 - **Deleting the scratchpad.** It was never tracked.
 
 ## Safety rules

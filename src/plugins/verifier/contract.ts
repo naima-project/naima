@@ -77,12 +77,18 @@ export interface Verifier {
    * where they change how the tool runs, so a run made one way is never reused for another. Absent: the options as written.
    */
   identityOptions?(options: Record<string, unknown>): Record<string, unknown>
+  /**
+   * The file a property names, when it names one rather than holding its formula inline (an mCRL2 `.mcf` file), as an
+   * absolute path from the project root `root`; null when the property is inline. A missing one is said as a missing
+   * file, never as staleness. Absent: every property is inline.
+   */
+  propertyFile?(property: string, root: string): string | null
 }
 
 export const verifiersPoint: ExtensionPoint<Verifier> = {
   id: "verifiers",
   says:
-    "an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest; `toolArgs`, the flags `naima verify --tool-args` may pass, which never change the verdict; and `equivalences` with `compare({ before, after, equivalence }, ctx) → { verdict, output, counterexample?, details? }` and `preserves({ property, options, equivalence }, ctx)`, for `naima equivalent`; `identityOptions(options)`, the options as they identify a run, so a run made with other effective options is never reused",
+    "an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest; `toolArgs`, the flags `naima verify --tool-args` may pass, which never change the verdict; and `equivalences` with `compare({ before, after, equivalence }, ctx) → { verdict, output, counterexample?, details? }` and `preserves({ property, options, equivalence }, ctx)`, for `naima equivalent`; `identityOptions(options)`, the options as they identify a run, so a run made with other effective options is never reused; `propertyFile(property, root)`, the file a property names when it is not inline, so a missing one is said as missing",
   noun: "verifier",
   stored: true,
   key: (v) => v.id,
@@ -91,7 +97,7 @@ export const verifiersPoint: ExtensionPoint<Verifier> = {
     const a = v as Partial<Verifier> | null
     if (!a || typeof a !== "object" || typeof a.id !== "string") return "has no id"
     if (typeof a.verify !== "function") return "has no verify function"
-    for (const k of ["inputs", "version", "compare", "preserves", "identityOptions"] as const) {
+    for (const k of ["inputs", "version", "compare", "preserves", "identityOptions", "propertyFile"] as const) {
       if (a[k] !== undefined && typeof a[k] !== "function") return `has a ${k} that is not a function`
     }
     const e = a.equivalences

@@ -100,9 +100,10 @@ else performed, and those are exactly where work gets lost.
 2. **Preparing branches** so that the trunk is their ancestor. That means merging the trunk in first, running the gates over the combined result, releasing the
    claims and writing the session note ([closing a worktree](closing-a-worktree.md)).
 3. **The landing train.** Finished branches are landed in order with `naima land`, with the gates run between them, and each landing is a
-   [marker](../guide/glossary.md#marker) naming the items it closes, followed by the commit that adds the marker to those items' `commits`, so `naima close`
-   needs no `naima set` first. If `naima land` refuses, stop. When it lists properties that are not current after a landing, the coordinator runs `naima verify`
-   on them on the trunk before the next landing, or files a bug for one that is now violated.
+   [marker](../guide/glossary.md#marker) naming the items it closes, followed by the commit that adds the marker to those items' `commits`, then by the commit
+   that closes each of them that is fixed and whose proof has passed, through `naima close` and its checks. An item fixed whose proof has not passed yet stays
+   open, and the landing that marks its proof passed closes it. If `naima land` refuses, stop. When it lists properties that are not current after a landing,
+   the coordinator runs `naima verify` on them on the trunk before the next landing, or files a bug for one that is now violated.
 
 The lead developer never merges without the gates and never closes an item on reasoning alone, because "the code clearly does this now" is a diagnosis, not a
 measurement. It also never closes its own branch's items.
@@ -166,7 +167,8 @@ While workers run, the coordinator reads `naima claims` at least every few minut
 its step and how long ago it was posted. A claim whose last sign of life is older than the coordination option `silentAfter` (15 minutes unless the project sets
 another number) is flagged "silent for N min — possibly stuck". The last sign of life is the later of the step and the branch's last commit. The coordinator
 checks that worker's run and worktree, then reports it to the owner as possibly stuck. The rule is shipped by the coordination plugin, so `naima rules` lists
-it.
+it. Under the claims, `naima claims` lists every run not yet over, and every crashed one, with its state, alive or dead, its time against its budget and the
+last line of its log. A stuck or crashed run is reported to the owner; a run not advancing only when the warning lasts.
 
 When a worker is dead or stuck, the coordinator briefs the worker that resumes it from `naima recover <branch>`. It prints the claim's items and last step, the
 commits the trunk lacks, what is not committed in the worktree, and the last entries of the stuck worker's agent transcript (its last steps and commands, each

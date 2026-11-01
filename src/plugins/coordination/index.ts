@@ -83,6 +83,7 @@ import { claimsUiView, notesUiView } from "./ui.ts"
 import { readStaleAfter, staleCommand, type StaleData, staleData, staleSection } from "./stale.ts"
 import { changeNotesCheck, changesCommand } from "./changes.ts"
 import { land, landingReportsPoint, landingsAreMarkers, landingsPaired } from "./land.ts"
+import { claimsReports, claimsReportsPoint } from "./claims-reports.ts"
 import { pushCheckCommand } from "./messages.ts"
 import { fixCommand } from "./fix.ts"
 import { guardCheckCommand, guardCommand, guardedFrom, guardOffSection, guardSetup, readTrunkGuard, switchesGuard } from "./guard.ts"
@@ -500,7 +501,8 @@ export function claimsData(ctx: Context, only?: string, silentAfter: number = SI
 
 const claimsCommand = (silentAfter: number, policy: Policy): Command => ({
   name: "claims",
-  says: "who holds what, recombined from every branch, with what each branch's worker is doing now",
+  says:
+    "who holds what, recombined from every branch, with what each branch's worker is doing now, and after them what other plugins report for the coordinator, such as the runs Naima watches",
   enforces:
     `nothing: it only reads; a claim whose last sign of life (its step, or its branch's last commit) is more than silentAfter minutes old (${silentAfter} here) is flagged possibly stuck; a stale claim (branch gone or merged into the trunk, or every item closed) is listed apart, at the end, and released by naima prune --write`,
   usage: "claims [--branch <b>] [--json]",
@@ -509,15 +511,16 @@ const claimsCommand = (silentAfter: number, policy: Policy): Command => ({
     {
       name: "--json",
       says:
-        "print the claims as JSON: each branch's items, note, step, minutes since its last sign of life and marks, the items more than one branch holds, and the silentAfter threshold",
+        "print the claims as JSON: each branch's items, note, step, minutes since its last sign of life and marks, the items more than one branch holds, the silentAfter threshold, and the sections other plugins report under `reports`",
     },
   ],
   examples: ["claims", "claims --branch fix/export-alpha", "claims --json"],
   run(args, ctx) {
     const p = parse(args, { branch: { type: "string" }, json: { type: "boolean" } })
     const d = claimsData(ctx, str(p, "branch"), silentAfter)
+    const reports = str(p, "branch") ? [] : claimsReports(ctx)
     if (bool(p, "json")) {
-      ctx.out(JSON.stringify(d, null, 2))
+      ctx.out(JSON.stringify({ ...d, reports }, null, 2))
       return 0
     }
     const live = d.claims.filter((c) => !c.stale)
@@ -536,6 +539,7 @@ const claimsCommand = (silentAfter: number, policy: Policy): Command => ({
       ctx.out("\nclaimed by more than one branch (allowed):")
       for (const c of d.contested) ctx.out(`  ${c.ref} → ${c.branches.join(", ")}`)
     }
+    for (const r of reports) ctx.out(["", `${r.name}:`, ...r.lines.map((l) => `  ${l}`)].join("\n"))
     const ready = readyLines(readyNow(ctx, policy))
     if (ready.length && !str(p, "branch")) ctx.out(["", ...ready].join("\n"))
     return 0
@@ -1220,7 +1224,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
     // The claims are a panel of naima ui, the timeline and the session notes tabs, when the ui plugin is loaded; without it, still commands and a view.
     // The diary rule is listed by naima rules when the rules plugin is loaded; without it, the check still notes.
     optional: ["ui-views", "rules"],
-    points: [landingReportsPoint],
+    points: [landingReportsPoint, claimsReportsPoint],
     summary: [whereWeWere, inHand(silentAfter), workerLimitSection(policy), readySection(policy), staleSection(stale), guardOffSection(guarded)],
     setup: [guardSetup(guarded)],
     hooks: [noClosingOwnWork],

@@ -23,6 +23,15 @@ export const hasFlag = (ctx: Context, item: Item, flag: string): boolean => {
   return s !== undefined && flagsOf(s).includes(flag)
 }
 
+/**
+ * The flag of a status that ends an item which no longer applies, on the owner's word (naima retire): the item is
+ * archived, out of every queue, gate and long run, and every plugin that counted on it as a proof says it was retired.
+ */
+export const RETIRED = "retired"
+
+/** Was this item retired: archived because it no longer applies, not because it was proven? */
+export const isRetired = (ctx: Context, item: Item): boolean => hasFlag(ctx, item, RETIRED)
+
 /** Does this item's status count as evidence for what it verifies? */
 export const proves = (ctx: Context, item: Item): boolean => hasFlag(ctx, item, "proves")
 

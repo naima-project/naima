@@ -23,14 +23,17 @@ export const STATUS_FILE = "status.json"
 export const LOG_FILE = "log"
 export const PROGRESS_FILE = "progress"
 export const STOP_FILE = "stop"
+/** Where the supervisor's own errors go: what says why a supervisor that died before starting the command did. */
+export const SUPERVISOR_ERR = "supervisor.err"
 
 /** The defaults the specification fixes. */
 export const DEFAULTS = {
   everyMs: 10_000,
-  /** A run that reports progress is stale after this long without a progress line (specs/progress-long-work-says-how-far, §4). */
-  staleMs: 2 * 60_000,
-  /** A run declared --no-progress is stale after this long without output. */
-  staleNoProgressMs: 15 * 60_000,
+  /**
+   * A run is stuck after this long with no output at all, neither a log line nor a progress line; one whose log grows
+   * while its progress does not move for this long is not advancing (specs/progress-long-work-says-how-far, §4).
+   */
+  staleMs: 60_000,
   timeoutMs: 10 * 60_000,
   waitEveryMs: 1_000,
   remoteEveryMs: 30_000,
@@ -45,6 +48,13 @@ export const DEFAULTS = {
    * to launch (macOS checks the binary before it runs).
    */
   startMs: 60_000,
+  /** How long `naima run` watches a command it saw start before it says started: a command not found exits at once. */
+  confirmMs: 500,
+  /**
+   * A shell command that exits within this long with the shell's own "not found" or "not executable" status (127,
+   * 126; cmd's 9009) never started: its end is recorded as a start that failed.
+   */
+  notFoundMs: 2_000,
 } as const
 
 /** What `naima run` asked for: written once, before the supervisor starts. */
@@ -91,16 +101,44 @@ export interface RunStatus {
   overallFrom?: ProgressSample
 }
 
-export type Reported = "starting" | "running" | "stale" | "lost" | "succeeded" | "failed" | "killed" | "stopped" | "unknown"
+/**
+ * The state a reader reports (develop/models/run-watch/run-watch.mcrl2): starting until the command is seen alive;
+ * running while it writes output; not-advancing when its log grows while its progress does not move, a warning;
+ * stuck with no output at all for its --stale window; crashed when its process is gone with no end recorded; and,
+ * once its end is recorded, how it ended.
+ */
+export type Reported =
+  | "starting"
+  | "running"
+  | "not-advancing"
+  | "stuck"
+  | "crashed"
+  | "succeeded"
+  | "failed"
+  | "killed"
+  | "stopped"
+  | "unknown"
+
+/** A state an earlier Naima reports, as this one names it: a host may run one. */
+export function currentState(state: string): Reported {
+  return state === "stale" ? "stuck" : state === "lost" ? "crashed" : state as Reported
+}
 
 /** One run as every reader reports it: `run status --json`, `run list --json`, and what a host answers. */
 export interface RunView {
   name: string
   host?: string
   state: Reported
-  /** True once nothing of the run can change any more: ended, or lost. */
+  /** True once nothing of the run can change any more: ended, or crashed. */
   over: boolean
   pid?: number
+  /** For a run of this machine not yet ended: whether its supervisor and command are seen alive. */
+  alive?: boolean
+  /** How long the run has written nothing at all, neither log nor progress, and how long its progress has not moved. */
+  silentMs?: number
+  stillMs?: number
+  /** The --stale window it is judged on. */
+  staleMs?: number
   started: string
   elapsedMs: number
   budgetTimeMs: number
@@ -114,8 +152,9 @@ export interface RunView {
   changedTracked?: string[]
   /** The last progress line, how old it is, and, for a structured one, its fields with the rate and ETA computed from it. */
   progress?: { line: string; ageMs: number } & ProgressEstimate
-  /** For a run declared --no-progress: why, and the log's last line, the most it can say. */
+  /** For a run declared --no-progress: why. */
   noProgress?: string
+  /** The log's last line. */
   lastLog?: string
   log: string
   tail?: string[]
@@ -258,6 +297,31 @@ export function sampleProgress(
   return out
 }
 
+/**
+ * Whether the process `pid` exists, asked with signal 0, which delivers nothing: a known pid, never a search of the
+ * process table. Undefined when the platform cannot say.
+ */
+export function pidAlive(pid: number): boolean | undefined {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (e) {
+    const code = (e as { code?: string }).code
+    return code === "ESRCH" ? false : code === "EPERM" ? true : undefined
+  }
+}
+
+/** The state of a run alive, at `now`, from when it started and when its log and its progress last changed. */
+export function liveState(
+  o: { started: number; logAt: number | null; progressAt: number | null; noProgress: boolean; staleMs: number },
+  now: number,
+): { state: "running" | "not-advancing" | "stuck"; silentMs: number; stillMs: number } {
+  const silentMs = Math.max(0, now - Math.max(o.started, o.logAt ?? 0, o.progressAt ?? 0))
+  const stillMs = Math.max(0, now - Math.max(o.started, o.progressAt ?? 0))
+  const state = silentMs > o.staleMs ? "stuck" : !o.noProgress && stillMs > o.staleMs ? "not-advancing" : "running"
+  return { state, silentMs, stillMs }
+}
+
 /** How long a heartbeat may age before the supervisor is taken for gone. */
 export const lostAfterMs = (everyMs: number): number => 3 * everyMs + 10_000
 
@@ -278,11 +342,11 @@ export function view(dir: string, now: number, tail = 0): RunView {
     log,
     ...(spec?.budgetDiskBytes !== undefined ? { budgetDiskBytes: spec.budgetDiskBytes } : {}),
   }
-  if (!spec) return { ...base, state: "lost", over: true, error: "the record has no run.json" }
+  if (!spec) return { ...base, state: "crashed", over: true, error: "the record has no run.json" }
   const progressFile = join(dir, PROGRESS_FILE)
   const progressAt = mtime(progressFile)
   const progressLine = lastLine(progressFile)
-  const lastLog = spec.noProgress !== undefined ? lastLine(log) : undefined
+  const lastLog = lastLine(log)
   const withFacts: RunView = {
     ...base,
     ...(status?.pid !== undefined ? { pid: status.pid } : {}),
@@ -296,7 +360,7 @@ export function view(dir: string, now: number, tail = 0): RunView {
   if (!status) {
     const age = now - Date.parse(spec.started)
     return age > Math.max(lostAfterMs(spec.everyMs), DEFAULTS.startMs)
-      ? { ...withFacts, state: "lost", over: true, error: "the supervisor never reported" }
+      ? { ...withFacts, state: "crashed", over: true, error: "the supervisor never reported" }
       : { ...withFacts, state: "starting" }
   }
   if (status.state === "ended") {
@@ -319,14 +383,40 @@ export function view(dir: string, now: number, tail = 0): RunView {
       : "failed"
     return { ...ended, state }
   }
-  const beat = Date.parse(status.heartbeat)
-  if (now - beat > lostAfterMs(spec.everyMs)) {
-    return { ...withFacts, elapsedMs: Math.max(status.elapsedMs, now - Date.parse(spec.started)), state: "lost", over: true }
+  const elapsedMs = Math.max(status.elapsedMs, now - Date.parse(spec.started))
+  // Gone with no end recorded: a supervisor that no longer exists, seen at once, or one whose heartbeat stopped.
+  const supervisor = status.supervisorPid ? pidAlive(status.supervisorPid) : undefined
+  if (supervisor === false) {
+    // It may have recorded the end just before it exited: read the record again before calling it crashed.
+    const again = readStatus(dir)
+    if (again?.state === "ended") return view(dir, now, tail)
   }
-  // A run that reports progress is judged on its progress file; one declared --no-progress on whatever it writes.
-  const active = Math.max(Date.parse(spec.started), spec.noProgress !== undefined ? mtime(log) ?? 0 : 0, progressAt ?? 0)
-  const state: Reported = status.state === "starting" ? "starting" : now - active > spec.staleMs ? "stale" : "running"
-  return { ...withFacts, elapsedMs: Math.max(status.elapsedMs, now - Date.parse(spec.started)), state }
+  const beat = Date.parse(status.heartbeat)
+  if (supervisor === false || now - beat > lostAfterMs(spec.everyMs)) {
+    return {
+      ...withFacts,
+      elapsedMs,
+      state: "crashed",
+      over: true,
+      alive: false,
+      error: supervisor === false ? "its supervisor is gone and no end was recorded" : "its supervisor's heartbeat stopped and no end was recorded",
+    }
+  }
+  if (status.state === "starting") return { ...withFacts, elapsedMs, state: "starting", alive: true }
+  // Stuck on no output at all; not advancing when only the log moves (discussions/review-inconsistency-7-stale-defined-two-ways).
+  const live = liveState(
+    { started: Date.parse(spec.started), logAt: mtime(log), progressAt, noProgress: spec.noProgress !== undefined, staleMs: spec.staleMs },
+    now,
+  )
+  return {
+    ...withFacts,
+    elapsedMs,
+    state: live.state,
+    alive: true,
+    silentMs: live.silentMs,
+    ...(spec.noProgress === undefined ? { stillMs: live.stillMs } : {}),
+    staleMs: spec.staleMs,
+  }
 }
 
 const UNITS: Record<string, number> = { s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 }

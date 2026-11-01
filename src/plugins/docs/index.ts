@@ -35,6 +35,7 @@ import {
   optionsTable,
   parse,
   type Plugin,
+  posixRelative,
   projectFiles,
   sentence,
   table,
@@ -223,12 +224,12 @@ export function unresolved(root: string, fromDir: string, target: string): strin
   const path = hashAt === -1 ? target : target.slice(0, hashAt)
   const hash = hashAt === -1 ? undefined : safeDecode(target.slice(hashAt + 1))
   const file = path ? resolve(fromDir, safeDecode(path)) : null
-  if (file && !existsSync(file)) return `${relative(root, file) || path} does not exist`
+  if (file && !existsSync(file)) return `${posixRelative(root, file) || path} does not exist`
   if (hash === undefined || hash === "") return null
   const md = file ?? null
   if (!md || !md.endsWith(".md") || statSync(md).isDirectory()) return null
   const anchors = anchorsOf(readFileSync(md, "utf8"))
-  return anchors.has(hash) || anchors.has(hash.toLowerCase()) ? null : `${relative(root, md)} has no heading #${hash}`
+  return anchors.has(hash) || anchors.has(hash.toLowerCase()) ? null : `${posixRelative(root, md)} has no heading #${hash}`
 }
 
 /** Why a feature's `docs` entry (`path` or `path#heading`, from the root) is not documentation, or null. */
@@ -259,7 +260,7 @@ export function brokenLinks(root: string, paths?: string[], program?: string): s
     for (const { target, line } of parseMarkdown(readFileSync(file, "utf8")).links) {
       if (target === "" || URI_SCHEME.test(target)) continue
       const why = unresolved(root, dirname(file), target.startsWith("#") ? relative(dirname(file), file) + target : target)
-      if (why) out.push(`${relative(root, file)}:${line}: link ${target} — ${why}`)
+      if (why) out.push(`${posixRelative(root, file)}:${line}: link ${target} — ${why}`)
     }
   }
   return out

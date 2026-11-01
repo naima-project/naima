@@ -227,6 +227,16 @@ An agent never closes an item, or sets `holds`, by editing `meta.json` or moving
 check, so a hand edit fails `naima check`. The check `closed-not-claimed` catches an archived item that the branch you stand on still claims, and
 `property-evidence` catches a `holds` with no current run.
 
+### When an item no longer applies
+
+An item that will never be fixed or proven because it stopped applying is retired, never deleted and never left open:
+`naima retire <item> --reason "<why>"
+[--replaced-by <item>] --consent "<the owner's yes, restated>"`. Ask the owner first, and retire only on their yes,
+restated in your words. A property whose model file is gone is the usual case: `naima hello`, `naima verify` and `naima check` say "model file missing" and name
+the command. "Filed by mistake" is a valid reason. A retired item leaves the queues, gates and long runs, but `naima check` lists it, a gate that depended on it
+shows it, and a requirement it proved is no longer counted as proven. Never retire a proof that fails in order to get it out of the way: fix what it found
+([retire what no longer applies](../guide/prove-and-close.md#retire-what-no-longer-applies)).
+
 ## Safety rules
 
 - **No attachment with no consent record.** Enforced by the check `attachment-consent`, which fails on a file copied in by hand, on a record whose file is gone,

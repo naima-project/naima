@@ -171,6 +171,7 @@ interface Verifier {
   compare(request: CompareRequest, ctx: Context): Promise<CompareResult>
   preserves(request: { property: string; options: Record<string, unknown>; equivalence: string }, ctx: Context): string | null
   identityOptions(options: Record<string, unknown>): Record<string, unknown>
+  propertyFile(property: string, root: string): string | null
 }
 
 /** The program, started for real: colour off, no shell; its standard error handed to `onStderr` as it comes, so a long step reports while it runs. */
@@ -1037,6 +1038,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
     equivalences: EQUIVALENCES,
     compare,
     preserves,
+    propertyFile: formulaFile,
     inputs: ({ model, property }, ctx) => {
       const f = formulaFile(property, ctx.root)
       return f ? [model, f] : [model]
