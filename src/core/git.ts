@@ -6,6 +6,7 @@
 // read time from every ref worth reading. Nothing in this module writes.
 
 import { spawn, spawnSync } from "node:child_process"
+import { homedir } from "node:os"
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs"
 import { join, relative, resolve, sep } from "node:path"
 import { isRegularFile, walkFiles } from "./files.ts"
@@ -22,6 +23,8 @@ export interface GitRun {
   err: string
   /** Git itself could not be started: not installed, or not on PATH. */
   notInstalled: boolean
+  /** Git's exit status, when it ran to an end: what a failure that printed nothing is reported by. */
+  status?: number | null
 }
 
 export interface GitOptions {
@@ -107,7 +110,7 @@ function spawnGit(cwd: string, args: string[], opts: GitOptions, encoding: "utf8
 export function runGit(cwd: string, args: string[], opts: GitOptions = {}): GitRun {
   const r = spawnGit(cwd, args, opts, "utf8")
   const notInstalled = (r.error as { code?: string } | undefined)?.code === "ENOENT"
-  return { ok: r.status === 0, out: String(r.stdout ?? "").replace(/\r?\n$/, ""), err: String(r.stderr ?? "").trim(), notInstalled }
+  return { ok: r.status === 0, out: String(r.stdout ?? "").replace(/\r?\n$/, ""), err: String(r.stderr ?? "").trim(), notInstalled, status: r.status }
 }
 
 /**
@@ -136,14 +139,34 @@ export function runGitAsync(cwd: string, args: string[], timeoutMs: number): Pro
     child.stdout?.on("data", (b) => (out += String(b)))
     child.stderr?.on("data", (b) => (err += String(b)))
     child.once("error", (e) => finish({ ok: false, out: "", err: String(e), notInstalled: (e as { code?: string }).code === "ENOENT" }))
-    child.once("close", (code) => finish({ ok: code === 0, out: out.replace(/\r?\n$/, ""), err: err.trim(), notInstalled: false }))
+    child.once("close", (code) => finish({ ok: code === 0, out: out.replace(/\r?\n$/, ""), err: err.trim(), notInstalled: false, status: code }))
   })
 }
 
-/** Why a run failed, in one line: git's own first line, or that git is not there. */
+/** How many of git's lines a reason carries at most: the last ones, where git says what went wrong. */
+const REASON_LINES = 3
+
+/**
+ * Why a run failed, in one line, in git's own words: the lines git marked as failures (`fatal:`, `error:`,
+ * a refused ref ` ! [rejected] … (would clobber existing tag)`), else its last lines, with the home folder
+ * written `~`; when git printed nothing, its exit status. Never a bare "git failed".
+ */
 export function gitReason(r: GitRun): string {
   if (r.notInstalled) return "git is not installed, or not on PATH"
-  return r.err.split("\n").find((l) => l.trim())?.replace(/^(fatal|error): /, "") ?? "git failed"
+  const lines = r.err.split("\n").map((l) => l.trim()).filter((l) => l)
+  const failures = lines.filter((l) => /^(fatal|error):|^!\s/.test(l))
+  const said = (failures.length ? failures : lines).slice(-REASON_LINES).map((l) => scrubHome(l.replace(/^(fatal|error): /, "").replace(/\s+/g, " ")))
+  if (said.length) return said.join("; ")
+  return r.status === undefined || r.status === null ? "git ended without saying why" : `git exited with status ${r.status} and printed no reason`
+}
+
+/** A line with the user's home folder written `~`, so a reason carries no home path. */
+export function scrubHome(line: string, home: string = homedir()): string {
+  if (!home || home === "/") return line
+  const forms = new Set([home, home.split(sep).join("/")])
+  let out = line
+  for (const f of forms) out = out.split(f).join("~")
+  return out
 }
 
 /** Git's trimmed output, or null when it fails: for questions whose failure is an answer ("is this a repository?"). */

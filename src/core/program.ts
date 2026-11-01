@@ -129,8 +129,8 @@ export function recordSourced(t: Target): string | null {
     const r = runGit(t.root, ["-C", s, "rev-list", "-n", "1", head, "--not", "--remotes"])
     return r.ok && !r.out && runGit(t.root, ["-C", s, "cat-file", "-e", `${head}^{commit}`]).ok
   })
-  if (proved) runGit(t.program, ["fetch", "--quiet", "--", proved, seedRemotes])
-  else runGit(t.program, ["fetch", "--quiet", "origin", "+refs/heads/main:refs/remotes/origin/main"])
+  if (proved) runGit(t.program, ["fetch", "--force", "--", proved, seedRemotes])
+  else runGit(t.program, ["fetch", "--force", "origin", "+refs/heads/main:refs/remotes/origin/main"])
   if (checkoutWork(t.program)) return null
   return `${where(t)} is at ${
     short(head)
@@ -219,7 +219,11 @@ function seeds(t: Target): string[] {
  */
 const lockedRefspec = (commit: string): string => `+${commit}:refs/remotes/origin/naima-locked`
 
-/** The source's refs as a seed knows them, copied into a clone of it: a clone names the seed's branches only. */
+/**
+ * The source's refs as a seed knows them, copied into a clone of it: a clone names the seed's branches only. Fetched on its own,
+ * before the lock's ref: a seed that holds refs/remotes/origin/naima-locked maps it to the ref lockedRefspec writes, and git
+ * refuses one fetch that writes a ref twice ("Cannot fetch both … to refs/remotes/origin/naima-locked").
+ */
 const seedRemotes = "+refs/remotes/origin/*:refs/remotes/origin/*"
 
 /** Whether `repo` knows `commit` as the source's: held, and reachable from a remote-tracking ref of origin. */
@@ -231,11 +235,11 @@ export function fetchCommit(t: Target, commit: string): void {
   if (sourced(t.program, commit)) return
   for (const seed of seeds(t)) {
     if (!runGit(t.root, ["-C", seed, "cat-file", "-e", `${commit}^{commit}`]).ok) continue
-    runGit(t.program, ["fetch", "--quiet", "--", seed, lockedRefspec(commit)])
+    runGit(t.program, ["fetch", "--force", "--", seed, lockedRefspec(commit)])
     if (sourced(t.program, commit)) return
   }
-  runGit(t.program, ["fetch", "--quiet", "origin"])
-  if (!sourced(t.program, commit)) runGit(t.program, ["fetch", "--quiet", "origin", lockedRefspec(commit)])
+  runGit(t.program, ["fetch", "--force", "origin"])
+  if (!sourced(t.program, commit)) runGit(t.program, ["fetch", "--force", "origin", lockedRefspec(commit)])
   if (has(t.program, commit)) return
   const reach = runGit(t.root, ["ls-remote", "--", t.source, "HEAD"])
   if (!reach.ok) {
@@ -267,7 +271,8 @@ function cloneProgram(t: Target): string {
   }
   if (!seed) return t.source
   // A clone names the seed's branches, not its remote-tracking refs, and the commit may be only there.
-  runGit(t.program, ["fetch", "--quiet", "--", seed, seedRemotes, lockedRefspec(t.commit)])
+  runGit(t.program, ["fetch", "--force", "--", seed, seedRemotes])
+  runGit(t.program, ["fetch", "--force", "--", seed, lockedRefspec(t.commit)])
   mustGit(t.program, "remote", "set-url", "origin", t.source)
   return "a copy on this disk"
 }
@@ -285,7 +290,8 @@ export function cloneIntoNewWorktree(t: Target, from: string): void {
   const g = (...args: string[]) => runGit(from, ["-C", t.program, ...args])
   // Always, as cloneProgram does: the seed's own main may lag the lock, and the lock's ref is what makes the commit the source's.
   const steps: string[][] = [
-    ["fetch", "--quiet", "--", seed, seedRemotes, lockedRefspec(t.commit)],
+    ["fetch", "--force", "--", seed, seedRemotes],
+    ["fetch", "--force", "--", seed, lockedRefspec(t.commit)],
     ["remote", "set-url", "origin", t.source],
     ["checkout", "--quiet", "--detach", t.commit],
   ]
@@ -490,9 +496,15 @@ export function remoteHead(t: Target): Head {
   return { branch: "main", commit, ...(movedTo ? { movedTo } : {}) }
 }
 
-/** `git fetch origin main` in the program, with the source's tags, which name versions: the head `naima update` moves the lock to. */
+/**
+ * `git fetch origin main` in the program, with the source's tags, which name versions: the head `naima update` moves the lock to.
+ * The tags are forced: the clone mirrors the source, so a tag the source moved (a rewritten history) moves here too, where an
+ * unforced fetch refuses it ("would clobber existing tag"). No check trusts a local tag: a release is verified by its archive's
+ * checksum, the commit the archive records and that commit's tree, and a tag's commit is read from the source itself.
+ * Not `--quiet`: git's lines go to the captured stderr, and a refused ref is reported only there.
+ */
 export function fetchHead(t: Target): Head {
-  const r = runGit(t.program, ["fetch", "--quiet", "--tags", "origin", "+refs/heads/main:refs/remotes/origin/main"])
+  const r = runGit(t.program, ["fetch", "--tags", "--force", "origin", "+refs/heads/main:refs/remotes/origin/main"])
   if (!r.ok) throw new Error(`cannot fetch main from ${t.source}: ${gitReason(r)}`)
   const movedTo = redirectedTo(r.err)
   return { branch: "main", commit: mustGit(t.program, "rev-parse", "refs/remotes/origin/main"), ...(movedTo ? { movedTo } : {}) }

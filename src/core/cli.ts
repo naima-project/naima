@@ -531,11 +531,11 @@ function siblingTracker(data: string, url: string | null, privateUrl: boolean, i
       // A local repository: no remote, works offline, stays on this machine until pushed to a private one.
       mkdirSync(data, { recursive: true })
       const r = runGit(data, ["init", "--quiet", "-b", trunk(root) ?? "main"])
-      if (!r.ok) throw new Error(`cannot create the tracker repository in ${shown}: ${r.err.split("\n").find((l) => l.trim()) ?? "git failed"}`)
+      if (!r.ok) throw new Error(`cannot create the tracker repository in ${shown}: ${gitReason(r)}`)
       io.out(`created a git repository of its own for the tracker in ${shown}, on this machine only: no remote, nothing public`)
     } else {
       const r = runGit(root, ["clone", "--quiet", "--", url, data])
-      if (!r.ok) throw new Error(`cannot clone the tracker repository into ${shown}: ${r.err.split("\n").find((l) => l.trim()) ?? "git failed"}`)
+      if (!r.ok) throw new Error(`cannot clone the tracker repository into ${shown}: ${gitReason(r)}`)
       io.out(`cloned the tracker repository into ${shown}`)
     }
   } else if (trackerGitOf(root, data) === root) {
