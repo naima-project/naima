@@ -304,6 +304,8 @@ export function permissions(
     /** The temporary folders the command may read besides, each as given and as resolved: describe's, note's, attach's and pass's input files. */
     tempReads?: string[]
     worktrees?: string[]
+    /** The folder the coordination option `worktrees` names, read-only by both its names: as written it may be a Windows 8.3 short name, which Deno does not expand. */
+    worktreesFolder?: string | null
     /** The programs the loaded contributions start, besides git: a verifier's `runs`, a metric's program. */
     runs?: string[]
     /** What `naima ui` is granted besides: null for every other command. */
@@ -336,6 +338,10 @@ export function permissions(
   const hostReads = (p.hostReads ?? []).filter((x) => !real(x).includes(","))
   // A temporary folder by both names: Deno checks a path as given, and /tmp is a link on macOS. One with a comma is left out.
   const temps = [...new Set((p.tempReads ?? []).flatMap((x) => [resolve(x), real(x)]))].filter((x) => !x.includes(","))
+  // The configured worktrees folder by both names too, so naima check can resolve the option as written. One with a comma is left out.
+  const folder = p.worktreesFolder
+    ? [...new Set([resolve(p.worktreesFolder), real(p.worktreesFolder)])].filter((x) => !x.includes(",") && !temps.includes(x))
+    : []
   return [
     `--allow-read=${
       list([
@@ -349,7 +355,7 @@ export function permissions(
         ...tick,
         ...hostReads,
       ])
-    }${temps.map((t) => `,${t}`).join("")}`,
+    }${[...temps, ...folder].map((t) => `,${t}`).join("")}`,
     `--allow-write=${list([p.tracker, p.data, p.program, ...tick, ...(p.hostFiles ?? []), ...(p.ui?.write ?? []).filter((w) => tools.includes(w))])}`,
     ...runFlag(p.ui?.runAll ? null : ["git", "tar", ...(p.runs ?? []), ...(p.ui?.runs ?? [])], p.found ?? runnable),
     "--allow-env",
@@ -359,6 +365,17 @@ export function permissions(
       ? [`--allow-net=${[...new Set([...(p.ui?.net ?? []), ...(p.net ?? [])])].join(",")}`]
       : []),
   ]
+}
+
+/** The folder the coordination option `worktrees` names, resolved against the main worktree as the plugin does: null when it is not set. */
+function configuredWorktrees(root: string, data: string | null): string | null {
+  if (!data) return null
+  try {
+    const dir: unknown = JSON.parse(readFileSync(join(data, DATA_FILE), "utf8"))?.plugins?.coordination?.options?.worktrees
+    return typeof dir === "string" && dir ? resolve(worktrees(root)[0]?.path ?? root, dir) : null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -556,6 +573,7 @@ export async function launch(args: string[], cwd: string): Promise<number> {
         hostReads: parsed.rest[0] === "recover" ? transcriptRoots(Deno.env.toObject()) : [],
         tempReads: TEMP_READERS.includes(parsed.rest[0] ?? "") ? tempRoots() : [],
         worktrees: others,
+        worktreesFolder: configuredWorktrees(root, data),
         tools,
         tick: tickState,
         // Every command: the tracker's privacy is asked of GitHub at most once a day, before the first write (core/exposure.ts).

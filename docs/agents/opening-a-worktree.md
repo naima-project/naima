@@ -21,7 +21,8 @@ cd <worktrees-dir>/<what>
 
 The branch is called `<who>/<what>`, meaning who is working (an agent's role or name) and on what, in a few words. Each part uses lowercase letters, digits,
 dots and dashes. `<what>` defaults to the first item's slug, and `<who>` defaults to the coordination plugin's `who` option. The worktree is the folder `<what>`
-inside the worktrees directory, which is `<main checkout>-worktrees` next to the main checkout unless the plugin's `worktrees` option says otherwise. The branch
+inside the worktrees directory, which is `<main checkout>-worktrees` next to the main checkout unless the plugin's `worktrees` option says otherwise. The option
+may name that folder in any form the file system takes, a Windows 8.3 short name or another letter case included: the folder it names is what counts. The branch
 starts from the [trunk](../guide/glossary.md#trunk). Before it touches anything, `open` refuses a name that doesn't follow the scheme, a branch that already
 exists and a folder that already exists. An existing branch is never reused: one already merged into the trunk is named with the command that deletes it,
 `naima prune --branch <who>/<what> --write`, and one with commits the trunk lacks is named with how many. The check `worktree-policy` fails any worktree or
