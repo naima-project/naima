@@ -353,8 +353,9 @@ that resumes a dead or stuck one ([several branches](several-branches.md#see-who
 checked for private data and secrets as any other text.
 
 **A normal run never touches the network.** Only these commands do, each granted it by the launcher for that command alone: `naima update` and alignment
-(git, and a release's download), `naima tools install` and `naima backup create`, `naima issues`, and `naima hello` through gh, and `naima run --host` through
-ssh.
+(git, and a release's download), `naima tools install` and `naima backup create`, `naima issues`, and `naima hello` through gh, and `naima run --host` and
+`naima verify --host` through ssh. Besides these, any command may ask GitHub's API whether the tracker's repository is public or private, at most once a day
+([where the tracker lives](#where-the-tracker-lives)).
 
 The allow-list of variables is `ENV` in `src/launcher.ts`. Deno can't grant a named list of variables and still let the program pass its environment on to git,
 so the launcher enforces the list by giving the program only those variables. An unrelated secret, such as a cloud key, simply isn't there. Deno also splits its
