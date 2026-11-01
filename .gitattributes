@@ -1,0 +1,6 @@
+# Naima's files are LF on every system, whatever core.autocrlf says (Git for Windows sets it):
+# the program reads, prints and hashes the same bytes everywhere.
+* text=auto eol=lf
+# The Windows launchers keep following the checkout's own setting.
+*.cmd !text !eol
+*.ps1 !text !eol
