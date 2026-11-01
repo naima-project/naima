@@ -45,6 +45,8 @@ export interface LongRun {
   budgetDisk?: string
   creates: string[]
   host?: string
+  /** The --stale window, `<n>s|m|h|d`; required with noProgress. */
+  stale?: string
   noProgress?: string
   /** As declared, `<n>s|m|h|d`, and in milliseconds: it is due once its last success is older. */
   within?: string
@@ -110,6 +112,9 @@ export function readLongRuns(options: Record<string, unknown>, hosts: Map<string
     const host = text("host")
     if (host !== undefined && !hosts.has(host)) throw new Error(`${at}: host "${host}" is not declared in hosts`)
     const noProgress = text("noProgress")
+    const stale = text("stale")
+    if (stale !== undefined && parseDuration(stale) === null) throw new Error(`${at}: stale: "${stale}" is not a duration — <n>s, <n>m, <n>h or <n>d`)
+    if (noProgress !== undefined && stale === undefined) throw new Error(`${at}: noProgress needs stale, how long silence is normal for it`)
     const fullSuite = d["fullSuite"] ?? false
     if (typeof fullSuite !== "boolean") throw new Error(`${at}: fullSuite is true or false`)
     const gates = list("gates")
@@ -130,6 +135,7 @@ export function readLongRuns(options: Record<string, unknown>, hosts: Map<string
       ...(budgetDisk !== undefined ? { budgetDisk } : {}),
       creates,
       ...(host !== undefined ? { host } : {}),
+      ...(stale !== undefined ? { stale } : {}),
       ...(noProgress !== undefined ? { noProgress } : {}),
       ...(within !== undefined ? { within, withinMs: withinMs! } : {}),
       fullSuite,
@@ -149,6 +155,7 @@ export const startArgs = (r: LongRun): string[] => [
   ...(r.budgetDisk !== undefined ? ["--budget-disk", r.budgetDisk] : []),
   ...r.creates.flatMap((c) => ["--creates", c]),
   ...(r.host !== undefined ? ["--host", r.host] : []),
+  ...(r.stale !== undefined ? ["--stale", r.stale] : []),
   ...(r.noProgress !== undefined ? ["--no-progress", r.noProgress] : []),
   "--",
   ...r.command,
