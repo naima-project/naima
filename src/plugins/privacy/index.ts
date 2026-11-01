@@ -10,7 +10,7 @@
 
 import { createHash } from "node:crypto"
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
-import { basename, join, relative, resolve } from "node:path"
+import { basename, dirname, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
   ATTACHMENTS,
@@ -47,6 +47,7 @@ import {
   saveMeta,
   saveProse,
   splitProse,
+  stateDir,
   str,
   today,
   trackerExposure,
@@ -155,8 +156,21 @@ export interface Signature {
   shown?: true
 }
 
-/** The mark, in a worktree's own git directory, that its first unsigned write was let through with the checklist shown. */
-export const SHOWN_MARK = "naima-checklist-shown"
+/**
+ * The folder, in Naima's state folder of the clone (naima/ in its git directory, which the launcher lets every command
+ * write), of the marks that a checkout's first unsigned write was let through with the checklist shown: one file per
+ * checkout, `main` for the clone's own and `worktree-<name>` for each linked worktree, holding the checklist's hash.
+ */
+export const SHOWN_MARK = "checklist-shown"
+
+/** The mark of the checkout at `root`: null outside git. */
+export function shownMark(root: string): string | null {
+  const state = stateDir(root)
+  // Both asked of git, as absolute paths: a linked worktree's git directory is outside what Naima may read.
+  const [own, common] = (gitOrNull(root, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir") ?? "").trim().split("\n")
+  if (!state || !own || !common) return null
+  return join(state, SHOWN_MARK, own !== common ? `worktree-${basename(own)}` : "main")
+}
 
 const hashOf = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex").slice(0, 16)
 
@@ -334,17 +348,22 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
   }
 
   /**
-   * A worktree's first unsigned write: the checklist printed and a signature marked shown, the worktree's git directory
-   * remembering it for the checklist's version; null for every later one, and outside git, where nothing can remember.
+   * A worktree's first unsigned write: the checklist printed and a signature marked shown, the checkout's mark in Naima's
+   * state folder remembering it for the checklist's version; null for every later one, and where nothing can remember:
+   * outside git, or where the mark cannot be written.
    */
   function showOnce(ctx: Context, path: string): Signature | null {
-    const dir = isGitRepo(ctx.root) ? gitOrNull(ctx.root, "rev-parse", "--absolute-git-dir")?.trim() : undefined
-    if (!dir) return null
+    const mark = isGitRepo(ctx.root) ? shownMark(ctx.root) : null
+    if (!mark) return null
     const bytes = readFileSync(SHIPPED)
     const shipped = hashOf(bytes)
-    const mark = join(dir, SHOWN_MARK)
     if (existsSync(mark) && readFileSync(mark, "utf8").trim() === shipped) return null
-    writeFileSync(mark, `${shipped}\n`)
+    try {
+      mkdirSync(dirname(mark), { recursive: true })
+      writeFileSync(mark, `${shipped}\n`)
+    } catch {
+      return null
+    }
     ctx.out(
       `first write of free text in this worktree: the no-leaks checklist (${path}) is shown once and the write goes on — from now on, check each one against it and sign it with --revised ${path}`,
     )
@@ -575,7 +594,7 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
       "The check `secrets` reads every project file and every attachment for six shapes of secret: a private key with its body (a header alone is not one), and AWS, GitHub, Slack, API-secret and Google keys; `naima attach` refuses a file holding one. " +
       "A file that must keep one is an exception in the plugin's options, with a reason and the item that tracks it; an exception the trunk's configuration does not hold is refused, so the list only shrinks. " +
       "Every write of free text or a file — a title, a description, a note, a free-text field, a session note, an event, an attachment — is signed against the no-leaks checklist the program ships, `docs/agents/NOLEAKS.md`: the writer passes its path with `--revised`, and the write hook `signed-writes` compares the file with the program's own copy, byte for byte, and refuses the write without it or with any other file. " +
-      "The first unsigned write in a worktree is not refused: the checklist is printed to the writer and the write goes on, its signature marked `shown`; the worktree's own git directory remembers it (`naima-checklist-shown`, the checklist's hash), so every later unsigned write there is refused, until the checklist changes. " +
+      "The first unsigned write in a worktree is not refused: the checklist is printed to the writer and the write goes on, its signature marked `shown`; the checkout's mark remembers it (the checklist's hash, in `checklist-shown/` of Naima's state folder `naima/` in the clone's git directory, which the launcher lets every command write: `main` for the clone's own checkout, `worktree-<name>` for each linked worktree), so every later unsigned write there is refused, until the checklist changes. " +
       "The signature, the checklist's hash with who signed and the day, goes in the item's field `revised`, in a session note's or an event's front matter, and in an attachment's record, so every write shows which version of the checklist it was checked against. " +
       "Statuses, enums, dates, links, claims, the fields Naima fills and the records it generates need no signature. The option `signed: false` turns the requirement off for a project. " +
       "Private data (machine names, addresses, home paths, user names) is refused by default; whether the project scrubs it is the owner's choice, asked once: the first refusals carry the question, and the answer is the option `privateData`, set with `naima privacy scrub` or `naima privacy keep`. " +

@@ -197,4 +197,4 @@ export {
   showRate,
   stageTotal,
 } from "./progress.ts"
-export { type JobOutcome, type Level, messageId, type Notice } from "./tick.ts"
+export { type JobOutcome, type Level, messageId, type Notice, stateDir } from "./tick.ts"

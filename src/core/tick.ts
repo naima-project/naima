@@ -112,6 +112,15 @@ export function tickDir(root: string): string | null {
   return r.ok && r.out.trim() ? join(resolve(root, r.out.trim()), "naima", "tick") : null
 }
 
+/**
+ * Naima's state folder for the clone, naima/ in its git directory, shared by its worktrees: the one place outside the
+ * tracker folder the launcher lets every command write (the tick's state is in it). Null outside git.
+ */
+export function stateDir(root: string): string | null {
+  const tick = tickDir(root)
+  return tick ? dirname(tick) : null
+}
+
 /** The slot `now` falls in: the day, or the hour, in UTC. */
 export function slotOf(every: Schedule["every"], now: Date): string {
   const iso = now.toISOString()
