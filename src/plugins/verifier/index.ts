@@ -42,12 +42,8 @@ import {
   privateContext,
   type Progress,
   progressFor,
-<<<<<<< HEAD
   projectHosts,
-=======
-  readHosts,
   redactPrivate,
->>>>>>> d330136e30ec7fffe4d503667d60e0fde83c6f71
   rendered,
   saveMeta,
   setFieldValue,
