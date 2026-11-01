@@ -21,12 +21,13 @@ import {
   type Host,
   installDirOf,
   NaimaError,
+  noHost,
   parse,
   platformKey,
   type Plugin,
   programFile,
   progressFor,
-  readHosts,
+  projectHosts,
   RECEIPT,
   str,
   toolsDir,
@@ -290,13 +291,11 @@ function pathOf(ctx: Context, world: ToolsWorld, name: string, program: string |
 
 /** The hosts the long-work plugin declares: the same machines `naima run --host` reaches. */
 function hostNamed(ctx: Context, name: string): Host {
-  const hosts = readHosts(ctx.config.plugins["long-work"]?.options ?? {})
+  const hosts = projectHosts(ctx.config.plugins["long-work"]?.options ?? {})
   const h = hosts.get(name)
   if (!h) {
     throw refuse(
-      `no host "${name}" — declare it in naima.json: plugins.long-work.options.hosts.${name} = { "ssh": "<destination>", "dir": "<project on the host>" }${
-        hosts.size ? `; declared: ${[...hosts.keys()].join(", ")}` : ""
-      }`,
+      noHost(name, hosts),
     )
   }
   return h

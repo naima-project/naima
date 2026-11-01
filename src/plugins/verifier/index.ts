@@ -35,12 +35,13 @@ import {
   label,
   linked,
   NO_PROGRESS,
+  noHost,
   parse,
   type Plugin,
   privateContext,
   type Progress,
   progressFor,
-  readHosts,
+  projectHosts,
   rendered,
   saveMeta,
   setFieldValue,
@@ -703,13 +704,11 @@ const verify: Command = {
     if (emit && hostName !== undefined) throw new Error("--emit and --host: --emit is what a host is asked, it is not given together with --host")
     let host: Host | undefined
     if (hostName !== undefined) {
-      const hosts = readHosts(ctx.config.plugins["long-work"]?.options ?? {})
+      const hosts = projectHosts(ctx.config.plugins["long-work"]?.options ?? {})
       host = hosts.get(hostName)
       if (!host) {
         throw new Error(
-          `no host "${hostName}" — declare it in naima.json: plugins.long-work.options.hosts.${hostName} = { "ssh": "<destination>", "dir": "<project on the host>" }${
-            hosts.size ? `; declared: ${[...hosts.keys()].join(", ")}` : ""
-          }`,
+          noHost(hostName, hosts),
         )
       }
     }
