@@ -38,6 +38,7 @@ import {
   gitOrNull,
   isGitRepo,
   isOpen,
+  isRetired,
   type Item,
   label,
   linked,
@@ -71,6 +72,17 @@ import {
 } from "./model-first.ts"
 
 export { STATEFUL, STATEFUL_KIND } from "./model-first.ts"
+
+/**
+ * A retired item in words — `closed/x (title) retired on 2026-11-01: why; replaced by features/y` — from the fields and
+ * the relation naima retire writes, read by name: plugins never import each other.
+ */
+function retiredSays(ctx: Context, item: Item): string {
+  const on = typeof item.meta["closedOn"] === "string" ? ` on ${item.meta["closedOn"]}` : ""
+  const why = typeof item.meta["retiredBecause"] === "string" ? `: ${item.meta["retiredBecause"]}` : ""
+  const by = linked(ctx, item, "replaced-by").map(label)
+  return `${label(item)} (${item.meta.title}) retired${on}${why}${by.length ? `; replaced by ${by.join(", ")}` : ""}`
+}
 
 // ── requirements ──────────────────────────────────────────────────────────────
 
@@ -138,12 +150,27 @@ const requirementsOf = (ctx: Context): Item[] => ctx.repo.items.filter((i) => i.
 const requirementsCheck: Check = {
   name: "requirements-proven",
   says:
-    "a requirement marked met has a proof that passed and none that refutes it; one proven but still stated is noted; one that nothing satisfies or verifies is noted; one proposed by someone other than the owner and never confirmed is noted",
+    "a requirement marked met has a proof that passed and none that refutes it; one whose proof was retired is flagged, never counted as proven by it — a problem while it is met with no other passed proof, a note otherwise; one proven but still stated is noted; one that nothing satisfies or verifies is noted; one proposed by someone other than the owner and never confirmed is noted",
   run(ctx) {
     const out: Finding[] = []
     for (const req of requirementsOf(ctx)) {
       const state = provenState(ctx, req)
       const status = req.meta.status
+      const retired = [...linked(ctx, req, "verified-by"), ...linked(ctx, req, "satisfied-by")].filter((p, n, all) => isRetired(ctx, p) && all.indexOf(p) === n)
+      if (retired.length) {
+        const said = retired.map((p) => retiredSays(ctx, p)).join("; ")
+        if (status === "met" && state !== "proven") {
+          out.push({
+            level: "problem",
+            item: req,
+            message: `${label(req)} is met, but the proof it stood on was retired (${said}) — naima link <test> verifies ${label(req)}, or naima set ${
+              label(req)
+            } status=stated`,
+          })
+          continue
+        }
+        out.push({ level: "note", item: req, message: `${label(req)}: a proof of it was retired, and no longer counts (${said})` })
+      }
       if (status === PROPOSED) {
         out.push({
           level: "note",
