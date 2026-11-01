@@ -269,7 +269,8 @@ export const guidePoint: ExtensionPoint<GuideSection> = {
 
 export const jobsPoint: ExtensionPoint<TickJob> = {
   id: "jobs",
-  says: "a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it; what it finds is shown to the owner as messages",
+  says:
+    "a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it, among those its canRunHere admits (a process it does not claims no attempt); what it finds is shown to the owner as messages",
   noun: "job",
   key: (j) => j.name,
   validate: (v) =>

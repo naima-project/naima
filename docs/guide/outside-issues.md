@@ -13,7 +13,8 @@ outside-issues plugin's option `repo` names it as `owner/name` in `naima.json`.
 
 ## The path
 
-1. **Intake.** Once a day, at a session start on the main checkout, the tick does what `naima issues file` does. Each open issue that no item records yet becomes an item (a bug, unless the
+1. **Intake.** Once a day, at a session start on the main checkout, the tick does what `naima issues file` does; any other command, or a checkout of
+   another branch, leaves the day's intake to the next session start there. Each open issue that no item records yet becomes an item (a bug, unless the
    option `type` says otherwise), with the issue's address in its field `issue` and a first triage marked as reported. You are told once about each one. An
    issue is never filed twice, even when two runs happen at the same moment. When the project already had an item for the problem before the issue was opened,
    `naima issues link <number> <item>` records the issue on that item instead, and the intake leaves the issue alone.

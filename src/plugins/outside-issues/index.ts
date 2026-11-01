@@ -32,6 +32,7 @@ import {
   type Item,
   KINDS,
   label,
+  mayRun,
   messageId,
   NaimaError,
   type Notice,
@@ -58,10 +59,22 @@ export interface Ran {
 /** How the plugin runs gh: the real one, or a fake in tests. */
 export interface IssuesWorld {
   run(program: string, args: string[], options: { cwd: string; input?: string }): Ran
+  /** Whether this process may start `program` at all, asked without starting it; absent, it may. */
+  mayRun?(program: string): boolean
 }
 
+/** What a run refused for want of the grant says, the same wherever the refusal was seen. */
+const refused = (program: string): Ran => ({
+  status: null,
+  stdout: "",
+  stderr: `NotCapable: Requires run access to "${program}", which the launcher did not grant to this command`,
+})
+
 export const realWorld = (): IssuesWorld => ({
+  mayRun,
   run(program, args, { cwd, input }) {
+    // Deno's node:child_process refuses a program outside the grant with an empty result, no status and no error.
+    if (!mayRun(program)) return refused(program)
     try {
       const r = spawnSync(program, args, {
         cwd,
@@ -71,6 +84,7 @@ export const realWorld = (): IssuesWorld => ({
         stdio: ["pipe", "pipe", "pipe"],
         timeout: 60_000,
       })
+      if (typeof r.status !== "number" && !r.error && !r.signal) return refused(program)
       return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? (r.error ? r.error.message : "") }
     } catch (e) {
       return { status: null, stdout: "", stderr: e instanceof Error ? e.message : String(e) }
@@ -119,6 +133,7 @@ export function issueRepo(ctx: Context, opts: Options): string | null {
 
 /** Whether gh is installed but this process may not start it: Deno refuses the run for want of the grant. */
 export function notGranted(world: IssuesWorld, cwd: string): boolean {
+  if (world.mayRun && !world.mayRun("gh")) return true
   const v = world.run("gh", ["--version"], { cwd })
   return v.status === null && /Requires run access|NotCapable|PermissionDenied|--allow-run/i.test(v.stderr)
 }
@@ -527,10 +542,18 @@ export function outsideIssuesPlugin(world: () => IssuesWorld = realWorld, option
   const job: TickJob = {
     name: "outside-issues",
     says:
-      "once a day, on the trunk's checkout of a project with a GitHub repository and gh: file each new outside issue, as naima issues file does, telling the owner once; gh is granted to naima issues and to the session start (naima hello) of a project whose origin is on GitHub, so a tick in another command that cannot start gh tries again later in the day; elsewhere, or without gh or a GitHub repository, nothing",
+      "once a day, on the trunk's checkout of a project with a GitHub repository and gh: file each new outside issue, as naima issues file does, telling the owner once; gh is granted to naima issues and to the session start (naima hello) of a project whose origin is on GitHub, so a tick in another command, or off the trunk, claims no attempt and leaves the day to the next command that can; without gh or a GitHub repository, nothing",
     every: "day",
     timeoutMs: 60_000,
     retryAfterMs: 10 * 60_000,
+    // Only the trunk's checkout, in a command granted gh, can file: anywhere else the tick claims nothing, so the day is
+    // left to the next naima hello or naima issues there, rather than spent by the first command that ticks.
+    canRunHere(ctx) {
+      const t = trunk(ctx.root)
+      if (!t || currentBranch(ctx.root) !== t) return false
+      const w = world()
+      return !w.mayRun || w.mayRun("gh")
+    },
     run(ctx) {
       const t = trunk(ctx.root)
       if (!t || currentBranch(ctx.root) !== t) return { ok: true }

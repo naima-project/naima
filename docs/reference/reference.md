@@ -142,7 +142,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `summary` | core | a block of `naima summary`; one marked `hello` is said by `naima hello` among what waits on the owner, and one with `goals(ctx)` says there where the project is going | core, trackers, coordination, triage, gates, epics, discussions, planning, beta-markers, verifier, backup, metrics, long-work |
 | `guide` | core | a block `naima guide` prints first, inside a project, before the documentation pages | triage, verifier, rules |
 | `rank` | core | an additive term of every item's urgency; lower is more urgent | triage, gates |
-| `jobs` | core | a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it; what it finds is shown to the owner as messages | outside-issues, long-work |
+| `jobs` | core | a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it, among those its canRunHere admits (a process it does not claims no attempt); what it finds is shown to the owner as messages | outside-issues, long-work |
 | `extends` | core | additive changes to another plugin's type — statuses (an existing one only with its category), traits, transitions — or field — enum values, more types or traits it applies to | discussions, knowledge, roles |
 | `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done; `beforeText(text, ctx)` may refuse a write of free text or a file that is not an item's (a session note, an event, an attachment) or add to its record | core, coordination, triage, epics, discussions, planning, knowledge, verifier, privacy |
 | `setup` | core | what a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init` and `naima update` after their own work: `install(ctx) → lines`, each said | coordination, planning, backup, metrics |
@@ -2923,7 +2923,7 @@ naima issues close 12 --release 1.1.2
 
 | Job | Every | What it does |
 |---|---|---|
-| `outside-issues` | day | once a day, on the trunk's checkout of a project with a GitHub repository and gh: file each new outside issue, as naima issues file does, telling the owner once; gh is granted to naima issues and to the session start (naima hello) of a project whose origin is on GitHub, so a tick in another command that cannot start gh tries again later in the day; elsewhere, or without gh or a GitHub repository, nothing |
+| `outside-issues` | day | once a day, on the trunk's checkout of a project with a GitHub repository and gh: file each new outside issue, as naima issues file does, telling the owner once; gh is granted to naima issues and to the session start (naima hello) of a project whose origin is on GitHub, so a tick in another command, or off the trunk, claims no attempt and leaves the day to the next command that can; without gh or a GitHub repository, nothing |
 
 ## verifier-mcrl2
 
