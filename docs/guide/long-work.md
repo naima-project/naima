@@ -131,6 +131,16 @@ You declare another machine once, in `naima.json`.
   "lab": { "ssh": "me@lab.example.org", "dir": "/home/me/project" } } } }
 ```
 
+`naima.json` is committed, so the machine's address ends up in the repository. To keep a private machine out of it, you declare the host in `hosts.json` in your
+own Naima config folder instead: `~/.config/naima/hosts.json` (or under `$XDG_CONFIG_HOME`), `%APPDATA%\naima\hosts.json` on Windows. That folder also holds
+the [private word list](rules.md#no-machine-names-or-private-infrastructure-in-a-repository). The file holds the same object as the `hosts` option, and its hosts
+are added to the committed ones. A host declared in both is taken from the private file, since that file describes this machine's own view of it. Each machine
+it names also counts as a private word, so a tracker write that mentions it is refused.
+
+```json
+{ "lab": { "ssh": "me@lab.example.org", "dir": "/home/me/project" } }
+```
+
 After that, `naima run bench --host lab --budget-time 6h -- 'deno task bench'` runs the work on that machine, using the copy of Naima it already has for the
 project, and `wait`, `run list`, `run status`, `run stop` and `run clean` ask it over ssh. A run on another machine must not change any file the repository
 tracks there. If it does, the run is reported as failed, and the report names the files. If the run cannot start there, for instance because the program it

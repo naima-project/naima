@@ -1,11 +1,13 @@
 // Hosts: the machines a long run or a tool install may go to, declared once in
-// the long-work plugin's `hosts` option, and reached through one
+// the long-work plugin's `hosts` option, or privately, outside every
+// repository, in the user's `hosts.json` (private.ts), and reached through one
 // non-interactive ssh call per question that runs the host's own Naima
 // (specs/long-work-naima-run-wait-run-list, §4; specs/tools-plugin-declares-tools-needs-naima-tools, §7).
 // The command is quoted for the shell the host's sshd runs it through: a POSIX
 // shell, or cmd, the shell of the stock Windows OpenSSH server.
 
 import { spawnSync } from "node:child_process"
+import { platform, PRIVATE_ENV, privateHostsFile, processEnv, readText } from "./private.ts"
 
 /** The shell a host's sshd runs a command through: a POSIX shell, or cmd (the stock Windows OpenSSH server). */
 export type HostShell = "posix" | "cmd"
@@ -53,6 +55,42 @@ export function readHosts(options: Record<string, unknown>): Map<string, Host> {
     out.set(name, { name, ssh: h.ssh, dir: h.dir, naima: h.naima ?? DEFAULT_REMOTE_NAIMA, shell: h.shell ?? "posix" })
   }
   return out
+}
+
+/** Where a private host is declared, as messages name it: never the path itself, which holds a home folder. */
+export const PRIVATE_HOSTS_SHOWN = "hosts.json in the user's Naima config folder (~/.config/naima/, or %APPDATA%\\naima\\ on Windows)"
+
+/**
+ * The hosts a project's commands reach: those the long-work plugin's `hosts` option declares, and those declared privately,
+ * outside every repository, in the user's hosts.json — handed over by the launcher, which reads it, or read here when this
+ * process may. A private host of the same name is the one used: it is this machine's own view of that host.
+ */
+export function projectHosts(
+  options: Record<string, unknown>,
+  env: Record<string, string | undefined> = processEnv(),
+  os: string = platform(),
+): Map<string, Host> {
+  const hosts = readHosts(options)
+  const text = env[PRIVATE_ENV.hosts] ?? readText(privateHostsFile(env, os))
+  if (text === null || !text.trim()) return hosts
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch (e) {
+    throw new Error(`the private hosts, ${PRIVATE_HOSTS_SHOWN}, are not JSON: ${(e as Error).message}`)
+  }
+  try {
+    for (const [name, h] of readHosts({ hosts: raw })) hosts.set(name, h)
+  } catch (e) {
+    throw new Error(`the private hosts, ${PRIVATE_HOSTS_SHOWN}: ${(e as Error).message.replace(/^long-work: (option hosts )?/, "")}`)
+  }
+  return hosts
+}
+
+/** What a command says when a host is not declared: where to declare it, committed or private, and the hosts there are. */
+export function noHost(name: string, hosts: Map<string, Host>): string {
+  return `no host "${name}" — declare it in naima.json: plugins.long-work.options.hosts.${name} = { "ssh": "<destination>", "dir": "<project on the host>" }, ` +
+    `or, to keep its address out of the repository, under "${name}" in ${PRIVATE_HOSTS_SHOWN}${hosts.size ? `; declared: ${[...hosts.keys()].join(", ")}` : ""}`
 }
 
 /** One word for a POSIX shell, quoted only when it must be. */
