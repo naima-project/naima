@@ -253,8 +253,10 @@ inside the project, for example the main worktree's, or a clone's as the install
 
 - **It never overwrites work.** If the clone was changed in place, so that its working tree isn't clean at the locked commit, it refuses and tells you to
   publish the change as a fork and set `source`. Changing Naima is welcome ([below](#modifying-naima)), but losing the change without a word is not.
-- **It refuses a commit it can't reach**, naming the source and the commit. This happens with a rewritten history or a deleted fork. Naima's own `main` is never
-  rewritten.
+- **It refuses a commit it can't reach**, naming the source and the commit. This happens with a rewritten history or a deleted fork.
+- **It mirrors the source's tags.** The program is a copy of the source, so its tags are never yours: when the source moves a tag to another commit, the next
+  fetch moves it in the program too, and `naima update` goes on. A release is checked against its archive's checksum, the commit the archive records and that
+  commit's files, never against a tag in the program. When git refuses something, the error carries git's own reason.
 - **It needs git and the network once per commit and machine**, to fetch the commit. If nothing is reachable and there is no network, it says so in one line. A
   commit already checked out somewhere on this disk needs no network at all ([below](#offline)).
 - **It fetches from this disk when it can.** Every git worktree of a project has its own ignored program directory. A new one is cloned locally from another

@@ -18,7 +18,7 @@
 import { chmodSync, existsSync, readdirSync, readFileSync, realpathSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { posixRelative } from "./config.ts"
-import { gitOrNull, mustGit, nativePath, runGit, toplevel, trunk } from "./git.ts"
+import { gitOrNull, gitReason, mustGit, nativePath, runGit, toplevel, trunk } from "./git.ts"
 import { DATA_DIR, DATA_FILE, TRACKER_DIR } from "./layout.ts"
 import { writeFileAtomic } from "./files.ts"
 
@@ -213,7 +213,7 @@ export function pointHooksPath(root: string, data: string, opts: { quietWhenSet?
   // Every hook of the clone's own directory keeps running: a stub of each name Naima does not write calls it.
   writeDelegates(data)
   const r = runGit(root, ["config", "core.hooksPath", path])
-  if (!r.ok) return [`core.hooksPath could not be set to ${path}: ${r.err.split("\n")[0] ?? "git failed"}`]
+  if (!r.ok) return [`core.hooksPath could not be set to ${path}: ${gitReason(r)}`]
   const own = naimaHooks(data).filter((n) => !isDelegate(data, n))
   return [
     `core.hooksPath is ${path} now, for this clone and every worktree of it: git runs the project's hooks (${
@@ -360,7 +360,7 @@ export function pairTracker(root: string, trackerGit: string, codeBranch: string
   const base = trunk(trackerGit) ?? "HEAD"
   const r = exists ? runGit(trackerGit, ["switch", "-q", want]) : runGit(trackerGit, ["switch", "-q", "-c", want, base])
   if (!r.ok) {
-    throw new Error(`the tracker could not move to ${want}, the branch that pairs with the code's ${codeBranch}: ${r.err.split("\n")[0] ?? "git failed"}`)
+    throw new Error(`the tracker could not move to ${want}, the branch that pairs with the code's ${codeBranch}: ${gitReason(r)}`)
   }
   return exists ? `the tracker moved to ${want}, the code's branch` : `the tracker took a new branch ${want}, from its ${base}, to pair with the code's`
 }
@@ -397,9 +397,9 @@ export function commitTrackerPaths(trackerGit: string, command: string, paths: r
   const input = paths.join("\0") + "\0"
   const spec = ["--pathspec-from-file=-", "--pathspec-file-nul"]
   const added = runGit(trackerGit, ["--literal-pathspecs", "add", "-A", ...spec], { input })
-  if (!added.ok) return `git add: ${added.err.split("\n")[0] ?? "git failed"}`
+  if (!added.ok) return `git add: ${gitReason(added)}`
   const made = runGit(trackerGit, ["--literal-pathspecs", "commit", "-q", "-m", cliCommitMessage(command, paths), ...spec], { input })
-  return made.ok ? null : `git commit: ${made.err.split("\n").find((l) => l.trim()) ?? "git failed"}`
+  return made.ok ? null : `git commit: ${gitReason(made)}`
 }
 
 /**
