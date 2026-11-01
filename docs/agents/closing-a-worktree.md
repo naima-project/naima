@@ -151,9 +151,10 @@ what the branch changed there. Then it moves the trunk, only if the trunk hasn't
 - the main checkout has uncommitted changes to tracked files;
 - the branch tip still holds its claim file (step 3);
 - it can't name an item the branch closes. A branch that changes only tracker data, such as the notes of a review, lands with `--tracker-only "<reason>"`, and
-  the marker keeps the reason in a `Tracker-only:` trailer; it is refused if the branch changes anything else. A branch whose work meets a requirement lands
-  with `--meets <requirement>`, and the marker names it in a `Meets:` trailer; it is refused unless a test that verifies the requirement passed on the branch,
-  and not already on the trunk;
+  the marker keeps the reason in a `Tracker-only:` trailer; an item the branch claimed and did not fix, such as a discussion whose description it edited while
+  it waits for the owner, stays open; it is refused if the branch changes anything else. A branch whose work meets a requirement lands with
+  `--meets <requirement>`, and the marker names it in a `Meets:` trailer; it is refused unless a test that verifies the requirement passed on the branch, and
+  not already on the trunk;
 - an item it closes is open and not fixed, meaning its status isn't done and `fixedOn` isn't set;
 - the branch changes a path that a `changes/config.json` lists, in the project or in a submodule, and adds no change note there. If nothing anyone can see
   changes, land it with `--no-change-note "<reason>"`, and the marker keeps the reason in a `No-change-note:` trailer;

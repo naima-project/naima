@@ -93,7 +93,8 @@ landing, for instance because it takes days, `--stale-proofs "<reason>"` lands t
 
 A branch that changes only tracker data, such as the notes and decisions of a review, may close no item. `naima land <branch> --tracker-only "<reason>"` lands
 it anyway, and the marker keeps the reason in a `Tracker-only:` trailer in place of `Closes:`. It still closes the items the branch claimed or that `--closes`
-names, once they are done or fixed. It is refused when the branch changes any file outside the tracker data, and the check that reads the trunk notes a
+names, once they are done or fixed. An item the branch claimed and did not fix stays open: this is how a branch opened on a discussion that waits for the owner
+lands a better description of it. It is refused when the branch changes any file outside the tracker data, and the check that reads the trunk notes a
 `Tracker-only:` marker made by hand that does.
 
 A branch whose work meets a [requirement](glossary.md#requirement) may also close no item, because a requirement is met by the test that verifies it, not
