@@ -157,6 +157,7 @@ export {
   pointHooksPath,
   SIBLING_FILE,
   TRACKER_TRAILER,
+  trackerChanges,
   trackerPath,
   trailerHookCurrent,
   trailerOf,

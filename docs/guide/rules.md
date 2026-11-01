@@ -79,8 +79,8 @@ Only someone who has looked at the work to be done sets `effort`. **Convention**
 
 [Fixed](glossary.md#fixed) (the change exists), [resolved](glossary.md#resolved) (fixed and proven) and [closed](glossary.md#closed) (resolved and archived) are
 kept apart and never added into one number. **Enforced by** `naima close`, which refuses anything that isn't resolved, and by the checks `closed-carries-proof`
-(every archived item carries a passed [proof](glossary.md#proof)) and `proven-but-open` (a note about an open item whose proof has passed and which is ready to
-close).
+(every archived item carries a passed [proof](glossary.md#proof)) and `proven-but-open` (an item fixed, proven and landed that is still open fails; `naima land`
+closes it in the landing).
 
 ### Every fix names the gesture that proves it
 

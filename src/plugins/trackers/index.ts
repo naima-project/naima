@@ -195,13 +195,52 @@ const partialWithoutClause: Check = {
       .map((i): Finding => ({ level: "note", message: `${label(i)} is partial but its page has no unticked clause`, item: i })),
 }
 
+/** Whether `item` is fixed, not archived, and proven: what naima close takes, the commit from the trunk aside. */
+const provenNotClosed = (ctx: Context, i: Item): boolean => i.type !== "closed" && !isRetired(ctx, i) && lifecycle(ctx, i) === "resolved"
+
 const provenButOpen: Check = {
   name: "proven-but-open",
-  says: "an open item whose proof has passed is reported so it can be closed",
+  says:
+    "an item that is fixed, whose proof has passed and one of whose commits is on the trunk, and that is still open, fails: naima land closes it in the landing, naima close closes it by hand; one whose commits are not on the trunk yet, a branch's before its landing, is a note",
   run: (ctx) =>
     ctx.repo.items
-      .filter((i) => i.type !== "closed" && isOpen(ctx, i) && lifecycle(ctx, i) === "resolved")
-      .map((i): Finding => ({ level: "note", message: `${label(i)} is resolved — naima close ${i.slug}`, item: i })),
+      .filter((i) => provenNotClosed(ctx, i))
+      .map((i): Finding =>
+        hasCommitFromTrunk(ctx, i)
+          ? { level: "problem", message: `${label(i)} is fixed and proven, and still open — naima close ${label(i)}`, item: i }
+          : { level: "note", message: `${label(i)} is resolved, and none of its commits is on the trunk yet: its landing closes it`, item: i }
+      ),
+}
+
+/** The items fixed whose proof is linked and has not passed yet: what the landing of that proof closes. */
+const waitingForProof = (ctx: Context): Item[] =>
+  ctx.repo.items.filter((i) => i.type !== "closed" && !isRetired(ctx, i) && lifecycle(ctx, i) === "fixed" && linked(ctx, i, "verified-by").length > 0)
+
+const fixedWaitingForProof: Check = {
+  name: "fixed-waiting-for-proof",
+  says:
+    "an item that is fixed and whose linked proof has not passed yet is listed as a note, waiting for its proof: the landing that marks it passed closes it",
+  run: (ctx) =>
+    waitingForProof(ctx).map((i): Finding => ({
+      level: "note",
+      message: `${label(i)} is fixed, waiting for its proof: ${linked(ctx, i, "verified-by").map((p) => `${label(p)} [${p.meta.status}]`).join(", ")}`,
+      item: i,
+    })),
+}
+
+/** `naima hello`: the items fixed and proven still open, and those fixed waiting for their proof, a line each. */
+const closingSection: SummarySection = {
+  name: "closing",
+  hello: true,
+  render(ctx) {
+    const open = ctx.repo.items.filter((i) => provenNotClosed(ctx, i) && hasCommitFromTrunk(ctx, i)).map(label)
+    const waiting = waitingForProof(ctx).map(label)
+    const shown = (l: string[]) => (l.length > 3 ? `${l.slice(0, 3).join(", ")} and ${l.length - 3} more` : l.join(", "))
+    return rendered({ proven: open, waiting }, (d) => [
+      ...(d.proven.length ? [`${d.proven.length} fixed and proven, still open: naima close ${shown(d.proven)}`] : []),
+      ...(d.waiting.length ? [`${d.waiting.length} fixed, waiting for its proof: ${shown(d.waiting)}`] : []),
+    ])
+  },
 }
 
 const fixNamesGesture: Check = {
@@ -726,6 +765,7 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
     checks: [
       partialWithoutClause,
       provenButOpen,
+      fixedWaitingForProof,
       fixNamesGesture,
       closedHasProof,
       closedWithoutProof,
@@ -741,6 +781,6 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
     ],
     commands: [close, retire, bugs],
     hooks: [retiredOnlyByRetire],
-    summary: [bugCounts],
+    summary: [bugCounts, closingSection],
   }
 }

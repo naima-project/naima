@@ -149,7 +149,7 @@ from the claim the branch released. If the trunk has moved in the meantime, it r
 $ cd ../demo
 $ naima land worker/greet-lang
 landed worker/greet-lang on main: 9ec50a9d41c2, closing features/greet-by-name-user-s-own-language
-next: naima close each item once its proof is checked, then naima prune --branch worker/greet-lang --write
+next: naima prune --branch worker/greet-lang --write
 ```
 
 To make the same commit by hand, you would run
