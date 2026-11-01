@@ -32,6 +32,8 @@ export interface GitOptions {
   input?: string | Uint8Array
   /** Added to the environment git runs with. */
   env?: Record<string, string>
+  /** Ended after this many milliseconds: for a call that reads the network. */
+  timeoutMs?: number
 }
 
 /** The variables a git hook runs with that bind git to one repository. */
@@ -101,6 +103,7 @@ function spawnGit(cwd: string, args: string[], opts: GitOptions, encoding: "utf8
     ...(encoding === "utf8" ? { encoding } : {}), // no encoding: bytes (Node refuses an explicit "buffer")
     ...(opts.input !== undefined ? { input: opts.input } : {}),
     ...(env ? { env } : {}),
+    ...(opts.timeoutMs !== undefined ? { timeout: opts.timeoutMs } : {}),
     stdio: [opts.input !== undefined ? "pipe" : "ignore", "pipe", "pipe"],
     maxBuffer: 1 << 28,
   })

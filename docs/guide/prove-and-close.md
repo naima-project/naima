@@ -128,6 +128,18 @@ naima set export-drops commits=3f2c1a9
 than this field, the item is grandfathered (see below) instead of being given a guessed hash. When the item lands with `naima land`, the landing adds its marker
 here on its own, and this step is already done.
 
+When the fix lives in another repository, such as a stance, a plugin or Naima itself, name its commit there as `<repository>@<hash>`:
+
+```sh
+naima set export-drops commits=https://github.com/naima-project/naima-stance-ui@a48955f
+```
+
+That commit counts when the repository is one the project declares and the commit is on its default branch. The declared repositories are the Naima the project
+runs (`source` in `naima.json`), every plugin pinned from git (an adopted stance among them), and those listed in `plugins.trackers.options.repositories`. Naima
+reads that repository with git, keeping a copy of its commits only (no files) in the project's git directory, so it asks the network once and not again for a
+commit it already knows. When the repository can't be read, offline for instance, `naima close` and `naima check` say the commit cannot be checked, and it
+doesn't count.
+
 ## 5. Close it
 
 When the item lands with `naima land`, the landing closes it on its own if it is fixed and its proof has passed, in a commit on the trunk right after the
@@ -146,7 +158,7 @@ an item in these cases, by hand or in a landing.
 - Something that verifies it refutes it, such as a failed test.
 - Its proof is no longer current, because the model of a property, a file it includes or the tool's version has changed since the run. In that case
   `naima verify` has to be run again.
-- None of its `commits` is a real commit that can be reached from the trunk.
+- None of its `commits` is a real commit that can be reached from the trunk, or a commit of a declared repository on that repository's default branch.
 - The branch you are on [claims](glossary.md#claim-file) it. The item is closed from the [trunk](glossary.md#trunk), after the merge, once someone other than
   whoever made the fix has checked the proof ([the rule](rules.md#whoever-fixes-does-not-also-close)).
 
@@ -323,10 +335,10 @@ arguments of `mcrl22lps` and `lps2lts`, and `details.rate` gives the states gene
 
 After linearising, the verifier also measures the condition of every summand, counting the operators and variables in it. Summands above the plugin option
 `summandConditionLimit` (10000 unless set; 0 switches the measurement off) are listed in the run's output on a line that begins with `lint:`, and in
-`details.lint`. A property can set its own limit with `verifierOptions.summandConditionLimit`, which replaces the plugin's for that property only.
-Counting stops once a summand passes the limit, so such a summand is reported as "more than" the limit. If the measurement cannot run, for example
-because `lpspp` fails, the output says `lint skipped:` and why, and the property still gets its verdict. `naima check` then notes each model over the limit
-with the check `mcrl2-summand-conditions`. How to keep conditions small is in [design with a model](design-with-a-model.md#keep-generated-models-small).
+`details.lint`. A property can set its own limit with `verifierOptions.summandConditionLimit`, which replaces the plugin's for that property only. Counting
+stops once a summand passes the limit, so such a summand is reported as "more than" the limit. If the measurement cannot run, for example because `lpspp` fails,
+the output says `lint skipped:` and why, and the property still gets its verdict. `naima check` then notes each model over the limit with the check
+`mcrl2-summand-conditions`. How to keep conditions small is in [design with a model](design-with-a-model.md#keep-generated-models-small).
 
 A `verifierOptions` of `{ "timeoutSeconds": 600 }` stops a run that takes longer than that and records it as `error` (undecided). If the tool isn't installed,
 the run is recorded as an error whose output begins with `tool missing:` and explains how to install it, and the property is never reported as holding.

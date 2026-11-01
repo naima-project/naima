@@ -946,6 +946,7 @@ Options, each with the default it takes when nothing sets it:
 | Option | Default | What it does |
 |---|---|---|
 | `excusePhrases` | `["held by","was held","is held","in use by","locked by","busy","unavailable"]` | the phrases (any case) by which an open agent's test says it could not run because something was held; test-excuses-itself notes them |
+| `repositories` | `[]` | the git URLs of other repositories, besides the Naima the project runs and the plugins it pins from git, whose commits an item's commits may name as <repository>@<hash> |
 
 ### naima close
 
@@ -1086,7 +1087,7 @@ Traits: `fixable`, `archive`.
 | `redSeen` | date | tests | the day a regression test was seen failing on the code before the fix: red, then green |  |
 | `area` | string | every type | where it lives: the surface somebody would have open while working on it |  |
 | `kind` | string | every type | the mode of work it demands: code, decision, research, writing… |  |
-| `commits` | strings | any type tagged `fixable` | the git commit hashes that fixed it, each reachable from the trunk — or "legacy" on an item closed before this field existed, set once by migration, never retrofitted by guessing |  |
+| `commits` | strings | any type tagged `fixable` | the git commit hashes that fixed it, each reachable from the trunk; a fix made in another repository the project declares (the Naima it runs, a plugin or stance pinned from git, or one listed in the trackers option repositories) as <repository>@<hash>, on that repository's default branch — or "legacy" on an item closed before this field existed, set once by migration, never retrofitted by guessing |  |
 
 **Link relations** — only the direction written is stored; the inverse is derived when read.
 
@@ -1109,8 +1110,8 @@ Traits: `fixable`, `archive`.
 | `closed-without-proof` | every item closed with a reason instead of a proof (a todo of kind review or decision, naima close --reason) is listed as a note with its reason |
 | `retired-items` | every retired item is listed as a note, with its reason and what replaced it, so nothing is retired unseen; one that does not carry the reason and the owner's consent naima retire records is a problem |
 | `human-says-why` | an open item whose proof needs a person (runBy human) says why in humanBecause |
-| `commits-are-real` | every hash an item's commits field names is a commit git has |
-| `closed-names-its-commits` | an item closed on or after 2026-10-01 names a commit reachable from the trunk, unless it was closed with a reason as a review or a decision, or retired |
+| `commits-are-real` | every hash an item's commits field names is a commit git has; one of another repository, <repository>@<hash>, is checked by closed-names-its-commits |
+| `closed-names-its-commits` | an item closed on or after 2026-10-01 names a commit reachable from the trunk, or one of another repository the project declares (<repository>@<hash>) on that repository's default branch — one that cannot be read, offline, is reported as not checkable, never accepted — unless it was closed with a reason as a review or a decision, or retired |
 | `regression-test-saw-red` | a passed test that verifies a bug records the day it was seen failing first, in redSeen |
 | `inspection-proves-nothing` | a passed test whose evidenceKind is inspection is noted: reading the code is no evidence |
 | `passed-test-carries-evidence` | a passed test an agent performed by driving the running software (runBy agent-hands) carries what shows it passed, an attachment of what was run and what it printed; one with none is noted |

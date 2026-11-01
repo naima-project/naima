@@ -46,6 +46,7 @@ import {
   usageError,
   type WriteHook,
 } from "../../core/api.ts"
+import { declaredRepositories, type ForeignVerdict, parseForeign, verifyForeign } from "./foreign.ts"
 
 /**
  * A retired item in words — `closed/x (title) retired on 2026-11-01: why; replaced by features/y` — from the fields and
@@ -136,19 +137,46 @@ export const LEGACY_COMMIT = "legacy"
 const DEFAULT_COMMITS_REQUIRED_FROM = "2026-10-01"
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
-function readOptions(options: Record<string, unknown>): { commitsRequiredFrom: string } {
+function readOptions(options: Record<string, unknown>): { commitsRequiredFrom: string; repositories: string[] } {
   const v = options["commitsRequiredFrom"] ?? DEFAULT_COMMITS_REQUIRED_FROM
   if (typeof v !== "string" || !ISO_DATE.test(v)) {
     throw new Error(`trackers: options.commitsRequiredFrom must be a date, YYYY-MM-DD, got ${JSON.stringify(v)}`)
   }
-  return { commitsRequiredFrom: v }
+  const r = options["repositories"] ?? []
+  if (!Array.isArray(r) || !r.every((x) => typeof x === "string" && x.trim())) {
+    throw new Error("trackers: options.repositories must be a list of git URLs")
+  }
+  return { commitsRequiredFrom: v, repositories: r as string[] }
 }
 
-/** Whether one of `item`'s `commits` is a real commit, and reachable from the trunk. False with no trunk to read. */
+/** Whether one of `item`'s `commits` is a real commit of the project, reachable from the trunk: read locally, never the network. */
 function hasCommitFromTrunk(ctx: Context, item: Item): boolean {
   const t = trunk(ctx.root)
   if (!t) return false
-  return (fieldValue(item, COMMITS) ?? []).some((h) => commitExists(ctx.root, h) && isAncestor(ctx.root, h, t))
+  return (fieldValue(item, COMMITS) ?? []).some((h) => !parseForeign(h) && commitExists(ctx.root, h) && isAncestor(ctx.root, h, t))
+}
+
+/**
+ * Whether one of `item`'s `commits` counts as its fix: a real commit reachable from the trunk, or a commit of another
+ * repository the project declares (`<repository>@<hash>`) on that repository's default branch. Otherwise the reasons
+ * each commit of another repository did not count, so a refusal says why; ok false with no trunk to read.
+ */
+function commitFromTrunk(ctx: Context, item: Item, repositories: readonly string[]): { ok: boolean; why: string[] } {
+  if (hasCommitFromTrunk(ctx, item)) return { ok: true, why: [] }
+  const listed = fieldValue(item, COMMITS) ?? []
+  const foreign = listed.flatMap((h) => {
+    const f = parseForeign(h)
+    return f ? [{ entry: h, f }] : []
+  })
+  if (!foreign.length) return { ok: false, why: [] }
+  const declared = declaredRepositories(ctx, repositories)
+  const why: string[] = []
+  for (const { entry, f } of foreign) {
+    const v: ForeignVerdict = verifyForeign(ctx, f, declared)
+    if (v.ok) return { ok: true, why: [] }
+    why.push(`${entry}: ${v.why}`)
+  }
+  return { ok: false, why }
 }
 
 /** Whether `item` is grandfathered: closed before `commits` existed, marked so by the migration, not by a guess. */
@@ -315,10 +343,10 @@ const humanSaysWhy: Check = {
 
 const commitsAreReal: Check = {
   name: "commits-are-real",
-  says: "every hash an item's commits field names is a commit git has",
+  says: "every hash an item's commits field names is a commit git has; one of another repository, <repository>@<hash>, is checked by closed-names-its-commits",
   run: (ctx) =>
     ctx.repo.items.flatMap((i): Finding[] => {
-      const bad = (fieldValue(i, COMMITS) ?? []).filter((h) => h !== LEGACY_COMMIT && !commitExists(ctx.root, h))
+      const bad = (fieldValue(i, COMMITS) ?? []).filter((h) => h !== LEGACY_COMMIT && !parseForeign(h) && !commitExists(ctx.root, h))
       return bad.length ? [{ level: "problem", message: `${label(i)}: commits names ${bad.join(", ")}, which git does not have`, item: i }] : []
     }),
 }
@@ -432,7 +460,7 @@ function readExcusePhrases(options: Record<string, unknown>): string[] {
   return v as string[]
 }
 
-const close: Command = {
+const closeCommand = (repositories: readonly string[]): Command => ({
   name: "close",
   says: "archive a resolved item: fixed, and proven by an item that has passed; or a finished review or decision, with the reason",
   enforces:
@@ -468,9 +496,12 @@ const close: Command = {
     if (state !== "resolved") {
       throw new Error(`${label(item)} is ${state}: closing takes fixedOn and a verified-by item that has passed`)
     }
-    if (!bool(p, "force") && !hasCommitFromTrunk(ctx, item)) {
+    const found = bool(p, "force") ? { ok: true, why: [] } : commitFromTrunk(ctx, item, repositories)
+    if (!found.ok) {
       throw new Error(
-        `${label(item)} cannot be closed: none of its commits is a real commit reachable from the trunk — set commits, or close --force`,
+        `${label(item)} cannot be closed: none of its commits is a real commit reachable from the trunk, or one of a declared repository on its default branch${
+          found.why.length ? ` (${found.why.join("; ")})` : ""
+        } — set commits, or close --force`,
       )
     }
     // One write: the move carries the new fields, so a refusal leaves the item as it was, where it was.
@@ -486,7 +517,7 @@ const close: Command = {
     }
     return 0
   },
-}
+})
 
 const retire: Command = {
   name: "retire",
@@ -593,19 +624,23 @@ const bugCounts: SummarySection = {
 }
 
 export default function trackers(options: Record<string, unknown> = {}): Plugin {
-  const { commitsRequiredFrom } = readOptions(options)
+  const { commitsRequiredFrom, repositories } = readOptions(options)
   const closedNamesCommits: Check = {
     name: "closed-names-its-commits",
     says:
-      `an item closed on or after ${commitsRequiredFrom} names a commit reachable from the trunk, unless it was closed with a reason as a review or a decision, or retired`,
+      `an item closed on or after ${commitsRequiredFrom} names a commit reachable from the trunk, or one of another repository the project declares (<repository>@<hash>) on that repository's default branch — one that cannot be read, offline, is reported as not checkable, never accepted — unless it was closed with a reason as a review or a decision, or retired`,
     run: (ctx) =>
       ctx.repo.items
         .filter((i) =>
           i.type === "closed" && (fieldValue(i, CLOSED_ON) ?? "") >= commitsRequiredFrom && !closedWithReason(i) && !isRetired(ctx, i) &&
-          !hasCommitFromTrunk(ctx, i) &&
           !isGrandfathered(i)
         )
-        .map((i): Finding => ({ level: "problem", message: `${label(i)} is closed without a commit reachable from the trunk`, item: i })),
+        .flatMap((i): Finding[] => {
+          const found = commitFromTrunk(ctx, i, repositories)
+          if (found.ok) return []
+          const why = found.why.length ? `: ${found.why.join("; ")}` : ""
+          return [{ level: "problem", message: `${label(i)} is closed without a commit reachable from the trunk${why}`, item: i }]
+        }),
   }
   const phrases = readExcusePhrases(options)
   return {
@@ -617,6 +652,11 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
       name: "excusePhrases",
       says: "the phrases (any case) by which an open agent's test says it could not run because something was held; test-excuses-itself notes them",
       default: JSON.stringify(EXCUSE_PHRASES),
+    }, {
+      name: "repositories",
+      says:
+        "the git URLs of other repositories, besides the Naima the project runs and the plugins it pins from git, whose commits an item's commits may name as <repository>@<hash>",
+      default: "[]",
     }],
     types: [
       {
@@ -752,7 +792,7 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
         name: "commits",
         kind: "strings",
         says:
-          'the git commit hashes that fixed it, each reachable from the trunk — or "legacy" on an item closed before this field existed, set once by migration, never retrofitted by guessing',
+          'the git commit hashes that fixed it, each reachable from the trunk; a fix made in another repository the project declares (the Naima it runs, a plugin or stance pinned from git, or one listed in the trackers option repositories) as <repository>@<hash>, on that repository\'s default branch — or "legacy" on an item closed before this field existed, set once by migration, never retrofitted by guessing',
         traits: [FIXABLE],
       },
     ],
@@ -779,7 +819,7 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
       untickedNamesPassed,
       excusesItself(phrases),
     ],
-    commands: [close, retire, bugs],
+    commands: [closeCommand(repositories), retire, bugs],
     hooks: [retiredOnlyByRetire],
     summary: [bugCounts, closingSection],
   }
