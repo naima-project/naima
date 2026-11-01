@@ -27,7 +27,9 @@
 // (VERIFY_PROGRAM), and with --host ssh too, to run the verifier in the host's
 // checkout. `naima recover`, and no other command, may read the folders the
 // agent tools keep their transcripts in (core/adapters, TranscriptReader), to
-// brief the worker that resumes a dead or stuck one. Every command may read the tools
+// brief the worker that resumes a dead or stuck one. `naima describe`, `naima note` and
+// `naima attach`, and no other command, may read the system's temporary folder (TEMP_READERS),
+// where an agent keeps the files it hands them; never write it. Every command may read the tools
 // directory, where an installed tool's programs are (src/core/tools.ts);
 // `naima tools`, and `naima backup create`, which installs gh through it, and no
 // other command, may write it, use the network and run any program: an install
@@ -270,6 +272,21 @@ function runFlag(programs: string[] | null, found: (program: string) => boolean)
   return granted.length ? [`--allow-run=${granted.join(",")}`] : []
 }
 
+/** The commands that read a file they are given, and so may read it from the system's temporary folder too: never write there. */
+export const TEMP_READERS: readonly string[] = ["describe", "note", "attach"]
+
+/**
+ * The system's temporary folders, where an agent's scratch directory is: /tmp and TMPDIR on POSIX, TEMP and TMP on
+ * Windows (what the OS's tmpdir gives), those that exist.
+ */
+export function tempRoots(
+  env: Record<string, string | undefined> = Deno.env.toObject(),
+  os: string = Deno.build.os,
+): string[] {
+  const roots = os === "windows" ? [env["TEMP"], env["TMP"]] : ["/tmp", env["TMPDIR"]]
+  return [...new Set(roots.filter((r): r is string => !!r && isAbsolute(r) && existsSync(r)))]
+}
+
 /**
  * The permissions the program runs with, as Deno flags. Throws when a path cannot be said in one: Deno splits the lists on commas.
  * `worktrees` are the other worktrees' data directories: read-only, and one with a comma is left out — it is read from its branch.
@@ -284,6 +301,8 @@ export function permissions(
     hostFiles?: string[]
     /** The folders outside the project the command may read besides: naima recover's agent transcripts. */
     hostReads?: string[]
+    /** The temporary folders the command may read besides, each as given and as resolved: describe's, note's and attach's input files. */
+    tempReads?: string[]
     worktrees?: string[]
     /** The programs the loaded contributions start, besides git: a verifier's `runs`, a metric's program. */
     runs?: string[]
@@ -315,6 +334,8 @@ export function permissions(
   const tick = p.tick && !real(p.tick).includes(",") ? [p.tick] : []
   // And a transcript folder: recover then finds no transcript there.
   const hostReads = (p.hostReads ?? []).filter((x) => !real(x).includes(","))
+  // A temporary folder by both names: Deno checks a path as given, and /tmp is a link on macOS. One with a comma is left out.
+  const temps = [...new Set((p.tempReads ?? []).flatMap((x) => [resolve(x), real(x)]))].filter((x) => !x.includes(","))
   return [
     `--allow-read=${
       list([
@@ -328,7 +349,7 @@ export function permissions(
         ...tick,
         ...hostReads,
       ])
-    }`,
+    }${temps.map((t) => `,${t}`).join("")}`,
     `--allow-write=${list([p.tracker, p.data, p.program, ...tick, ...(p.hostFiles ?? []), ...(p.ui?.write ?? []).filter((w) => tools.includes(w))])}`,
     ...runFlag(p.ui?.runAll ? null : ["git", "tar", ...(p.runs ?? []), ...(p.ui?.runs ?? [])], p.found ?? runnable),
     "--allow-env",
@@ -526,6 +547,7 @@ export async function launch(args: string[], cwd: string): Promise<number> {
         entry,
         hostFiles: hostFiles(parsed.rest, root, data),
         hostReads: parsed.rest[0] === "recover" ? transcriptRoots(Deno.env.toObject()) : [],
+        tempReads: TEMP_READERS.includes(parsed.rest[0] ?? "") ? tempRoots() : [],
         worktrees: others,
         tools,
         tick: tickState,
