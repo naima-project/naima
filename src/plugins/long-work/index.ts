@@ -12,7 +12,7 @@
 // docs/guide/long-work.md.
 
 import { spawn, spawnSync } from "node:child_process"
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { dirname, isAbsolute, join, parse as parsePath, relative, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
@@ -40,11 +40,14 @@ import { commandReports, findRuns, noProgressOf } from "./declared.ts"
 import { DUE_FIELD, dueJob, dueSection, fileDue, type LongRun, readLongRuns, rememberSuccess, startArgs } from "./due.ts"
 import { ALLOW, findWaits, SCRIPT } from "./loops.ts"
 import {
+  currentState,
   DEFAULTS,
   ensureRunsDir,
+  lastLine,
   NAME,
   parseDuration,
   parseSize,
+  pidAlive,
   readSpec,
   recordDirs,
   RUN_FILE,
@@ -55,6 +58,7 @@ import {
   showSize,
   STOP_FILE,
   SUBCOMMANDS,
+  SUPERVISOR_ERR,
   trackerFolder,
   view,
   writeJsonAtomic,
@@ -138,7 +142,7 @@ function remoteView(host: Host, name: string, tail: number): RunView {
   if (r.ok) {
     try {
       const v = JSON.parse(r.out) as RunView
-      return { ...v, host: host.name, ...(tail ? {} : { tail: [] }) }
+      return { ...v, state: currentState(v.state), host: host.name, ...(tail ? {} : { tail: [] }) }
     } catch { /* not an answer */ }
   }
   const why = r.err.split("\n").filter(Boolean).pop() ?? `exit ${r.code}`
@@ -174,10 +178,14 @@ export function describe(v: RunView): string[] {
     ? v.reason === "start-failed" ? `could not start${v.error ? `: ${v.error}` : ""}` : v.signal ? `signal ${v.signal}` : `exit ${v.exitCode}`
     : v.state === "killed"
     ? `over its ${v.reason === "budget-disk" ? "disk" : "time"} budget`
-    : v.state === "lost"
-    ? "its supervisor is gone (killed, or the machine restarted) and no end was recorded"
+    : v.state === "crashed"
+    ? `${v.error ?? "its supervisor is gone"} (killed, or the machine restarted)`
     : v.state === "unknown"
     ? `cannot be asked: ${v.error ?? "no answer"}`
+    : v.state === "stuck"
+    ? `no output at all, neither log nor progress, for ${showDuration(v.silentMs ?? 0)} (its --stale window is ${showDuration(v.staleMs ?? 0)})`
+    : v.state === "not-advancing"
+    ? `warning: its log grows but its progress has not moved for ${showDuration(v.stillMs ?? 0)}`
     : null
   const out = [`run ${v.name}${v.host ? ` on ${v.host}` : ""}: ${v.over || v.state === "unknown" ? v.state : `still ${v.state}`}${how ? ` — ${how}` : ""}`]
   if (v.state !== "unknown") out.push(`  time: ${ofBudget(v)}`)
@@ -185,9 +193,9 @@ export function describe(v: RunView): string[] {
   if (d) out.push(`  disk: ${d}`)
   if (v.pid !== undefined) out.push(`  pid: ${v.pid}`)
   if (v.progress) out.push(`  progress: ${progressText(v.progress)} (${showDuration(v.progress.ageMs)} ago)`)
-  if (v.noProgress !== undefined) {
-    out.push(`  no progress: ${v.noProgress}`)
-    if (v.lastLog !== undefined) out.push(`  last said: ${JSON.stringify(v.lastLog)}`)
+  if (v.noProgress !== undefined) out.push(`  no progress: ${v.noProgress}`)
+  if (v.lastLog !== undefined && (v.noProgress !== undefined || !v.progress || v.state === "stuck" || v.state === "not-advancing")) {
+    out.push(`  last said: ${JSON.stringify(v.lastLog)}`)
   }
   if (v.changedTracked?.length) out.push(`  tracked files changed, which a guarded run must not: ${v.changedTracked.join(", ")}`)
   if (v.log) out.push(`  log: ${v.log}`)
@@ -195,15 +203,19 @@ export function describe(v: RunView): string[] {
   return out
 }
 
-/** One run in a line, as `run list` prints it: stale and lost runs in capitals. */
+/** One run in a line, as `run list` prints it: stuck and crashed runs in capitals, a run not advancing marked as a warning. */
 export function listLine(v: RunView): string {
-  const state = v.state === "stale" || v.state === "lost" ? v.state.toUpperCase() : v.state
+  const state = v.state === "stuck" || v.state === "crashed" ? v.state.toUpperCase() : v.state === "not-advancing" ? "not-advancing (warning)" : v.state
   const parts = [v.name, state, v.state === "unknown" ? v.error ?? "" : ofBudget(v)]
   const d = disk(v)
   if (d) parts.push(`disk ${d}`)
   if (v.host) parts.push(`on ${v.host}`)
   if (v.progress) parts.push(`progress ${progressText(v.progress)} ${showDuration(v.progress.ageMs)} ago`)
   if (v.noProgress !== undefined) parts.push(`no progress (${v.noProgress})${v.lastLog !== undefined ? ` last said ${JSON.stringify(v.lastLog)}` : ""}`)
+  else if (v.state === "stuck" || v.state === "not-advancing") {
+    parts.push(v.state === "stuck" ? `silent ${showDuration(v.silentMs ?? 0)}` : `progress still ${showDuration(v.stillMs ?? 0)}`)
+    if (v.lastLog !== undefined) parts.push(`last said ${JSON.stringify(v.lastLog)}`)
+  }
   return parts.join("  ")
 }
 
@@ -250,7 +262,7 @@ async function start(ctx: Context, hosts: Map<string, Host>, cmd: Command, args:
     throw refuse('naima run: --no-progress needs the reason the command cannot report progress — --no-progress "<reason>"')
   }
   const every = duration(str(p, "every"), DEFAULTS.everyMs, "--every")!
-  const stale = duration(str(p, "stale"), noProgress !== undefined ? DEFAULTS.staleNoProgressMs : DEFAULTS.staleMs, "--stale")!
+  const stale = duration(str(p, "stale"), DEFAULTS.staleMs, "--stale")!
   const hostName = str(p, "host")
   if (hostName !== undefined) {
     return startRemote(ctx, hostOf(hosts, hostName), name, args.slice(0, at), command, budgetTime, every, stale, creates, noProgress?.trim())
@@ -278,6 +290,8 @@ async function start(ctx: Context, hosts: Map<string, Host>, cmd: Command, args:
   }
   mkdirSync(dir)
   writeJsonAtomic(join(dir, RUN_FILE), spec)
+  // The supervisor's exit before it reports, seen at once where it is our child: a start that failed, never a wait.
+  let gone: string | null = null
   if (process.platform === "win32") {
     // A detached child stays in the job of an ssh session, and ends with it: WMI starts the supervisor outside it.
     const how = windowsLaunch(process.execPath, supervisorArgs("supervise", dir, [dir]), cwd)
@@ -287,30 +301,32 @@ async function start(ctx: Context, hosts: Map<string, Host>, cmd: Command, args:
       throw refuse(`naima run: the supervisor could not be started through WMI — ${String(r.stderr || r.error?.message || `exit ${r.status}`).trim()}`)
     }
   } else {
+    const errFd = openSync(join(dir, SUPERVISOR_ERR), "a")
     const child = spawn(process.execPath, supervisorArgs("supervise", dir, [dir]), {
       cwd,
       env: callerEnv(process.env),
       detached: true,
-      stdio: "ignore",
+      stdio: ["ignore", "ignore", errFd],
       windowsHide: true,
     })
+    closeSync(errFd)
+    child.once("error", (e) => (gone = e.message))
+    child.once("exit", (code, signal) => (gone = signal ? `signal ${signal}` : `exit ${code}`))
     child.unref()
   }
-  const until = Date.now() + DEFAULTS.startMs
-  let v = view(dir, Date.now())
-  while (v.state === "starting" && Date.now() < until) {
-    await delay(50)
-    v = view(dir, Date.now())
-  }
-  if (v.reason === "start-failed" || (v.over && v.pid === undefined)) {
+  const v = await confirmStart(dir, () => gone)
+  if (!v.ok) {
     for (const l of describe(view(dir, Date.now(), DEFAULTS.tail))) ctx.out(l)
+    if (v.why) ctx.out(`naima run: ${name} did not start — ${v.why}`)
     return EXIT.FAILED
   }
   ctx.out(
-    `run ${name}: started${v.pid !== undefined ? `, pid ${v.pid}` : ""}, time budget ${showDuration(budgetTime)}${
+    `run ${name}: started${v.view.pid !== undefined ? `, pid ${v.view.pid}` : ""}, time budget ${showDuration(budgetTime)}${
       budgetDisk !== undefined ? `, disk budget ${showSize(budgetDisk)}` : ""
     }`,
   )
+  // Seen alive, it started, whatever came next: a command that ended within the confirmation is reported by wait.
+  if (v.view.over) ctx.out(`  it has already ended (${v.view.state}): naima wait ${name} reports how`)
   ctx.out(`  log: ${join(dir, "log")}`)
   ctx.out(
     noProgress !== undefined
@@ -319,6 +335,46 @@ async function start(ctx: Context, hosts: Map<string, Host>, cmd: Command, args:
   )
   ctx.out(`  wait: naima wait ${name} --timeout 10m · watch: naima run list · end: naima run stop ${name} · then: naima run clean ${name}`)
   return EXIT.OK
+}
+
+/**
+ * Wait until the run in `dir` is seen started (develop/models/run-watch/run-watch.mcrl2): its command alive for
+ * `confirmMs`, or ended within it. A start that failed, a supervisor that exited before reporting (`gone` says how),
+ * and a supervisor that never reports within `startMs` are not started; on that last one a stop request is left, so
+ * that a supervisor late to start starts nothing.
+ */
+export async function confirmStart(
+  dir: string,
+  gone: () => string | null,
+  startMs: number = DEFAULTS.startMs,
+  confirmMs: number = DEFAULTS.confirmMs,
+): Promise<{ ok: true; view: RunView } | { ok: false; why?: string }> {
+  const until = Date.now() + startMs
+  let v = view(dir, Date.now())
+  while (v.state === "starting" && Date.now() < until) {
+    const how = gone()
+    if (how !== null) {
+      v = view(dir, Date.now())
+      if (v.state !== "starting") break
+      const err = lastLine(join(dir, SUPERVISOR_ERR))
+      return { ok: false, why: `its supervisor exited (${how}) before starting the command${err ? `: ${err}` : ""}` }
+    }
+    await delay(50)
+    v = view(dir, Date.now())
+  }
+  if (v.state === "starting") {
+    writeFileSync(join(dir, STOP_FILE), new Date().toISOString() + "\n")
+    return { ok: false, why: `its supervisor did not report within ${showDuration(startMs)}; a stop request is left so that it starts nothing` }
+  }
+  if (v.reason === "start-failed" || (v.over && v.pid === undefined)) return { ok: false }
+  // Watched for confirmMs; a command already gone by then is waited on until its end is recorded, a few seconds at most.
+  const seen = Date.now()
+  while (!v.over && (Date.now() - seen < confirmMs || (v.pid !== undefined && pidAlive(v.pid) === false && Date.now() - seen < 5_000))) {
+    await delay(50)
+    v = view(dir, Date.now())
+  }
+  if (v.reason === "start-failed") return { ok: false }
+  return { ok: true, view: v }
 }
 
 /**
@@ -332,7 +388,7 @@ export function remoteCause(out: string, err: string): string {
   if ([...errs, ...outs].some((l) => /unknown command "run"/.test(l))) {
     return `) — its own Naima has no run command: it needs the long-work plugin`
   }
-  const why = outs.find((l) => /^run \S+: (?:failed|killed|lost)\b/.test(l)) ?? errs.at(-1) ?? outs.at(-1)
+  const why = outs.find((l) => /^run \S+: (?:failed|killed|lost|crashed)\b/.test(l)) ?? errs.at(-1) ?? outs.at(-1)
   return why ? `: ${why})` : ")"
 }
 
@@ -387,6 +443,28 @@ function startRemote(
 
 /** `naima run list`: every run, newest first; a host is asked once for all of its runs. */
 function list(ctx: Context, hosts: Map<string, Host>, json: boolean): number {
+  const views = allViews(ctx, hosts)
+  if (json) ctx.out(JSON.stringify(views, null, 2))
+  else if (!views.length) ctx.out("no runs — naima run <name> --budget-time <duration> -- <command> starts one")
+  else for (const v of views) ctx.out(listLine(v))
+  return EXIT.OK
+}
+
+/**
+ * The runs `naima claims` shows the coordinator at each owner turn: each one not over, and each crashed, with alive or
+ * dead, its time against its budget and the log's last line; an ended run is left to run list.
+ */
+const runsReport = (hosts: Map<string, Host>) => ({
+  name: "runs",
+  says:
+    "every run not over, and every crashed one, with its state (stuck, crashed, not advancing as a warning), alive or dead, its time against its budget and the log's last line",
+  lines(ctx: Context): string[] {
+    return allViews(ctx, hosts).filter((v) => !v.over || v.state === "crashed").map((v) => `${v.name}  ${watchLine(v)}`)
+  },
+})
+
+/** Every run recorded here, newest first, as its reader reports it; a host is asked once for all of its runs. */
+function allViews(ctx: Context, hosts: Map<string, Host>): RunView[] {
   const now = Date.now()
   const answers = new Map<string, Map<string, RunView>>()
   const views = recordDirs(tracker(ctx)).map((dir): RunView => {
@@ -398,7 +476,7 @@ function list(ctx: Context, hosts: Map<string, Host>, json: boolean): number {
       const r = onHost(host, ["run", "list", "--json"])
       const byName = new Map<string, RunView>()
       try {
-        for (const v of JSON.parse(r.out) as RunView[]) byName.set(v.name, v)
+        for (const v of JSON.parse(r.out) as RunView[]) byName.set(v.name, { ...v, state: currentState(v.state) })
       } catch { /* the host could not be asked */ }
       answers.set(host.name, byName)
     }
@@ -415,10 +493,7 @@ function list(ctx: Context, hosts: Map<string, Host>, json: boolean): number {
       error: `${host.ssh} did not report it`,
     }
   })
-  if (json) ctx.out(JSON.stringify(views, null, 2))
-  else if (!views.length) ctx.out("no runs — naima run <name> --budget-time <duration> -- <command> starts one")
-  else for (const v of views) ctx.out(listLine(v))
-  return EXIT.OK
+  return views
 }
 
 /** `naima run stop <name>`: the supervisor is asked to end the run, and does at its next check. */
@@ -428,8 +503,8 @@ function stop(ctx: Context, hosts: Map<string, Host>, name: string): number {
   if (!existsSync(dir)) throw refuse(`no run "${name}" here — naima run list shows the runs of this worktree`)
   if (spec?.host) return forward(ctx, hostOf(hosts, spec.host), ["run", "stop", name])
   const v = view(dir, Date.now())
-  if (v.state === "lost") {
-    ctx.out(`run ${name}: lost — its supervisor is gone, so nothing of it is supervised to stop; naima run clean ${name}`)
+  if (v.state === "crashed") {
+    ctx.out(`run ${name}: crashed — its supervisor is gone, so nothing of it is supervised to stop; naima run clean ${name}`)
     return EXIT.OK
   }
   if (v.over) throw refuse(`run ${name} has already ended (${v.state}) — naima run clean ${name}`)
@@ -517,8 +592,12 @@ async function waitFor(ctx: Context, hosts: Map<string, Host>, cmd: Command, arg
   const until = Date.now() + timeout
   // While it waits, the run's elapsed time and progress on standard error, every --report (specs/progress-long-work-says-how-far, §5).
   let reported = Date.now()
+  let lastState: string | undefined
   const tell = (v: RunView): void => {
-    if (v.over || Date.now() - reported < report) return
+    // A warning is said as soon as it appears, then with every report.
+    const turned = v.state !== lastState && v.state === "not-advancing"
+    lastState = v.state
+    if (v.over || (!turned && Date.now() - reported < report)) return
     ctx.err(waitLine(v))
     reported = Date.now()
   }
@@ -528,12 +607,13 @@ async function waitFor(ctx: Context, hosts: Map<string, Host>, cmd: Command, arg
     for (const l of describe(v)) ctx.out(l)
     return EXIT.FAILED
   }
-  while (!v.over && Date.now() + every <= until) {
+  // A stuck run ends the wait: Naima found it silent, and what to do with it is the agent's decision.
+  while (!v.over && v.state !== "stuck" && Date.now() + every <= until) {
     await delay(every)
     v = look(0)
     tell(v)
   }
-  if (!v.over && Date.now() < until) {
+  if (!v.over && v.state !== "stuck" && Date.now() < until) {
     await delay(Math.max(0, until - Date.now()))
     v = look(0)
   }
@@ -541,7 +621,11 @@ async function waitFor(ctx: Context, hosts: Map<string, Host>, cmd: Command, arg
   if (bool(p, "json")) ctx.out(JSON.stringify(v, null, 2))
   else {
     for (const l of describe(v)) ctx.out(l)
-    if (!v.over) {
+    if (v.state === "stuck") {
+      ctx.out(
+        `naima wait: ${name} is stuck, silent for its --stale window — look at its log, then naima run stop ${name}, or naima wait ${name} again if it is expected to be silent`,
+      )
+    } else if (!v.over) {
       ctx.out(
         `naima wait: ${name} is still running after ${showDuration(timeout)} — waiting again is a decision: naima wait ${name}, or naima run stop ${name}`,
       )
@@ -557,7 +641,29 @@ export function waitLine(v: RunView): string {
     : v.noProgress !== undefined
     ? `no progress (${v.noProgress})${v.lastLog !== undefined ? `, last said ${JSON.stringify(v.lastLog)}` : ""}`
     : "no progress reported yet"
-  return `run ${v.name}${v.host ? ` on ${v.host}` : ""}: ${v.state}, ${showDuration(v.elapsedMs)} · ${how}`
+  const warn = v.state === "not-advancing"
+    ? ` · warning: its log grows but its progress has not moved for ${showDuration(v.stillMs ?? 0)}`
+    : v.state === "stuck"
+    ? ` · stuck: no output at all for ${showDuration(v.silentMs ?? 0)}`
+    : ""
+  return `run ${v.name}${v.host ? ` on ${v.host}` : ""}: ${v.state}, ${showDuration(v.elapsedMs)} · ${how}${warn}`
+}
+
+/** What a run's watch found, in one line: its state, alive or dead, its time against its budget, and the log's last line. */
+export function watchLine(v: RunView): string {
+  const why = v.state === "stuck"
+    ? `STUCK — no output at all for ${showDuration(v.silentMs ?? 0)}`
+    : v.state === "crashed"
+    ? `CRASHED — ${v.error ?? "its process is gone and no end was recorded"}`
+    : v.state === "not-advancing"
+    ? `not advancing (warning) — its log grows, its progress has not moved for ${showDuration(v.stillMs ?? 0)}`
+    : v.state
+  const alive = v.over ? (v.state === "crashed" ? "dead" : "ended") : v.alive === false ? "dead" : v.alive ? "alive" : v.state === "unknown" ? "?" : "starting"
+  const parts = [why, alive, v.state === "unknown" ? v.error ?? "" : ofBudget(v)]
+  if (v.host) parts.push(`on ${v.host}`)
+  if (v.noProgress !== undefined) parts.push(`no progress (${v.noProgress})`)
+  if (v.lastLog !== undefined) parts.push(`last said ${JSON.stringify(v.lastLog)}`)
+  return parts.filter(Boolean).join(" · ")
 }
 
 const runCommand = (hosts: Map<string, Host>, declared: LongRun[]): Command => ({
@@ -576,14 +682,14 @@ const runCommand = (hosts: Map<string, Host>, declared: LongRun[]): Command => (
     {
       name: "--stale",
       says:
-        "how long with no new progress line before the run is reported stale (default 2m); for a run declared --no-progress, with no change to the log or the progress file (default 15m)",
+        "how long with no output at all, neither a log line nor a progress line, before the run is reported stuck, and with a log that grows while its progress does not move before it is reported not advancing, a warning (default 1m)",
     },
     { name: "--host", says: "run it on this host, declared in the plugin's hosts option, through the host's own Naima over ssh" },
     { name: "--guard-tracked", says: "fail the run if a tracked file changes while it runs; always on for a remote run" },
     {
       name: "--no-progress",
       says:
-        "declare that the command cannot report progress, and why: the run is then shown with its elapsed time and the log's last line, and judged stale on its log",
+        "declare that the command cannot report progress, and why: the run is then shown with its elapsed time, the log's last line and the reason, and judged stuck on its log alone",
     },
     { name: "--tail", says: "how many of the log's last lines to print (default 20)" },
     { name: "--json", says: "print the run, or every run, as JSON" },
@@ -707,9 +813,10 @@ const progressDeclared: Check = {
     const now = Date.now()
     for (const dir of recordDirs(tracker(ctx))) {
       const spec = readSpec(dir)
-      if (!spec || spec.host || spec.noProgress !== undefined) continue
+      if (!spec || spec.host) continue
       const v = view(dir, now)
-      if (v.progress || v.elapsedMs <= spec.staleMs) continue
+      if (v.state === "stuck" || v.state === "crashed" || v.state === "not-advancing") out.push({ level: "note", message: `run ${spec.name}: ${watchLine(v)}` })
+      if (spec.noProgress !== undefined || v.progress || v.elapsedMs <= spec.staleMs) continue
       out.push({
         level: "note",
         message: `run ${spec.name} has run ${showDuration(v.elapsedMs)} without writing a progress line, and declares no reason (--no-progress) — ${rule}`,
@@ -765,9 +872,11 @@ export default function longWork(options: Record<string, unknown> = {}): Plugin 
       "`naima run <name> --budget-time <d> -- <command>` starts the command detached, under a supervisor of its own, with a log, a progress file (`$NAIMA_RUN_PROGRESS`) and a record in the tracker folder's `.runs/`, which ignores itself. " +
       "The supervisor writes a heartbeat every `--every`, and ends the command's whole process group when the time budget runs out, when what it declares with `--creates` outgrows `--budget-disk`, or when `naima run stop` asks. " +
       "`naima wait <name>` reads the record — never the process table — until the run ends or `--timeout` passes, then prints the state, exit status and the log's tail. " +
-      "`naima run list` shows every run against its budgets, marking stale runs (no output for `--stale`) and lost ones (no heartbeat); `naima run clean` removes what a run declared, never a tracked file, never while it runs. " +
+      "`naima run` returns once the command is seen alive, or fails at once with the reason when it never started (a program not found, a supervisor that died, a host that cannot be reached). " +
+      "Every reader — `naima wait`, `naima run list`, `naima claims` — reports a run stuck when it wrote no output at all, neither log nor progress, for `--stale` (default 1 minute); not advancing, a warning, when its log grows while its progress does not move for as long; and crashed when its supervisor is gone with no end recorded, seen at once by its process id, or when its heartbeat stopped. `naima wait` returns when the run turns stuck. " +
+      "`naima run list` shows every run against its budgets, stuck and crashed runs in capitals; `naima run clean` removes what a run declared, never a tracked file, never while it runs. " +
       "A host declared in the `hosts` option is reached over ssh, and a run there is a run of the host's own Naima, always `--guard-tracked`: a tracked file it changes fails it. " +
-      "A run's progress is the last line of its progress file: a JSON object — `stage`, `done`, `total`, `unit`, `note`, `overall` — or free text. The supervisor keeps the first sample of each stage, and every reader shows the count with its rate and, when the total is known, its ETA; a run silent past `--stale` (2 minutes) is stale. A command that cannot report says so with `--no-progress \"<reason>\"`, and is shown with its elapsed time and the log's last line. " +
+      "A run's progress is the last line of its progress file: a JSON object — `stage`, `done`, `total`, `unit`, `note`, `overall` — or free text. The supervisor keeps the first sample of each stage, and every reader shows the count with its rate and, when the total is known, its ETA. A command that cannot report says so with `--no-progress \"<reason>\"`, and is shown with its elapsed time, the log's last line and the reason; it is judged stuck on its log alone, and never not advancing. " +
       "Nothing runs unattended: no run starts on a schedule, since a run nobody watches competes with the work on the same machine. A long run is declared in the `longRuns` option — `command` and `budgetTime`, optionally `budgetDisk` with `creates`, `host` and `noProgress` as `naima run` takes them — with what makes it due: `within`, a threshold its last success must be younger than; `fullSuite`, every gate of the full suite; `gates`, by name; `model`, every property verified on that model; `items`, by reference. The full suite is a long run named `full-suite` even when nothing declares it, whenever some gate is part of it. A long run is due when an item it covers is not current (a gate of the full suite names it, or it is open; one whose last verdict refutes it waits on a fix instead), when a gate it covers does not hold, or when it has not succeeded here within its threshold; a run of it in progress is not due. `naima summary` and `naima hello` say each due run in one line; `naima run due` files each as one todo, marked by the field `dueRun` and linked to the items it covers, leaves one already open as it is, marks it done once the run is current, and drops it when the run is no longer declared. `naima run <long run>` starts a declared one with its budgets, its finished record cleaned first; the agent asks the owner before running it. A run's success is remembered when its record is cleaned. " +
       "The plugin ships the rule that makes these mandatory for agents, enforced by the check `wait-loops`, and the rule that long work reports its progress, enforced by the check `progress-declared`.",
     options: [
@@ -788,7 +897,7 @@ export default function longWork(options: Record<string, unknown> = {}): Plugin 
     checks: [waitLoops, progressDeclared],
     fields: [DUE_FIELD],
     home: import.meta.url,
-    contributes: { rules: "rules/", summary: [dueSection(declared, tracker)], jobs: [dueJob(declared, tracker)] },
-    optional: ["rules"],
+    contributes: { rules: "rules/", summary: [dueSection(declared, tracker)], jobs: [dueJob(declared, tracker)], "claims-reports": [runsReport(hosts)] },
+    optional: ["rules", "claims-reports"],
   }
 }

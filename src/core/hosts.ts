@@ -138,7 +138,7 @@ export function remoteCommand(host: Host, args: string[]): string {
 
 /** The arguments of the one ssh call that runs `naima <args>` in the host's checkout. */
 export function sshArgs(host: Host, args: string[]): string[] {
-  return ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15", host.ssh, remoteCommand(host, args)]
+  return ["-o", "BatchMode=yes", "-o", "ConnectTimeout=8", host.ssh, remoteCommand(host, args)]
 }
 
 /** What a host's Naima answered one question: its exit status and output, or why ssh could not ask. */

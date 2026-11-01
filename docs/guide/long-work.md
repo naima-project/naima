@@ -51,7 +51,7 @@ Some commands really can't say how far along they are, such as a solver that pri
 naima run solve --budget-time 12h --no-progress "the solver prints nothing until it ends" -- ./solve.sh
 ```
 
-It is then shown with its elapsed time and the last line of its log.
+It is then shown with its elapsed time, the last line of its log and the reason.
 
 ## Wait for it, see it, stop it
 
@@ -62,13 +62,22 @@ naima run status bench --tail 50  # one run, with the end of its log
 naima run stop bench              # end it now
 ```
 
+`naima run` returns only once it has seen the command running. If the command never starts, because the program does not exist, the supervisor died
+before starting it or the host cannot be reached, `naima run` says why and exits 1, within a few seconds.
+
 While it waits, `naima wait` prints how long the run has been going and its progress, every 30 seconds (`--report`). When the run ends, it prints how it ended
 (succeeded, failed with its exit code, killed by a budget, or stopped) together with the end of its log, and it exits 0 only if the run succeeded. If the run is
 still going when the timeout passes, it says so and exits 1, so waiting again has to be a deliberate choice.
 
-`naima run list` marks two kinds of runs in capitals. A **STALE** run is still running but has gone quiet. Normally that means no new progress line for the
-`--stale` interval, which is 2 minutes by default. For a run started with `--no-progress`, it means nothing new in its log or progress file for 15 minutes. A
-**LOST** run is one whose supervisor stopped reporting, because it was killed or the machine restarted, so nobody knows how the run ended.
+Naima watches every run itself, and `naima wait`, `naima run list` and `naima claims` all show what it finds:
+
+- A **STUCK** run is still running but has written nothing at all, neither a log line nor a progress line, for its `--stale` window, one minute by default.
+  `naima wait` stops waiting as soon as a run is stuck and says so, so you can look at its log and decide whether to stop it.
+- A run is **not advancing** when its log keeps growing but its progress has not moved for the same window. That is only a warning: the run is alive and
+  saying something, it just isn't counting. A run started with `--no-progress` has no progress to compare, so it is never "not advancing", only stuck when its
+  log goes quiet.
+- A **CRASHED** run is one whose supervisor is gone without recording how the run ended, because it was killed or the machine restarted. Naima sees this within
+  seconds and never shows such a run as running.
 
 ## When a long run is due
 

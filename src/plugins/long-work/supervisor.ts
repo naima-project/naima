@@ -126,6 +126,15 @@ export async function endTree(pid: number, p: Platform, graceMs: number): Promis
   if (alive(pid, p.groups)) send(true)
 }
 
+/**
+ * Whether a command ended as one that never started: run through the shell, which exited at once with its own status
+ * for a command not found or not executable (127, 126; 9009 under cmd).
+ */
+export function notFound(shell: boolean, platform: string, code: number | null, afterMs: number): boolean {
+  if (!shell || code === null || afterMs > DEFAULTS.notFoundMs) return false
+  return platform === "win32" ? code === 9009 : code === 127 || code === 126
+}
+
 /** Supervise the run recorded in `dir` until it ends; resolves once its end is written. */
 export async function supervise(dir: string, graceMs: number = DEFAULTS.graceMs): Promise<RunStatus> {
   const spec = readSpec(dir)
@@ -138,6 +147,18 @@ export async function supervise(dir: string, graceMs: number = DEFAULTS.graceMs)
     writeJsonAtomic(join(dir, STATUS_FILE), status)
   }
   write({})
+  // naima run gave up waiting for this supervisor and left a stop request: a supervisor late to start starts nothing.
+  if (existsSync(join(dir, STOP_FILE))) {
+    write({
+      state: "ended",
+      reason: "start-failed",
+      error: "naima run stopped waiting for the command to start",
+      ended: new Date().toISOString(),
+      exitCode: null,
+      signal: null,
+    })
+    return status
+  }
   const before = spec.guardTracked ? trackedChanges(spec.cwd) : null
   const log = createWriteStream(join(dir, LOG_FILE), { flags: "a" })
   // The tick's folder is the launcher's, for this Naima: the command gets none, so a Naima it runs, or a test suite, finds its own.
@@ -162,10 +183,11 @@ export async function supervise(dir: string, graceMs: number = DEFAULTS.graceMs)
   child.stderr?.pipe(log, { end: false })
   const drained = outputClosed(child)
   let reason: Reason | null = null
-  const exited = new Promise<{ code: number | null; signal: string | null; error?: string }>((done) => {
-    child.once("error", (e) => done({ code: null, signal: null, error: e.message }))
-    child.once("exit", (code, signal) => done({ code, signal }))
+  const exited = new Promise<{ code: number | null; signal: string | null; error?: string; exitAt: number }>((done) => {
+    child.once("error", (e) => done({ code: null, signal: null, error: e.message, exitAt: Date.now() }))
+    child.once("exit", (code, signal) => done({ code, signal, exitAt: Date.now() }))
   })
+  const spawned = Date.now()
   if (child.pid !== undefined) write({ state: "running", pid: child.pid })
   const end = (why: Reason): void => {
     if (reason || child.pid === undefined) return
@@ -200,13 +222,18 @@ export async function supervise(dir: string, graceMs: number = DEFAULTS.graceMs)
   await Promise.race([new Promise((done) => log.end(done)), delay(2_000)])
   const after = before !== null ? trackedChanges(spec.cwd) : null
   const changed = before !== null && after !== null ? after.filter((f) => !before.includes(f)) : []
+  const missing = notFound(spec.shell, process.platform, result.code, result.exitAt - spawned)
   const final: Partial<RunStatus> = {
     state: "ended",
     exitCode: result.code,
     signal: result.signal,
-    reason: result.error ? "start-failed" : reason ?? "exit",
+    reason: result.error || missing ? "start-failed" : reason ?? "exit",
     ended: new Date().toISOString(),
-    ...(result.error ? { error: result.error } : {}),
+    ...(result.error
+      ? { error: result.error }
+      : missing
+      ? { error: lastLine(join(dir, LOG_FILE)) ?? `the shell exited ${result.code}: the command was not found or cannot run` }
+      : {}),
     ...(changed.length ? { changedTracked: changed } : {}),
   }
   if (spec.creates.length) {
