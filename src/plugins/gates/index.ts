@@ -50,6 +50,7 @@ import {
   hasFlag,
   isEvidenceType,
   isOpen,
+  isRetired,
   type Item,
   label,
   linked,
@@ -73,6 +74,17 @@ import { dependenciesAcyclic, dependenciesWaitOnWork, orderCommand, readyCommand
 
 export { type CoverageConfig, coverageOf, type CoverageRow } from "./coverage.ts"
 
+/**
+ * A retired item in words — `closed/x (title) retired on 2026-11-01: why; replaced by features/y` — from the fields and
+ * the relation naima retire writes, read by name: plugins never import each other.
+ */
+function retiredSays(ctx: Context, item: Item): string {
+  const on = typeof item.meta["closedOn"] === "string" ? ` on ${item.meta["closedOn"]}` : ""
+  const why = typeof item.meta["retiredBecause"] === "string" ? `: ${item.meta["retiredBecause"]}` : ""
+  const by = linked(ctx, item, "replaced-by").map(label)
+  return `${label(item)} (${item.meta.title}) retired${on}${why}${by.length ? `; replaced by ${by.join(", ")}` : ""}`
+}
+
 export interface GateResult {
   holds: boolean
   /** What stops the gate. */
@@ -83,6 +95,10 @@ export interface GateResult {
   reasons?: string[]
   /** The recorded evidence it stands on, in words: a record, a suite's run. */
   backedBy?: string[]
+  /** Blocking items no run can bring current, such as a property whose model file is gone: a long run is not due for them. */
+  stuck?: Item[]
+  /** The proofs it depended on that were retired, in words, each with its reason: shown so a retirement never hides a failing proof. */
+  retired?: string[]
 }
 
 /** A named release or merge condition, backed by items: what any plugin contributes to the `gates` point. */
@@ -249,8 +265,12 @@ export async function fullSuite(ctx: Context): Promise<GateResult & { parts: str
   const owed: Item[] = []
   const reasons: string[] = []
   const backedBy: string[] = []
+  const stuck: Item[] = []
+  const retired: string[] = []
   for (const g of parts) {
     const r = await g.evaluate(ctx)
+    for (const i of r.stuck ?? []) if (!stuck.includes(i)) stuck.push(i)
+    for (const w of r.retired ?? []) if (!retired.includes(w)) retired.push(w)
     for (const i of r.blocking) if (!blocking.includes(i)) blocking.push(i)
     for (const i of r.owed) if (!owed.includes(i) && !r.blocking.includes(i)) owed.push(i)
     reasons.push(...(r.reasons ?? []).map((why) => `${g.name}: ${why}`))
@@ -263,6 +283,8 @@ export async function fullSuite(ctx: Context): Promise<GateResult & { parts: str
     owed: owed.filter((i) => !blocking.includes(i)),
     reasons,
     backedBy,
+    ...(stuck.length ? { stuck } : {}),
+    ...(retired.length ? { retired } : {}),
     parts: parts.map((g) => g.name),
   }
 }
@@ -273,12 +295,16 @@ async function withFullSuite(ctx: Context, own: GateResult): Promise<GateResult>
   const blocking = [...own.blocking, ...suite.blocking.filter((i) => !own.blocking.includes(i))]
   const owed = [...own.owed, ...suite.owed].filter((i, n, all) => !blocking.includes(i) && all.indexOf(i) === n)
   const why = [...(own.reasons ?? []), ...(suite.reasons ?? [])]
+  const stuck = [...(own.stuck ?? []), ...(suite.stuck ?? [])].filter((i, n, all) => all.indexOf(i) === n)
+  const retired = [...(own.retired ?? []), ...(suite.retired ?? [])].filter((w, n, all) => all.indexOf(w) === n)
   return {
     holds: own.holds && suite.holds,
     blocking,
     owed,
     ...(why.length ? { reasons: why } : {}),
     ...(suite.backedBy?.length ? { backedBy: suite.backedBy } : {}),
+    ...(stuck.length ? { stuck } : {}),
+    ...(retired.length ? { retired } : {}),
   }
 }
 
@@ -357,10 +383,25 @@ export async function goals(ctx: Context): Promise<string[]> {
 }
 
 export function evaluateGate(ctx: Context, name: string, holdsOn: "code" | "proof"): GateResult {
-  const open = gatedItems(ctx, name).filter((i) => isOpen(ctx, i))
+  const on = gatedItems(ctx, name)
+  const open = on.filter((i) => isOpen(ctx, i))
   const blocking = holdsOn === "proof" ? open : open.filter((i) => !owesOnlyProof(ctx, i))
   const owed = open.filter((i) => !blocking.includes(i))
-  return { holds: blocking.length === 0, blocking, owed }
+  const retired = retiredUnder(ctx, on)
+  return { holds: blocking.length === 0, blocking, owed, ...(retired.length ? { retired } : {}) }
+}
+
+/**
+ * What a gate depended on and was retired: an item on it, or a proof of one, archived by naima retire. Said with its
+ * reason, so a retirement is seen where the gate is read and never quietly takes a failing proof off it.
+ */
+export function retiredUnder(ctx: Context, on: Item[]): string[] {
+  const seen = new Set<Item>()
+  for (const i of on) {
+    if (isRetired(ctx, i)) seen.add(i)
+    for (const p of linked(ctx, i, "verified-by")) if (isRetired(ctx, p)) seen.add(p)
+  }
+  return [...seen].map((i) => retiredSays(ctx, i))
 }
 
 /** Who can perform an item's proof: its own `runBy`, else that of an item verifying it. */
@@ -384,6 +425,7 @@ function printGate(ctx: Context, gate: GateDef, r: GateResult, hands = false): v
   const who = (i: Item) => (hands ? `  (${runByOf(ctx, i) || "unclassified"})` : "")
   for (const why of r.reasons ?? []) ctx.out(`  ✗ ${why}`)
   for (const by of r.backedBy ?? []) ctx.out(`  ✓ backed by ${by}`)
+  for (const r2 of r.retired ?? []) ctx.out(`  ! depended on ${r2}`)
   for (const i of r.blocking) ctx.out(`  ✗ ${label(i)}  ${i.meta.title}${who(i)}`)
   for (const i of r.owed) ctx.out(`  · ${label(i)}  ${i.meta.title}${who(i)}`)
 }
@@ -406,6 +448,8 @@ interface GateRow {
   reasons: string[]
   /** The recorded evidence it stands on. */
   backedBy: string[]
+  /** What it depended on that was retired, each with its reason. */
+  retired: string[]
   blocking: GateItemRow[]
   owed: GateItemRow[]
 }
@@ -428,6 +472,7 @@ async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: Gate
         holds: result.holds,
         reasons: result.reasons ?? [],
         backedBy: result.backedBy ?? [],
+        retired: result.retired ?? [],
         blocking: result.blocking.map(item),
         owed: result.owed.map(item),
       },

@@ -205,8 +205,10 @@ function seeds(t: Target): string[] {
   const common = runGit(t.root, ["rev-parse", "--path-format=absolute", "--git-common-dir"])
   if (common.ok) {
     // Asked of git, not of the file system: the main worktree is outside what Naima may read.
-    const twin = join(dirname(common.out), posixRelative(t.root, t.program))
-    if (resolve(twin) !== resolve(t.program) && runGit(t.root, ["-C", twin, "rev-parse", "--show-toplevel"]).out === twin) out.push(twin)
+    // Paths compared in this platform's own form: on Windows git prints C:/a/b for C:\a\b.
+    const twin = resolve(dirname(common.out), posixRelative(t.root, t.program))
+    const top = runGit(t.root, ["-C", twin, "rev-parse", "--show-toplevel"])
+    if (twin !== resolve(t.program) && top.ok && resolve(top.out) === twin) out.push(twin)
   }
   out.push(...(t.seeds ?? []).filter((s) => resolve(s) !== resolve(t.program)))
   return out

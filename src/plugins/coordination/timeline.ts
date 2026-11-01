@@ -3,7 +3,8 @@
 // from the items and git, nothing stored. A gate opened is its first item
 // reported (`created`), a gate passed its last item resolved (`closedOn`, else
 // `fixedOn`) once none is open; an epic the same, from the items it groups; a
-// release is a version tag; a session is its note. What has no date is
+// release is a version tag; a session is its note; an item retired is its
+// closedOn, with its reason (naima retire). What has no date is
 // counted at the foot, never placed at a guess.
 //
 // Only what nothing derives — a decision taken outside the tracker, a build
@@ -41,6 +42,7 @@ import {
   guardPrivate,
   hasTrait,
   isOpen,
+  isRetired,
   type Item,
   label,
   linked,
@@ -56,9 +58,20 @@ import {
   writeFileAtomic,
 } from "../../core/api.ts"
 
+/**
+ * A retired item in words — `closed/x (title) retired on 2026-11-01: why; replaced by features/y` — from the fields and
+ * the relation naima retire writes, read by name: plugins never import each other.
+ */
+function retiredSays(ctx: Context, item: Item): string {
+  const on = typeof item.meta["closedOn"] === "string" ? ` on ${item.meta["closedOn"]}` : ""
+  const why = typeof item.meta["retiredBecause"] === "string" ? `: ${item.meta["retiredBecause"]}` : ""
+  const by = linked(ctx, item, "replaced-by").map(label)
+  return `${label(item)} (${item.meta.title}) retired${on}${why}${by.length ? `; replaced by ${by.join(", ")}` : ""}`
+}
+
 export const EVENTS = "events"
 
-export type EventKind = "gate opened" | "gate passed" | "epic opened" | "epic finished" | "release" | "session" | "record"
+export type EventKind = "gate opened" | "gate passed" | "epic opened" | "epic finished" | "release" | "session" | "record" | "retired"
 
 export interface TimelineEvent {
   date: string
@@ -215,6 +228,12 @@ export function timelineOf(ctx: Context, passes: SessionNote[]): Timeline {
   for (const e of ctx.repo.items.filter((i) => hasTrait(ctx, i, GROUP))) {
     const members = linked(ctx, e, HAS_PART).filter((m) => m.meta.id !== e.meta.id)
     span(ctx, members, "epic opened", "epic finished", label(e), `${label(e)} (${e.meta.title})`, out)
+  }
+  // An item retired on the owner's word (naima retire): the day, the reason and what replaced it, from its own fields.
+  for (const i of ctx.repo.items.filter((i) => isRetired(ctx, i))) {
+    const d = fieldValue(i, CLOSED_ON)
+    if (isDate(d)) out.events.push({ date: d, kind: "retired", subject: label(i), says: retiredSays(ctx, i) })
+    else out.undated.retired = (out.undated.retired ?? 0) + 1
   }
   for (const r of releases(ctx)) out.events.push({ date: r.date, kind: "release", subject: r.tag, says: `version tag ${r.tag}` })
   for (const p of passes) {
@@ -373,7 +392,7 @@ const DECIDED_ON = { name: "decidedOn", kind: "date" } as const
 export interface DiaryEntry {
   date: string
   at?: string
-  kind: "decision" | "diary" | "session" | "delivery"
+  kind: "decision" | "diary" | "session" | "delivery" | "retired"
   text: string
 }
 
@@ -412,10 +431,18 @@ function deliveriesOf(ctx: Context): DiaryEntry[] {
   })
 }
 
-/** The diary: records of kind diary, decisions with their reasons, artifacts delivered, session notes -- oldest first. */
+/** Every item retired on the owner's word, on the day it was: what it was, why, and what replaced it. */
+const retirementsOf = (ctx: Context): DiaryEntry[] =>
+  ctx.repo.items.filter((i) => isRetired(ctx, i)).flatMap((i): DiaryEntry[] => {
+    const date = fieldValue(i, CLOSED_ON)
+    return isDate(date) ? [{ date, kind: "retired", text: `Retired: ${retiredSays(ctx, i)}` }] : []
+  })
+
+/** The diary: records of kind diary, decisions with their reasons, artifacts delivered, items retired, session notes -- oldest first. */
 export function diaryOf(ctx: Context, passes: SessionNote[]): DiaryEntry[] {
   const out: DiaryEntry[] = decisionsOf(ctx).map((d) => ({ date: d.date, kind: "decision", text: d.text }))
   out.push(...deliveriesOf(ctx))
+  out.push(...retirementsOf(ctx))
   for (const r of readRecords(ctx).filter((r) => r.kind === DIARY)) {
     out.push({ date: r.date, ...(r.at ? { at: r.at } : {}), kind: "diary", text: r.text.replace(/\s+/g, " ") })
   }
@@ -431,8 +458,8 @@ export function diaryCommand(passes: (ctx: Context) => SessionNote[]): Command {
   return {
     name: "diary",
     says:
-      "the project's story, day by day and in order: events recorded with --kind diary, every decision with its reason, every artifact delivered, every session note; nothing stored but those files",
-    enforces: "nothing: it reads the records, the decisions, the artifacts and the session notes, and writes nothing",
+      "the project's story, day by day and in order: events recorded with --kind diary, every decision with its reason, every artifact delivered, every item retired with its reason, every session note; nothing stored but those files",
+    enforces: "nothing: it reads the records, the decisions, the artifacts, the retired items and the session notes, and writes nothing",
     usage: "diary [--from <YYYY-MM-DD>] [--to <YYYY-MM-DD>] [--json]",
     options: [
       { name: "--from", says: "the first day to tell" },

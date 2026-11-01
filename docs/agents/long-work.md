@@ -11,7 +11,8 @@ Follow this page for any command you expect to take more than a few minutes, or 
    with `--no-progress "<why>"` instead. A host whose ssh server runs cmd, as the one that comes with Windows does, is declared with `"shell": "cmd"`
    ([on another machine](../guide/long-work.md#on-another-machine)); without it every quoted word arrives there with its quotes.
 2. **Wait** with `naima wait <name> --timeout <d>`, using a timeout shorter than your tool call's limit. When the timeout is reached it exits 1 and says the run
-   is still going. Then check `naima run list` to see whether the run is stale or lost and whether its rate and ETA are moving, do other work if there is any,
+   is still going. It also returns, exiting 1, as soon as the run is stuck (no output at all for its `--stale` window). Then check `naima run list` to see whether the run is
+   stuck, not advancing (its log grows but its progress does not, a warning) or crashed, and whether its rate and ETA are moving, do other work if there is any,
    and decide whether to wait again or to `naima run stop <name>`. A run started on the host itself, with no record here, is waited on with
    `naima wait <name> --host <h> --timeout <d>`; never poll the host over ssh by hand.
 3. **Report** from the output of `naima wait`. Give the state, the exit status, the budgets, the progress and the tail of the log, and put each number next to

@@ -5,6 +5,7 @@
 
 import { type Context, positiveInt } from "../../core/api.ts"
 import type { ClaimsData, Pass } from "./index.ts"
+import { claimsReports } from "./claims-reports.ts"
 
 const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
 
@@ -42,9 +43,12 @@ export function claimsUiView(claimsData: (ctx: Context) => ClaimsData) {
           d.contested.map((c) => `<li>${itemLink(c.id, c.ref)} → ${c.branches.map((b) => `<code>${esc(b)}</code>`).join(", ")}</li>`).join("")
         }</ul>`
         : ""
+      // The sections other plugins report under the claims, as `naima claims --json` gives them under `reports`.
+      const reports = claimsReports(ctx)
+      const sections = reports.map((r) => `<h3>${esc(r.name)}</h3><ul>${r.lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>`)
       return {
-        data: d,
-        html: held.length ? [...held.map(branch), contested].join("\n") : "<p>No branch claims an item.</p>",
+        data: { ...d, reports },
+        html: [held.length ? [...held.map(branch), contested].join("\n") : "<p>No branch claims an item.</p>", ...sections].join("\n"),
         css: ".tag{font-weight:400;opacity:.75}h3{margin:12px 0 4px;font-size:1em}",
       }
     },

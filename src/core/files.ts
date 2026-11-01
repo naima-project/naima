@@ -39,6 +39,24 @@ export function mayRun(program: string): boolean {
   }
 }
 
+/** What Deno answers when asked whether a host may be reached. */
+type NetQuery = { querySync(d: { name: "net"; host: string }): { state: string } }
+
+/**
+ * May this process reach `host`? Under Deno, what the permissions it was started with grant: the launcher's helper
+ * that asks which programs the plugins start runs with no network at all. Asked before a network check, so a run
+ * that may not reach the host never asks and never takes the refusal for an answer. Under another runtime nothing
+ * fences the network. `permissions` is injected by tests.
+ */
+export function mayReach(host: string, permissions = (globalThis as { Deno?: { permissions?: NetQuery } }).Deno?.permissions): boolean {
+  if (!permissions) return true
+  try {
+    return permissions.querySync({ name: "net", host }).state === "granted"
+  } catch {
+    return false
+  }
+}
+
 /** Never a project's own source, wherever they sit: version control, dependencies, build output. */
 export const NEVER_SOURCE: ReadonlySet<string> = new Set([".git", "node_modules", "dist", "build"])
 

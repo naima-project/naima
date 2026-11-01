@@ -6,7 +6,7 @@
 // release on GitHub; and the environment, where the binding finds that cache.
 
 import { spawn } from "node:child_process"
-import { join } from "node:path"
+import { join, posix, win32 } from "node:path"
 import { fileURLToPath } from "node:url"
 
 /** The webview binding window.ts loads, pinned: a different version is a change to review, never a drift. */
@@ -49,9 +49,11 @@ export function osName(): string {
 /** Deno's directory, where the webview binding keeps its library (in `plug/`): DENO_DIR, or the platform's cache directory. From the environment: the program may not ask the system. */
 export function denoDir(env: Record<string, string | undefined>, os: string, home = env["HOME"] ?? env["USERPROFILE"] ?? "."): string {
   if (env["DENO_DIR"]) return env["DENO_DIR"]
-  if (os === "darwin") return join(home, "Library", "Caches", "deno")
-  if (os === "windows") return join(env["LOCALAPPDATA"] ?? join(home, "AppData", "Local"), "deno")
-  return join(env["XDG_CACHE_HOME"] ?? join(home, ".cache"), "deno")
+  // Paths in the form of the system asked about, whatever system this runs on.
+  const at = os === "windows" ? win32.join : posix.join
+  if (os === "darwin") return at(home, "Library", "Caches", "deno")
+  if (os === "windows") return at(env["LOCALAPPDATA"] ?? at(home, "AppData", "Local"), "deno")
+  return at(env["XDG_CACHE_HOME"] ?? at(home, ".cache"), "deno")
 }
 
 /** Why no window can open here, or null when one may: the window is Deno's, on macOS, Linux and Windows. */

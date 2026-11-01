@@ -367,7 +367,7 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
     ctx.out(
       `first write of free text in this worktree: the no-leaks checklist (${path}) is shown once and the write goes on — from now on, check each one against it and sign it with --revised ${path}`,
     )
-    for (const line of new TextDecoder().decode(bytes).trimEnd().split("\n")) ctx.out(`  ${line}`)
+    for (const line of new TextDecoder().decode(bytes).trimEnd().split(/\r?\n/)) ctx.out(`  ${line}`)
     const by = gitOrNull(ctx.root, "config", "user.name")?.trim()
     return { checklist: shipped, ...(by ? { by } : {}), on: today(ctx), shown: true }
   }
