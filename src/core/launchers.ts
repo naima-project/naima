@@ -22,11 +22,18 @@ export const BIN_DIR = ".bin"
 /** This program's copy of a launcher: what the tracker folder's must equal. */
 export const launcherText = (name: string): string => readFileSync(fileURLToPath(new URL(`./launchers/${name}`, import.meta.url)), "utf8")
 
+/**
+ * A launcher's text as compared: the Windows launchers follow the checkout's own line endings (git's
+ * core.autocrlf), so CRLF and LF copies of naima.ps1 and naima.cmd are the same launcher; naima.sh, run by a
+ * POSIX shell, must be LF.
+ */
+const compared = (name: string, text: string): string => name === SH_LAUNCHER ? text : text.replace(/\r\n/g, "\n")
+
 /** The launchers of the tracker folder that are missing or differ from this program's. */
 export function staleLaunchers(tracker: string): string[] {
   return LAUNCHERS.filter((name) => {
     const path = join(tracker, name)
-    return !existsSync(path) || readFileSync(path, "utf8") !== launcherText(name)
+    return !existsSync(path) || compared(name, readFileSync(path, "utf8")) !== compared(name, launcherText(name))
   })
 }
 

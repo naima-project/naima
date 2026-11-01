@@ -214,7 +214,8 @@ the files go in the same commit as the update. An update started by a version wh
 Every hook Naima installs, and the line in the entry file, run Naima through a launcher that is committed with the project in `naima-tracker/`: `naima.sh` on
 macOS and Linux (and under Git Bash on Windows, where it hands over to `naima.ps1`), and `naima.cmd`, which runs `naima.ps1`, from cmd or PowerShell on Windows.
 Git's hooks run it too (the trunk guard and the pre-commit checks). `naima init` writes the three files, `naima update` rewrites them when the program holds a
-newer copy, and `naima check` notes one that is missing or has been changed by hand.
+newer copy, and `naima check` notes one that is missing or has been changed by hand. The line endings of a Windows checkout with `core.autocrlf` are not a
+change: `naima.ps1` and `naima.cmd` with CRLF count as current, while `naima.sh` must keep LF, since a POSIX shell cannot run it otherwise.
 
 When Deno and the program are both there, the launcher only runs Naima with the same arguments, and says nothing. A fresh clone in a new cloud session, or any
 machine set up from scratch, has neither: the program is gitignored, and Deno lived in the old machine's home folder. The launcher then repairs both before
