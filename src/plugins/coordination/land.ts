@@ -376,7 +376,7 @@ function preconditions(
 /**
  * The items a landing closes, read in the tracker's repository between its trunk `old` and the branch tip `tip`:
  * refused while the branch still holds its claim, when it names no item (unless the landing is tracker-only), or one
- * open and not fixed.
+ * open and not fixed; a tracker-only landing leaves open, and does not close, an item it claimed and did not fix.
  */
 function landedItems(
   ctx: Context,
@@ -408,6 +408,12 @@ function landedItems(
     if (!it) throw new Error(`${id} is not an item on ${branch}: a landing closes an item that exists`)
     return it
   })
+  // A tracker-only landing changes nothing but tracker data, so an item it claimed and did not fix is one whose prose
+  // it edited (a discussion that waits for the owner): it stays open, and only an item it names must be closable.
+  if (trackerOnly && !closes.length) {
+    for (const i of items.filter((i) => !i.closable)) ctx.out(`${i.ref} [${i.status}] stays open: the tracker-only landing edits it and does not close it`)
+    return items.filter((i) => i.closable)
+  }
   const open = items.filter((i) => !i.closable)
   if (open.length) {
     throw new Error(
@@ -929,7 +935,7 @@ export const land: Command = {
   says:
     "land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor",
   enforces:
-    "runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one whose commits carry private infrastructure in their messages — a home-directory path, a machine or user name — in the project or in a submodule whose pointer it moves (commits no remote-tracking branch holds), unless --allow-private gives the reason; one that names no item (unless --tracker-only gives the reason and the branch changes only tracker data, or --meets names a requirement it meets) or an item open and not fixed; refuses --meets for an item that is not a requirement, one with no item that verifies it and passed on the branch tip, one whose proofs all passed on the trunk already, and one an item refutes, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch a landing check finds failing, whatever flag is given, and one that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, adds the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right after the marker, so that naima close finds a commit reachable from the trunk; then closes, through naima close and every check it makes, each item it names, or whose proof it changed, that is fixed and whose proof has passed, in one commit on the trunk that only closes items, and says each item it names that is fixed and still waits for its proof, which the landing of that proof closes; then prints what every landing report says of the files the landing changed, never undoing it",
+    "runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one whose commits carry private infrastructure in their messages — a home-directory path, a machine or user name — in the project or in a submodule whose pointer it moves (commits no remote-tracking branch holds), unless --allow-private gives the reason; one that names no item (unless --tracker-only gives the reason and the branch changes only tracker data, or --meets names a requirement it meets) or an item open and not fixed (under --tracker-only, an item the branch claimed and did not fix stays open instead); refuses --meets for an item that is not a requirement, one with no item that verifies it and passed on the branch tip, one whose proofs all passed on the trunk already, and one an item refutes, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch a landing check finds failing, whatever flag is given, and one that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, adds the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right after the marker, so that naima close finds a commit reachable from the trunk; then closes, through naima close and every check it makes, each item it names, or whose proof it changed, that is fixed and whose proof has passed, in one commit on the trunk that only closes items, and says each item it names that is fixed and still waits for its proof, which the landing of that proof closes; then prints what every landing report says of the files the landing changed, never undoing it",
   usage:
     'land <branch> [--closes <item>]... [--no-change-note "<reason>"] [--stale-proofs "<reason>"] [--tracker-only "<reason>"] [--meets <requirement>]... | land <branch> --repair',
   options: [
@@ -952,7 +958,7 @@ export const land: Command = {
     {
       name: "--tracker-only",
       says:
-        "why a branch that changes only tracker data lands — notes and decisions of a review, items filed or revised; it may close no item, and is refused when it changes any file outside the tracker data; recorded in the marker as a Tracker-only: trailer",
+        "why a branch that changes only tracker data lands — notes and decisions of a review, items filed or revised, the description of an item that must stay open; it may close no item, leaves open an item the branch claimed and did not fix (an item named with --closes must still be closable), and is refused when it changes any file outside the tracker data; recorded in the marker as a Tracker-only: trailer",
     },
     {
       name: "--meets",
