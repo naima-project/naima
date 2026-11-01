@@ -22,6 +22,7 @@ import {
   saveProse,
   significantWords,
   splitProse,
+  stillTemplate,
   today,
   type WriteOptions,
 } from "./item.ts"
@@ -184,6 +185,9 @@ const newCommand: Command = {
     }
     const item = createItem(ctx, type, title.trim(), fields, { authored: true, origin })
     ctx.out(`${ctx.trackerDir}/${type.dir}/${item.slug}/  ${item.meta.id}`)
+    if (stillTemplate(type, item)) {
+      ctx.err(`warning: ${label(item)}: its body is still the ${type.id} template — naima describe ${item.slug} "<what it is about>" before it is read`)
+    }
     return 0
   },
 }

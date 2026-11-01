@@ -138,6 +138,9 @@ naima describe <item> --file triaged.md          # the description, rewritten in
 naima note <item> "Reproduced on 16-bit PNGs only; 8-bit keeps alpha." --by "triage agent"
 ```
 
+- A new item's description is its type's template until it is described: `naima new` warns, and `naima check` notes an item that is open or still in its
+  type's first status (a decision is settled as it is filed) with the template untouched. Describe every item you file in the same turn, a discussion and a
+  decision above all, since a meeting and the next agent read only the page.
 - `naima describe` replaces the description and keeps the title line and the Notes section. The agent rewrites a report that an agent filed, but never one a
   person wrote; for those, the triage adds a note instead. The title is a field, set with `naima set <item> title="…"`, which also rewrites the page's title
   line in the same write.
