@@ -4,7 +4,7 @@
 // write claims are in ./index.ts.
 
 import { existsSync, realpathSync } from "node:fs"
-import { basename, dirname, resolve } from "node:path"
+import { basename, dirname, resolve, win32 } from "node:path"
 import { type CheckOptions, type Finding, gitOrNull, gitReason, isGitRepo, mustGit, runGit, trunk, type Worktree, worktrees } from "../../core/api.ts"
 
 /** The plugin's options that shape the scheme. */
@@ -62,8 +62,17 @@ export function worktreesDir(policy: Policy, main: string): string {
   return resolve(main, policy.worktrees ?? `../${basename(main)}-worktrees`)
 }
 
-/** One directory, whether or not either path can be resolved here: the program may not read outside its project. */
-const same = (a: string, b: string): boolean => a === b || realOr(a) === realOr(b)
+/**
+ * One directory, whether or not either path can be resolved here: the program may not read outside its project.
+ * On Windows paths are compared as the file system does: either slash, any letter case, drive letter included.
+ */
+export function samePath(a: string, b: string, platform: string = process.platform): boolean {
+  if (a === b || realOr(a) === realOr(b)) return true
+  if (platform !== "win32") return false
+  const folded = (p: string): string => win32.resolve(realOr(p)).replace(/[\\/]+$/, "").toLowerCase()
+  return folded(a) === folded(b)
+}
+const same = (a: string, b: string): boolean => samePath(a, b)
 
 /** The worker worktrees open now: every worktree but the main one that is a folder of the worktrees directory, on a branch the scheme applies to. */
 export function workerTrees(root: string, policy: Policy, trees: Worktree[] = worktrees(root)): Worktree[] {

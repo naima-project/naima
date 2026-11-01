@@ -588,7 +588,8 @@ Each piece of work has its own [worktree](glossary.md#worktree) and its own [bra
 The branch is named `<who>/<what>`, with each part made of lowercase letters, digits, dots and dashes. Its worktree is the folder `<what>` in the worktrees
 directory, which is `<main checkout>-worktrees` beside the main checkout unless configured otherwise. Every worktree carries a
 [claim file](glossary.md#claim-file), although a worktree that only files items and claims none can make do with a [session note](glossary.md#session-note).
-`naima open` creates all three in one step. **Enforced by** the check `worktree-policy`, which fails on a worktree outside the directory or misnamed, on a
+`naima open` creates all three in one step. On Windows a path is compared as the file system does, in any letter case and with either slash.
+**Enforced by** the check `worktree-policy`, which fails on a worktree outside the directory or misnamed, on a
 branch off the scheme, and on a worktree whose branch has commits the trunk lacks but has no claim (now, or released in those commits) and no session note. A
 fresh worktree with no claim yet only gets a note. A gate judges its own tree, so this failure is a problem only for the worktree being checked. Any other
 worktree in the same state gets a note naming it, so that one worker's missing claim never blocks another branch's gate. For the coordinator,
