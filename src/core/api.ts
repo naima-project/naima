@@ -60,6 +60,7 @@ export {
 export { trackerExposure } from "./exposure.ts"
 export { callerEnv } from "./launched.ts"
 export { EXIT, isInternal, message, NaimaError } from "./errors.ts"
+export { tarCommand } from "./releases.ts"
 export { isRegularFile, mayRun, NEVER_SOURCE, pathMatches, readText, walkFiles, writeFileAtomic } from "./files.ts"
 export {
   byUrgency,

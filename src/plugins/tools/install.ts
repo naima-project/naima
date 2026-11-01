@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process"
 import { createHash, randomUUID } from "node:crypto"
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync, writeSync } from "node:fs"
 import { dirname, join } from "node:path"
-import { installDirOf, NaimaError, NO_PROGRESS, programFile, type Progress, RECEIPT } from "../../core/api.ts"
+import { installDirOf, NaimaError, NO_PROGRESS, programFile, type Progress, RECEIPT, tarCommand } from "../../core/api.ts"
 import type { Source, ToolDeclaration } from "./contract.ts"
 
 /** What one program run gave. */
@@ -115,17 +115,23 @@ function step(exec: Exec, what: string, program: string, args: string[], options
   return r
 }
 
+/** Run tar to unpack `archive` into `root`, in the form every tar takes as a local file (see tarCommand). */
+function untar(exec: Exec, what: string, archive: string, root: string): ExecResult {
+  const { args, cwd } = tarCommand(archive, root, ["-x"])
+  return step(exec, what, "tar", args, { cwd })
+}
+
 /** Unpack `archive` into `root` by its format; `python` is the Python a pip source installs with. */
 export function unpack(source: Source, archive: string, root: string, stage: string, exec: Exec, os: string, python: string | null): void {
   mkdirSync(root, { recursive: true })
   switch (source.format) {
     case "tar.gz":
-      step(exec, "unpacking with tar", "tar", ["-xf", archive, "-C", root])
+      untar(exec, "unpacking with tar", archive, root)
       return
     case "zip":
       // bsdtar reads zip (macOS, Windows 10 and later); GNU tar does not, so Linux uses unzip.
       if (os === "linux") step(exec, "unpacking with unzip", "unzip", ["-q", archive, "-d", root])
-      else step(exec, "unpacking with tar", "tar", ["-xf", archive, "-C", root])
+      else untar(exec, "unpacking with tar", archive, root)
       return
     case "deb": {
       const members = readAr(readFileSync(archive))
@@ -133,7 +139,7 @@ export function unpack(source: Source, archive: string, root: string, stage: str
       if (!data) throw refuse("the .deb holds no data.tar — nothing installed")
       const inner = join(stage, data)
       writeFileSync(inner, members.get(data)!)
-      step(exec, "unpacking the .deb's data with tar", "tar", ["-xf", inner, "-C", root])
+      untar(exec, "unpacking the .deb's data with tar", inner, root)
       return
     }
     case "dmg": {

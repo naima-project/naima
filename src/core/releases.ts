@@ -25,7 +25,7 @@
 import { createHash } from "node:crypto"
 import { spawnSync } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
+import nodePath, { join } from "node:path"
 import { gunzipSync } from "node:zlib"
 import { NaimaError } from "./errors.ts"
 import { gitReason, runGit, runGitAsync } from "./git.ts"
@@ -357,10 +357,33 @@ export function archiveCommit(archive: string, cwd: string): string | null {
   return r.ok && /^[0-9a-f]{40}$/.test(r.out) ? r.out : null
 }
 
+/**
+ * How to run tar on `archive` with `flags` so that it works in `dir`, with any tar: from the archive's folder, the archive
+ * named by its file name alone. GNU tar, the one Git Bash puts on Windows' path, reads an archive name with a colon in it,
+ * as `C:\...`, as host:path and tries to reach that host; bsdtar refuses `--force-local`, so a bare file name is the one
+ * form every tar takes as local. `dir` is given relative to that folder, or whole when it is on another drive (`-C` is
+ * never read as a host), with forward slashes: GNU tar on Windows cannot open a `-C` folder written with backslashes
+ * and a drive letter, and takes `C:/...`. `path` is the system's path module, given only to check Windows' paths on
+ * another system.
+ */
+export function tarCommand(
+  archive: string,
+  dir: string,
+  flags: string[],
+  path: typeof nodePath = nodePath,
+): { args: string[]; cwd: string } {
+  const cwd = path.dirname(path.resolve(archive))
+  const whole = path.resolve(dir)
+  const rel = path.relative(cwd, whole)
+  const target = rel === "" ? "." : path.isAbsolute(rel) ? whole : rel
+  return { args: [...flags, "-f", path.basename(archive), "-C", target.split(path.sep).join("/")], cwd }
+}
+
 /** Unpack a release archive into `dir`, its top folder (`<name>-<version>/`) stripped, with the system's tar. */
 export function unpackArchive(archive: string, dir: string): void {
   mkdirSync(dir, { recursive: true })
-  const r = spawnSync("tar", ["-xzf", archive, "-C", dir, "--strip-components=1"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })
+  const { args, cwd } = tarCommand(archive, dir, ["-xz", "--strip-components=1"])
+  const r = spawnSync("tar", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })
   if (r.status !== 0) throw new Error(`cannot unpack ${archive}: ${String(r.stderr || r.error?.message || "tar failed").trim()}`)
 }
 

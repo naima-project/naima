@@ -98,7 +98,10 @@ function Restore-Program {
       if ($got -ne $locked.ToLower()) { Fail "$archive has SHA-256 $got, but the lock says ${locked}: refused, nothing restored" }
       New-Item -ItemType Directory -Force -Path $Program -ErrorAction Stop | Out-Null
       try {
-        & tar.exe -xzf (Join-Path $tmp $archive) -C $Program --strip-components=1
+        # From the archive's folder, by its bare name, the target with forward slashes: Git Bash's GNU tar reads a
+        # C:\ archive name as a remote host, and cannot open a C:\ folder given to -C.
+        Push-Location -LiteralPath $tmp
+        try { & tar.exe -xzf $archive -C ($Program -replace '\\', '/') --strip-components=1 } finally { Pop-Location }
         if ($LASTEXITCODE -ne 0) { throw "tar could not unpack $archive" }
         Invoke-Git @('-C', $Program, 'init', '-q')
         Invoke-Git @('-C', $Program, 'config', 'core.autocrlf', 'false')
