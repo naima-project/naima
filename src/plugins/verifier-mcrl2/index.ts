@@ -73,7 +73,7 @@ import {
   sha256File,
   storeReduced,
 } from "./lts-cache.ts"
-import { type ConditionLint, lintConditions, lintLine } from "./lps-lint.ts"
+import { type ConditionLint, lintConditionsOfFile, lintLine, sizeText } from "./lps-lint.ts"
 import { MCRL2 } from "./tool.ts"
 
 export { MCRL2 } from "./tool.ts"
@@ -349,6 +349,8 @@ export const VERIFIER_OPTIONS: Record<string, string> = {
     'how mcrl22lps linearises, on every route: "rewrite" (the default, mcrl22lps as it is) or "no-rewrite" (mcrl22lps --no-rewrite, faster on some models, a stack overflow or a stall on others)',
   noRewrite: 'the earlier form of linearise, still read: true is "no-rewrite", false is "rewrite"',
   cached: "lps2lts caches its enumerations (--cached), on the LTS route; default true",
+  summandConditionLimit:
+    "the size above which a summand's condition is reported by the lint, for this property, in place of the plugin option of the same name; 0 turns the lint off",
 }
 
 /** How the tools run beyond the route: the verdict-preserving options of the allow-list. */
@@ -412,6 +414,8 @@ export interface Explore {
   threads: number
   maxStates?: number | undefined
   pipeline: Pipeline
+  /** The lint's limit for this run, in place of the plugin's (`verifierOptions.summandConditionLimit`). */
+  conditionLimit?: number | undefined
 }
 
 /** How fast a counting step went: its count, its seconds, and the count per second. */
@@ -467,6 +471,17 @@ function routeOf(options: Record<string, unknown>): { route: Route } | { wrong: 
 }
 
 /** The `--max` of lps2lts (§1): the most states one exploration may reach; undefined when there is no cap, or why the option is wrong. */
+/** The property's own lint limit (`verifierOptions.summandConditionLimit`), or why it is not a whole number. */
+function conditionLimitOf(options: Record<string, unknown>): number | undefined | { wrong: string } {
+  const m = options["summandConditionLimit"]
+  if (m === undefined) return undefined
+  return typeof m === "number" && Number.isInteger(m) && m >= 0 ? m : {
+    wrong: `verifierOptions.summandConditionLimit must be a whole number of operator and variable occurrences, 0 to turn the lint off, not ${
+      JSON.stringify(m)
+    }`,
+  }
+}
+
 function maxStatesOf(options: Record<string, unknown>): number | undefined | { wrong: string } {
   const m = options["maxStates"]
   if (m === undefined) return undefined
@@ -602,23 +617,37 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
 
   /**
    * The lint of the LPS at `lps` on its summand conditions (lps-lint.ts), its finding added to the log; null when the
-   * lint is off (`summandConditionLimit` 0) or `lpspp` could not print the LPS, which the log then says.
+   * lint is off (`limit` 0) or could not run. A lint never decides a run: whatever stops it, `lpspp` failing or the
+   * print unreadable, the log gets one line `lint skipped: <reason>` and the route goes on to its verdict. The print is
+   * read as a stream, never as one string.
    */
-  async function lintOf(s: ReturnType<typeof steps>, lps: string, dir: string): Promise<ConditionLint | null> {
-    if (conditionLimit <= 0) return null
+  async function lintOf(s: ReturnType<typeof steps>, lps: string, dir: string, limit: number = conditionLimit): Promise<ConditionLint | null> {
+    if (limit <= 0) return null
     const aterm = join(dir, "lint.aterm")
     try {
       const printed = await s.step("lpspp", ["--format=internal", lps, aterm], dir)
-      if ("stop" in printed || !existsSync(aterm)) {
-        s.log.push("lint: lpspp could not print the LPS, so its summand conditions were not measured")
+      if ("stop" in printed) {
+        const why = printed.stop.output.trim().split("\n").pop() ?? ""
+        s.log.push(`lint skipped: lpspp could not print the LPS${why ? ` (${why})` : ""}`)
         return null
       }
-      const lint = lintConditions(readFileSync(aterm, "utf8"), conditionLimit)
+      if (!existsSync(aterm)) {
+        s.log.push("lint skipped: lpspp wrote no print of the LPS")
+        return null
+      }
+      const lint = lintConditionsOfFile(aterm, limit)
       const line = lintLine(lint)
       if (line) s.log.push(line)
       return lint
+    } catch (e) {
+      s.log.push(`lint skipped: ${e instanceof Error ? e.message : String(e)}`)
+      return null
     } finally {
-      rmSync(aterm, { force: true })
+      try {
+        rmSync(aterm, { force: true })
+      } catch {
+        // A print that cannot be removed is left in the run's folder, which is removed with it.
+      }
     }
   }
 
@@ -632,6 +661,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
     extra: readonly string[] = [],
     pipeline: Pipeline = DEFAULT_PIPELINE,
     name?: string,
+    limit: number = conditionLimit,
   ): Promise<Outcome> {
     const s = steps(seconds, dir, progress, extra, name)
     const details: Record<string, unknown> = { route: "lps", linearise: pipeline.linearise, options: { mcrl22lps: lineariseArgs(pipeline) } }
@@ -641,7 +671,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
     const evidence = join(dir, "evidence.lps")
     const linearised = await s.step("mcrl22lps", [...lineariseArgs(pipeline), model, lps])
     if ("stop" in linearised) return done(linearised.stop)
-    const lint = await lintOf(s, lps, dir)
+    const lint = await lintOf(s, lps, dir, limit)
     if (lint) details["lint"] = lint
     const translated = await s.step("lps2pbes", ["--counter-example", `--formula=${formula}`, lps, pbes])
     if ("stop" in translated) return done(translated.stop)
@@ -696,7 +726,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
       const started = Date.now()
       const linearised = await s.step("mcrl22lps", [...recipe["mcrl22lps"]!, model, lps], folder)
       if ("stop" in linearised) return linearised
-      const lint = await lintOf(s, lps, folder)
+      const lint = await lintOf(s, lps, folder, explore.conditionLimit ?? conditionLimit)
       const args = [
         ...(explore.threads > 1 ? [`--threads=${explore.threads}`] : []),
         ...(explore.pipeline.cached ? ["--cached"] : []),
@@ -889,7 +919,10 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
     }
     const pipeline = pipelineOf(options)
     if ("wrong" in pipeline) return { verdict: "error", output: pipeline.wrong }
-    const explore: Explore = { threads, maxStates, pipeline }
+    const ownLimit = conditionLimitOf(options)
+    if (typeof ownLimit === "object") return { verdict: "error", output: ownLimit.wrong }
+    const limit = ownLimit ?? conditionLimit
+    const explore: Explore = { threads, maxStates, pipeline, conditionLimit: limit }
     const seconds = timeoutOf(options)
     // The model as a crash names it: its path in the project, never the machine's.
     const name = relative(ctx.root, model).split(sep).join("/")
@@ -898,7 +931,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
       let formula = formulaFile(property, ctx.root)
       if (formula && !existsSync(formula)) return { verdict: "error", output: `the formula file ${property.trim()} does not exist` }
       if (!formula) writeFileSync(formula = join(dir, "property.mcf"), property.trim() + "\n")
-      if (chosen.route === "lps") return await lpsRoute(model, formula, dir, seconds, progress, toolArgs, pipeline, name)
+      if (chosen.route === "lps") return await lpsRoute(model, formula, dir, seconds, progress, toolArgs, pipeline, name, limit)
       if (chosen.route === "lts") return await ltsRoute(model, formula, dir, ctx, seconds, explore, progress, toolArgs, name)
       const sub = (name: string): string => {
         const d = join(dir, name)
@@ -914,6 +947,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
         toolArgs,
         pipeline,
         name,
+        limit,
       )
       const lts = await ltsRoute(
         model,
@@ -1053,7 +1087,9 @@ export const summandConditions: Check = {
         subject: model,
         message: `${
           label(item)
-        }: ${model} has ${lint.overCount} of ${lint.summands} summands with a condition larger than ${lint.limit} operator and variable occurrences (largest ${lint.largest}) — share a guard repeated in every summand as one derived predicate (docs/guide/design-with-a-model.md, "Keep generated models small"), or raise plugins.verifier-mcrl2.options.summandConditionLimit`,
+        }: ${model} has ${lint.overCount} of ${lint.summands} summands with a condition larger than ${lint.limit} operator and variable occurrences (largest ${
+          sizeText(lint.largest, lint.largestAtLeast, lint.limit)
+        }) — share a guard repeated in every summand as one derived predicate (docs/guide/design-with-a-model.md, "Keep generated models small"), or raise plugins.verifier-mcrl2.options.summandConditionLimit, or the property's verifierOptions.summandConditionLimit`,
       })
     }
     return out
@@ -1079,8 +1115,8 @@ export function mcrl2Plugin(options: Record<string, unknown> = {}, run: Runner =
       "A property chooses its route in `verifierOptions.route`. `lps`, the default, is the standard route: `mcrl22lps`, `lps2pbes --counter-example`, and `pbessolve` with an evidence file: `true` holds; `false` is violated, and the evidence, printed by `lps2lts` as an `.aut` labelled transition system, is the counterexample; any other answer, or `verifierOptions.timeoutSeconds` reached by a step, is unknown. " +
       "`lts`, the LTS route, is for a model whose state space is small but whose data makes the standard route slow. `mcrl22lps` and `lps2lts` (with `--threads` from `verifierOptions.threads`) make the LTS once per model version, kept in the run work folder under a key over the model's contents, the toolset's version and the recipe, and shared by every property of that model. `verifierOptions.maxStates` caps the states `lps2lts` may explore (`--max`): a state space larger than the cap makes the run unknown, its output beginning `state cap reached:`, and the LTS cut short is not kept; on the standard route the option is an error, since that route explores with `pbessolve`. Each formula is then reduced only by an equivalence that preserves and reflects it, the coarsest of three: `branching-bisim` for a formula of the fragment the branching equivalences preserve — every visible step right after a star over an action formula that includes tau, no single step that includes tau, fixpoints only as the four inevitability patterns — when it has no fixpoint and no deadlock through a star; `dpbranching-bisim` when it has one of those, which see divergence; `bisim`, strong bisimilarity, for every other formula. With a branching equivalence, `ltsconvert` first hides every action the formula does not mention, unless a label joins such an action to another, in which case the formula takes `bisim` and nothing is hidden. The output says which equivalence was used and why; the reduced LTS is kept beside the LTS, one per equivalence and set of hidden actions, for every formula that needs the same. On the reduced LTS, `lts2pbes --counter-example` and one `pbessolve` with an evidence file decide; on false, the evidence, printed by `ltsconvert` as an `.aut` labelled transition system, is the counterexample, over the reduced LTS, where the hidden actions appear as tau. " +
       "`cross-check` runs both routes and gives a verdict only when they agree; a disagreement is an error whose output begins `the routes disagree:`. Each run records in its `details` the route, the version of every tool it started, and for the LTS route the LTS's key, reuse and size, the mentioned and hidden actions, the equivalence it reduced by and why, the reduced size and whether it was reused, and on false that the counterexample comes from the reduced LTS. While a step runs, every line it prints is the run's progress: `lps2lts` its states, level and transitions, `pbessolve` its BES equations, `ltsconvert` and `lts2pbes`, started with `--verbose`, their stages; a counting step's total is estimated from the count it ended on in the previous run of the same property, model and options. " +
-      '`verifierOptions` is an allow-list: `route`, `timeoutSeconds`, `threads`, `maxStates`, `linearise`, `noRewrite` and `cached`, every one leaving the verdict as it is; any other key is an error that names the ones it takes. `linearise`, `"rewrite"` by default, is how `mcrl22lps` linearises on every route, so the verdict never depends on the route: `"no-rewrite"` adds `--no-rewrite`, faster on some models and a stack overflow or a stall of `lps2lts` on others, so it is chosen per model. It makes another LPS, so it is part of the LTS\'s cache key, and it is part of a run\'s identity (`identityOptions`): a run made under one choice is never reused for the other. `noRewrite`, the earlier boolean form, is still read: true is `"no-rewrite"`, false `"rewrite"`; given with a `linearise` that says otherwise, it is an error. `cached`, true by default, explores with `lps2lts --cached`; `threads` stays on `lps2lts` alone. `lps2lts` rewrites with `jitty`, mCRL2\'s default rewriter. `--threads` and `--cached` change how fast the LTS is made, never the LTS, so they are no part of the key. On POSIX, `lps2lts` and `pbessolve` are started through `/bin/sh` with the stack limit raised to unlimited, or to the hard limit where unlimited is refused; on Windows a program\'s stack is fixed when it is linked, so they start as they are. Every run records `details.linearise` and the options it used and its rate: on the LTS route `details.lts.exploration` (the `mcrl22lps` and `lps2lts` arguments) and `details.rate`, the states `lps2lts` explored per second (`reused: true` when the LTS came from the cache); on the standard route `details.rate`, the BES equations `pbessolve` generated per second. ' +
-      "After linearising, `lpspp --format=internal` prints the LPS and each summand's condition is measured in operator and variable occurrences; the summands over the plugin option `summandConditionLimit` (10000 by default, 0 turns it off) are named in the run's output, in a line beginning `lint:`, and in `details.lint`, and the check `mcrl2-summand-conditions` notes each model whose last run found some. " +
+      '`verifierOptions` is an allow-list: `route`, `timeoutSeconds`, `threads`, `maxStates`, `linearise`, `noRewrite`, `cached` and `summandConditionLimit`, every one leaving the verdict as it is; any other key is an error that names the ones it takes. `linearise`, `"rewrite"` by default, is how `mcrl22lps` linearises on every route, so the verdict never depends on the route: `"no-rewrite"` adds `--no-rewrite`, faster on some models and a stack overflow or a stall of `lps2lts` on others, so it is chosen per model. It makes another LPS, so it is part of the LTS\'s cache key, and it is part of a run\'s identity (`identityOptions`): a run made under one choice is never reused for the other. `noRewrite`, the earlier boolean form, is still read: true is `"no-rewrite"`, false `"rewrite"`; given with a `linearise` that says otherwise, it is an error. `cached`, true by default, explores with `lps2lts --cached`; `threads` stays on `lps2lts` alone. `lps2lts` rewrites with `jitty`, mCRL2\'s default rewriter. `--threads` and `--cached` change how fast the LTS is made, never the LTS, so they are no part of the key. On POSIX, `lps2lts` and `pbessolve` are started through `/bin/sh` with the stack limit raised to unlimited, or to the hard limit where unlimited is refused; on Windows a program\'s stack is fixed when it is linked, so they start as they are. Every run records `details.linearise` and the options it used and its rate: on the LTS route `details.lts.exploration` (the `mcrl22lps` and `lps2lts` arguments) and `details.rate`, the states `lps2lts` explored per second (`reused: true` when the LTS came from the cache); on the standard route `details.rate`, the BES equations `pbessolve` generated per second. ' +
+      "After linearising, `lpspp --format=internal` prints the LPS and each summand's condition is measured in operator and variable occurrences; the summands over the plugin option `summandConditionLimit` (10000 by default, 0 turns it off), or over the property's own `verifierOptions.summandConditionLimit` when it gives one, are named in the run's output, in a line beginning `lint:`, and in `details.lint`, and the check `mcrl2-summand-conditions` notes each model whose last run found some. The print is read as a stream and a condition is counted only up to the limit: one past it is reported as more than the limit (`atLeast` in `details.lint`). The lint never decides a run: when it cannot run, the output says `lint skipped:` with the reason and the verdict stands. " +
       "The tools are taken from `bin` when it is given and exists on this machine, otherwise from the mCRL2 202607.0 that `naima tools install mcrl2` installed on this machine, otherwise from PATH; a `bin` that does not exist on this machine, as when a shared `naima.json` names another machine's path, is said once and passed over. The plugin declares that tool, so `naima tools` reports it. A tool that is not there is an error run whose output begins `tool missing:`; a tool that fails is an error with its output; a tool killed by a signal is an error whose output ends `<tool> crashed (signal <n>, <name>) on <model>`, the model by its path in the project. The version recorded is the first line of `mcrl22lps --version`. " +
       "For `naima equivalent`, it compares two versions of a model modulo `bisim` (strong bisimilarity, the default, which preserves every formula) or `dpbranching-bisim` (divergence-preserving branching bisimilarity, which preserves the formulas the LTS route accepts): `mcrl22lps`, `lps2lts` and `ltsinfo` for each version, the new one through the LTS cache, then `ltscompare --counter-example`; on false, the distinguishing formula it writes is what tells them apart.",
     options: [
