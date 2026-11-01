@@ -6,7 +6,8 @@
 // A remote's visibility is asked of GitHub (visibility.ts) at most once a day
 // and remembered with its time in the tracker repository's own git config,
 // which is never committed: `naima-visibility.<key>.seen` holds
-// "<visibility> <ISO time>". A probe that fails keeps the last answer known.
+// "<visibility> <ISO time>". A probe that fails keeps the last answer known,
+// and a run that may not reach GitHub (the launcher's helper) never asks.
 // What cannot be told (another host, offline, never answered) is not a
 // refusal: the owner is asked once, and the answer is recorded in naima.json's
 // `privateRemotes` as the remote's key, a hash, never its address.
@@ -19,7 +20,8 @@ import { NaimaError } from "./errors.ts"
 import { gitOrNull, runGit } from "./git.ts"
 import { DATA_DIR, DATA_FILE, TRACKER_DIR } from "./layout.ts"
 import { withoutCredentials } from "./program.ts"
-import { githubRepo, isLocalRemote, probeVisibility, type Visibility } from "./visibility.ts"
+import { githubRepo, isLocalRemote, probeVisibility, VISIBILITY_HOST, type Visibility } from "./visibility.ts"
+import { mayReach } from "./files.ts"
 import { appliesTo } from "./fields.ts"
 import { createItem, saveProse } from "./item.ts"
 import { FOLLOW_UP } from "./updates.ts"
@@ -132,7 +134,8 @@ export async function refreshVisibility(w: Where, opts: { force?: boolean } = {}
       out.push({ ...r, visibility: known.visibility, from: "cache" })
       continue
     }
-    const asked = githubRepo(r.url) ? await (probeOverride ?? probeVisibility)(r.url) : "unknown"
+    // Never asked where the network is not granted — the launcher's helper runs with none —: no answer, not a refusal taken for one.
+    const asked = githubRepo(r.url) && mayReach(VISIBILITY_HOST) ? await (probeOverride ?? probeVisibility)(r.url) : "unknown"
     if (asked === "unknown") {
       // No answer — offline, or a run without network permission, such as the launcher's helper — is
       // never remembered: it would hide the real answer for a day, or renew a stale one without asking.
