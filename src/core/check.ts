@@ -8,8 +8,8 @@ import { message } from "./errors.ts"
 import { formatCheck } from "./format.ts"
 import { trackerExposure } from "./exposure.ts"
 import { appliesTo, fieldError, fieldsOf, isOpenList, offList } from "./fields.ts"
-import { isUuid, README, titleWords } from "./item.ts"
-import { label } from "./lifecycle.ts"
+import { isUuid, README, stillTemplate, titleWords } from "./item.ts"
+import { isOpen, label } from "./lifecycle.ts"
 import { trackerOf } from "./layout.ts"
 import { brokenEntryLinks } from "./pointer.ts"
 import { pluginHookGaps } from "./plugin-hooks.ts"
@@ -162,6 +162,19 @@ const duplicates: Check = {
   },
 }
 
+const templateBody: Check = {
+  name: "template-body",
+  says:
+    "an item that is open, or still in the status its type starts it in (a decision is settled when filed), whose description is still its type's template, untouched (the title line and the Notes section aside), is noted with the naima describe that fills it; a note, never a problem",
+  run: (ctx) =>
+    ctx.repo.items.flatMap((item) => {
+      const type = ctx.registry.types.get(item.type)
+      const live = isOpen(ctx, item) || item.meta.status === type?.initialStatus
+      if (!type || !live || !stillTemplate(type, item)) return []
+      return [{ level: "note" as const, message: `${label(item)}: its description is still its type's template — naima describe ${item.slug} "<what it is about>"`, item, subject: label(item) }]
+    }),
+}
+
 const entryPointers: Check = {
   name: "entry-pointers",
   says:
@@ -207,6 +220,7 @@ export const coreChecks: Check[] = [
   links,
   layout,
   duplicates,
+  templateBody,
   entryPointers,
   sessionStart,
   unreadOptionsCheck,

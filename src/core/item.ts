@@ -245,6 +245,19 @@ export function listDirs(path: string): string[] {
 
 const defaultTemplate = (title: string): string => `# ${title}\n\nDescribe it here.\n`
 
+/** The README a new item of `type` starts with: its type's template, or the default one. */
+export const templateOf = (type: TypeDef, title: string): string => (type.template ?? defaultTemplate)(title)
+
+/**
+ * True when an item's description is still its type's template, untouched: the title line and the Notes section
+ * aside, so a renamed item or one with notes appended still counts, and line endings do not.
+ */
+export function stillTemplate(type: TypeDef, item: Item): boolean {
+  const description = (text: string): string => splitProse(text.replace(/\r\n/g, "\n")).description
+  const template = description(templateOf(type, item.meta.title))
+  return template !== "" && description(readReadme(item)) === template
+}
+
 /**
  * The slug a new item takes, and the names it must not: a slug another local
  * branch already holds under the same type is taken too, so two branches that
@@ -271,7 +284,7 @@ export function createItem(ctx: Context, type: TypeDef, title: string, fields: R
   const dir = join(base, slug)
   mkdirSync(join(dir, ATTACHMENTS))
   writeFileSync(join(dir, ATTACHMENTS, ".gitkeep"), "")
-  writeFileSync(join(dir, README), (type.template ?? defaultTemplate)(title))
+  writeFileSync(join(dir, README), templateOf(type, title))
   const item: Item = { type: type.id, slug, dir, meta: write.item.meta }
   writeJson(join(dir, META), item.meta)
   write.item = item

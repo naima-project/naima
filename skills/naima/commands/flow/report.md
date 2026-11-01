@@ -16,7 +16,8 @@ it owns the routing table.
    files only with their yes), the evidence, measured apart from
    inferred, the consequence. Write it with `naima describe <item> "<text>"`
    and record what you checked with `naima note <item> "<text>" --by <who>`;
-   never edit `README.md` by hand. Commands and output exactly, but redacted
+   never edit `README.md` by hand. Until then the page is the type's
+   template: `naima new` warns, and `naima check` notes it. Commands and output exactly, but redacted
    first: `<host>`, `<ip>`, `<path>`, `<user>` for machine names, addresses,
    home paths and user names
    ([the rule](../../../../docs/guide/rules.md#no-machine-names-or-private-infrastructure-in-a-repository)).

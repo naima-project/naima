@@ -41,6 +41,10 @@ naima note export-drops "Reproduced with sample.png; 8-bit images keep alpha." -
 item's **Notes** section, and earlier notes are never rewritten. Both can read a longer text from `--file`. Write in your own words, because a person's message
 only goes in verbatim if they say yes ([the rule](rules.md#the-owners-chat-stays-private)).
 
+A new item starts with its type's template as its description, and `naima new` warns that it is still the template. `naima check` notes every item that is
+open, or still in the status its type starts it in (a decision is settled as it is filed), whose description is still that template, untouched: a note, which
+never fails the check, until `naima describe` replaces it.
+
 ## See what is missing
 
 ```console
