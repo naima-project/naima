@@ -111,7 +111,7 @@ function unreadable(file: string, src: string): string {
   } catch (e) {
     const code = (e as { code?: string; name?: string }).code ?? (e as { name?: string }).name
     if (code === "ENOENT" || code === "NotFound") return `${file} does not exist`
-    return `${file} cannot be read: Naima reads only inside the project — copy the file into the project first, then attach the copy`
+    return `${file} cannot be read: Naima reads a file to attach only inside the project or the system's temporary folder — copy the file into one of them first, then attach the copy`
   }
   return `${file} is not a plain file`
 }
@@ -329,7 +329,7 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
   /** The signature of this command's write, or the refusal: no --revised, or a file that is not the shipped checklist. */
   function sign(ctx: Context, what: string): Signature | string {
     const path = checklistPath(ctx)
-    const how = `read ${path}, check the text against every point of it, and run the command again with --revised ${path}`
+    const how = `read ${path}, check the text against every point of it, and sign the write: run the command again with --revised ${path}`
     if (ctx.revised === undefined) {
       const shown = showOnce(ctx, path)
       if (shown) return shown
@@ -352,14 +352,19 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
   /**
    * A worktree's first unsigned write: the checklist printed and a signature marked shown, the checkout's mark in Naima's
    * state folder remembering it for the checklist's version; null for every later one, and where nothing can remember:
-   * outside git, or where the mark cannot be written.
+   * outside git, or where the mark cannot be read or written.
    */
   function showOnce(ctx: Context, path: string): Signature | null {
     const mark = isGitRepo(ctx.root) ? shownMark(ctx.root) : null
     if (!mark) return null
     const bytes = readFileSync(SHIPPED)
     const shipped = hashOf(bytes)
-    if (existsSync(mark) && readFileSync(mark, "utf8").trim() === shipped) return null
+    try {
+      // A mark that cannot be read counts as one: the write is refused for what it lacks, never for where the mark is.
+      if (existsSync(mark) && readFileSync(mark, "utf8").trim() === shipped) return null
+    } catch {
+      return null
+    }
     try {
       mkdirSync(dirname(mark), { recursive: true })
       writeFileSync(mark, `${shipped}\n`)
