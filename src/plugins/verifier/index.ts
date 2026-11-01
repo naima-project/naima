@@ -41,6 +41,7 @@ import {
   type Progress,
   progressFor,
   readHosts,
+  redactPrivate,
   rendered,
   saveMeta,
   setFieldValue,
@@ -616,8 +617,41 @@ export async function verifyOnHost(ctx: Context, host: Host, item: Item, progres
   return { verdict: run.verdict }
 }
 
-/** Attach a run to the property — its record, and its counterexample as a file of its own — and make it the last run, its status from the verdict. */
-function keepRun(ctx: Context, item: Item, record: RunRecord): string {
+/** `value` with every string in it redacted by `clean`, keys and every other value as they are. */
+function redactDeep<T>(value: T, clean: (s: string) => string): T {
+  if (typeof value === "string") return clean(value) as T
+  if (Array.isArray(value)) return value.map((v) => redactDeep(v, clean)) as T
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, redactDeep(v, clean)])) as T
+  }
+  return value
+}
+
+/**
+ * The run as it may be committed: what the tool printed — its output, counterexample and details, and those of an
+ * equivalence the verdict was carried over by — with the project's root as `<root>` and every private thing the
+ * tracker's writes refuse (a home path, a machine or user name, an address) as its placeholder. What keys the run
+ * (the inputs, their digests, the tool's version, the options) is left as it is.
+ */
+export function redactRun(record: RunRecord, root: string): RunRecord {
+  const pc = privateContext()
+  const clean = (s: string): string => redactPrivate(root ? s.split(root).join("<root>") : s, pc)
+  const out: RunRecord = { ...record, output: clean(record.output) }
+  if (record.counterexample !== undefined) out.counterexample = clean(record.counterexample)
+  if (record.details !== undefined) out.details = redactDeep(record.details, clean)
+  if (record.carried !== undefined) {
+    out.carried = { ...record.carried, output: clean(record.carried.output) }
+    if (record.carried.details !== undefined) out.carried.details = redactDeep(record.carried.details, clean)
+  }
+  return out
+}
+
+/**
+ * Attach a run to the property — its record, and its counterexample as a file of its own — and make it the last run, its status from the verdict.
+ * What the tool printed is redacted first (`redactRun`): an attachment is committed, and a log carries the paths of the machine it ran on.
+ */
+function keepRun(ctx: Context, item: Item, run: RunRecord): string {
+  const record = redactRun(run, ctx.root)
   const stamp = freshStamp(join(item.dir, ATTACHMENTS), record.at.replace(/[:.]/g, "-"))
   const name = `run-${stamp}.json`
   writeJson(join(item.dir, ATTACHMENTS, name), record)
@@ -1329,7 +1363,7 @@ export default function verifier(): Plugin {
     says: "properties checked by formal-methods tools, with each run attached as evidence",
     about:
       "A `properties` item names a `verifier` (an adapter any plugin can contribute), a `model` file (a path from the project root) and a `property` in the verifier's own language. " +
-      "`naima verify` runs the adapter and attaches the run — verdict, output, the adapter's `details` of how it reached the verdict when it gives them, the model's sha256, and one digest over every file the run read (the model and what the adapter's `inputs` says it includes) and the tool's version (the adapter's `version`) — and the counterexample as its own file, then sets the status from the verdict. Every file is hashed by the content git commits: a text file's CRLF line endings are read as LF, so a run made on a Windows checkout with core.autocrlf is current on any other. " +
+      "`naima verify` runs the adapter and attaches the run — verdict, output, the adapter's `details` of how it reached the verdict when it gives them, the model's sha256, and one digest over every file the run read (the model and what the adapter's `inputs` says it includes) and the tool's version (the adapter's `version`) — and the counterexample as its own file, then sets the status from the verdict. What the tool printed (the output, the counterexample, the details) is attached redacted: the project's root as `<root>`, a home-directory path, a machine or user name and an address as their placeholders. Every file is hashed by the content git commits: a text file's CRLF line endings are read as LF, so a run made on a Windows checkout with core.autocrlf is current on any other. " +
       "`--tool-args=<flags>` passes the tool flags the adapter declares in `toolArgs` as changing what it prints, never the verdict, and keeps them with the run, outside its identity. `--host <host>` runs the verifier in the checkout of a host the long-work plugin declares, through that host's Naima (`naima verify --emit`, which prints the run and writes nothing), and attaches the run here, marked with the host, only when it was made on exactly what this checkout has. " +
       'A conclusive run (holds or violated) already recorded on the property with the same identity — verifier, model, property, `verifierOptions`, and the one digest over every input and the tool\'s version — is reused instead of repeated: `naima verify` says `reused` and names the run, and `--force "<reason>"` runs it again, keeping the reason with the new run. An error is never reused. Every run is kept, two made in the same instant included. A run records in `counts` the count each step that finished ended on (the states explored, the BES equations generated); the next run of the same property, model and `verifierOptions`, whatever the inputs now hold, reports that count as the estimated total of the step (`estimate: true` in its progress line, `~` in its text), which grows as the step passes it. ' +
       "A property that holds is evidence exactly as a passed test is: it can `verify` a bug and close it. A verdict is only as good as what it was reached on, so `naima check` fails when a property claims to hold and its property, verifier, model path, `verifierOptions`, model contents, any file it includes, the set of files it reads, or the tool's version have changed since the run. " +

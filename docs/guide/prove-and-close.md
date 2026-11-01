@@ -191,7 +191,9 @@ record.
 naima verify <property> --force "the first run was cut short by a reboot"
 ```
 
-Every run stays in the property's `attachments/`, two runs made in the same instant included, so the earlier verdicts can always be read again.
+Every run stays in the property's `attachments/`, two runs made in the same instant included, so the earlier verdicts can always be read again. What the tool
+printed is redacted before it is attached, since an attachment is committed: the project's folder becomes `<root>`, and a home-directory path, a machine or user
+name and an address become `<path>`, `<host>`, `<user>` and `<ip>`, as the tracker's own writes require.
 
 Some flags of a tool change only what it prints, such as how much it says and how long each phase took. A verifier declares which ones those are, and
 `--tool-args` passes them; anything else is refused. For mCRL2 they are `--verbose` and `--timings`, given to every tool of the run, and what they print ends up
