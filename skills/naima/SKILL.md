@@ -75,7 +75,7 @@ owner who prefers to see each of them; either way is right.
 
 When the repository has `naima-tracker/naima-data/naima.json` but no `naima-tracker/naima/` (a fresh clone, a new worktree), run the launcher of any Naima at
 hand from inside the project — the main worktree's, or a shallow clone of the `source` that `naima.json` names, outside the project. The run clones the locked
-commit into the program by itself ([fresh clones and worktrees](../../docs/guide/install.md#fresh-clones-and-worktrees)).
+commit into the program by itself; a project that has its program is served only by its own launcher, so another project's launcher run by its path acts on that other project ([fresh clones and worktrees](../../docs/guide/install.md#fresh-clones-and-worktrees)).
 
 When there is none and the work is to be tracked here:
 

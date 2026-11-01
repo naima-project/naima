@@ -244,6 +244,10 @@ git clone <source> naima-tracker/naima
 followed by any `naima` command, which then aligns the clone with the lock. A new [worktree](glossary.md#worktree) of the project is the same case. `naima open`
 makes its program a local clone of the current one (`git clone --local`, then a checkout of the lock), so opening a worktree never touches the network.
 
+A launcher run by its path from inside another project, the main worktree's from a fresh worktree for instance, serves that other project only while it has
+no program of its own: it clones the program there at the lock. Once that project has its program, a launcher always serves its own project, wherever it
+is run from: `sh ../other/naima-tracker/naima.sh show <item>` reads the other project's tracker, not the one of the current folder.
+
 ## Every run aligns the program
 
 Before it does anything else, every run makes `naima-tracker/naima/` match the `source` and `commit` in `naima.json` exactly. It clones the program if it is
