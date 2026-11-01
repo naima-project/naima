@@ -42,7 +42,7 @@ naima hello
 
 The first line it prints is the one the agent shows you, for example
 `I'm Naima, the No-guesswork Artificial Intelligence Meta-Agent, active in this repository: version 1.0.0, commit 45ba22c1134c.` The version is the latest
-release tag at or before the locked commit. After that comes what Naima found about newer versions, then one line for each long run that is due
+release tag at or before the locked commit. `naima --version` (or `naima version`) prints that line alone. After that comes what Naima found about newer versions, then one line for each long run that is due
 ([long work](long-work.md#when-a-long-run-is-due)), one line for each repository you chose to keep without a remote
 ([a remote for every repository](private-tracker.md#a-remote-for-every-repository)), and a reminder of what you can ask for: an explanation of Naima and its
 documentation, a check for an update, or an update. With an agent tool that has a session-start hook, you see one line of it directly: the first line, and

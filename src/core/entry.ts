@@ -194,6 +194,13 @@ export const cliCommands: Omit<Command, "run">[] = [
     examples: ["guide"],
   },
   {
+    name: "version",
+    says: "print the banner naima hello opens with: the running Naima's version and commit; naima --version prints the same",
+    enforces: "nothing: it only prints",
+    usage: "version",
+    examples: ["version", "--version"],
+  },
+  {
     name: "help",
     says: "list every command the loaded plugins provide, with its usage",
     enforces: "nothing: it only prints",

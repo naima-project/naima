@@ -27,8 +27,8 @@
 // (VERIFY_PROGRAM), and with --host ssh too, to run the verifier in the host's
 // checkout. `naima recover`, and no other command, may read the folders the
 // agent tools keep their transcripts in (core/adapters, TranscriptReader), to
-// brief the worker that resumes a dead or stuck one. `naima describe`, `naima note` and
-// `naima attach`, and no other command, may read the system's temporary folder (TEMP_READERS),
+// brief the worker that resumes a dead or stuck one. `naima describe`, `naima note`,
+// `naima attach` and `naima pass`, and no other command, may read the system's temporary folder (TEMP_READERS),
 // where an agent keeps the files it hands them; never write it. Every command may read the tools
 // directory, where an installed tool's programs are (src/core/tools.ts);
 // `naima tools`, and `naima backup create`, which installs gh through it, and no
@@ -273,7 +273,7 @@ function runFlag(programs: string[] | null, found: (program: string) => boolean)
 }
 
 /** The commands that read a file they are given, and so may read it from the system's temporary folder too: never write there. */
-export const TEMP_READERS: readonly string[] = ["describe", "note", "attach"]
+export const TEMP_READERS: readonly string[] = ["describe", "note", "attach", "pass"]
 
 /**
  * The system's temporary folders, where an agent's scratch directory is: /tmp and TMPDIR on POSIX, TEMP and TMP on
@@ -301,7 +301,7 @@ export function permissions(
     hostFiles?: string[]
     /** The folders outside the project the command may read besides: naima recover's agent transcripts. */
     hostReads?: string[]
-    /** The temporary folders the command may read besides, each as given and as resolved: describe's, note's and attach's input files. */
+    /** The temporary folders the command may read besides, each as given and as resolved: describe's, note's, attach's and pass's input files. */
     tempReads?: string[]
     worktrees?: string[]
     /** The programs the loaded contributions start, besides git: a verifier's `runs`, a metric's program. */

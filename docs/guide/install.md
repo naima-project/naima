@@ -348,7 +348,7 @@ any program. An install downloads from whatever host a redirect points to (a rel
 **`naima recover`, and no other command,** may also read the folders where the agent tools in use keep their sessions' transcripts, to brief the worker
 that resumes a dead or stuck one ([several branches](several-branches.md#see-who-is-doing-what)). It only reads them and writes nothing.
 
-**`naima describe`, `naima note` and `naima attach`, and no other command,** may also read the system's temporary folder (`/tmp` and `TMPDIR`, or `TEMP` and
+**`naima describe`, `naima note`, `naima attach` and `naima pass`, and no other command,** may also read the system's temporary folder (`/tmp` and `TMPDIR`, or `TEMP` and
 `TMP` on Windows) and its subfolders, where an agent keeps the files it hands them in its scratch directory. They only read there, and what they read is
 checked for private data and secrets as any other text.
 
