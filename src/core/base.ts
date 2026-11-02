@@ -37,7 +37,7 @@ import { waive, WAIVERS } from "./waivers.ts"
 import { askedByOption, ORIGIN, originCommand, originMatches, originOnce } from "./origin.ts"
 import { LEVEL, messagesCommand, messagesType } from "./messages.ts"
 import { READY_FIELD } from "./ready.ts"
-import type { Command, Context, Contribution, FieldDef, Item, Plugin, Rendered, SummarySection, TypeDef, View, Write, WriteHook } from "./types.ts"
+import type { Command, Context, Contribution, FieldDef, Item, ItemFacts, Plugin, Rendered, SummarySection, TypeDef, View, Write, WriteHook } from "./types.ts"
 
 export function typeOrThrow(ctx: Context, id: string | undefined): TypeDef {
   const type = id ? ctx.registry.types.get(id) : undefined
@@ -257,26 +257,30 @@ export function itemData(ctx: Context, item: Item): ItemData {
 
 const show: Command = {
   name: "show",
-  says: "print one item: fields, links in both directions, attachments, prose",
+  says: "print one item: fields, what the plugins say of it (such as a fix on a development line), links in both directions, attachments, prose",
   enforces: "nothing: it only reads",
   usage: "show <item> [--json]",
   options: [{
     name: "--json",
     says:
-      "print the item as JSON: its fields, its links with the other end's title and status and whether it is evidence that proves or refutes, its attachments, its prose",
+      "print the item as JSON: its fields, what the plugins say of it (facts), its links with the other end's title and status and whether it is evidence that proves or refutes, its attachments, its prose",
   }],
   examples: ["show export-drops", "show bugs/export-drops-alpha-channel", "show export-drops --json"],
   run(args, ctx) {
     const p = parse(args, { json: { type: "boolean" } })
     const ref = p.positionals[0]
     if (!ref?.trim()) throw usageError(this)
-    const d = itemData(ctx, ctx.repo.resolve(ref))
+    const item = ctx.repo.resolve(ref)
+    const d = itemData(ctx, item)
+    // What the plugins know of the item that its files do not say, such as a fix on a development line.
+    const facts = ctx.registry.contributions("facts").flatMap((c) => (c.value as ItemFacts).facts(ctx, item))
     if (bool(p, "json")) {
-      ctx.out(JSON.stringify(d, null, 2))
+      ctx.out(JSON.stringify({ ...d, facts }, null, 2))
       return 0
     }
     ctx.out(`${d.title}\n${d.ref}  ${d.id}  [${d.status}]`)
     for (const [k, v] of Object.entries(d.fields)) ctx.out(`  ${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`)
+    for (const f of facts) ctx.out(`  ${f}`)
     for (const l of d.links) ctx.out(`  ${l.says} ${l.ref ? `${l.ref} [${l.status}]` : l.id}${l.implied ? "  (inverse)" : ""}`)
     if (d.attachments.length) ctx.out(`  attachments: ${d.attachments.join(", ")}`)
     ctx.out("")

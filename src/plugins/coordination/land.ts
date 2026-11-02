@@ -1089,7 +1089,9 @@ export const land: Command = {
         if (gate) {
           if (trackerOnly !== undefined || meets.length || stale !== undefined) {
             throw new Error(
-              `${branch} lands on ${lineBranch(gate)}, which closes nothing: --tracker-only, --meets and --stale-proofs belong to the landing of the line on the trunk`,
+              `${branch} lands on ${
+                lineBranch(gate)
+              }, which closes nothing: --tracker-only, --meets and --stale-proofs belong to the landing of the line on the trunk`,
             )
           }
           ctx.out(`on line ${lineBranch(gate)}`)

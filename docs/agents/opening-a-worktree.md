@@ -29,8 +29,9 @@ exists and a folder that already exists. An existing branch is never reused: one
 branch that doesn't follow this scheme ([the rule](../guide/rules.md#worktrees-and-branches-are-named-by-one-scheme-and-every-worktree-carries-a-claim)).
 
 When the work belongs to a [development line](../guide/lines.md), the branch starts from the line instead: `open` takes it from `--line <gate>`, else from the
-line the chat works on (`naima line use <gate>`), else from the open line of a gate the item stands on; `--trunk` keeps it on the trunk. It says first where it
-starts, `on line line/<gate>`, and refuses an item whose own goal comes before the line's. The bound `maxWorkers` counts per line.
+open line of a gate the item stands on, else from the line the chat works on (`naima line use <gate>`), unless the item's goal comes before that line's, when it
+starts from the trunk; `--trunk` keeps it on the trunk. It says first where it starts, `on line line/<gate>`, and refuses an item on a line named with `--line`
+whose goal comes after the item's own. The bound `maxWorkers` counts per line.
 
 A fresh checkout has no dependencies installed, so install them before you run anything.
 

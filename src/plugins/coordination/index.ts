@@ -101,6 +101,7 @@ import {
   type Line,
   lineBranch,
   lineCommand,
+  lineFacts,
   lineOf,
   linesSection,
   linesView,
@@ -844,14 +845,29 @@ function openCommand(policy: Policy): Command {
 const GATE_FIELD = { name: "gate", kind: "enum" } as const
 
 /**
- * The line an item's branch starts from: --line or --trunk; else the line this chat works on, once chosen; else the
- * open line of a gate an item stands on; else the trunk (null). Refused for an item whose own goal comes before the
- * line's: its goal would wait for that line, and the line for its goal.
+ * The line an item's branch starts from: --line or --trunk; else the open line of a gate an item stands on; else the
+ * line this chat works on, once chosen, unless an item's goal comes before it, when the trunk; else the trunk (null).
+ * Refused, when named, for an item whose own goal comes before the line's: its goal would wait for that line, and the
+ * line for its goal.
  */
 export function openLine(ctx: Context, items: Item[], line: string | undefined, toTrunk: boolean, lines: Line[] = openLines(ctx.root)): string | null {
   let gate: string | null
-  if (line !== undefined || toTrunk || sessionLine(ctx.root) !== undefined) gate = chosenLine(ctx, { line, trunk: toTrunk }, lines)
-  else gate = items.flatMap((i) => fieldValues(i, GATE_FIELD)).find((g) => lines.some((l) => l.gate === g)) ?? null
+  const own = items.flatMap((i) => fieldValues(i, GATE_FIELD)).find((g) => lines.some((l) => l.gate === g)) ?? null
+  if (line !== undefined || toTrunk) gate = chosenLine(ctx, { line, trunk: toTrunk }, lines)
+  else if (sessionLine(ctx.root) !== undefined) {
+    const chat = chosenLine(ctx, {}, lines)
+    const earlier = chat === null ? [] : items.flatMap((i) => fieldValues(i, GATE_FIELD)).filter((g) => g !== chat && goalBefore(ctx, g, chat))
+    gate = own ?? (earlier.length ? null : chat)
+    if (chat !== null && gate !== chat) {
+      ctx.out(
+        `this chat works on ${lineBranch(chat)}, but ${items.map(label).join(", ")} ${
+          gate
+            ? `belongs to ${lineBranch(gate)}: its branch starts there`
+            : `is on ${earlier.join(", ")}, a goal before ${chat} with no open line: its branch starts from the trunk`
+        }`,
+      )
+    }
+  } else gate = own
   if (gate === null) {
     if (lines.length) ctx.out(onLine(null, trunk(ctx.root)))
     return null
@@ -1320,6 +1336,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       diaryCommand(readPasses),
     ],
     views: [timelineView(readPasses), linesView],
+    facts: [lineFacts],
     home: import.meta.url,
     contributes: {
       "ui-views": [claimsUiView((ctx) => claimsData(ctx, undefined, silentAfter)), timelineUiView(readPasses), notesUiView(readPasses)],

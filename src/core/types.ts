@@ -226,6 +226,13 @@ export interface SummarySection {
   render(ctx: Context): Rendered | Promise<Rendered>
 }
 
+/** What a plugin says of one item in `naima show`, a line each under its fields: such as where its work stands outside this checkout. One with nothing to say returns no lines. */
+export interface ItemFacts {
+  name: string
+  says: string
+  facts(ctx: Context, item: Item): string[]
+}
+
 /** A block `naima guide` prints first, inside a project, before the documentation pages: what an agent reads before anything else. May be async; one with nothing to say renders no lines. */
 export interface GuideSection {
   name: string
@@ -437,6 +444,8 @@ export interface Plugin {
   summary?: SummarySection[]
   /** Blocks `naima guide` prints first, inside a project. */
   guide?: GuideSection[]
+  /** Lines `naima show` prints of an item under its fields. */
+  facts?: ItemFacts[]
   rank?: RankTerm[]
   /** Jobs the tick runs when they are due. */
   jobs?: TickJob[]

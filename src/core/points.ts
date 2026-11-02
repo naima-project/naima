@@ -17,6 +17,7 @@ import type {
   FieldDef,
   FieldKind,
   GuideSection,
+  ItemFacts,
   Migration,
   OptionDoc,
   RankTerm,
@@ -267,6 +268,17 @@ export const guidePoint: ExtensionPoint<GuideSection> = {
   ) => ["", "**Guide sections**, printed first by `naima guide`", ...table(["Section", "What it shows"], sections.map((s) => [code(s.name), s.says]))],
 }
 
+export const factsPoint: ExtensionPoint<ItemFacts> = {
+  id: "facts",
+  says: "lines `naima show` prints of an item under its fields, and in its JSON as `facts`: what a plugin knows of the item that its files do not say",
+  noun: "item facts",
+  key: (f) => f.name,
+  renamed: (f, name) => ({ ...f, name }),
+  validate: (v) => shape(v, (c) => text(c, "name"), (c) => fn(c, "facts")),
+  gaps: (f) => says(f, "shows"),
+  document: (all) => ["", "**Item facts**, printed by `naima show`", ...table(["Facts", "What they say"], all.map((f) => [code(f.name), f.says]))],
+}
+
 export const jobsPoint: ExtensionPoint<TickJob> = {
   id: "jobs",
   says:
@@ -449,6 +461,7 @@ export const CORE_POINTS: readonly ExtensionPoint[] = [
   dirsPoint,
   summaryPoint,
   guidePoint,
+  factsPoint,
   rankPoint,
   jobsPoint,
   extendsPoint,

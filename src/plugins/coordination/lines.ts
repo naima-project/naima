@@ -392,6 +392,18 @@ export function lineCommand(policy: Policy): Command {
   }
 }
 
+/** What naima show says of an item fixed on an open line: the trunk's copy of it does not say so. */
+export const lineFacts = {
+  name: "lines",
+  says: "an item fixed on an open development line, and not yet on the trunk: fixed on line line/<gate>",
+  facts(ctx: Context, item: { meta: { id: string } }): string[] {
+    if (ctx.sibling) return []
+    return openLines(ctx.root).filter((l) => fixedOnLine(ctx.root, l.branch).includes(item.meta.id)).map((l) =>
+      `fixed on line ${l.branch}, not yet on the trunk: it closes when the line lands`
+    )
+  },
+}
+
 /** `naima view lines`: the open lines and the items fixed on each, read from the lines' tips. */
 export const linesView: View = {
   name: "lines",

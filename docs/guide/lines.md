@@ -28,10 +28,11 @@ naima open export-speed --as ada               # from the line of the item's gat
 naima land ada/export-speed                    # lands on line/release-1.2, and closes nothing
 ```
 
-- `naima open` starts the branch from the line given with `--line <gate>`; else from the line this chat works on; else, when the item stands on a gate that has
-  an open line, from that line; else from the trunk. `--trunk` always starts from the trunk. It says first where it starts: `on line line/release-1.2`.
-- `naima open` refuses an item whose own goal comes before the line's goal. Such an item could never land: its goal would wait for the line, and the line for
-  its goal. Open it on the trunk, or on its own goal's line.
+- `naima open` starts the branch from the line given with `--line <gate>`; else, when the item stands on a gate that has an open line, from that line; else from
+  the line this chat works on; else from the trunk. `--trunk` always starts from the trunk. It says first where it starts: `on line line/release-1.2`.
+- An item whose own goal comes before a line's goal never goes on that line, since it could never land: its goal would wait for the line, and the line for its
+  goal. `naima open --line` refuses it; with the chat on such a line, `naima open` starts it from the trunk, and says why.
+- `naima show` on the trunk says of an item fixed on an open line: `fixed on line line/<gate>, not yet on the trunk`.
 - `naima land` of a branch of a line lands it on the line, as one merge whose tree is the branch tip's. It closes nothing: the item stays fixed, named in the
   merge's `Fixes:` trailer, and is closed when the line lands. The trunk does not move, and its copy of the item is untouched.
 - The coordination option `maxWorkers` counts per line: the trunk is one line, each development line another.
