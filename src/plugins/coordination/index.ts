@@ -26,6 +26,7 @@ import {
   CONTRACT,
   currentBranch,
   fieldValue,
+  fieldValues,
   filesAt,
   type Finding,
   findPrivate,
@@ -47,6 +48,7 @@ import {
   readAcrossBranches,
   readText,
   rendered,
+  sessionLine,
   setupPaths,
   short,
   str,
@@ -90,6 +92,7 @@ import { guardCheckCommand, guardCommand, guardedFrom, guardOffSection, guardSet
 import { diaryCheck, diaryCommand, eventCommand, EVENTS, frontLines, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
 import { recoverCommand } from "./recover.ts"
 import { readyLines, readyNow, readySection, readyWorkWaiting, workerLimitSection } from "./ready.ts"
+import { chosenLine, goalBefore, goalOrderPoint, type Line, lineBranch, lineCommand, lineOf, linesSection, linesView, onLine, openLines } from "./lines.ts"
 
 export { type NextStep, type StaleData, type StaleEntry } from "./stale.ts"
 export { type Timeline, type TimelineEvent, timelineOf } from "./timeline.ts"
@@ -757,15 +760,31 @@ function openCommand(policy: Policy): Command {
     says: "start a piece of work: a worktree <worktrees>/<what> on a new branch <who>/<what> from the trunk, and its claim on the items, in one step",
     enforces:
       "work happens on its own branch and worktree from the trunk, and its claim on the items is recorded in the same step; a branch that already exists is never reused, and the refusal says whether it is merged into the trunk; no worker worktree is opened beyond the option maxWorkers, and the refusal names the open ones and how to raise the bound",
-    usage: 'open <item>... [--as <who>] [--name <what>] [--note "why"]',
+    usage: 'open <item>... [--as <who>] [--name <what>] [--note "why"] [--line <gate> | --trunk]',
     options: [
       { name: "--as", says: "who works: the branch's first segment", ...(policy.who ? { default: policy.who } : {}) },
       { name: "--name", says: "what the work is: the branch's last segment and the worktree's folder", default: "the first item's slug" },
       { name: "--note", says: "why the branch holds the items, written in the claim" },
+      {
+        name: "--line",
+        says:
+          "start the branch from the line of this gate (line/<gate>) instead of the line this chat works on; refused for an item whose own goal comes before that line's",
+      },
+      { name: "--trunk", says: "start the branch from the trunk, whatever line this chat works on or the item's gate has" },
     ],
-    examples: ['open export-drops --as agent --note "alpha channel in the exporter"', "open export-drops export-keeps --as agent --name export-alpha"],
+    examples: [
+      'open export-drops --as agent --note "alpha channel in the exporter"',
+      "open export-drops export-keeps --as agent --name export-alpha",
+      "open export-drops --as agent --line release-1.2",
+    ],
     run(args, ctx) {
-      const p = parse(args, { as: { type: "string" }, name: { type: "string" }, note: { type: "string" } })
+      const p = parse(args, {
+        as: { type: "string" },
+        name: { type: "string" },
+        note: { type: "string" },
+        line: { type: "string" },
+        trunk: { type: "boolean" },
+      })
       if (!p.positionals.length) throw usageError(this)
       const who = str(p, "as") ?? policy.who
       if (!who) throw new Error("open needs --as <who>, the branch's first segment, or the coordination plugin's who option")
@@ -775,15 +794,46 @@ function openCommand(policy: Policy): Command {
       for (const [flag, value] of [["--as", who], ["--name", what]] as const) {
         if (!SEGMENT.test(value)) throw new Error(`${flag} ${value}: each part of a branch name is a ${SEGMENT_SAYS}`)
       }
-      const { path } = openWork(ctx, policy, items, who, what, str(p, "note"))
+      const gate = openLine(ctx, items, str(p, "line"), bool(p, "trunk"))
+      const { path } = openWork(ctx, policy, items, who, what, str(p, "note"), gate)
       ctx.out(`next: cd ${path}, and install the dependencies a fresh checkout lacks`)
       return 0
     },
   }
 }
 
+const GATE_FIELD = { name: "gate", kind: "enum" } as const
+
 /**
- * The worktree `<worktrees>/<what>` on a new branch `<who>/<what>` from the trunk, with its claim on `items`: what
+ * The line an item's branch starts from: --line or --trunk; else the line this chat works on, once chosen; else the
+ * open line of a gate an item stands on; else the trunk (null). Refused for an item whose own goal comes before the
+ * line's: its goal would wait for that line, and the line for its goal.
+ */
+export function openLine(ctx: Context, items: Item[], line: string | undefined, toTrunk: boolean, lines: Line[] = openLines(ctx.root)): string | null {
+  let gate: string | null
+  if (line !== undefined || toTrunk || sessionLine(ctx.root) !== undefined) gate = chosenLine(ctx, { line, trunk: toTrunk }, lines)
+  else gate = items.flatMap((i) => fieldValues(i, GATE_FIELD)).find((g) => lines.some((l) => l.gate === g)) ?? null
+  if (gate === null) {
+    if (lines.length) ctx.out(onLine(null, trunk(ctx.root)))
+    return null
+  }
+  if (ctx.sibling) throw new Error("development lines need the tracker committed with its code: this project keeps the tracker in a repository of its own")
+  for (const item of items) {
+    const earlier = fieldValues(item, GATE_FIELD).filter((g) => g !== gate && goalBefore(ctx, g, gate!))
+    if (earlier.length) {
+      throw new Error(
+        `${label(item)} is on ${earlier.join(", ")}, a goal ordered before ${gate}: on ${
+          lineBranch(gate)
+        } it could never land, since that line waits for its goal and its goal for that line — open it on the trunk (--trunk) or on its goal's line`,
+      )
+    }
+  }
+  ctx.out(onLine(gate, trunk(ctx.root)))
+  return gate
+}
+
+/**
+ * The worktree `<worktrees>/<what>` on a new branch `<who>/<what>` from the trunk, or from the line of `line`, with its claim on `items`: what
  * `open` does, and `fix` reuses. The claim file is written in the new worktree, not committed unless the tracker is
  * a repository of its own.
  */
@@ -794,6 +844,7 @@ export function openWork(
   who: string,
   what: string,
   note?: string,
+  line: string | null = null,
 ): { path: string; branch: string; claimFile: string } {
   const branch = `${who}/${what}`
   const trees = worktrees(ctx.root)
@@ -804,7 +855,7 @@ export function openWork(
       `the repository has no commit yet, and a branch can only start from one: commit what Naima wrote first, straight on the trunk, then run naima open again: ${first}`,
     )
   }
-  const base = trunk(ctx.root) ?? "HEAD"
+  const base = line ? lineBranch(line) : trunk(ctx.root) ?? "HEAD"
   // An existing branch is never reused: it may be an old one, landed and behind the trunk.
   if (gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`) !== null) {
     const n = ahead(ctx.root, base, branch)
@@ -815,7 +866,20 @@ export function openWork(
     )
   }
   if (exists(path)) throw new Error(`${path} already exists: pick another --name`)
-  const bound = workerBoundReason(ctx.root, policy, trees)
+  const lines = openLines(ctx.root)
+  const lineOfTree = (b: string): string | null => {
+    try {
+      return lineOf(ctx.root, b, lines)
+    } catch {
+      return null
+    }
+  }
+  const bound = workerBoundReason(
+    ctx.root,
+    policy,
+    trees,
+    lines.length ? { name: onLine(line, trunk(ctx.root)), holds: (b) => lineOfTree(b) === line } : undefined,
+  )
   if (bound) throw new Error(bound)
   const trackerBase = ctx.sibling ? trunk(ctx.trackerGit) : null
   if (ctx.sibling) {
@@ -1210,12 +1274,13 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       pushCheckCommand,
       changesCommand,
       prune,
+      lineCommand(policy),
       staleCommand(stale, staleAfter),
       pass,
       eventCommand,
       diaryCommand(readPasses),
     ],
-    views: [timelineView(readPasses)],
+    views: [timelineView(readPasses), linesView],
     home: import.meta.url,
     contributes: {
       "ui-views": [claimsUiView((ctx) => claimsData(ctx, undefined, silentAfter)), timelineUiView(readPasses), notesUiView(readPasses)],
@@ -1224,8 +1289,8 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
     // The claims are a panel of naima ui, the timeline and the session notes tabs, when the ui plugin is loaded; without it, still commands and a view.
     // The diary rule is listed by naima rules when the rules plugin is loaded; without it, the check still notes.
     optional: ["ui-views", "rules"],
-    points: [landingReportsPoint, claimsReportsPoint],
-    summary: [whereWeWere, inHand(silentAfter), workerLimitSection(policy), readySection(policy), staleSection(stale), guardOffSection(guarded)],
+    points: [landingReportsPoint, claimsReportsPoint, goalOrderPoint],
+    summary: [whereWeWere, linesSection, inHand(silentAfter), workerLimitSection(policy), readySection(policy), staleSection(stale), guardOffSection(guarded)],
     setup: [guardSetup(guarded)],
     hooks: [noClosingOwnWork],
   }

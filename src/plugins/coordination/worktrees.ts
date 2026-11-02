@@ -85,13 +85,19 @@ export function workerTrees(root: string, policy: Policy, trees: Worktree[] = wo
  * `maxWorkers` are open already. The refusal names each, and says how to free
  * one or raise the bound; null while there is room.
  */
-export function workerBoundReason(root: string, policy: Policy, trees: Worktree[] = worktrees(root)): string | null {
-  const open = workerTrees(root, policy, trees)
+export function workerBoundReason(
+  root: string,
+  policy: Policy,
+  trees: Worktree[] = worktrees(root),
+  line?: { name: string; holds(branch: string): boolean },
+): string | null {
+  // The bound counts per line: the trunk is one line, each development line another.
+  const open = workerTrees(root, policy, trees).filter((w) => !line || line.holds(w.branch ?? ""))
   if (open.length < policy.maxWorkers) return null
   return [
-    `${plural(open.length, "worker worktree")} ${
-      open.length === 1 ? "is" : "are"
-    } open, the coordination option maxWorkers (${policy.maxWorkers}): open no more until one is done`,
+    `${plural(open.length, "worker worktree")} ${open.length === 1 ? "is" : "are"} open${
+      line ? ` ${line.name}` : ""
+    }, the coordination option maxWorkers (${policy.maxWorkers}): open no more until one is done`,
     ...open.map((w) => `  ${w.branch}  ${w.path}`),
     "free one that has landed with naima prune --branch <branch> --write, or give two small items to one worker (naima open <item> <item>);",
     `raise the bound only on purpose, in naima.json: "plugins": { "coordination": { "options": { "maxWorkers": ${policy.maxWorkers + 1} } } }`,

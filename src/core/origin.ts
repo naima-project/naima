@@ -452,3 +452,39 @@ export const originCommand: Command = {
     return 0
   },
 }
+
+// ── the chat's line ──────────────────────────────────────────────────────────
+
+/** The file that keeps the line a session works on, beside its log: null outside git. */
+function lineFile(root: string): string | null {
+  const dir = sessionsDir(root)
+  if (!dir) return null
+  // Without a session (no naima hello yet, no NAIMA_SESSION), the worktree's own record stands for it.
+  const dirs = gitDirs(root)
+  const session = currentSession(root) ?? (dirs ? `worktree-${keyOf(dirs.own)}` : null)
+  return session ? join(dir, `line-${session}.json`) : null
+}
+
+/**
+ * The development line this session works on, as `naima line use` recorded it outside the repository: a gate's name,
+ * `null` for the trunk chosen on purpose, `undefined` when none was chosen.
+ */
+export function sessionLine(root: string): string | null | undefined {
+  const file = lineFile(root)
+  if (!file || !existsSync(file)) return undefined
+  try {
+    const v: unknown = JSON.parse(readFileSync(file, "utf8"))
+    if (!isObject(v)) return undefined
+    return v["line"] === null ? null : typeof v["line"] === "string" ? v["line"] : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Record the line this session works on: a gate's name, or null for the trunk. Throws outside git. */
+export function setSessionLine(root: string, line: string | null): void {
+  const file = lineFile(root)
+  if (!file) throw new Error("the line a session works on is kept beside its git directory: this is not a git repository")
+  mkdirSync(dirname(file), { recursive: true })
+  writeFileAtomic(file, JSON.stringify({ line }) + "\n")
+}
