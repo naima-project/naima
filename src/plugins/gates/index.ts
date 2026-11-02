@@ -78,7 +78,7 @@ import {
   writeJson,
 } from "../../core/api.ts"
 import { type CoverageConfig, coverageLines, coverageOf, coverageReasons, coverageUiView, COVERS, readCoverage, staleCovers } from "./coverage.ts"
-import { finished, fixedOnLine, goalOrder, goalsLanding, lineNotReady } from "./goals.ts"
+import { finished, fixedOnLine, goalBefore, goalOrder, goalsLanding, lineNotReady } from "./goals.ts"
 import { dependenciesAcyclic, dependenciesWaitOnWork, orderCommand, readyCommand, standsFor } from "./dependencies.ts"
 import { CLOSES_STEP, findMethod, methodsPoint, type MethodStep, STEP_NAME, stepRecordsCheck, type StepState, stepsVerdict } from "./methods.ts"
 
@@ -525,11 +525,22 @@ interface GateRow {
   /** For a gate with steps: the method it follows, if any, and its steps in order, the method's then its own. */
   method?: string
   steps?: StepState[]
+  /** Its goal: the version it ships as, its due date and freeze, the goals it says it comes after. */
+  version?: string
+  due?: string
+  freeze?: string
+  after?: string[]
+  /** Every goal ordered before it, by after, version and due date: the goal order lines follow. */
+  before: string[]
+  /** Its goal is finished: its version released, or, with none, it holds and its due date has come. */
+  finished: boolean
 }
 
 /** The gates named — every one when none is — each evaluated now: what `naima gates` prints and the gates panel shows. */
 async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: GateDef; result: GateResult; row: GateRow }[]> {
   const all = gatesOf(ctx).map((g) => g.name)
+  let released: Set<string> | null = null
+  const tags = (): Set<string> => (released ??= releaseTags(ctx))
   return await Promise.all((names.length ? names : all).map(async (name) => {
     const def = ctx.registry.find<GateDef>("gates", name)?.value
     if (!def) throw new Error(`no gate "${name}" — gates: ${all.join(", ") || "none configured"}`)
@@ -550,6 +561,13 @@ async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: Gate
         owed: result.owed.map(item),
         ...(result.method ? { method: result.method } : {}),
         ...(result.steps ? { steps: result.steps } : {}),
+        ...(def.version ? { version: def.version } : {}),
+        ...(def.due ? { due: def.due } : {}),
+        ...(def.freeze ? { freeze: def.freeze } : {}),
+        ...(def.after?.length ? { after: def.after } : {}),
+        before: all.filter((a) => goalBefore(ctx, a, def.name)),
+        // As finished() judges it, on the verdict just made rather than a second evaluation.
+        finished: def.version ? tags().has(versionKey(def.version)) : result.holds && (!def.due || def.due <= today(ctx)),
       },
     }
   }))
@@ -562,7 +580,11 @@ const gatesCommand: Command = {
   usage: "gates [name...] [--check] [--json]",
   options: [
     { name: "--check", says: "exit 1 when a listed gate does not hold" },
-    { name: "--json", says: "print the gates as JSON: each one's name, title, timing, whether it holds, and the items blocking it or owed" },
+    {
+      name: "--json",
+      says:
+        "print the gates as JSON: each one's name, title, timing, whether it holds, the items blocking it or owed, its steps, its version, due date, freeze and after, the goals ordered before it, and whether its goal is finished",
+    },
   ],
   examples: ["gates", "gates first-public --check", "gates --json"],
   async run(args, ctx) {

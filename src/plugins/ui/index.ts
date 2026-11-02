@@ -262,7 +262,8 @@ const uiCommand: Command = {
   name: "ui",
   says:
     "show the views the plugins contribute — first the summary, the gates, what is next and the claims, then the boards, the metrics, the session notes, each item with its evidence and the other tabs — in a native window titled Naima, served from this machine only, live from the files; closing the window stops it",
-  enforces: "the views are served only on the loopback interface, and every request without this run's token is refused",
+  enforces:
+    "the views are served only on the loopback interface, and every request without this run's token is refused; an action runs only a command of its short list, through the command line, and only with the token's cookie, the run's CSRF value and the server's own Origin",
   hidden: true,
   usage: "ui [--browser | --no-open] [--log]",
   options: [
@@ -291,7 +292,10 @@ export default function ui(): Plugin {
       "The first screen holds the views that are panels — the summary, which this plugin renders from every plugin's summary section exactly as `naima summary` does; the gates, from the gates plugin, as `naima gates` reports them; what is next, from the triage plugin, as `naima view next` ranks it; the claims, from the coordination plugin, as `naima claims` recombines them — and every other view is a tab: " +
       "the boards, which this plugin renders as `naima board` does, one type at a time; the session notes across branches, from the coordination plugin, as `naima pass --list`; " +
       "one item, which this plugin renders as `naima show` does, its evidence first — its attachments and the items of a type that can prove it, each marked proves, refutes or not yet — and to which every item reference of the window links; the metrics and the others. " +
-      "`/data/<view>` answers the same view's data as JSON, the same data the command prints with `--json`. Closing the window stops the server. " +
+      "`/data/<view>` answers the same view's data as JSON, the same data the command prints with `--json`; with `?at=<commit>`, as that commit had it, read only from its tree, a commit no local branch reaches refused. " +
+      "`/events` streams one server-sent event when the project changes (a commit, a branch moved, a tracker file written), and the new interface reads again while it shows Live. " +
+      "`/data/metro` gives the rail's map: the trunk, the open lines and the branches with their first-parent commits, where each leaves and rejoins, each worker branch with a status and why, and the goals ahead per line, from `line list`, `claims` and `gates` with `--json`. " +
+      "`POST /action/<name>` runs `decide`, `note`, `gate step`, `claim` or `release` through the command line and answers its output and exit code as JSON, refused without the token's cookie, the run's CSRF value from `/session`, the server's own Origin and a same-origin fetch. Closing the window stops the server. " +
       "The window is a webview, loaded from JSR at a pinned version, only by it, and in a process of its own: the rest of Naima has no dependency. " +
       "Where it cannot open — on Node or Bun, on a system it does not run on, offline on its first run, when it fetches its library — the default browser opens instead, and it says so in one line.",
     points: [viewsPoint],
