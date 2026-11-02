@@ -165,6 +165,11 @@ tool runs it without asking the owner: no `rm` on a path built from a variable t
 makes the server refuse such pushes, as information: run it only on the owner's word. When the tracker is a repository of its own, Naima commits every tracker
 write itself: never commit or edit the tracker's files by hand.
 
+Work for a later goal may go on its development line, the branch `line/<gate>` ([development lines](../../docs/guide/lines.md)). `naima line use <gate>` sets
+the line this chat works on; `naima open`, `naima claims` and `naima queue --ready` follow it and say so first, and `naima land` of an item's branch lands it
+on its line, closing nothing. The trunk reaches a line only by `naima line sync <gate>`; a line lands on the trunk with `naima land line/<gate>`, once
+`naima gate show <gate> --line` says it is ready. Never commit on a line by hand: the trunk guard refuses it as on the trunk.
+
 Before asking the owner anything, run `naima decisions <words>`: a settled decision answers it, and the owner's answer to a new question is recorded as one
 ([asking the human](../../docs/agents/asking-the-human.md)).
 

@@ -38,6 +38,12 @@ A release is a tag, an artifact and an announcement, and the runbook below makes
    If there is no standing decision, ask once, as a single question ([asking the human](asking-the-human.md)): "the gate holds, here is the changelog — ship
    it?" Record the answer with `naima new decisions "…"`, linked `settles` to the release.
 
+## Releases and development lines
+
+A release finishes its goal: the tag of its version is what lets the [line](../guide/lines.md) of the next goal land, and what ends the goal's freeze, if it
+has one (`naima gate set <gate> --freeze <date>`). While the goal is frozen, no landing on the trunk closes a feature; fixes still land, and so does a line of
+the frozen goal that holds only fixes. Work for the next release waits on its line until then.
+
 ## The runbook
 
 The release item starts as `staging`, at its first stage, and `naima view releases` shows what it still needs. Record the output of each stage with
