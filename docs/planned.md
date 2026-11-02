@@ -45,8 +45,10 @@ checklist on its own, without being prompted, at a project's first commit.
   The agent would read it from a checkout of that pin, just as it reads [the Naima skill](agents/skill.md) from the clone in `naima-tracker/naima/`, rather than
   from a second copy kept in the project.
 - **A dashboard**: a visual page of the project's state, with a look of its own, showing the boards, the gates, the ranked queue, claims and notes across
-  branches, and the evidence attached to each item. **Today:** the same views are commands (`naima summary`, `naima board`, `naima gates`, `naima view`), and
-  `naima summary --markdown` prints the state as text you can paste anywhere.
+  branches, and the evidence attached to each item, with a map of the lines and commits on its rail from which a commit of the past is chosen. **Today:**
+  [the Naima window](guide/the-window.md) has the new interface's frame (the rail, the moment, the screens) with the summary on its home screen, and the
+  earlier views at `/classic`; the same views are commands (`naima summary`, `naima board`, `naima gates`, `naima view`), and `naima summary --markdown`
+  prints the state as text you can paste anywhere.
 
 ## A pointer in the agent's instruction file
 

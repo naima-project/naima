@@ -1,0 +1,35 @@
+{
+  "radius": {
+    "$type": "dimension",
+    "sm": {
+      "$value": {
+        "value": 0.5,
+        "unit": "rem"
+      }
+    },
+    "md": {
+      "$value": {
+        "value": 0.75,
+        "unit": "rem"
+      }
+    },
+    "full": {
+      "$value": {
+        "value": 624.9375,
+        "unit": "rem"
+      }
+    },
+    "lg": {
+      "$value": {
+        "value": 1.25,
+        "unit": "rem"
+      }
+    },
+    "xl": {
+      "$value": {
+        "value": 2.0,
+        "unit": "rem"
+      }
+    }
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "$schema": "https://www.designtokens.org/schemas/2025.10/resolver.json",
+  "version": "2025.10",
+  "name": "naima-ui-r3-3",
+  "description": "Frost: Hush on cold blue-greys; amber kept, so the main action stands out more.",
+  "sets": {
+    "foundation": {
+      "sources": [
+        {
+          "$ref": "motion.tokens.json"
+        },
+        {
+          "$ref": "radius.tokens.json"
+        },
+        {
+          "$ref": "spacing.tokens.json"
+        },
+        {
+          "$ref": "typography.tokens.json"
+        }
+      ]
+    }
+  },
+  "modifiers": {
+    "theme": {
+      "description": "Follows prefers-color-scheme unless the user chose one.",
+      "contexts": {
+        "light": [
+          {
+            "$ref": "themes/light/color.tokens.json"
+          },
+          {
+            "$ref": "themes/light/shadow.tokens.json"
+          }
+        ],
+        "dark": [
+          {
+            "$ref": "themes/dark/color.tokens.json"
+          },
+          {
+            "$ref": "themes/dark/shadow.tokens.json"
+          }
+        ]
+      },
+      "default": "light"
+    }
+  },
+  "resolutionOrder": [
+    {
+      "$ref": "#/sets/foundation"
+    },
+    {
+      "$ref": "#/modifiers/theme"
+    }
+  ]
+}

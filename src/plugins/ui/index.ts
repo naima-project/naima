@@ -1,5 +1,6 @@
-// The UI: `naima ui` shows the views plugins contribute in a native window:
-// first a screen of panels — the summary, which this plugin renders from the
+// The UI: `naima ui` opens the new interface (the bundle in ui/dist, which
+// server.ts serves at /) and shows the views plugins contribute: at /classic,
+// a screen of panels — the summary, which this plugin renders from the
 // core's summary sections, the gates, what is next and the claims — then the
 // tabs: the boards and the item with its evidence, which this plugin renders
 // from the core's board and item data, the metrics, the session notes and the
@@ -284,7 +285,8 @@ export default function ui(): Plugin {
     says:
       "the views plugins contribute, a provisional window onto the project, shown in a native window or the browser from a server on this machine only, until the new UI replaces it",
     about:
-      "The provisional window starts a server bound to the loopback interface, on a free port, that refuses every request without the token of its run, and opens it in a native window titled Naima. " +
+      "The window starts a server bound to the loopback interface, on a free port, that refuses every request without the token of its run, and opens it in a native window titled Naima. " +
+      "At `/` it serves the new interface, the built bundle the product ships in `ui/dist`: the rail, the moment, the screens, the summary on Home, its logic generated from an mCRL2 model; the provisional window below is at `/classic`. " +
       "Each view is one a plugin contributes to `ui-views`, rendered from the files at each request, so the window shows what the files hold now. " +
       "The first screen holds the views that are panels — the summary, which this plugin renders from every plugin's summary section exactly as `naima summary` does; the gates, from the gates plugin, as `naima gates` reports them; what is next, from the triage plugin, as `naima view next` ranks it; the claims, from the coordination plugin, as `naima claims` recombines them — and every other view is a tab: " +
       "the boards, which this plugin renders as `naima board` does, one type at a time; the session notes across branches, from the coordination plugin, as `naima pass --list`; " +

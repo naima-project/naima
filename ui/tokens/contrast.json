@@ -1,0 +1,69 @@
+{
+  "$description": "The colour pairs the widget set puts on screen, which every theme of every mood board must make legible. text: 4.5:1 (WCAG 2.2 SC 1.4.3, EN 301 549 9.1.4.3). ui: 3:1 for what identifies a control or its state, focus rings included (SC 1.4.11, 9.1.4.11). The ratio is WCAG's, from the tokens' sRGB components.",
+  "pairs": [
+    {
+      "kind": "text",
+      "use": "body text, labels, key labels, menu items",
+      "fg": ["color.text"],
+      "bg": [
+        "color.surface",
+        "color.surface-raised",
+        "color.surface-sunken",
+        "color.key",
+        "color.key-hover",
+        "color.key-pressed",
+        "color.accent-soft",
+        "color.border"
+      ]
+    },
+    {
+      "kind": "text",
+      "use": "secondary text, hints, quiet keys, disabled labels",
+      "fg": ["color.text-muted"],
+      "bg": ["color.surface", "color.surface-raised", "color.surface-sunken", "color.key", "color.key-pressed"]
+    },
+    {
+      "kind": "text",
+      "use": "accent text: operator keys, links",
+      "fg": ["color.accent"],
+      "bg": [
+        "color.surface",
+        "color.surface-raised",
+        "color.key",
+        "color.key-hover",
+        "color.key-pressed",
+        "color.accent-soft"
+      ]
+    },
+    {
+      "kind": "text",
+      "use": "text on the accent: primary buttons, the equals key",
+      "fg": ["color.on-accent"],
+      "bg": ["color.accent", "color.accent-hover"]
+    },
+    {
+      "kind": "text",
+      "use": "error and success messages, danger buttons",
+      "fg": ["color.danger", "color.success"],
+      "bg": ["color.surface", "color.surface-raised", "color.surface-sunken"]
+    },
+    {
+      "kind": "ui",
+      "use": "the focus ring, drawn outside the control on the surface around it",
+      "fg": ["color.focus"],
+      "bg": ["color.surface", "color.surface-raised", "color.surface-sunken", "color.key"]
+    },
+    {
+      "kind": "ui",
+      "use": "the border that shows where an input or a secondary button is",
+      "fg": ["color.border-strong"],
+      "bg": ["color.surface", "color.surface-raised"]
+    },
+    {
+      "kind": "ui",
+      "use": "a filled control: primary button, checked checkbox",
+      "fg": ["color.accent"],
+      "bg": ["color.surface", "color.surface-raised"]
+    }
+  ]
+}

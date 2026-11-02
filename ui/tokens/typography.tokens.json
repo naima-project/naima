@@ -1,0 +1,105 @@
+{
+  "font": {
+    "family": {
+      "$type": "fontFamily",
+      "body": {
+        "$value": [
+          "Inter",
+          "system-ui",
+          "-apple-system",
+          "Segoe UI",
+          "sans-serif"
+        ]
+      },
+      "mono": {
+        "$value": [
+          "ui-monospace",
+          "SFMono-Regular",
+          "Menlo",
+          "monospace"
+        ]
+      }
+    },
+    "size": {
+      "$type": "dimension",
+      "sm": {
+        "$value": {
+          "value": 0.8125,
+          "unit": "rem"
+        }
+      },
+      "md": {
+        "$value": {
+          "value": 0.9375,
+          "unit": "rem"
+        }
+      },
+      "lg": {
+        "$value": {
+          "value": 1.125,
+          "unit": "rem"
+        }
+      },
+      "xl": {
+        "$value": {
+          "value": 1.5,
+          "unit": "rem"
+        }
+      },
+      "display": {
+        "$value": {
+          "value": 3.75,
+          "unit": "rem"
+        }
+      },
+      "display-md": {
+        "$value": {
+          "value": 2.75,
+          "unit": "rem"
+        }
+      },
+      "display-sm": {
+        "$value": {
+          "value": 2,
+          "unit": "rem"
+        }
+      }
+    },
+    "weight": {
+      "$type": "fontWeight",
+      "regular": {
+        "$value": 400
+      },
+      "strong": {
+        "$value": 600
+      },
+      "light": {
+        "$value": 300
+      }
+    },
+    "line-height": {
+      "$type": "number",
+      "tight": {
+        "$value": 1.2
+      },
+      "normal": {
+        "$value": 1.5
+      }
+    },
+    "letter-spacing": {
+      "$type": "dimension",
+      "display": {
+        "$value": {
+          "value": -0.0625,
+          "unit": "rem"
+        }
+      },
+      "label": {
+        "$value": {
+          "value": 0.05,
+          "unit": "rem"
+        }
+      }
+    }
+  }
+}
