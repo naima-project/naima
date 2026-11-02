@@ -589,7 +589,8 @@ export const archiveTag = (branch: string): string => `archive/${branch}`
 /** What deleting a branch does in one repository: the steps it would take, and runs them once every side may. */
 interface PruneSide {
   plan: string[]
-  kept: boolean
+  /** Where the branch's commits stay once it is deleted: its archive tag, or the line that holds them; null when the trunk does. */
+  keptOn: string | null
   run(): void
 }
 
@@ -605,11 +606,12 @@ function pruneSide(ctx: Context, repo: string, branch: string, write: boolean, a
   if (tree?.self) throw new Error(`${branch} is the worktree you stand in: prune it from another one`)
   const tag = archiveTag(branch)
   const n = ahead(repo, main, branch)
-  const kept = (gitOrNull(repo, "rev-parse", "--verify", "--quiet", `refs/tags/${tag}`) !== null &&
-    gitOrNull(repo, "merge-base", "--is-ancestor", branch, `refs/tags/${tag}`) !== null) ||
-    // A branch landed on an open development line: the line holds its commits.
-    (repo === ctx.root && openLines(repo).some((l) => l.branch !== branch && isAncestor(repo, branch, l.branch)))
-  const unkept = n > 0 && !kept
+  const tagged = gitOrNull(repo, "rev-parse", "--verify", "--quiet", `refs/tags/${tag}`) !== null &&
+    gitOrNull(repo, "merge-base", "--is-ancestor", branch, `refs/tags/${tag}`) !== null
+  // A branch landed on an open development line: the line holds its commits.
+  const line = repo === ctx.root ? openLines(repo).find((l) => l.branch !== branch && isAncestor(repo, branch, l.branch))?.branch : undefined
+  const holder = tagged ? tag : line ?? null
+  const unkept = n > 0 && !holder
   if (unkept) {
     const why = `${branch} has ${plural(n, "commit")} not on ${main}${name} and no ${tag} tag holding them`
     if (!archive) {
@@ -630,7 +632,7 @@ function pruneSide(ctx: Context, repo: string, branch: string, write: boolean, a
       ...(tree ? [`remove the worktree ${tree.path}`] : []),
       `delete the branch ${branch}${name}`,
     ],
-    kept: kept || (unkept && archive),
+    keptOn: n > 0 ? (unkept ? (archive ? tag : null) : holder) : null,
     run() {
       if (unkept && archive) mustGit(repo, "tag", tag, branch)
       if (tree) mustGit(repo, "worktree", "remove", ...(status === "" ? ["--force"] : []), tree.path)
@@ -663,7 +665,8 @@ function pruneBranch(ctx: Context, branch: string, write: boolean, archive: bool
     return 0
   }
   for (const s of sides) s.run()
-  ctx.out(`did ${plan.join(", ")}${sides.some((s) => s.kept) ? ` — its commits stay on ${archiveTag(branch)}` : ""}`)
+  const keptOn = sides.find((s) => s.keptOn)?.keptOn
+  ctx.out(`did ${plan.join(", ")}${keptOn ? ` — its commits stay on ${keptOn}` : ""}`)
   return 0
 }
 
