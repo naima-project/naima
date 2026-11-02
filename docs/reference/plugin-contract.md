@@ -243,7 +243,8 @@ export default function looks() {
 
 A plugin written as plain JavaScript (`.mjs`), as a stance is, contributes the same way; listing `ui-tabs` under `optional` lets a Naima without it still load
 the plugin. Every view of `ui-views` (the provisional window's tabs) is shown as a tab too: its page in a frame, sandboxed the same way, its own links kept
-inside the frame. `/data/tabs` lists the tabs with their subtabs, and `/data/tab/<name>?sub=<subtab>` answers what one shows, with `?at=<commit>` too.
+inside the frame, unless the view says `screen: true` because the interface has a screen of its own for it, as the metrics view does. `/data/tabs` lists the
+tabs with their subtabs, and `/data/tab/<name>?sub=<subtab>` answers what one shows, with `?at=<commit>` too.
 
 ## Names
 

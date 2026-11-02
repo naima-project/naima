@@ -1073,6 +1073,8 @@ interface UiView {
   says: string
   /** With `?at=<commit>` it is rendered from the files as they are, `params.at` the commit's full hash. */
   moments?: boolean
+  /** The new interface has a screen of its own for it: not also shown as a tab. */
+  screen?: boolean
   render(params: Record<string, string[]>, ctx: Context): { data: unknown; html: string; css?: string }
 }
 
@@ -1086,6 +1088,7 @@ export const metricsView: UiView = {
   says:
     "the project's metrics along the commit timeline: a chart and a table of each, for the metrics and the commits picked; its data's `timeline` places every record on the trunk's commit axis for the new UI, and with `?at=<commit>` each metric's record at that commit",
   moments: true,
+  screen: true,
   render(params, ctx) {
     const all = metricsOf(ctx)
     const wanted = params["metric"]?.filter((n) => all.some((m) => m.name === n)) ?? []

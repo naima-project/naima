@@ -76,6 +76,8 @@ export interface UiView {
    * whose records of a commit are written after it) needs what is known now, not what the commit's tree held.
    */
   moments?: boolean
+  /** The new interface has a screen of its own for this view (the metrics): it is not also shown as one of its tabs. */
+  screen?: boolean
   /** The view for these query parameters, rendered from the files at each request: its data, its HTML, and the styles that HTML needs. */
   render(params: Record<string, string[]>, ctx: Context): UiRender | Promise<UiRender>
 }
