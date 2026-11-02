@@ -14,7 +14,19 @@ naima ui --no-open    # print the address, with its token, and serve until Ctrl-
 The window opens on the new interface. At the top is the rail, a strip that will hold the map of the project's lines and commits; for now it opens onto a short
 note that the map is still to come. Beside it is the moment the window shows, Live: what the files hold now, kept current as they change. Choosing a commit of
 the past comes with the map (see [planned](../planned.md)). Under the rail are the screens: Home, Metrics, Diary, Bugs, Features and Failed tests. Home shows
-the summary of the project, the same sections `naima summary` prints, each under its name. The other screens are placeholders and say so.
+the summary of the project, the same sections `naima summary` prints, each under its name. The other screens are placeholders and say so, but for Metrics.
+
+Metrics shows the project's [metrics](metrics-and-budgets.md) at the moment the window shows. At the top are the key numbers, one card each: the value, its
+change, the date of its record and a small chart of its history. Live, a card shows the newest record and its change since the record before. At a commit of the
+past it shows the value then and its change against live, and says "recorded at this commit" or, when that commit has no record, "no record at this commit,
+nearest:" with the date of the last record at or before it, the one that holds then. Clicking a card shows its metric in the large chart below. Beside that
+chart is the list of every metric with its value, its change and a small chart; picking one shows it in the large chart. Every chart runs along the trunk's
+commits in order, labelled with their dates; a commit of the past is marked by an amber line, and a bound by a dashed one. The range picks every commit or the
+last 500 or 100. Each chart has a text summary that screen readers read. A metric becomes a card with `"card": true` in its declaration, and goes under a
+heading of the list with `"group"`; with no card marked, the first six metrics with records are the cards. Below, the screen says how many of the newest commits
+have no record. Its data is `/data/metrics`, whose `timeline` places every record on the trunk; with `?at=<commit>` it gives each metric's record at that
+commit, read from the records as they are now, since a commit's own tree holds none of the records made after it. How the screen reads a moment is a small model
+of its own, checked like the shell's: an answer that arrives after the moment changed is dropped and the new moment read.
 
 The earlier window is still there at `/classic` in the same server: the panels of the first screen (the summary, the gates, what is next, the claims) and the
 tabs of the boards, the metrics, the session notes and each item with its evidence. Every view's data is at `/data/<view>` as JSON, the same data the matching
@@ -66,17 +78,15 @@ the Inter typeface comes with it under the SIL Open Font License.
 
 ## The state explorer
 
-The state explorer shows every state the interface can be in, without the server and without the project's data. Open
-it at `/#explorer` in the window, or open the file `ui/dist/explorer.html` of the Naima checkout straight from the disk.
+The state explorer shows every state the interface can be in, without the server and without the project's data. Open it at `/#explorer` in the window, or open
+the file `ui/dist/explorer.html` of the Naima checkout straight from the disk.
 
-On the left it lists the states of each state machine of the interface. The shell's are every combination of the moment
-(Live, or one of two commits of the past), the rail (closed or open) and the screen that the model allows. The summary's
-are what Home shows while it reads, once it has read (the summary, or an empty one) and when the reading fails. Choose
-a state and the real interface appears below in that state, with a summary recorded from a real project and scrubbed of
-its details. Above it, "Path to here" gives the shortest way from the start to that state, and "Transitions" lists every
-step out of it; choosing one takes that step. Using the interface in the preview moves the explorer too. "Every state"
-shows a thumbnail of the interface in each state of the shell.
+On the left it lists the states of each state machine of the interface. The shell's are every combination of the moment (Live, or one of two commits of the
+past), the rail (closed or open) and the screen that the model allows. The summary's are what Home shows while it reads, once it has read (the summary, or an
+empty one) and when the reading fails. Choose a state and the real interface appears below in that state, with a summary recorded from a real project and
+scrubbed of its details. Above it, "Path to here" gives the shortest way from the start to that state, and "Transitions" lists every step out of it; choosing
+one takes that step. Using the interface in the preview moves the explorer too. "Every state" shows a thumbnail of the interface in each state of the shell.
 
-The shell's list comes from the code generated from its model, and its count is the model's: the model has 60 states,
-36 where the interface rests between two of your actions and 24 it only passes through inside one, while it asks the
-screens to read their data again. The explorer lists the 36 and says how many the model has.
+The shell's list comes from the code generated from its model, and its count is the model's: the model has 60 states, 36 where the interface rests between two
+of your actions and 24 it only passes through inside one, while it asks the screens to read their data again. The explorer lists the 36 and says how many the
+model has.

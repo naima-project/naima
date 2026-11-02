@@ -43,7 +43,7 @@ const blank = (s: unknown): boolean => typeof s !== "string" || !s.trim()
 export const viewsPoint: ExtensionPoint<UiView> = {
   id: "ui-views",
   says:
-    "a view the provisional window shows as a tab, or as a panel of its first screen: `name` (its path), `title`, `says`, `order` (lower first, 0 when absent), `panel` (true: on the first screen, not a tab), `render(params, ctx) → { data, html, css? }`, rendered at each request",
+    "a view the provisional window shows as a tab, or as a panel of its first screen: `name` (its path), `title`, `says`, `order` (lower first, 0 when absent), `panel` (true: on the first screen, not a tab), `moments` (true: with `?at=` it is rendered from the files as they are, `params.at` the commit's hash), `render(params, ctx) → { data, html, css? }`, rendered at each request",
   noun: "ui view",
   key: (v) => v.name,
   validate: (v) => {
@@ -292,7 +292,7 @@ export default function ui(): Plugin {
       "The first screen holds the views that are panels — the summary, which this plugin renders from every plugin's summary section exactly as `naima summary` does; the gates, from the gates plugin, as `naima gates` reports them; what is next, from the triage plugin, as `naima view next` ranks it; the claims, from the coordination plugin, as `naima claims` recombines them — and every other view is a tab: " +
       "the boards, which this plugin renders as `naima board` does, one type at a time; the session notes across branches, from the coordination plugin, as `naima pass --list`; " +
       "one item, which this plugin renders as `naima show` does, its evidence first — its attachments and the items of a type that can prove it, each marked proves, refutes or not yet — and to which every item reference of the window links; the metrics and the others. " +
-      "`/data/<view>` answers the same view's data as JSON, the same data the command prints with `--json`; with `?at=<commit>`, as that commit had it, read only from its tree, a commit no local branch reaches refused. " +
+      "`/data/<view>` answers the same view's data as JSON, the same data the command prints with `--json`; with `?at=<commit>`, as that commit had it, read only from its tree, a commit no local branch reaches refused; a view that places a commit itself (`moments`, the metrics) is read from the files as they are, with the commit's full hash as its `at` parameter. " +
       "`/events` streams one server-sent event when the project changes (a commit, a branch moved, a tracker file written), and the new interface reads again while it shows Live. " +
       "`/data/metro` gives the rail's map: the trunk, the open lines and the branches with their first-parent commits, where each leaves and rejoins, each worker branch with a status and why, and the goals ahead per line, from `line list`, `claims` and `gates` with `--json`. " +
       "`POST /action/<name>` runs `decide`, `note`, `gate step`, `claim` or `release` through the command line and answers its output and exit code as JSON, refused without the token's cookie, the run's CSRF value from `/session`, the server's own Origin and a same-origin fetch. Closing the window stops the server. " +

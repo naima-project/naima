@@ -48,6 +48,12 @@ export interface UiView {
   order?: number
   /** Shown on the first screen, beside the other panels, rather than as a tab of its own. */
   panel?: boolean
+  /**
+   * The view places a commit itself: with `?at=<commit>` it is rendered from the files as they are now, its data
+   * about that commit, which `params.at` names by its full hash. A view about the history of commits (the metrics,
+   * whose records of a commit are written after it) needs what is known now, not what the commit's tree held.
+   */
+  moments?: boolean
   /** The view for these query parameters, rendered from the files at each request: its data, its HTML, and the styles that HTML needs. */
   render(params: Record<string, string[]>, ctx: Context): UiRender | Promise<UiRender>
 }
@@ -293,17 +299,20 @@ export function serve(
     const at = url.searchParams.get("at")
     if (at !== null && kind !== "data") return send(res, 400, "text/plain", "naima ui: ?at= is for /data/<view> only\n", headers)
     let from = ctx
+    let sha: string | null = null
     if (at !== null) {
       try {
-        from = atCache.get(ctx, commitOf(ctx, at))
+        sha = commitOf(ctx, at)
+        if (!view.moments) from = atCache.get(ctx, sha)
       } catch (e) {
         return send(res, e instanceof AtRefused ? 400 : 500, "text/plain", `${e instanceof Error ? e.message : String(e)}\n`, headers)
       }
     }
     try {
-      if (at === null) ctx.reload()
+      if (from === ctx) ctx.reload()
       const params = paramsOf(url)
       delete params["at"]
+      if (sha !== null && view.moments) params["at"] = [sha]
       const r = await view.render(params, from)
       if (kind === "data") return send(res, 200, "application/json", JSON.stringify(r.data, null, 2), headers)
       return send(res, 200, "text/html", page(views, view, view.title, r.html, r.css), headers)
