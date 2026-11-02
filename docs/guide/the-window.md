@@ -11,10 +11,51 @@ naima ui --no-open    # print the address, with its token, and serve until Ctrl-
 
 ## What the window shows
 
-The window opens on the new interface. At the top is the rail, a strip that will hold the map of the project's lines and commits; for now it opens onto a short
-note that the map is still to come. Beside it is the moment the window shows, Live: what the files hold now, kept current as they change. Choosing a commit of
-the past comes with the map (see [planned](../planned.md)). Under the rail are the screens: Home, Metrics, Diary, Bugs, Features and Failed tests. Home shows
-the summary of the project, the same sections `naima summary` prints, each under its name. The other screens are placeholders and say so.
+The window opens on the new interface. At the top is the rail, a thin strip with the project's commits and what is still
+ahead; it opens over the page as a metro map when you point at it, click it or reach it with Tab. Under the rail are the
+screens: Home, Metrics, Diary, Bugs, Features and Failed tests. Home is described below; the other screens are
+placeholders and say so.
+
+### The rail
+
+Closed, the rail is one row: every commit on the map as a small dot, oldest on the left, then the future of the line
+the checkout here works on, drawn dashed, with a tick for each step of its gate still open, one for its gate, and one
+where it lands on main. The three nearest ticks carry a small grey label; the others show theirs when you point at
+them or reach them with Tab.
+
+Open, the rail is a metro map. Main runs across the middle and every open line runs above it, each in its own colour;
+the other branches run on lanes of their own, above their line or below main. A branch leaves its base and rejoins it
+at 45 degrees and runs straight in between, and the stations where one leaves or lands are drawn larger, as
+interchanges. Past the last commit, main and every line go on, dashed, with a station for each goal and step still
+ahead in the order they come, and a line's future comes down onto main where it will land. Robots stand on the worker
+branches, each with a look of its own and a badge for its status: a gear while it works, a flask while it tests, a
+question mark when it waits for an answer, a pause when it is idle or silent, a check when it is done and waits to
+land. Working robots step in place at a few frames a second, and stand still when your system asks for reduced
+motion. You stand on the line checked out here.
+
+Choosing a commit, on the strip or on the map, shows every screen as the project was at that commit; choosing a mark
+ahead shows that goal, step or landing on Home, with its status as it is now. The left and right arrow keys step from
+one commit to the next, and on into the marks ahead. Escape, or "Back to live", returns to Live.
+
+### Home
+
+Home is one column under the rail. It says first which moment it shows: Live, with the line, or the commit with its
+date, its line and its message. Then:
+
+- **Waiting for you**: the items the owner's gate holds (an open question, a decision) and the tests that wait for
+  your proof, each with what it asks of you; the first has the one amber button of the page. At a commit of the past
+  the list is as it was then, with no buttons: you act on the live view.
+- **Goals**: the next goals in goal order, each with its due date or version, whether it holds or how many items
+  block it, how many of its open items are fixed and wait for proof, and its gate's steps; the goals after them in one
+  line.
+- **Fixed, waiting for proof**: what is fixed and waits for an agent or a build to prove it, and on which gate.
+- **Development lines**: main and every open line, with its goal, its last update, how far it lags main and what is
+  fixed on it.
+- **Who is working**: each agent holding work, with its status and what it does now.
+
+When a goal is chosen on the rail, Home shows that goal instead of what waits for you: its status, its version or due
+date, what comes before it, its steps and the items it waits on. Home is built from the views' data, the same the
+commands print with `--json`: `naima gates`, `naima queue`, `naima claims`, `naima line list` and `naima summary`.
 
 The earlier window is still there at `/classic` in the same server: the panels of the first screen (the summary, the gates, what is next, the claims) and the
 tabs of the boards, the metrics, the session notes and each item with its evidence. Every view's data is at `/data/<view>` as JSON, the same data the matching
@@ -61,7 +102,8 @@ same-origin`. Another page in your browser cannot run one.
 
 The interface is a Svelte app that ships with Naima, already built: Naima needs no npm package and no network to show it. Its logic is generated from a model.
 The moment, the rail and the current screen form one state machine, modelled in mCRL2 and checked with its properties, and naima-codegen generates the code the
-screens call. The components only read that machine's state and call its transitions. The colours, type and shapes are the design tokens of the interface, and
+screens call. How a screen reads its data is a second one, the reader: a change that comes while a screen is still reading is never lost, since the screen
+reads once more when the first answer comes, and that answer, which may be of the moment before, is set aside. The components only read that machine's state and call its transitions. The colours, type and shapes are the design tokens of the interface, and
 the Inter typeface comes with it under the SIL Open Font License.
 
 ## The state explorer
@@ -70,13 +112,13 @@ The state explorer shows every state the interface can be in, without the server
 it at `/#explorer` in the window, or open the file `ui/dist/explorer.html` of the Naima checkout straight from the disk.
 
 On the left it lists the states of each state machine of the interface. The shell's are every combination of the moment
-(Live, or one of two commits of the past), the rail (closed or open) and the screen that the model allows. The summary's
-are what Home shows while it reads, once it has read (the summary, or an empty one) and when the reading fails. Choose
-a state and the real interface appears below in that state, with a summary recorded from a real project and scrubbed of
-its details. Above it, "Path to here" gives the shortest way from the start to that state, and "Transitions" lists every
+(Live, one of two commits of the past, or one of two goals ahead), the rail (closed or open) and the screen that the model
+allows. The home data's are what Home shows while it reads, once it has read (a recorded project, or an empty one), when
+the reading fails, and while a reload waits for the reading on its way. Choose a state and the real interface appears
+below in that state, with the map and the project recorded from a real one. Above it, "Path to here" gives the shortest way from the start to that state, and "Transitions" lists every
 step out of it; choosing one takes that step. Using the interface in the preview moves the explorer too. "Every state"
 shows a thumbnail of the interface in each state of the shell.
 
-The shell's list comes from the code generated from its model, and its count is the model's: the model has 60 states,
-36 where the interface rests between two of your actions and 24 it only passes through inside one, while it asks the
-screens to read their data again. The explorer lists the 36 and says how many the model has.
+The shell's list comes from the code generated from its model, and its count is the model's: the model has 108 states,
+60 where the interface rests between two of your actions and 48 it only passes through inside one, while it asks the
+screens to read their data again. The explorer lists the 60 and says how many the model has.

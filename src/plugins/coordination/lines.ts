@@ -421,6 +421,25 @@ export const linesView: View = {
     ),
 }
 
+const escHtml = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+
+/** The open lines as a view of `naima ui`, the shape the `ui-views` point takes: its data is `naima line list --json`. */
+export const linesUiView = {
+  name: "lines",
+  title: "Lines",
+  says: "the open development lines: each one's gate, branch, tip, how far it is ahead of and behind the trunk, its latest update and the items fixed on it; its data is `naima line list --json`",
+  order: 30,
+  render(_params: Record<string, string[]>, ctx: Context) {
+    const d = linesData(ctx)
+    return {
+      data: d,
+      html: d.lines.length
+        ? `<ul>${d.lines.map((l) => `<li><code>${escHtml(l.branch)}</code> ${escHtml(lineRow(l).slice(l.branch.length).trim())}</li>`).join("")}</ul>`
+        : "<p>No open line: <code>naima line new &lt;gate&gt;</code> starts one.</p>",
+    }
+  },
+}
+
 /** What hello says of the lines: each open one with its gate and latest update, and the line this chat works on. */
 export const linesSection: SummarySection = {
   name: "lines",

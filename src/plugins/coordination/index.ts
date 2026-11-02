@@ -104,6 +104,7 @@ import {
   lineFacts,
   lineOf,
   linesSection,
+  linesUiView,
   linesView,
   onLine,
   openLines,
@@ -1339,7 +1340,12 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
     facts: [lineFacts],
     home: import.meta.url,
     contributes: {
-      "ui-views": [claimsUiView((ctx) => claimsData(ctx, undefined, silentAfter)), timelineUiView(readPasses), notesUiView(readPasses)],
+      "ui-views": [
+        claimsUiView((ctx) => claimsData(ctx, undefined, silentAfter)),
+        timelineUiView(readPasses),
+        notesUiView(readPasses),
+        linesUiView,
+      ],
       rules: { folder: "rules/", settings: { trunkGuard: String(guarded) } },
     },
     // The claims are a panel of naima ui, the timeline and the session notes tabs, when the ui plugin is loaded; without it, still commands and a view.

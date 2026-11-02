@@ -599,6 +599,27 @@ const gatesCommand: Command = {
 const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
 
 /** The gates as a panel of the first screen of `naima ui`: the shape the `ui-views` point takes, declared here since plugins never import each other. */
+/** The queue as a view of naima ui, a tab: every gate's open items, how many have no code yet and how many owe only proof. */
+const queueUiView = {
+  name: "queue",
+  title: "Queue",
+  says:
+    "the open items on the gates, how many have no code yet and how many owe only proof, and by whose hands, every gate's together and each gate's; its data is `naima queue --json`",
+  order: 2,
+  render(_params: Record<string, string[]>, ctx: Context) {
+    const d = queueData(ctx) as ReturnType<typeof queueRow> & { gates: ReturnType<typeof queueRow>[] }
+    const row = (r: ReturnType<typeof queueRow>) =>
+      `<tr><td>${esc(r.gate ?? "all gates")}</td><td>${r.open}</td><td>${r.noCode}</td><td>${r.proofOnly}</td></tr>`
+    return {
+      data: d,
+      html: `<table><thead><tr>${["Gate", "Open", "No code yet", "Owing only proof"].map((h) => `<th scope="col">${h}</th>`).join("")}</tr></thead><tbody>${
+        [d, ...d.gates].map(row).join("")
+      }</tbody></table>`,
+      css: "table{border-collapse:collapse}th,td{padding:2px 12px 2px 0;text-align:left}",
+    }
+  },
+}
+
 const gatesUiView = {
   name: "gates",
   title: "Gates",
@@ -678,14 +699,48 @@ function readyList(ctx: Context, gate: string | undefined): number {
   return 0
 }
 
+/** The open items of a gate, or of every gate, by whose hands their proof needs. */
+const handsOf = (ctx: Context, open: Item[]) =>
+  groupBy(open, (i) => {
+    const who = runByOf(ctx, i)
+    return who === "agent" || who === "agent-hands" ? "agent" : who || "unclassified"
+  })
+
+/** One gate's queue, or every gate's together when none is named: its open items, how many have no code yet and how many owe only proof, and by whose hands. */
+export function queueRow(ctx: Context, gate?: string) {
+  const def = gate === undefined ? undefined : ctx.registry.find<GateDef>("gates", gate)?.value
+  if (gate !== undefined && !def) throw new Error(`no gate "${gate}"`)
+  const open = gatedItems(ctx, gate).filter((i) => isOpen(ctx, i))
+  const by = handsOf(ctx, open)
+  const noCode = open.filter((i) => !owesOnlyProof(ctx, i)).length
+  return {
+    gate: gate ?? null,
+    when: def ? timing(ctx, def) : "",
+    open: open.length,
+    noCode,
+    proofOnly: open.length - noCode,
+    hands: Object.fromEntries(["agent", "human", "build", "unclassified"].map((b) => [b, by.get(b)?.length ?? 0])) as Record<string, number>,
+  }
+}
+
+/** What `naima queue --json` prints: the gate's queue; with no gate named, every gate's together, then each gate's. */
+export function queueData(ctx: Context, gate?: string) {
+  return gate !== undefined ? queueRow(ctx, gate) : { ...queueRow(ctx), gates: gatesOf(ctx).map((g) => queueRow(ctx, g.name)) }
+}
+
 const queue: Command = {
   name: "queue",
   says:
     "open items on a gate, split by whose hands the proof needs; at its foot, the summary sections that stand beside the work, such as the metrics. With --role, one role's queue instead",
   enforces: "nothing: it prints derived state, never stored",
-  usage: "queue [gate] [--human] [--role <role>] | queue [gate] --ready",
+  usage: "queue [gate] [--human | --json] [--role <role>] | queue [gate] --ready",
   options: [
     { name: "--human", says: "also list the items that need a person or a build, with why" },
+    {
+      name: "--json",
+      says:
+        "print the queue as JSON: the gate's open items, how many have no code yet, how many owe only proof, and how many each kind of hands proves; with no gate named, every gate's together, then each gate's under gates",
+    },
     {
       name: "--ready",
       says:
@@ -698,24 +753,29 @@ const queue: Command = {
   ],
   examples: ["queue", "queue first-public --human", "queue --role tester", "queue first-public --role implementer", "queue --ready"],
   async run(args, ctx) {
-    const p = parse(args, { human: { type: "boolean" }, role: { type: "string" }, ready: { type: "boolean" } })
+    const p = parse(args, { human: { type: "boolean" }, role: { type: "string" }, ready: { type: "boolean" }, json: { type: "boolean" } })
     const gate = p.positionals[0]
     const role = str(p, "role")
     if (bool(p, "ready")) {
-      if (role !== undefined || bool(p, "human")) throw usageError(this)
+      if (role !== undefined || bool(p, "human") || bool(p, "json")) throw usageError(this)
       // A chat working on a development line sees the ready work of that line's gate.
       const line = gate === undefined ? sessionLine(ctx.root) : undefined
       if (typeof line === "string") ctx.out(`on line line/${line}`)
       return readyList(ctx, gate ?? line ?? undefined)
     }
-    if (role !== undefined) return roleQueue(ctx, role, gate)
+    if (role !== undefined) {
+      if (bool(p, "json")) throw usageError(this)
+      return roleQueue(ctx, role, gate)
+    }
+    if (bool(p, "json")) {
+      if (bool(p, "human")) throw usageError(this)
+      ctx.out(JSON.stringify(queueData(ctx, gate), null, 2))
+      return 0
+    }
     const def = gate === undefined ? undefined : ctx.registry.find<GateDef>("gates", gate)?.value
     const when = def ? timing(ctx, def) : ""
     const open = gatedItems(ctx, gate).filter((i) => isOpen(ctx, i))
-    const by = groupBy(open, (i) => {
-      const who = runByOf(ctx, i)
-      return who === "agent" || who === "agent-hands" ? "agent" : who || "unclassified"
-    })
+    const by = handsOf(ctx, open)
     const noCode = open.filter((i) => !owesOnlyProof(ctx, i)).length
     ctx.out(
       `${gate ?? "all gates"}${when ? ` (${when})` : ""}: ${open.length} open — ${
@@ -1267,7 +1327,7 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
     points: [gatesPoint, methodsPoint],
     // What it reads of the trackers' vocabulary: without it loaded, gates would decide on nothing.
     uses: { fields: [FIXED_ON.name, RUN_BY.name, HUMAN_BECAUSE.name], relations: ["verifies", "verified-by"] },
-    contributes: { gates: defs, "ui-views": [gatesUiView, coverageUiView(lists)], "goal-order": [goalOrder], "landing-reports": [goalsLanding] },
+    contributes: { gates: defs, "ui-views": [gatesUiView, queueUiView, coverageUiView(lists)], "goal-order": [goalOrder], "landing-reports": [goalsLanding] },
     // The gates are a panel of naima ui, coverage a tab, when the ui plugin is loaded; without it, still a command. The goal
     // order and the landing check are for the coordination plugin's development lines, when it is loaded.
     optional: ["ui-views", "goal-order", "landing-reports"],

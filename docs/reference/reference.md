@@ -1648,6 +1648,7 @@ naima event 2026-10-05 "The plan was entered" --kind diary
 | `claims` | Claims | first screen | who holds what, recombined from every branch, and the items more than one branch holds; its data is `naima claims --json` |
 | `timeline` | Timeline | tab | the project's events — gates, epics, releases, sessions, records — derived from the items and git, oldest first |
 | `notes` | Session notes | tab | the newest session notes, across every branch, newest first; `?n=` says how many (5); its data is `naima pass --list [n] --json` |
+| `lines` | Lines | tab | the open development lines: each one's gate, branch, tip, how far it is ahead of and behind the trunk, its latest update and the items fixed on it; its data is `naima line list --json` |
 
 **Shipped rules**, active in every project that loads the plugin, listed by `naima rules`
 
@@ -1853,13 +1854,15 @@ Open items on a gate, split by whose hands the proof needs; at its foot, the sum
 **Enforces**: Nothing: it prints derived state, never stored.
 
 ```sh
-naima queue [gate] [--human] [--role <role>]
+naima queue [gate] [--human
+naima --json] [--role <role>]
 naima queue [gate] --ready
 ```
 
 | Option | Default | What it does |
 |---|---|---|
 | `--human` |  | also list the items that need a person or a build, with why |
+| `--json` |  | print the queue as JSON: the gate's open items, how many have no code yet, how many owe only proof, and how many each kind of hands proves; with no gate named, every gate's together, then each gate's under gates |
 | `--ready` |  | list the ready queue instead: the open items the owner approved at the close of a meeting, in the order they start — what the owner said to start now first, then by priority; with no gate named, a chat working on a development line (naima line use) sees its gate's |
 | `--role` |  | list one role's open items, most urgent first — on the gate, when one is named, else every open item: a role any loaded plugin contributes |
 
@@ -1977,6 +1980,7 @@ naima order first-public
 | View | Title | Where | What it shows |
 |---|---|---|---|
 | `gates` | Gates | first screen | every gate and whether it holds, with the items blocking it and those owing only proof, as `naima gates` reports them; its data is `naima gates --json` |
+| `queue` | Queue | tab | the open items on the gates, how many have no code yet and how many owe only proof, and by whose hands, every gate's together and each gate's; its data is `naima queue --json` |
 | `coverage` | Coverage | tab | each normative list the project declares, read from its source now, every entry with the test that proves it or NO TEST |
 
 ## epics
@@ -3108,7 +3112,7 @@ The views plugins contribute, a provisional window onto the project, shown in a 
 
 Its contributions' qualified ids are `ui/<name>`.
 
-The window starts a server bound to the loopback interface, on a free port, that refuses every request without the token of its run, and opens it in a native window titled Naima. At `/` it serves the new interface, the built bundle the product ships in `ui/dist`: the rail, the moment, the screens, the summary on Home, its logic generated from an mCRL2 model; the provisional window below is at `/classic`. Each view is one a plugin contributes to `ui-views`, rendered from the files at each request, so the window shows what the files hold now. The first screen holds the views that are panels — the summary, which this plugin renders from every plugin's summary section exactly as `naima summary` does; the gates, from the gates plugin, as `naima gates` reports them; what is next, from the triage plugin, as `naima view next` ranks it; the claims, from the coordination plugin, as `naima claims` recombines them — and every other view is a tab: the boards, which this plugin renders as `naima board` does, one type at a time; the session notes across branches, from the coordination plugin, as `naima pass --list`; one item, which this plugin renders as `naima show` does, its evidence first — its attachments and the items of a type that can prove it, each marked proves, refutes or not yet — and to which every item reference of the window links; the metrics and the others. `/data/<view>` answers the same view's data as JSON, the same data the command prints with `--json`; with `?at=<commit>`, as that commit had it, read only from its tree, a commit no local branch reaches refused. `/events` streams one server-sent event when the project changes (a commit, a branch moved, a tracker file written), and the new interface reads again while it shows Live. `/data/metro` gives the rail's map: the trunk, the open lines and the branches with their first-parent commits, where each leaves and rejoins, each worker branch with a status and why, and the goals ahead per line, from `line list`, `claims` and `gates` with `--json`. `POST /action/<name>` runs `decide`, `note`, `gate step`, `claim` or `release` through the command line and answers its output and exit code as JSON, refused without the token's cookie, the run's CSRF value from `/session`, the server's own Origin and a same-origin fetch. Closing the window stops the server. The window is a webview, loaded from JSR at a pinned version, only by it, and in a process of its own: the rest of Naima has no dependency. Where it cannot open — on Node or Bun, on a system it does not run on, offline on its first run, when it fetches its library — the default browser opens instead, and it says so in one line.
+The window starts a server bound to the loopback interface, on a free port, that refuses every request without the token of its run, and opens it in a native window titled Naima. At `/` it serves the new interface, the built bundle the product ships in `ui/dist`: the rail with its metro map of the lines and the goals ahead, the moment, the screens with Home, its logic generated from mCRL2 models; the provisional window below is at `/classic`. Each view is one a plugin contributes to `ui-views`, rendered from the files at each request, so the window shows what the files hold now. The first screen holds the views that are panels — the summary, which this plugin renders from every plugin's summary section exactly as `naima summary` does; the gates, from the gates plugin, as `naima gates` reports them; what is next, from the triage plugin, as `naima view next` ranks it; the claims, from the coordination plugin, as `naima claims` recombines them — and every other view is a tab: the boards, which this plugin renders as `naima board` does, one type at a time; the session notes across branches, from the coordination plugin, as `naima pass --list`; one item, which this plugin renders as `naima show` does, its evidence first — its attachments and the items of a type that can prove it, each marked proves, refutes or not yet — and to which every item reference of the window links; the metrics and the others. `/data/<view>` answers the same view's data as JSON, the same data the command prints with `--json`; with `?at=<commit>`, as that commit had it, read only from its tree, a commit no local branch reaches refused. `/events` streams one server-sent event when the project changes (a commit, a branch moved, a tracker file written), and the new interface reads again while it shows Live. `/data/metro` gives the rail's map: the trunk, the open lines and the branches with their first-parent commits, where each leaves and rejoins, each worker branch with a status and why, and the goals ahead per line, from `line list`, `claims` and `gates` with `--json`. `POST /action/<name>` runs `decide`, `note`, `gate step`, `claim` or `release` through the command line and answers its output and exit code as JSON, refused without the token's cookie, the run's CSRF value from `/session`, the server's own Origin and a same-origin fetch. Closing the window stops the server. The window is a webview, loaded from JSR at a pinned version, only by it, and in a process of its own: the rest of Naima has no dependency. Where it cannot open — on Node or Bun, on a system it does not run on, offline on its first run, when it fetches its library — the default browser opens instead, and it says so in one line.
 
 **Extension points** it declares: `ui-views`.
 

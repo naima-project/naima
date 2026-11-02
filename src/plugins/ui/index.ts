@@ -287,7 +287,7 @@ export default function ui(): Plugin {
       "the views plugins contribute, a provisional window onto the project, shown in a native window or the browser from a server on this machine only, until the new UI replaces it",
     about:
       "The window starts a server bound to the loopback interface, on a free port, that refuses every request without the token of its run, and opens it in a native window titled Naima. " +
-      "At `/` it serves the new interface, the built bundle the product ships in `ui/dist`: the rail, the moment, the screens, the summary on Home, its logic generated from an mCRL2 model; the provisional window below is at `/classic`. " +
+      "At `/` it serves the new interface, the built bundle the product ships in `ui/dist`: the rail with its metro map of the lines and the goals ahead, the moment, the screens with Home, its logic generated from mCRL2 models; the provisional window below is at `/classic`. " +
       "Each view is one a plugin contributes to `ui-views`, rendered from the files at each request, so the window shows what the files hold now. " +
       "The first screen holds the views that are panels — the summary, which this plugin renders from every plugin's summary section exactly as `naima summary` does; the gates, from the gates plugin, as `naima gates` reports them; what is next, from the triage plugin, as `naima view next` ranks it; the claims, from the coordination plugin, as `naima claims` recombines them — and every other view is a tab: " +
       "the boards, which this plugin renders as `naima board` does, one type at a time; the session notes across branches, from the coordination plugin, as `naima pass --list`; " +
