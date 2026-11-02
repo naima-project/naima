@@ -149,10 +149,13 @@ export function viewTab(v: UiView): UiTab {
 /** The view a tab stands for, when it is one shown through the adapter. */
 export const viewOf = (t: UiTab): UiView | null => (t as UiTab & { view?: UiView }).view ?? null
 
-/** The tabs the app shows: every contributed tab, then every view not shadowed by a tab of its name, by order. */
+/**
+ * The tabs the app shows: every contributed tab, then every view not shadowed by a tab of its name and not one the
+ * app has a screen of its own for, by order.
+ */
 export function allTabs(tabs: readonly UiTab[], views: readonly UiView[]): UiTab[] {
   const named = new Set(tabs.map((t) => t.name))
-  return [...tabs, ...views.filter((v) => !named.has(v.name)).map(viewTab)]
+  return [...tabs, ...views.filter((v) => !named.has(v.name) && !v.screen).map(viewTab)]
     .map((t, i) => ({ t, i }))
     .sort((a, b) => (a.t.order ?? 0) - (b.t.order ?? 0) || a.i - b.i)
     .map(({ t }) => t)

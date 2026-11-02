@@ -178,6 +178,10 @@ export interface MetricConfig {
   file?: string
   /** The requirements it measures: items, by slug, type/slug or id. */
   satisfies?: string[]
+  /** True: one of the key numbers, a card at the top of the UI's metrics screen. */
+  card?: boolean
+  /** The heading the UI's metrics screen lists it under: tests, size, code quality… */
+  group?: string
 }
 
 /** A metric as the `metrics` point holds it: its name, its configuration, and the program it starts. */
@@ -402,7 +406,8 @@ export function readMetrics(options: Record<string, unknown>): Record<string, Me
       throw new Error(`${at}: satisfies is a list of the requirements it measures: ["startup-time"]`)
     }
     if (raw["prepare"] !== undefined) checkCommand(at, "prepare", raw["prepare"])
-    for (const key of ["says", "kind", "pattern", "unit", "because", "statistic", "field"]) {
+    if (raw["card"] !== undefined && typeof raw["card"] !== "boolean") throw new Error(`${at}: card is true or false`)
+    for (const key of ["says", "kind", "pattern", "unit", "because", "statistic", "field", "group"]) {
       if (raw[key] !== undefined && typeof raw[key] !== "string") throw new Error(`${at}: ${key} is a string`)
     }
     for (const key of ["include", "exclude"]) {
@@ -927,11 +932,149 @@ export function seriesOf(ctx: Context, m: MetricDef, last?: number): Series {
   }
 }
 
+/** A record's place on the trunk's commit axis: its position, its commit and that commit's date. */
+type Placed = { pos: number; commit: string; date: string }
+
+/** A metric along the trunk, as the new UI's metrics screen draws it. */
+export interface TimelineMetric {
+  name: string
+  says?: string
+  unit?: string
+  better: "higher" | "lower" | "neither"
+  bound?: { word: string; value: number }
+  /** One of the key numbers: a card at the top of the screen. */
+  card: boolean
+  group?: string
+  /** Each record with a value, oldest first: [position, value, commit, date]. */
+  points: [number, number, string, string][]
+  /** Each record whose run failed and took no value: [position, commit, date]. */
+  fails: [number, string, string][]
+  /** At a selected commit: the record that holds then, the commit's own (exact) or the last one at or before it; null when none does. */
+  at?: { value: number; commit: string; date: string; exact: boolean } | null
+}
+
+/**
+ * The metrics along the trunk, for the new UI: positions count the trunk's commits (the first-parent line up to
+ * HEAD), oldest first, and a commit off it takes the position of the last trunk commit made at or before its time.
+ */
+export interface Timeline {
+  /** How many commits the trunk has: positions run from 0 to n - 1. */
+  n: number
+  head: string
+  /** The first position of each day, with the day. */
+  days: [number, string][]
+  /** The newest record on the trunk's history, or null. */
+  lastRecord: Placed | null
+  /** The selected commit, or null when live. */
+  moment: (Placed & { onTrunk: boolean }) | null
+  metrics: TimelineMetric[]
+}
+
+const lines = (s: string | null): string[] => (s ?? "").split("\n").filter(Boolean)
+
+/** How many key-number cards there are when no metric says it is one: the first that have records. */
+const DEFAULT_CARDS = 6
+
+/** The metrics along the trunk, and each one's record at `at` (a full hash) when a commit is selected. */
+export function timelineOf(ctx: Context, metrics: MetricDef[], at?: string): Timeline {
+  const trunk = lines(git(ctx, "log", "--first-parent", "--reverse", "--format=%H %cI", "HEAD")).map((l) => {
+    const [commit = "", date = ""] = l.split(" ")
+    return { commit, date, t: Date.parse(date) }
+  })
+  const index = new Map(trunk.map((c, i) => [c.commit, i]))
+  // The last trunk commit at or before a time: where a commit off the trunk stands.
+  const posAt = (t: number): number => {
+    let lo = 0, hi = trunk.length - 1, r = 0
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1
+      if (trunk[mid]!.t <= t) (r = mid), (lo = mid + 1)
+      else hi = mid - 1
+    }
+    return r
+  }
+  const reach = new Map(
+    lines(git(ctx, "log", "--format=%H %cI", "HEAD")).map((l) => {
+      const [commit = "", date = ""] = l.split(" ")
+      return [commit, date] as const
+    }),
+  )
+  const place = (commit: string, date: string): Placed => ({ commit, date, pos: index.get(commit) ?? posAt(Date.parse(date)) })
+  // Each reachable commit's latest record, placed, oldest first.
+  const latest = new Map<string, MetricRecord>()
+  for (const r of readRecords(ctx)) {
+    if (!reach.has(r.commit)) continue
+    const prior = latest.get(r.commit)
+    if (!prior || prior.at < r.at) latest.set(r.commit, r)
+  }
+  const placed = [...latest.values()].map((r) => ({ r, p: place(r.commit, reach.get(r.commit) ?? r.date ?? "") }))
+    .sort((a, b) => a.p.pos - b.p.pos || Date.parse(a.p.date) - Date.parse(b.p.date))
+  const days: [number, string][] = []
+  trunk.forEach((c, i) => {
+    const d = c.date.slice(0, 10)
+    if (days.at(-1)?.[1] !== d) days.push([i, d])
+  })
+  let moment: Timeline["moment"] = null
+  let own: MetricRecord | undefined
+  if (at) {
+    const date = reach.get(at) ?? git(ctx, "log", "-1", "--format=%cI", at) ?? ""
+    moment = { ...place(at, date), onTrunk: index.has(at) }
+    own = readRecords(ctx).filter((r) => r.commit === at).sort((a, b) => (a.at < b.at ? 1 : -1))[0]
+  }
+  const someCard = metrics.some((m) => m.card === true)
+  let defaults = 0
+  const out = metrics.map((m): TimelineMetric => {
+    const points: TimelineMetric["points"] = []
+    const fails: TimelineMetric["fails"] = []
+    for (const { r, p } of placed) {
+      const v = r.values[m.name]
+      if (!v) continue
+      if (typeof v.value === "number") points.push([p.pos, v.value, p.commit, p.date.slice(0, 10)])
+      else fails.push([p.pos, p.commit, p.date.slice(0, 10)])
+    }
+    const b = boundOf(m)
+    const unit = m.unit ?? (m.measure ? measureUnit(m.measure) : undefined)
+    const card = someCard ? m.card === true : points.length > 0 && defaults++ < DEFAULT_CARDS
+    const row: TimelineMetric = {
+      name: m.name,
+      ...(m.says ? { says: m.says } : {}),
+      ...(unit ? { unit } : {}),
+      better: betterOf(m),
+      ...(b && BOUNDS.some((k) => num(m[k])) ? { bound: { word: BOUND_WORD[b.bound], value: b.value } } : {}),
+      card,
+      ...(m.group ? { group: m.group } : {}),
+      points,
+      fails,
+    }
+    if (moment) {
+      const mine = own?.values[m.name]?.value
+      if (typeof mine === "number") row.at = { value: mine, commit: moment.commit, date: moment.date.slice(0, 10), exact: true }
+      else {
+        const before = points.filter((q) => q[0] <= moment!.pos).at(-1)
+        row.at = before ? { value: before[1], commit: before[2], date: before[3], exact: before[2] === moment.commit } : null
+      }
+    }
+    return row
+  })
+  const last = placed.at(-1)?.p ?? null
+  return {
+    n: trunk.length,
+    head: trunk.at(-1)?.commit ?? "",
+    days,
+    lastRecord: last ? { ...last, date: last.date.slice(0, 10) } : null,
+    moment: moment ? { ...moment, date: moment.date.slice(0, 10) } : null,
+    metrics: out,
+  }
+}
+
 /** A view of `naima ui`: the shape the `ui-views` point takes, declared here since plugins never import each other. */
 interface UiView {
   name: string
   title: string
   says: string
+  /** With `?at=<commit>` it is rendered from the files as they are, `params.at` the commit's full hash. */
+  moments?: boolean
+  /** The new interface has a screen of its own for it: not also shown as a tab. */
+  screen?: boolean
   render(params: Record<string, string[]>, ctx: Context): { data: unknown; html: string; css?: string }
 }
 
@@ -942,7 +1085,10 @@ interface UiView {
 export const metricsView: UiView = {
   name: "metrics",
   title: "Metrics",
-  says: "the project's metrics along the commit timeline: a chart and a table of each, for the metrics and the commits picked",
+  says:
+    "the project's metrics along the commit timeline: a chart and a table of each, for the metrics and the commits picked; its data's `timeline` places every record on the trunk's commit axis for the new UI, and with `?at=<commit>` each metric's record at that commit",
+  moments: true,
+  screen: true,
   render(params, ctx) {
     const all = metricsOf(ctx)
     const wanted = params["metric"]?.filter((n) => all.some((m) => m.name === n)) ?? []
@@ -969,7 +1115,8 @@ export const metricsView: UiView = {
       ...(from ? { from } : {}),
       ...(to ? { to } : {}),
     }
-    return { data: { ...sel, series }, html: selectionPage(sel, series), css: REPORT_CSS }
+    const timeline = timelineOf(ctx, all, params["at"]?.[0])
+    return { data: { ...sel, series, timeline }, html: selectionPage(sel, series), css: REPORT_CSS }
   },
 }
 

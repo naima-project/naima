@@ -13,8 +13,8 @@ naima ui --no-open    # print the address, with its token, and serve until Ctrl-
 
 The window opens on the new interface. At the top is the rail, a thin strip with the project's commits and what is still
 ahead; it opens over the page as a metro map when you point at it, click it or reach it with Tab. Under the rail are the
-screens: Home, Metrics, Diary, Bugs, Features and Failed tests. Home is described below; the other screens are
-placeholders and say so.
+screens: Home, Metrics, Diary, Bugs, Features and Failed tests. Home and Metrics are described below; the other screens
+are placeholders and say so.
 
 ### The rail
 
@@ -56,6 +56,20 @@ date, its line and its message. Then:
 When a goal is chosen on the rail, Home shows that goal instead of what waits for you: its status, its version or due
 date, what comes before it, its steps and the items it waits on. Home is built from the views' data, the same the
 commands print with `--json`: `naima gates`, `naima queue`, `naima claims`, `naima line list` and `naima summary`.
+
+### Metrics
+
+Metrics shows the project's [metrics](metrics-and-budgets.md) at the moment the window shows. At the top are the key numbers, one card each: the value, its
+change, the date of its record and a small chart of its history. Live, a card shows the newest record and its change since the record before. At a commit of the
+past it shows the value then and its change against live, and says "recorded at this commit" or, when that commit has no record, "no record at this commit,
+nearest:" with the date of the last record at or before it, the one that holds then. Clicking a card shows its metric in the large chart below. Beside that
+chart is the list of every metric with its value, its change and a small chart; picking one shows it in the large chart. Every chart runs along the trunk's
+commits in order, labelled with their dates; a commit of the past is marked by an amber line, and a bound by a dashed one. The range picks every commit or the
+last 500 or 100. Each chart has a text summary that screen readers read. A metric becomes a card with `"card": true` in its declaration, and goes under a
+heading of the list with `"group"`; with no card marked, the first six metrics with records are the cards. Below, the screen says how many of the newest commits
+have no record. Its data is `/data/metrics`, whose `timeline` places every record on the trunk; with `?at=<commit>` it gives each metric's record at that
+commit, read from the records as they are now, since a commit's own tree holds none of the records made after it. How the screen reads a moment is a small model
+of its own, checked like the shell's: an answer that arrives after the moment changed is dropped and the new moment read.
 
 The earlier window is still there at `/classic` in the same server: the panels of the first screen (the summary, the gates, what is next, the claims) and the
 tabs of the boards, the metrics, the session notes and each item with its evidence. Every view's data is at `/data/<view>` as JSON, the same data the matching
@@ -125,8 +139,8 @@ typeface comes with it under the SIL Open Font License.
 
 ## The state explorer
 
-The state explorer shows every state the interface can be in, without the server and without the project's data. Open
-it at `/#explorer` in the window, or open the file `ui/dist/explorer.html` of the Naima checkout straight from the disk.
+The state explorer shows every state the interface can be in, without the server and without the project's data. Open it at `/#explorer` in the window, or open
+the file `ui/dist/explorer.html` of the Naima checkout straight from the disk.
 
 On the left it lists the states of each state machine of the interface. The shell's are every combination of the moment
 (Live, one of two commits of the past, or one of two goals ahead), the rail (closed or open), the screen, or a plugin's
