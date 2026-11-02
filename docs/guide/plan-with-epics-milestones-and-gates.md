@@ -77,6 +77,40 @@ command changes a gate's title, what it says, its version, what it holds on and 
 `naima gates --json` prints the same information as data: each gate's name, title and timing, whether it holds, and the items that block it or only still owe a
 proof.
 
+## Follow a stance's method: steps as sub-goals
+
+A stance can bring a method: an ordered list of steps, each with what must be true for it to be done, such as "you chose a palette among the variants". When a
+gate follows the method, those steps become sub-goals of the gate, and the gate holds only once every one of them is done, in order, on top of its own items.
+
+```sh
+naima gate set beta --method ui/design
+```
+
+`ui/design` is the method `design` of the UI stance, which has to be adopted first. The name of the stance's plugin works too (`stance-ui/design`), and that is
+what the gate records. `--method ""` takes the method off. `naima gates`, `naima gate show` and `naima hello` then show the steps:
+
+```text
+$ naima gates beta
+beta — Public beta (due 2026-12-01, 17 days left): BLOCKED by 1
+  ✗ step 2 of 3 of stance-ui/design is next: palette (Palette), closed when you chose a palette among the variants — naima gate step beta palette --by <item>
+  method stance-ui/design: 1 of 3 steps closed
+  ✓ step 1 mood-board  Mood board — closed by decisions/the-mood-board-is-calm
+  → step 2 palette  Palette — next, closed when you chose a palette among the variants
+  · step 3 screens  Screens — waits for the step before
+  ✗ bugs/first-run-crash  First run crashes
+```
+
+A step is closed by a record of what you decided: usually a decision, once it is settled. The agent closes the step with it.
+
+```sh
+naima gate step beta palette --by decisions/the-palette-is-dusk
+```
+
+This writes `closesStep: beta/palette` on the decision, and nothing on the gate. It refuses while the step before is not closed, and while the decision is still
+open. Because the steps are worked out from the records every time, their order can't be broken by hand either: a record written for a later step counts only
+once every step before it is closed, and if a decision is reopened, its step and every step after it are open again. `naima check` notes a record that names a
+gate following no method, or a step its method doesn't have, and reports a gate whose method no adopted stance provides.
+
 ## See when things happened: the timeline
 
 ```sh
@@ -206,5 +240,5 @@ then blocked by each entry with NO TEST. `naima check` notes a test whose `cover
 ## Where it lives
 
 Epics are items, kept in `naima-tracker/naima-data/epics/`. Gates are stored under `plugins.gates.options.gates` in `naima-tracker/naima-data/naima.json`
-([configuration](config.md)), which is what `naima gate new` writes, and the coverage lists sit next to them under `plugins.gates.options.coverage`. The
-timeline's records are in `naima-tracker/naima-data/events/`. All of them are committed along with the work.
+([configuration](config.md)), which is what `naima gate new` writes, with the method a gate follows as its `method`, and the coverage lists sit next to them
+under `plugins.gates.options.coverage`. The timeline's records are in `naima-tracker/naima-data/events/`. All of them are committed along with the work.

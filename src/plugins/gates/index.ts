@@ -20,6 +20,9 @@
 // fullSuite       a release gate: it holds only when every gate that is part
 //                 of the full suite (`inFullSuite`, such as every property
 //                 current and every test suite passing) holds too.
+// method          the method it follows, `<plugin>/<method>` (methods.ts): the
+//                 method's steps are its sub-goals, closed in order by
+//                 records, and it holds only once every step is closed.
 //
 // `naima gate new|add|remove|show` declares a gate and puts items on it, so
 // nobody edits naima.json by hand. An item whose type carries the `group`
@@ -71,8 +74,10 @@ import {
 } from "../../core/api.ts"
 import { type CoverageConfig, coverageLines, coverageOf, coverageReasons, coverageUiView, COVERS, readCoverage, staleCovers } from "./coverage.ts"
 import { dependenciesAcyclic, dependenciesWaitOnWork, orderCommand, readyCommand, standsFor } from "./dependencies.ts"
+import { CLOSES_STEP, findMethod, methodsPoint, methodVerdict, stepRecordsCheck, type StepState } from "./methods.ts"
 
 export { type CoverageConfig, coverageOf, type CoverageRow } from "./coverage.ts"
+export { type MethodDef, type MethodStep, type StepState } from "./methods.ts"
 
 /**
  * A retired item in words — `closed/x (title) retired on 2026-11-01: why; replaced by features/y` — from the fields and
@@ -99,6 +104,9 @@ export interface GateResult {
   stuck?: Item[]
   /** The proofs it depended on that were retired, in words, each with its reason: shown so a retirement never hides a failing proof. */
   retired?: string[]
+  /** For a gate that follows a method: the method, and each of its steps, closed, next, or waiting for the one before. */
+  method?: string
+  steps?: StepState[]
 }
 
 /** A named release or merge condition, backed by items: what any plugin contributes to the `gates` point. */
@@ -116,6 +124,8 @@ export interface GateDef {
   version?: string
   /** Part of the project's full suite: a gate declared with `fullSuite`, a release gate, holds only when this one does too. */
   inFullSuite?: boolean
+  /** The method it follows, `<plugin>/<method>`: `naima gate step` closes its steps. */
+  method?: string
   /** May be async: a gate backed by an external tool awaits it. */
   evaluate(ctx: Context): GateResult | Promise<GateResult>
 }
@@ -166,6 +176,8 @@ export interface GateConfig {
   coverage?: string[]
   /** A release gate: it holds only when every gate that is part of the full suite (`inFullSuite`) holds too. */
   fullSuite?: boolean
+  /** The method it follows, `<plugin>/<method>`: its steps are sub-goals the gate waits for, in order. */
+  method?: string
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -191,6 +203,9 @@ function readOptions(options: Record<string, unknown>): Record<string, GateConfi
       for (const l of c.coverage) if (!Object.hasOwn(lists, l)) throw new Error(`gates: gate "${name}": coverage names no list "${l}"`)
     }
     if (c.fullSuite !== undefined && typeof c.fullSuite !== "boolean") throw new Error(`gates: gate "${name}": fullSuite is true or false`)
+    if (c.method !== undefined && (typeof c.method !== "string" || !/^[^/\s]+\/[^/\s]+$/.test(c.method))) {
+      throw new Error(`gates: gate "${name}": method is <plugin>/<method>, got ${JSON.stringify(c.method)}`)
+    }
   }
   return gates as Record<string, GateConfig>
 }
@@ -305,6 +320,8 @@ async function withFullSuite(ctx: Context, own: GateResult): Promise<GateResult>
     ...(suite.backedBy?.length ? { backedBy: suite.backedBy } : {}),
     ...(stuck.length ? { stuck } : {}),
     ...(retired.length ? { retired } : {}),
+    ...(own.method ? { method: own.method } : {}),
+    ...(own.steps ? { steps: own.steps } : {}),
   }
 }
 
@@ -324,8 +341,18 @@ function goalStatus(r: GateResult): string {
   if (!n) return `does not hold: ${(r.reasons ?? []).join("; ") || "no reason given"}`
   const first = r.blocking[0]!
   const items = `${n} item${n === 1 ? "" : "s"}`
-  return n <= NAMED_LEFT ? `${items} left, next ${label(first)} (${first.meta.title})` : `blocked by ${items}`
+  const step = r.steps?.find((s) => s.state === "next")
+  const next = step ? `; next step ${step.index} of ${r.steps!.length}, ${step.name}` : ""
+  return (n <= NAMED_LEFT ? `${items} left, next ${label(first)} (${first.meta.title})` : `blocked by ${items}`) + next
 }
+
+/** A step of a gate's method in one line: ✓ closed and by what, → the next and what closes it, · waiting. */
+const stepLine = (s: StepState): string =>
+  s.state === "closed"
+    ? `  ✓ step ${s.index} ${s.name}  ${s.title} — closed by ${s.closedBy.join(", ")}`
+    : s.state === "next"
+    ? `  → step ${s.index} ${s.name}  ${s.title} — next, closed when ${s.exit}`
+    : `  · step ${s.index} ${s.name}  ${s.title} — waits for the step before`
 
 /**
  * A version as a release compares it: no leading v, and its numbers padded with zeros to major.minor.patch, so that
@@ -426,6 +453,8 @@ function printGate(ctx: Context, gate: GateDef, r: GateResult, hands = false): v
   for (const why of r.reasons ?? []) ctx.out(`  ✗ ${why}`)
   for (const by of r.backedBy ?? []) ctx.out(`  ✓ backed by ${by}`)
   for (const r2 of r.retired ?? []) ctx.out(`  ! depended on ${r2}`)
+  if (r.method && r.steps?.length) ctx.out(`  method ${r.method}: ${r.steps.filter((s) => s.state === "closed").length} of ${r.steps.length} steps closed`)
+  for (const s of r.steps ?? []) ctx.out(stepLine(s))
   for (const i of r.blocking) ctx.out(`  ✗ ${label(i)}  ${i.meta.title}${who(i)}`)
   for (const i of r.owed) ctx.out(`  · ${label(i)}  ${i.meta.title}${who(i)}`)
 }
@@ -452,6 +481,9 @@ interface GateRow {
   retired: string[]
   blocking: GateItemRow[]
   owed: GateItemRow[]
+  /** For a gate that follows a method: the method, and its steps in order. */
+  method?: string
+  steps?: StepState[]
 }
 
 /** The gates named — every one when none is — each evaluated now: what `naima gates` prints and the gates panel shows. */
@@ -475,6 +507,8 @@ async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: Gate
         retired: result.retired ?? [],
         blocking: result.blocking.map(item),
         owed: result.owed.map(item),
+        ...(result.method ? { method: result.method } : {}),
+        ...(result.steps ? { steps: result.steps } : {}),
       },
     }
   }))
@@ -698,13 +732,52 @@ const findGate = (ctx: Context, name: string | undefined): GateDef => {
   return gate
 }
 
+/** The method `ref` names, as its qualified id, which a gate stores; refused when no loaded plugin contributes it. */
+function methodId(ctx: Context, ref: string): string {
+  const found = findMethod(ctx, ref.trim())
+  if (found) return found.id
+  const all = ctx.registry.points.has("methods") ? ctx.registry.contributions("methods").map((c) => c.id) : []
+  throw new Error(`no method "${ref}" — methods: ${all.join(", ") || "none: a stance declares one under contributes.methods"}`)
+}
+
+/**
+ * Close a step of the method a gate follows: `by`, a settled item recording that the step's exit criterion holds, gets
+ * closesStep=<gate>/<step>. Refused while the step before is not closed, or while `by` is still open.
+ */
+function closeStep(ctx: Context, gate: GateDef, step: string, record: string): number {
+  const r = gate.method ? methodVerdict(ctx, gate.name, gate.method) : undefined
+  if (!r || !gate.method) throw new Error(`gate ${gate.name} follows no method — naima gate set ${gate.name} --method <stance>/<method>`)
+  if (!r.method) throw new Error(r.reasons[0])
+  const s = r.steps.find((x) => x.name === step)
+  if (!s) throw new Error(`the method ${r.method} has no step "${step}" — steps: ${r.steps.map((x) => x.name).join(", ")}`)
+  if (s.state === "closed") throw new Error(`step ${step} of gate ${gate.name} is already closed by ${s.closedBy.join(", ")}`)
+  if (s.state === "waiting") {
+    const next = r.steps.find((x) => x.state === "next")!
+    throw new Error(`step ${step} of gate ${gate.name} waits for step ${next.index}, ${next.name}, closed when ${next.exit} — close that first`)
+  }
+  const by = ctx.repo.resolve(record)
+  if (isOpen(ctx, by)) {
+    throw new Error(`${label(by)} is still open (${by.meta.status}): a step closes on a settled record, such as a settled decision — settle it first`)
+  }
+  const ref = `${gate.name}/${step}`
+  const had = fieldValue(by, CLOSES_STEP) ?? []
+  setFields(ctx, by, [[CLOSES_STEP.name, JSON.stringify([...had.filter((x) => x !== ref), ref])]])
+  const after = methodVerdict(ctx, gate.name, gate.method).steps.find((x) => x.state === "next")
+  ctx.out(
+    `gate ${gate.name}: step ${s.index} of ${r.steps.length}, ${step}, closed by ${label(by)}${
+      after ? ` — next: ${after.name} (${after.title}), closed when ${after.exit}` : " — every step of the method is closed"
+    }`,
+  )
+  return 0
+}
+
 const gateCommand: Command = {
   name: "gate",
   says:
-    "declare a gate — a milestone, with a date and a version — put items on it or take them off, and show one; writes go to naima.json and to the items, validated, through the write hooks",
+    "declare a gate — a milestone, with a date and a version, or one that follows a stance's method — put items on it or take them off, close the steps of its method, and show one; writes go to naima.json and to the items, validated, through the write hooks",
   enforces: "writes to naima.json and to the items are validated and pass the write hooks",
   usage:
-    'gate new <name> "<title>" [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite] | gate set <name> [--title <t>] [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite | --no-full-suite] | gate add <gate> <item>... | gate remove <gate> <item>... | gate show <gate>',
+    'gate new <name> "<title>" [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite] [--method <stance>/<method>] | gate set <name> [--title <t>] [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite | --no-full-suite] [--method <stance>/<method>] | gate add <gate> <item>... | gate remove <gate> <item>... | gate step <gate> <step> --by <item> | gate show <gate>',
   options: [
     { name: "--title", says: "gate set: its new title" },
     { name: "--says", says: "gate new and set: what the gate is for, in one sentence" },
@@ -721,6 +794,15 @@ const gateCommand: Command = {
         "gate new and set: a release gate, which holds only when every gate that is part of the full suite holds too: every property current, every test suite passing",
     },
     { name: "--no-full-suite", says: "gate set: no longer a release gate that waits for the full suite" },
+    {
+      name: "--method",
+      says:
+        'gate new and set: the method the gate follows, as <stance>/<method> or <plugin>/<method>: its steps become sub-goals the gate waits for, closed in order; with set, "" takes it off',
+    },
+    {
+      name: "--by",
+      says: "gate step: the settled item, such as a decision, that records the step's exit criterion holds; it gets closesStep=<gate>/<step>",
+    },
   ],
   examples: [
     'gate new beta "Public beta" --says "the first outside users" --due 2026-12-01 --version 0.9',
@@ -730,6 +812,8 @@ const gateCommand: Command = {
     'gate new v1 "First release" --version 1.0 --full-suite',
     'gate set beta --due ""',
     "gate set beta --due 2026-12-15",
+    "gate set beta --method ui/design",
+    "gate step beta palette --by decisions/palette-is-dusk",
   ],
   async run(args, ctx) {
     const p = parse(args, {
@@ -741,6 +825,8 @@ const gateCommand: Command = {
       coverage: { type: "string" },
       "full-suite": { type: "boolean" },
       "no-full-suite": { type: "boolean" },
+      method: { type: "string" },
+      by: { type: "string" },
     })
     const [sub, name, ...rest] = p.positionals
     if (sub === "new") {
@@ -756,6 +842,7 @@ const gateCommand: Command = {
         ...(holdsOn !== undefined ? { holdsOn } : {}),
         ...(coverage?.length ? { coverage } : {}),
         ...(bool(p, "full-suite") ? { fullSuite: true } : {}),
+        ...(str(p, "method") !== undefined ? { method: methodId(ctx, str(p, "method") ?? "") } : {}),
       } as GateConfig
       declareGate(ctx, name, gate)
       ctx.out(`gate ${name} declared in ${ctx.trackerDir}/${DATA_FILE} — put items on it: naima gate add ${name} <item>...`)
@@ -772,6 +859,8 @@ const gateCommand: Command = {
       if (bool(p, "full-suite") && bool(p, "no-full-suite")) throw usageError(this)
       if (bool(p, "full-suite")) changes["fullSuite"] = true
       if (bool(p, "no-full-suite")) changes["fullSuite"] = false
+      const method = str(p, "method")?.trim()
+      if (method !== undefined) changes["method"] = method === "" ? "" : methodId(ctx, method)
       if (!Object.keys(changes).length) throw usageError(this)
       updateGate(ctx, name, changes)
       ctx.out(`gate ${name}: ${Object.entries(changes).map(([k, v]) => (v === "" || v === false ? `${k} removed` : `${k} ${v}`)).join(", ")}`)
@@ -790,6 +879,11 @@ const gateCommand: Command = {
         ctx.out(`${label(item)}: ${sub === "add" ? "on" : "off"} gate ${gate.name}`)
       }
       return 0
+    }
+    if (sub === "step") {
+      const by = str(p, "by")
+      if (!name || rest.length !== 1 || !by) throw usageError(this)
+      return closeStep(ctx, findGate(ctx, name), rest[0]!, by)
     }
     if (sub === "show") {
       if (rest.length) throw usageError(this)
@@ -884,10 +978,18 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
       (c.version ? " A release gate, having a version, does not hold while no item is on it." : "") +
       (c.fullSuite
         ? " A release gate: it holds only when every gate that is part of the full suite holds too (naima gates marks them), their blocking items, owed items and reasons joining its own."
+        : "") +
+      (c.method
+        ? ` It follows the method ${c.method}: it holds only once every step of it is closed, in order — a step by a settled item carrying closesStep=${name}/<step>.`
         : ""),
+    ...(c.method !== undefined ? { method: c.method } : {}),
     evaluate: (ctx) => {
-      const r = evaluateGate(ctx, name, c.holdsOn ?? "code")
+      const evaluated = evaluateGate(ctx, name, c.holdsOn ?? "code")
       const reasons = c.coverage?.length ? coverageReasons(ctx, lists, c.coverage) : []
+      // A gate that follows a method waits for its steps too, closed in order: the next one is its reason.
+      const method = c.method !== undefined ? methodVerdict(ctx, name, c.method) : undefined
+      if (method) reasons.push(...method.reasons)
+      const r: GateResult = method ? { ...evaluated, ...(method.method ? { method: method.method } : {}), steps: method.steps } : evaluated
       // A release with nothing on it is not ready: holding vacuously would announce an empty release.
       if (c.version && !ctx.repo.items.some((i) => onGates(i).includes(name))) {
         reasons.push(`nothing is on it yet — naima gate add ${name} <item>...`)
@@ -929,12 +1031,14 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
       "A gate with a `due` date (and, optionally, a `version`) is a milestone: `naima gates` and `naima queue` say the days left, and a check warns once it is overdue. " +
       "An item whose type carries the `group` trait — an epic — stands on a gate for the items it groups. " +
       "A coverage list is a normative list the project keeps elsewhere — paid features, limits, API endpoints — named by its source, a JSON file and a path in it, or files and a regular expression, and read from it on every run, never copied. " +
-      "A proving item names the entry it proves in `covers`; `naima coverage` prints every entry with its test or NO TEST, `--check` exits 1 on one, and a gate that lists it in `coverage` is blocked by each.",
+      "A proving item names the entry it proves in `covers`; `naima coverage` prints every entry with its test or NO TEST, `--check` exits 1 on one, and a gate that lists it in `coverage` is blocked by each. " +
+      "A method is an ordered list of steps, each with an exit criterion, that a plugin — typically a stance — contributes to the `methods` point. A gate that follows one (`naima gate set <gate> --method <stance>/<method>`) gets its steps as sub-goals: `naima gates` and `naima hello` show which is closed and which is next, and the gate holds only once every step is closed. " +
+      "A step is closed by a record, a settled item such as a decision carrying `closesStep: <gate>/<step>`, which `naima gate step <gate> <step> --by <item>` writes and refuses while the step before is open; nothing about a step is stored on the gate, and a step counts as closed only when every step before it does.",
     options: [
       {
         name: "gates",
         says:
-          `\`plugins.gates.options.gates\` in \`${DEFAULT_DATA}/${DATA_FILE}\`, written by \`naima gate new\`: gate name → { "title", "says", "holdsOn", "due", "version" }. due (YYYY-MM-DD) makes the gate a milestone; version is what it ships as. holdsOn "code" (the default) waits for code, not proof: a fixed item that owes only its proving gesture, and the gestures themselves, are owed but do not block. holdsOn "proof": every open item on the gate blocks it.`,
+          `\`plugins.gates.options.gates\` in \`${DEFAULT_DATA}/${DATA_FILE}\`, written by \`naima gate new\`: gate name → { "title", "says", "holdsOn", "due", "version", "coverage", "fullSuite", "method" }. method ("<plugin>/<method>", written by \`naima gate set <gate> --method\`) makes the method's steps sub-goals the gate waits for, closed in order. due (YYYY-MM-DD) makes the gate a milestone; version is what it ships as. holdsOn "code" (the default) waits for code, not proof: a fixed item that owes only its proving gesture, and the gestures themselves, are owed but do not block. holdsOn "proof": every open item on the gate blocks it.`,
         default: "{}",
       },
       {
@@ -951,6 +1055,12 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
         says: "the entries of the coverage lists this proving item proves: `<entry>`, or `<list>:<entry>` to say which list; comma-separated",
       },
       {
+        name: CLOSES_STEP.name,
+        kind: CLOSES_STEP.kind,
+        says:
+          "the steps of a gate's method this settled item records as closed, each `<gate>/<step>`; written by `naima gate step`. A step counts as closed only when every step before it does",
+      },
+      {
         name: "gate",
         kind: "enum",
         says: "the gates this item is what is waited for: any gate a loaded plugin contributes — the project's own, or a plugin's — one, or a list of several",
@@ -959,7 +1069,7 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
         multiple: true,
       },
     ],
-    points: [gatesPoint],
+    points: [gatesPoint, methodsPoint],
     // What it reads of the trackers' vocabulary: without it loaded, gates would decide on nothing.
     uses: { fields: [FIXED_ON.name, RUN_BY.name, HUMAN_BECAUSE.name], relations: ["verifies", "verified-by"] },
     contributes: { gates: defs, "ui-views": [gatesUiView, coverageUiView(lists)] },
@@ -967,7 +1077,14 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
     optional: ["ui-views"],
     migrations: [moveGates],
     rank: [{ name: "gate", score: (i) => (onGates(i).length ? 0 : 4) }],
-    checks: [gatedProofIsGated, overdue, coverageCheck(lists), dependenciesAcyclic, dependenciesWaitOnWork],
+    checks: [
+      gatedProofIsGated,
+      overdue,
+      coverageCheck(lists),
+      dependenciesAcyclic,
+      dependenciesWaitOnWork,
+      stepRecordsCheck(Object.fromEntries(Object.entries(configured).flatMap(([n, c]) => (c.method ? [[n, c.method]] : [])))),
+    ],
     commands: [gatesCommand, gateCommand, queue, coverageCommand(lists), readyCommand(gatedItems), orderCommand(gatedItems)],
     summary: [status],
   }

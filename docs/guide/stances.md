@@ -32,10 +32,10 @@ the file.
 naima stance adopt ui
 ```
 
-This finds the stance's repository and takes its newest release: it downloads the release's archive, checks it against its checksum and against the commit
-the release's tag names, and writes that commit into `naima.json` as the plugin `stance-ui`, pinned to it. The download is what counts the adoption on the
-stance's releases page, as for Naima itself ([Naima updates to releases](update-naima.md#naima-updates-to-releases)). A stance that publishes no releases is
-pinned to the commit at the head of its main branch instead. Either way the pin looks like this:
+This finds the stance's repository and takes its newest release: it downloads the release's archive, checks it against its checksum and against the commit the
+release's tag names, and writes that commit into `naima.json` as the plugin `stance-ui`, pinned to it. The download is what counts the adoption on the stance's
+releases page, as for Naima itself ([Naima updates to releases](update-naima.md#naima-updates-to-releases)). A stance that publishes no releases is pinned to
+the commit at the head of its main branch instead. Either way the pin looks like this:
 
 ```json
 {
@@ -56,17 +56,17 @@ into the stance's entry in `naima.json`, under `options`, where its checks read 
 the adoption step, so `naima stance adopt ui --app web --mood dusk` records that the app is in `web/` and copies the UI stance's widget set into it with the
 dusk mood board.
 
-Before it runs the adoption step, Naima says where it will write: in the app's folder when the stance declares an `app` option, otherwise in the project's
-root. If that would be the root, the root holds no app, and the project has one in a subfolder (a folder with a `package.json` or a Svelte configuration),
-Naima refuses, puts `naima.json` back, and names the folders it found. Give `--app <folder>` to adopt the stance into that app, or `--app .` to adopt it at
-the root anyway.
+Before it runs the adoption step, Naima says where it will write: in the app's folder when the stance declares an `app` option, otherwise in the project's root.
+If that would be the root, the root holds no app, and the project has one in a subfolder (a folder with a `package.json` or a Svelte configuration), Naima
+refuses, puts `naima.json` back, and names the folders it found. Give `--app <folder>` to adopt the stance into that app, or `--app .` to adopt it at the root
+anyway.
 
 The adoption writes into the checkout you run it from. Run from another worktree of the project with the trunk checkout's Naima, it is served from that
-worktree's own data, so the pin and the files land on the worktree's branch. If the worktree has no data of its own, Naima refuses and says which Naima to
-run instead.
+worktree's own data, so the pin and the files land on the worktree's branch. If the worktree has no data of its own, Naima refuses and says which Naima to run
+instead.
 
-If the stance asks the agent tool to run something, such as its checks after every edit, Naima installs that hook in the tool's settings as part of the
-adoption ([hooks in the agent tool](extending-naima.md#hooks-in-the-agent-tool)).
+If the stance asks the agent tool to run something, such as its checks after every edit, Naima installs that hook in the tool's settings as part of the adoption
+([hooks in the agent tool](extending-naima.md#hooks-in-the-agent-tool)).
 
 Commit the change to `naima.json`, with whatever the adoption step wrote, like any other change.
 
@@ -98,9 +98,34 @@ A stance is written like any plugin ([extending Naima](extending-naima.md)), wit
 - `kind: "stance"`, which adoption checks when it loads the plugin;
 - `examples`, an optional list of paths inside its repository.
 
-Its repository also holds `naima-plugin.json` at its root, which says the same as data, with `"kind": "stance"` ([describing a
-plugin](extending-naima.md#describing-a-plugin-naima-pluginjson)). Naima loads the module from `plugin/index.mjs` for now, so `entry` names that path.
+A stance can also bring a method, the order its work is done in, as steps a gate follows
+([steps as sub-goals](plan-with-epics-milestones-and-gates.md#follow-a-stances-method-steps-as-sub-goals)). It declares each method under `contributes.methods`,
+and lists `methods` under `optional`, so that it still loads in a Naima without them:
 
-For its adoption step, it adds a command named like its plugin entry (`stance-<name>`) whose usage includes `adopt`. Its checks that refuse a landing while
-they fail are `refuses` landing reports, and the hooks it wants in the agent tool are `agent-hooks`; it writes no file of the host's own. To be listed by `naima stances`, it is
-published as `naima-stance-<name>` in the naima-project organisation, with its plugin in `plugin/index.mjs` and its `naima-plugin.json` at the root.
+```js
+contributes: {
+  methods: [{
+    name: "design",
+    title: "Design an interface",
+    says: "from a mood board to the screens, each step chosen by the owner",
+    steps: [
+      { name: "mood-board", title: "Mood board", exit: "the owner chose a mood board among the variants" },
+      { name: "palette", title: "Palette", exit: "the owner chose a palette among the variants" },
+      { name: "screens", title: "Screens", exit: "the owner approved the screens" },
+    ],
+  }],
+},
+optional: ["methods"],
+```
+
+A step's `name` is lowercase letters, digits and dashes, its `exit` says what must be true for it to close, and a method has at least one step. A gate follows
+it with `naima gate set <gate> --method <stance>/<method>`.
+
+Its repository also holds `naima-plugin.json` at its root, which says the same as data, with `"kind": "stance"`
+([describing a plugin](extending-naima.md#describing-a-plugin-naima-pluginjson)). Naima loads the module from `plugin/index.mjs` for now, so `entry` names that
+path.
+
+For its adoption step, it adds a command named like its plugin entry (`stance-<name>`) whose usage includes `adopt`. Its checks that refuse a landing while they
+fail are `refuses` landing reports, and the hooks it wants in the agent tool are `agent-hooks`; it writes no file of the host's own. To be listed by
+`naima stances`, it is published as `naima-stance-<name>` in the naima-project organisation, with its plugin in `plugin/index.mjs` and its `naima-plugin.json`
+at the root.

@@ -18,6 +18,7 @@ straight away through the CLI. Don't edit `naima.json` or a `meta.json` by hand.
 | "keep a diary", "write down what happened today"                    | `naima event <today> "<what happened, and why>" --kind diary`; read it back with `naima diary`                                                                                                                |
 | "every paid feature needs a test", "is every endpoint tested?"      | declare the list in `plugins.gates.options.coverage`, then `naima coverage --check`                                                                                                                           |
 | "the launch needs every paid feature tested"                        | `naima gate new <name> "<title>" --coverage <list>`                                                                                                                                                           |
+| "do the beta the UI stance's way", "mood board first, then palette" | `naima gate set <name> --method <stance>/<method>`; when a step's exit criterion holds and is recorded (a settled decision), `naima gate step <name> <step> --by <decision>`                                  |
 
 Whoever prepares a gate's items doesn't also mark the gate as met. The status of a gate or an epic is derived from its items and is never set by hand, so the
 agent that did the work is never the one that decides the release is ready.
@@ -42,6 +43,10 @@ These rules hold:
   direction, or a notable event outside the tracker; the related turns of one conversation make one entry. None for routine work, landings, items filed, fixes,
   test runs, or what a session note or the timeline already records. The check `diary-entries` notes a day above the coordination option `diaryPerDay` (5 by
   default) and an entry that only restates a session note or a decision ([the rule](../guide/rules.md#agents-keep-the-diary)).
+- **Close a method's steps one by one, on a record.** When a gate follows a stance's method, `naima gates` names the next step and what closes it. Work toward
+  that step, ask the owner when its exit criterion is theirs (a choice among variants), record the answer as a decision, then
+  `naima gate step <gate> <step> --by <decision>`. Never close a step on an open item, never skip one, and never write `closesStep` by hand: a record out of
+  order closes nothing until the steps before it are closed.
 - **Commit what the commands wrote**, meaning the epic's folder, the items, `naima-tracker/naima-data/naima.json` and any `events/` file, together with the work
   that led to it. What changes more than it adds, such as an epic set done or a gate's settings, is committed on the branch of an item and landed with
   `naima land`; only a new item, a note or a diary entry may go straight on the trunk.
