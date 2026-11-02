@@ -11,7 +11,16 @@
 //                         under the other; the first tab when no view is a panel
 //   /view/<name>?…        a view's page: the tabs, then the view
 //   /data/<name>?…        a view's data, as JSON — a panel's too; the new UI
-//                         reads these
+//                         reads these; with ?at=<commit>, as that commit had it
+//                         (at.ts), read only
+//   /data/metro           what the new UI's rail draws: the trunk, the lines,
+//                         the branches, the workers and the goals ahead (metro.ts)
+//   /events               a stream of server-sent events, one when the project
+//                         changes: a commit, a branch moved, the tracker's files
+//                         (live.ts)
+//   /session              this run's CSRF value and the actions the UI may run
+//   POST /action/<name>   run one naima command of a short list through the CLI,
+//                         as JSON in and out (actions.ts); the only write
 //
 // Each request renders the view again from the files: the page is live.
 
@@ -23,6 +32,10 @@ import type { AddressInfo } from "node:net"
 import { extname, join, normalize, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { Context } from "../../core/api.ts"
+import { actionArgv, type ActionResult, type ActionRunner, ACTIONS, cliRunner } from "./actions.ts"
+import { AtCache, AtRefused, commitOf } from "./at.ts"
+import { EventHub, watchProject } from "./live.ts"
+import { metroData } from "./metro.ts"
 
 /** A view of `naima ui`: what any plugin contributes to the `ui-views` point. */
 export interface UiView {
@@ -177,18 +190,70 @@ function send(res: ServerResponse, status: number, type: string, body: string, h
 export function serve(
   ctx: Context,
   views: readonly UiView[],
-  opts: { token?: string; port?: number; log?: (line: string) => void; bundle?: string | null } = {},
+  opts: {
+    token?: string
+    port?: number
+    log?: (line: string) => void
+    bundle?: string | null
+    /** How often the project is looked at for /events, and how long a change settles, in ms. */
+    watch?: { interval?: number; debounce?: number }
+    /** What runs an action's command: the CLI by default. */
+    actions?: ActionRunner
+  } = {},
 ): Promise<Served> {
   const token = opts.token ?? randomBytes(24).toString("hex")
+  const csrf = randomBytes(24).toString("hex")
+  const runAction = opts.actions ?? cliRunner()
+  const atCache = new AtCache()
+  const hub = new EventHub((send) => watchProject(ctx, send, opts.watch ?? {}))
+  let origin = ""
   const bundle = opts.bundle === undefined ? BUNDLE : opts.bundle
   const app = bundle !== null && existsSync(join(bundle, "index.html")) ? bundle : null
+  /** POST /action/<name>: refused unless the cookie, this run's CSRF value, this server's Origin and a same-origin fetch say it is this UI's page. */
+  const action = async (req: IncomingMessage, res: ServerResponse, url: URL, headers: Record<string, string>): Promise<void> => {
+    const cookie = cookieToken(req)
+    const site = req.headers["sec-fetch-site"]
+    const refuse = (why: string) => send(res, 403, "application/json", JSON.stringify({ error: `naima ui: ${why}` }), headers)
+    if (!cookie || !same(cookie, token)) return refuse("an action needs the token's cookie")
+    if (!same(String(req.headers["x-naima-csrf"] ?? ""), csrf)) return refuse("an action needs this run's CSRF value, from /session")
+    if (req.headers.origin !== origin) return refuse("an action comes from this server's own page only")
+    if (site !== undefined && site !== "same-origin") return refuse("an action comes from this server's own page only")
+    if (!String(req.headers["content-type"] ?? "").startsWith("application/json")) return refuse("an action's body is JSON")
+    let raw = ""
+    for await (const chunk of req) {
+      raw += String(chunk)
+      if (raw.length > 64_000) return send(res, 413, "application/json", JSON.stringify({ error: "naima ui: the body is too large" }), headers)
+    }
+    let body: unknown
+    try {
+      body = raw.trim() ? JSON.parse(raw) : {}
+    } catch {
+      return send(res, 400, "application/json", JSON.stringify({ error: "naima ui: the body is not JSON" }), headers)
+    }
+    const argv = actionArgv(decodeURIComponent(url.pathname.slice("/action/".length)), body)
+    if (typeof argv === "string") return send(res, 400, "application/json", JSON.stringify({ error: `naima ui: ${argv}` }), headers)
+    const r = await runAction(argv, ctx.root)
+    const result: ActionResult = { command: ["naima", ...argv], code: r.code, out: r.out, err: r.err }
+    return send(res, 200, "application/json", JSON.stringify(result), headers)
+  }
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", `http://${HOST}`)
     if (opts.log) res.once("finish", () => opts.log?.(`${res.statusCode} ${req.method} ${url.pathname} ${req.headers["user-agent"] ?? ""}`))
     const given = url.searchParams.get("token") ?? cookieToken(req)
     if (!given || !same(given, token)) return send(res, 403, "text/plain", "naima ui: this address needs the token it was opened with\n")
     const headers = { "set-cookie": `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict` }
+    if (req.method === "POST" && url.pathname.startsWith("/action/")) return action(req, res, url, headers)
     if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "text/plain", "naima ui: read only\n", headers)
+    if (url.pathname === "/session") return send(res, 200, "application/json", JSON.stringify({ csrf, actions: ACTIONS }), headers)
+    if (url.pathname === "/events") return hub.add(res, headers)
+    if (url.pathname === "/data/metro") {
+      try {
+        ctx.reload()
+        return send(res, 200, "application/json", JSON.stringify(await metroData(ctx), null, 2), headers)
+      } catch (e) {
+        return send(res, 500, "text/plain", `naima ui: the metro data failed: ${e instanceof Error ? e.message : String(e)}\n`, headers)
+      }
+    }
     let parts: string[]
     try {
       parts = url.pathname.split("/").map((p) => decodeURIComponent(p))
@@ -225,9 +290,21 @@ export function serve(
     }
     const view = views.find((v) => v.name === name)
     if (!view || (kind !== "view" && kind !== "data")) return send(res, 404, "text/plain", `naima ui: no ${url.pathname}\n`, headers)
+    const at = url.searchParams.get("at")
+    if (at !== null && kind !== "data") return send(res, 400, "text/plain", "naima ui: ?at= is for /data/<view> only\n", headers)
+    let from = ctx
+    if (at !== null) {
+      try {
+        from = atCache.get(ctx, commitOf(ctx, at))
+      } catch (e) {
+        return send(res, e instanceof AtRefused ? 400 : 500, "text/plain", `${e instanceof Error ? e.message : String(e)}\n`, headers)
+      }
+    }
     try {
-      ctx.reload()
-      const r = await view.render(paramsOf(url), ctx)
+      if (at === null) ctx.reload()
+      const params = paramsOf(url)
+      delete params["at"]
+      const r = await view.render(params, from)
       if (kind === "data") return send(res, 200, "application/json", JSON.stringify(r.data, null, 2), headers)
       return send(res, 200, "text/html", page(views, view, view.title, r.html, r.css), headers)
     } catch (e) {
@@ -238,6 +315,7 @@ export function serve(
     server.once("error", reject)
     server.listen(opts.port ?? 0, HOST, () => {
       const port = (server.address() as AddressInfo).port
+      origin = `http://${HOST}:${port}`
       resolve({
         url: `http://${HOST}:${port}/?token=${token}`,
         host: HOST,
@@ -245,6 +323,8 @@ export function serve(
         token,
         close: () =>
           new Promise<void>((done) => {
+            hub.close()
+            atCache.clear()
             server.closeAllConnections?.()
             server.close(() => done())
           }),
