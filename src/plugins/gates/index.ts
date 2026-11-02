@@ -119,7 +119,7 @@ export interface GateDef {
   version?: string
   /** Part of the project's full suite: a gate declared with `fullSuite`, a release gate, holds only when this one does too. */
   inFullSuite?: boolean
-  /** The goals this one comes after, overriding the order by version and due date. */
+  /** The goals this one comes after, added to the order by version and due date. */
   after?: string[]
   /** The date its freeze starts, YYYY-MM-DD: until the goal is finished, no landing on the trunk closes a feature. */
   freeze?: string
@@ -173,7 +173,7 @@ export interface GateConfig {
   coverage?: string[]
   /** A release gate: it holds only when every gate that is part of the full suite (`inFullSuite`) holds too. */
   fullSuite?: boolean
-  /** The goals it comes after; without it, release gates are ordered by version and dated gates by due date. */
+  /** The goals it comes after, besides the order release gates take by version and dated gates by due date. */
   after?: string[]
   /** From this date, YYYY-MM-DD, while the goal is unfinished, no landing on the trunk closes a feature. */
   freeze?: string
@@ -742,7 +742,7 @@ const gateCommand: Command = {
     { name: "--no-full-suite", says: "gate set: no longer a release gate that waits for the full suite" },
     {
       name: "--after",
-      says: 'gate new and set: the goals this one comes after, comma-separated, overriding the order by version and due date; with set, "" takes them off',
+      says: 'gate new and set: the goals this one comes after, comma-separated, added to the order by version and due date; with set, "" takes them off',
     },
     {
       name: "--freeze",

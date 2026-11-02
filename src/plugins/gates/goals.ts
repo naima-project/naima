@@ -1,8 +1,8 @@
 // Goals, as development lines need them: their order, when one is finished,
 // its freeze, and when the trunk and a line are ready for the line to land.
 //
-// A gate may say `after: [gates]`, the goals it comes after; without it,
-// release gates are ordered by version and dated gates by due date. A goal is
+// A gate may say `after: [gates]`, the goals it comes after, besides the
+// order release gates take by version and dated gates by due date. A goal is
 // finished when its version is released (a git tag carries it), or, with no
 // version, when it holds and its due date, if any, has come. A gate's
 // `freeze: <date>` is in force from that date while its goal is unfinished,
@@ -30,18 +30,30 @@ const versionBefore = (a: string, b: string): boolean => {
   return false
 }
 
+/** Whether goal `x` comes right before goal `y`: `y`'s after names it, or both have a version and `x`'s is lower, or both a due date and `x`'s is earlier. */
+const rightBefore = (x: GateDef, y: GateDef): boolean =>
+  !!y.after?.includes(x.name) || (!!x.version && !!y.version && versionBefore(x.version, y.version)) || (!!x.due && !!y.due && x.due < y.due)
+
 /**
- * Whether goal `a` comes before goal `b`: by `b`'s after, followed through the goals it names; without one, by
- * version when both have one, else by due date when both have one.
+ * Whether goal `a` comes before goal `b`: through any chain of goals each right before the next, by a gate's after,
+ * by version, or by due date. After adds to the order the versions and due dates make; it never replaces it.
  */
-export function goalBefore(ctx: Context, a: string, b: string, seen: Set<string> = new Set()): boolean {
-  if (a === b || seen.has(b)) return false
-  seen.add(b)
-  const da = defOf(ctx, a), db = defOf(ctx, b)
-  if (!da || !db) return false
-  if (db.after) return db.after.includes(a) || db.after.some((x) => goalBefore(ctx, a, x, seen))
-  if (da.version && db.version) return versionBefore(da.version, db.version)
-  if (da.due && db.due) return da.due < db.due
+export function goalBefore(ctx: Context, a: string, b: string): boolean {
+  if (a === b) return false
+  const all = gatesOf(ctx).map((g) => g.value)
+  const target = all.find((g) => g.name === b)
+  if (!target || !all.some((g) => g.name === a)) return false
+  const seen = new Set<string>([b])
+  const todo: GateDef[] = [target]
+  while (todo.length) {
+    const y = todo.pop()!
+    for (const x of all) {
+      if (seen.has(x.name) || !rightBefore(x, y)) continue
+      if (x.name === a) return true
+      seen.add(x.name)
+      todo.push(x)
+    }
+  }
   return false
 }
 
@@ -130,6 +142,6 @@ export const goalsLanding = {
 /** The goal order the coordination plugin reads, so that naima open refuses an item on the line of a goal after its own. */
 export const goalOrder = {
   name: "gates",
-  says: "a gate's after, else release gates by version and dated gates by due date",
+  says: "a gate's after, added to the order release gates take by version and dated gates by due date",
   before: (ctx: Context, a: string, b: string): boolean => goalBefore(ctx, a, b),
 }

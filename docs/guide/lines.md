@@ -61,8 +61,9 @@ Lines land in the order of their goals, so the gates have an order:
 naima gate set release-1.2 --after launch     # release-1.2 comes after launch
 ```
 
-Without `--after`, gates with a version are ordered by version, and gates with a due date by date. A goal is finished when its version is released (a git tag
-carries it), or, for a gate with no version, when it holds and its due date, if any, has come.
+Gates with a version are ordered by version, and gates with a due date by date; `--after` adds to that order and never replaces it, so a release named after
+another goal still comes after every earlier release. A goal is finished when its version is released (a git tag carries it), or, for a gate with no version,
+when it holds and its due date, if any, has come.
 
 ## Freezes
 
