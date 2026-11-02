@@ -4,17 +4,24 @@
 // first answer sets — or is refused: another user of the machine, or a page
 // in a browser, cannot read the project through it.
 //
-//   /                     the first screen: every panel, one under the other;
-//                         the first tab when no view is a panel
+//   /                     the new UI: the built bundle the product ships in
+//                         ui/dist (its index.html, then its files by path);
+//                         /classic when there is no bundle
+//   /classic              the provisional first screen: every panel, one
+//                         under the other; the first tab when no view is a panel
 //   /view/<name>?…        a view's page: the tabs, then the view
-//   /data/<name>?…        a view's data, as JSON — a panel's too
+//   /data/<name>?…        a view's data, as JSON — a panel's too; the new UI
+//                         reads these
 //
 // Each request renders the view again from the files: the page is live.
 
 import { Buffer } from "node:buffer"
 import { randomBytes, timingSafeEqual } from "node:crypto"
+import { existsSync, readFileSync, statSync } from "node:fs"
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 import type { AddressInfo } from "node:net"
+import { extname, join, normalize, sep } from "node:path"
+import { fileURLToPath } from "node:url"
 import type { Context } from "../../core/api.ts"
 
 /** A view of `naima ui`: what any plugin contributes to the `ui-views` point. */
@@ -51,6 +58,38 @@ export interface Served {
 export const HOST = "127.0.0.1"
 const COOKIE = "naima-ui"
 
+/** The new UI's bundle, as the product ships it: ui/dist, built in the workshop and committed. */
+export const BUNDLE: string = fileURLToPath(new URL("../../../ui/dist/", import.meta.url))
+
+/** The provisional first screen's path, now that / is the new UI. */
+const CLASSIC = "/classic"
+
+/** The media types of the bundle's files; anything else is not served. */
+const TYPES: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".woff2": "font/woff2",
+}
+
+/** The bundle's pages may load only what the bundle and this server hold. */
+const POLICY =
+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+
+/** The file of the bundle a path names — / is index.html — or null when it names none, or names one outside the bundle. */
+function bundleFile(dir: string, path: string): string | null {
+  const rel = path === "/" ? "index.html" : path.slice(1)
+  if (!rel || rel.includes("\u0000")) return null
+  const file = normalize(join(dir, rel))
+  const root = normalize(dir.endsWith(sep) ? dir : dir + sep)
+  if (!file.startsWith(root) || !TYPES[extname(file)]) return null
+  return existsSync(file) && statSync(file).isFile() ? file : null
+}
+
 const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
 
 const same = (a: string, b: string): boolean => {
@@ -70,7 +109,7 @@ function page(views: readonly UiView[], current: UiView | null, title: string, b
   const link = (href: string, here: boolean, says: string, name: string) =>
     `<a href="${href}"${here ? ' aria-current="page"' : ""} title="${esc(says)}">${esc(name)}</a>`
   const tabs = [
-    ...(views.some((v) => v.panel) ? [link("/", current === null || current.panel === true, HOME.says, HOME.title)] : []),
+    ...(views.some((v) => v.panel) ? [link(CLASSIC, current === null || current.panel === true, HOME.says, HOME.title)] : []),
     ...views.filter((v) => !v.panel).map((v) => link(`/view/${encodeURIComponent(v.name)}`, v === current, v.says, v.title)),
   ]
   return [
@@ -132,14 +171,17 @@ function send(res: ServerResponse, status: number, type: string, body: string, h
 
 /**
  * Serve the views on the loopback interface, on a free port unless `port` is given, refusing every request without
- * `token` (a fresh random one by default). `log` hears one line per request: its status, method, path and user agent.
+ * `token` (a fresh random one by default), and the new UI's bundle at / from `bundle` (the product's by default;
+ * null for none). `log` hears one line per request: its status, method, path and user agent.
  */
 export function serve(
   ctx: Context,
   views: readonly UiView[],
-  opts: { token?: string; port?: number; log?: (line: string) => void } = {},
+  opts: { token?: string; port?: number; log?: (line: string) => void; bundle?: string | null } = {},
 ): Promise<Served> {
   const token = opts.token ?? randomBytes(24).toString("hex")
+  const bundle = opts.bundle === undefined ? BUNDLE : opts.bundle
+  const app = bundle !== null && existsSync(join(bundle, "index.html")) ? bundle : null
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", `http://${HOST}`)
     if (opts.log) res.once("finish", () => opts.log?.(`${res.statusCode} ${req.method} ${url.pathname} ${req.headers["user-agent"] ?? ""}`))
@@ -154,7 +196,21 @@ export function serve(
       return send(res, 400, "text/plain", "naima ui: a path that is not one\n", headers)
     }
     const [, kind, name] = parts
-    if (url.pathname === "/" && views.some((v) => v.panel)) {
+    if (app && kind !== "view" && kind !== "data" && url.pathname !== CLASSIC) {
+      const file = bundleFile(app, parts.join("/"))
+      if (!file) return send(res, 404, "text/plain", `naima ui: no ${url.pathname}\n`, headers)
+      res.writeHead(200, {
+        "content-type": TYPES[extname(file)]!,
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+        "referrer-policy": "no-referrer",
+        "content-security-policy": POLICY,
+        ...headers,
+      })
+      return res.end(req.method === "HEAD" ? undefined : readFileSync(file))
+    }
+    if (url.pathname === "/") return send(res, 302, "text/plain", "", { ...headers, location: CLASSIC })
+    if (url.pathname === CLASSIC && views.some((v) => v.panel)) {
       try {
         ctx.reload()
         return send(res, 200, "text/html", await home(views, ctx), headers)
@@ -162,7 +218,7 @@ export function serve(
         return send(res, 500, "text/plain", `naima ui: the first screen failed: ${e instanceof Error ? e.message : String(e)}\n`, headers)
       }
     }
-    if (url.pathname === "/") {
+    if (url.pathname === CLASSIC) {
       const first = views[0]
       if (!first) return send(res, 200, "text/html", "<!doctype html><title>Naima</title><p>No plugin contributes a view.</p>", headers)
       return send(res, 302, "text/plain", "", { ...headers, location: `/view/${encodeURIComponent(first.name)}` })
