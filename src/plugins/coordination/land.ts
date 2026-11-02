@@ -349,8 +349,12 @@ function sideOf(repo: string, branch: string, name: string, optional: boolean): 
   const tip = gitOrNull(repo, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}^{commit}`) ?? (optional ? old : null)
   if (!tip) throw new Error(`no branch ${branch}`)
   if (runGit(repo, ["merge-base", "--is-ancestor", old, tip]).ok === false) {
+    // A line takes the trunk only by a sync, and refuses a merge made on it by hand.
+    const gate = gateOfLine(branch)
     throw new Error(
-      `${main}${name} is not an ancestor of ${branch}: merge ${main} into the branch (git merge ${main}, on the branch${name}) and run its gates again`,
+      gate
+        ? `${main}${name} is not an ancestor of ${branch}: bring the trunk into the line with naima line sync ${gate}, then land it again`
+        : `${main}${name} is not an ancestor of ${branch}: merge ${main} into the branch (git merge ${main}, on the branch${name}) and run its gates again`,
     )
   }
   const dirty = gitOrNull(repo, "status", "--porcelain", "--untracked-files=no") ?? ""
