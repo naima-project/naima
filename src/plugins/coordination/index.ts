@@ -524,9 +524,14 @@ const claimsCommand = (silentAfter: number, policy: Policy): Command => ({
     "who holds what, recombined from every branch, with what each branch's worker is doing now, and after them what other plugins report for the coordinator, such as the runs Naima watches",
   enforces:
     `nothing: it only reads; a claim whose last sign of life (its step, or its branch's last commit) is more than silentAfter minutes old (${silentAfter} here) is flagged possibly stuck; a stale claim (branch gone or merged into the trunk, or every item closed) is listed apart, at the end, and released by naima prune --write`,
-  usage: "claims [--branch <b>] [--json]",
+  usage: "claims [--branch <b>] [--line <gate> | --trunk] [--json]",
   options: [
     { name: "--branch", says: "only the claim of this branch" },
+    {
+      name: "--line",
+      says: "only the claims of branches of this development line, line/<gate>; without it, the line this chat works on (naima line use), once one is chosen",
+    },
+    { name: "--trunk", says: "only the claims of branches of the trunk, whatever line this chat works on" },
     {
       name: "--json",
       says:
@@ -535,8 +540,21 @@ const claimsCommand = (silentAfter: number, policy: Policy): Command => ({
   ],
   examples: ["claims", "claims --branch fix/export-alpha", "claims --json"],
   run(args, ctx) {
-    const p = parse(args, { branch: { type: "string" }, json: { type: "boolean" } })
-    const d = claimsData(ctx, str(p, "branch"), silentAfter)
+    const p = parse(args, { branch: { type: "string" }, json: { type: "boolean" }, line: { type: "string" }, trunk: { type: "boolean" } })
+    const all = claimsData(ctx, str(p, "branch"), silentAfter)
+    // Claims follow the line this chat works on, once one is chosen: those of the branches of that line, or of the trunk.
+    const follow = str(p, "line") !== undefined || bool(p, "trunk") || (sessionLine(ctx.root) !== undefined && !str(p, "branch"))
+    const lines = follow ? openLines(ctx.root) : []
+    const gate = follow ? chosenLine(ctx, { line: str(p, "line"), trunk: bool(p, "trunk") }, lines) : null
+    const onIt = (b: string): boolean => {
+      try {
+        return lineOf(ctx.root, b, lines) === gate
+      } catch {
+        return false
+      }
+    }
+    const d = follow ? { ...all, claims: all.claims.filter((c) => onIt(c.branch)) } : all
+    if (follow && !bool(p, "json")) ctx.out(onLine(gate, trunk(ctx.root)))
     const reports = str(p, "branch") ? [] : claimsReports(ctx)
     if (bool(p, "json")) {
       ctx.out(JSON.stringify({ ...d, reports }, null, 2))
