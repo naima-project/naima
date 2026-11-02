@@ -427,7 +427,8 @@ const escHtml = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&
 export const linesUiView = {
   name: "lines",
   title: "Lines",
-  says: "the open development lines: each one's gate, branch, tip, how far it is ahead of and behind the trunk, its latest update and the items fixed on it; its data is `naima line list --json`",
+  says:
+    "the open development lines: each one's gate, branch, tip, how far it is ahead of and behind the trunk, its latest update and the items fixed on it; its data is `naima line list --json`",
   order: 30,
   render(_params: Record<string, string[]>, ctx: Context) {
     const d = linesData(ctx)
