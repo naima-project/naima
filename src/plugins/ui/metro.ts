@@ -11,7 +11,8 @@
 //            its step and its silence, each with the reason it was given
 //   goals    per route of the trunk and the lines, the goals still ahead in goal
 //            order: a line's gate's steps, then the gate; on the trunk, every
-//            unfinished goal no open line stands for, then each line's landing
+//            unfinished gate that is a goal (isGoal) no open line stands for, then
+//            each line's landing
 
 import { type Command, type Context, gitOrNull, isAncestor, trunk, worktrees } from "../../core/api.ts"
 
@@ -107,7 +108,7 @@ interface ClaimRow {
   silent?: boolean
   items: { id: string; ref: string; title: string }[]
 }
-interface GateRow {
+export interface GateRow {
   gate: string
   title: string
   holds: boolean
@@ -143,6 +144,16 @@ function statusOf(claim: ClaimRow | undefined, ahead: number): { status: WorkerS
 /** The goals of `rows` not finished, in goal order: one comes after every goal ordered before it. */
 const ahead = (rows: GateRow[]): GateRow[] =>
   rows.filter((g) => !g.finished).map((g, i) => ({ g, i })).sort((a, b) => (a.g.before?.length ?? 0) - (b.g.before?.length ?? 0) || a.i - b.i).map((x) => x.g)
+
+/**
+ * Whether a gate is a goal, a milestone the rail draws ahead: it has a version (a release), a due date or steps,
+ * or it is ordered with other gates (it comes after one, or one comes after it). A gate with none of these
+ * collects or checks something standing, such as what waits for the owner, every property holding or the
+ * project's metrics: it is not a milestone, and the rail does not draw it ahead. A goal's steps are its sub-goals.
+ */
+export function isGoal(g: GateRow, all: readonly GateRow[]): boolean {
+  return !!(g.version || g.due || g.steps?.length || g.before?.length || all.some((x) => x.before?.includes(g.gate)))
+}
 
 const goalState = (g: GateRow): string => (g.holds ? "holds" : `blocked by ${g.blocking.length}`)
 
@@ -215,9 +226,10 @@ export async function metroData(ctx: Context): Promise<Metro> {
       })
     }
   }
-  // The goals ahead: each line's gate's steps then the gate; on the trunk, the goals no line stands for, then the landings.
+  // The goals ahead (only gates that are goals, isGoal): each line's gate's steps then the gate; on the trunk, the
+  // goals no line stands for, then the landings.
   const goals: Record<string, Mark[]> = {}
-  const order = ahead(gates)
+  const order = ahead(gates).filter((g) => isGoal(g, gates))
   const lineOfGate = new Map(lines.map((l) => [l.gate, l.branch]))
   for (const l of lines) {
     const g = gates.find((x) => x.gate === l.gate)
