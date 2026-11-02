@@ -219,6 +219,8 @@ export interface ItemData {
   /** Every other field of meta.json, as stored. */
   fields: Record<string, unknown>
   links: ItemLink[]
+  /** What the plugins say of it that its files do not, a line each (the point facts): such as a fix on a development line. */
+  facts: string[]
   /** The files of its attachments/ directory: the evidence attached to it. */
   attachments: string[]
   readme: string
@@ -250,6 +252,7 @@ export function itemData(ctx: Context, item: Item): ItemData {
         refutes: other ? refutes(ctx, other) : false,
       }
     }),
+    facts: ctx.registry.contributions("facts").flatMap((c) => (c.value as ItemFacts).facts(ctx, item)),
     attachments: existsSync(att) ? readdirSync(att).filter((f) => !f.startsWith(".")).sort() : [],
     readme: readReadme(item).trimEnd(),
   }
@@ -270,17 +273,14 @@ const show: Command = {
     const p = parse(args, { json: { type: "boolean" } })
     const ref = p.positionals[0]
     if (!ref?.trim()) throw usageError(this)
-    const item = ctx.repo.resolve(ref)
-    const d = itemData(ctx, item)
-    // What the plugins know of the item that its files do not say, such as a fix on a development line.
-    const facts = ctx.registry.contributions("facts").flatMap((c) => (c.value as ItemFacts).facts(ctx, item))
+    const d = itemData(ctx, ctx.repo.resolve(ref))
     if (bool(p, "json")) {
-      ctx.out(JSON.stringify({ ...d, facts }, null, 2))
+      ctx.out(JSON.stringify(d, null, 2))
       return 0
     }
     ctx.out(`${d.title}\n${d.ref}  ${d.id}  [${d.status}]`)
     for (const [k, v] of Object.entries(d.fields)) ctx.out(`  ${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`)
-    for (const f of facts) ctx.out(`  ${f}`)
+    for (const f of d.facts) ctx.out(`  ${f}`)
     for (const l of d.links) ctx.out(`  ${l.says} ${l.ref ? `${l.ref} [${l.status}]` : l.id}${l.implied ? "  (inverse)" : ""}`)
     if (d.attachments.length) ctx.out(`  attachments: ${d.attachments.join(", ")}`)
     ctx.out("")

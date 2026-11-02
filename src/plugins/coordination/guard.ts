@@ -52,6 +52,7 @@ import {
   type Setup,
   SETUP_STEPS,
   SETUP_TRAILER,
+  setupCommit,
   setupPaths,
   SIBLING_FILE,
   str,
@@ -405,8 +406,8 @@ function followProgram(ctx: Context): string | null {
   }
   installGuard(ctx)
   const hooks = posixRelative(ctx.root, join(ctx.trackerRoot, HOOKS_DIR))
-  return `Naima rewrote the trunk guard for the program it runs now, which differs from the one that wrote it: commit it on ${main}, ` +
-    `which takes a commit that only rewrites Naima's hooks — git add ${hooks} && git commit -m "Rewrite Naima's git hooks for this program". ` +
+  return `Naima rewrote the trunk guard for the program it runs now, which differs from the one that wrote it: commit the rewrite straight on the trunk, ` +
+    `which takes a commit that only rewrites Naima's hooks — ${setupCommit([hooks], "Rewrite the git hooks for this Naima", "update")}. ` +
     `Every checkout runs this copy from now on, the lines among them.`
 }
 
