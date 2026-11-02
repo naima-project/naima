@@ -61,6 +61,22 @@ The earlier window is still there at `/classic` in the same server: the panels o
 tabs of the boards, the metrics, the session notes and each item with its evidence. Every view's data is at `/data/<view>` as JSON, the same data the matching
 command prints with `--json`; the new interface reads it from there.
 
+## Tabs from plugins
+
+Beside the screens are the tabs the project's plugins add, a stance's included, each with its own subtabs when it has some. The UI stance, for instance, adds a
+Design tab with a subtab for each step of its design method: mood board, palette, typography, widget shapes and screens. Each subtab shows that step's rounds,
+the variants of each in frames side by side, the variant chosen and the decision recorded. The stance finds the design record through `design` in the app's
+`stance-ui.json`: the folder of the steps and their `decisions.md` (`design` by default), and, when the comparison pages are kept elsewhere, the folder that
+holds them (the stance's README says how).
+
+A tab keeps the moment the window shows: opening a tab or a subtab never changes it, and Live stays one step away whichever tab is open. Opening a tab or a
+subtab closes the rail. The views of the earlier window are tabs as well, each showing its page as at `/classic`.
+
+What a plugin shows in a tab is either data, which the window draws with its own components (a list, a table, a chart, a gallery of framed pages, markdown
+text), or a page of its own. Every such page runs in a sandboxed frame, cut off from the window: its scripts cannot read the window, its data or its token, nor
+run an action, and it can load nothing from outside this server. `/data/tabs` lists the tabs, and `/data/tab/<name>?sub=<subtab>` gives what one shows. How a
+plugin adds a tab is in [the plugin contract](../reference/plugin-contract.md#tabs-of-the-window).
+
 ## Live, and the past
 
 The window follows the project as it changes. The server looks at it every second: a new commit, a branch or tag that moved, a file of the tracker written (an
@@ -101,10 +117,11 @@ same-origin`. Another page in your browser cannot run one.
 ## How it is built
 
 The interface is a Svelte app that ships with Naima, already built: Naima needs no npm package and no network to show it. Its logic is generated from a model.
-The moment, the rail and the current screen form one state machine, modelled in mCRL2 and checked with its properties, and naima-codegen generates the code the
-screens call. How a screen reads its data is a second one, the reader: a change that comes while a screen is still reading is never lost, since the screen
-reads once more when the first answer comes, and that answer, which may be of the moment before, is set aside. The components only read that machine's state and call its transitions. The colours, type and shapes are the design tokens of the interface, and
-the Inter typeface comes with it under the SIL Open Font License.
+The moment, the rail, the current screen and the plugin's tab and subtab shown form one state machine, modelled in mCRL2 and checked with its properties, and
+naima-codegen generates the code the screens call. How a screen reads its data is a second one, the reader: a change that comes while a screen is still
+reading is never lost, since the screen reads once more when the first answer comes, and that answer, which may be of the moment before, is set aside. The
+components only read the machines' state and call their transitions. The colours, type and shapes are the design tokens of the interface, and the Inter
+typeface comes with it under the SIL Open Font License.
 
 ## The state explorer
 
@@ -112,13 +129,15 @@ The state explorer shows every state the interface can be in, without the server
 it at `/#explorer` in the window, or open the file `ui/dist/explorer.html` of the Naima checkout straight from the disk.
 
 On the left it lists the states of each state machine of the interface. The shell's are every combination of the moment
-(Live, one of two commits of the past, or one of two goals ahead), the rail (closed or open) and the screen that the model
-allows. The home data's are what Home shows while it reads, once it has read (a recorded project, or an empty one), when
-the reading fails, and while a reload waits for the reading on its way. Choose a state and the real interface appears
-below in that state, with the map and the project recorded from a real one. Above it, "Path to here" gives the shortest way from the start to that state, and "Transitions" lists every
-step out of it; choosing one takes that step. Using the interface in the preview moves the explorer too. "Every state"
-shows a thumbnail of the interface in each state of the shell.
+(Live, one of two commits of the past, or one of two goals ahead), the rail (closed or open), the screen, or a plugin's
+tab and subtab (two of each, as in the model), with the tab and subtab last shown, that the model allows. The home
+data's are what Home shows while it reads, once it has read (a recorded project, or an empty one), when the reading
+fails, and while a reload waits for the reading on its way. Choose a state and the real interface appears below in that
+state, with the map and the project recorded from a real one. Above it, "Path to here" gives the shortest way from the
+start to that state, and "Transitions" lists every step out of it; choosing one takes that step. Using the interface in
+the preview moves the explorer too. "Every state" shows a thumbnail of the interface in each state of the shell.
 
-The shell's list comes from the code generated from its model, and its count is the model's: the model has 108 states,
-60 where the interface rests between two of your actions and 48 it only passes through inside one, while it asks the
-screens to read their data again. The explorer lists the 60 and says how many the model has.
+The shell's list comes from the code generated from its model, and its count is the model's: the model has 524 states,
+280 where the interface rests between two of your actions and 244 it only passes through inside one, while it asks
+the screens to read their data again or the tab shown to read its content. The explorer lists the 280 and says how many
+the model has.

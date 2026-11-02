@@ -52,7 +52,9 @@ and `naima show <item> --json` (`/data/item?item=<item>`). So as an agent, read 
 
 A plugin adds a tab to that window by contributing a view to the `ui-views` extension point. The view has a `name`, `title`, `says`, `order`, `panel` (true puts
 it on the first screen instead of in a tab) and `render(params, ctx) → { data, html, css? }`, and it is rendered on each request
-([the reference](../reference/reference.md)). The ui plugin never names the plugins it shows.
+([the reference](../reference/reference.md)). The ui plugin never names the plugins it shows. A tab of the new interface comes from `ui-tabs`: data for one of
+the window's components (a list, a table, a chart, a gallery of framed pages, markdown) or a sandboxed page, with optional subtabs
+([the plugin contract](../reference/plugin-contract.md#tabs-of-the-window)); every `ui-views` view is shown there as a tab too.
 
 Under the launcher, Naima may only write inside the tracker directory. If `--out` is refused, print the chart and redirect it instead, with
 `naima metrics plot coverage > quality.svg`.

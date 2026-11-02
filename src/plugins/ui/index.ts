@@ -33,9 +33,12 @@ import {
 } from "../../core/api.ts"
 import { browserCommand, denoDir, denoPath, openBrowser, type Opened, openWindow, osName, windowCommand, windowUnavailable } from "./open.ts"
 import { serve, type UiView } from "./server.ts"
+import { tabsPoint, type UiTab } from "./tabs.ts"
 
 export type { UiRender, UiView } from "./server.ts"
 export { HOST, serve } from "./server.ts"
+export type { ComponentData, TabComponent, UiFrame, UiSubtab, UiTab, UiTabContent } from "./tabs.ts"
+export { COMPONENTS, tabsPoint } from "./tabs.ts"
 
 const blank = (s: unknown): boolean => typeof s !== "string" || !s.trim()
 
@@ -194,6 +197,23 @@ export function viewsOf(ctx: Context): UiView[] {
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
 }
 
+/** The `ui-tabs` point with its reference: every plugin's tabs of the new UI. */
+export const uiTabsPoint: ExtensionPoint<UiTab> = {
+  ...tabsPoint,
+  document: (ts) => [
+    "",
+    "**UI tabs**, the tabs of the new UI",
+    ...table(["Tab", "Title", "Subtabs", "What it shows"], ts.map((t) => [`\`${t.name}\``, t.title, (t.subtabs ?? []).map((s) => s.title).join(", "), t.says])),
+  ],
+}
+
+/** Every tab a loaded plugin contributes, by its order, then in load order, each under its short name, or its qualified id when another shares it. */
+export function tabsOf(ctx: Context): UiTab[] {
+  return ctx.registry.contributions("ui-tabs")
+    .map((c) => ({ ...(c.value as UiTab), name: shortOrId(ctx, "ui-tabs", c).replace("/", "-") }))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+}
+
 /** What `naima ui` does besides serving: each replaced by a test. */
 export interface UiDeps {
   /** Why no window can open here, or null. */
@@ -230,7 +250,7 @@ export const realDeps: UiDeps = {
 
 /** `naima ui`: serve the views, show them, and stop the server once the window closes, or on Ctrl-C. */
 export async function runUi(ctx: Context, flags: { browser: boolean; open: boolean }, deps: UiDeps = realDeps): Promise<number> {
-  const served = await serve(ctx, viewsOf(ctx), deps.log ? { log: deps.log } : {})
+  const served = await serve(ctx, viewsOf(ctx), { tabs: tabsOf(ctx), ...(deps.log ? { log: deps.log } : {}) })
   try {
     if (!flags.open) {
       ctx.out(`naima ui: serving ${served.url} — open it in a browser; Ctrl-C stops it`)
@@ -294,11 +314,12 @@ export default function ui(): Plugin {
       "one item, which this plugin renders as `naima show` does, its evidence first — its attachments and the items of a type that can prove it, each marked proves, refutes or not yet — and to which every item reference of the window links; the metrics and the others. " +
       "`/data/<view>` answers the same view's data as JSON, the same data the command prints with `--json`; with `?at=<commit>`, as that commit had it, read only from its tree, a commit no local branch reaches refused. " +
       "`/events` streams one server-sent event when the project changes (a commit, a branch moved, a tracker file written), and the new interface reads again while it shows Live. " +
+      "Any plugin, a stance included, adds tabs to the new interface through `ui-tabs`, each with optional subtabs: for a subtab and the moment shown it gives data the interface draws with one of its own components (a list, a table, a chart, a gallery of framed pages, markdown), or a page, served sandboxed under a key derived from the token, so no code of the plugin runs in the interface; every `ui-views` view is shown as a tab too, its page framed the same way. `/data/tabs` lists them, `/data/tab/<name>?sub=<subtab>` gives what one shows, with `?at=` too. " +
       "`/data/metro` gives the rail's map: the trunk, the open lines and the branches with their first-parent commits, where each leaves and rejoins, each worker branch with a status and why, and the goals ahead per line, from `line list`, `claims` and `gates` with `--json`. " +
       "`POST /action/<name>` runs `decide`, `note`, `gate step`, `claim` or `release` through the command line and answers its output and exit code as JSON, refused without the token's cookie, the run's CSRF value from `/session`, the server's own Origin and a same-origin fetch. Closing the window stops the server. " +
       "The window is a webview, loaded from JSR at a pinned version, only by it, and in a process of its own: the rest of Naima has no dependency. " +
       "Where it cannot open — on Node or Bun, on a system it does not run on, offline on its first run, when it fetches its library — the default browser opens instead, and it says so in one line.",
-    points: [viewsPoint],
+    points: [viewsPoint, uiTabsPoint],
     contributes: { "ui-views": [summaryView, boardView, itemView] },
     commands: [uiCommand],
   }
