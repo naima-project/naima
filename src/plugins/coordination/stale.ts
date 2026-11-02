@@ -8,6 +8,7 @@ import { join } from "node:path"
 import { allRefNames, bool, type Command, type Context, gitOrNull, isAncestor, parse, rendered, type SummarySection, trunk, worktrees } from "../../core/api.ts"
 import type { Claim, Pass } from "./index.ts"
 import { ahead, plural } from "./worktrees.ts"
+import { baseOf, gateOfLine } from "./lines.ts"
 
 /** What to do with a piece of stale work. */
 export type NextStep = "land" | "resume" | "archive" | "drop"
@@ -127,6 +128,8 @@ export function staleData(ctx: Context, inputs: StaleInputs): StaleData {
   const trackerTrees = ctx.sibling ? worktrees(ctx.trackerGit) : []
   const branches = new Set([...localBranches(repo), ...inputs.claims.map((c) => c.branch)])
   if (main) branches.delete(main)
+  // A development line is long-lived by design: hello lists it with its latest update, it is never stale work.
+  for (const b of [...branches]) if (gateOfLine(b)) branches.delete(b)
   const now = ctx.now().getTime()
   const out: StaleEntry[] = []
   for (const branch of branches) {
@@ -153,7 +156,8 @@ export function staleData(ctx: Context, inputs: StaleInputs): StaleData {
     if (claimWhy && !gone) why.push(claimWhy)
     if (idleHours !== undefined && idleHours >= inputs.staleAfter) why.push(`no sign of life for ${plural(idleHours, "hour")}`)
     if (!why.length) continue
-    const n = local && main ? ahead(repo, main, branch) : undefined
+    const base = local ? baseOf(repo, branch) : main
+    const n = local && base ? ahead(repo, base, branch) : undefined
     const facts: Omit<StaleEntry, "next" | "how"> = {
       branch,
       ...(tree ? { worktree: tree.path } : {}),
@@ -162,7 +166,7 @@ export function staleData(ctx: Context, inputs: StaleInputs): StaleData {
       ...(idleHours !== undefined ? { idleHours } : {}),
       dirty: [...here.paths, ...there.paths.map((p) => `${ctx.trackerDir}/${p}`)],
       ...(n !== undefined ? { ahead: n } : {}),
-      ...(local && main && isAncestor(repo, main, `refs/heads/${branch}`) ? { upToDate: true as const } : {}),
+      ...(local && base && isAncestor(repo, base, `refs/heads/${branch}`) ? { upToDate: true as const } : {}),
       ...(claim
         ? {
           claim: {

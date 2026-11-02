@@ -52,6 +52,7 @@ import {
   SETUP_TRAILER,
   setupPaths,
   SIBLING_FILE,
+  str,
   type SummarySection,
   TRACKER_DIR,
   TRACKER_TRAILER,
@@ -62,6 +63,7 @@ import {
   writeJson,
 } from "../../core/api.ts"
 import { guardServer, serverHintOf } from "./server.ts"
+import { FIXES, SYNC } from "./lines.ts"
 import { CLOSES, initsTracker, MEETS, onlyAddsTrackerData, onlyClosesItems, recordsMarker, TRACKER_ONLY, TRUNK_REASON } from "./land.ts"
 
 export { TRUNK_REASON }
@@ -145,11 +147,15 @@ export function guardHook(
     '[ "$1" = prepared ] || exit 0',
     "old=",
     "new=",
+    "side=",
     "while read -r o n ref; do",
     `  if [ "$ref" = ${quote(`refs/heads/${trunkName}`)} ]; then old=$o; new=$n; fi`,
+    "  # A development line is guarded too: it takes only landings.",
+    '  case "$ref" in refs/heads/line/*) [ -n "$side" ] || { lold=$o; lnew=$n; side="--line ${ref#refs/heads/}"; } ;; esac',
     "done <<EOF",
     "$input",
     "EOF",
+    'if [ -z "$new" ] && [ -n "$side" ]; then old=$lold; new=$lnew; else side=; fi',
     '[ -n "$new" ] || exit 0',
     'top="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0',
     ...(opts.sibling ? [`# The tracker's own repository: its trunk is not guarded.`, `[ -f "$top/${DATA_FILE}" ] && exit 0`] : []),
@@ -167,7 +173,7 @@ export function guardHook(
       ]
       : []),
     "unset GIT_INDEX_FILE",
-    `exec ${command} guard-check "$old" "$new"`,
+    `exec ${command} guard-check $side "$old" "$new"`,
     "",
   ].join("\n")
 }
@@ -535,6 +541,27 @@ export function trunkRefusal(ctx: Context, old: string, next: string, side: "cod
   return null
 }
 
+/** Whether a commit is a landing on a development line: a marker naming the items it fixes (`Fixes:`) or the trunk commit it syncs (`Sync:`). */
+export function isLineMarker(root: string, sha: string): boolean {
+  const c = commitsOf(root, ["-1", sha])[0]
+  if (!c || c.parents.length !== 2) return false
+  const trailers = gitOrNull(root, "log", "-1", `--format=%(trailers:key=${FIXES},valueonly)%(trailers:key=${SYNC},valueonly)`, sha) ?? ""
+  return !!trailers.trim() && isMarker(root, { ...c, closes: ["line"] })
+}
+
+/** Why the line `branch` may not move from `old` to `next`, in one line; null when it may: a creation, a deletion, a rewind, or only landings. */
+export function lineRefusal(ctx: Context, branch: string, old: string, next: string): string | null {
+  if (ZERO.test(old) || ZERO.test(next) || old === next || isAncestor(ctx.root, next, old)) return null
+  for (const c of commitsOf(ctx.root, ["--first-parent", "--reverse", next, `^${old}`])) {
+    if (c.reason || isLineMarker(ctx.root, c.sha)) continue
+    return `${branch} may not take ${
+      c.sha.slice(0, 12)
+    } "${c.subject}": a development line takes only landings — open an item from the line (naima open <item>), ` +
+      `land it with naima land, and bring the trunk in with naima line sync; only the owner lets a commit through by hand, with a ${TRUNK_REASON}: <why> trailer`
+  }
+  return null
+}
+
 // ── the commands ─────────────────────────────────────────────────────────────
 
 export const guardCheckCommand: Command = {
@@ -542,15 +569,19 @@ export const guardCheckCommand: Command = {
   says: "what the trunk guard's git hook runs when the trunk is about to move: exit 0 when it may, else one line saying why not and what to do",
   enforces:
     "a commit, merge or fast-forward of the trunk made by hand is refused unless every commit it adds to the first-parent line is a landing marker, the record land makes, a commit that only adds to the tracker data (a claim may also be rewritten or removed) or only closes items, naima init's commit, one that only switches the guard, a commit Naima's setup asks for (a Naima-Setup: trailer: the install, the migration of a copied program, the update that brings the guard in) touching only the tracker folder and the files a setup writes, or one with a Trunk-reason: trailer; a tip the upstream holds, a rewind, a ref created or deleted pass",
-  usage: "guard-check [--tracker] <old> <new>",
-  examples: ["guard-check 0123abc 4567def", "guard-check --tracker 0123abc 4567def"],
-  options: [{ name: "--tracker", says: "the move is of the tracker's trunk, in sibling mode: it takes the commits Naima makes there and landing markers" }],
+  usage: "guard-check [--tracker | --line <line>] <old> <new>",
+  examples: ["guard-check 0123abc 4567def", "guard-check --tracker 0123abc 4567def", "guard-check --line line/release-1.2 0123abc 4567def"],
+  options: [
+    { name: "--tracker", says: "the move is of the tracker's trunk, in sibling mode: it takes the commits Naima makes there and landing markers" },
+    { name: "--line", says: "the move is of a development line, line/<gate>: it takes only landings (Fixes: or Sync: markers)" },
+  ],
   hook: true,
   run(args, ctx) {
-    const p = parse(args, { tracker: { type: "boolean" } })
+    const p = parse(args, { tracker: { type: "boolean" }, line: { type: "string" } })
     const [old, next, ...rest] = p.positionals
     if (!old || !next || rest.length) throw usageError(this)
-    const why = trunkRefusal(ctx, old, next, bool(p, "tracker") ? "tracker" : "code")
+    const line = str(p, "line")
+    const why = line ? lineRefusal(ctx, line, old, next) : trunkRefusal(ctx, old, next, bool(p, "tracker") ? "tracker" : "code")
     if (!why) return 0
     ctx.err(`naima: ${why}`)
     return 1

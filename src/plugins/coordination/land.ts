@@ -1360,11 +1360,55 @@ export interface Guarded {
   accepts(ctx: Context, sha: string, files: { status: string; path: string }[]): boolean
 }
 
+/**
+ * Each open development line's first-parent line after the commit that opened it: every commit a landing, a merge up
+ * to date whose tree is the branch tip's, with a Fixes: or a Sync: trailer; one note per commit that is not.
+ */
+function lineFindings(ctx: Context): Finding[] {
+  if (ctx.sibling) return []
+  const main = trunk(ctx.root)
+  if (!main) return []
+  const out: Finding[] = []
+  for (const l of openLines(ctx.root)) {
+    const log = gitOrNull(
+      ctx.root,
+      "log",
+      "--first-parent",
+      "--reverse",
+      `--format=%H%x1f%P%x1f%T%x1f%s%x1f%(trailers:key=${FIXES},valueonly,separator=%x2C)%(trailers:key=${SYNC},valueonly,separator=%x2C)%x1f%(trailers:key=${TRUNK_REASON},valueonly)%x1e`,
+      `${main}..${l.branch}`,
+    ) ?? ""
+    const commits = log.split("\x1e").map((r) => r.replace(/^\n/, "")).filter(Boolean).map((r) => r.split("\x1f"))
+    for (const [sha = "", parents = "", tree = "", subject = "", trailers = "", reason = ""] of commits.slice(1)) {
+      const [first = "", second = ""] = parents.split(" ")
+      const marker = !!second && !!trailers.trim() && gitOrNull(ctx.root, "rev-parse", `${second}^{tree}`) === tree && isAncestor(ctx.root, first, second)
+      if (marker || reason.trim()) continue
+      out.push({
+        level: "note",
+        subject: sha,
+        message:
+          `${l.branch} took ${
+            sha.slice(0, 12)
+          } "${subject}" without a landing marker: a line takes only landings (naima land, with Fixes: or Sync: trailers) — ` +
+          `or accept it once: naima waive landings-are-markers ${sha} --reason "<why>" --as <who>`,
+      })
+    }
+  }
+  return out
+}
+
 export const landingsAreMarkers = (guarded: Guarded | null = null): Check => ({
   name: "landings-are-markers",
   says:
     "from the first landing marker on the trunk's first-parent line (a merge whose first parent the second contains, whose tree is the second's, with a Closes:, a Tracker-only: or a Meets: trailer), every first-parent commit is a marker: a fast-forward, a commit made on the trunk, a merge not up to date, or one without a Closes: naming an item done or fixed — or a Tracker-only: trailer giving why a merge that changes only tracker data lands, or a Meets: trailer naming the requirement a merge meets, closing nothing if need be — is a note naming it, one note per commit, with the commit as its subject so that a waiver can accept it. A commit made on the trunk that only adds to the tracker data — new files in the data directory outside rules/, waivers/ and naima.json, and lines added to an item's README.md, its meta.json untouched — is accepted without a note, and so is a commit that only closes items as naima close does (each moved whole from its type's folder to the closed archive), the commit right after a marker that only adds the marker to the commits of items it closes, the record naima land makes, and naima init's commit, the one that adds naima.json. Any other tracker step that changes more than it adds (an update of Naima, a waiver, a release record, an epic set done) is made on an item's branch and landed. Before the first marker nothing is asked, unless the trunk guard is on: then the check asks from the commit that added the guard's hook to the trunk, so a project is not noted for what it committed before the guard; a commit the owner let through the guard with a Trunk-reason: trailer is a note that gives the reason. In sibling mode, where Naima commits every write to the tracker itself with a Naima-Command: trailer naming the command, such a commit is accepted, and from the first of them on, a commit of the tracker's trunk without one is a note: it was made by hand",
   run(ctx) {
+    return [...trunkFindings(ctx, guarded), ...lineFindings(ctx)]
+  },
+})
+
+/** What landings-are-markers finds on the trunk's first-parent line. */
+function trunkFindings(ctx: Context, guarded: Guarded | null): Finding[] {
+  {
     // The markers that close items are the tracker's: the project's trunk, or the tracker's own in sibling mode.
     const repo = ctx.trackerGit
     const main = trunk(repo)
@@ -1433,5 +1477,5 @@ export const landingsAreMarkers = (guarded: Guarded | null = null): Check => ({
       }
     }
     return out
-  },
-})
+  }
+}

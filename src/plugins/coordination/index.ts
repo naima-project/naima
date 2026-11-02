@@ -92,7 +92,21 @@ import { guardCheckCommand, guardCommand, guardedFrom, guardOffSection, guardSet
 import { diaryCheck, diaryCommand, eventCommand, EVENTS, frontLines, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
 import { recoverCommand } from "./recover.ts"
 import { readyLines, readyNow, readySection, readyWorkWaiting, workerLimitSection } from "./ready.ts"
-import { chosenLine, goalBefore, goalOrderPoint, type Line, lineBranch, lineCommand, lineOf, linesSection, linesView, onLine, openLines } from "./lines.ts"
+import {
+  baseOf,
+  chosenLine,
+  gateOfLine,
+  goalBefore,
+  goalOrderPoint,
+  type Line,
+  lineBranch,
+  lineCommand,
+  lineOf,
+  linesSection,
+  linesView,
+  onLine,
+  openLines,
+} from "./lines.ts"
 
 export { type NextStep, type StaleData, type StaleEntry } from "./stale.ts"
 export { type Timeline, type TimelineEvent, timelineOf } from "./timeline.ts"
@@ -273,7 +287,7 @@ function freshClaim(ctx: Context, branch: string): Claim {
 }
 
 /** Whether `branch` is the trunk, of the project or, in sibling mode, of the tracker: no claim belongs there. */
-const onTrunk = (ctx: Context, branch: string): boolean => branch === trunk(ctx.root) || branch === trunk(ctx.trackerGit)
+const onTrunk = (ctx: Context, branch: string): boolean => branch === trunk(ctx.root) || branch === trunk(ctx.trackerGit) || gateOfLine(branch) !== null
 
 /** A claim that holds nothing: no item. */
 const empty = (c: Claim): boolean => !c.items.length
@@ -320,7 +334,9 @@ const claimCommand: Command = {
     if (branch === "HEAD") throw new Error("HEAD is detached: a claim belongs to a branch — git switch -c <branch>, then claim")
     if (onTrunk(ctx, branch)) {
       throw new Error(
-        `${branch} is the trunk: a claim belongs to an item's branch, never to the trunk, where every merge would carry it — naima open <item> makes the branch and its claim`,
+        `${branch} is ${
+          gateOfLine(branch) ? "a development line" : "the trunk"
+        }: a claim belongs to an item's branch, never to the trunk or a line, where every merge would carry it — naima open <item> makes the branch and its claim`,
       )
     }
     const all = readClaims(ctx)
@@ -571,8 +587,10 @@ function pruneSide(ctx: Context, repo: string, branch: string, write: boolean, a
   if (tree?.self) throw new Error(`${branch} is the worktree you stand in: prune it from another one`)
   const tag = archiveTag(branch)
   const n = ahead(repo, main, branch)
-  const kept = gitOrNull(repo, "rev-parse", "--verify", "--quiet", `refs/tags/${tag}`) !== null &&
-    gitOrNull(repo, "merge-base", "--is-ancestor", branch, `refs/tags/${tag}`) !== null
+  const kept = (gitOrNull(repo, "rev-parse", "--verify", "--quiet", `refs/tags/${tag}`) !== null &&
+    gitOrNull(repo, "merge-base", "--is-ancestor", branch, `refs/tags/${tag}`) !== null) ||
+    // A branch landed on an open development line: the line holds its commits.
+    (repo === ctx.root && openLines(repo).some((l) => l.branch !== branch && isAncestor(repo, branch, l.branch)))
   const unkept = n > 0 && !kept
   if (unkept) {
     const why = `${branch} has ${plural(n, "commit")} not on ${main}${name} and no ${tag} tag holding them`
@@ -946,7 +964,7 @@ function worktreePolicy(policy: Policy): Check {
     name: "worktree-policy",
     says:
       "every worktree but the main one is <worktrees>/<what> on the branch <who>/<what>, every local branch but the trunk is <who>/<what>, and every worktree carries a claim — one with commits the trunk lacks and no claim, now or released in those commits, nor a session note, is a problem for the worktree being checked, and (unless naima check --all-worktrees) a note naming any other worktree in the same state; a worktree outside <worktrees> that nothing holds is not Naima's (made before it, or by plain git) and is only a note",
-    run: (ctx, options) => policyFindings(ctx.root, policy, holders(ctx), options),
+    run: (ctx, options) => policyFindings(ctx.root, policy, holders(ctx), options, (b) => baseOf(ctx.root, b)),
   }
 }
 
@@ -954,7 +972,7 @@ const trunkMoved: Check = {
   name: "trunk-moved-while-preparing",
   says:
     "a branch whose claim is marked preparing is told every commit the trunk took that it lacks, and which of them the trunk's reflog records as committed on the trunk directly",
-  run: (ctx) => readClaims(ctx).filter((c) => c.preparing).flatMap((c) => preparingFindings(ctx.root, c.branch)),
+  run: (ctx) => readClaims(ctx).filter((c) => c.preparing).flatMap((c) => preparingFindings(ctx.root, c.branch, baseOf(ctx.root, c.branch))),
 }
 
 /** The commits of `repo` on its branch that its trunk lacks, with the value each gives the trailer `key`: empty on the trunk or without one. */
