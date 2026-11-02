@@ -53,7 +53,7 @@ import {
   WAIVERS,
   worktrees,
 } from "../../core/api.ts"
-import { changeNoteTrailers } from "./changes.ts"
+import { changeNoteTrailers, NO_CHANGE_NOTE } from "./changes.ts"
 import { guardLandingMessages } from "./messages.ts"
 import { CLAIMS } from "./index.ts"
 import { plural } from "./worktrees.ts"
@@ -737,7 +737,8 @@ async function landBoth(
  * is a sync, recorded in a `Sync:` trailer naming the trunk commit it merged, and may carry no item's work. Neither the
  * main checkout nor the trunk is touched.
  */
-export function landOnLine(ctx: Context, branch: string, gate: string, closes: string[]): number {
+export function landOnLine(ctx: Context, branch: string, gate: string, closes: string[], noChangeNote?: string): number {
+  if (noChangeNote !== undefined && (!noChangeNote.trim() || noChangeNote.includes("\n"))) throw new Error(`--no-change-note takes the reason, on one line`)
   const line = lineBranch(gate)
   const trees = worktrees(ctx.root)
   if (!trees[0]?.self) throw new Error(`land runs from the main checkout: ${trees[0]?.path ?? "the main worktree"} — only the coordinator lands`)
@@ -765,6 +766,8 @@ export function landOnLine(ctx: Context, branch: string, gate: string, closes: s
     ids = landedItems(ctx, branch, closes, old, tip).map((i) => i.id)
     trailers = ids.map((id) => `${FIXES}: ${id}`)
   }
+  // A landing on a line asks for no change note: the line's landing on the trunk does. A reason given is kept on the marker.
+  if (noChangeNote !== undefined) trailers.push(`${NO_CHANGE_NOTE}: ${noChangeNote.trim()}`)
   guardLandingMessages(ctx, branch, old, tip)
   const made = runGit(ctx.root, ["commit-tree", `${tip}^{tree}`, "-p", old, "-p", tip, "-F", "-"], { input: `Land ${branch}\n\n${trailers.join("\n")}\n` })
   if (!made.ok) throw new Error(`git commit-tree: ${gitReason(made)}`)
@@ -1028,7 +1031,7 @@ export const land: Command = {
     {
       name: "--no-change-note",
       says:
-        "why the branch changes behaviour paths with no change note — a refactor, a test, nothing a person or an agent sees; recorded in the marker as a No-change-note: trailer",
+        "why the branch changes behaviour paths with no change note — a refactor, a test, nothing a person or an agent sees; recorded in the marker as a No-change-note: trailer. On a development line no change note is asked, since the line's landing on the trunk asks for it; a reason given is kept on the line's marker all the same",
     },
     {
       name: "--stale-proofs",
@@ -1084,15 +1087,13 @@ export const land: Command = {
       if (!(own && lines.some((l) => l.gate === own))) {
         const gate = lineOf(ctx.root, branch, lines)
         if (gate) {
-          if (trackerOnly !== undefined || meets.length || stale !== undefined || str(p, "no-change-note") !== undefined) {
+          if (trackerOnly !== undefined || meets.length || stale !== undefined) {
             throw new Error(
-              `${branch} lands on ${
-                lineBranch(gate)
-              }, which closes nothing: --tracker-only, --meets, --stale-proofs and --no-change-note belong to the landing of the line on the trunk`,
+              `${branch} lands on ${lineBranch(gate)}, which closes nothing: --tracker-only, --meets and --stale-proofs belong to the landing of the line on the trunk`,
             )
           }
           ctx.out(`on line ${lineBranch(gate)}`)
-          return landOnLine(ctx, branch, gate, strs(p, "closes"))
+          return landOnLine(ctx, branch, gate, strs(p, "closes"), str(p, "no-change-note"))
         }
         const gone = abandonedLineOf(ctx.root, branch)
         if (gone) {

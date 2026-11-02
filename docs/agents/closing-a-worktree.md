@@ -121,7 +121,8 @@ git merge-base --is-ancestor main HEAD && echo "ready to land"
 ```
 
 A branch opened from a [development line](../guide/lines.md) merges its line instead (`git merge --no-edit line/<gate>`), and lands on it; it never merges the
-trunk, which reaches the line only by `naima line sync <gate>`. A branch whose line has landed in the meantime merges the trunk and lands there.
+trunk, which reaches the line only by `naima line sync <gate>`. A branch whose line has landed in the meantime merges the trunk and lands there. A landing on
+a line asks for no change note, since the line's landing on the trunk does; `--no-change-note "<reason>"` is taken there all the same, and kept on the marker.
 
 This makes the trunk an ancestor of the branch, which landing requires. Resolve any conflicts here, where you still have the context. Then run step 5 again,
 because the merge brought in code you haven't tested together with yours.
