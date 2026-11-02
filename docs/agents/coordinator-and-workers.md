@@ -134,6 +134,11 @@ worker, one worktree, one branch, opened with `naima open <item> <item>`.
 the open ones. Free one that has landed with `naima prune --branch <branch> --write`. Raise the bound only when the owner asks for it, in `naima.json`;
 `naima hello` states the bound in one line, with the reminder that the owner can ask to change it, and the coordinator passes it on.
 
+With [development lines](../guide/lines.md) the bound counts per line: the trunk is one line and each `line/<gate>` another. The coordinator keeps the line it
+works on with `naima line use <gate>`; `naima open`, `naima claims` and `naima queue --ready` then follow it, and a worker's branch shows its line by itself.
+The coordinator syncs a line (`naima line sync <gate>`), lands its items' branches on it with `naima land`, and lands the line on the trunk once
+`naima gate show <gate> --line` says it is ready.
+
 Naima feeds itself from the ready queue. When a meeting with the owner closes, the work its decisions call for is approved package by package, queued or to
 start now (`naima meeting <meeting> --close`). Whenever fewer workers are open than `maxWorkers` allows, the coordinator starts the next item of
 `naima queue --ready` with a worker, without asking: `naima hello` and `naima claims` name the items to start, and the check `ready-work-waiting` notes a slot

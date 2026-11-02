@@ -1,6 +1,11 @@
 // The object every command, check and view receives.
 
+import { randomUUID } from "node:crypto"
+import { mkdirSync, rmSync } from "node:fs"
+import { join } from "node:path"
 import { posixRelative } from "./config.ts"
+import { gitReason, runGit } from "./git.ts"
+import { stateDir } from "./tick.ts"
 import { deepFreeze } from "./collections.ts"
 import { writes } from "./item.ts"
 import { loadRepo } from "./repo.ts"
@@ -79,4 +84,31 @@ export function createContext(place: Place, config: Config, registry: Registry, 
     err: io.err,
     now: io.now,
   }
+}
+
+/**
+ * The tracker as `ref` has it, read only: its data directory checked out of git, through an index of its own, into a
+ * folder of Naima's state in the git directory, the one place outside the tracker every command may write. The tree
+ * of a branch no worktree stands on is judged so, such as a development line's tip. `dispose` removes the folder.
+ */
+export function contextAt(ctx: Context, ref: string): { ctx: Context; dispose(): void } {
+  const state = stateDir(ctx.root)
+  if (!state) throw new Error("the tracker of a ref is read into Naima's state folder in the git directory: this is not a git repository")
+  const dir = join(state, "at", randomUUID())
+  const data = join(dir, "data")
+  mkdirSync(data, { recursive: true })
+  const dispose = (): void => rmSync(dir, { recursive: true, force: true })
+  try {
+    const env = { GIT_INDEX_FILE: join(dir, "index") }
+    const tree = ctx.trackerPrefix ? `${ref}:${ctx.trackerPrefix}` : `${ref}^{tree}`
+    const read = runGit(ctx.trackerGit, ["read-tree", tree], { env })
+    if (!read.ok) throw new Error(`no tracker on ${ref}: ${gitReason(read)}`)
+    const out = runGit(ctx.trackerGit, ["checkout-index", "-a", "-f", `--prefix=${data.split("\\").join("/")}/`], { env })
+    if (!out.ok) throw new Error(`the tracker on ${ref} could not be read: ${gitReason(out)}`)
+  } catch (e) {
+    dispose()
+    throw e
+  }
+  const at = createContext({ root: ctx.root, data, program: ctx.program }, ctx.config as Config, ctx.registry, { out: ctx.out, err: ctx.err, now: ctx.now })
+  return { ctx: at, dispose }
 }

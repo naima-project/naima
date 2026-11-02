@@ -54,7 +54,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`version`](#naima-version) | core | print the banner naima hello opens with: the running Naima's version and commit; naima --version prints the same | nothing: it only prints |
 | [`help`](#naima-help) | core | list every command the loaded plugins provide, with its usage | nothing: it only prints |
 | [`new`](#naima-new) | core | open an item | every field is validated against its type's declarations before the item exists, and every write hook runs: a typo or a refusal leaves nothing behind; an archive type takes no new item |
-| [`show`](#naima-show) | core | print one item: fields, links in both directions, attachments, prose | nothing: it only reads |
+| [`show`](#naima-show) | core | print one item: fields, what the plugins say of it (such as a fix on a development line), links in both directions, attachments, prose | nothing: it only reads |
 | [`list`](#naima-list) | core | list items, most urgent first | nothing: it only reads |
 | [`set`](#naima-set) | core | set fields on an item; an empty value removes the field | every pair is validated against the declared fields and passes every write hook (a status moves only along its type's transitions, and each plugin's own hooks); nothing is written unless all pass |
 | [`note`](#naima-note) | core | append a dated, attributed note to an item's Notes section: the writer's own words, never a person's message pasted in; earlier notes are never rewritten | notes are append-only and attributed: the writer is named, earlier notes are never rewritten, and a note holds no heading of its own |
@@ -83,10 +83,11 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`land`](#naima-land) | coordination | land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor | runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one whose commits carry private infrastructure in their messages — a home-directory path, a machine or user name — in the project or in a submodule whose pointer it moves (commits no remote-tracking branch holds), unless --allow-private gives the reason; one that names no item (unless --tracker-only gives the reason and the branch changes only tracker data, or --meets names a requirement it meets) or an item open and not fixed (under --tracker-only, an item the branch claimed and did not fix stays open instead); refuses --meets for an item that is not a requirement, one with no item that verifies it and passed on the branch tip, one whose proofs all passed on the trunk already, and one an item refutes, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch a landing check finds failing, whatever flag is given, and one that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, adds the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right after the marker, so that naima close finds a commit reachable from the trunk; then closes, through naima close and every check it makes, each item it names, or whose proof it changed, that is fixed and whose proof has passed, in one commit on the trunk that only closes items, and says each item it names that is fixed and still waits for its proof, which the landing of that proof closes; then prints what every landing report says of the files the landing changed, never undoing it |
 | [`fix`](#naima-fix) | coordination | take a small fix from filing to landing in one step, as the normal steps would: on the main checkout, on the trunk, file the item, open its worktree, move the change there, commit it and land it; on a worker's branch, file the item, commit the change on the branch and hand it over to the coordinator | the change is what the checkout holds uncommitted outside the tracker data, and there must be one unless an earlier run left the item's branch; the item's type has fixedOn, which is set on the branch; the command releases its own claim before a landing and before a run ends done; a worker's run never touches the trunk; the coordinator's commits on the trunk are the new item (tracker data only) and the landing marker; who works is --as, the coordination plugin's who option, or coordinator when an agent runs it on the trunk, and otherwise it refuses before writing anything; a coordinator's run stops where the normal path stops: a landing refused because the trunk moved merges the trunk into the branch and is tried once more, and any other refusal once the worktree is open leaves the branch, the worktree, what was committed and the claim in place, records the reason of a refused landing on the item, committed on the branch, and says what to do next; a later run for the same title takes up that branch and worktree instead of opening new ones |
 | [`guard`](#naima-guard) | coordination | the trunk guard: whether it is on and runs in this clone; off turns it off for the project (recorded in naima.json, the hook removed), on turns it back on; server, on the owner's word, makes a GitHub ruleset that lets only the repository's admins push the trunk (with gh, else it says the request and the web page; --print only says them) | while on, the git hook refuses a commit, merge or fast-forward of the trunk made by hand (naima guard-check says what passes); off is the owner's choice, recorded, and update does not put the hook back |
-| [`guard-check`](#naima-guard-check) | coordination | what the trunk guard's git hook runs when the trunk is about to move: exit 0 when it may, else one line saying why not and what to do | a commit, merge or fast-forward of the trunk made by hand is refused unless every commit it adds to the first-parent line is a landing marker, the record land makes, a commit that only adds to the tracker data (a claim may also be rewritten or removed) or only closes items, naima init's commit, one that only switches the guard, a commit Naima's setup asks for (a Naima-Setup: trailer: the install, the migration of a copied program, the update that brings the guard in) touching only the tracker folder and the files a setup writes, or one with a Trunk-reason: trailer; a tip the upstream holds, a rewind, a ref created or deleted pass |
+| [`guard-check`](#naima-guard-check) | coordination | what the trunk guard's git hook runs when the trunk is about to move: exit 0 when it may, else one line saying why not and what to do | a commit, merge or fast-forward of the trunk made by hand is refused unless every commit it adds to the first-parent line is a landing marker, the record land makes, a commit that only adds to the tracker data (a claim may also be rewritten or removed) or only closes items, naima init's commit, one that only switches the guard, one that only rewrites Naima's hooks to the text the running program writes, a commit Naima's setup asks for (a Naima-Setup: trailer: the install, the migration of a copied program, the update that brings the guard in) touching only the tracker folder and the files a setup writes, or one with a Trunk-reason: trailer; a tip the upstream holds, a rewind, a ref created or deleted pass; a commit that brings the work of a development line that has not landed, or of an abandoned one, is refused whatever its trailers |
 | [`push-check`](#naima-push-check) | coordination | what the trunk guard's pre-push hook runs: exit 0 when no commit the push sends carries private infrastructure in its message, else each one with what to write instead | a push is refused when a commit it sends — one the remote's tip does not hold, or no remote-tracking branch holds when that tip is new or unknown here — has a home-directory path, a machine or user name, an IP address, a URI with a port or a word of the private list in its message; a deletion sends nothing; git push --no-verify skips the hook, on the owner's word |
 | [`changes`](#naima-changes) | coordination | print the release notes a range of commits makes, assembled from the change notes it adds to changes/, as Markdown: breaking changes first, then those that need an action, then features, behaviour changes and fixes, each with its text and what to do, and a Credits section last, as naima credits --markdown prints it; from the newest version tag (v…) to HEAD unless --from and --to say otherwise, in every repository of the project with a changes/config.json (the project itself, a submodule) unless --repo names one | nothing: it only prints; a change note that does not parse is named on stderr |
 | [`prune`](#naima-prune) | coordination | list (or with --write remove) stale claim files: their branch is gone, or is the trunk, or merged into the trunk that carries the file, or every item they claim is closed; one only another ref carries is listed with that ref, to be dropped there. With --branch, delete a branch and its worktree, refusing one with unmerged commits that no archive/<branch> tag holds | the trunk is never pruned, and a branch with unmerged commits that no archive/<branch> tag holds is refused, and so is a worktree with anything uncommitted, inside its submodules too; a clean one is removed even when it holds a submodule; nothing is removed without --write |
+| [`line`](#naima-line) | coordination | parallel development lines, one long-lived branch line/<gate> per goal of the trunk: new starts one from the trunk; list shows the open ones, each with its gate, latest update, how far it lags and the items fixed on it; use sets the line this chat works on (kept outside the repository), which open, claims, queue --ready and land follow; sync merges the trunk into a line through a short branch; abandon keeps its commits under archive/line/<gate> and deletes it | a line starts only from the trunk, tied to a gate the project declares, never from another line; the trunk reaches a line only by a sync, never the reverse, and a line reaches the trunk only by landing; abandon keeps every commit under its archive tag and writes nothing on the trunk, so the items fixed on the line are open there again; nothing is supported with the tracker in a repository of its own |
 | [`stale`](#naima-stale) | coordination | the work left behind: every branch, worktree and claim with no sign of life for staleAfter hours, or whose branch is gone or merged, with what it holds and the next step | nothing: it only reads; a branch counts as stale when its claim is stale (branch gone or merged into the trunk, or every item closed) or nothing happened on it for staleAfter hours (24 here) — no commit, step, session note or file changed; the next step is resume when anything is not committed, land when it is ahead of the trunk, up to date with it and holds open items, resume when it is behind, archive when no open item is claimed, drop when the trunk has all of it or the branch is gone |
 | [`pass`](#naima-pass) | coordination | write this session's note (one new file), or list the newest | a session note is one new file: earlier ones are never rewritten; a note is refused without --ack when the project's active rules ask for an acknowledgement, and --ack is refused unless it carries every phrase they ask for |
 | [`event`](#naima-event) | coordination | record an event the timeline cannot derive — a decision taken elsewhere, a build handed out, a policy, an outside fact — as one new file; everything else on `naima view timeline` is derived | an event has a YYYY-MM-DD date and a one-word kind, and is one new file; what the timeline derives is never recorded |
@@ -143,6 +144,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `dirs` | core | directories under the tracker root a plugin owns that are not item types | core, coordination, metrics, rules, commit-hooks, adopt |
 | `summary` | core | a block of `naima summary`; one marked `hello` is said by `naima hello` among what waits on the owner, and one with `goals(ctx)` says there where the project is going | core, trackers, coordination, triage, gates, epics, discussions, planning, beta-markers, verifier, backup, metrics, long-work |
 | `guide` | core | a block `naima guide` prints first, inside a project, before the documentation pages | triage, verifier, rules |
+| `facts` | core | lines `naima show` prints of an item under its fields, and in its JSON as `facts`: what a plugin knows of the item that its files do not say | coordination |
 | `rank` | core | an additive term of every item's urgency; lower is more urgent | triage, gates |
 | `jobs` | core | a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it, among those its canRunHere admits (a process it does not claims no attempt); what it finds is shown to the owner as messages | outside-issues, long-work |
 | `extends` | core | additive changes to another plugin's type — statuses (an existing one only with its category), traits, transitions — or field — enum values, more types or traits it applies to | discussions, knowledge, roles |
@@ -151,8 +153,9 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `agent-hooks` | core | a hook the agent tool runs, which Naima installs in the tool's settings beside its own at `naima init`, `naima update` and `naima stance adopt`, and removes once the plugin is gone: `name`, `says`, `tool` (the agent tool, by adapter id), `event` and optionally `matcher` in that tool's terms, and `command`, the naima command it runs as a list of words |  |
 | `migrations` | core | a plugin's own data migrations, in order from its format 1, run by `naima update` after the core's | gates |
 | `credits` | core | what a plugin runs or builds on without installing it (a program found on PATH, say), credited by `naima credits`: name, homepage, source, authors, license, version (provisional) | verifier |
-| `landing-reports` | coordination | what `naima land` checks before a branch lands and reports once it has: `name`, `says`, and `refuses(ctx, { branch, from, to, changed }) → lines`, what fails on the branch, any line refusing the landing with no flag to let it through; `blocks(ctx, landing) → lines`, what the landing changed whose proofs are not current, any line refusing the landing unless --stale-proofs gives the reason; or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root | verifier, rules |
+| `landing-reports` | coordination | what `naima land` checks before a branch lands and reports once it has: `name`, `says`, and `refuses(ctx, { branch, from, to, changed }) → lines`, what fails on the branch, any line refusing the landing with no flag to let it through; `blocks(ctx, landing) → lines`, what the landing changed whose proofs are not current, any line refusing the landing unless --stale-proofs gives the reason; or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root | gates, verifier, rules |
 | `claims-reports` | coordination | a section `naima claims` prints after the claims, and gives under `reports` with --json: `name`, `says`, and `lines(ctx) → lines`, none when there is nothing to report | long-work |
+| `goal-order` | coordination | the order of the goals development lines are tied to: `name`, `says`, `before(ctx, a, b) → boolean`, whether goal a comes before goal b; naima open refuses an item on the line of a goal that comes after the item's own | gates |
 | `gates` | gates | a named release or merge condition, backed by items: `title`, `says`, `decides`, `evaluate(ctx) → { holds, blocking, owed }`; `inFullSuite` makes it part of the full suite a release gate (`fullSuite`) requires | verifier |
 | `methods` | gates | an ordered list of steps, each with an exit criterion, that a gate may follow (`naima gate set <gate> --method <plugin>/<method>`): `name`, `title`, `says`, `steps: [{ name, title, exit }]`; the gate holds only once every step is closed, in order |  |
 | `roles` | roles | a role of the company of agents: `title`, what it `owns`, what it `refuses` (never empty), the `kinds` and `types` on its queue, and `queue(ctx)`, its open items most urgent first | roles |
@@ -466,7 +469,7 @@ naima new bugs "Export crashes on an empty layer" --from export-keeps
 
 ### naima show
 
-Print one item: fields, links in both directions, attachments, prose.
+Print one item: fields, what the plugins say of it (such as a fix on a development line), links in both directions, attachments, prose.
 
 **Enforces**: Nothing: it only reads.
 
@@ -476,7 +479,7 @@ naima show <item> [--json]
 
 | Option | Default | What it does |
 |---|---|---|
-| `--json` |  | print the item as JSON: its fields, its links with the other end's title and status and whether it is evidence that proves or refutes, its attachments, its prose |
+| `--json` |  | print the item as JSON: its fields, what the plugins say of it (facts), its links with the other end's title and status and whether it is evidence that proves or refutes, its attachments, its prose |
 
 Examples:
 
@@ -1152,7 +1155,7 @@ Claims and session notes, one file per session, recombined from every branch; th
 
 Its contributions' qualified ids are `coordination/<name>`.
 
-No session writes a file another session writes. A claim is one file per branch, `claims/<uuid>.json`; a session note is one file per session, `passes/<date>-<uuid>.md`. Both are written on the writer's own branch and never staged or committed by the tool: commit them with the work. `claims`, `pass --list` and `summary` recombine them at read time from every local branch — the trunk, every branch not merged into it, whatever each worktree stands on — each read from the disk of the worktree that stands on it, uncommitted files included, or from its ref when none does; remote-tracking refs are not read. The trunk is the branch origin's HEAD names, else `main`, else `master`; without one, every local branch is read. A claim belongs to a branch, so on a detached HEAD `claim` is refused. Several branches may claim one item: `claim` says who else holds it rather than refusing. There are no locks: a claim says who works on what and never excludes anyone. What one session at a time must touch — the trunk, the published site, the releases — is touched by one writer, the coordinator; workers only prepare on their own branches, and the owner decides what lands and when, when it matters. Work happens by one scheme, checked: the worktree `<worktrees>/<what>` stands on the branch `<who>/<what>` and carries a claim; `open` makes all three in one step. A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. A claim is stale when its branch is gone, or merged into the trunk that carries its file, or every item it claims is done or closed: `claims` lists it apart, `stale-claims` notes it, and `prune --write` releases it; a claim that still names a closed item among open ones is noted by `claims-on-closed-items`. Work left behind is listed by `stale` and in the summary: every branch, worktree and claim whose claim is stale, or with no sign of life (commit, step, session note, file not committed) for `staleAfter` hours, with its facts — last commit, files not committed, commits ahead of the trunk, whether it is up to date with it, items held and their status — and the next step: resume, land, archive or drop. Landings are semi-linear: a branch the trunk is an ancestor of enters it as one marker commit, a merge whose tree is the branch tip's and whose message names the items it closes in `Closes:` trailers; `land` makes it from the main checkout, the shortcut for `git merge --no-ff`, and moves the trunk only from the commit it read. From the first marker on the trunk's first-parent line every first-parent commit is a marker, or `landings-are-markers` notes it, one note per commit, which `naima waive landings-are-markers <commit>` accepts with a reason; before it nothing is asked, so a history of fast-forwards keeps working. The trunk guard holds the same line before anything lands: a git `reference-transaction` hook (git 2.28 or later), written by `naima init` and by `naima update` into the data directory's `hooks/` and named by core.hooksPath, refuses a commit, merge or fast-forward of the trunk made by hand, in one line that says to open an item and land it. It lets through what the check accepts (a marker, the record land makes after it, a commit that only adds to the tracker data or only closes items, naima init's commit), a commit that only switches the guard, a tip origin's branch of the trunk already holds (a pull), a rewind, and a commit with a `Trunk-reason:` trailer, the owner's way through, which the check then notes with its reason. Other refs cost the shell script alone; for the trunk it starts `naima guard-check`. While the guard is on the check asks from the commit that added the hook to the trunk, so a project is not noted for its past; the plugin ships the rule that every change goes through an item and lands, acknowledged as "Landing mode on". `naima guard off` turns it off for the project (the option `trunkGuard`, the hook removed), `naima guard on` back on, and `naima hello` says when it is off. A commit made on the trunk that only adds to the tracker data is accepted without a note: new files in the data directory outside `rules/`, `waivers/` and `naima.json`, lines added to an item's README.md with its meta.json untouched, and any change to a claim in `claims/` (added, rewritten by `claim --step` or removed by `release` and `prune --write`), so the coordinator files an item, appends a note, writes a diary entry or a session note, and keeps the claims without a branch; a status, a rule, a waiver, the lock or a release record still lands, from the worktree of an item of its own. naima init's commit, the one that adds `naima.json`, and the close after a landing are accepted too. A repository of the project with `changes/config.json` — the project itself, or a product it holds as a submodule — names there the paths whose change is a change of behaviour; a branch that changes one adds a change note, `changes/<date>-<slug>.md`, in the same repository. `land` refuses a branch that does not, unless `--no-change-note` gives the reason, which the marker records as a `No-change-note:` trailer; `change-notes` notes it on the branch beforehand, and is a problem for a file of `changes/` that is not a change note. `changes` prints the release notes the change notes of a range make. `naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. What has no date is counted at the foot, never placed at a guess. Only what nothing derives — a decision taken elsewhere, a build handed out, a policy, an outside fact — is a record, one file per event, `events/<date>-<uuid>.md`, written by `naima event`. `naima diary` tells the records of kind `diary`, every decision with its reason, every artifact delivered (on its `deliveredOn`, when an `artifacts` type is loaded) and every session note, day by day. The plugin ships the rule that agents keep the diary on their own, one entry per decision taken with the owner or notable turn and never a log of routine work, acknowledged as "Diary mode on"; the check `diary-entries` notes, never failing, a day with more diary entries than the option `diaryPerDay` allows, and an entry that only restates a session note of its day or a decision taken that day. `pass --ack "<line>"` writes the acknowledgement line whichever plugin declares a rule's `ack` field asks an agent to give back — refused if a phrase is missing from it — and records it in the note's front matter; a note dated after 2026-10-02 missing it, or whose body no longer starts with it, is a problem (`session-note-ack`), tolerating one written before — on the day it shipped, or earlier, grandfathered like a closed item on the day `commits` shipped — since what it recorded is what the rules asked then. A note is never edited after the fact: one written without the line is accepted with a recorded waiver, `naima waive session-note-ack passes/<file> --reason "<why>" --as <who>`.
+No session writes a file another session writes. A claim is one file per branch, `claims/<uuid>.json`; a session note is one file per session, `passes/<date>-<uuid>.md`. Both are written on the writer's own branch and never staged or committed by the tool: commit them with the work. `claims`, `pass --list` and `summary` recombine them at read time from every local branch — the trunk, every branch not merged into it, whatever each worktree stands on — each read from the disk of the worktree that stands on it, uncommitted files included, or from its ref when none does; remote-tracking refs are not read. The trunk is the branch origin's HEAD names, else `main`, else `master`; without one, every local branch is read. A claim belongs to a branch, so on a detached HEAD `claim` is refused. Several branches may claim one item: `claim` says who else holds it rather than refusing. There are no locks: a claim says who works on what and never excludes anyone. What one session at a time must touch — the trunk, the published site, the releases — is touched by one writer, the coordinator; workers only prepare on their own branches, and the owner decides what lands and when, when it matters. Work happens by one scheme, checked: the worktree `<worktrees>/<what>` stands on the branch `<who>/<what>` and carries a claim; `open` makes all three in one step. A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. A claim is stale when its branch is gone, or merged into the trunk that carries its file, or every item it claims is done or closed: `claims` lists it apart, `stale-claims` notes it, and `prune --write` releases it; a claim that still names a closed item among open ones is noted by `claims-on-closed-items`. Work left behind is listed by `stale` and in the summary: every branch, worktree and claim whose claim is stale, or with no sign of life (commit, step, session note, file not committed) for `staleAfter` hours, with its facts — last commit, files not committed, commits ahead of the trunk, whether it is up to date with it, items held and their status — and the next step: resume, land, archive or drop. Landings are semi-linear: a branch the trunk is an ancestor of enters it as one marker commit, a merge whose tree is the branch tip's and whose message names the items it closes in `Closes:` trailers; `land` makes it from the main checkout, the shortcut for `git merge --no-ff`, and moves the trunk only from the commit it read. From the first marker on the trunk's first-parent line every first-parent commit is a marker, or `landings-are-markers` notes it, one note per commit, which `naima waive landings-are-markers <commit>` accepts with a reason; before it nothing is asked, so a history of fast-forwards keeps working. The trunk guard holds the same line before anything lands: a git `reference-transaction` hook (git 2.28 or later), written by `naima init` and by `naima update` into the data directory's `hooks/` and named by core.hooksPath, refuses a commit, merge or fast-forward of the trunk made by hand, in one line that says to open an item and land it. It lets through what the check accepts (a marker, the record land makes after it, a commit that only adds to the tracker data or only closes items, naima init's commit), a commit that only switches the guard, one that only rewrites Naima's hooks to the text the running program writes, a tip origin's branch of the trunk already holds (a pull), a rewind, and a commit with a `Trunk-reason:` trailer, the owner's way through, which the check then notes with its reason. Other refs cost the shell script alone; for the trunk it starts `naima guard-check`. A checkout whose copy of the hook differs from the main checkout's runs the main checkout's, so every branch, a development line among them, is guarded by the program's hook; `naima hello` in the main checkout rewrites a hook the program no longer writes, and says how to commit it. While the guard is on the check asks from the commit that added the hook to the trunk, so a project is not noted for its past; the plugin ships the rule that every change goes through an item and lands, acknowledged as "Landing mode on". `naima guard off` turns it off for the project (the option `trunkGuard`, the hook removed), `naima guard on` back on, and `naima hello` says when it is off. A commit made on the trunk that only adds to the tracker data is accepted without a note: new files in the data directory outside `rules/`, `waivers/` and `naima.json`, lines added to an item's README.md with its meta.json untouched, and any change to a claim in `claims/` (added, rewritten by `claim --step` or removed by `release` and `prune --write`), so the coordinator files an item, appends a note, writes a diary entry or a session note, and keeps the claims without a branch; a status, a rule, a waiver, the lock or a release record still lands, from the worktree of an item of its own. naima init's commit, the one that adds `naima.json`, and the close after a landing are accepted too. A repository of the project with `changes/config.json` — the project itself, or a product it holds as a submodule — names there the paths whose change is a change of behaviour; a branch that changes one adds a change note, `changes/<date>-<slug>.md`, in the same repository. `land` refuses a branch that does not, unless `--no-change-note` gives the reason, which the marker records as a `No-change-note:` trailer; `change-notes` notes it on the branch beforehand, and is a problem for a file of `changes/` that is not a change note. `changes` prints the release notes the change notes of a range make. `naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. What has no date is counted at the foot, never placed at a guess. Only what nothing derives — a decision taken elsewhere, a build handed out, a policy, an outside fact — is a record, one file per event, `events/<date>-<uuid>.md`, written by `naima event`. `naima diary` tells the records of kind `diary`, every decision with its reason, every artifact delivered (on its `deliveredOn`, when an `artifacts` type is loaded) and every session note, day by day. The plugin ships the rule that agents keep the diary on their own, one entry per decision taken with the owner or notable turn and never a log of routine work, acknowledged as "Diary mode on"; the check `diary-entries` notes, never failing, a day with more diary entries than the option `diaryPerDay` allows, and an entry that only restates a session note of its day or a decision taken that day. `pass --ack "<line>"` writes the acknowledgement line whichever plugin declares a rule's `ack` field asks an agent to give back — refused if a phrase is missing from it — and records it in the note's front matter; a note dated after 2026-10-02 missing it, or whose body no longer starts with it, is a problem (`session-note-ack`), tolerating one written before — on the day it shipped, or earlier, grandfathered like a closed item on the day `commits` shipped — since what it recorded is what the rules asked then. A note is never edited after the fact: one written without the line is accepted with a recorded waiver, `naima waive session-note-ack passes/<file> --reason "<why>" --as <who>`.
 
 Options, each with the default it takes when nothing sets it:
 
@@ -1167,7 +1170,7 @@ Options, each with the default it takes when nothing sets it:
 | `silentAfter` | `15` | minutes without a sign of life (a step posted with naima claim --step, or a commit on the branch) after which naima claims and naima summary flag a claim with a step as possibly stuck: a positive whole number |
 | `staleAfter` | `24` | hours without a sign of life (a commit, a step, a session note, a file changed and not committed) after which naima stale and naima summary list a branch as stale work: a positive whole number |
 
-**Extension points** it declares: `landing-reports`, `claims-reports`.
+**Extension points** it declares: `landing-reports`, `claims-reports`, `goal-order`.
 
 ### naima open
 
@@ -1176,7 +1179,8 @@ Start a piece of work: a worktree <worktrees>/<what> on a new branch <who>/<what
 **Enforces**: Work happens on its own branch and worktree from the trunk, and its claim on the items is recorded in the same step; a branch that already exists is never reused, and the refusal says whether it is merged into the trunk; no worker worktree is opened beyond the option maxWorkers, and the refusal names the open ones and how to raise the bound.
 
 ```sh
-naima open <item>... [--as <who>] [--name <what>] [--note "why"]
+naima open <item>... [--as <who>] [--name <what>] [--note "why"] [--line <gate>
+naima --trunk]
 ```
 
 | Option | Default | What it does |
@@ -1184,12 +1188,15 @@ naima open <item>... [--as <who>] [--name <what>] [--note "why"]
 | `--as` |  | who works: the branch's first segment |
 | `--name` | `the first item's slug` | what the work is: the branch's last segment and the worktree's folder |
 | `--note` |  | why the branch holds the items, written in the claim |
+| `--line` |  | start the branch from the line of this gate (line/<gate>) instead of the line this chat works on; refused for an item whose own goal comes before that line's |
+| `--trunk` |  | start the branch from the trunk, whatever line this chat works on or the item's gate has |
 
 Examples:
 
 ```sh
 naima open export-drops --as agent --note "alpha channel in the exporter"
 naima open export-drops export-keeps --as agent --name export-alpha
+naima open export-drops --as agent --line release-1.2
 ```
 
 ### naima claim
@@ -1241,12 +1248,15 @@ Who holds what, recombined from every branch, with what each branch's worker is 
 **Enforces**: Nothing: it only reads; a claim whose last sign of life (its step, or its branch's last commit) is more than silentAfter minutes old (15 here) is flagged possibly stuck; a stale claim (branch gone or merged into the trunk, or every item closed) is listed apart, at the end, and released by naima prune --write.
 
 ```sh
-naima claims [--branch <b>] [--json]
+naima claims [--branch <b>] [--line <gate>
+naima --trunk] [--json]
 ```
 
 | Option | Default | What it does |
 |---|---|---|
 | `--branch` |  | only the claim of this branch |
+| `--line` |  | only the claims of branches of this development line, line/<gate>; without it, the line this chat works on (naima line use), once one is chosen |
+| `--trunk` |  | only the claims of branches of the trunk, whatever line this chat works on |
 | `--json` |  | print the claims as JSON: each branch's items, note, step, minutes since its last sign of life and marks, the items more than one branch holds, the silentAfter threshold, and the sections other plugins report under `reports` |
 
 Examples:
@@ -1294,7 +1304,7 @@ naima land <branch> --repair
 |---|---|---|
 | `--repair` |  | with the tracker in a repository of its own: finish a landing that moved one repository and not the other — make the code marker the tracker's marker names, and record it in the items it closes; does nothing to a landing already paired |
 | `--closes` |  | an item the landing closes, instead of those the branch claimed in its commits; repeat for several |
-| `--no-change-note` |  | why the branch changes behaviour paths with no change note — a refactor, a test, nothing a person or an agent sees; recorded in the marker as a No-change-note: trailer |
+| `--no-change-note` |  | why the branch changes behaviour paths with no change note — a refactor, a test, nothing a person or an agent sees; recorded in the marker as a No-change-note: trailer. On a development line no change note is asked, since the line's landing on the trunk asks for it; a reason given is kept on the line's marker all the same |
 | `--stale-proofs` |  | why the branch lands although proofs of what it changed are not current — a suite that runs for days, due as a long run the owner starts; recorded in the marker as a Stale-proofs: trailer |
 | `--tracker-only` |  | why a branch that changes only tracker data lands — notes and decisions of a review, items filed or revised, the description of an item that must stay open; it may close no item, leaves open an item the branch claimed and did not fix (an item named with --closes must still be closable), and is refused when it changes any file outside the tracker data; recorded in the marker as a Tracker-only: trailer |
 | `--meets` |  | a requirement the branch's work meets: met by an item that verifies it and was marked passed on the branch, never closed, so the landing may close no item; refused unless such a test passed on the branch tip, and did not already on the trunk; recorded in the marker as a Meets: trailer; repeat for several |
@@ -1366,21 +1376,24 @@ naima guard server --print
 
 What the trunk guard's git hook runs when the trunk is about to move: exit 0 when it may, else one line saying why not and what to do.
 
-**Enforces**: A commit, merge or fast-forward of the trunk made by hand is refused unless every commit it adds to the first-parent line is a landing marker, the record land makes, a commit that only adds to the tracker data (a claim may also be rewritten or removed) or only closes items, naima init's commit, one that only switches the guard, a commit Naima's setup asks for (a Naima-Setup: trailer: the install, the migration of a copied program, the update that brings the guard in) touching only the tracker folder and the files a setup writes, or one with a Trunk-reason: trailer; a tip the upstream holds, a rewind, a ref created or deleted pass.
+**Enforces**: A commit, merge or fast-forward of the trunk made by hand is refused unless every commit it adds to the first-parent line is a landing marker, the record land makes, a commit that only adds to the tracker data (a claim may also be rewritten or removed) or only closes items, naima init's commit, one that only switches the guard, one that only rewrites Naima's hooks to the text the running program writes, a commit Naima's setup asks for (a Naima-Setup: trailer: the install, the migration of a copied program, the update that brings the guard in) touching only the tracker folder and the files a setup writes, or one with a Trunk-reason: trailer; a tip the upstream holds, a rewind, a ref created or deleted pass; a commit that brings the work of a development line that has not landed, or of an abandoned one, is refused whatever its trailers.
 
 ```sh
-naima guard-check [--tracker] <old> <new>
+naima guard-check [--tracker
+naima --line <line>] <old> <new>
 ```
 
 | Option | Default | What it does |
 |---|---|---|
 | `--tracker` |  | the move is of the tracker's trunk, in sibling mode: it takes the commits Naima makes there and landing markers |
+| `--line` |  | the move is of a development line, line/<gate>: it takes only landings (Fixes: or Sync: markers) |
 
 Examples:
 
 ```sh
 naima guard-check 0123abc 4567def
 naima guard-check --tracker 0123abc 4567def
+naima guard-check --line line/release-1.2 0123abc 4567def
 ```
 
 ### naima push-check
@@ -1451,6 +1464,37 @@ Examples:
 naima prune
 naima prune --write
 naima prune --branch agent/old-idea --archive --write
+```
+
+### naima line
+
+Parallel development lines, one long-lived branch line/<gate> per goal of the trunk: new starts one from the trunk; list shows the open ones, each with its gate, latest update, how far it lags and the items fixed on it; use sets the line this chat works on (kept outside the repository), which open, claims, queue --ready and land follow; sync merges the trunk into a line through a short branch; abandon keeps its commits under archive/line/<gate> and deletes it.
+
+**Enforces**: A line starts only from the trunk, tied to a gate the project declares, never from another line; the trunk reaches a line only by a sync, never the reverse, and a line reaches the trunk only by landing; abandon keeps every commit under its archive tag and writes nothing on the trunk, so the items fixed on the line are open there again; nothing is supported with the tracker in a repository of its own.
+
+```sh
+naima line new <gate>
+naima line list [--json]
+naima line use [<gate>
+naima --trunk]
+naima line sync <gate>
+naima line abandon <gate>
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--trunk` |  | with use: this chat works on the trunk |
+| `--json` |  | with list: the lines as JSON, each one's gate, branch, tip, ahead, behind, updated and the items fixed on it |
+
+Examples:
+
+```sh
+naima line new release-1.2
+naima line use release-1.2
+naima line list
+naima line sync release-1.2
+naima line use --trunk
+naima line abandon release-1.2
 ```
 
 ### naima stale
@@ -1573,10 +1617,17 @@ naima event 2026-10-05 "The plan was entered" --kind diary
 | View | What it shows |
 |---|---|
 | `timeline` | when each gate opened and passed, each epic began and finished, each release and session — derived from the items and git, nothing stored; undated ones counted at the foot |
+| `lines` | the open development lines: each one's gate, latest update, how far it lags the trunk, and the items fixed on it and not yet closed on the trunk |
 
 **Directories** it owns under the tracker root: `claims/`, `passes/`, `events/`.
 
-**Summary sections**: `where we were`, `in hand`, `worker limit`, `ready queue`, `stale work`, `trunk-guard`.
+**Summary sections**: `where we were`, `lines`, `in hand`, `worker limit`, `ready queue`, `stale work`, `trunk-guard`.
+
+**Item facts**, printed by `naima show`
+
+| Facts | What they say |
+|---|---|
+| `lines` | an item fixed on an open development line, and not yet on the trunk: fixed on line line/<gate> |
 
 **Write hooks**, run on every item write
 
@@ -1746,14 +1797,14 @@ Declare a gate — a milestone, with a date and a version, or one that follows a
 ```sh
 naima gate new <name> "<title>" [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite] [--method <stance>/<method>]
 naima gate set <name> [--title <t>] [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite
-naima --no-full-suite] [--method <stance>/<method>]
+naima --no-full-suite] [--method <stance>/<method>] [--after <gate>,...] [--freeze YYYY-MM-DD]
 naima gate add <gate> <item>...
 naima gate remove <gate> <item>...
 naima gate step <gate> <step> --by <item>
 naima gate step add <gate> <step> "<title>" --exit <exit> [--after <step>
 naima --first]
 naima gate step remove <gate> <step>
-naima gate show <gate>
+naima gate show <gate> [--line]
 ```
 
 | Option | Default | What it does |
@@ -1769,8 +1820,10 @@ naima gate show <gate>
 | `--method` |  | gate new and set: the method the gate follows, as <stance>/<method> or <plugin>/<method>: its steps become sub-goals the gate waits for, closed in order; with set, "" takes it off |
 | `--by` |  | gate step: the settled item, such as a decision, that records the step's exit criterion holds; it gets closesStep=<gate>/<step> |
 | `--exit` |  | gate step add: the step's exit criterion, what must be true and recorded for it to close |
-| `--after` |  | gate step add: the step the new one goes right after, one of the gate's own or its method's last; without it, last |
+| `--after` |  | gate new and set: the goals this one comes after, comma-separated, added to the order by version and due date; with set, "" takes them off. gate step add: the step the new one goes right after, one of the gate's own or its method's last; without it, last |
 | `--first` |  | gate step add: the new step goes first among the gate's own, right after its method's |
+| `--freeze` |  | gate new and set: the date its freeze starts, YYYY-MM-DD: from then, until the goal is finished, no landing on the trunk closes a feature; with set, "" clears the freeze |
+| `--line` |  | gate show: judge the gate on the tip of its development line, line/<gate>, and say whether the line may land |
 
 Examples:
 
@@ -1780,6 +1833,10 @@ naima gate add beta bugs/export-drops-alpha epics/onboarding
 naima gate remove beta bugs/export-drops-alpha
 naima gate show beta
 naima gate new v1 "First release" --version 1.0 --full-suite
+naima gate set launch --freeze 2026-11-01
+naima gate set launch --freeze ""
+naima gate set release-1.2 --after launch
+naima gate show release-1.2 --line
 naima gate set beta --due ""
 naima gate set beta --due 2026-12-15
 naima gate set beta --method ui/design
@@ -1803,7 +1860,7 @@ naima queue [gate] --ready
 | Option | Default | What it does |
 |---|---|---|
 | `--human` |  | also list the items that need a person or a build, with why |
-| `--ready` |  | list the ready queue instead: the open items the owner approved at the close of a meeting, in the order they start — what the owner said to start now first, then by priority |
+| `--ready` |  | list the ready queue instead: the open items the owner approved at the close of a meeting, in the order they start — what the owner said to start now first, then by priority; with no gate named, a chat working on a development line (naima line use) sees its gate's |
 | `--role` |  | list one role's open items, most urgent first — on the gate, when one is named, else every open item: a role any loaded plugin contributes |
 
 Examples:
@@ -1906,6 +1963,14 @@ naima order first-public
 **Migrations** of its own data, run by `naima update` after the core's; its format is 2:
 
 - format 1 → 2: the top-level gates key of naima.json moves to plugins.gates.options.gates
+
+**Landing reports**, checked by `naima land` before a landing (refuses, or blocks until its proofs are current) or printed after it (reports)
+
+| Report | When | What it says |
+|---|---|---|
+| `goals` | refuses | refuses a landing on the trunk that closes a feature while a goal's freeze is in force, and the landing of a development line (line/<gate>) unless every goal ordered before its gate is finished and its gate holds on the line's tip |
+
+**goal-order**: `gates`.
 
 **UI views**, the tabs of the provisional window
 

@@ -620,6 +620,15 @@ commit made in another clone and then pulled arrives as a fast-forward and isn't
 `git tag checkpoint/<date>-<what>`. Plain `git branch -D` isn't stopped
 ([closing a worktree](../agents/closing-a-worktree.md#8-only-then-remove-the-worktree-and-the-branch)).
 
+### A development line takes only landings, and lands only when ready
+
+A [line](glossary.md#line), the branch `line/<gate>` of one goal, starts from the trunk and takes only landings: an item's branch lands on it as a marker with
+`Fixes:` trailers that closes nothing, and the trunk enters it only by a sync, a marker with a `Sync:` trailer. It lands on the trunk as one marker that
+closes every item fixed on it, once every goal ordered before its own is finished and its own gate holds on its tip; while a goal is frozen, no landing on the
+trunk closes a feature. **Enforced by** the trunk guard, which refuses a commit made on a line by hand; by `naima land`, which refuses a line that is not ready,
+a feature during a freeze, a branch of a line that has not landed, and a branch carrying two lines' commits; by `naima open`, which refuses an item on the line
+of a goal ordered after its own; and by `landings-are-markers`, which reads each open line's history ([development lines](lines.md)).
+
 ### Every landing is a marker naming the items it closes
 
 A branch enters the trunk as a [marker](glossary.md#marker). That is a merge commit whose first parent is the trunk and whose second parent is the branch tip,

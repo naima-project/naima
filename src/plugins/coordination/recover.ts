@@ -6,6 +6,7 @@
 // to continue the work: it is printed for the agent that asked, never written
 // to a file, since the owner's chat stays private.
 
+import { baseOf } from "./lines.ts"
 import { basename } from "node:path"
 import {
   bool,
@@ -54,7 +55,8 @@ export function recoverData(
   const claim = claims.claims.find((c) => c.branch === branch && !c.stale) ?? claims.claims.find((c) => c.branch === branch)
   const trees = worktrees(ctx.root)
   const tree = trees.find((w) => w.branch === branch)
-  const main = trunk(ctx.root) ?? undefined
+  // A branch of a development line is measured against its line: the commits the line lacks.
+  const main = baseOf(ctx.root, branch) ?? trunk(ctx.root) ?? undefined
   const log = main ? gitOrNull(ctx.root, "log", "--format=%h %s", `${main}..refs/heads/${branch}`) : null
   const status = tree ? gitOrNull(tree.path, "status", "--porcelain", "--untracked-files=all") : null
   const transcript = workerTranscript(env, {

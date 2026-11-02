@@ -53,10 +53,11 @@ import {
   WAIVERS,
   worktrees,
 } from "../../core/api.ts"
-import { changeNoteTrailers } from "./changes.ts"
+import { changeNoteTrailers, NO_CHANGE_NOTE } from "./changes.ts"
 import { guardLandingMessages } from "./messages.ts"
 import { CLAIMS } from "./index.ts"
 import { plural } from "./worktrees.ts"
+import { abandonedLineOf, fixedOnLine, FIXES, gateOfLine, lineBranch, lineOf, lineWorkIn, openLines, SYNC, SYNC_PREFIX, unlanded } from "./lines.ts"
 
 /** A landing: the branch, the trunk before it, and every file it changed, from the project root. */
 export interface Landing {
@@ -65,6 +66,8 @@ export interface Landing {
   /** The marker, once landed; the branch tip while the landing is checked. */
   to: string
   changed: string[]
+  /** The ids of the items it closes, when it lands on the trunk; a line's landing closes every item fixed on it. */
+  closes?: string[]
 }
 
 /**
@@ -346,8 +349,12 @@ function sideOf(repo: string, branch: string, name: string, optional: boolean): 
   const tip = gitOrNull(repo, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}^{commit}`) ?? (optional ? old : null)
   if (!tip) throw new Error(`no branch ${branch}`)
   if (runGit(repo, ["merge-base", "--is-ancestor", old, tip]).ok === false) {
+    // A line takes the trunk only by a sync, and refuses a merge made on it by hand.
+    const gate = gateOfLine(branch)
     throw new Error(
-      `${main}${name} is not an ancestor of ${branch}: merge ${main} into the branch (git merge ${main}, on the branch${name}) and run its gates again`,
+      gate
+        ? `${main}${name} is not an ancestor of ${branch}: bring the trunk into the line with naima line sync ${gate}, then land it again`
+        : `${main}${name} is not an ancestor of ${branch}: merge ${main} into the branch (git merge ${main}, on the branch${name}) and run its gates again`,
     )
   }
   const dirty = gitOrNull(repo, "status", "--porcelain", "--untracked-files=no") ?? ""
@@ -396,7 +403,13 @@ function landedItems(
     )
   }
   // A requirement the landing meets is met by its test, never closed: claimed or named, it is not among what it closes.
-  const ids = (closes.length ? closes.map((r) => idOf(ctx, tip, r)) : claimedInHistory(ctx, old, branch).map((e) => e.id)).filter((id) => !met.includes(id))
+  // A line closes every item fixed on it: the Fixes: trailers of its markers, not a claim of its own.
+  const named = closes.length
+    ? closes.map((r) => idOf(ctx, tip, r))
+    : gateOfLine(branch) && !ctx.sibling
+    ? fixedOnLine(ctx.root, branch)
+    : claimedInHistory(ctx, old, branch).map((e) => e.id)
+  const ids = named.filter((id) => !met.includes(id))
   if (!ids.length && (trackerOnly || met.length)) return []
   if (!ids.length) {
     throw new Error(
@@ -717,6 +730,76 @@ async function landBoth(
   return 0
 }
 
+/**
+ * Land `branch` on the line of `gate` as one marker: a merge whose first parent is the line, whose tree is the branch
+ * tip's, moved with the same compare-and-swap. It closes nothing: an item's work is recorded as fixed there, in a
+ * `Fixes:` trailer per item, and closes when the line lands on the trunk; a branch that brings the trunk into the line
+ * is a sync, recorded in a `Sync:` trailer naming the trunk commit it merged, and may carry no item's work. Neither the
+ * main checkout nor the trunk is touched.
+ */
+export function landOnLine(ctx: Context, branch: string, gate: string, closes: string[], noChangeNote?: string): number {
+  if (noChangeNote !== undefined && (!noChangeNote.trim() || noChangeNote.includes("\n"))) throw new Error(`--no-change-note takes the reason, on one line`)
+  const line = lineBranch(gate)
+  const trees = worktrees(ctx.root)
+  if (!trees[0]?.self) throw new Error(`land runs from the main checkout: ${trees[0]?.path ?? "the main worktree"} — only the coordinator lands`)
+  const on = trees.find((w) => w.branch === line)
+  if (on) throw new Error(`${on.path} stands on ${line}: a line is moved by landings only — switch that worktree to another branch first`)
+  const main = trunk(ctx.root)
+  if (!main) throw new Error("no trunk (main, master, or origin's HEAD): nothing to measure the line against")
+  const old = mustGit(ctx.root, "rev-parse", `refs/heads/${line}`)
+  const tip = gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}^{commit}`)
+  if (!tip) throw new Error(`no branch ${branch}`)
+  if (!isAncestor(ctx.root, old, tip)) {
+    throw new Error(`${line} is not an ancestor of ${branch}: merge ${line} into the branch (git merge ${line}, on the branch) and run its gates again`)
+  }
+  if (old === tip) throw new Error(`${branch} has nothing ${line} lacks: nothing to land`)
+  const base = gitOrNull(ctx.root, "merge-base", main, tip)
+  const sync = base && !isAncestor(ctx.root, base, old) ? base : null
+  let ids: string[] = []
+  let trailers: string[]
+  if (sync) {
+    if (closes.length || claimedInHistory(ctx, old, branch).length) {
+      throw new Error(`${branch} brings ${main} into ${line} and claims items: a sync carries no item's work — land the items on their own branches`)
+    }
+    trailers = [`${SYNC}: ${sync}`]
+  } else {
+    ids = landedItems(ctx, branch, closes, old, tip).map((i) => i.id)
+    trailers = ids.map((id) => `${FIXES}: ${id}`)
+  }
+  // A landing on a line asks for no change note: the line's landing on the trunk does. A reason given is kept on the marker.
+  if (noChangeNote !== undefined) trailers.push(`${NO_CHANGE_NOTE}: ${noChangeNote.trim()}`)
+  guardLandingMessages(ctx, branch, old, tip)
+  const made = runGit(ctx.root, ["commit-tree", `${tip}^{tree}`, "-p", old, "-p", tip, "-F", "-"], { input: `Land ${branch}\n\n${trailers.join("\n")}\n` })
+  if (!made.ok) throw new Error(`git commit-tree: ${gitReason(made)}`)
+  const marker = made.out.trim()
+  moveTrunk(ctx.root, line, marker, old, `land: ${branch}`)
+  const refs = ids.map((id) => ctx.repo.byId.get(id)).map((i, n) => (i ? label(i) : ids[n]))
+  ctx.out(
+    `landed ${branch} on ${line}: ${marker.slice(0, 12)}, ${
+      sync ? `syncing it with ${main} at ${sync.slice(0, 12)}` : `fixing ${refs.join(", ")} there: they close when ${line} lands on ${main}`
+    }`,
+  )
+  if (sync && branch === `${SYNC_PREFIX}${gate}`) return removeSync(ctx, branch, line)
+  ctx.out(nextAfterLanding(branch))
+  return 0
+}
+
+/** A sync branch landed on its line is done: its worktree, once clean, and the branch go, so that the next sync can start. */
+function removeSync(ctx: Context, branch: string, line: string): number {
+  const tree = worktrees(ctx.root).find((w) => w.branch === branch)
+  if (tree) {
+    const dirty = gitOrNull(tree.path, "status", "--porcelain", "--untracked-files=all")
+    const removed = dirty === "" ? runGit(ctx.root, ["worktree", "remove", "--force", tree.path]) : null
+    if (!removed?.ok) {
+      ctx.out(`kept ${tree.path}: ${removed ? gitReason(removed) : "it holds files not committed"} — naima prune --branch ${branch} --write once it is clean`)
+      return 0
+    }
+  }
+  mustGit(ctx.root, "branch", "-D", branch)
+  ctx.out(`removed ${tree ? `${tree.path} and ` : ""}${branch}: its merge is on ${line}`)
+  return 0
+}
+
 /** The trailers naming each requirement a landing meets. */
 const meetsTrailers = (met: readonly Landed[]): string[] => met.map((m) => `${MEETS}: ${m.id}`)
 
@@ -948,7 +1031,7 @@ export const land: Command = {
     {
       name: "--no-change-note",
       says:
-        "why the branch changes behaviour paths with no change note — a refactor, a test, nothing a person or an agent sees; recorded in the marker as a No-change-note: trailer",
+        "why the branch changes behaviour paths with no change note — a refactor, a test, nothing a person or an agent sees; recorded in the marker as a No-change-note: trailer. On a development line no change note is asked, since the line's landing on the trunk asks for it; a reason given is kept on the line's marker all the same",
     },
     {
       name: "--stale-proofs",
@@ -997,6 +1080,33 @@ export const land: Command = {
       return repairLanding(ctx, branch)
     }
     const meets = strs(p, "meets")
+    if (!ctx.sibling) {
+      // A branch of a line lands on its line; a line itself, and a branch of the trunk, on the trunk.
+      const lines = openLines(ctx.root)
+      const own = gateOfLine(branch)
+      if (!(own && lines.some((l) => l.gate === own))) {
+        const gate = lineOf(ctx.root, branch, lines)
+        if (gate) {
+          if (trackerOnly !== undefined || meets.length || stale !== undefined) {
+            throw new Error(
+              `${branch} lands on ${
+                lineBranch(gate)
+              }, which closes nothing: --tracker-only, --meets and --stale-proofs belong to the landing of the line on the trunk`,
+            )
+          }
+          ctx.out(`on line ${lineBranch(gate)}`)
+          return landOnLine(ctx, branch, gate, strs(p, "closes"), str(p, "no-change-note"))
+        }
+        const gone = abandonedLineOf(ctx.root, branch)
+        if (gone) {
+          throw new Error(
+            `${branch} carries commits of ${
+              lineBranch(gone)
+            }, which was abandoned: it cannot land, and its items are open again on the trunk — drop it (naima prune --branch ${branch} --archive --write) and open them again from the trunk`,
+          )
+        }
+      } else ctx.out(`landing the line ${branch} on the trunk`)
+    }
     if (ctx.sibling) return await landBoth(ctx, branch, strs(p, "closes"), str(p, "no-change-note"), stale, trackerOnly, meets)
     const { main, old, tip, items, met } = preconditions(ctx, branch, strs(p, "closes"), trackerOnly !== undefined, meets)
     guardLandingMessages(ctx, branch, old, tip)
@@ -1016,7 +1126,7 @@ export const land: Command = {
     }
     let marker: string
     try {
-      const { refused, notCurrent } = await landingChecks(ctx, { branch, from: old, to: tip, changed })
+      const { refused, notCurrent } = await landingChecks(ctx, { branch, from: old, to: tip, changed, closes: items.map((i) => i.id) })
       if (refused.length) throw refusedLanding(branch, refused)
       if (notCurrent.length && stale === undefined) {
         throw new Error(
@@ -1274,11 +1384,62 @@ export interface Guarded {
   accepts(ctx: Context, sha: string, files: { status: string; path: string }[]): boolean
 }
 
+/**
+ * Each open development line's first-parent line after the commit that opened it: every commit a landing, a merge up
+ * to date whose tree is the branch tip's, with a Fixes: or a Sync: trailer; one note per commit that is not.
+ */
+function lineFindings(ctx: Context): Finding[] {
+  if (ctx.sibling) return []
+  const main = trunk(ctx.root)
+  if (!main) return []
+  const out: Finding[] = []
+  for (const w of lineWorkIn(ctx.root, main)) {
+    out.push({
+      level: "problem",
+      message: `${main} holds work of ${unlanded(w)}: a line's work reaches the trunk only when the line lands (naima land ${w.branch}), ` +
+        `and an abandoned line's never — find the merge that brought it (git log --first-parent ${main}) and revert it on an item's branch`,
+    })
+  }
+  for (const l of openLines(ctx.root)) {
+    const log = gitOrNull(
+      ctx.root,
+      "log",
+      "--first-parent",
+      "--reverse",
+      `--format=%H%x1f%P%x1f%T%x1f%s%x1f%(trailers:key=${FIXES},valueonly,separator=%x2C)%(trailers:key=${SYNC},valueonly,separator=%x2C)%x1f%(trailers:key=${TRUNK_REASON},valueonly)%x1e`,
+      `${main}..${l.branch}`,
+    ) ?? ""
+    const commits = log.split("\x1e").map((r) => r.replace(/^\n/, "")).filter(Boolean).map((r) => r.split("\x1f"))
+    for (const [sha = "", parents = "", tree = "", subject = "", trailers = "", reason = ""] of commits.slice(1)) {
+      const [first = "", second = ""] = parents.split(" ")
+      const marker = !!second && !!trailers.trim() && gitOrNull(ctx.root, "rev-parse", `${second}^{tree}`) === tree && isAncestor(ctx.root, first, second)
+      if (marker || reason.trim()) continue
+      out.push({
+        level: "note",
+        subject: sha,
+        message:
+          `${l.branch} took ${
+            sha.slice(0, 12)
+          } "${subject}" without a landing marker: a line takes only landings (naima land, with Fixes: or Sync: trailers) — ` +
+          `or accept it once: naima waive landings-are-markers ${sha} --reason "<why>" --as <who>`,
+      })
+    }
+  }
+  return out
+}
+
 export const landingsAreMarkers = (guarded: Guarded | null = null): Check => ({
   name: "landings-are-markers",
   says:
     "from the first landing marker on the trunk's first-parent line (a merge whose first parent the second contains, whose tree is the second's, with a Closes:, a Tracker-only: or a Meets: trailer), every first-parent commit is a marker: a fast-forward, a commit made on the trunk, a merge not up to date, or one without a Closes: naming an item done or fixed — or a Tracker-only: trailer giving why a merge that changes only tracker data lands, or a Meets: trailer naming the requirement a merge meets, closing nothing if need be — is a note naming it, one note per commit, with the commit as its subject so that a waiver can accept it. A commit made on the trunk that only adds to the tracker data — new files in the data directory outside rules/, waivers/ and naima.json, and lines added to an item's README.md, its meta.json untouched — is accepted without a note, and so is a commit that only closes items as naima close does (each moved whole from its type's folder to the closed archive), the commit right after a marker that only adds the marker to the commits of items it closes, the record naima land makes, and naima init's commit, the one that adds naima.json. Any other tracker step that changes more than it adds (an update of Naima, a waiver, a release record, an epic set done) is made on an item's branch and landed. Before the first marker nothing is asked, unless the trunk guard is on: then the check asks from the commit that added the guard's hook to the trunk, so a project is not noted for what it committed before the guard; a commit the owner let through the guard with a Trunk-reason: trailer is a note that gives the reason. In sibling mode, where Naima commits every write to the tracker itself with a Naima-Command: trailer naming the command, such a commit is accepted, and from the first of them on, a commit of the tracker's trunk without one is a note: it was made by hand",
   run(ctx) {
+    return [...trunkFindings(ctx, guarded), ...lineFindings(ctx)]
+  },
+})
+
+/** What landings-are-markers finds on the trunk's first-parent line. */
+function trunkFindings(ctx: Context, guarded: Guarded | null): Finding[] {
+  {
     // The markers that close items are the tracker's: the project's trunk, or the tracker's own in sibling mode.
     const repo = ctx.trackerGit
     const main = trunk(repo)
@@ -1347,5 +1508,5 @@ export const landingsAreMarkers = (guarded: Guarded | null = null): Check => ({
       }
     }
     return out
-  },
-})
+  }
+}

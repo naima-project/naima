@@ -38,7 +38,8 @@ export {
   type WriteOptions,
 } from "./item.ts"
 export { storedLinks } from "./repo.ts"
-export { filerRole } from "./origin.ts"
+export { filerRole, sessionLine, setSessionLine } from "./origin.ts"
+export { contextAt } from "./context.ts"
 export { READY, readyQueue, type ReadyRecord, readyRecord } from "./ready.ts"
 export { groupBy } from "./collections.ts"
 export {
@@ -151,6 +152,7 @@ export {
   CODE_TRAILER,
   commitTrackerPaths,
   DELEGATE_MARK,
+  delegateHook,
   HOOKS_DIR,
   HOOKS_OFF_KEY,
   installTrailerHooks,

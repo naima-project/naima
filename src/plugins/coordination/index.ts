@@ -26,6 +26,7 @@ import {
   CONTRACT,
   currentBranch,
   fieldValue,
+  fieldValues,
   filesAt,
   type Finding,
   findPrivate,
@@ -47,6 +48,7 @@ import {
   readAcrossBranches,
   readText,
   rendered,
+  sessionLine,
   setupPaths,
   short,
   str,
@@ -86,10 +88,26 @@ import { land, landingReportsPoint, landingsAreMarkers, landingsPaired } from ".
 import { claimsReports, claimsReportsPoint } from "./claims-reports.ts"
 import { pushCheckCommand } from "./messages.ts"
 import { fixCommand } from "./fix.ts"
-import { guardCheckCommand, guardCommand, guardedFrom, guardOffSection, guardSetup, readTrunkGuard, switchesGuard } from "./guard.ts"
+import { guardCheckCommand, guardCommand, guardedFrom, guardOffSection, guardSetup, readTrunkGuard, takenByGuard } from "./guard.ts"
 import { diaryCheck, diaryCommand, eventCommand, EVENTS, frontLines, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
 import { recoverCommand } from "./recover.ts"
 import { readyLines, readyNow, readySection, readyWorkWaiting, workerLimitSection } from "./ready.ts"
+import {
+  baseOf,
+  chosenLine,
+  gateOfLine,
+  goalBefore,
+  goalOrderPoint,
+  type Line,
+  lineBranch,
+  lineCommand,
+  lineFacts,
+  lineOf,
+  linesSection,
+  linesView,
+  onLine,
+  openLines,
+} from "./lines.ts"
 
 export { type NextStep, type StaleData, type StaleEntry } from "./stale.ts"
 export { type Timeline, type TimelineEvent, timelineOf } from "./timeline.ts"
@@ -270,7 +288,7 @@ function freshClaim(ctx: Context, branch: string): Claim {
 }
 
 /** Whether `branch` is the trunk, of the project or, in sibling mode, of the tracker: no claim belongs there. */
-const onTrunk = (ctx: Context, branch: string): boolean => branch === trunk(ctx.root) || branch === trunk(ctx.trackerGit)
+const onTrunk = (ctx: Context, branch: string): boolean => branch === trunk(ctx.root) || branch === trunk(ctx.trackerGit) || gateOfLine(branch) !== null
 
 /** A claim that holds nothing: no item. */
 const empty = (c: Claim): boolean => !c.items.length
@@ -317,7 +335,9 @@ const claimCommand: Command = {
     if (branch === "HEAD") throw new Error("HEAD is detached: a claim belongs to a branch — git switch -c <branch>, then claim")
     if (onTrunk(ctx, branch)) {
       throw new Error(
-        `${branch} is the trunk: a claim belongs to an item's branch, never to the trunk, where every merge would carry it — naima open <item> makes the branch and its claim`,
+        `${branch} is ${
+          gateOfLine(branch) ? "a development line" : "the trunk"
+        }: a claim belongs to an item's branch, never to the trunk or a line, where every merge would carry it — naima open <item> makes the branch and its claim`,
       )
     }
     const all = readClaims(ctx)
@@ -505,9 +525,14 @@ const claimsCommand = (silentAfter: number, policy: Policy): Command => ({
     "who holds what, recombined from every branch, with what each branch's worker is doing now, and after them what other plugins report for the coordinator, such as the runs Naima watches",
   enforces:
     `nothing: it only reads; a claim whose last sign of life (its step, or its branch's last commit) is more than silentAfter minutes old (${silentAfter} here) is flagged possibly stuck; a stale claim (branch gone or merged into the trunk, or every item closed) is listed apart, at the end, and released by naima prune --write`,
-  usage: "claims [--branch <b>] [--json]",
+  usage: "claims [--branch <b>] [--line <gate> | --trunk] [--json]",
   options: [
     { name: "--branch", says: "only the claim of this branch" },
+    {
+      name: "--line",
+      says: "only the claims of branches of this development line, line/<gate>; without it, the line this chat works on (naima line use), once one is chosen",
+    },
+    { name: "--trunk", says: "only the claims of branches of the trunk, whatever line this chat works on" },
     {
       name: "--json",
       says:
@@ -516,8 +541,21 @@ const claimsCommand = (silentAfter: number, policy: Policy): Command => ({
   ],
   examples: ["claims", "claims --branch fix/export-alpha", "claims --json"],
   run(args, ctx) {
-    const p = parse(args, { branch: { type: "string" }, json: { type: "boolean" } })
-    const d = claimsData(ctx, str(p, "branch"), silentAfter)
+    const p = parse(args, { branch: { type: "string" }, json: { type: "boolean" }, line: { type: "string" }, trunk: { type: "boolean" } })
+    const all = claimsData(ctx, str(p, "branch"), silentAfter)
+    // Claims follow the line this chat works on, once one is chosen: those of the branches of that line, or of the trunk.
+    const follow = str(p, "line") !== undefined || bool(p, "trunk") || (sessionLine(ctx.root) !== undefined && !str(p, "branch"))
+    const lines = follow ? openLines(ctx.root) : []
+    const gate = follow ? chosenLine(ctx, { line: str(p, "line"), trunk: bool(p, "trunk") }, lines) : null
+    const onIt = (b: string): boolean => {
+      try {
+        return lineOf(ctx.root, b, lines) === gate
+      } catch {
+        return false
+      }
+    }
+    const d = follow ? { ...all, claims: all.claims.filter((c) => onIt(c.branch)) } : all
+    if (follow && !bool(p, "json")) ctx.out(onLine(gate, trunk(ctx.root)))
     const reports = str(p, "branch") ? [] : claimsReports(ctx)
     if (bool(p, "json")) {
       ctx.out(JSON.stringify({ ...d, reports }, null, 2))
@@ -552,7 +590,8 @@ export const archiveTag = (branch: string): string => `archive/${branch}`
 /** What deleting a branch does in one repository: the steps it would take, and runs them once every side may. */
 interface PruneSide {
   plan: string[]
-  kept: boolean
+  /** Where the branch's commits stay once it is deleted: its archive tag, or the line that holds them; null when the trunk does. */
+  keptOn: string | null
   run(): void
 }
 
@@ -568,9 +607,12 @@ function pruneSide(ctx: Context, repo: string, branch: string, write: boolean, a
   if (tree?.self) throw new Error(`${branch} is the worktree you stand in: prune it from another one`)
   const tag = archiveTag(branch)
   const n = ahead(repo, main, branch)
-  const kept = gitOrNull(repo, "rev-parse", "--verify", "--quiet", `refs/tags/${tag}`) !== null &&
+  const tagged = gitOrNull(repo, "rev-parse", "--verify", "--quiet", `refs/tags/${tag}`) !== null &&
     gitOrNull(repo, "merge-base", "--is-ancestor", branch, `refs/tags/${tag}`) !== null
-  const unkept = n > 0 && !kept
+  // A branch landed on an open development line: the line holds its commits.
+  const line = repo === ctx.root ? openLines(repo).find((l) => l.branch !== branch && isAncestor(repo, branch, l.branch))?.branch : undefined
+  const holder = tagged ? tag : line ?? null
+  const unkept = n > 0 && !holder
   if (unkept) {
     const why = `${branch} has ${plural(n, "commit")} not on ${main}${name} and no ${tag} tag holding them`
     if (!archive) {
@@ -591,7 +633,7 @@ function pruneSide(ctx: Context, repo: string, branch: string, write: boolean, a
       ...(tree ? [`remove the worktree ${tree.path}`] : []),
       `delete the branch ${branch}${name}`,
     ],
-    kept: kept || (unkept && archive),
+    keptOn: n > 0 ? (unkept ? (archive ? tag : null) : holder) : null,
     run() {
       if (unkept && archive) mustGit(repo, "tag", tag, branch)
       if (tree) mustGit(repo, "worktree", "remove", ...(status === "" ? ["--force"] : []), tree.path)
@@ -624,7 +666,8 @@ function pruneBranch(ctx: Context, branch: string, write: boolean, archive: bool
     return 0
   }
   for (const s of sides) s.run()
-  ctx.out(`did ${plan.join(", ")}${sides.some((s) => s.kept) ? ` — its commits stay on ${archiveTag(branch)}` : ""}`)
+  const keptOn = sides.find((s) => s.keptOn)?.keptOn
+  ctx.out(`did ${plan.join(", ")}${keptOn ? ` — its commits stay on ${keptOn}` : ""}`)
   return 0
 }
 
@@ -757,15 +800,31 @@ function openCommand(policy: Policy): Command {
     says: "start a piece of work: a worktree <worktrees>/<what> on a new branch <who>/<what> from the trunk, and its claim on the items, in one step",
     enforces:
       "work happens on its own branch and worktree from the trunk, and its claim on the items is recorded in the same step; a branch that already exists is never reused, and the refusal says whether it is merged into the trunk; no worker worktree is opened beyond the option maxWorkers, and the refusal names the open ones and how to raise the bound",
-    usage: 'open <item>... [--as <who>] [--name <what>] [--note "why"]',
+    usage: 'open <item>... [--as <who>] [--name <what>] [--note "why"] [--line <gate> | --trunk]',
     options: [
       { name: "--as", says: "who works: the branch's first segment", ...(policy.who ? { default: policy.who } : {}) },
       { name: "--name", says: "what the work is: the branch's last segment and the worktree's folder", default: "the first item's slug" },
       { name: "--note", says: "why the branch holds the items, written in the claim" },
+      {
+        name: "--line",
+        says:
+          "start the branch from the line of this gate (line/<gate>) instead of the line this chat works on; refused for an item whose own goal comes before that line's",
+      },
+      { name: "--trunk", says: "start the branch from the trunk, whatever line this chat works on or the item's gate has" },
     ],
-    examples: ['open export-drops --as agent --note "alpha channel in the exporter"', "open export-drops export-keeps --as agent --name export-alpha"],
+    examples: [
+      'open export-drops --as agent --note "alpha channel in the exporter"',
+      "open export-drops export-keeps --as agent --name export-alpha",
+      "open export-drops --as agent --line release-1.2",
+    ],
     run(args, ctx) {
-      const p = parse(args, { as: { type: "string" }, name: { type: "string" }, note: { type: "string" } })
+      const p = parse(args, {
+        as: { type: "string" },
+        name: { type: "string" },
+        note: { type: "string" },
+        line: { type: "string" },
+        trunk: { type: "boolean" },
+      })
       if (!p.positionals.length) throw usageError(this)
       const who = str(p, "as") ?? policy.who
       if (!who) throw new Error("open needs --as <who>, the branch's first segment, or the coordination plugin's who option")
@@ -775,15 +834,61 @@ function openCommand(policy: Policy): Command {
       for (const [flag, value] of [["--as", who], ["--name", what]] as const) {
         if (!SEGMENT.test(value)) throw new Error(`${flag} ${value}: each part of a branch name is a ${SEGMENT_SAYS}`)
       }
-      const { path } = openWork(ctx, policy, items, who, what, str(p, "note"))
+      const gate = openLine(ctx, items, str(p, "line"), bool(p, "trunk"))
+      const { path } = openWork(ctx, policy, items, who, what, str(p, "note"), gate)
       ctx.out(`next: cd ${path}, and install the dependencies a fresh checkout lacks`)
       return 0
     },
   }
 }
 
+const GATE_FIELD = { name: "gate", kind: "enum" } as const
+
 /**
- * The worktree `<worktrees>/<what>` on a new branch `<who>/<what>` from the trunk, with its claim on `items`: what
+ * The line an item's branch starts from: --line or --trunk; else the open line of a gate an item stands on; else the
+ * line this chat works on, once chosen, unless an item's goal comes before it, when the trunk; else the trunk (null).
+ * Refused, when named, for an item whose own goal comes before the line's: its goal would wait for that line, and the
+ * line for its goal.
+ */
+export function openLine(ctx: Context, items: Item[], line: string | undefined, toTrunk: boolean, lines: Line[] = openLines(ctx.root)): string | null {
+  let gate: string | null
+  const own = items.flatMap((i) => fieldValues(i, GATE_FIELD)).find((g) => lines.some((l) => l.gate === g)) ?? null
+  if (line !== undefined || toTrunk) gate = chosenLine(ctx, { line, trunk: toTrunk }, lines)
+  else if (sessionLine(ctx.root) !== undefined) {
+    const chat = chosenLine(ctx, {}, lines)
+    const earlier = chat === null ? [] : items.flatMap((i) => fieldValues(i, GATE_FIELD)).filter((g) => g !== chat && goalBefore(ctx, g, chat))
+    gate = own ?? (earlier.length ? null : chat)
+    if (chat !== null && gate !== chat) {
+      ctx.out(
+        `this chat works on ${lineBranch(chat)}, but ${items.map(label).join(", ")} ${
+          gate
+            ? `belongs to ${lineBranch(gate)}: its branch starts there`
+            : `is on ${earlier.join(", ")}, a goal before ${chat} with no open line: its branch starts from the trunk`
+        }`,
+      )
+    }
+  } else gate = own
+  if (gate === null) {
+    if (lines.length) ctx.out(onLine(null, trunk(ctx.root)))
+    return null
+  }
+  if (ctx.sibling) throw new Error("development lines need the tracker committed with its code: this project keeps the tracker in a repository of its own")
+  for (const item of items) {
+    const earlier = fieldValues(item, GATE_FIELD).filter((g) => g !== gate && goalBefore(ctx, g, gate!))
+    if (earlier.length) {
+      throw new Error(
+        `${label(item)} is on ${earlier.join(", ")}, a goal ordered before ${gate}: on ${
+          lineBranch(gate)
+        } it could never land, since that line waits for its goal and its goal for that line — open it on the trunk (--trunk) or on its goal's line`,
+      )
+    }
+  }
+  ctx.out(onLine(gate, trunk(ctx.root)))
+  return gate
+}
+
+/**
+ * The worktree `<worktrees>/<what>` on a new branch `<who>/<what>` from the trunk, or from the line of `line`, with its claim on `items`: what
  * `open` does, and `fix` reuses. The claim file is written in the new worktree, not committed unless the tracker is
  * a repository of its own.
  */
@@ -794,6 +899,7 @@ export function openWork(
   who: string,
   what: string,
   note?: string,
+  line: string | null = null,
 ): { path: string; branch: string; claimFile: string } {
   const branch = `${who}/${what}`
   const trees = worktrees(ctx.root)
@@ -804,7 +910,7 @@ export function openWork(
       `the repository has no commit yet, and a branch can only start from one: commit what Naima wrote first, straight on the trunk, then run naima open again: ${first}`,
     )
   }
-  const base = trunk(ctx.root) ?? "HEAD"
+  const base = line ? lineBranch(line) : trunk(ctx.root) ?? "HEAD"
   // An existing branch is never reused: it may be an old one, landed and behind the trunk.
   if (gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`) !== null) {
     const n = ahead(ctx.root, base, branch)
@@ -815,7 +921,20 @@ export function openWork(
     )
   }
   if (exists(path)) throw new Error(`${path} already exists: pick another --name`)
-  const bound = workerBoundReason(ctx.root, policy, trees)
+  const lines = openLines(ctx.root)
+  const lineOfTree = (b: string): string | null => {
+    try {
+      return lineOf(ctx.root, b, lines)
+    } catch {
+      return null
+    }
+  }
+  const bound = workerBoundReason(
+    ctx.root,
+    policy,
+    trees,
+    lines.length ? { name: onLine(line, trunk(ctx.root)), holds: (b) => lineOfTree(b) === line } : undefined,
+  )
   if (bound) throw new Error(bound)
   const trackerBase = ctx.sibling ? trunk(ctx.trackerGit) : null
   if (ctx.sibling) {
@@ -882,7 +1001,7 @@ function worktreePolicy(policy: Policy): Check {
     name: "worktree-policy",
     says:
       "every worktree but the main one is <worktrees>/<what> on the branch <who>/<what>, every local branch but the trunk is <who>/<what>, and every worktree carries a claim — one with commits the trunk lacks and no claim, now or released in those commits, nor a session note, is a problem for the worktree being checked, and (unless naima check --all-worktrees) a note naming any other worktree in the same state; a worktree outside <worktrees> that nothing holds is not Naima's (made before it, or by plain git) and is only a note",
-    run: (ctx, options) => policyFindings(ctx.root, policy, holders(ctx), options),
+    run: (ctx, options) => policyFindings(ctx.root, policy, holders(ctx), options, (b) => baseOf(ctx.root, b)),
   }
 }
 
@@ -890,7 +1009,7 @@ const trunkMoved: Check = {
   name: "trunk-moved-while-preparing",
   says:
     "a branch whose claim is marked preparing is told every commit the trunk took that it lacks, and which of them the trunk's reflog records as committed on the trunk directly",
-  run: (ctx) => readClaims(ctx).filter((c) => c.preparing).flatMap((c) => preparingFindings(ctx.root, c.branch)),
+  run: (ctx) => readClaims(ctx).filter((c) => c.preparing).flatMap((c) => preparingFindings(ctx.root, c.branch, baseOf(ctx.root, c.branch))),
 }
 
 /** The commits of `repo` on its branch that its trunk lacks, with the value each gives the trailer `key`: empty on the trunk or without one. */
@@ -1140,7 +1259,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       "Work left behind is listed by `stale` and in the summary: every branch, worktree and claim whose claim is stale, or with no sign of life (commit, step, session note, file not committed) for `staleAfter` hours, with its facts — last commit, files not committed, commits ahead of the trunk, whether it is up to date with it, items held and their status — and the next step: resume, land, archive or drop. " +
       "Landings are semi-linear: a branch the trunk is an ancestor of enters it as one marker commit, a merge whose tree is the branch tip's and whose message names the items it closes in `Closes:` trailers; `land` makes it from the main checkout, the shortcut for `git merge --no-ff`, and moves the trunk only from the commit it read. " +
       "From the first marker on the trunk's first-parent line every first-parent commit is a marker, or `landings-are-markers` notes it, one note per commit, which `naima waive landings-are-markers <commit>` accepts with a reason; before it nothing is asked, so a history of fast-forwards keeps working. " +
-      "The trunk guard holds the same line before anything lands: a git `reference-transaction` hook (git 2.28 or later), written by `naima init` and by `naima update` into the data directory's `hooks/` and named by core.hooksPath, refuses a commit, merge or fast-forward of the trunk made by hand, in one line that says to open an item and land it. It lets through what the check accepts (a marker, the record land makes after it, a commit that only adds to the tracker data or only closes items, naima init's commit), a commit that only switches the guard, a tip origin's branch of the trunk already holds (a pull), a rewind, and a commit with a `Trunk-reason:` trailer, the owner's way through, which the check then notes with its reason. Other refs cost the shell script alone; for the trunk it starts `naima guard-check`. While the guard is on the check asks from the commit that added the hook to the trunk, so a project is not noted for its past; the plugin ships the rule that every change goes through an item and lands, acknowledged as \"Landing mode on\". `naima guard off` turns it off for the project (the option `trunkGuard`, the hook removed), `naima guard on` back on, and `naima hello` says when it is off. " +
+      "The trunk guard holds the same line before anything lands: a git `reference-transaction` hook (git 2.28 or later), written by `naima init` and by `naima update` into the data directory's `hooks/` and named by core.hooksPath, refuses a commit, merge or fast-forward of the trunk made by hand, in one line that says to open an item and land it. It lets through what the check accepts (a marker, the record land makes after it, a commit that only adds to the tracker data or only closes items, naima init's commit), a commit that only switches the guard, one that only rewrites Naima's hooks to the text the running program writes, a tip origin's branch of the trunk already holds (a pull), a rewind, and a commit with a `Trunk-reason:` trailer, the owner's way through, which the check then notes with its reason. Other refs cost the shell script alone; for the trunk it starts `naima guard-check`. A checkout whose copy of the hook differs from the main checkout's runs the main checkout's, so every branch, a development line among them, is guarded by the program's hook; `naima hello` in the main checkout rewrites a hook the program no longer writes, and says how to commit it. While the guard is on the check asks from the commit that added the hook to the trunk, so a project is not noted for its past; the plugin ships the rule that every change goes through an item and lands, acknowledged as \"Landing mode on\". `naima guard off` turns it off for the project (the option `trunkGuard`, the hook removed), `naima guard on` back on, and `naima hello` says when it is off. " +
       "A commit made on the trunk that only adds to the tracker data is accepted without a note: new files in the data directory outside `rules/`, `waivers/` and `naima.json`, lines added to an item's README.md with its meta.json untouched, and any change to a claim in `claims/` (added, rewritten by `claim --step` or removed by `release` and `prune --write`), so the coordinator files an item, appends a note, writes a diary entry or a session note, and keeps the claims without a branch; a status, a rule, a waiver, the lock or a release record still lands, from the worktree of an item of its own. naima init's commit, the one that adds `naima.json`, and the close after a landing are accepted too. " +
       "A repository of the project with `changes/config.json` — the project itself, or a product it holds as a submodule — names there the paths whose change is a change of behaviour; a branch that changes one adds a change note, `changes/<date>-<slug>.md`, in the same repository. `land` refuses a branch that does not, unless `--no-change-note` gives the reason, which the marker records as a `No-change-note:` trailer; `change-notes` notes it on the branch beforehand, and is a problem for a file of `changes/` that is not a change note. `changes` prints the release notes the change notes of a range make. " +
       "`naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. " +
@@ -1190,7 +1309,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       trunkMoved,
       closedNotClaimed,
       sessionNoteAck,
-      landingsAreMarkers(guarded ? { from: guardedFrom, accepts: switchesGuard } : null),
+      landingsAreMarkers(guarded ? { from: guardedFrom, accepts: takenByGuard } : null),
       landingsPaired,
       branchesPaired,
       diaryCheck(readPasses, diaryPerDay),
@@ -1210,12 +1329,14 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       pushCheckCommand,
       changesCommand,
       prune,
+      lineCommand(policy),
       staleCommand(stale, staleAfter),
       pass,
       eventCommand,
       diaryCommand(readPasses),
     ],
-    views: [timelineView(readPasses)],
+    views: [timelineView(readPasses), linesView],
+    facts: [lineFacts],
     home: import.meta.url,
     contributes: {
       "ui-views": [claimsUiView((ctx) => claimsData(ctx, undefined, silentAfter)), timelineUiView(readPasses), notesUiView(readPasses)],
@@ -1224,8 +1345,8 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
     // The claims are a panel of naima ui, the timeline and the session notes tabs, when the ui plugin is loaded; without it, still commands and a view.
     // The diary rule is listed by naima rules when the rules plugin is loaded; without it, the check still notes.
     optional: ["ui-views", "rules"],
-    points: [landingReportsPoint, claimsReportsPoint],
-    summary: [whereWeWere, inHand(silentAfter), workerLimitSection(policy), readySection(policy), staleSection(stale), guardOffSection(guarded)],
+    points: [landingReportsPoint, claimsReportsPoint, goalOrderPoint],
+    summary: [whereWeWere, linesSection, inHand(silentAfter), workerLimitSection(policy), readySection(policy), staleSection(stale), guardOffSection(guarded)],
     setup: [guardSetup(guarded)],
     hooks: [noClosingOwnWork],
   }

@@ -134,6 +134,13 @@ trunk, never on a [development line](lines.md), which gets them when it is broug
 goal's sub-goals can't be separate milestones there, since a milestone that comes before the line's goal could never land on it, but steps of the line's own
 gate can.
 
+## Order the goals, and freeze one
+
+`naima gate set <gate> --after <gate>,...` says which goals a gate comes after, besides the order gates with a version take by version and gates with a due date
+by date. `naima gate set <gate> --freeze <date>` freezes a goal from that date until it is finished (its version released, or, with no version, the gate holds
+and its date has come): meanwhile no landing on the trunk closes a feature, and `--freeze ""` clears it. The order and the freezes decide when a
+[development line](lines.md) may land, and `naima gate show <gate> --line` judges a gate on its line's tip.
+
 ## See when things happened: the timeline
 
 ```sh

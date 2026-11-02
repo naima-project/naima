@@ -100,11 +100,17 @@ naima guard on     # turn it back on
 
 Commit `naima.json` and the hook after turning the guard on or off; that commit goes straight on the trunk, since the guard lets it through.
 
-The commits Naima's setup asks for go straight on the trunk too, each with a `Naima-Setup:` trailer that the command it prints already carries: the
-installer's first commit (`Naima-Setup: install`), its move of a copied program to a git clone (`Naima-Setup: migrate`), and the update that brings the guard
-into a project whose trunk does not carry it yet (`Naima-Setup: update`). The guard takes such a commit only when it touches nothing but the tracker folder,
-`AGENTS.md` and the files each agent tool's setup writes (its entry file, such as `CLAUDE.md`, and its settings, such as `.claude/settings.json`); an
-update once the guard is on the trunk is landed through an item, like any other change.
+The commits Naima's setup asks for go straight on the trunk too, each with a `Naima-Setup:` trailer that the command it prints already carries: the installer's
+first commit (`Naima-Setup: install`), its move of a copied program to a git clone (`Naima-Setup: migrate`), and the update that brings the guard into a project
+whose trunk does not carry it yet (`Naima-Setup: update`). The guard takes such a commit only when it touches nothing but the tracker folder, `AGENTS.md` and
+the files each agent tool's setup writes (its entry file, such as `CLAUDE.md`, and its settings, such as `.claude/settings.json`); an update once the guard is
+on the trunk is landed through an item, like any other change.
+
+The hooks follow the program. core.hooksPath names the hooks folder by a relative path, so each checkout would run its own copy, the one its branch carries;
+instead, a copy that differs from the main checkout's hands the ref updates to the main checkout's, so a branch made before the program moved, a development
+line among them, is guarded as the trunk is now. When the program changes without `naima update` writing the hooks, `naima hello` in the main checkout, on the
+trunk, rewrites them and prints the commit to make: the trunk takes a commit that only rewrites Naima's hooks to the text the running program writes, with no
+`Trunk-reason:`.
 
 When the tracker is kept as a repository of its own ([sibling mode](private-tracker.md#sibling-mode)), the tracker's repository runs the same hook, and its
 trunk is guarded too. Naima commits every write to that tracker itself, and each of those commits carries a `Naima-Command:` trailer naming the command, which

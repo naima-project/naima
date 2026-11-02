@@ -43,6 +43,7 @@ import {
   code,
   type Command,
   type Context,
+  contextAt,
   CONTRACT,
   type Contribution,
   DATA_FILE,
@@ -67,6 +68,7 @@ import {
   readyRecord,
   refutes,
   rendered,
+  sessionLine,
   setFields,
   str,
   type SummarySection,
@@ -76,6 +78,7 @@ import {
   writeJson,
 } from "../../core/api.ts"
 import { type CoverageConfig, coverageLines, coverageOf, coverageReasons, coverageUiView, COVERS, readCoverage, staleCovers } from "./coverage.ts"
+import { finished, fixedOnLine, goalOrder, goalsLanding, lineNotReady } from "./goals.ts"
 import { dependenciesAcyclic, dependenciesWaitOnWork, orderCommand, readyCommand, standsFor } from "./dependencies.ts"
 import { CLOSES_STEP, findMethod, methodsPoint, type MethodStep, STEP_NAME, stepRecordsCheck, type StepState, stepsVerdict } from "./methods.ts"
 
@@ -131,6 +134,10 @@ export interface GateDef {
   method?: string
   /** Its own steps, after the method's: `naima gate step` closes them the same way. */
   ownSteps?: MethodStep[]
+  /** The goals this one comes after, added to the order by version and due date. */
+  after?: string[]
+  /** The date its freeze starts, YYYY-MM-DD: until the goal is finished, no landing on the trunk closes a feature. */
+  freeze?: string
   /** May be async: a gate backed by an external tool awaits it. */
   evaluate(ctx: Context): GateResult | Promise<GateResult>
 }
@@ -185,6 +192,10 @@ export interface GateConfig {
   method?: string
   /** Its own steps, in order, after the method's: sub-goals closed the same way. */
   steps?: MethodStep[]
+  /** The goals it comes after, besides the order release gates take by version and dated gates by due date. */
+  after?: string[]
+  /** From this date, YYYY-MM-DD, while the goal is unfinished, no landing on the trunk closes a feature. */
+  freeze?: string
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -227,6 +238,11 @@ function readOptions(options: Record<string, unknown>): Record<string, GateConfi
         seen.add(s.name)
       }
     }
+    if (c.after !== undefined) {
+      if (!Array.isArray(c.after) || !c.after.every((g) => typeof g === "string")) throw new Error(`gates: gate "${name}": after is a list of gate names`)
+      if (c.after.includes(name)) throw new Error(`gates: gate "${name}": a goal does not come after itself`)
+    }
+    if (c.freeze !== undefined && !isDate(c.freeze)) throw new Error(`gates: gate "${name}": freeze is a date, YYYY-MM-DD, got ${JSON.stringify(c.freeze)}`)
   }
   return gates as Record<string, GateConfig>
 }
@@ -394,7 +410,7 @@ const tagsOf = (repo: string): string[] => (gitOrNull(repo, "tag", "--list") ?? 
  * Every tag a release may be marked with, as version keys: the project's own, the tracker's repository's when it has
  * one of its own, and each submodule's, such as a product kept as a submodule of the repository that tracks it.
  */
-function releaseTags(ctx: Context): Set<string> {
+export function releaseTags(ctx: Context): Set<string> {
   const repos = new Set([ctx.root, ctx.trackerGit])
   const paths = gitOrNull(ctx.root, "config", "--file", ".gitmodules", "--get-regexp", "^submodule\\..*\\.path$") ?? ""
   for (const line of paths.split("\n")) {
@@ -651,7 +667,7 @@ const queue: Command = {
     {
       name: "--ready",
       says:
-        "list the ready queue instead: the open items the owner approved at the close of a meeting, in the order they start — what the owner said to start now first, then by priority",
+        "list the ready queue instead: the open items the owner approved at the close of a meeting, in the order they start — what the owner said to start now first, then by priority; with no gate named, a chat working on a development line (naima line use) sees its gate's",
     },
     {
       name: "--role",
@@ -665,7 +681,10 @@ const queue: Command = {
     const role = str(p, "role")
     if (bool(p, "ready")) {
       if (role !== undefined || bool(p, "human")) throw usageError(this)
-      return readyList(ctx, gate)
+      // A chat working on a development line sees the ready work of that line's gate.
+      const line = gate === undefined ? sessionLine(ctx.root) : undefined
+      if (typeof line === "string") ctx.out(`on line line/${line}`)
+      return readyList(ctx, gate ?? line ?? undefined)
     }
     if (role !== undefined) return roleQueue(ctx, role, gate)
     const def = gate === undefined ? undefined : ctx.registry.find<GateDef>("gates", gate)?.value
@@ -859,7 +878,7 @@ const gateCommand: Command = {
     "declare a gate — a milestone, with a date and a version, or one that follows a stance's method — put items on it or take them off, add steps of its own, close its steps, and show one; writes go to naima.json and to the items, validated, through the write hooks",
   enforces: "writes to naima.json and to the items are validated and pass the write hooks",
   usage:
-    'gate new <name> "<title>" [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite] [--method <stance>/<method>] | gate set <name> [--title <t>] [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite | --no-full-suite] [--method <stance>/<method>] | gate add <gate> <item>... | gate remove <gate> <item>... | gate step <gate> <step> --by <item> | gate step add <gate> <step> "<title>" --exit <exit> [--after <step> | --first] | gate step remove <gate> <step> | gate show <gate>',
+    'gate new <name> "<title>" [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite] [--method <stance>/<method>] | gate set <name> [--title <t>] [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite | --no-full-suite] [--method <stance>/<method>] [--after <gate>,...] [--freeze YYYY-MM-DD] | gate add <gate> <item>... | gate remove <gate> <item>... | gate step <gate> <step> --by <item> | gate step add <gate> <step> "<title>" --exit <exit> [--after <step> | --first] | gate step remove <gate> <step> | gate show <gate> [--line]',
   options: [
     { name: "--title", says: "gate set: its new title" },
     { name: "--says", says: "gate new and set: what the gate is for, in one sentence" },
@@ -888,9 +907,16 @@ const gateCommand: Command = {
     { name: "--exit", says: "gate step add: the step's exit criterion, what must be true and recorded for it to close" },
     {
       name: "--after",
-      says: "gate step add: the step the new one goes right after, one of the gate's own or its method's last; without it, last",
+      says:
+        "gate new and set: the goals this one comes after, comma-separated, added to the order by version and due date; with set, \"\" takes them off. gate step add: the step the new one goes right after, one of the gate's own or its method's last; without it, last",
     },
     { name: "--first", says: "gate step add: the new step goes first among the gate's own, right after its method's" },
+    {
+      name: "--freeze",
+      says:
+        'gate new and set: the date its freeze starts, YYYY-MM-DD: from then, until the goal is finished, no landing on the trunk closes a feature; with set, "" clears the freeze',
+    },
+    { name: "--line", says: "gate show: judge the gate on the tip of its development line, line/<gate>, and say whether the line may land" },
   ],
   examples: [
     'gate new beta "Public beta" --says "the first outside users" --due 2026-12-01 --version 0.9',
@@ -898,6 +924,10 @@ const gateCommand: Command = {
     "gate remove beta bugs/export-drops-alpha",
     "gate show beta",
     'gate new v1 "First release" --version 1.0 --full-suite',
+    "gate set launch --freeze 2026-11-01",
+    'gate set launch --freeze ""',
+    "gate set release-1.2 --after launch",
+    "gate show release-1.2 --line",
     'gate set beta --due ""',
     "gate set beta --due 2026-12-15",
     "gate set beta --method ui/design",
@@ -921,8 +951,11 @@ const gateCommand: Command = {
       exit: { type: "string" },
       after: { type: "string" },
       first: { type: "boolean" },
+      freeze: { type: "string" },
+      line: { type: "boolean" },
     })
     const [sub, name, ...rest] = p.positionals
+    const after = str(p, "after")?.split(",").map((g) => g.trim()).filter(Boolean)
     if (sub === "new") {
       const title = rest[0]
       if (!name || !title?.trim() || rest.length > 1) throw usageError(this)
@@ -937,6 +970,8 @@ const gateCommand: Command = {
         ...(coverage?.length ? { coverage } : {}),
         ...(bool(p, "full-suite") ? { fullSuite: true } : {}),
         ...(str(p, "method") !== undefined ? { method: methodId(ctx, str(p, "method") ?? "") } : {}),
+        ...(after?.length ? { after } : {}),
+        ...(str(p, "freeze") ? { freeze: str(p, "freeze") } : {}),
       } as GateConfig
       declareGate(ctx, name, gate)
       ctx.out(`gate ${name} declared in ${ctx.trackerDir}/${DATA_FILE} — put items on it: naima gate add ${name} <item>...`)
@@ -955,6 +990,8 @@ const gateCommand: Command = {
       if (bool(p, "no-full-suite")) changes["fullSuite"] = false
       const method = str(p, "method")?.trim()
       if (method !== undefined) changes["method"] = method === "" ? "" : methodId(ctx, method)
+      if (after !== undefined) changes["after"] = after.length ? after : ""
+      if (str(p, "freeze") !== undefined) changes["freeze"] = (str(p, "freeze") ?? "").trim()
       if (!Object.keys(changes).length) throw usageError(this)
       updateGate(ctx, name, changes)
       ctx.out(`gate ${name}: ${Object.entries(changes).map(([k, v]) => (v === "" || v === false ? `${k} removed` : `${k} ${v}`)).join(", ")}`)
@@ -991,14 +1028,38 @@ const gateCommand: Command = {
     if (sub === "show") {
       if (rest.length) throw usageError(this)
       const gate = findGate(ctx, name)
+      if (bool(p, "line")) return await showOnLine(ctx, gate)
       const r = await gate.evaluate(ctx)
       printGate(ctx, gate, r, true)
+      if (gate.freeze) ctx.out(`  frozen from ${gate.freeze}${(await finished(ctx, gate)) ? ", finished: the freeze no longer holds" : ""}`)
+      if (gate.after?.length) ctx.out(`  after: ${gate.after.join(", ")}`)
+      const onLine = new Set(fixedOnLine(ctx, gate.name))
+      const fixedThere = r.blocking.filter((i) => onLine.has(i.meta.id))
+      if (fixedThere.length) ctx.out(`  fixed on line line/${gate.name}, closed when it lands: ${fixedThere.map(label).join(", ")}`)
       if (gate.says) ctx.out(`  for: ${gate.says}`)
       if (gate.decides) ctx.out(`  decides: ${gate.decides}`)
       return r.holds ? 0 : 1
     }
     throw usageError(this)
   },
+}
+
+/** `gate show <gate> --line`: the gate judged on its line's tip, and whether the line may land. */
+async function showOnLine(ctx: Context, gate: GateDef): Promise<number> {
+  if (gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `refs/heads/line/${gate.name}`) === null) {
+    throw new Error(`no line for ${gate.name}: naima line new ${gate.name} starts one`)
+  }
+  const at = contextAt(ctx, `refs/heads/line/${gate.name}`)
+  try {
+    const def = gatesOf(at.ctx).find((g) => g.name === gate.name)?.value ?? gate
+    printGate(ctx, def, await def.evaluate(at.ctx), true)
+    const why = await lineNotReady(ctx, at.ctx, gate.name, fixedOnLine(ctx, gate.name))
+    ctx.out(why.length ? `line/${gate.name} may not land yet:` : `line/${gate.name} is ready to land: naima land line/${gate.name}`)
+    for (const w of why) ctx.out(`  ✗ ${w}`)
+    return why.length ? 1 : 0
+  } finally {
+    at.dispose()
+  }
 }
 
 const overdue: Check = {
@@ -1070,6 +1131,8 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
     says: c.says ?? "",
     ...(c.due !== undefined ? { due: c.due } : {}),
     ...(c.version !== undefined ? { version: c.version } : {}),
+    ...(c.after !== undefined ? { after: c.after } : {}),
+    ...(c.freeze !== undefined ? { freeze: c.freeze } : {}),
     decides:
       ((c.holdsOn ?? "code") === "code"
         ? `blocked by every open item with gate=${name} that still owes code: no fixedOn, and not itself a proving gesture. Fixed items and open proving gestures are owed, not blocking — unless refuted: one whose status refutes (a failed test, a violated property), or one verified by such an item, blocks.`
@@ -1182,9 +1245,10 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
     points: [gatesPoint, methodsPoint],
     // What it reads of the trackers' vocabulary: without it loaded, gates would decide on nothing.
     uses: { fields: [FIXED_ON.name, RUN_BY.name, HUMAN_BECAUSE.name], relations: ["verifies", "verified-by"] },
-    contributes: { gates: defs, "ui-views": [gatesUiView, coverageUiView(lists)] },
-    // The gates are a panel of naima ui, coverage a tab, when the ui plugin is loaded; without it, still a command.
-    optional: ["ui-views"],
+    contributes: { gates: defs, "ui-views": [gatesUiView, coverageUiView(lists)], "goal-order": [goalOrder], "landing-reports": [goalsLanding] },
+    // The gates are a panel of naima ui, coverage a tab, when the ui plugin is loaded; without it, still a command. The goal
+    // order and the landing check are for the coordination plugin's development lines, when it is loaded.
+    optional: ["ui-views", "goal-order", "landing-reports"],
     migrations: [moveGates],
     rank: [{ name: "gate", score: (i) => (onGates(i).length ? 0 : 4) }],
     checks: [

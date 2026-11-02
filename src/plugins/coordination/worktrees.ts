@@ -85,13 +85,19 @@ export function workerTrees(root: string, policy: Policy, trees: Worktree[] = wo
  * `maxWorkers` are open already. The refusal names each, and says how to free
  * one or raise the bound; null while there is room.
  */
-export function workerBoundReason(root: string, policy: Policy, trees: Worktree[] = worktrees(root)): string | null {
-  const open = workerTrees(root, policy, trees)
+export function workerBoundReason(
+  root: string,
+  policy: Policy,
+  trees: Worktree[] = worktrees(root),
+  line?: { name: string; holds(branch: string): boolean },
+): string | null {
+  // The bound counts per line: the trunk is one line, each development line another.
+  const open = workerTrees(root, policy, trees).filter((w) => !line || line.holds(w.branch ?? ""))
   if (open.length < policy.maxWorkers) return null
   return [
-    `${plural(open.length, "worker worktree")} ${
-      open.length === 1 ? "is" : "are"
-    } open, the coordination option maxWorkers (${policy.maxWorkers}): open no more until one is done`,
+    `${plural(open.length, "worker worktree")} ${open.length === 1 ? "is" : "are"} open${
+      line ? ` ${line.name}` : ""
+    }, the coordination option maxWorkers (${policy.maxWorkers}): open no more until one is done`,
     ...open.map((w) => `  ${w.branch}  ${w.path}`),
     "free one that has landed with naima prune --branch <branch> --write, or give two small items to one worker (naima open <item> <item>);",
     `raise the bound only on purpose, in naima.json: "plugins": { "coordination": { "options": { "maxWorkers": ${policy.maxWorkers + 1} } } }`,
@@ -160,7 +166,13 @@ export interface Holders {
  * checked itself (`w.self`), and, with `options.allWorktrees`, for every
  * worktree — the coordinator's view (`naima check --all-worktrees`).
  */
-export function policyFindings(root: string, policy: Policy, holders: Holders, options: CheckOptions = {}): Finding[] {
+export function policyFindings(
+  root: string,
+  policy: Policy,
+  holders: Holders,
+  options: CheckOptions = {},
+  baseOf: (branch: string) => string | null = () => trunk(root),
+): Finding[] {
   if (!isGitRepo(root)) return []
   const out: Finding[] = []
   const main = trunk(root)
@@ -171,9 +183,13 @@ export function policyFindings(root: string, policy: Policy, holders: Holders, o
   for (const w of trees.slice(1)) {
     if (!w.branch || isExempt(policy, w.branch)) continue
     const last = w.branch.split("/").pop() ?? w.branch
-    const n = main ? ahead(root, main, w.branch) : 0
-    const held = holders.claimed.has(w.branch) || holders.noted.has(w.branch) ||
-      !!(n && gitOrNull(claimsRepo, "log", "-1", "--format=%H", "--diff-filter=A", `${claimsMain}..${w.branch}`, "--", holders.claims || "."))
+    // A branch of a development line is measured against its line, not the trunk.
+    const base = baseOf(w.branch) ?? main
+    const n = base ? ahead(root, base, w.branch) : 0
+    const from = claimsRepo === root ? base : claimsMain
+    // A sync of a line (sync/<gate>) belongs to the line it merges the trunk into: it holds no claim.
+    const held = w.branch.startsWith("sync/") || holders.claimed.has(w.branch) || holders.noted.has(w.branch) ||
+      !!(n && gitOrNull(claimsRepo, "log", "-1", "--format=%H", "--diff-filter=A", `${from}..${w.branch}`, "--", holders.claims || "."))
     if (!same(dirname(w.path), dir)) {
       if (!held) {
         out.push({
@@ -194,7 +210,7 @@ export function policyFindings(root: string, policy: Policy, holders: Holders, o
           level,
           message: `worktree ${w.path} (${w.branch}) carries no claim and has ${
             plural(n, "commit")
-          } not on ${main}: claim its items there (naima claim), or, once they are released, write its session note (naima pass)`,
+          } not on ${base}: claim its items there (naima claim), or, once they are released, write its session note (naima pass)`,
         }
         : { level, message: `worktree ${w.path} (${w.branch}) carries no claim: claim its items there before any work (naima claim)` },
     )
@@ -220,8 +236,8 @@ const DIRECT = /^(commit|commit \(amend\)|cherry-pick|revert):/
  * reflog records as committed on it directly — outside the flow, where
  * every change arrives by a merge.
  */
-export function preparingFindings(root: string, branch: string): Finding[] {
-  const main = trunk(root)
+export function preparingFindings(root: string, branch: string, base: string | null = trunk(root)): Finding[] {
+  const main = base
   if (!main || branch === main) return []
   // A branch the trunk already holds is merged, not being prepared: its claim rode along.
   if (gitOrNull(root, "merge-base", "--is-ancestor", branch, main) !== null) return []

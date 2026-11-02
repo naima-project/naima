@@ -424,6 +424,17 @@ A line of work in git. Each piece of work has its own branch.
 
 The branch that releases come from, usually `main`.
 
+### Line
+
+A long-lived branch `line/<gate>` for one goal of the project, kept apart from the [trunk](#trunk) until the trunk is ready to take it. Items' branches start
+from it and land back on it, the trunk is merged into it by a sync, and it lands on the trunk once the goals before its own are finished and its own holds on
+its tip ([development lines](lines.md)).
+
+### Freeze
+
+A date from which a goal's [gate](#gate) refuses every landing on the trunk that closes a feature, until the goal is finished or the owner clears it
+([development lines](lines.md#freezes)).
+
 ### Worktree
 
 A private copy of the project in which one agent works, so that it can't disturb anyone else. It is a second checkout of the same repository, in its own folder

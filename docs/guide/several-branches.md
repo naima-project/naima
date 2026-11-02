@@ -110,6 +110,11 @@ which git removes only when forced, is then removed with `git worktree remove --
 If `naima land` refuses because the trunk is not an ancestor of the branch, stop, because the trunk has moved. Merge it into the branch again, on the branch
 ([the rule](rules.md#every-landing-is-a-marker-naming-the-items-it-closes)).
 
+## Work for a later goal: lines
+
+When work for a later goal, such as the next release, must not reach the trunk yet, it goes on that goal's line, the long-lived branch `line/<gate>`: items'
+branches start from it and land on it, and it lands on the trunk when the trunk is ready ([development lines](lines.md)).
+
 ## A small fix in one command
 
 For a fix small enough to need no plan, `naima fix "<title>"` takes the whole way in one step, starting from the change already made and not committed. On the
