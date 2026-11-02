@@ -1,9 +1,12 @@
-// Methods: an ordered list of steps a plugin, typically a stance, contributes to
-// the `methods` point. A gate that follows one (`method` in its configuration,
-// `naima gate set <gate> --method <stance>/<method>`) gets the method's steps as
-// sub-goals, in order, and holds only once every one is closed.
+// A gate's steps: its sub-goals, in order. They come from two places. A method
+// is an ordered list of steps a plugin, typically a stance, contributes to the
+// `methods` point; a gate that follows one (`method` in its configuration,
+// `naima gate set <gate> --method <stance>/<method>`) gets the method's steps.
+// A gate may also have steps of its own (`steps` in its configuration, written
+// by `naima gate step add|remove`), which come after the method's. The gate
+// holds only once every step is closed.
 //
-// Nothing about a step is stored on the gate. A step is closed by a record: an
+// Nothing about a step's progress is stored on the gate. A step is closed by a record: an
 // item carrying `closesStep: <gate>/<step>` whose status is settled (in the done
 // category, such as a settled decision) and not retired. `naima gate step`
 // writes it, and refuses while the step before is not closed; a record written
@@ -31,7 +34,8 @@ export interface MethodDef {
   steps: MethodStep[]
 }
 
-const STEP_NAME = /^[a-z0-9][a-z0-9-]*$/
+/** A step's name: lowercase letters, digits and dashes. */
+export const STEP_NAME = /^[a-z0-9][a-z0-9-]*$/
 
 /** The point a stance declares its methods on: the gates plugin declares it, any plugin may contribute. */
 export const methodsPoint: ExtensionPoint<MethodDef> = {
@@ -92,65 +96,91 @@ export interface StepState {
   state: "closed" | "next" | "waiting"
   /** The settled records that close it. */
   closedBy: string[]
+  /** A step of the gate's own, not of its method. */
+  own?: boolean
 }
 
 /** The settled, unretired items that record `<gate>/<step>` closed. */
 const recordsOf = (ctx: Context, gate: string, step: string): Item[] =>
   ctx.repo.items.filter((i) => (fieldValue(i, CLOSES_STEP) ?? []).includes(`${gate}/${step}`) && !isOpen(ctx, i) && !isRetired(ctx, i))
 
-/** Each step of `method` on `gate`, derived from the records: a step is closed only when every step before it is. */
-export function stepStates(ctx: Context, gate: string, method: MethodDef): StepState[] {
+/** Each step on `gate`, derived from the records: a step is closed only when every step before it is. */
+export function stepStates(ctx: Context, gate: string, steps: readonly (MethodStep & { own?: boolean })[]): StepState[] {
   let before = true
   let next = true
-  return method.steps.map((s, n) => {
+  return steps.map((s, n) => {
     const by = recordsOf(ctx, gate, s.name).map(label)
     const closed = before && by.length > 0
     before = closed
     const state = closed ? "closed" : next ? "next" : "waiting"
     if (!closed) next = false
-    return { name: s.name, title: s.title, exit: s.exit, index: n + 1, state, closedBy: closed ? by : [] }
+    return { name: s.name, title: s.title, exit: s.exit, index: n + 1, state, closedBy: closed ? by : [], ...(s.own ? { own: true } : {}) }
   })
 }
 
-/** What a gate's method adds to its verdict: its steps, and a reason while one is not closed — or the reason the method cannot be found. */
-export function methodVerdict(ctx: Context, gate: string, ref: string): { steps: StepState[]; reasons: string[]; method?: string } {
-  const found = findMethod(ctx, ref)
-  if (!found) {
-    return { steps: [], reasons: [`follows the method ${ref}, which no loaded plugin contributes — adopt its stance, or naima gate set ${gate} --method ""`] }
-  }
-  const steps = stepStates(ctx, gate, found.method)
-  const next = steps.find((s) => s.state === "next")
-  const reasons = next
-    ? [
-      `step ${next.index} of ${steps.length} of ${found.id} is next: ${next.name} (${next.title}), closed when ${next.exit} — naima gate step ${gate} ${next.name} --by <item>`,
-    ]
-    : []
-  return { steps, reasons, method: found.id }
+/** What a gate declares about its steps: the method it follows, and its own steps. */
+export interface GateSteps {
+  method?: string
+  steps?: MethodStep[]
 }
 
-/** A record that names a gate following no method, or a step its method lacks: noted, since it closes nothing. */
-export function stepRecordsCheck(methods: Readonly<Record<string, string>>): Check {
+/**
+ * What a gate's steps add to its verdict: the method's steps, then its own, and a reason while one is not closed — or
+ * the reason its method cannot be found, in which case only its own steps are listed.
+ */
+export function stepsVerdict(ctx: Context, gate: string, declared: GateSteps): { steps: StepState[]; reasons: string[]; method?: string } {
+  const reasons: string[] = []
+  const found = declared.method !== undefined ? findMethod(ctx, declared.method) : undefined
+  if (declared.method !== undefined && !found) {
+    reasons.push(`follows the method ${declared.method}, which no loaded plugin contributes — adopt its stance, or naima gate set ${gate} --method ""`)
+  }
+  const steps = stepStates(ctx, gate, [...(found?.method.steps ?? []), ...(declared.steps ?? []).map((s) => ({ ...s, own: true }))])
+  const next = steps.find((s) => s.state === "next")
+  if (next) {
+    reasons.push(
+      `step ${next.index} of ${steps.length}${
+        next.own ? "" : ` of ${found?.id}`
+      } is next: ${next.name} (${next.title}), closed when ${next.exit} — naima gate step ${gate} ${next.name} --by <item>`,
+    )
+  }
+  return { steps, reasons, ...(found ? { method: found.id } : {}) }
+}
+
+/** A record that names a gate with no steps, or a step the gate lacks: noted, since it closes nothing. */
+export function stepRecordsCheck(gates: Readonly<Record<string, GateSteps>>): Check {
   return {
     name: "method-steps",
-    says: "an item's closesStep names a gate that follows a method, and a step of that method; a gate's method is one a loaded plugin contributes",
+    says:
+      "an item's closesStep names a gate that has steps, and one of its steps (of its method or its own); a gate's method is one a loaded plugin contributes, and none of its own steps shares a name with a step of its method",
     run(ctx) {
       const out: Finding[] = []
-      for (const [gate, ref] of Object.entries(methods)) {
-        if (!findMethod(ctx, ref)) {
+      const names = new Map<string, string[]>()
+      for (const [gate, d] of Object.entries(gates)) {
+        const found = d.method !== undefined ? findMethod(ctx, d.method) : undefined
+        if (d.method !== undefined && !found) {
           out.push({
             level: "problem",
-            message: `gate ${gate} follows the method ${ref}, which no loaded plugin contributes — adopt its stance, or naima gate set ${gate} --method ""`,
+            message:
+              `gate ${gate} follows the method ${d.method}, which no loaded plugin contributes — adopt its stance, or naima gate set ${gate} --method ""`,
           })
         }
+        const fromMethod = found?.method.steps.map((s) => s.name) ?? []
+        const own = (d.steps ?? []).map((s) => s.name)
+        for (const n of own.filter((n) => fromMethod.includes(n))) {
+          out.push({
+            level: "problem",
+            message: `gate ${gate} has a step of its own named ${n}, as a step of its method ${found?.id} is — naima gate step remove ${gate} ${n}`,
+          })
+        }
+        if (d.method !== undefined || own.length) names.set(gate, found || d.method === undefined ? [...fromMethod, ...own] : [])
       }
       for (const item of ctx.repo.items) {
         for (const ref of fieldValue(item, CLOSES_STEP) ?? []) {
           const [gate = "", step = ""] = ref.split("/")
-          const m = Object.hasOwn(methods, gate) ? methods[gate] : undefined
-          const found = m === undefined ? undefined : findMethod(ctx, m)
-          if (m === undefined) out.push({ level: "note", item, message: `${label(item)} closes step ${ref}, but gate ${gate} follows no method` })
-          else if (found && !found.method.steps.some((s) => s.name === step)) {
-            out.push({ level: "note", item, message: `${label(item)} closes step ${ref}, but the method ${found.id} has no step ${step}` })
+          const steps = names.get(gate)
+          if (steps === undefined) out.push({ level: "note", item, message: `${label(item)} closes step ${ref}, but gate ${gate} has no steps` })
+          else if (steps.length && !steps.includes(step)) {
+            out.push({ level: "note", item, message: `${label(item)} closes step ${ref}, but gate ${gate} has no step ${step}` })
           }
         }
       }

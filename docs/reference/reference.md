@@ -93,7 +93,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`diary`](#naima-diary) | coordination | the project's story, day by day and in order: events recorded with --kind diary, every decision with its reason, every artifact delivered, every item retired with its reason, every session note; nothing stored but those files | nothing: it reads the records, the decisions, the artifacts, the retired items and the session notes, and writes nothing |
 | [`triage`](#naima-triage) | triage | coverage of the four fields; set them; list what needs a human; derive what the page proves | the four fields take only their declared values, through the write hooks; derive writes only with --write |
 | [`gates`](#naima-gates) | gates | every gate, whoever declared it, and whether it holds; --check exits 1 if one does not | with --check, every listed gate holds: exit 1 if one does not |
-| [`gate`](#naima-gate) | gates | declare a gate — a milestone, with a date and a version, or one that follows a stance's method — put items on it or take them off, close the steps of its method, and show one; writes go to naima.json and to the items, validated, through the write hooks | writes to naima.json and to the items are validated and pass the write hooks |
+| [`gate`](#naima-gate) | gates | declare a gate — a milestone, with a date and a version, or one that follows a stance's method — put items on it or take them off, add steps of its own, close its steps, and show one; writes go to naima.json and to the items, validated, through the write hooks | writes to naima.json and to the items are validated and pass the write hooks |
 | [`queue`](#naima-queue) | gates | open items on a gate, split by whose hands the proof needs; at its foot, the summary sections that stand beside the work, such as the metrics. With --role, one role's queue instead | nothing: it prints derived state, never stored |
 | [`coverage`](#naima-coverage) | gates | each normative list the project declares — read from its source now, never copied — every entry with the test that proves it, or NO TEST | nothing: it reads each list from its source every time, never a copy, and marks an entry no test proves NO TEST |
 | [`ready`](#naima-ready) | gates | the open items that wait on nothing still open -- every `blocked-by` target settled -- most urgent first: what can start now; on a gate, only its items | nothing: it prints derived state, never stored |
@@ -1701,13 +1701,13 @@ Named release conditions backed by items.
 
 Its contributions' qualified ids are `gates/<name>`.
 
-A gate is the set of items that must be settled before something may happen — a release, a merge. An item joins a gate by carrying `gate: <name>`. Gates are configured, never hard-coded, and any plugin may contribute one through the contract; `naima gates` lists them all. `naima gate new` declares one in the project's configuration and `naima gate add` puts items on it, so nobody edits naima.json by hand. A gate with a `due` date (and, optionally, a `version`) is a milestone: `naima gates` and `naima queue` say the days left, and a check warns once it is overdue. An item whose type carries the `group` trait — an epic — stands on a gate for the items it groups. A coverage list is a normative list the project keeps elsewhere — paid features, limits, API endpoints — named by its source, a JSON file and a path in it, or files and a regular expression, and read from it on every run, never copied. A proving item names the entry it proves in `covers`; `naima coverage` prints every entry with its test or NO TEST, `--check` exits 1 on one, and a gate that lists it in `coverage` is blocked by each. A method is an ordered list of steps, each with an exit criterion, that a plugin — typically a stance — contributes to the `methods` point. A gate that follows one (`naima gate set <gate> --method <stance>/<method>`) gets its steps as sub-goals: `naima gates` and `naima hello` show which is closed and which is next, and the gate holds only once every step is closed. A step is closed by a record, a settled item such as a decision carrying `closesStep: <gate>/<step>`, which `naima gate step <gate> <step> --by <item>` writes and refuses while the step before is open; nothing about a step is stored on the gate, and a step counts as closed only when every step before it does.
+A gate is the set of items that must be settled before something may happen — a release, a merge. An item joins a gate by carrying `gate: <name>`. Gates are configured, never hard-coded, and any plugin may contribute one through the contract; `naima gates` lists them all. `naima gate new` declares one in the project's configuration and `naima gate add` puts items on it, so nobody edits naima.json by hand. A gate with a `due` date (and, optionally, a `version`) is a milestone: `naima gates` and `naima queue` say the days left, and a check warns once it is overdue. An item whose type carries the `group` trait — an epic — stands on a gate for the items it groups. A coverage list is a normative list the project keeps elsewhere — paid features, limits, API endpoints — named by its source, a JSON file and a path in it, or files and a regular expression, and read from it on every run, never copied. A proving item names the entry it proves in `covers`; `naima coverage` prints every entry with its test or NO TEST, `--check` exits 1 on one, and a gate that lists it in `coverage` is blocked by each. A method is an ordered list of steps, each with an exit criterion, that a plugin — typically a stance — contributes to the `methods` point. A gate that follows one (`naima gate set <gate> --method <stance>/<method>`) gets its steps as sub-goals: `naima gates` and `naima hello` show which is closed and which is next, and the gate holds only once every step is closed. A gate may also have steps of its own, the same name, title and exit, added with `naima gate step add <gate> <step> "<title>" --exit <exit>` and removed with `naima gate step remove`; they come after its method's steps, are kept on the gate in naima.json, and close the same way. A step is closed by a record, a settled item such as a decision carrying `closesStep: <gate>/<step>`, which `naima gate step <gate> <step> --by <item>` writes and refuses while the step before is open; nothing about a step is stored on the gate, and a step counts as closed only when every step before it does.
 
 Options, each with the default it takes when nothing sets it:
 
 | Option | Default | What it does |
 |---|---|---|
-| `gates` | `{}` | `plugins.gates.options.gates` in `naima-tracker/naima-data/naima.json`, written by `naima gate new`: gate name → { "title", "says", "holdsOn", "due", "version", "coverage", "fullSuite", "method" }. method ("<plugin>/<method>", written by `naima gate set <gate> --method`) makes the method's steps sub-goals the gate waits for, closed in order. due (YYYY-MM-DD) makes the gate a milestone; version is what it ships as. holdsOn "code" (the default) waits for code, not proof: a fixed item that owes only its proving gesture, and the gestures themselves, are owed but do not block. holdsOn "proof": every open item on the gate blocks it. |
+| `gates` | `{}` | `plugins.gates.options.gates` in `naima-tracker/naima-data/naima.json`, written by `naima gate new`: gate name → { "title", "says", "holdsOn", "due", "version", "coverage", "fullSuite", "method", "steps" }. method ("<plugin>/<method>", written by `naima gate set <gate> --method`) makes the method's steps sub-goals the gate waits for, closed in order. steps ([{ "name", "title", "exit" }], written by `naima gate step add\|remove`) are the gate's own sub-goals, after the method's, closed the same way. due (YYYY-MM-DD) makes the gate a milestone; version is what it ships as. holdsOn "code" (the default) waits for code, not proof: a fixed item that owes only its proving gesture, and the gestures themselves, are owed but do not block. holdsOn "proof": every open item on the gate blocks it. |
 | `coverage` | `{}` | `plugins.gates.options.coverage` in `naima-tracker/naima-data/naima.json`: list name → { "says", and one source: "json" (a file from the project root) with "path" (keys joined by dots, * for every element or value) and "key" (the field naming an entry when elements are objects, default id); or "files" (paths or patterns with * and **) with "pattern" (a regular expression; each match is an entry, its first group when it has one) }. A gate requires lists with "coverage": [names]. |
 
 **Extension points** it declares: `gates`, `methods`.
@@ -1739,7 +1739,7 @@ naima gates --json
 
 ### naima gate
 
-Declare a gate — a milestone, with a date and a version, or one that follows a stance's method — put items on it or take them off, close the steps of its method, and show one; writes go to naima.json and to the items, validated, through the write hooks.
+Declare a gate — a milestone, with a date and a version, or one that follows a stance's method — put items on it or take them off, add steps of its own, close its steps, and show one; writes go to naima.json and to the items, validated, through the write hooks.
 
 **Enforces**: Writes to naima.json and to the items are validated and pass the write hooks.
 
@@ -1750,6 +1750,9 @@ naima --no-full-suite] [--method <stance>/<method>]
 naima gate add <gate> <item>...
 naima gate remove <gate> <item>...
 naima gate step <gate> <step> --by <item>
+naima gate step add <gate> <step> "<title>" --exit <exit> [--after <step>
+naima --first]
+naima gate step remove <gate> <step>
 naima gate show <gate>
 ```
 
@@ -1765,6 +1768,9 @@ naima gate show <gate>
 | `--no-full-suite` |  | gate set: no longer a release gate that waits for the full suite |
 | `--method` |  | gate new and set: the method the gate follows, as <stance>/<method> or <plugin>/<method>: its steps become sub-goals the gate waits for, closed in order; with set, "" takes it off |
 | `--by` |  | gate step: the settled item, such as a decision, that records the step's exit criterion holds; it gets closesStep=<gate>/<step> |
+| `--exit` |  | gate step add: the step's exit criterion, what must be true and recorded for it to close |
+| `--after` |  | gate step add: the step the new one goes right after, one of the gate's own or its method's last; without it, last |
+| `--first` |  | gate step add: the new step goes first among the gate's own, right after its method's |
 
 Examples:
 
@@ -1778,6 +1784,9 @@ naima gate set beta --due ""
 naima gate set beta --due 2026-12-15
 naima gate set beta --method ui/design
 naima gate step beta palette --by decisions/palette-is-dusk
+naima gate step add beta skeleton "The skeleton runs" --exit "the empty app starts and serves its first screen"
+naima gate step add beta screens "The screens" --exit "the owner accepted every screen" --after skeleton
+naima gate step remove beta screens
 ```
 
 ### naima queue
@@ -1876,7 +1885,7 @@ naima order first-public
 | Field | Kind | Applies to | Meaning | Values |
 |---|---|---|---|---|
 | `covers` | strings | every type | the entries of the coverage lists this proving item proves: `<entry>`, or `<list>:<entry>` to say which list; comma-separated |  |
-| `closesStep` | strings | every type | the steps of a gate's method this settled item records as closed, each `<gate>/<step>`; written by `naima gate step`. A step counts as closed only when every step before it does |  |
+| `closesStep` | strings | every type | the steps of a gate, its method's or its own, this settled item records as closed, each `<gate>/<step>`; written by `naima gate step`. A step counts as closed only when every step before it does |  |
 | `gate` | enum | every type | the gates this item is what is waited for: any gate a loaded plugin contributes — the project's own, or a plugin's — one, or a list of several | the name of any contribution to `gates`; one, or a list of several |
 
 **Checks**, run by `naima check`
@@ -1888,7 +1897,7 @@ naima order first-public
 | `coverage-lists` | a coverage list's source can be read; an item's covers names an entry its list holds |
 | `dependencies-acyclic` | no open items wait on each other in a cycle of blocked-by links: none of them could ever start |
 | `dependencies-wait-on-work` | every blocked-by names work: a requirement is not work, so a wait on it is a note -- wait on what delivers or proves it |
-| `method-steps` | an item's closesStep names a gate that follows a method, and a step of that method; a gate's method is one a loaded plugin contributes |
+| `method-steps` | an item's closesStep names a gate that has steps, and one of its steps (of its method or its own); a gate's method is one a loaded plugin contributes, and none of its own steps shares a name with a step of its method |
 
 **Summary sections**: `gates`.
 

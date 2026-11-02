@@ -93,7 +93,7 @@ what the gate records. `--method ""` takes the method off. `naima gates`, `naima
 $ naima gates beta
 beta — Public beta (due 2026-12-01, 17 days left): BLOCKED by 1
   ✗ step 2 of 3 of stance-ui/design is next: palette (Palette), closed when you chose a palette among the variants — naima gate step beta palette --by <item>
-  method stance-ui/design: 1 of 3 steps closed
+  steps (method stance-ui/design): 1 of 3 closed
   ✓ step 1 mood-board  Mood board — closed by decisions/the-mood-board-is-calm
   → step 2 palette  Palette — next, closed when you chose a palette among the variants
   · step 3 screens  Screens — waits for the step before
@@ -109,7 +109,30 @@ naima gate step beta palette --by decisions/the-palette-is-dusk
 This writes `closesStep: beta/palette` on the decision, and nothing on the gate. It refuses while the step before is not closed, and while the decision is still
 open. Because the steps are worked out from the records every time, their order can't be broken by hand either: a record written for a later step counts only
 once every step before it is closed, and if a decision is reopened, its step and every step after it are open again. `naima check` notes a record that names a
-gate following no method, or a step its method doesn't have, and reports a gate whose method no adopted stance provides.
+gate with no steps, or a step the gate doesn't have, and reports a gate whose method no adopted stance provides.
+
+## Break a goal into steps of its own
+
+A gate can also have steps of its own, with no stance involved: you, or an agent, break a goal into sub-goals, each with a name, a title and what must be true
+for it to be done.
+
+```sh
+naima gate step add release-1.2 skeleton "The skeleton runs" --exit "the empty app starts and serves its first screen"
+naima gate step add release-1.2 screens "The screens" --exit "you accepted every screen"
+naima gate step add release-1.2 live "Live server" --exit "the server pushes every change" --after skeleton
+naima gate step remove release-1.2 live
+```
+
+A new step goes last, right after the one `--after` names, or first with `--first`. They close exactly as a method's steps do, in order and on a settled record,
+with `naima gate step <gate> <step> --by <item>`, and `naima gates`, `naima gate show` and `naima hello` show them the same way. A gate that follows a method
+and has steps of its own takes the method's steps first and its own after them: `--after` can name the method's last step, but no other. A step of its own can't
+share a name with a step of the method. `naima gate step remove` refuses a step while a record names it, since that record would then close nothing; take the
+`closesStep` off the record first. Adding a step to a goal that already held means it no longer holds until that step is closed.
+
+The steps are stored on the gate, under its `steps`, in `naima.json`, and like every setting of a gate they belong to the trunk: add or remove them on the
+trunk, never on a [development line](lines.md), which gets them when it is brought up to date with the trunk. That is also what makes them useful on a line: a
+goal's sub-goals can't be separate milestones there, since a milestone that comes before the line's goal could never land on it, but steps of the line's own
+gate can.
 
 ## See when things happened: the timeline
 
@@ -240,5 +263,6 @@ then blocked by each entry with NO TEST. `naima check` notes a test whose `cover
 ## Where it lives
 
 Epics are items, kept in `naima-tracker/naima-data/epics/`. Gates are stored under `plugins.gates.options.gates` in `naima-tracker/naima-data/naima.json`
-([configuration](config.md)), which is what `naima gate new` writes, with the method a gate follows as its `method`, and the coverage lists sit next to them
-under `plugins.gates.options.coverage`. The timeline's records are in `naima-tracker/naima-data/events/`. All of them are committed along with the work.
+([configuration](config.md)), which is what `naima gate new` writes, with the method a gate follows as its `method` and its own steps as its `steps`, and the
+coverage lists sit next to them under `plugins.gates.options.coverage`. The timeline's records are in `naima-tracker/naima-data/events/`. All of them are
+committed along with the work.
