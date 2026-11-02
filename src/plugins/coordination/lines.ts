@@ -142,6 +142,39 @@ export function abandonedLineOf(root: string, ref: string): string | null {
   return null
 }
 
+/** The commit that opened the line of `gate` on `ref` (its branch, or its archive tag): the first-parent commit "Open line/<gate>". */
+export function openingOf(root: string, ref: string, gate: string): string | null {
+  const subject = `Open ${lineBranch(gate)}`
+  const out = gitOrNull(root, "log", "--first-parent", "--fixed-strings", `--grep=${subject}`, "--format=%H%x09%s", ref) ?? ""
+  for (const l of out.split("\n")) {
+    const [sha = "", s = ""] = l.split("\t")
+    if (s === subject) return sha
+  }
+  return null
+}
+
+/**
+ * The lines whose work `next` holds and `old` (when given) lacks, though they have not landed there: an open line whose
+ * opening commit `next` carries without its tip, or an abandoned one whose opening commit it carries. A line's work
+ * reaches the trunk only when the line lands (P1 of the model), and an abandoned line's never.
+ */
+export function lineWorkIn(root: string, next: string, old?: string): { branch: string; abandoned: boolean }[] {
+  const out: { branch: string; abandoned: boolean }[] = []
+  const brings = (o: string | null): boolean => !!o && isAncestor(root, o, next) && !(old && isAncestor(root, o, old))
+  for (const l of openLines(root)) {
+    if (brings(openingOf(root, l.branch, l.gate)) && !isAncestor(root, l.tip, next)) out.push({ branch: l.branch, abandoned: false })
+  }
+  const prefix = archiveTag(LINE_PREFIX)
+  for (const tag of (gitOrNull(root, "for-each-ref", "--format=%(refname:short)", `refs/tags/${prefix}`) ?? "").split("\n").filter(Boolean)) {
+    const gate = tag.slice(prefix.length)
+    if (brings(openingOf(root, `refs/tags/${tag}`, gate))) out.push({ branch: lineBranch(gate), abandoned: true })
+  }
+  return out
+}
+
+/** What a line's work on the trunk is, in words: "line/<gate>, which has not landed" or "…, which was abandoned". */
+export const unlanded = (w: { branch: string; abandoned: boolean }): string => `${w.branch}, which ${w.abandoned ? "was abandoned" : "has not landed"}`
+
 /** Where a branch measures itself, and lands: its line's branch, else the trunk. */
 export function baseOf(root: string, ref: string): string | null {
   try {

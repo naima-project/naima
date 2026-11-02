@@ -57,7 +57,7 @@ import { changeNoteTrailers } from "./changes.ts"
 import { guardLandingMessages } from "./messages.ts"
 import { CLAIMS } from "./index.ts"
 import { plural } from "./worktrees.ts"
-import { abandonedLineOf, fixedOnLine, FIXES, gateOfLine, lineBranch, lineOf, openLines, SYNC } from "./lines.ts"
+import { abandonedLineOf, fixedOnLine, FIXES, gateOfLine, lineBranch, lineOf, lineWorkIn, openLines, SYNC, unlanded } from "./lines.ts"
 
 /** A landing: the branch, the trunk before it, and every file it changed, from the project root. */
 export interface Landing {
@@ -1373,6 +1373,13 @@ function lineFindings(ctx: Context): Finding[] {
   const main = trunk(ctx.root)
   if (!main) return []
   const out: Finding[] = []
+  for (const w of lineWorkIn(ctx.root, main)) {
+    out.push({
+      level: "problem",
+      message: `${main} holds work of ${unlanded(w)}: a line's work reaches the trunk only when the line lands (naima land ${w.branch}), ` +
+        `and an abandoned line's never — find the merge that brought it (git log --first-parent ${main}) and revert it on an item's branch`,
+    })
+  }
   for (const l of openLines(ctx.root)) {
     const log = gitOrNull(
       ctx.root,

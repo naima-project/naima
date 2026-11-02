@@ -109,7 +109,10 @@ open there again, since the trunk never saw their fix. A branch opened from the 
 
 - The trunk guard also guards every `line/*` branch: a line takes only landings, and a commit made on it by hand is refused.
 - `naima land` refuses to put on the trunk a branch that carries commits of a line that has not landed, and refuses a branch carrying commits of two lines.
-- `landings-are-markers` reads each open line's history as it reads the trunk's.
+- The trunk guard refuses the same by hand: a merge onto the trunk that carries the work of a line that has not landed, or of an abandoned one, is refused even
+  when it looks like a landing marker or gives a `Trunk-reason:`; only the line's own landing brings its work.
+- `landings-are-markers` reads each open line's history as it reads the trunk's, and reports as a problem a trunk that holds the work of a line that has not
+  landed or was abandoned.
 - `naima check`, `naima stale`, `naima recover` and `naima claim --preparing` measure a branch of a line against its line, not the trunk; `naima prune` deletes
   a branch that a line already holds; `naima claim` refuses on a line, as on the trunk.
 - Naima's own settings in `naima.json` (the lock, the gates, the options) are kept on the trunk only: the lock never moves on a line.

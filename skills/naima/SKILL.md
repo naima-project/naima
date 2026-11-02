@@ -75,7 +75,8 @@ owner who prefers to see each of them; either way is right.
 
 When the repository has `naima-tracker/naima-data/naima.json` but no `naima-tracker/naima/` (a fresh clone, a new worktree), run the launcher of any Naima at
 hand from inside the project — the main worktree's, or a shallow clone of the `source` that `naima.json` names, outside the project. The run clones the locked
-commit into the program by itself; a project that has its program is served only by its own launcher, so another project's launcher run by its path acts on that other project ([fresh clones and worktrees](../../docs/guide/install.md#fresh-clones-and-worktrees)).
+commit into the program by itself; a project that has its program is served only by its own launcher, so another project's launcher run by its path acts on that
+other project ([fresh clones and worktrees](../../docs/guide/install.md#fresh-clones-and-worktrees)).
 
 When there is none and the work is to be tracked here:
 
@@ -166,9 +167,10 @@ makes the server refuse such pushes, as information: run it only on the owner's 
 write itself: never commit or edit the tracker's files by hand.
 
 Work for a later goal may go on its development line, the branch `line/<gate>` ([development lines](../../docs/guide/lines.md)). `naima line use <gate>` sets
-the line this chat works on; `naima open`, `naima claims` and `naima queue --ready` follow it and say so first, and `naima land` of an item's branch lands it
-on its line, closing nothing. The trunk reaches a line only by `naima line sync <gate>`; a line lands on the trunk with `naima land line/<gate>`, once
-`naima gate show <gate> --line` says it is ready. Never commit on a line by hand: the trunk guard refuses it as on the trunk.
+the line this chat works on; `naima open`, `naima claims` and `naima queue --ready` follow it and say so first, and `naima land` of an item's branch lands it on
+its line, closing nothing. The trunk reaches a line only by `naima line sync <gate>`; a line lands on the trunk with `naima land line/<gate>`, once
+`naima gate show <gate> --line` says it is ready. Never commit on a line by hand, nor merge a line's branch onto the trunk by hand: the trunk guard refuses
+both.
 
 Before asking the owner anything, run `naima decisions <words>`: a settled decision answers it, and the owner's answer to a new question is recorded as one
 ([asking the human](../../docs/agents/asking-the-human.md)).

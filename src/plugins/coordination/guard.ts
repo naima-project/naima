@@ -63,7 +63,7 @@ import {
   writeJson,
 } from "../../core/api.ts"
 import { guardServer, serverHintOf } from "./server.ts"
-import { FIXES, SYNC } from "./lines.ts"
+import { FIXES, lineWorkIn, SYNC, unlanded } from "./lines.ts"
 import { CLOSES, initsTracker, MEETS, onlyAddsTrackerData, onlyClosesItems, recordsMarker, TRACKER_ONLY, TRUNK_REASON } from "./land.ts"
 
 export { TRUNK_REASON }
@@ -525,6 +525,13 @@ export function trunkRefusal(ctx: Context, old: string, next: string, side: "cod
   const added = commitsOf(root, ["--first-parent", "--reverse", next, `^${old}`])
   let prev: Added | undefined = commitsOf(root, ["-1", old])[0]
   for (const c of added) {
+    // A line's work reaches the trunk only when its line lands: no hand merge, marker-shaped or with a reason, brings it.
+    const leaks = tracker || ctx.sibling ? [] : lineWorkIn(root, c.sha, prev?.sha)
+    if (leaks.length) {
+      return `${main} may not take ${c.sha.slice(0, 12)} "${c.subject}": it carries the work of ${leaks.map(unlanded).join(" and ")}. ` +
+        `A line's work reaches the trunk only when the line lands, with naima land line/<gate>, and an abandoned line's never: ` +
+        `land the branch on its line instead (naima land, from the main checkout); nothing lets it through by hand short of naima guard off`
+    }
     const why = tracker ? trackerRefusal(root, c, upstream) : refusal(ctx, c, prev, upstream)
     if (why && tracker) {
       return `the tracker's ${main} may not take ${
@@ -568,7 +575,7 @@ export const guardCheckCommand: Command = {
   name: "guard-check",
   says: "what the trunk guard's git hook runs when the trunk is about to move: exit 0 when it may, else one line saying why not and what to do",
   enforces:
-    "a commit, merge or fast-forward of the trunk made by hand is refused unless every commit it adds to the first-parent line is a landing marker, the record land makes, a commit that only adds to the tracker data (a claim may also be rewritten or removed) or only closes items, naima init's commit, one that only switches the guard, a commit Naima's setup asks for (a Naima-Setup: trailer: the install, the migration of a copied program, the update that brings the guard in) touching only the tracker folder and the files a setup writes, or one with a Trunk-reason: trailer; a tip the upstream holds, a rewind, a ref created or deleted pass",
+    "a commit, merge or fast-forward of the trunk made by hand is refused unless every commit it adds to the first-parent line is a landing marker, the record land makes, a commit that only adds to the tracker data (a claim may also be rewritten or removed) or only closes items, naima init's commit, one that only switches the guard, a commit Naima's setup asks for (a Naima-Setup: trailer: the install, the migration of a copied program, the update that brings the guard in) touching only the tracker folder and the files a setup writes, or one with a Trunk-reason: trailer; a tip the upstream holds, a rewind, a ref created or deleted pass; a commit that brings the work of a development line that has not landed, or of an abandoned one, is refused whatever its trailers",
   usage: "guard-check [--tracker | --line <line>] <old> <new>",
   examples: ["guard-check 0123abc 4567def", "guard-check --tracker 0123abc 4567def", "guard-check --line line/release-1.2 0123abc 4567def"],
   options: [
