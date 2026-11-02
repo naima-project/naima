@@ -57,7 +57,7 @@ import { changeNoteTrailers } from "./changes.ts"
 import { guardLandingMessages } from "./messages.ts"
 import { CLAIMS } from "./index.ts"
 import { plural } from "./worktrees.ts"
-import { abandonedLineOf, fixedOnLine, FIXES, gateOfLine, lineBranch, lineOf, lineWorkIn, openLines, SYNC, unlanded } from "./lines.ts"
+import { abandonedLineOf, fixedOnLine, FIXES, gateOfLine, lineBranch, lineOf, lineWorkIn, openLines, SYNC, SYNC_PREFIX, unlanded } from "./lines.ts"
 
 /** A landing: the branch, the trunk before it, and every file it changed, from the project root. */
 export interface Landing {
@@ -776,7 +776,24 @@ export function landOnLine(ctx: Context, branch: string, gate: string, closes: s
       sync ? `syncing it with ${main} at ${sync.slice(0, 12)}` : `fixing ${refs.join(", ")} there: they close when ${line} lands on ${main}`
     }`,
   )
+  if (sync && branch === `${SYNC_PREFIX}${gate}`) return removeSync(ctx, branch, line)
   ctx.out(nextAfterLanding(branch))
+  return 0
+}
+
+/** A sync branch landed on its line is done: its worktree, once clean, and the branch go, so that the next sync can start. */
+function removeSync(ctx: Context, branch: string, line: string): number {
+  const tree = worktrees(ctx.root).find((w) => w.branch === branch)
+  if (tree) {
+    const dirty = gitOrNull(tree.path, "status", "--porcelain", "--untracked-files=all")
+    const removed = dirty === "" ? runGit(ctx.root, ["worktree", "remove", "--force", tree.path]) : null
+    if (!removed?.ok) {
+      ctx.out(`kept ${tree.path}: ${removed ? gitReason(removed) : "it holds files not committed"} — naima prune --branch ${branch} --write once it is clean`)
+      return 0
+    }
+  }
+  mustGit(ctx.root, "branch", "-D", branch)
+  ctx.out(`removed ${tree ? `${tree.path} and ` : ""}${branch}: its merge is on ${line}`)
   return 0
 }
 

@@ -295,11 +295,8 @@ function syncLine(ctx: Context, policy: Policy, gate: string): number {
     ctx.out(`the trunk does not merge cleanly into ${branch}: resolve the conflicts in ${path}, commit the merge on ${sync}, then naima land ${sync}`)
     return 1
   }
-  landOnLine(ctx, sync, gate, [])
-  mustGit(ctx.root, "worktree", "remove", "--force", path)
-  mustGit(ctx.root, "branch", "-D", sync)
-  ctx.out(`removed ${path} and ${sync}: its merge is on ${branch}`)
-  return 0
+  // Landed, the sync's worktree and branch are removed: landOnLine does it for every sync, this one or one finished by hand.
+  return landOnLine(ctx, sync, gate, [])
 }
 
 /** `line abandon`: the line's commits under archive/line/<gate>, the branch deleted; its items open again on the trunk. */
