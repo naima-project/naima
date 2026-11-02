@@ -13,6 +13,13 @@
 //   /data/<name>?…        a view's data, as JSON — a panel's too; the new UI
 //                         reads these; with ?at=<commit>, as that commit had it
 //                         (at.ts), read only
+//   /data/tabs            the tabs plugins contribute to the new UI (tabs.ts), each
+//                         with its subtabs; every `ui-views` view is one too
+//   /data/tab/<name>?sub= what a tab shows for a subtab, at the moment ?at=:
+//                         a component's data, or the address of a page
+//   /page/<key>/…         the tabs' pages and frames, sandboxed (tabs.ts): the
+//                         key, derived from the token, is all they need and all
+//                         they open
 //   /data/metro           what the new UI's rail draws: the trunk, the lines,
 //                         the branches, the workers and the goals ahead (metro.ts)
 //   /events               a stream of server-sent events, one when the project
@@ -36,6 +43,21 @@ import { actionArgv, type ActionResult, type ActionRunner, ACTIONS, cliRunner } 
 import { AtCache, AtRefused, commitOf } from "./at.ts"
 import { EventHub, watchProject } from "./live.ts"
 import { metroData } from "./metro.ts"
+import {
+  allTabs,
+  contentProblem,
+  fileUrl,
+  folderFile,
+  framedViewHtml,
+  framePage,
+  PAGE_TYPES,
+  pageKey,
+  pagePolicy,
+  tabList,
+  type UiTab,
+  type UiTabContent,
+  viewOf,
+} from "./tabs.ts"
 
 /** A view of `naima ui`: what any plugin contributes to the `ui-views` point. */
 export interface UiView {
@@ -205,10 +227,14 @@ export function serve(
     watch?: { interval?: number; debounce?: number }
     /** What runs an action's command: the CLI by default. */
     actions?: ActionRunner
+    /** The tabs plugins contribute to `ui-tabs`; every view is shown as a tab too. */
+    tabs?: readonly UiTab[]
   } = {},
 ): Promise<Served> {
   const token = opts.token ?? randomBytes(24).toString("hex")
   const csrf = randomBytes(24).toString("hex")
+  const key = pageKey(token)
+  const tabs = allTabs(opts.tabs ?? [], views)
   const runAction = opts.actions ?? cliRunner()
   const atCache = new AtCache()
   const hub = new EventHub((send) => watchProject(ctx, send, opts.watch ?? {}))
@@ -242,9 +268,132 @@ export function serve(
     const result: ActionResult = { command: ["naima", ...argv], code: r.code, out: r.out, err: r.err }
     return send(res, 200, "application/json", JSON.stringify(result), headers)
   }
+  /** The context of the moment ?at= names (the live one when absent), or why it cannot be read. */
+  const momentOf = (url: URL): Context | { status: number; error: string } => {
+    const at = url.searchParams.get("at")
+    if (at === null) {
+      ctx.reload()
+      return ctx
+    }
+    try {
+      return atCache.get(ctx, commitOf(ctx, at))
+    } catch (e) {
+      return { status: e instanceof AtRefused ? 400 : 500, error: e instanceof Error ? e.message : String(e) }
+    }
+  }
+  /** A tab's content for /data/tab/<name>?sub=&at= and its page: the tab, the subtab, and what render gave, checked. */
+  const tabContent = async (url: URL, prefix = "/data/tab/"): Promise<
+    { tab: UiTab; sub: string | null; at: string | null; content: UiTabContent } | { status: number; error: string }
+  > => {
+    let name: string
+    try {
+      name = decodeURIComponent(url.pathname.slice(prefix.length))
+    } catch {
+      return { status: 400, error: "naima ui: a path that is not one" }
+    }
+    const tab = tabs.find((t) => t.name === name)
+    if (!tab) return { status: 404, error: `naima ui: no tab ${name}` }
+    const asked = url.searchParams.get("sub")
+    const subs = tab.subtabs ?? []
+    const sub = asked ?? subs[0]?.name ?? null
+    if (sub !== null && !subs.some((s) => s.name === sub)) return { status: 404, error: `naima ui: the tab ${name} has no subtab ${sub}` }
+    const from = momentOf(url)
+    if ("error" in from) return from
+    const query: Record<string, string[]> = {}
+    for (const [k, v] of url.searchParams) if (!["token", "at", "sub"].includes(k)) (query[k] ??= []).push(v)
+    try {
+      const content = await tab.render({ sub, query }, from)
+      const problem = contentProblem(content)
+      if (problem) return { status: 500, error: `naima ui: the ${name} tab's content ${problem}` }
+      return { tab, sub, at: url.searchParams.get("at"), content }
+    } catch (e) {
+      return { status: 500, error: `naima ui: the ${name} tab failed: ${e instanceof Error ? e.message : String(e)}` }
+    }
+  }
+  /** What /data/tab answers: a component's data with every frame's path made the address it is served at, or a page's address. */
+  const shown = (tab: UiTab, sub: string | null, at: string | null, c: UiTabContent): Record<string, unknown> => {
+    const head = { tab: tab.name, sub }
+    if ("page" in c) return { ...head, page: fileUrl(key, tab.name, c.page) }
+    if ("html" in c) {
+      const view = viewOf(tab)
+      const q = new URLSearchParams()
+      if (sub !== null) q.set("sub", sub)
+      if (at !== null) q.set("at", at)
+      const qs = q.size ? `?${q}` : ""
+      return { ...head, page: view ? `/page/${key}/view/${encodeURIComponent(view.name)}${qs}` : `/page/${key}/tab/${encodeURIComponent(tab.name)}${qs}` }
+    }
+    if (c.component === "gallery") {
+      const sections = c.data.sections.map((s) => ({ ...s, frames: s.frames.map((f) => ({ ...f, src: fileUrl(key, tab.name, f.src) })) }))
+      return { ...head, component: c.component, data: { ...c.data, sections }, ...(c.lead === undefined ? {} : { lead: c.lead }) }
+    }
+    if (c.component === "list") {
+      const items = c.data.items.map((i) => (i.src === undefined ? i : { ...i, src: fileUrl(key, tab.name, i.src) }))
+      return { ...head, component: c.component, data: { ...c.data, items }, ...(c.lead === undefined ? {} : { lead: c.lead }) }
+    }
+    return { ...head, ...c }
+  }
+  /**
+   * /page/<key>/…: the pages and frames of the tabs, refused without this run's page key; nothing else is reached with
+   * it. files/<tab>/<path> a file of the tab's folder; tab/<tab>?sub= a page the tab makes; view/<name>?… a view's
+   * page. Each goes out with the sandboxing policy, and sets no cookie.
+   */
+  const pages = async (req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> => {
+    const policy = { "content-security-policy": pagePolicy(origin) }
+    const [, , given, kind, ...rest] = url.pathname.split("/")
+    if (!given || !same(given, key)) return send(res, 403, "text/plain", "naima ui: this page needs the key of this run\n")
+    if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "text/plain", "naima ui: read only\n")
+    let parts: string[]
+    try {
+      parts = rest.map((p) => decodeURIComponent(p))
+    } catch {
+      return send(res, 400, "text/plain", "naima ui: a path that is not one\n")
+    }
+    if (kind === "files") {
+      const [name, ...path] = parts
+      const tab = tabs.find((t) => t.name === name)
+      let dir: string | null = null
+      try {
+        dir = tab?.files ? tab.files(ctx) : null
+      } catch (e) {
+        return send(res, 500, "text/plain", `naima ui: the ${name} tab's folder failed: ${e instanceof Error ? e.message : String(e)}\n`)
+      }
+      const file = dir ? folderFile(dir, path.join("/")) : null
+      if (!file) return send(res, 404, "text/plain", `naima ui: no ${url.pathname.split("/").slice(3).join("/")}\n`)
+      res.writeHead(200, {
+        "content-type": PAGE_TYPES[extname(file).toLowerCase()]!,
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+        "referrer-policy": "no-referrer",
+        ...policy,
+      })
+      return void res.end(req.method === "HEAD" ? undefined : readFileSync(file))
+    }
+    if (kind === "tab") {
+      const got = await tabContent(url, `/page/${given}/tab/`)
+      if ("error" in got) return send(res, got.status, "text/plain", `${got.error}\n`, policy)
+      if (!("html" in got.content)) return send(res, 404, "text/plain", `naima ui: the ${got.tab.name} tab shows no page of its own here\n`, policy)
+      return send(res, 200, "text/html", framePage(got.tab.title, got.content.html, got.content.css), policy)
+    }
+    if (kind === "view") {
+      const view = views.find((v) => v.name === parts[0])
+      if (!view || parts.length !== 1) return send(res, 404, "text/plain", `naima ui: no view ${parts.join("/")}\n`, policy)
+      const from = momentOf(url)
+      if ("error" in from) return send(res, from.status, "text/plain", `${from.error}\n`, policy)
+      try {
+        const params = paramsOf(url)
+        delete params["at"]
+        const r = await view.render(params, from)
+        return send(res, 200, "text/html", framePage(view.title, framedViewHtml(key, r.html), r.css), policy)
+      } catch (e) {
+        return send(res, 500, "text/plain", `naima ui: the ${view.name} view failed: ${e instanceof Error ? e.message : String(e)}\n`, policy)
+      }
+    }
+    return send(res, 404, "text/plain", `naima ui: no ${url.pathname.split("/").slice(3).join("/")}\n`)
+  }
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", `http://${HOST}`)
     if (opts.log) res.once("finish", () => opts.log?.(`${res.statusCode} ${req.method} ${url.pathname} ${req.headers["user-agent"] ?? ""}`))
+    if (url.pathname.startsWith("/page/")) return pages(req, res, url)
     const given = url.searchParams.get("token") ?? cookieToken(req)
     if (!given || !same(given, token)) return send(res, 403, "text/plain", "naima ui: this address needs the token it was opened with\n")
     const headers = { "set-cookie": `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict` }
@@ -252,6 +401,12 @@ export function serve(
     if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "text/plain", "naima ui: read only\n", headers)
     if (url.pathname === "/session") return send(res, 200, "application/json", JSON.stringify({ csrf, actions: ACTIONS }), headers)
     if (url.pathname === "/events") return hub.add(res, headers)
+    if (url.pathname === "/data/tabs") return send(res, 200, "application/json", JSON.stringify(tabList(tabs), null, 2), headers)
+    if (url.pathname.startsWith("/data/tab/")) {
+      const got = await tabContent(url)
+      if ("error" in got) return send(res, got.status, "text/plain", `${got.error}\n`, headers)
+      return send(res, 200, "application/json", JSON.stringify(shown(got.tab, got.sub, got.at, got.content), null, 2), headers)
+    }
     if (url.pathname === "/data/metro") {
       try {
         ctx.reload()

@@ -50,8 +50,8 @@ a newer contract is refused when the project loads, naming both versions, instea
 contract 1, the shape before `contract` existed, and keeps working: its top-level `gates` or `verifiers` are contributions to those points as any top-level key
 named after a point is, and a view or summary section that returns plain lines is read as text whose data is those lines
 ([views and summaries](#views-and-summaries)). Contract 3 added `home` and contributions named as a folder ([below](#contributions-kept-as-files)). Contract 4
-added the `agent-hooks` point, `refuses` on a landing report and `runs` on a check; a plugin written for 3 keeps working as it is, and one that uses any of these
-says 4, so an older Naima refuses it by name instead of ignoring them.
+added the `agent-hooks` point, `refuses` on a landing report and `runs` on a check; a plugin written for 3 keeps working as it is, and one that uses any of
+these says 4, so an older Naima refuses it by name instead of ignoring them.
 
 ### What a plugin can and cannot do
 
@@ -80,29 +80,29 @@ thing and is typed.
 
 The core's points, each also a typed key of the manifest:
 
-| Point        | What a contribution is                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `commands`   | `naima <name>`: `says`, `usage`, `options` (one per `--flag` in the usage), `examples` (invocations without the leading `naima`); optional and recommended, `enforces`: the policy or invariant it holds, or `nothing:` and what it does instead — a command without it is a note in `naima check`, never a problem; `run(args, ctx)` returns an exit code (may be async)                                                                                                                  |
-| `types`      | item types: `id`, `dir`, `statuses` (each `open` or `done`, with open-ended `flags`; `proves` — evidence for what the item verifies — and `refutes` — evidence against it, which blocks a gate and a close — are two, also said as keys), `initialStatus`, a README `template`, `creatable: false` for archives, plain `traits`, an optional `transitions` map ([extending](#extending-another-plugins-types-and-fields))                                                                  |
-| `fields`     | fields with a kind (`string`, `strings`, `date`, `enum`, `boolean`, `number`, `object`), enum values in rank order — or `valuesFrom` a point, and `multiple` for several — and the types they apply to, by name (`appliesTo`) or by trait (`traits`); `configured: true` when the values come from the project's configuration, so the program's reference does not list them; `filled: true` for a record Naima fills on another write (a signature), which the trunk guard takes with it |
-| `extends`    | additive changes to another plugin's types and fields ([extending](#extending-another-plugins-types-and-fields))                                                                                                                                                                                                                                                                                                                                                                           |
-| `relations`  | link relations; each names its inverse, which must also be declared                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `checks`     | `run(ctx) → Finding[]`, or a promise of them; `problem` fails `naima check`, `note` does not; the project may weigh each one `off`, `note` or `problem` ([check severity](../guide/config.md#check-severity)); `staged: true` for one that reads only the change staged for the next commit, which `naima check --staged` — what the pre-commit hook runs — runs alone ([commit hooks](../guide/commit-hooks.md)); `runs`, the programs it starts ([below](#programs-it-starts)) |
-| `agent-hooks` | a hook the agent tool runs: `name`, `says`, `tool` (the agent tool, by adapter id), `event` and optionally `matcher` in that tool's terms, and `command`, the naima command it runs as a list of words; Naima installs it in the tool's settings at `naima init`, `naima update` and `naima stance adopt`, and removes it once the plugin is gone ([hooks in the agent tool](../guide/extending-naima.md#hooks-in-the-agent-tool)) |
-| `views`      | `naima view <name>`: a named rendering of derived state, `render(args, ctx) → { data, text() }` ([below](#views-and-summaries))                                                                                                                                                                                                                                                                                                                                                            |
-| `dirs`       | directories under the tracker root the plugin owns that are not item types                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `summary`    | a block of `naima summary`, `render(ctx) → { data, text() }`                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `facts`      | lines `naima show` prints of an item under its fields, `facts(ctx, item) → string[]`, and in its JSON as `facts`                                                                                                                                                                                                                                                                                                                                                                           |
-| `rank`       | an additive urgency term; lower is more urgent                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `hooks`      | [write hooks](#write-hooks): `beforeWrite(write, ctx)`, which may change what is written or refuse it, and `afterWrite(write, ctx)`, on every item write                                                                                                                                                                                                                                                                                                                                   |
-| `migrations` | its own data migrations, in order from its format 1: `from`, `says`, and pure `config(raw)`, `item(meta)`, `stale(meta)`; its format is 1 + their number ([migrations](format.md#migrations))                                                                                                                                                                                                                                                                                              |
-| `credits`    | what the plugin runs or builds on without installing it, such as a program found on the PATH: `name`, `homepage`, `source`, `authors`, `license`, `version`, printed by `naima credits` (provisional)                                                                                                                                                                                                                                                                                      |
+| Point         | What a contribution is                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `commands`    | `naima <name>`: `says`, `usage`, `options` (one per `--flag` in the usage), `examples` (invocations without the leading `naima`); optional and recommended, `enforces`: the policy or invariant it holds, or `nothing:` and what it does instead — a command without it is a note in `naima check`, never a problem; `run(args, ctx)` returns an exit code (may be async)                                                                                                                  |
+| `types`       | item types: `id`, `dir`, `statuses` (each `open` or `done`, with open-ended `flags`; `proves` — evidence for what the item verifies — and `refutes` — evidence against it, which blocks a gate and a close — are two, also said as keys), `initialStatus`, a README `template`, `creatable: false` for archives, plain `traits`, an optional `transitions` map ([extending](#extending-another-plugins-types-and-fields))                                                                  |
+| `fields`      | fields with a kind (`string`, `strings`, `date`, `enum`, `boolean`, `number`, `object`), enum values in rank order — or `valuesFrom` a point, and `multiple` for several — and the types they apply to, by name (`appliesTo`) or by trait (`traits`); `configured: true` when the values come from the project's configuration, so the program's reference does not list them; `filled: true` for a record Naima fills on another write (a signature), which the trunk guard takes with it |
+| `extends`     | additive changes to another plugin's types and fields ([extending](#extending-another-plugins-types-and-fields))                                                                                                                                                                                                                                                                                                                                                                           |
+| `relations`   | link relations; each names its inverse, which must also be declared                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `checks`      | `run(ctx) → Finding[]`, or a promise of them; `problem` fails `naima check`, `note` does not; the project may weigh each one `off`, `note` or `problem` ([check severity](../guide/config.md#check-severity)); `staged: true` for one that reads only the change staged for the next commit, which `naima check --staged` — what the pre-commit hook runs — runs alone ([commit hooks](../guide/commit-hooks.md)); `runs`, the programs it starts ([below](#programs-it-starts))           |
+| `agent-hooks` | a hook the agent tool runs: `name`, `says`, `tool` (the agent tool, by adapter id), `event` and optionally `matcher` in that tool's terms, and `command`, the naima command it runs as a list of words; Naima installs it in the tool's settings at `naima init`, `naima update` and `naima stance adopt`, and removes it once the plugin is gone ([hooks in the agent tool](../guide/extending-naima.md#hooks-in-the-agent-tool))                                                         |
+| `views`       | `naima view <name>`: a named rendering of derived state, `render(args, ctx) → { data, text() }` ([below](#views-and-summaries))                                                                                                                                                                                                                                                                                                                                                            |
+| `dirs`        | directories under the tracker root the plugin owns that are not item types                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `summary`     | a block of `naima summary`, `render(ctx) → { data, text() }`                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `facts`       | lines `naima show` prints of an item under its fields, `facts(ctx, item) → string[]`, and in its JSON as `facts`                                                                                                                                                                                                                                                                                                                                                                           |
+| `rank`        | an additive urgency term; lower is more urgent                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `hooks`       | [write hooks](#write-hooks): `beforeWrite(write, ctx)`, which may change what is written or refuse it, and `afterWrite(write, ctx)`, on every item write                                                                                                                                                                                                                                                                                                                                   |
+| `migrations`  | its own data migrations, in order from its format 1: `from`, `says`, and pure `config(raw)`, `item(meta)`, `stale(meta)`; its format is 1 + their number ([migrations](format.md#migrations))                                                                                                                                                                                                                                                                                              |
+| `credits`     | what the plugin runs or builds on without installing it, such as a program found on the PATH: `name`, `homepage`, `source`, `authors`, `license`, `version`, printed by `naima credits` (provisional)                                                                                                                                                                                                                                                                                      |
 
 First-party plugins declare two more: the `gates` plugin declares `gates` (a named condition: `title`, `says`, `decides`,
 `evaluate(ctx) → { holds,
-blocking, owed }`), the `verifier` plugin `verifiers` ([below](#the-verifier-contract)), and the `coordination` plugin `landing-reports`: `refuses(ctx, landing)`
-for a check that refuses the landing while it fails, with no flag to let it through; `blocks(ctx, landing)` for proofs not current, which
-`naima land --stale-proofs "<reason>"` lets through; and `report(ctx, landing)`, printed after the landing. The
+blocking, owed }`), the `verifier` plugin `verifiers` ([below](#the-verifier-contract)), and the `coordination` plugin
+`landing-reports`: `refuses(ctx, landing)` for a check that refuses the landing while it fails, with no flag to let it through; `blocks(ctx, landing)` for
+proofs not current, which `naima land --stale-proofs "<reason>"` lets through; and `report(ctx, landing)`, printed after the landing. The
 [reference](reference.md#extension-points) lists every point with who declares it and who contributes to it.
 
 A contribution to a point no loaded plugin declares, and any manifest key the contract does not know, is refused when the project loads: a misspelt key is never
@@ -199,6 +199,51 @@ of a project that does not open.
 **What may be async.** A check's `run`, a view's and a summary section's `render`, a gate's `evaluate` and a command's `run` may return a promise; the core
 awaits each, so a check that shells out to an external tool needs no special case. A check that rejects is reported as a problem, as one that throws is. A rank
 term is not async: it is summed while items are sorted.
+
+## Tabs of the window
+
+A plugin adds a tab to the window `naima ui` opens by contributing to `ui-tabs`, a point the ui plugin declares. A tab may have subtabs; the first is shown when
+the tab opens. Its `render` is called for the subtab shown and the moment the window shows (its `ctx` is the tracker as that commit had it, when one is
+selected), at each request, in Naima's process. It returns one of three things:
+
+- `{ component, data, lead? }`: data the window draws with one of its own components, the same for every plugin. `list` takes
+  `{ items: [{ title, text?, src? }] }`, `table` `{ columns, rows }`, `chart` `{ series: [{ name, points: [{ x, y }] }], unit? }`, `gallery`
+  `{ sections: [{ title, text?, frames: [{ title, src, note?, chosen? }] }] }` (pages side by side in frames) and `markdown` `{ text }`. Text and `lead` are
+  CommonMark, drawn without raw HTML.
+- `{ page }`: a file of the tab's folder, shown in a frame.
+- `{ html, css? }`: a page the plugin makes, shown in a frame.
+
+A `src` and a `page` are paths in the folder `files(ctx)` returns, read at each request. Every page and frame is served under `/page/<key>/`, where the key is
+derived from the run's token: it opens pages and nothing else. Each goes out with a Content-Security-Policy whose `sandbox` (scripts and forms allowed, never
+the same origin) puts it in an opaque origin of its own, even when opened on its own, so its scripts cannot reach the window, its cookie, its data or its
+actions; it loads only from the same server and connects nowhere. No code of the plugin runs in the window.
+
+```js
+export default function looks() {
+  return {
+    name: "looks",
+    says: "how the app looks",
+    optional: ["ui-tabs"],
+    contributes: {
+      "ui-tabs": [{
+        name: "looks",
+        title: "Looks",
+        says: "the rounds of the design, framed",
+        subtabs: [{ name: "rounds", title: "Rounds" }, { name: "notes", title: "Notes" }],
+        files: (ctx) => `${ctx.root}/design`,
+        render: ({ sub }) =>
+          sub === "notes"
+            ? { component: "markdown", data: { text: "# Notes" } }
+            : { component: "gallery", data: { sections: [{ title: "Round 1", frames: [{ title: "a", src: "round-1/a/index.html", chosen: true }] }] } },
+      }],
+    },
+  }
+}
+```
+
+A plugin written as plain JavaScript (`.mjs`), as a stance is, contributes the same way; listing `ui-tabs` under `optional` lets a Naima without it still load
+the plugin. Every view of `ui-views` (the provisional window's tabs) is shown as a tab too: its page in a frame, sandboxed the same way, its own links kept
+inside the frame. `/data/tabs` lists the tabs with their subtabs, and `/data/tab/<name>?sub=<subtab>` answers what one shows, with `?at=<commit>` too.
 
 ## Names
 
@@ -340,12 +385,12 @@ is refused. Without `inputs`, the model alone is recorded.
 
 ### Programs it starts
 
-A verifier that runs an external tool declares it: `runs: ["mcrl22lps", "lps2pbes", "pbessolve", "lps2lts"]` — each a name looked up on
-`PATH`, or an absolute path; one word, no comma. `runs` is not the verifier's alone: a contribution to any point may declare the programs it starts, and the
-core collects them from every point. A check that runs Deno and svelte-check says `runs: ["deno", "svelte-check"]`. The launcher allows the program exactly the declared programs, besides `git`: it asks the program about to run
-(`naima runs --json`, under read permission only) when the project loads a third-party plugin or a replacement, declares metrics, or switches on
-`verifier-mcrl2` — a first-party plugin that is off until `naima.json` names it, since it starts a model checker. Anything undeclared fails with Deno's own
-`Requires run access`.
+A verifier that runs an external tool declares it: `runs: ["mcrl22lps", "lps2pbes", "pbessolve", "lps2lts"]` — each a name looked up on `PATH`, or an absolute
+path; one word, no comma. `runs` is not the verifier's alone: a contribution to any point may declare the programs it starts, and the core collects them from
+every point. A check that runs Deno and svelte-check says `runs: ["deno", "svelte-check"]`. The launcher allows the program exactly the declared programs,
+besides `git`: it asks the program about to run (`naima runs --json`, under read permission only) when the project loads a third-party plugin or a replacement,
+declares metrics, or switches on `verifier-mcrl2` — a first-party plugin that is off until `naima.json` names it, since it starts a model checker. Anything
+undeclared fails with Deno's own `Requires run access`.
 
 An adapter that throws is recorded as `error` with the message as output. So is a result outside the contract — a verdict not in the table, or no string
 `output` — with an output that says what was wrong. Map the tool's exit status and output to a verdict; never report `holds` on a run that did not complete.
