@@ -152,6 +152,7 @@ export {
   CODE_TRAILER,
   commitTrackerPaths,
   DELEGATE_MARK,
+  delegateHook,
   HOOKS_DIR,
   HOOKS_OFF_KEY,
   installTrailerHooks,

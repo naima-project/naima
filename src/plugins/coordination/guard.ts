@@ -30,7 +30,7 @@
 // `naima guard on` puts it back.
 
 import { existsSync, readFileSync, rmSync } from "node:fs"
-import { dirname, isAbsolute, join, relative } from "node:path"
+import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { isDeepStrictEqual } from "node:util"
 import {
   bool,
@@ -38,6 +38,8 @@ import {
   type Command,
   type Context,
   DATA_FILE,
+  DELEGATE_MARK,
+  delegateHook,
   gitOrNull,
   gitPath,
   HOOKS_DIR,
@@ -58,6 +60,7 @@ import {
   TRACKER_TRAILER,
   trunk,
   usageError,
+  worktrees,
   writeDelegates,
   writeGitHook,
   writeJson,
@@ -122,6 +125,27 @@ export interface TrackerSide {
 }
 
 /**
+ * What the hook does first, in the prepared state: when core.hooksPath is relative, every checkout runs its own copy,
+ * the one its commit carries, so a branch made before the program moved — a line, or an item's branch from it — would
+ * run the guard of then. The main checkout's copy is the one the program writes: a copy that differs from it hands the
+ * ref updates to it, once (NAIMA_GUARD_COPY), and the main checkout's copy runs the clone's own hook and the check.
+ */
+const followMainCopy: readonly string[] = [
+  "# Every checkout runs the main checkout's copy of this hook, the one the program wrote last: a branch made before the program moved is guarded as the trunk is.",
+  'if [ "$1" = prepared ] && [ -z "$NAIMA_GUARD_COPY" ]; then',
+  '  hp="$(git config --get core.hooksPath)"',
+  '  case "$hp" in',
+  '    ""|/*) ;;',
+  "    *)",
+  `      first="$(git worktree list --porcelain | sed -n '1s/^worktree //p')"`,
+  `      current="$first/$hp/${GUARD_HOOK}"`,
+  `      if [ -f "$current" ] && ! cmp -s "$current" "$0"; then printf '%s\\n' "$input" | NAIMA_GUARD_COPY=1 sh "$current" "$@"; exit $?; fi`,
+  "      ;;",
+  "  esac",
+  "fi",
+]
+
+/**
  * The hook: shell that reads the ref updates, runs the clone's own hook of the same name first, and for an update
  * of `refs/heads/<trunkName>` in the prepared state only, starts `command guard-check <old> <new>`. `command` is
  * Deno on the launcher by default; `launcher` names it for the check that it exists. In sibling mode the tracker's
@@ -141,6 +165,7 @@ export function guardHook(
     "# Any other ref costs this script alone. naima guard off turns it off for the project.",
     "",
     "input=$(cat)",
+    ...followMainCopy,
     "# A hook the clone had before core.hooksPath pointed here still runs, first, with the same lines.",
     `legacy="$(git rev-parse --git-common-dir)/hooks/${GUARD_HOOK}"`,
     `if [ -x "$legacy" ]; then printf '%s\\n' "$input" | "$legacy" "$@" || exit $?; fi`,
@@ -353,8 +378,37 @@ export const guardSetup = (on: boolean): Setup => ({
 export const guardOffSection = (on: boolean): SummarySection => ({
   name: "trunk-guard",
   hello: true,
-  render: () => rendered({ on }, () => (on ? [] : ["The trunk guard is off in this project (naima guard on): commits on the trunk are not refused."])),
+  render: (ctx) => {
+    const rewrote = on ? followProgram(ctx) : null
+    return rendered(
+      { on, rewrote },
+      () => on ? rewrote ? [rewrote] : [] : ["The trunk guard is off in this project (naima guard on): commits on the trunk are not refused."],
+    )
+  },
 })
+
+/**
+ * When the program moved (an update, or a program linked by hand) and the main checkout, on the trunk, holds a guard
+ * that is not the one it writes: rewrite the hooks, and say how to commit them, straight on the trunk, which takes a
+ * commit that only rewrites Naima's hooks to what the program writes. Null when there is nothing to rewrite.
+ */
+function followProgram(ctx: Context): string | null {
+  if (ctx.sibling || !hasGuard(ctx) || !guardRuns(ctx)) return null
+  // Only the project's own program, beside its data: a development build run on the project writes nothing here.
+  if (dirname(resolve(ctx.program)) !== dirname(resolve(ctx.trackerRoot))) return null
+  const main = trunk(ctx.root)
+  if (!main || !worktrees(ctx.root)[0]?.self || gitOrNull(ctx.root, "symbolic-ref", "--quiet", "--short", "HEAD") !== main) return null
+  const project = projectCommand(ctx)
+  const push = pushHook(project.command, { launcher: project.launcher, committed: project.committed })
+  if (readFileSync(hookFile(ctx), "utf8") === projectGuardHook(ctx) && (!existsSync(pushHookFile(ctx)) || readFileSync(pushHookFile(ctx), "utf8") === push)) {
+    return null
+  }
+  installGuard(ctx)
+  const hooks = posixRelative(ctx.root, join(ctx.trackerRoot, HOOKS_DIR))
+  return `Naima rewrote the trunk guard for the program it runs now, which differs from the one that wrote it: commit it on ${main}, ` +
+    `which takes a commit that only rewrites Naima's hooks — git add ${hooks} && git commit -m "Rewrite Naima's git hooks for this program". ` +
+    `Every checkout runs this copy from now on, the lines among them.`
+}
 
 // ── what the trunk takes directly ────────────────────────────────────────────
 
@@ -420,6 +474,35 @@ export function isMarker(root: string, c: Pick<Added, "parents" | "tree" | "clos
   if (c.parents.length !== 2 || !first || !second) return false
   return (c.closes.length > 0 || !!c.tracker || !!c.trackerOnly || !!c.meets?.length) && treeOf(root, second) === c.tree && isAncestor(root, first, second)
 }
+
+/**
+ * Whether a commit only rewrites Naima's hooks: every file it touches is in the data directory's hooks folder, and holds,
+ * with `exact`, the text the running program writes there now (the guard, the pre-push hook, a stub delegating to the
+ * clone's own hook); without, any text Naima wrote, marked as its own. The trunk guard takes it with `exact`, so that the
+ * hooks follow the program when it moves; landings-are-markers reads history, written by earlier programs, without.
+ */
+export function rewritesHooks(ctx: Context, sha: string, files: { status: string; path: string }[], exact = true): boolean {
+  if (ctx.sibling || !files.length) return false
+  const dir = `${ctx.trackerPrefix ? `${ctx.trackerPrefix}/` : ""}${HOOKS_DIR}/`
+  if (!files.every((f) => f.path.startsWith(dir) && (f.status === "M" || f.status === "A"))) return false
+  const project = exact ? projectCommand(ctx) : null
+  return files.every((f) => {
+    const name = f.path.slice(dir.length)
+    const r = runGit(ctx.root, ["show", `${sha}:${f.path}`])
+    if (!r.ok) return false
+    if (!exact) return r.out.includes(MARK) || r.out.includes(DELEGATE_MARK)
+    const want = name === GUARD_HOOK
+      ? projectGuardHook(ctx)
+      : name === PUSH_HOOK
+      ? pushHook(project!.command, { launcher: project!.launcher, committed: project!.committed })
+      : delegateHook(name)
+    return r.out.trimEnd() === want.trimEnd() // git output without its last newline
+  })
+}
+
+/** What landings-are-markers takes directly on a guarded trunk: a commit that only switches the guard, or only rewrites Naima's hooks. */
+export const takenByGuard = (ctx: Context, sha: string, files: { status: string; path: string }[]): boolean =>
+  switchesGuard(ctx, sha, files) || rewritesHooks(ctx, sha, files, false)
 
 /** Whether a commit only switches the guard: naima.json changed in `trunkGuard` alone, and the hook added or removed. */
 export function switchesGuard(ctx: Context, sha: string, files: { status: string; path: string }[]): boolean {
@@ -503,7 +586,10 @@ function refusal(ctx: Context, c: Added, prev: Added | undefined, upstream: stri
     if (files.length && files.every((f) => f.path.startsWith(`${TRACKER_DIR}/`))) return null
     return "a commit made on the trunk by hand"
   }
-  if (initsTracker(ctx, files) || onlyAddsTrackerData(ctx, c.sha, files) || onlyClosesItems(ctx, c.sha, files) || switchesGuard(ctx, c.sha, files)) return null
+  if (
+    initsTracker(ctx, files) || onlyAddsTrackerData(ctx, c.sha, files) || onlyClosesItems(ctx, c.sha, files) || switchesGuard(ctx, c.sha, files) ||
+    rewritesHooks(ctx, c.sha, files)
+  ) return null
   if (prev && prev.parents.length === 2 && prev.closes.length && recordsMarker(ctx, c.sha, files, { sha: prev.sha, closes: prev.closes })) return null
   return "a commit made on the trunk that does more than add to the tracker data"
 }
@@ -575,7 +661,7 @@ export const guardCheckCommand: Command = {
   name: "guard-check",
   says: "what the trunk guard's git hook runs when the trunk is about to move: exit 0 when it may, else one line saying why not and what to do",
   enforces:
-    "a commit, merge or fast-forward of the trunk made by hand is refused unless every commit it adds to the first-parent line is a landing marker, the record land makes, a commit that only adds to the tracker data (a claim may also be rewritten or removed) or only closes items, naima init's commit, one that only switches the guard, a commit Naima's setup asks for (a Naima-Setup: trailer: the install, the migration of a copied program, the update that brings the guard in) touching only the tracker folder and the files a setup writes, or one with a Trunk-reason: trailer; a tip the upstream holds, a rewind, a ref created or deleted pass; a commit that brings the work of a development line that has not landed, or of an abandoned one, is refused whatever its trailers",
+    "a commit, merge or fast-forward of the trunk made by hand is refused unless every commit it adds to the first-parent line is a landing marker, the record land makes, a commit that only adds to the tracker data (a claim may also be rewritten or removed) or only closes items, naima init's commit, one that only switches the guard, one that only rewrites Naima's hooks to the text the running program writes, a commit Naima's setup asks for (a Naima-Setup: trailer: the install, the migration of a copied program, the update that brings the guard in) touching only the tracker folder and the files a setup writes, or one with a Trunk-reason: trailer; a tip the upstream holds, a rewind, a ref created or deleted pass; a commit that brings the work of a development line that has not landed, or of an abandoned one, is refused whatever its trailers",
   usage: "guard-check [--tracker | --line <line>] <old> <new>",
   examples: ["guard-check 0123abc 4567def", "guard-check --tracker 0123abc 4567def", "guard-check --line line/release-1.2 0123abc 4567def"],
   options: [

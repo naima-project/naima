@@ -108,7 +108,8 @@ open there again, since the trunk never saw their fix. A branch opened from the 
 
 ## What protects the lines
 
-- The trunk guard also guards every `line/*` branch: a line takes only landings, and a commit made on it by hand is refused.
+- The trunk guard also guards every `line/*` branch: a line takes only landings, and a commit made on it by hand is refused. Every checkout runs the main
+  checkout's copy of the guard, so a line made before the program moved needs no sync to be guarded ([the trunk guard](commit-hooks.md)).
 - `naima land` refuses to put on the trunk a branch that carries commits of a line that has not landed, and refuses a branch carrying commits of two lines.
 - The trunk guard refuses the same by hand: a merge onto the trunk that carries the work of a line that has not landed, or of an abandoned one, is refused even
   when it looks like a landing marker or gives a `Trunk-reason:`; only the line's own landing brings its work.
