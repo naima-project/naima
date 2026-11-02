@@ -3,7 +3,7 @@ title: The new interface has its metrics screen, with key-number cards and a lar
 kind: feature
 affects:
   - usage
-  - configuration
+  - data
 ---
 
 The Metrics screen of the new interface shows the key numbers as cards, each with its value, its change, the date of its record and a small chart, and below
