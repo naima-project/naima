@@ -1665,6 +1665,7 @@ naima event 2026-10-05 "The plan was entered" --kind diary
 | Hook | What it does |
 |---|---|
 | `no-closing-own-claims` | archiving an item (a move to a type that is not creatable, as naima close does) that the branch you stand on claims is refused unless --force: a branch does not close its own items on the strength of its own tests; a claim naming the trunk is stale, never the trunk's own, and refuses nothing |
+| `tracker-data-on-trunk` | on a development line or a branch opened from one, a tracker write is refused except an item's own work, which travels with its code: its fixed mark (fixedOn), its test runs (status and last run of an item whose type records runs) and the session note; filing an item, a note, a link, a field set by hand, a move, an event and an attachment are made in the trunk's checkout, and naima.json is never changed on a line |
 
 **Setup**, put in place by `naima init` and `naima update` where missing
 

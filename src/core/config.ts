@@ -14,6 +14,7 @@ import { ADAPTERS } from "./adapters/index.ts"
 import { message } from "./errors.ts"
 import { writeFileAtomic } from "./files.ts"
 import { DATA_FILE, DEFAULT_PROGRAM } from "./layout.ts"
+import { refuseConfigOnLine } from "./trunk-only.ts"
 import { FORMAT, formatRefusal, formatsOf } from "./format.ts"
 import { DEFAULT_ENTRY_FILES } from "./pointer.ts"
 import type { Config, Extension, PluginConfig, PluginOptions, PluginSource, Severity } from "./types.ts"
@@ -278,9 +279,22 @@ export function readRaw(data: string): Record<string, unknown> {
 
 export const readConfig = (data: string): Config => parseConfig(readRaw(data))
 
-/** Write `<data>/naima.json`, keys in the order given. */
+/**
+ * Write `<data>/naima.json`, keys in the order given. Refused when its checkout stands on a development line
+ * (core/trunk-only.ts), unless it writes back what the file already holds, as a command putting it back does.
+ */
 export function writeRaw(data: string, raw: Record<string, unknown>): void {
-  writeFileAtomic(join(data, DATA_FILE), JSON.stringify(raw, null, 2) + "\n")
+  const path = join(data, DATA_FILE)
+  const text = JSON.stringify(raw, null, 2) + "\n"
+  let was: string | null = null
+  try {
+    was = readFileSync(path, "utf8")
+  } catch {
+    // no naima.json yet: init writes the first one
+  }
+  if (was === text) return
+  if (was !== null) refuseConfigOnLine(data)
+  writeFileAtomic(path, text)
 }
 
 /**

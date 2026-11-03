@@ -25,6 +25,8 @@ export const PROGRESS_FILE = "progress"
 export const STOP_FILE = "stop"
 /** Where the supervisor's own errors go: what says why a supervisor that died before starting the command did. */
 export const SUPERVISOR_ERR = "supervisor.err"
+/** The supervisor's process id, written by `naima run` as soon as it is started: what tells a supervisor that died before it reported. */
+export const SUPERVISOR_PID = "supervisor.pid"
 
 /** The defaults the specification fixes. */
 export const DEFAULTS = {
@@ -48,6 +50,13 @@ export const DEFAULTS = {
    * to launch (macOS checks the binary before it runs).
    */
   startMs: 60_000,
+  /**
+   * How long `naima wait` gives a run it finds not started, its command not seen alive, before it ends and says so:
+   * a run that never started is reported within seconds, never waited on for the whole timeout.
+   */
+  notStartedMs: 10_000,
+  /** How long a run that reports progress may run with no progress line at all before `naima wait` says it shows none. */
+  firstProgressMs: 10_000,
   /** How long `naima run` watches a command it saw start before it says started: a command not found exits at once. */
   confirmMs: 500,
   /**
@@ -322,6 +331,29 @@ export function liveState(
   return { state, silentMs, stillMs }
 }
 
+/**
+ * Why a run with no status yet never started, or null while it may still start: its supervisor, by the id naima run
+ * recorded, is gone and wrote no status (read once more, in case it wrote one as it ended), or naima run stopped
+ * waiting for it and left a stop request, so that it starts nothing.
+ */
+export function neverStarted(dir: string): string | null {
+  const pid = Number.parseInt(readText(join(dir, SUPERVISOR_PID)) ?? "", 10)
+  if (Number.isInteger(pid) && pid > 0 && pidAlive(pid) === false && !readStatus(dir)) {
+    const err = lastLine(join(dir, SUPERVISOR_ERR))
+    return `it never started: its supervisor (pid ${pid}) is gone and never reported the command${err ? ` — ${err}` : ""}`
+  }
+  if (existsSync(join(dir, STOP_FILE)) && !readStatus(dir)) return "it never started: naima run stopped waiting for its supervisor, and left a stop request"
+  return null
+}
+
+const readText = (path: string): string | null => {
+  try {
+    return readFileSync(path, "utf8").trim()
+  } catch {
+    return null
+  }
+}
+
 /** How long a heartbeat may age before the supervisor is taken for gone. */
 export const lostAfterMs = (everyMs: number): number => 3 * everyMs + 10_000
 
@@ -358,6 +390,9 @@ export function view(dir: string, now: number, tail = 0): RunView {
     ...(tail > 0 ? { tail: tailOf(log, tail) } : {}),
   }
   if (!status) {
+    // Never started: the supervisor naima run started is gone with nothing reported, or naima run gave up on it.
+    const never = neverStarted(dir)
+    if (never) return { ...withFacts, state: "failed", over: true, reason: "start-failed", error: never }
     const age = now - Date.parse(spec.started)
     return age > Math.max(lostAfterMs(spec.everyMs), DEFAULTS.startMs)
       ? { ...withFacts, state: "crashed", over: true, error: "the supervisor never reported" }

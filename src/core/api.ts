@@ -221,3 +221,4 @@ export {
   stageTotal,
 } from "./progress.ts"
 export { type JobOutcome, type Level, messageId, type Notice, stateDir } from "./tick.ts"
+export { developmentLine, LINE_BRANCH_PREFIX, type OnLine, refuseConfigOnLine, trunkOnlyRefusal, whereOnLine } from "./trunk-only.ts"

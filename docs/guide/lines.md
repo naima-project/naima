@@ -40,8 +40,11 @@ naima land ada/export-speed                    # lands on line/release-1.2, and 
   landing on the trunk is the one that asks for it. Each check prints one line, where it ran and what it found.
 - The coordination option `maxWorkers` counts per line: the trunk is one line, each development line another.
 
-Items, notes, decisions and diary entries are still filed on the trunk, as always. Only an item's own work (its fix, its test runs, its change note, its session
-note) travels with its code on the line.
+Items, notes, decisions and diary entries are filed on the trunk, and Naima's settings in `naima.json` change only there. On a line, and on a branch opened from
+one, Naima refuses to write them: filing an item, a note or a description, a field set by hand, a link, an event, an attachment and any change to `naima.json`
+each stop with a message saying to run the command in the trunk's checkout, where the line gets it at its next sync. Only an item's own work travels with its
+code on the line, and Naima writes it there: its fixed mark (`fixedOn`), its test runs (the status and last run a test or a property records), its session note,
+and its change note, which is a file of the code.
 
 ## Keep a line up to date with the trunk
 
@@ -132,7 +135,8 @@ open there again, since the trunk never saw their fix. A branch opened from the 
   landed or was abandoned.
 - `naima check`, `naima stale`, `naima recover` and `naima claim --preparing` measure a branch of a line against its line, not the trunk; `naima prune` deletes
   a branch that a line already holds; `naima claim` refuses on a line, as on the trunk.
-- Naima's own settings in `naima.json` (the lock, the gates, the options) are kept on the trunk only: the lock never moves on a line.
+- Naima's own settings in `naima.json` (the lock, the gates, the options) are kept on the trunk only: on a line, and on a branch of one, every command that
+  would change `naima.json` is refused, `naima update` and `naima plugin` among them, so the lock never moves on a line.
 
 ## Which line you are on
 

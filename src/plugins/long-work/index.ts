@@ -59,6 +59,7 @@ import {
   STOP_FILE,
   SUBCOMMANDS,
   SUPERVISOR_ERR,
+  SUPERVISOR_PID,
   trackerFolder,
   view,
   writeJsonAtomic,
@@ -303,6 +304,8 @@ async function start(ctx: Context, hosts: Map<string, Host>, cmd: Command, args:
       rmSync(dir, { recursive: true, force: true })
       throw refuse(`naima run: the supervisor could not be started through WMI — ${String(r.stderr || r.error?.message || `exit ${r.status}`).trim()}`)
     }
+    const pid = String(r.stdout ?? "").trim()
+    if (/^\d+$/.test(pid)) writeFileSync(join(dir, SUPERVISOR_PID), pid + "\n")
   } else {
     const errFd = openSync(join(dir, SUPERVISOR_ERR), "a")
     const child = spawn(process.execPath, supervisorArgs("supervise", dir, [dir]), {
@@ -316,6 +319,8 @@ async function start(ctx: Context, hosts: Map<string, Host>, cmd: Command, args:
     child.once("error", (e) => (gone = e.message))
     child.once("exit", (code, signal) => (gone = signal ? `signal ${signal}` : `exit ${code}`))
     child.unref()
+    // Its id, recorded at once: a supervisor that dies before it reports is then seen never started, by any reader.
+    if (child.pid !== undefined) writeFileSync(join(dir, SUPERVISOR_PID), `${child.pid}\n`)
   }
   const v = await confirmStart(dir, () => gone)
   if (!v.ok) {
@@ -610,13 +615,26 @@ async function waitFor(ctx: Context, hosts: Map<string, Host>, cmd: Command, arg
     for (const l of describe(v)) ctx.out(l)
     return EXIT.FAILED
   }
-  // A stuck run ends the wait: Naima found it silent, and what to do with it is the agent's decision.
-  while (!v.over && v.state !== "stuck" && Date.now() + every <= until) {
+  // What the run is doing, said at once: a run not started, or showing no progress, is seen within seconds.
+  if (!v.over) ctx.err(waitLine(v))
+  const began = Date.now()
+  const notStarted = (r: RunView): boolean => r.state === "starting" && Date.now() - began >= DEFAULTS.notStartedMs
+  let saidNoProgress = false
+  const sayNoProgress = (r: RunView): void => {
+    if (saidNoProgress || !showsNoProgress(r)) return
+    ctx.err(noProgressLine(r))
+    saidNoProgress = true
+  }
+  sayNoProgress(v)
+  // A stuck run ends the wait: Naima found it silent, and what to do with it is the agent's decision. So does a run
+  // still not started after a few seconds: nobody waits a whole timeout on a command that never ran.
+  while (!v.over && v.state !== "stuck" && !notStarted(v) && Date.now() + every <= until) {
     await delay(every)
     v = look(0)
     tell(v)
+    sayNoProgress(v)
   }
-  if (!v.over && v.state !== "stuck" && Date.now() < until) {
+  if (!v.over && v.state !== "stuck" && !notStarted(v) && Date.now() < until) {
     await delay(Math.max(0, until - Date.now()))
     v = look(0)
   }
@@ -624,7 +642,17 @@ async function waitFor(ctx: Context, hosts: Map<string, Host>, cmd: Command, arg
   if (bool(p, "json")) ctx.out(JSON.stringify(v, null, 2))
   else {
     for (const l of describe(v)) ctx.out(l)
-    if (v.state === "stuck") {
+    if (v.reason === "start-failed") {
+      ctx.out(`naima wait: ${name} did not start — ${v.error ?? "its command could not be run"}; naima run clean ${name}, then start it again`)
+    } else if (v.state === "starting") {
+      ctx.out(
+        `naima wait: ${name} has not started: launched ${
+          showDuration(v.elapsedMs)
+        } ago, its command not seen alive — naima run status ${name}, and its supervisor's errors in ${
+          join(dirname(v.log), SUPERVISOR_ERR)
+        }; naima wait ${name} again if its machine is slow to start it, or naima run stop ${name}`,
+      )
+    } else if (v.state === "stuck") {
       ctx.out(
         `naima wait: ${name} is stuck, silent for its --stale window — look at its log, then naima run stop ${name}, or naima wait ${name} again if it is expected to be silent`,
       )
@@ -633,12 +661,28 @@ async function waitFor(ctx: Context, hosts: Map<string, Host>, cmd: Command, arg
         `naima wait: ${name} is still running after ${showDuration(timeout)} — waiting again is a decision: naima wait ${name}, or naima run stop ${name}`,
       )
     }
+    if (!v.over && showsNoProgress(v)) ctx.out(noProgressLine(v))
   }
   return v.state === "succeeded" ? EXIT.OK : EXIT.FAILED
 }
 
+/** Whether a run that should report progress has run past the first few seconds without one progress line. */
+export const showsNoProgress = (v: RunView): boolean =>
+  !v.over && v.state !== "starting" && v.state !== "unknown" && v.noProgress === undefined && !v.progress && v.elapsedMs >= DEFAULTS.firstProgressMs
+
+/** What wait says of a run that shows no progress: how long it has run, and how it reports progress, or declares it cannot. */
+export const noProgressLine = (v: RunView): string =>
+  `naima wait: ${v.name} shows no progress: running ${
+    showDuration(v.elapsedMs)
+  } with no progress line — the command writes one to $NAIMA_RUN_PROGRESS, or is started with --stale <duration> --no-progress "<why>"${
+    v.lastLog !== undefined ? `; its log last said ${JSON.stringify(v.lastLog)}` : "; its log is empty"
+  }`
+
 /** What wait says while a run goes on: its elapsed time and its progress, or, without progress, the log's last line. */
 export function waitLine(v: RunView): string {
+  if (v.state === "starting") {
+    return `run ${v.name}${v.host ? ` on ${v.host}` : ""}: not started yet, launched ${showDuration(v.elapsedMs)} ago — its command is not seen alive`
+  }
   const how = v.progress
     ? `progress ${progressText(v.progress)}`
     : v.noProgress !== undefined

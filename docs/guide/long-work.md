@@ -69,9 +69,12 @@ naima run stop bench              # end it now
 `naima run` returns only once it has seen the command running. If the command never starts, because the program does not exist, the supervisor died before
 starting it or the host cannot be reached, `naima run` says why and exits 1, within a few seconds.
 
-While it waits, `naima wait` prints how long the run has been going and its progress, every 30 seconds (`--report`). When the run ends, it prints how it ended
-(succeeded, failed with its exit code, killed by a budget, or stopped) together with the end of its log, and it exits 0 only if the run succeeded. If the run is
-still going when the timeout passes, it says so and exits 1, so waiting again has to be a deliberate choice.
+While it waits, `naima wait` prints how long the run has been going and its progress, once as soon as it starts waiting and then every 30 seconds (`--report`).
+It never waits long on a run that is not running. A run whose supervisor died before it could start the command never started, and `naima wait` says so at once;
+a run whose command has still not been seen alive after 10 seconds ends the wait with "has not started", so you can look at what went wrong instead of waiting
+for the timeout. A run that should report progress and has written no progress line after 10 seconds is said to show no progress. When the run ends, it prints
+how it ended (succeeded, failed with its exit code, killed by a budget, or stopped) together with the end of its log, and it exits 0 only if the run succeeded.
+If the run is still going when the timeout passes, it says so and exits 1, so waiting again has to be a deliberate choice.
 
 Naima watches every run itself, and `naima wait`, `naima run list` and `naima claims` all show what it finds:
 

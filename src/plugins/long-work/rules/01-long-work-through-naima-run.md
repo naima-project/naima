@@ -11,7 +11,9 @@ verifiedBy: wait-loops
 A command expected to outlast a few minutes, or one run on another machine, is started with `naima run <name> --budget-time <duration> -- <command>` — with
 `--budget-disk` and `--creates` when it writes stores or temporary data, `--host` when it runs elsewhere — waited on with
 `naima wait <name> --timeout <duration>`, watched with `naima run list`, and cleaned with `naima run clean <name>`. A hand-written wait loop (`while` or `until`
-with `sleep`) and any process lookup by pattern (`pgrep -f`, `pkill -f`) are forbidden, in a session and in a committed script.
+with `sleep`) and any process lookup by pattern (`pgrep -f`, `pkill -f`) are forbidden, in a session and in a committed script. Such a command is never run
+directly under a long tool timeout: `naima run` returns once it has seen the command alive, and `naima wait` runs with a timeout shorter than the tool's, again
+as often as needed, so that a run that never started or shows no progress is seen within seconds.
 
 ## Why
 

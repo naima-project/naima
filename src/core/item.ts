@@ -2,10 +2,12 @@
 
 import { randomUUID } from "node:crypto"
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
-import { join, relative } from "node:path"
+import { basename, dirname, join, relative } from "node:path"
 import { NaimaError } from "./errors.ts"
 import { writeFileAtomic } from "./files.ts"
 import { dirsAcrossBranches } from "./git.ts"
+import { DATA_FILE } from "./layout.ts"
+import { refuseConfigOnLine } from "./trunk-only.ts"
 import type { Context, Item, Meta, OriginRequest, TextWrite, TypeDef, Write } from "./types.ts"
 
 export const META = "meta.json"
@@ -94,9 +96,11 @@ export function setWriteGuard(g: ((path?: string) => void) | null): void {
   guard = g
 }
 
-/** Write a value as JSON, atomically (writeFileAtomic), after the write guard. */
+/** Write a value as JSON, atomically (writeFileAtomic), after the write guard; naima.json is refused on a development line. */
 export function writeJson(path: string, value: unknown): void {
   guard?.(path)
+  // naima.json is the trunk's alone: a checkout on a development line never changes it (core/trunk-only.ts).
+  if (basename(path) === DATA_FILE && existsSync(path)) refuseConfigOnLine(dirname(path))
   writeFileAtomic(path, JSON.stringify(value, null, 2) + "\n")
   generation++
 }

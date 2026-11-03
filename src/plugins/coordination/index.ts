@@ -109,6 +109,7 @@ import {
   onLine,
   openLines,
 } from "./lines.ts"
+import { trunkOnlyTracker } from "./trunk-only.ts"
 
 export { type NextStep, type StaleData, type StaleEntry } from "./stale.ts"
 export { type Timeline, type TimelineEvent, timelineOf } from "./timeline.ts"
@@ -1361,6 +1362,6 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
     points: [landingReportsPoint, claimsReportsPoint, goalOrderPoint],
     summary: [whereWeWere, linesSection, inHand(silentAfter), workerLimitSection(policy), readySection(policy), staleSection(stale), guardOffSection(guarded)],
     setup: [guardSetup(guarded)],
-    hooks: [noClosingOwnWork],
+    hooks: [noClosingOwnWork, trunkOnlyTracker],
   }
 }
