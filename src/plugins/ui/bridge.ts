@@ -3,13 +3,16 @@
 // Naima's; the stance defines only the carriers, and its request handler (bridge-handler.ts) is copied unchanged.
 //
 //   describe                       the project, and the actions the UI may run
-//   data {view, at?}               a `ui-views` view's data, what its command prints with --json; with `at`, as that
-//                                  commit had it (at.ts), or, for a view that places a commit itself, about that commit
+//   data {view, at?, query?}       a `ui-views` view's data, what its command prints with --json; with `at`, as that
+//                                  commit had it (at.ts), or, for a view that places a commit itself, about that commit;
+//                                  `query` gives the view its parameters, such as the metric and the commit of the
+//                                  record of a metric's run (the metrics plugin's metric-run)
 //   tabs                           the tabs plugins contribute to the new UI, each with its subtabs
 //   tab {name, sub?, at?, query?}  what a tab shows for a subtab at the moment: a component's data, the address of a
 //                                  page of its folder, or a page it makes, as a whole HTML document the app frames
 //   metro                          what the rail draws: the trunk, the lines, the branches, the workers, the goals ahead
-//   action {name, args}            one naima command of a short list, started through `naima run`: answers its run
+//   action {name, args}            one naima command of a short list, started through `naima run`: answers its run;
+//                                  record-metrics records the metrics (naima metrics run --record)
 //   run {name}                     that run as `naima run status --json` shows it, with the end of its log
 //
 // and one feed:
@@ -28,14 +31,29 @@ import { watchProject } from "./live.ts"
 import { metroData } from "./metro.ts"
 import { contentProblem, framePage, tabList, type UiTab, type UiTabContent, type UiView } from "./tabs.ts"
 
-/** The actions the UI may run: its name, the command's words, and what it does. None of them rewrites history. */
-export const ACTIONS: readonly { name: string; words: string[]; says: string }[] = [
+/**
+ * The actions the UI may run: its name, the command's words, and what it does. None of them rewrites history. An
+ * action that takes long says its time budget and that its command writes its own progress (`naima run`'s progress
+ * file); the others end within 5 minutes and print their result when they end.
+ */
+export const ACTIONS: readonly { name: string; words: string[]; says: string; budget?: string; progress?: boolean; noArgs?: boolean }[] = [
   { name: "decide", words: ["decide"], says: "record a decision on an item" },
   { name: "note", words: ["note"], says: "add a note to an item" },
   { name: "gate-step", words: ["gate", "step"], says: "close a step of a gate with the item that records it (not add or remove one)" },
   { name: "claim", words: ["claim"], says: "claim items for this branch, or post its step" },
   { name: "release", words: ["release"], says: "release this branch's claim" },
+  {
+    name: "record-metrics",
+    words: ["metrics", "run", "--record"],
+    says: "record the metrics of the commit checked out, each run of a test suite with its log (naima metrics run --record)",
+    budget: "2h",
+    progress: true,
+    noArgs: true,
+  },
 ]
+
+/** An action by its name. */
+export const actionOf = (name: string) => ACTIONS.find((a) => a.name === name)
 
 /** The command line of an action, or why it is refused. */
 export function actionArgv(name: string, args: unknown): string[] | string {
@@ -44,6 +62,7 @@ export function actionArgv(name: string, args: unknown): string[] | string {
   if (!Array.isArray(args) || !args.every((a) => typeof a === "string")) return "args is a list of strings, the arguments after the command"
   // gate step add and remove change what a gate is; only closing a step is the UI's.
   if (action.name === "gate-step" && (args[0] === "add" || args[0] === "remove")) return `gate step ${args[0]} is not an action of the UI`
+  if (action.noArgs && args.length) return `${action.name} takes no arguments`
   return [...action.words, ...(args as string[])]
 }
 
@@ -129,9 +148,15 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       if (!view) throw new Error(`no view ${String(args["view"])}`)
       const at = text(args["at"])
       const sha = at === null ? null : commitOf(ctx, at)
+      const params: Record<string, string[]> = {}
+      const q = args["query"]
+      if (q && typeof q === "object" && !Array.isArray(q)) {
+        for (const [k, v] of Object.entries(q)) if (typeof v === "string" && k !== "at") params[k] = [v]
+      }
       // A view that places a commit itself is read from the files as they are, with the commit as its parameter.
+      if (sha !== null && view.moments) params["at"] = [sha]
       const from = sha !== null && !view.moments ? atCache.get(ctx, sha) : momentOf(null)
-      return json((await view.render(sha !== null && view.moments ? { at: [sha] } : {}, from)).data)
+      return json((await view.render(params, from)).data)
     },
     tabs: () => json(tabList(opts.tabs)),
     tab: async (args) => {
@@ -155,16 +180,14 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
     action: async (args) => {
       const argv = actionArgv(String(args["name"]), args["args"] ?? [])
       if (typeof argv === "string") throw new Error(argv)
+      const action = actionOf(String(args["name"]))!
       const run = `ui-${argv[0]}-${ctx.now().toISOString().replace(/\D/g, "").slice(0, 14)}-${++runs}`
       const started = await runCommand(ctx, [
         "run",
         run,
         "--budget-time",
-        "5m",
-        "--stale",
-        "1m",
-        "--no-progress",
-        "a naima command the UI ran, which prints its result when it ends",
+        action.budget ?? "5m",
+        ...(action.progress ? ["--stale", "10m"] : ["--stale", "1m", "--no-progress", "a naima command the UI ran, which prints its result when it ends"]),
         "--",
         ...(opts.entry ?? naimaEntry()),
         ...argv,

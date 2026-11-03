@@ -47,7 +47,7 @@ import { spawnSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { isAbsolute, join, relative, resolve } from "node:path"
+import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 import {
   bool,
   type Check,
@@ -1120,6 +1120,140 @@ export const metricsView: UiView = {
   },
 }
 
+/** How a metric's value came to be: a suite's run, run then or reused, a command, a code measure, or a file. */
+export type RunHow =
+  | {
+    kind: "suite"
+    suite: string
+    /** The suite's run, from the data directory: test-runs/<suite>/<file>. */
+    run: string
+    /** True when the record reused an earlier run whose inputs were the same, instead of running the suite. */
+    reused: boolean
+    /** The commit and the time of the run the value comes from. */
+    commit: string
+    at: string
+    command: string
+    exit: number
+    seconds: number
+    counts: { passed: number; failed: number; skipped: number; total: number }
+    error?: string
+    /** The end of the run's log, as recorded (private infrastructure already replaced); empty when it kept none. */
+    log: string
+  }
+  | { kind: "command"; command: string }
+  | { kind: "measure"; measure: string }
+  | { kind: "file"; file: string }
+
+/** The record of the run that measured a metric at a commit, as a point of the UI's value-against-time graph opens it. */
+export interface RunRecord {
+  metric: string
+  says?: string
+  unit?: string
+  commit: string
+  /** Whether a record of that commit holds a value of the metric (or a failed run of it). */
+  found: boolean
+  /** The record file, from the data directory, and when it was made. */
+  record?: { file: string; at: string; dirty: boolean; backfill: boolean }
+  value?: number | null
+  exit?: number
+  holds?: boolean
+  /** The metric's bound, when it has one: a budget, a floor or a baseline. */
+  bound?: { word: string; value: number }
+  how?: RunHow
+}
+
+/** The longest end of a run's log a run record carries, in lines. */
+const RUN_LOG_LINES = 80
+
+/** The record of the run that measured `metric` at `commit` (a full hash, or a prefix of one): the commit's latest record. */
+export function runRecordOf(ctx: Context, metrics: MetricDef[], name: string, commit: string): RunRecord {
+  const m = metrics.find((x) => x.name === name)
+  if (!m) throw new Error(`no metric ${name}`)
+  const files = recordFiles(ctx).filter((r) => commit.length >= 4 && r.record.commit.startsWith(commit) && r.record.values[name])
+    .sort((a, b) => (a.record.at < b.record.at ? 1 : -1))
+  const base: RunRecord = {
+    metric: m.name,
+    ...(m.says ? { says: m.says } : {}),
+    ...(m.unit ? { unit: m.unit } : m.measure && measureUnit(m.measure) ? { unit: measureUnit(m.measure)! } : {}),
+    commit: files[0]?.record.commit ?? commit,
+    found: files.length > 0,
+  }
+  const b = boundOf(m)
+  if (b && BOUNDS.some((k) => num(m[k]))) base.bound = { word: BOUND_WORD[b.bound], value: b.value }
+  const latest = files[0]
+  if (!latest) return base
+  const r = latest.record
+  const v = r.values[name]!
+  const out: RunRecord = {
+    ...base,
+    record: { file: `${DIR}/${latest.file}`, at: r.at, dirty: !!r.dirty, backfill: !!r.backfill },
+    value: v.value,
+    exit: v.exit,
+    holds: v.holds,
+  }
+  if (m.suite) {
+    const path = r.runs?.[m.suite]
+    const run = path ? readSuiteRun(ctx, path) : null
+    if (path && run) {
+      // Reused: the run is another commit's, or an earlier record of this commit already stood on it.
+      const earlier = recordFiles(ctx).some((o) => o.record.at < r.at && o.record.runs?.[m.suite!] === path)
+      let log = ""
+      if (run.log) {
+        try {
+          log = readFileSync(join(ctx.trackerRoot, dirname(path), run.log), "utf8").split("\n").slice(-RUN_LOG_LINES - 1).join("\n").trimEnd()
+        } catch {
+          log = ""
+        }
+      }
+      out.how = {
+        kind: "suite",
+        suite: m.suite,
+        run: path,
+        reused: run.commit !== r.commit || earlier,
+        commit: run.commit,
+        at: run.at,
+        command: [...(run.prepare ? [...run.prepare, "&&"] : []), ...run.command].join(" "),
+        exit: run.exit,
+        seconds: run.seconds,
+        counts: run.counts,
+        ...(run.error ? { error: run.error } : {}),
+        log,
+      }
+    }
+  } else if (m.run) out.how = { kind: "command", command: [...(m.prepare ? [...m.prepare, "&&"] : []), ...m.run].join(" ") }
+  else if (m.measure) out.how = { kind: "measure", measure: m.measure }
+  else if (m.file) out.how = { kind: "file", file: m.file }
+  return out
+}
+
+/**
+ * The record of the run that measured a metric at a commit, for the new UI: `metric` names the metric and `commit`
+ * the commit, by its hash or a prefix of it; its data is the run record (runRecordOf). It has no tab: a point of a
+ * value-against-time graph opens it.
+ */
+export const metricRunView: UiView = {
+  name: "metric-run",
+  title: "Metric run",
+  says:
+    "the record of the run that measured a metric at a commit, for a point of the new UI's value-against-time graph: `?metric=<name>&commit=<hash>` gives the value, whether it held its bound, when it was recorded and how it was taken — a test suite's run with its counts, its time and the end of its log, or the earlier run it reused; a command; a code measure",
+  screen: true,
+  render(params, ctx) {
+    const metric = params["metric"]?.[0]
+    const commit = params["commit"]?.[0]
+    if (!metric || !commit) throw new Error("metric-run needs metric=<name> and commit=<hash>")
+    const data = runRecordOf(ctx, metricsOf(ctx), metric, commit)
+    const rows = [
+      ["metric", data.metric],
+      ["commit", data.commit],
+      ["value", data.found ? String(data.value ?? "none") : "no record"],
+      ["holds", data.holds === undefined ? "" : data.holds ? "yes" : "no"],
+      ["how", data.how ? data.how.kind + (data.how.kind === "suite" && data.how.reused ? " (reused)" : "") : ""],
+    ]
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    return { data, html: `<table>${rows.map(([k, v]) => `<tr><th>${esc(k!)}</th><td>${esc(v!)}</td></tr>`).join("")}</table>` }
+  },
+}
+
 const measureUnit = (id: string): string | undefined => builtinMeasures.find((x) => x.id === id)?.unit || undefined
 
 const csvCell = (v: string | number | null): string => (v === null ? "" : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v))
@@ -1796,7 +1930,7 @@ export default function metrics(options: Record<string, unknown> = {}): Plugin {
       "test-suites": suiteDefs,
       metrics: defs,
       gates: [...(defs.length ? [metricsGate] : []), ...(suiteDefs.length ? [suitesGate] : [])],
-      "ui-views": [metricsView],
+      "ui-views": [metricsView, metricRunView],
       "landing-reports": suiteDefs.length ? [suitesCurrent] : [],
     },
     // The gate is for the gates plugin, the view for the ui plugin, the landing check for the coordination plugin, when
