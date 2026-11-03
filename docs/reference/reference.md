@@ -130,7 +130,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`privacy`](#naima-privacy) | privacy | show or set what the project does with private data (machine names, addresses, home paths, user names) in its tracker (privacy option privateData): scrub, the default, refuses it; keep lets it through while the tracker is private; what leaves the project is scrubbed either way | the choice is the owner's, asked once the first time private data is refused: an agent sets it only after the owner said which; keep is refused on a tracker that is or may be public unless --despite-public restates why |
 | [`adopt`](#naima-adopt) | adopt | adopt a board the project already keeps (a TODO.md, an issue list in markdown) as items, without losing a line: propose markers, split, audit, links — each a dry run until --write; the source is never deleted | no line of the source is lost and the source is never deleted; nothing is written without --write, and the only edit to the source is adding marker lines |
 | [`docs`](#naima-docs) | docs | print the reference generated from the loaded manifests; write it, or check that a file matches it | with --check, the file is what the manifests generate and every loaded contribution is documented, this field included: exit 1 otherwise |
-| [`stance-ui`](#naima-stance-ui) | stance-ui | copies the UI stance into the project, says what the project customized and whether the checks passed since, runs its checks, reruns the fast ones after an agent's edit, or builds and drives the app on every platform the machine reaches | nothing: it copies the stance and reports; the checks hold the rules |
+| [`stance-ui`](#naima-stance-ui) | stance-ui | copies the UI stance into the project, says what the project customized and whether the checks passed since, runs its checks, reruns the fast ones after an agent's edit, builds and drives the app on every platform the machine reaches, or installs the project's pinned Rust into the project | nothing: it copies the stance and reports; the checks hold the rules |
 
 ## Extension points
 
@@ -3827,7 +3827,7 @@ Options, each with the default it takes when nothing sets it:
 
 ### naima stance-ui
 
-Copies the UI stance into the project, says what the project customized and whether the checks passed since, runs its checks, reruns the fast ones after an agent's edit, or builds and drives the app on every platform the machine reaches.
+Copies the UI stance into the project, says what the project customized and whether the checks passed since, runs its checks, reruns the fast ones after an agent's edit, builds and drives the app on every platform the machine reaches, or installs the project's pinned Rust into the project.
 
 **Enforces**: Nothing: it copies the stance and reports; the checks hold the rules.
 
@@ -3837,6 +3837,7 @@ naima status
 naima check
 naima hook
 naima platforms [--platforms <list>]
+naima toolchain [--check]
 ```
 
 | Option | Default | What it does |
@@ -3849,6 +3850,7 @@ naima platforms [--platforms <list>]
 | `--no-scaffold` |  | copy the stance only, without the files a new project needs to build, test and run |
 | `--no-install` |  | do not install the project's npm packages (deno install) after the copy |
 | `--platforms` | `every one` | with platforms: the platforms to try |
+| `--check` |  | with toolchain: install nothing, only say what is there |
 
 Examples:
 
@@ -3858,6 +3860,7 @@ naima stance-ui status
 naima stance-ui check
 naima stance-ui hook < hook-input.json
 naima stance-ui platforms
+naima stance-ui toolchain
 ```
 
 **Checks**, run by `naima check`
@@ -3885,7 +3888,7 @@ naima stance-ui platforms
 
 | Report | When | What it says |
 |---|---|---|
-| `ui-stance-checks` | refuses | a landing that changes a file the UI stance's checks read (tokens, mood boards, contrast pairs, widgets, components, stance-ui.json) is refused while any of its checks fails on the branch's files |
+| `ui-stance-checks` | refuses, on the landing host | a landing that changes a file the UI stance's checks read (tokens, mood boards, contrast pairs, widgets, components, stance-ui.json) is refused while any of its checks fails on the branch's files |
 
 **Methods**, which a gate follows with `naima gate set <gate> --method <plugin>/<method>`
 
