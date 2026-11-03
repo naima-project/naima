@@ -2,7 +2,8 @@
 // the UI stance's request handler (bridge-handler.ts), on the loopback interface, on a free port. Every request carries
 // this run's token, in the URL the browser opens and then in the cookie the first answer sets, or is refused: another
 // user of the machine, or a page of another site, cannot read the project through it. A forwarded port reaches it
-// the same way, with the same token.
+// the same way, with the same token. The cookie is named after the run: a browser keeps cookies per host, not per
+// port, so two runs opened in one browser each set and read their own.
 //
 //   POST /bridge/<command>     a bridge command, its arguments and answer as JSON; refused from another origin
 //   GET  /bridge/<feed>        a bridge feed, as server-sent events
@@ -24,7 +25,6 @@ import { bridgeHandler, type Feeds, type Handlers } from "./bridge-handler.ts"
 import { PAGE_TYPES, pagePolicy } from "./tabs.ts"
 
 export const HOST = "127.0.0.1"
-const COOKIE = "naima-ui"
 
 /** The new UI's bundle, as the product ships it: ui/dist, built in the workshop and committed. */
 export const BUNDLE: string = fileURLToPath(new URL("../../../ui/dist/", import.meta.url))
@@ -59,8 +59,11 @@ const same = (a: string, b: string): boolean => {
   return x.length === y.length && timingSafeEqual(x, y)
 }
 
-const cookieToken = (req: IncomingMessage): string | undefined =>
-  (req.headers.cookie ?? "").split(";").map((c) => c.trim().split("=")).find(([k]) => k === COOKIE)?.[1]
+/** The name of a run's cookie: derived from its token, so that runs on other ports of the same host never replace it. */
+export const cookieName = (token: string): string => `naima-ui-${createHmac("sha256", token).update("naima ui cookie").digest("hex").slice(0, 16)}`
+
+const cookieToken = (req: IncomingMessage, name: string): string | undefined =>
+  (req.headers.cookie ?? "").split(";").map((c) => c.trim().split("=")).find(([k]) => k === name)?.[1]
 
 function plain(res: ServerResponse, status: number, body: string, headers: Record<string, string> = {}): void {
   res.writeHead(status, { "content-type": "text/plain; charset=utf-8", ...SAFE, ...headers })
@@ -139,6 +142,7 @@ export function newToken(): string {
 export function serve(opts: ServeOptions): Promise<Served> {
   const token = opts.token ?? newToken()
   const key = filesKey(token)
+  const name = cookieName(token)
   const bundle = opts.bundle ?? BUNDLE
   let listening = ""
   const handle = bridgeHandler({ handlers: opts.handlers, feeds: opts.feeds })
@@ -167,9 +171,9 @@ export function serve(opts: ServeOptions): Promise<Served> {
       if (!found) return plain(res, 404, `no ${parts.slice(3).join("/")}`)
       return file(req, res, found, PAGE_TYPES[extname(found).toLowerCase()]!, { "content-security-policy": pagePolicy(origin) })
     }
-    const given = url.searchParams.get("token") ?? cookieToken(req)
+    const given = url.searchParams.get("token") ?? cookieToken(req, name)
     if (!given || !same(given, token)) return plain(res, 403, "this address needs the token it was opened with")
-    const cookie = { "set-cookie": `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict` }
+    const cookie = { "set-cookie": `${name}=${token}; Path=/; HttpOnly; SameSite=Strict` }
     if (parts[1] === "bridge") {
       // A command comes from this server's own page only: a page of another origin cannot run one, even with the cookie.
       if (req.method === "POST" && req.headers.origin !== undefined && req.headers.origin !== origin) {

@@ -14,14 +14,14 @@ The address `naima ui` opens looks like `http://127.0.0.1:53817/?token=9f3c…`,
 `naima ui` makes a new one, at random, every time it starts, and the server answers only requests that carry it. A request without it gets a short error saying
 that the address needs the token it was opened with.
 
-The browser gets the token from the address and from nowhere else. When the first page arrives, the server also stores the token in a cookie named `naima-ui`,
-and from then on the browser sends that cookie with every request the window makes: its scripts, the data of each screen, the actions, and the live feed that
+The browser gets the token from the address and from nowhere else. When the first page arrives, the server also stores the token in a cookie of its own,
+named `naima-ui-` followed by a few characters that come from the token, and from then on the browser sends that cookie with every request the window makes: its scripts, the data of each screen, the actions, and the live feed that
 says when the project changed. This is why only the first address needs the token. The cookie is marked so that no script can read it, and so that the browser
 sends it only with requests made by the window itself, never with requests that a page of another site starts. The pages a plugin's tab shows run in a sandbox
 without the cookie; they load their own files under a separate key that the server derives from the token, which opens those files and nothing else.
 
-The token lasts as long as the run. When you stop `naima ui` and start it again, you get a new port and a new token, and the old address stops working. Two runs
-open in one browser at the same time share the cookie, so the window opened first stops answering; open its printed address again to bring it back.
+The token lasts as long as the run. When you stop `naima ui` and start it again, you get a new port and a new token, and the old address stops working. Each run
+names its cookie differently, so two runs open in one browser at the same time, for two projects or two worktrees, each keep working with their own.
 
 ### What the token protects against
 
