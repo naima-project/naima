@@ -4,7 +4,8 @@
 // and from git for the commits. A part whose plugin is not loaded is empty.
 //
 //   routes   the trunk and every open line, then the other branches in a window
-//            of recent history: each with its first-parent commits (newest first),
+//            of recent history: each with its first-parent commits (newest first;
+//            the trunk's and the lines' whole history, down to the root commit),
 //            the commit it leaves its base at (fork) and the one it rejoins it at
 //            (land, null while it has not)
 //   workers  each worker branch: its claim and a status, derived from the claim,
@@ -18,6 +19,12 @@ import { type Command, type Context, gitOrNull, isAncestor, trunk, worktrees } f
 
 /** How many first-parent commits of the trunk the window holds; a branch is shown when it leaves or rejoins within it. */
 export const WINDOW = 60
+
+/**
+ * How many first-parent commits of the trunk, and of each line, are sent at most: the whole history of most projects.
+ * Past it, the root commit is still sent, last, and `older` counts the commits between left out.
+ */
+export const HISTORY = 5000
 
 export type RouteKind = "trunk" | "line" | "sync" | "worker" | "branch"
 
@@ -79,6 +86,8 @@ export interface Metro {
   workers: Worker[]
   /** Per route name (the trunk, each line's branch), the goals ahead in order. */
   goals: Record<string, Mark[]>
+  /** First-parent commits of the trunk older than those sent and newer than its root: 0 unless past HISTORY. */
+  older?: number
 }
 
 /** What a command prints with --json, run here; null when no loaded plugin has it, or it fails. */
@@ -171,12 +180,25 @@ export async function metroData(ctx: Context): Promise<Metro> {
       kind: "trunk",
       base: null,
       tip: git(ctx, "rev-parse", main),
-      commits: firstParent(ctx, main, WINDOW, commits),
+      commits: firstParent(ctx, main, HISTORY, commits),
       fork: null,
       land: null,
     })
   }
-  const window = new Set(routes[0]?.commits ?? [])
+  // The whole history down to the root: past HISTORY, the root commit still ends the trunk, the rest counted.
+  let older = 0
+  const trunkCommits = routes[0]?.commits ?? []
+  if (main && trunkCommits.length === HISTORY) {
+    const all = Number(git(ctx, "rev-list", "--first-parent", "--count", main)) || 0
+    const root = git(ctx, "rev-list", "--first-parent", "--max-parents=0", main).split("\n").filter(Boolean).at(-1)
+    if (root && all > HISTORY) {
+      const [t = "0", ...sub] = git(ctx, "log", "-1", "--format=%ct%x09%s", root).split("\t")
+      commits[root] = { t: Number(t), subject: sub.join("\t") }
+      trunkCommits.push(root)
+      older = all - HISTORY - 1
+    }
+  }
+  const window = new Set(trunkCommits.slice(0, WINDOW))
   for (const l of lines) {
     routes.push({
       name: l.branch,
@@ -184,7 +206,7 @@ export async function metroData(ctx: Context): Promise<Metro> {
       gate: l.gate,
       base: main,
       tip: l.tip,
-      commits: main ? firstParent(ctx, `${main}..${l.branch}`, WINDOW, commits) : [],
+      commits: main ? firstParent(ctx, `${main}..${l.branch}`, HISTORY, commits) : [],
       fork: main ? git(ctx, "merge-base", main, l.branch) || null : null,
       land: null,
     })
@@ -249,5 +271,5 @@ export async function metroData(ctx: Context): Promise<Metro> {
       ...(g.version ? { version: g.version } : {}),
     }))
   }
-  return { trunk: main, head, routes, commits, workers, goals }
+  return { trunk: main, head, routes, commits, workers, goals, ...(older ? { older } : {}) }
 }
