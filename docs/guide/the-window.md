@@ -96,8 +96,12 @@ own, above their line or below main. A branch leaves its base and rejoins it at 
 lands are drawn larger, as interchanges. Past the last commit, main and every line go on, dashed, with a station for each goal and step still ahead in the order
 they come, and a line's future comes down onto main where it will land. Robots stand on the worker branches, each with a look of its own and a badge for its
 status: a gear while it works, a flask while it tests, a question mark when it waits for an answer, a pause when it is idle or silent, a check when it is done
-and waits to land. Working robots step in place at a few frames a second, and stand still when your system asks for reduced motion. You stand on the line
-checked out here.
+and waits to land. Working robots step in place at a few frames a second, and stand still when your system asks for reduced motion. The people of the
+project stand on the map too, each under their own name: whoever is checked out here (git's `user.name`) on the branch checked out, and every other author of
+the commits the map draws on the route of their newest commit. A small pin marks where the main checkout and each worktree stand, on the commit each has
+checked out, with its name and branch; the main checkout's label and the one the window is served from are always shown, the others when you point at them.
+A commit you have named with `naima name-stop <commit> "<name>"` shows that name under its station, and says it when you reach it with Tab, on the open map and
+on the closed rail alike. The names are kept in the tracker's `stops/` folder, one file per commit, written on the trunk like any other addition to the tracker.
 
 Choosing a commit, on the strip or on the map, shows every screen as the project was at that commit; choosing a mark ahead shows that goal, step or landing on
 Home, with its status as it is now. The left and right arrow keys step from one commit to the next on the rail, and on into the marks ahead. Escape, or the one
@@ -180,18 +184,23 @@ goals are its gate's steps not yet closed, then the gate. The trunk's are the ga
 line's gate shown as that line landing. The parts come from the commands that own them (`naima line list`, `naima claims`, `naima gates`, each with `--json`),
 so the map and the commands always agree.
 
-A worker's status is derived, and the data says how in its `why` field:
+A worker's status comes from the records Naima keeps of its branch, never from the words of its step: its claim and the time of its last step, its commits,
+the runs started from its worktree with `naima run` (each run records the branch it was started on), the discussions still open on an item it claims, and the
+silences between them. The records are read oldest first by a small state machine, generated with naima-codegen from its mCRL2 model
+(`develop/models/ui/worker-status` in the workshop), whose properties are checked; its `why` field lists the records it was given. While the branch holds a
+claim, the first of these that applies is its status:
 
-- **done, waiting to land**: its branch has commits its base lacks and no live claim, as a worker leaves it when it hands its work over;
-- **idle**: its claim has been silent longer than the coordination option `silentAfter`;
-- **question**: its last step says it asks or waits for an answer;
-- **testing**: its last step says it is testing, verifying or checking;
-- **working**: any other live claim.
+- **question**: a discussion on one of its items is still open;
+- **testing**: a run started from its worktree is still going;
+- **idle**: no record for longer than the coordination option `silentAfter` since its last sign of life (a step, a commit, a run starting or ending);
+- **working**: otherwise.
+
+With no live claim, a branch that has commits its base lacks is **done, waiting to land**, as a worker leaves it when it hands its work over.
 
 ## Actions
 
 The window can run a few naima commands for you: record a decision (`decide`), add a note (`note`), close a gate's step (`gate step`, not adding or removing
-one), claim items or post a step (`claim`) and release a claim (`release`). Each runs as a run of `naima run`, exactly as if you typed the command, so every
+one), claim items or post a step (`claim`), release a claim (`release`) and name a commit of the map (`name-stop`). Each runs as a run of `naima run`, exactly as if you typed the command, so every
 rule and check applies, and the window can follow the run: its state, its exit code and what it printed. None of them rewrites history. Another page in your
 browser cannot run one.
 

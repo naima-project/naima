@@ -291,6 +291,7 @@ async function start(ctx: Context, hosts: Map<string, Host>, cmd: Command, args:
     guardTracked: bool(p, "guard-tracked"),
     started: new Date().toISOString(),
     ...(noProgress !== undefined ? { noProgress: noProgress.trim() } : {}),
+    ...branchHere(cwd),
   }
   mkdirSync(dir)
   writeJsonAtomic(join(dir, RUN_FILE), spec)
@@ -442,6 +443,7 @@ function startRemote(
     started: new Date().toISOString(),
     host: host.name,
     ...(noProgress !== undefined ? { noProgress } : {}),
+    ...branchHere(process.cwd()),
   }
   mkdirSync(dir, { recursive: true })
   writeJsonAtomic(join(dir, RUN_FILE), spec)
@@ -471,6 +473,12 @@ const runsReport = (hosts: Map<string, Host>) => ({
   },
 })
 
+/** The branch checked out in `dir`, as a run's record keeps it; none on a detached HEAD or outside git. */
+function branchHere(dir: string): { branch?: string } {
+  const b = gitOrNull(dir, "symbolic-ref", "--quiet", "--short", "HEAD")
+  return b ? { branch: b } : {}
+}
+
 /** Every run recorded here, newest first, as its reader reports it; a host is asked once for all of its runs. */
 function allViews(ctx: Context, hosts: Map<string, Host>): RunView[] {
   const now = Date.now()
@@ -489,9 +497,11 @@ function allViews(ctx: Context, hosts: Map<string, Host>): RunView[] {
       answers.set(host.name, byName)
     }
     const v = answers.get(host.name)!.get(spec.name)
-    return v ? { ...v, host: host.name } : {
+    const branch = spec.branch ? { branch: spec.branch } : {}
+    return v ? { ...v, host: host.name, ...branch } : {
       name: spec.name,
       host: host.name,
+      ...branch,
       state: "unknown",
       over: false,
       started: spec.started,

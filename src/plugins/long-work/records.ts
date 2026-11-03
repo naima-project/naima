@@ -85,6 +85,8 @@ export interface RunSpec {
   host?: string
   /** Set by --no-progress: why the command cannot report progress. */
   noProgress?: string
+  /** The branch checked out where it was started, here: whose work it is (the metro map's worker status). */
+  branch?: string
 }
 
 export type Reason = "exit" | "budget-time" | "budget-disk" | "stopped" | "start-failed"
@@ -137,6 +139,8 @@ export function currentState(state: string): Reported {
 export interface RunView {
   name: string
   host?: string
+  /** The branch checked out where it was started, when its record names one. */
+  branch?: string
   state: Reported
   /** True once nothing of the run can change any more: ended, or crashed. */
   over: boolean
@@ -373,6 +377,7 @@ export function view(dir: string, now: number, tail = 0): RunView {
     budgetTimeMs: spec?.budgetTimeMs ?? 0,
     log,
     ...(spec?.budgetDiskBytes !== undefined ? { budgetDiskBytes: spec.budgetDiskBytes } : {}),
+    ...(spec?.branch ? { branch: spec.branch } : {}),
   }
   if (!spec) return { ...base, state: "crashed", over: true, error: "the record has no run.json" }
   const progressFile = join(dir, PROGRESS_FILE)
