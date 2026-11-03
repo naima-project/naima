@@ -140,7 +140,9 @@ export const landingReportsPoint: ExtensionPoint<LandingReport> = {
   validate: (v) => {
     const r = v as Partial<LandingReport> | null
     if (!r || typeof r !== "object" || typeof r.name !== "string") return "has no name"
-    for (const k of ["refuses", "blocks", "report", "covers"] as const) if (r[k] !== undefined && typeof r[k] !== "function") return `has a ${k} that is not a function`
+    for (const k of ["refuses", "blocks", "report", "covers"] as const) {
+      if (r[k] !== undefined && typeof r[k] !== "function") return `has a ${k} that is not a function`
+    }
     if (r.heavy !== undefined && typeof r.heavy !== "boolean") return "has a heavy that is not true or false"
     return r.refuses || r.blocks || r.report ? null : "has no refuses, blocks or report function"
   },
@@ -152,7 +154,14 @@ export const landingReportsPoint: ExtensionPoint<LandingReport> = {
     "**Landing reports**, checked by `naima land` before a landing (refuses, or blocks until its proofs are current) or printed after it (reports)",
     ...table(
       ["Report", "When", "What it says"],
-      rs.map((r) => [code(r.name), (r.refuses ? "refuses" : r.blocks ? "blocks" : "reports") + (r.heavy ? (r.covers ? ", on the landing host when it changes a file it covers" : ", on the landing host") : ""), r.says]),
+      rs.map((
+        r,
+      ) => [
+        code(r.name),
+        (r.refuses ? "refuses" : r.blocks ? "blocks" : "reports") +
+        (r.heavy ? (r.covers ? ", on the landing host when it changes a file it covers" : ", on the landing host") : ""),
+        r.says,
+      ]),
     ),
   ],
 }
