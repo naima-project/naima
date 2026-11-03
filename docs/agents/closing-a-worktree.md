@@ -168,8 +168,10 @@ what the branch changed there. Then it moves the trunk, only if the trunk hasn't
   `--stale-proofs "<reason>"`, and the marker keeps the reason in a `Stale-proofs:` trailer;
 - a plugin's landing check fails on the branch's files, such as a stance's checks on a file they read. No flag lets this through, `--stale-proofs` included: the
   worker fixes the branch. A check that declares itself heavy, such as one that opens a browser, never runs where `naima land` runs: it runs on the host the
-  coordination option `landingHost` names, through `naima run --host`, and with no such host the landing is refused. Each check prints one line, where it ran
-  and what it found. The same checks run before a landing on a development line;
+  coordination option `landingHost` names, through `naima run --host`, and with no such host the landing is refused. The host is read from the branch's own
+  configuration first, then from the trunk's, so the branch that sets `landingHost` lands by it. A heavy check that says which files it covers is not needed
+  on a landing that changes none of them, and then needs no host. Each check prints one line, where it ran and what it found, or that it was not needed. The
+  same checks run before a landing on a development line;
 - an untracked file in the main checkout would be overwritten, in which case nothing moves.
 
 After the landing, `naima land` prints what each landing report says. Among them are the reviews recorded with `naima reviewed` that the branch carries, and a

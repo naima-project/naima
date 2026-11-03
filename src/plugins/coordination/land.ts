@@ -9,7 +9,7 @@
 import { join, relative } from "node:path"
 import { isDeepStrictEqual, stripVTControlCharacters } from "node:util"
 import { randomUUID } from "node:crypto"
-import { mkdirSync, rmSync } from "node:fs"
+import { mkdirSync, readFileSync, rmSync } from "node:fs"
 import {
   appliesTo,
   bool,
@@ -91,12 +91,15 @@ export interface Landing {
  * through. `blocks` names what the landing changed whose proofs are not current: any line refuses the landing on the
  * trunk unless --stale-proofs gives a reason. `report` runs once the landing is made, and never refuses it. A `heavy`
  * check (browsers, a full suite) never runs where naima land runs: it runs on the landing host, through naima run
- * --host, in a checkout of the tip there, and with no landing host named the landing is refused.
+ * --host, in a checkout of the tip there, and with no landing host named the landing is refused. A heavy check may say
+ * up front, with `covers`, which of the files the landing changed it reads, where naima land runs and cheaply: when
+ * it covers none, it is not needed, runs nowhere, and needs no landing host.
  */
 export interface LandingReport {
   name: string
   says: string
   heavy?: boolean
+  covers?(ctx: Context, landing: Landing): string[] | Promise<string[]>
   refuses?(ctx: Context, landing: Landing): string[] | Promise<string[]>
   blocks?(ctx: Context, landing: Landing): string[] | Promise<string[]>
   report?(ctx: Context, landing: Landing): string[] | Promise<string[]>
@@ -131,13 +134,13 @@ function notTrackerOnly(branch: string, outside: string[]): string | null {
 export const landingReportsPoint: ExtensionPoint<LandingReport> = {
   id: "landing-reports",
   says:
-    "what `naima land` checks before a branch lands, on the trunk or on a line, and reports once it has: `name`, `says`, and `refuses(ctx, { branch, from, to, changed }) → lines`, what fails on the branch, any line refusing the landing with no flag to let it through; `blocks(ctx, landing) → lines`, what the landing changed whose proofs are not current, any line refusing a landing on the trunk unless --stale-proofs gives the reason; or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root, and `ctx.root` holds the branch tip's files; `heavy: true` says the check runs heavy work (browsers, a full suite): naima land runs it only on the host the coordination option landingHost names, through naima run --host, and refuses the landing when none is named",
+    "what `naima land` checks before a branch lands, on the trunk or on a line, and reports once it has: `name`, `says`, and `refuses(ctx, { branch, from, to, changed }) → lines`, what fails on the branch, any line refusing the landing with no flag to let it through; `blocks(ctx, landing) → lines`, what the landing changed whose proofs are not current, any line refusing a landing on the trunk unless --stale-proofs gives the reason; or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root, and `ctx.root` holds the branch tip's files; `heavy: true` says the check runs heavy work (browsers, a full suite): naima land runs it only on the host the coordination option landingHost names, through naima run --host, and refuses the landing when none is named; a heavy check may give `covers(ctx, landing) → files`, the files of `changed` it reads, computed where naima land runs without heavy work: when it covers none, the check is not needed and needs no landing host; the landing host is the one the branch tip's configuration names, else the trunk's",
   noun: "landing report",
   key: (r) => r.name,
   validate: (v) => {
     const r = v as Partial<LandingReport> | null
     if (!r || typeof r !== "object" || typeof r.name !== "string") return "has no name"
-    for (const k of ["refuses", "blocks", "report"] as const) if (r[k] !== undefined && typeof r[k] !== "function") return `has a ${k} that is not a function`
+    for (const k of ["refuses", "blocks", "report", "covers"] as const) if (r[k] !== undefined && typeof r[k] !== "function") return `has a ${k} that is not a function`
     if (r.heavy !== undefined && typeof r.heavy !== "boolean") return "has a heavy that is not true or false"
     return r.refuses || r.blocks || r.report ? null : "has no refuses, blocks or report function"
   },
@@ -149,7 +152,7 @@ export const landingReportsPoint: ExtensionPoint<LandingReport> = {
     "**Landing reports**, checked by `naima land` before a landing (refuses, or blocks until its proofs are current) or printed after it (reports)",
     ...table(
       ["Report", "When", "What it says"],
-      rs.map((r) => [code(r.name), (r.refuses ? "refuses" : r.blocks ? "blocks" : "reports") + (r.heavy ? ", on the landing host" : ""), r.says]),
+      rs.map((r) => [code(r.name), (r.refuses ? "refuses" : r.blocks ? "blocks" : "reports") + (r.heavy ? (r.covers ? ", on the landing host when it changes a file it covers" : ", on the landing host") : ""), r.says]),
     ),
   ],
 }
@@ -185,10 +188,38 @@ async function runCheck(at: Context, check: LandingReport, landing: Landing): Pr
   return found
 }
 
-/** The coordination option `landingHost`: the host, declared for naima run --host, that heavy landing checks run on. */
-export function landingHost(ctx: Context): string | undefined {
-  const v = (ctx.config.plugins["coordination"]?.options ?? {})["landingHost"]
-  return typeof v === "string" && v.trim() ? v.trim() : undefined
+/**
+ * The coordination option `landingHost`: the host, declared for naima run --host, that heavy landing checks run on. With
+ * `at`, whose tracker holds the branch tip's files, the host its naima.json names comes first, so that the branch that
+ * names the landing host lands by it; else the one `ctx`'s configuration names.
+ */
+export function landingHost(ctx: Context, at?: Context): string | undefined {
+  const named = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v.trim() : undefined)
+  if (at) {
+    let tip: unknown
+    try {
+      tip = (JSON.parse(readFileSync(join(at.trackerRoot, DATA_FILE), "utf8")) as { plugins?: Record<string, { options?: Record<string, unknown> }> })
+        .plugins?.["coordination"]?.options?.["landingHost"]
+    } catch {
+      // no readable naima.json at the tip: the configuration naima land runs with decides
+    }
+    const host = named(tip)
+    if (host) return host
+  }
+  return named((ctx.config.plugins["coordination"]?.options ?? {})["landingHost"])
+}
+
+/**
+ * Whether a heavy check is needed on a landing: one with no `covers` always is; one with it is when it covers a file the
+ * landing changed, or when `covers` throws, since then what it reads is not known.
+ */
+async function heavyNeeded(at: Context, check: LandingReport, landing: Landing): Promise<boolean> {
+  if (!check.covers) return true
+  try {
+    return (await check.covers(at, landing)).length > 0
+  } catch {
+    return true
+  }
 }
 
 /** The prefix of the line on which naima landing-check prints its findings, as JSON. */
@@ -204,11 +235,12 @@ const HEAVY_STALE = "15m"
 /**
  * A heavy landing check, on the landing host: the tip pushed to the host's checkout, `naima landing-check` run there
  * through naima run --host and waited on, its findings read from the run's log, then the run and the pushed ref
- * removed. With no landing host named, no long-work plugin or no such host, it is not run, and it refuses the landing.
+ * removed. The landing host is the one the branch tip's files name (`at`), else the trunk's. With no landing host named,
+ * no long-work plugin or no such host, it is not run, and it refuses the landing.
  */
-async function heavyCheck(ctx: Context, name: string, landing: Landing): Promise<Found & { where: string }> {
+async function heavyCheck(ctx: Context, name: string, landing: Landing, at: Context = ctx): Promise<Found & { where: string }> {
   const refusal = (why: string): Found & { where: string } => ({ refused: [why], notCurrent: [], said: [], where: "" })
-  const hostName = landingHost(ctx)
+  const hostName = landingHost(ctx, at)
   if (!hostName) {
     return refusal(
       "is heavy, so it runs only on the landing host, and none is named: set the coordination option landingHost to a host naima run --host reaches — not run here",
@@ -288,7 +320,8 @@ function checkedLine(name: string, where: string, f: Found): string {
  * What the landing checks find before the trunk or the line moves, each line prefixed with its check's name: what fails
  * on the branch (`refused`, from `refuses`) and what has proofs not current (`notCurrent`, from `blocks`). `at` is the
  * context whose root holds the branch tip's files. A `blocks` that throws says so and blocks nothing; a `refuses` that
- * throws refuses the landing, since the branch was not checked; a heavy check runs on the landing host (heavyCheck).
+ * throws refuses the landing, since the branch was not checked; a heavy check runs on the landing host (heavyCheck),
+ * unless its `covers` finds no file of the landing it reads.
  * Each check that ran prints one line, where it ran and what it found, so that a pass is seen.
  */
 async function landingChecks(ctx: Context, landing: Landing, at: Context = ctx): Promise<{ refused: string[]; notCurrent: string[] }> {
@@ -299,7 +332,11 @@ async function landingChecks(ctx: Context, landing: Landing, at: Context = ctx):
   for (const c of ctx.registry.contributions("landing-reports")) {
     const check = c.value as LandingReport
     if (!check.refuses && !check.blocks) continue
-    const found = check.heavy ? await heavyCheck(ctx, c.name, landing) : { ...(await runCheck(at, check, landing)), where: "here" }
+    if (check.heavy && !(await heavyNeeded(at, check, landing))) {
+      ctx.out(`${c.name}: not needed, the landing changes no file it covers`)
+      continue
+    }
+    const found = check.heavy ? await heavyCheck(ctx, c.name, landing, at) : { ...(await runCheck(at, check, landing)), where: "here" }
     for (const line of found.said) ctx.out(`${c.name}: ${line}`)
     refused.push(...found.refused.map((l) => `${c.name}: ${l}`))
     notCurrent.push(...found.notCurrent.map((l) => `${c.name}: ${l}`))
