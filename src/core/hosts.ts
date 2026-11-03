@@ -152,6 +152,11 @@ export interface HostAnswer {
 /** Ask the host's Naima `args`, through one ssh call; its answer, or why there is none. */
 export function askHost(host: Host, args: string[], timeoutMs = 120_000): HostAnswer {
   const r = spawnSync("ssh", sshArgs(host, args), { encoding: "utf8", timeout: timeoutMs, stdio: ["ignore", "pipe", "pipe"] })
-  const err = r.error ? `ssh: ${r.error.message}` : String(r.stderr ?? "").trim()
+  // No status, no signal and no error: ssh was never started, as when the program may not run it (src/launcher.ts).
+  const err = r.error
+    ? `ssh: ${r.error.message}`
+    : r.status === null && !r.signal
+    ? "ssh: could not be started — this command may not run ssh"
+    : String(r.stderr ?? "").trim()
   return { ok: r.status === 0, out: String(r.stdout ?? ""), err, code: r.status ?? 1 }
 }

@@ -350,6 +350,9 @@ any program. An install downloads from whatever host a redirect points to (a rel
 ([the checks of naima-codegen](prove-and-close.md#the-checks-of-naima-codegen)), and read that script, to find the commit it runs from. With `--host` it may run
 `ssh`, to run the verifier on another machine.
 
+**`naima land`, and no other command besides `naima run` and `naima wait`,** may also run `ssh`, to start a heavy landing check on the landing host through
+`naima run --host` and wait on it there ([closing a worktree](../agents/closing-a-worktree.md)).
+
 **`naima recover`, and no other command,** may also read the folders where the agent tools in use keep their sessions' transcripts, to brief the worker
 that resumes a dead or stuck one ([several branches](several-branches.md#see-who-is-doing-what)). It only reads them and writes nothing.
 
@@ -358,8 +361,8 @@ that resumes a dead or stuck one ([several branches](several-branches.md#see-who
 checked for private data and secrets as any other text.
 
 **A normal run never touches the network.** Only these commands do, each granted it by the launcher for that command alone: `naima update` and alignment
-(git, and a release's download), `naima tools install` and `naima backup create`, `naima issues`, and `naima hello` through gh, and `naima run --host` and
-`naima verify --host` through ssh. Besides these, any command may ask GitHub's API whether the tracker's repository is public or private, at most once a day
+(git, and a release's download), `naima tools install` and `naima backup create`, `naima issues`, and `naima hello` through gh, and `naima run --host`,
+`naima verify --host` and a heavy landing check of `naima land` through ssh. Besides these, any command may ask GitHub's API whether the tracker's repository is public or private, at most once a day
 ([where the tracker lives](#where-the-tracker-lives)).
 
 The allow-list of variables is `ENV` in `src/launcher.ts`. Deno can't grant a named list of variables and still let the program pass its environment on to git,
