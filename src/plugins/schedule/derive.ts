@@ -1,5 +1,5 @@
 // The schedule data, derived at every call: the actual schedule of each piece from its records through the machine
-// (machine.ts), its planned schedule from the proposals (plans.ts), its expected schedule from the project's own pace,
+// naima-codegen generates from the workshop's model (generated/actual.ts), its planned schedule from the proposals (plans.ts), its expected schedule from the project's own pace,
 // then the drift, the overlaps, the resource histogram and the quality of past predictions.
 //
 // The pace is a reference class drawn from the project's own history: for a kind of work (an item type), the median
@@ -8,7 +8,7 @@
 // at all, a piece is given eight hours.
 
 import { type Context, type Item, label, linked } from "../../core/api.ts"
-import { INITIAL, type Input, type Phase, step } from "./machine.ts"
+import { type Event, initial, type Phase, type State, step } from "./generated/actual.ts"
 import type { PlanRecord } from "./plans.ts"
 import { plannedByItem } from "./plans.ts"
 import { recordsOf } from "./records.ts"
@@ -57,7 +57,7 @@ const STATE: Record<Phase, ActualState> = {
   CLOSED: "closed",
 }
 
-const INPUT: Record<ActualEvent["kind"], Input> = {
+const INPUT: Record<ActualEvent["kind"], Event["type"]> = {
   claim: "claim",
   step: "sign",
   commit: "sign",
@@ -99,28 +99,34 @@ export function withSilence(events: ActualEvent[], stallAfter: number, now: numb
   return out
 }
 
-/** A piece's actual schedule: its records fed oldest first through the machine, each stretch opened at its record's moment. */
+/**
+ * A piece's actual schedule: its records fed oldest first through the machine, each stretch opened at its record's
+ * moment by the machine's action (work, stall, pause, or finish, the end of the piece). The model takes every record in
+ * every phase, one that changes nothing there included; a record the machine refused would leave the state as it was.
+ */
 export function actualOf(events: ActualEvent[]): ActualSchedule {
-  let phase: Phase = INITIAL
+  let state: State = initial({}).state
   let start: string | undefined
   let end: string | undefined
   const segments: ActualSchedule["segments"] = []
   for (const e of events) {
-    const r = step(phase, INPUT[e.kind])
-    phase = r.phase
-    if (!r.opens) continue
-    const cur = segments[segments.length - 1]
-    if (cur && cur.to === undefined) cur.to = e.at
-    if (r.opens === "finish") {
-      end = e.at
+    const r = step(state, { type: INPUT[e.kind] })
+    if (r === null) continue
+    state = r.state
+    for (const a of r.actions) {
+      const cur = segments[segments.length - 1]
+      if (cur && cur.to === undefined) cur.to = e.at
+      if (a.type === "finish") {
+        end = e.at
+        if (start === undefined) start = e.at
+        continue
+      }
       if (start === undefined) start = e.at
-      continue
+      end = undefined
+      segments.push({ kind: a.type === "stall" ? "stalled" : a.type === "pause" ? "paused" : "work", from: e.at })
     }
-    if (start === undefined) start = e.at
-    end = undefined
-    segments.push({ kind: r.opens === "stall" ? "stalled" : r.opens === "pause" ? "paused" : "work", from: e.at })
   }
-  return { state: STATE[phase], ...(start ? { start } : {}), ...(end ? { end } : {}), segments, events }
+  return { state: STATE[state.phase], ...(start ? { start } : {}), ...(end ? { end } : {}), segments, events }
 }
 
 /** The kind of work a piece is: its type, or the type it was closed from. */

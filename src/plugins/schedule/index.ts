@@ -2,7 +2,7 @@
 // between them, the resource histogram, and how far Naima's predictions can be trusted (types.ts says the shape).
 //
 // The actual schedule is derived at every call from what the project already records (records.ts), through the
-// machine of the workshop's model (machine.ts); the planned one is the proposals `naima schedule plan` and
+// machine naima-codegen generates from the workshop's model (generated/actual.ts); the planned one is the proposals `naima schedule plan` and
 // `naima schedule propose` write, one new file each (plans.ts); everything else is computed from the two (derive.ts).
 // It shows and records proposals only: moving a planned bar in the interface is not part of it.
 //
