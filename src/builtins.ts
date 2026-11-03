@@ -27,6 +27,7 @@ import ruleTemplates from "./plugins/rule-templates/index.ts"
 import privacy from "./plugins/privacy/index.ts"
 import roles from "./plugins/roles/index.ts"
 import rules from "./plugins/rules/index.ts"
+import schedule from "./plugins/schedule/index.ts"
 import tools from "./plugins/tools/index.ts"
 import trackers from "./plugins/trackers/index.ts"
 import triage from "./plugins/triage/index.ts"
@@ -59,6 +60,7 @@ export const firstParty: readonly FirstParty[] = [
   { name: "pack-papers", factory: packPapers, optIn: true },
   { name: "ui", factory: ui },
   { name: "metrics", factory: metrics },
+  { name: "schedule", factory: schedule },
   { name: "rules", factory: rules },
   { name: "long-work", factory: longWork },
   { name: "working-rules", factory: working },
