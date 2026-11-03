@@ -133,8 +133,10 @@ last 500 or 100. Each chart has a text summary that screen readers read. Clickin
 on, selects its commit, so the whole window shows that moment, and opens below the chart the record of the run that measured it: the value and whether it kept
 its bound, when it was recorded, and how it was taken. For a test suite's number that is the suite's run, with its command, its counts, its time and the end of
 its log, or the earlier run it reused because nothing the suite reads had changed; for a command's number, the command; for a code measure, the measure. A metric
-becomes a card with `"card": true` in its declaration, and goes under a heading of the list with `"group"`; with no card marked, the first six metrics with
-records are the cards. Below, the screen says how many of the newest commits have no record, with the main action Record metrics, which runs
+becomes a card with `"card": true` in its declaration, or with its place among the cards, `"card": 2`, and goes under a heading of the list with `"group"`;
+with no card marked, the first six metrics with records are the cards. The cards with a place come first, in that order, and the others after them in the
+list's order, which is the order of the declarations. The screen names a metric by its `"label"`, such as `"Function size, mean"`, or else by its declared
+name written as words, `function-size` as Function size. Below, the screen says how many of the newest commits have no record, with the main action Record metrics, which runs
 `naima metrics run --record` on the commit checked out, under `naima run` with a budget of two hours, and says how the run goes until it ends; one recording runs
 at a time, and when it succeeds the window reads the new records. Its data is the metrics view's, whose `timeline` places every record on the trunk; at a commit it gives each metric's record at that commit,
 read from the records as they are now, since a commit's own tree holds none of the records made after it. How the screen reads a moment is a small model of its
