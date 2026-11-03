@@ -7,7 +7,8 @@
 //   out  {"id": 1, "ok": <answer>}  or  {"id": 1, "error": "..."}
 //   out  {"feed": "changes", "event": {...}}          each change of the project, pushed as it comes
 //
-// It stops when its standard input ends, as it does when the shell quits.
+// It stops when its standard input ends, as it does when the shell quits, once every request it read is answered: the
+// machine below, which follows the protocol's model, decides when.
 
 import { readFileSync } from "node:fs"
 import { extname } from "node:path"
@@ -34,9 +35,90 @@ export interface SidecarOptions {
   input: Readable
   write(line: string): void
   watch?: { interval?: number; debounce?: number }
+  /** Told each event of the sidecar's machine and each action it takes, as its model's action record has them. */
+  record?: (entry: SidecarEntry) => void
 }
 
-/** Answers the shell until its input ends; returns the exit code. */
+/** An event of the sidecar's machine, or an action it takes: the entries of its model's action record. */
+export type SidecarEntry =
+  | { event: { type: "request" | "answer"; req: number | null } | { type: "stdinEnd" | "change" } }
+  | { action: { type: "push" | "exit" } }
+
+/**
+ * The sidecar's own state, the Core of its model in the workshop (develop/models/ui/sidecar/model/core.mcrl2),
+ * followed by hand while naima-codegen's TypeScript is not erasable TypeScript, which Node needs: whether the
+ * standard input is open, how many handlers are in flight, whether a change is to be pushed and whether the sidecar
+ * has stopped. Each method is the summand of the same name; `#outputs` is the policy, a change pushed before the
+ * sidecar stops. The id of a request travels with it, so the machine only counts.
+ */
+export class SidecarMachine {
+  #open = true
+  #pending = 0
+  #feed = false
+  #done = false
+  readonly #act: (action: "push" | "exit") => void
+  readonly #record: ((entry: SidecarEntry) => void) | undefined
+
+  constructor(act: (action: "push" | "exit") => void, record?: (entry: SidecarEntry) => void) {
+    this.#act = act
+    this.#record = record
+  }
+
+  get done(): boolean {
+    return this.#done
+  }
+
+  /** A request line read: its handler starts. Refused once the input has ended. */
+  request(req: number | null): boolean {
+    if (!this.#open) return false
+    this.#record?.({ event: { type: "request", req } })
+    this.#pending += 1
+    return this.#outputs()
+  }
+
+  /** A handler settled, its answer line written. */
+  answer(req: number | null): boolean {
+    if (this.#pending === 0) return false
+    this.#record?.({ event: { type: "answer", req } })
+    this.#pending -= 1
+    return this.#outputs()
+  }
+
+  /** The standard input ended. */
+  stdinEnd(): boolean {
+    if (!this.#open) return false
+    this.#record?.({ event: { type: "stdinEnd" } })
+    this.#open = false
+    return this.#outputs()
+  }
+
+  /** The project changed: pushed while the sidecar runs, refused once it has stopped. */
+  change(): boolean {
+    if (this.#done) return false
+    this.#record?.({ event: { type: "change" } })
+    this.#feed = true
+    return this.#outputs()
+  }
+
+  #outputs(): true {
+    for (;;) {
+      if (this.#feed) {
+        this.#feed = false
+        this.#take("push")
+      } else if (!this.#open && this.#pending === 0 && !this.#done) {
+        this.#done = true
+        this.#take("exit")
+      } else return true
+    }
+  }
+
+  #take(action: "push" | "exit"): void {
+    this.#record?.({ action: { type: action } })
+    this.#act(action)
+  }
+}
+
+/** Answers the shell until its input ends and every request read is answered; returns the exit code. */
 export async function runSidecar(ctx: Context, opts: SidecarOptions): Promise<number> {
   const bridge = naimaBridge(ctx, {
     views: opts.views,
@@ -54,8 +136,18 @@ export async function runSidecar(ctx: Context, opts: SidecarOptions): Promise<nu
     },
   }
   const send = (message: { [key: string]: Json }) => opts.write(JSON.stringify(message))
-  const stop = bridge.feeds["changes"]!((event) => send({ feed: "changes", event }))
-  const pending = new Set<Promise<void>>()
+  let exited: () => void = () => {}
+  const stopped = new Promise<void>((resolve) => (exited = resolve))
+  // The feed's event to push: the machine decides whether it is pushed, the event travels beside it.
+  let event: Json = null
+  const machine = new SidecarMachine((action) => {
+    if (action === "push") send({ feed: "changes", event })
+    else exited()
+  }, opts.record)
+  const stop = bridge.feeds["changes"]!((e) => {
+    event = e
+    machine.change()
+  })
   try {
     for await (const line of createInterface({ input: opts.input, crlfDelay: Infinity })) {
       if (!line.trim()) continue
@@ -63,6 +155,7 @@ export async function runSidecar(ctx: Context, opts: SidecarOptions): Promise<nu
       try {
         request = JSON.parse(line)
       } catch {
+        // Answered with no id and outside the machine: it changes nothing.
         send({ error: "a line that is not JSON" })
         continue
       }
@@ -70,18 +163,24 @@ export async function runSidecar(ctx: Context, opts: SidecarOptions): Promise<nu
       const command = String(request.command)
       const args = request.args && typeof request.args === "object" && !Array.isArray(request.args) ? request.args as { [key: string]: Json } : {}
       const handler = Object.hasOwn(handlers, command) ? handlers[command] : undefined
-      const answer = (async () => {
+      machine.request(id)
+      void (async () => {
+        let answer: { [key: string]: Json }
         try {
           if (!handler) throw new Error(`no such command: ${command}`)
-          send({ id, ok: await handler(args) })
+          answer = { id, ok: await handler(args) }
         } catch (e) {
-          send({ id, error: e instanceof Error ? e.message : String(e) })
+          answer = { id, error: e instanceof Error ? e.message : String(e) }
+        }
+        try {
+          send(answer)
+        } finally {
+          machine.answer(id)
         }
       })()
-      pending.add(answer)
-      void answer.finally(() => pending.delete(answer))
     }
-    await Promise.all(pending)
+    machine.stdinEnd()
+    await stopped
     return 0
   } finally {
     stop()
