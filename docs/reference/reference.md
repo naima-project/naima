@@ -27,6 +27,7 @@ Every contribution below has a qualified id, `<plugin>/<name>`, and goes by its 
 - [verifier-mcrl2](#verifier-mcrl2) — the mCRL2 adapter: a property is a modal mu-calculus formula over an mCRL2 specification
 - [ui](#ui) — the new interface, served in the default browser from a server on this machine only through Naima's bridge commands, and the views and tabs plugins contribute to it
 - [metrics](#metrics) — named measurements — a command's number, a code-quality number taken in process, a test suite's results — recorded per commit, held to a budget, a floor or a baseline, and read back along the commit timeline
+- [schedule](#schedule) — the planned, expected and actual schedule of every piece of work, with drift, overlaps and the quality of predictions
 - [rules](#rules) — the project's own rules, kept as items: shown to agents first by naima guide, listed by naima rules
 - [long-work](#long-work) — long work, run and waited on by Naima: naima run starts a command detached, with budgets and a progress channel, locally or on a host; naima wait blocks on it by its record; naima run list, status, stop and clean; a long run that is due reported and filed, never started on its own; shipped rules make them mandatory for agents and make long work report its progress
 - [working-rules](#working-rules) — the working rules every project ships for its agents: quiet, talking to the owner, fast, the coordinator delegating to workers, asking before what cannot be undone, capturing with judgment, never asking what the rules answer, closing every loop, reporting a problem in Naima upstream only when it is real and on the owner's yes, introducing a Naima feature along the way, answering in the user's terms with Naima's words only where they help, handling an issue opened outside along one path with everything posted on it scrubbed; and for everyone, no new status document and the right tool for the job
@@ -121,6 +122,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`backup`](#naima-backup) | backup | the remote of each repository Naima relies on — the tracker's own, kept private beside the code, and the project's: say which have one; create a private GitHub repository with gh, after the owner's yes; add one the owner made by hand; record that the owner keeps one on this machine | a repository Naima relies on is never left without a remote unless the owner said so: the owner is asked once, at init or at the next update, and a no is recorded and recalled by naima hello |
 | [`issues`](#naima-issues) | outside-issues | the issues of the project's GitHub repository, through gh, one path for each opened by someone outside: with no subcommand, list the open issues, each with the item filed for it; file: file one item for each open issue no item records, its address in the field issue, triaged as reported, and say each once (the daily tick runs it); show <issue>: the issue and its comments, marked as untrusted text from outside; reply <issue> "<text>": comment on it; link <number> <item>: record that an item filed before answers the issue, as file would have, a tracker addition the trunk takes; candidate <issue>: the version of the next pre-release, from the newest version tag of the repository (the patch after a release, or the version a pre-release leads to, with the suffix rc.<n>), and the steps that cut it from the item's branch, never marked latest; from the trunk's head, said to have skipped the path, when the fix has already landed; offer <issue> --version <version>: comment with the one command that installs that candidate; close <issue> --release <version>: comment with a link to the release, then close it. An issue is named by its number or by its item. An issue is public: every text posted passes the private-data scrub, and a finding refuses it | an outside issue is filed at most once, however many intakes run at once: an item that records its address, or another intake's exclusive claim on it, skips it; link records an issue on one item only, and an item records one issue; an issue is public, so every text posted on it passes the private-data scrub and a finding refuses the post; what is read from an issue is printed marked as untrusted text; a candidate is a pre-release, never marked latest |
 | [`metrics`](#naima-metrics) | metrics | the project's metrics — each a name and the command or code measure that takes it — run, recorded per commit, held to a budget, a floor or a baseline, and read back along the commit timeline as a trend, a table or a chart; every number with the one it is compared to | numbers are recorded with the commit they measure; a ratcheted bound only tightens, and loosening one is refused without --because naming the item that says why |
+| [`schedule`](#naima-schedule) | schedule | the schedule of the pieces of work: with no subcommand, what naima view schedule shows; plan records a planned schedule with the dates given, propose one from the project's pace, each with who proposed it | a plan is one new file in schedules/, never rewritten: the first plan of a piece is kept as its baseline and a later one replaces it in force; a plan ends after it starts; who proposed it is the git user and the checkout's role |
 | [`rules`](#naima-rules) | rules | print the project's active rules, must before should, each with its text and reason, ending with the line an agent must acknowledge back; or check that text carries every one (rules check-ack) | nothing: it only reads |
 | [`reviewed`](#naima-reviewed) | rules | record that an agent reviewed a change against a rule verified by an agent (no check holds it): which rule, the item the change lands with, and what was checked; naima land shows the review, and notes a change to what such a rule covers that lands with none | the rule is an active rule verified by agent, the item exists, and what was checked is said; each review is one new file under rule-reviews/, landed with the change |
 | [`run`](#naima-run) | long-work | start a long command detached — locally, or on a declared host through its own Naima — with a log, a progress file, a time budget and, on what it declares it creates, a disk budget, ending itself when one runs out; list the runs against their budgets, show one, stop one, or remove what one created | every run has a time budget, and is ended, its whole process group with it, when it runs out or its declared paths outgrow the disk budget; a declared path is never the root, the home directory, the repository or above it, nor holds a tracked file; a run is never cleaned while it runs; a remote run is always guarded, failing when it changes a tracked file; nothing starts on its own: a due long run is reported and filed, and starts only when a person or an agent runs it |
@@ -138,13 +140,13 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 
 | Point | Declared by | What it is | Contributed by |
 |---|---|---|---|
-| `commands` | core | `naima <name>`: a command, with its usage, options and examples | core, trackers, coordination, triage, gates, epics, discussions, planning, knowledge, roles, announce, loop, beta-markers, verifier, tools, backup, outside-issues, ui, metrics, rules, long-work, commit-hooks, privacy, adopt, docs, stance-ui |
+| `commands` | core | `naima <name>`: a command, with its usage, options and examples | core, trackers, coordination, triage, gates, epics, discussions, planning, knowledge, roles, announce, loop, beta-markers, verifier, tools, backup, outside-issues, ui, metrics, schedule, rules, long-work, commit-hooks, privacy, adopt, docs, stance-ui |
 | `types` | core | item types: a directory of items, their statuses, and the status a new one starts in | core, trackers, epics, discussions, planning, knowledge, verifier, rules |
 | `fields` | core | typed fields of an item's meta.json, and the types they apply to | core, trackers, triage, gates, discussions, planning, knowledge, roles, announce, verifier, outside-issues, rules, long-work, privacy, adopt, docs |
 | `relations` | core | link relations between items, each naming its inverse | core, trackers, epics, discussions, planning, knowledge, verifier |
 | `checks` | core | invariants `naima check` holds: a problem fails it, a note does not | core, trackers, coordination, triage, gates, epics, discussions, planning, knowledge, announce, beta-markers, verifier, verifier-mcrl2, metrics, rules, long-work, commit-hooks, privacy, docs, stance-ui |
-| `views` | core | `naima view <name>`: a named rendering of derived state | coordination, triage, planning |
-| `dirs` | core | directories under the tracker root a plugin owns that are not item types | core, coordination, metrics, rules, commit-hooks, adopt |
+| `views` | core | `naima view <name>`: a named rendering of derived state | coordination, triage, planning, schedule |
+| `dirs` | core | directories under the tracker root a plugin owns that are not item types | core, coordination, metrics, schedule, rules, commit-hooks, adopt |
 | `summary` | core | a block of `naima summary`; one marked `hello` is said by `naima hello` among what waits on the owner, and one with `goals(ctx)` says there where the project is going | core, trackers, coordination, triage, gates, epics, discussions, planning, beta-markers, verifier, backup, metrics, long-work |
 | `guide` | core | a block `naima guide` prints first, inside a project, before the documentation pages | triage, verifier, rules |
 | `facts` | core | lines `naima show` prints of an item under its fields, and in its JSON as `facts`: what a plugin knows of the item that its files do not say | coordination |
@@ -164,7 +166,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `roles` | roles | a role of the company of agents: `title`, what it `owns`, what it `refuses` (never empty), the `kinds` and `types` on its queue, and `queue(ctx)`, its open items most urgent first | roles |
 | `verifiers` | verifier | an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest; `toolArgs`, the flags `naima verify --tool-args` may pass, which never change the verdict; and `equivalences` with `compare({ before, after, equivalence }, ctx) → { verdict, output, counterexample?, details? }` and `preserves({ property, options, equivalence }, ctx)`, for `naima equivalent`; `identityOptions(options)`, the options as they identify a run, so a run made with other effective options is never reused; `propertyFile(property, root)`, the file a property names when it is not inline, so a missing one is said as missing | verifier, verifier-mcrl2 |
 | `tools` | tools | a tool a plugin needs, which `naima tools install` installs into Naima's own directory: name, exact version, licence, homepage, source and authors (its attribution, which `naima credits` prints), programs, how an install is verified, and per platform a source (url, size, sha256, format) or the answer saying why there is none | backup, verifier-mcrl2 |
-| `ui-views` | ui | a view the new UI shows as a tab, and whose data the bridge's `data` command answers: `name`, `title`, `says`, `order` (lower first, 0 when absent), `moments` (true: at a commit it is rendered from the files as they are, `params.at` the commit's hash), `screen` (true: the new interface has a screen of its own for it, so it is not also one of its tabs), `render(params, ctx) → { data, html, css? }`, rendered at each request | coordination, triage, gates, ui, metrics |
+| `ui-views` | ui | a view the new UI shows as a tab, and whose data the bridge's `data` command answers: `name`, `title`, `says`, `order` (lower first, 0 when absent), `moments` (true: at a commit it is rendered from the files as they are, `params.at` the commit's hash), `screen` (true: the new interface has a screen of its own for it, so it is not also one of its tabs), `render(params, ctx) → { data, html, css? }`, rendered at each request | coordination, triage, gates, ui, metrics, schedule |
 | `ui-tabs` | ui | a tab of the new UI, with optional subtabs: `name`, `title`, `says`, `order` (lower first, 0 when absent), `subtabs` ([{ name, title, says? }]), `files(ctx)` (the folder its pages and frames show, or null) and `render({ sub, query }, ctx)`, which gives `{ component, data, lead? }` (component one of list, table, chart, gallery, markdown, drawn by the app), `{ page }` (a file of `files`) or `{ html, css? }`; pages are served sandboxed, and no code of the plugin runs in the app | stance-ui |
 | `metric-kinds` | metrics | how a metric's number is read from its run: `read({ exit, stdout, stderr, seconds }, metric) → number \| { error }`, `readsExit` | metrics |
 | `metrics` | metrics | a named measurement: `run` (a program and its arguments) and `kind`, a code `measure`, a test `suite`'s number or a `file`'s; a bound — `atMost`, `atLeast` or `equals` — and `better` |  |
@@ -3323,6 +3325,65 @@ naima metrics presets
 | `junit` | JUnit XML, from a file (`report`) or the output: pytest --junit-xml, deno test --reporter=junit, node --test-reporter=junit, bun test --reporter=junit, and most CI tools |
 | `tap` | TAP 13 or 14, with indented subtests and YAML diagnostics: deno test --reporter=tap, node --test-reporter=tap |
 | `libtest-json` | the JSON lines of Rust's test harness, cargo test -- -Z unstable-options --format json |
+
+## schedule
+
+The planned, expected and actual schedule of every piece of work, with drift, overlaps and the quality of predictions.
+
+Its contributions' qualified ids are `schedule/<name>`.
+
+Every piece of work Naima tracks can carry three schedules on one time axis. The planned one is proposed when the work is planned, by hand (`naima schedule plan`) or from the project's pace (`naima schedule propose`), and records who proposed it; the first plan stays as the baseline when a later one replaces it. The actual one is derived as work happens from what the project already records: the claims and their posted steps, the commits on the claiming branch, the landings and the closes, with stalls where no sign of life came for the stall window and pauses where the claim went away before landing. The expected one is Naima's forecast: the actual schedule once work started, otherwise placed after what the piece waits on, its length from the plan corrected by how plans of that kind of work turned out, or the median duration of that kind. From the three come the drift of each piece, the overlaps (work that started while what it waits on had not ended; days on which more pieces ran than the capacity, the over-allocated days of the resource histogram) and the prediction quality per kind of work and month by month, which gives every forecast its confidence. `naima view schedule` shows it; its data, the shape of naima/src/plugins/schedule/types.ts, is the `ui-views` view `schedule` the new interface's Gantt reads.
+
+Options, each with the default it takes when nothing sets it:
+
+| Option | Default | What it does |
+|---|---|---|
+| `stallAfter` | `the coordination option silentAfter (15)` | minutes without a sign of life after which work counts as stalled |
+| `tolerance` | `24` | hours within which an end counts as on plan |
+| `capacity` | `the coordination option maxWorkers (3)` | the most pieces of work that run at once, the resource histogram's capacity |
+
+### naima schedule
+
+The schedule of the pieces of work: with no subcommand, what naima view schedule shows; plan records a planned schedule with the dates given, propose one from the project's pace, each with who proposed it.
+
+**Enforces**: A plan is one new file in schedules/, never rewritten: the first plan of a piece is kept as its baseline and a later one replaces it in force; a plan ends after it starts; who proposed it is the git user and the checkout's role.
+
+```sh
+naima schedule [<item>...] [--json]
+naima schedule plan <item> --start <when> --end <when> [--basis "<why>"] [--by <name>]
+naima schedule propose <item>... [--by <name>]
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--start` |  | when the piece is planned to start: a day (its start) or a timestamp |
+| `--end` |  | when the piece is planned to end: a day (its end) or a timestamp |
+| `--basis` | `given by hand` | how the dates were reached, in words |
+| `--by` | `the git user` | who proposes, by name |
+| `--json` |  | print the schedule data, the shape of naima/src/plugins/schedule/types.ts |
+
+Examples:
+
+```sh
+naima schedule
+naima schedule features/export --json
+naima schedule plan features/export --start 2026-11-04 --end 2026-11-05
+naima schedule propose features/export bugs/import-drops-rows
+```
+
+**Views**, printed by `naima view <name>`
+
+| View | What it shows |
+|---|---|
+| `schedule` | the planned, expected and actual schedule of every piece of work that has a plan or a record, with its drift, the overlaps by dependency and by capacity, the resource histogram and the quality of past predictions |
+
+**Directories** it owns under the tracker root: `schedules/`.
+
+**UI views**, shown as tabs of the new UI
+
+| View | Title | What it shows |
+|---|---|---|
+| `schedule` | Schedule | the planned, expected and actual schedule of every piece of work that has a plan or a record, with its drift, the overlaps by dependency and by capacity, the resource histogram and the quality of past predictions |
 
 ## rules
 
