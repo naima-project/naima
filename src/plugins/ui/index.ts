@@ -32,7 +32,7 @@ import { browserCommand, openBrowser, type Opened, osName } from "./open.ts"
 import { filesKey, filesUrl, newToken, serve } from "./serve.ts"
 import { allTabs, tabsPoint, type UiTab, type UiView } from "./tabs.ts"
 
-export { ACTIONS, actionArgv, naimaBridge } from "./bridge.ts"
+export { actionArgv, ACTIONS, naimaBridge } from "./bridge.ts"
 export { HOST, serve } from "./serve.ts"
 export type { ComponentData, TabComponent, UiFrame, UiRender, UiSubtab, UiTab, UiTabContent, UiView } from "./tabs.ts"
 export { COMPONENTS, tabsPoint } from "./tabs.ts"
