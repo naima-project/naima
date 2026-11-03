@@ -178,8 +178,10 @@ export interface MetricConfig {
   file?: string
   /** The requirements it measures: items, by slug, type/slug or id. */
   satisfies?: string[]
-  /** True: one of the key numbers, a card at the top of the UI's metrics screen. */
-  card?: boolean
+  /** True: one of the key numbers, a card at the top of the UI's metrics screen; a whole number from 1: a card, at that place among the cards. */
+  card?: boolean | number
+  /** The name the UI's metrics screen shows for it, such as "Function size, mean"; without one, the screen writes its declared name as words. */
+  label?: string
   /** The heading the UI's metrics screen lists it under: tests, size, code quality… */
   group?: string
 }
@@ -406,7 +408,12 @@ export function readMetrics(options: Record<string, unknown>): Record<string, Me
       throw new Error(`${at}: satisfies is a list of the requirements it measures: ["startup-time"]`)
     }
     if (raw["prepare"] !== undefined) checkCommand(at, "prepare", raw["prepare"])
-    if (raw["card"] !== undefined && typeof raw["card"] !== "boolean") throw new Error(`${at}: card is true or false`)
+    if (raw["card"] !== undefined && typeof raw["card"] !== "boolean" && !(Number.isInteger(raw["card"]) && (raw["card"] as number) >= 1)) {
+      throw new Error(`${at}: card is true, false, or its place among the cards, a whole number from 1`)
+    }
+    if (raw["label"] !== undefined && !(typeof raw["label"] === "string" && raw["label"].trim())) {
+      throw new Error(`${at}: label is the name the metrics screen shows, a string`)
+    }
     for (const key of ["says", "kind", "pattern", "unit", "because", "statistic", "field", "group"]) {
       if (raw[key] !== undefined && typeof raw[key] !== "string") throw new Error(`${at}: ${key} is a string`)
     }
@@ -942,8 +949,12 @@ export interface TimelineMetric {
   unit?: string
   better: "higher" | "lower" | "neither"
   bound?: { word: string; value: number }
+  /** The name the screen shows, when the declaration gives one. */
+  label?: string
   /** One of the key numbers: a card at the top of the screen. */
   card: boolean
+  /** A card's place among the cards, when its declaration gives one: the cards are shown in that order, those without one after, in the list's order. */
+  cardPlace?: number
   group?: string
   /** Each record with a value, oldest first: [position, value, commit, date]. */
   points: [number, number, string, string][]
@@ -1020,7 +1031,8 @@ export function timelineOf(ctx: Context, metrics: MetricDef[], at?: string): Tim
     moment = { ...place(at, date), onTrunk: index.has(at) }
     own = readRecords(ctx).filter((r) => r.commit === at).sort((a, b) => (a.at < b.at ? 1 : -1))[0]
   }
-  const someCard = metrics.some((m) => m.card === true)
+  const marked = (m: MetricDef): boolean => m.card === true || typeof m.card === "number"
+  const someCard = metrics.some(marked)
   let defaults = 0
   const out = metrics.map((m): TimelineMetric => {
     const points: TimelineMetric["points"] = []
@@ -1033,14 +1045,16 @@ export function timelineOf(ctx: Context, metrics: MetricDef[], at?: string): Tim
     }
     const b = boundOf(m)
     const unit = m.unit ?? (m.measure ? measureUnit(m.measure) : undefined)
-    const card = someCard ? m.card === true : points.length > 0 && defaults++ < DEFAULT_CARDS
+    const card = someCard ? marked(m) : points.length > 0 && defaults++ < DEFAULT_CARDS
     const row: TimelineMetric = {
       name: m.name,
+      ...(m.label ? { label: m.label } : {}),
       ...(m.says ? { says: m.says } : {}),
       ...(unit ? { unit } : {}),
       better: betterOf(m),
       ...(b && BOUNDS.some((k) => num(m[k])) ? { bound: { word: BOUND_WORD[b.bound], value: b.value } } : {}),
       card,
+      ...(typeof m.card === "number" ? { cardPlace: m.card } : {}),
       ...(m.group ? { group: m.group } : {}),
       points,
       fails,
