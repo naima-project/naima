@@ -1,6 +1,7 @@
 // The UI: `naima ui` serves the new interface (the bundle in ui/dist) in the default browser, through Naima's
 // bridge commands (bridge.ts) carried by the UI stance's bridge (serve.ts), for as long as it runs. The desktop app is
-// the Tauri shell around the same bundle, with Naima as its sidecar speaking the same commands (sidecar.ts). The
+// the Tauri shell around the same bundle, which starts `naima ui --sidecar` and speaks the same commands to it over
+// its standard input and output (sidecar.ts). The
 // interface shows the tabs plugins contribute (`ui-tabs`), and every view of `ui-views` as a tab of its own: the
 // summary, which this plugin renders from the core's summary sections, the boards and the item with its evidence,
 // which it renders from the core's board and item data, and the views of the other plugins. A new plugin's tab
@@ -30,6 +31,7 @@ import {
 import { naimaBridge } from "./bridge.ts"
 import { browserCommand, openBrowser, type Opened, osName } from "./open.ts"
 import { filesKey, filesUrl, newToken, serve } from "./serve.ts"
+import { runSidecar } from "./sidecar.ts"
 import { allTabs, tabsPoint, type UiTab, type UiView } from "./tabs.ts"
 
 export { actionArgv, ACTIONS, naimaBridge } from "./bridge.ts"
@@ -283,15 +285,30 @@ const uiCommand: Command = {
   enforces:
     "the interface is served only on the loopback interface, and every request without this run's token is refused; a bridge command comes only from the server's own page; an action runs only a command of its short list, through naima run",
   hidden: true,
-  usage: "ui [--no-open] [--log]",
+  usage: "ui [--no-open] [--log] | ui --sidecar",
   options: [
     { name: "--no-open", says: "open no browser: print the address, with its token, and serve until Ctrl-C (for a port forwarded from another machine)" },
     { name: "--log", says: "print one line per request on stderr: its status, method and path" },
+    {
+      name: "--sidecar",
+      says: "answer the bridge commands on standard input and output, one JSON object a line, with no network listener: what the desktop app's shell starts",
+    },
   ],
-  examples: ["ui", "ui --no-open"],
+  examples: ["ui", "ui --no-open", "ui --sidecar"],
   run(args, ctx) {
-    const p = parse(args, { "no-open": { type: "boolean" }, log: { type: "boolean" } })
-    if (p.positionals.length) throw usageError(this)
+    const p = parse(args, { "no-open": { type: "boolean" }, log: { type: "boolean" }, sidecar: { type: "boolean" } })
+    if (p.positionals.length || (bool(p, "sidecar") && (bool(p, "no-open") || bool(p, "log")))) throw usageError(this)
+    if (bool(p, "sidecar")) {
+      const tabs = allTabs(tabsOf(ctx), viewsOf(ctx))
+      return runSidecar(ctx, {
+        views: viewsOf(ctx),
+        tabs,
+        tabFolder: (name) => tabFolder(ctx, tabs, name),
+        os: osName(),
+        input: process.stdin,
+        write: (line) => void process.stdout.write(line + "\n"),
+      })
+    }
     return runUi(ctx, { open: !bool(p, "no-open") }, bool(p, "log") ? { ...realDeps, log: (l) => ctx.err(l) } : realDeps)
   },
 }
@@ -309,7 +326,7 @@ export default function ui(): Plugin {
       "Its one feed, `changes` (GET /bridge/changes, server-sent events), says when the project changed (a commit, a branch moved, a tracker file written), and the interface reads again while it shows Live. " +
       "Any plugin, a stance included, adds tabs through `ui-tabs`, each with optional subtabs: for a subtab and the moment shown it gives data the interface draws with one of its own components (a list, a table, a chart, a gallery of framed pages, markdown), a page of its folder, served sandboxed under a key derived from the token, or a page it makes, which the interface frames in the same sandbox, so no code of the plugin runs in the interface; every `ui-views` view is shown as a tab too, but for one the interface has a screen of its own for (`screen`, the metrics). " +
       "`action` runs `decide`, `note`, `gate step`, `claim` or `release` as a run of `naima run`, and `run` shows that run, its state, exit code and log; a bridge command is refused from any page but the server's own. " +
-      "The same commands serve the desktop app, the Tauri shell around the same bundle, through its Naima sidecar, with no network listener.",
+      "The same commands serve the desktop app, the Tauri shell around the same bundle: it starts `naima ui --sidecar` in the project's folder, which answers them on its standard input and output, one JSON object a line, pushes the feed's events there too, and reads a tab's files for the shell's naima-files: scheme, with no network listener.",
     points: [viewsPoint, uiTabsPoint],
     contributes: { "ui-views": [summaryView, boardView, itemView] },
     commands: [uiCommand],
