@@ -45,10 +45,10 @@ owner the chart, not the commands. If they want numbers to work with themselves,
 If the owner wants to look at the metrics themselves rather than at a file, `naima metrics plot --html --out <file>` writes a chart and a table they can open in
 a browser.
 
-The window's first screen shows the summary, the gates, what is next and the claims. Its other views include the boards, the session notes, and a single item
-with its evidence. Each view's data, `/data/<view>`, is exactly what the matching command prints with `--json`: `naima summary --json`, `naima gates --json`,
-`naima view --json next`, `naima claims --json`, `naima board <type> --json` (`/data/board?type=<type>`), `naima pass --list [n] --json` (`/data/notes?n=<n>`)
-and `naima show <item> --json` (`/data/item?item=<item>`). So as an agent, read the commands rather than the window.
+The window's views include the summary, the gates, what is next, the claims, the boards, the session notes, and a single item with its evidence. Each view's
+data, which the window reads through the bridge's `data` command, is exactly what the matching command prints with `--json`: `naima summary --json`,
+`naima gates --json`, `naima view --json next`, `naima claims --json`, `naima board <type> --json`, `naima pass --list [n] --json` and
+`naima show <item> --json`. So as an agent, read the commands rather than the window.
 
 A plugin adds a tab to that window by contributing a view to the `ui-views` extension point. The view has a `name`, `title`, `says`, `order`, `panel` (true puts
 it on the first screen instead of in a tab) and `render(params, ctx) → { data, html, css? }`, and it is rendered on each request

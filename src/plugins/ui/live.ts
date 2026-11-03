@@ -1,5 +1,5 @@
 // What makes the new UI live: a watch on the project that says when it
-// changed, and the stream /events sends it on. It polls, so it runs the same on
+// changed, which the bridge's feed `changes` sends on (bridge.ts). It polls, so it runs the same on
 // Deno, Node and Bun and on every system: the branches and tags from git (a new
 // commit moves HEAD or a branch), and the tracker's files by their size and time
 // (an item written, a claim posted). A change is said once things have settled:
@@ -12,7 +12,6 @@
 
 import { readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
-import type { ServerResponse } from "node:http"
 import { type Context, gitOrNull } from "../../core/api.ts"
 
 /** What changed: HEAD moved (a new commit, a checkout), a branch or tag moved, the tracker's files changed. */
@@ -111,59 +110,5 @@ export function watchProject(
       stopped = true
       if (timer) clearTimeout(timer)
     },
-  }
-}
-
-/** The clients of /events, each a response held open; the watch runs only while one is connected. */
-export class EventHub {
-  readonly #clients = new Set<ServerResponse>()
-  #watch: Watch | null = null
-  readonly #start: () => Watch
-  #keepAlive: ReturnType<typeof setInterval> | null = null
-
-  constructor(start: (send: (c: Change) => void) => Watch) {
-    this.#start = () => start((c) => this.send(c))
-  }
-
-  /** Hold `res` open as an event stream until the client goes. */
-  add(res: ServerResponse, headers: Record<string, string>): void {
-    res.writeHead(200, {
-      "content-type": "text/event-stream; charset=utf-8",
-      "cache-control": "no-store",
-      "x-content-type-options": "nosniff",
-      connection: "keep-alive",
-      ...headers,
-    })
-    res.write(": naima ui events\n\n")
-    this.#clients.add(res)
-    res.once("close", () => {
-      this.#clients.delete(res)
-      if (!this.#clients.size) this.#idle()
-    })
-    if (!this.#watch) {
-      this.#watch = this.#start()
-      // A comment every 15 s keeps the stream open through anything that drops a silent connection.
-      this.#keepAlive = setInterval(() => {
-        for (const c of this.#clients) c.write(": keep-alive\n\n")
-      }, 15_000)
-    }
-  }
-
-  send(c: Change): void {
-    const frame = `event: change\ndata: ${JSON.stringify(c)}\n\n`
-    for (const res of this.#clients) res.write(frame)
-  }
-
-  #idle(): void {
-    this.#watch?.stop()
-    this.#watch = null
-    if (this.#keepAlive) clearInterval(this.#keepAlive)
-    this.#keepAlive = null
-  }
-
-  close(): void {
-    for (const res of this.#clients) res.end()
-    this.#clients.clear()
-    this.#idle()
   }
 }

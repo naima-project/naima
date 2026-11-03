@@ -370,13 +370,12 @@ const next: View = {
 
 const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
 
-/** What is next, as a panel of the first screen of `naima ui`: the shape the `ui-views` point takes, declared here since plugins never import each other. */
+/** What is next, as a view of `naima ui`: the shape the `ui-views` point takes, declared here since plugins never import each other. */
 const nextUiView = {
   name: "next",
   title: "Next up",
   says: "the open items, most urgent first, ranked as `naima view next` ranks them; `?n=` says how many (15); its data is `naima view --json next`",
   order: 10,
-  panel: true,
   render(params: Record<string, string[]>, ctx: Context) {
     const rows = nextRows(ctx, positiveInt(params["n"]?.[0], 15, "next"))
     const cells = (r: NextRow) =>
@@ -550,7 +549,7 @@ export default function triagePlugin(options: Record<string, unknown> = {}): Plu
     rank,
     commands: [triage],
     views: [next, parked],
-    // What is next is a panel of naima ui when the ui plugin is loaded; without it, still a view.
+    // What is next is a view of naima ui when the ui plugin is loaded; without it, still a view.
     contributes: { "ui-views": [nextUiView] },
     optional: ["ui-views"],
     summary: [top],

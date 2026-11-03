@@ -25,7 +25,7 @@ Every contribution below has a qualified id, `<plugin>/<name>`, and goes by its 
 - [backup](#backup) — a remote for every repository Naima relies on: the owner is asked once whether to create a private GitHub repository for one that has none
 - [outside-issues](#outside-issues) — the project's GitHub issues through gh, and one path for those opened by someone outside: filed once as a triaged item that links back, fixed on its branch, tested by the reporter as a pre-release candidate, landed and released on their confirmation, closed with a link to the release; every text posted is scrubbed of private data
 - [verifier-mcrl2](#verifier-mcrl2) — the mCRL2 adapter: a property is a modal mu-calculus formula over an mCRL2 specification
-- [ui](#ui) — the views plugins contribute, a provisional window onto the project, shown in a native window or the browser from a server on this machine only, until the new UI replaces it
+- [ui](#ui) — the new interface, served in the default browser from a server on this machine only through Naima's bridge commands, and the views and tabs plugins contribute to it
 - [metrics](#metrics) — named measurements — a command's number, a code-quality number taken in process, a test suite's results — recorded per commit, held to a budget, a floor or a baseline, and read back along the commit timeline
 - [rules](#rules) — the project's own rules, kept as items: shown to agents first by naima guide, listed by naima rules
 - [long-work](#long-work) — long work, run and waited on by Naima: naima run starts a command detached, with budgets and a progress channel, locally or on a host; naima wait blocks on it by its record; naima run list, status, stop and clean; a long run that is due reported and filed, never started on its own; shipped rules make them mandatory for agents and make long work report its progress
@@ -34,6 +34,7 @@ Every contribution below has a qualified id, `<plugin>/<name>`, and goes by its 
 - [privacy](#privacy) — the owner's material enters the repository only with their recorded yes, and no secret enters it at all
 - [adopt](#adopt) — adopt a board the project already keeps as items, in reviewed phases, without losing a line of it or deleting it
 - [docs](#docs) — every feature is documented as part of its implementation, and naima check holds it
+- [stance-ui](#stance-ui) — the UI stance by makebecome: logic without UI, one store written by transitions, design tokens in light and dark, accessible at WCAG 2.2 AA, a compositional widget set
 
 ## Commands at a glance
 
@@ -128,6 +129,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`privacy`](#naima-privacy) | privacy | show or set what the project does with private data (machine names, addresses, home paths, user names) in its tracker (privacy option privateData): scrub, the default, refuses it; keep lets it through while the tracker is private; what leaves the project is scrubbed either way | the choice is the owner's, asked once the first time private data is refused: an agent sets it only after the owner said which; keep is refused on a tracker that is or may be public unless --despite-public restates why |
 | [`adopt`](#naima-adopt) | adopt | adopt a board the project already keeps (a TODO.md, an issue list in markdown) as items, without losing a line: propose markers, split, audit, links — each a dry run until --write; the source is never deleted | no line of the source is lost and the source is never deleted; nothing is written without --write, and the only edit to the source is adding marker lines |
 | [`docs`](#naima-docs) | docs | print the reference generated from the loaded manifests; write it, or check that a file matches it | with --check, the file is what the manifests generate and every loaded contribution is documented, this field included: exit 1 otherwise |
+| [`stance-ui`](#naima-stance-ui) | stance-ui | copies the UI stance into the project, says what the project customized and whether the checks passed since, runs its checks, reruns the fast ones after an agent's edit, or builds and drives the app on every platform the machine reaches | nothing: it copies the stance and reports; the checks hold the rules |
 
 ## Extension points
 
@@ -135,11 +137,11 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 
 | Point | Declared by | What it is | Contributed by |
 |---|---|---|---|
-| `commands` | core | `naima <name>`: a command, with its usage, options and examples | core, trackers, coordination, triage, gates, epics, discussions, planning, knowledge, roles, announce, loop, beta-markers, verifier, tools, backup, outside-issues, ui, metrics, rules, long-work, commit-hooks, privacy, adopt, docs |
+| `commands` | core | `naima <name>`: a command, with its usage, options and examples | core, trackers, coordination, triage, gates, epics, discussions, planning, knowledge, roles, announce, loop, beta-markers, verifier, tools, backup, outside-issues, ui, metrics, rules, long-work, commit-hooks, privacy, adopt, docs, stance-ui |
 | `types` | core | item types: a directory of items, their statuses, and the status a new one starts in | core, trackers, epics, discussions, planning, knowledge, verifier, rules |
 | `fields` | core | typed fields of an item's meta.json, and the types they apply to | core, trackers, triage, gates, discussions, planning, knowledge, roles, announce, verifier, outside-issues, rules, long-work, privacy, adopt, docs |
 | `relations` | core | link relations between items, each naming its inverse | core, trackers, epics, discussions, planning, knowledge, verifier |
-| `checks` | core | invariants `naima check` holds: a problem fails it, a note does not | core, trackers, coordination, triage, gates, epics, discussions, planning, knowledge, announce, beta-markers, verifier, verifier-mcrl2, metrics, rules, long-work, commit-hooks, privacy, docs |
+| `checks` | core | invariants `naima check` holds: a problem fails it, a note does not | core, trackers, coordination, triage, gates, epics, discussions, planning, knowledge, announce, beta-markers, verifier, verifier-mcrl2, metrics, rules, long-work, commit-hooks, privacy, docs, stance-ui |
 | `views` | core | `naima view <name>`: a named rendering of derived state | coordination, triage, planning |
 | `dirs` | core | directories under the tracker root a plugin owns that are not item types | core, coordination, metrics, rules, commit-hooks, adopt |
 | `summary` | core | a block of `naima summary`; one marked `hello` is said by `naima hello` among what waits on the owner, and one with `goals(ctx)` says there where the project is going | core, trackers, coordination, triage, gates, epics, discussions, planning, beta-markers, verifier, backup, metrics, long-work |
@@ -150,26 +152,26 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `extends` | core | additive changes to another plugin's type — statuses (an existing one only with its category), traits, transitions — or field — enum values, more types or traits it applies to | discussions, knowledge, roles |
 | `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done; `beforeText(text, ctx)` may refuse a write of free text or a file that is not an item's (a session note, an event, an attachment) or add to its record | core, trackers, coordination, triage, epics, discussions, planning, knowledge, verifier, privacy |
 | `setup` | core | what a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init` and `naima update` after their own work: `install(ctx) → lines`, each said | coordination, planning, backup, metrics |
-| `agent-hooks` | core | a hook the agent tool runs, which Naima installs in the tool's settings beside its own at `naima init`, `naima update` and `naima stance adopt`, and removes once the plugin is gone: `name`, `says`, `tool` (the agent tool, by adapter id), `event` and optionally `matcher` in that tool's terms, and `command`, the naima command it runs as a list of words |  |
+| `agent-hooks` | core | a hook the agent tool runs, which Naima installs in the tool's settings beside its own at `naima init`, `naima update` and `naima stance adopt`, and removes once the plugin is gone: `name`, `says`, `tool` (the agent tool, by adapter id), `event` and optionally `matcher` in that tool's terms, and `command`, the naima command it runs as a list of words | stance-ui |
 | `migrations` | core | a plugin's own data migrations, in order from its format 1, run by `naima update` after the core's | gates |
 | `credits` | core | what a plugin runs or builds on without installing it (a program found on PATH, say), credited by `naima credits`: name, homepage, source, authors, license, version (provisional) | verifier |
-| `landing-reports` | coordination | what `naima land` checks before a branch lands and reports once it has: `name`, `says`, and `refuses(ctx, { branch, from, to, changed }) → lines`, what fails on the branch, any line refusing the landing with no flag to let it through; `blocks(ctx, landing) → lines`, what the landing changed whose proofs are not current, any line refusing the landing unless --stale-proofs gives the reason; or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root | gates, verifier, rules |
+| `landing-reports` | coordination | what `naima land` checks before a branch lands and reports once it has: `name`, `says`, and `refuses(ctx, { branch, from, to, changed }) → lines`, what fails on the branch, any line refusing the landing with no flag to let it through; `blocks(ctx, landing) → lines`, what the landing changed whose proofs are not current, any line refusing the landing unless --stale-proofs gives the reason; or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root | gates, verifier, rules, stance-ui |
 | `claims-reports` | coordination | a section `naima claims` prints after the claims, and gives under `reports` with --json: `name`, `says`, and `lines(ctx) → lines`, none when there is nothing to report | long-work |
 | `goal-order` | coordination | the order of the goals development lines are tied to: `name`, `says`, `before(ctx, a, b) → boolean`, whether goal a comes before goal b; naima open refuses an item on the line of a goal that comes after the item's own | gates |
 | `gates` | gates | a named release or merge condition, backed by items: `title`, `says`, `decides`, `evaluate(ctx) → { holds, blocking, owed }`; `inFullSuite` makes it part of the full suite a release gate (`fullSuite`) requires | verifier |
-| `methods` | gates | an ordered list of steps, each with an exit criterion, that a gate may follow (`naima gate set <gate> --method <plugin>/<method>`): `name`, `title`, `says`, `steps: [{ name, title, exit }]`; the gate holds only once every step is closed, in order |  |
+| `methods` | gates | an ordered list of steps, each with an exit criterion, that a gate may follow (`naima gate set <gate> --method <plugin>/<method>`): `name`, `title`, `says`, `steps: [{ name, title, exit }]`; the gate holds only once every step is closed, in order | stance-ui |
 | `roles` | roles | a role of the company of agents: `title`, what it `owns`, what it `refuses` (never empty), the `kinds` and `types` on its queue, and `queue(ctx)`, its open items most urgent first | roles |
 | `verifiers` | verifier | an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest; `toolArgs`, the flags `naima verify --tool-args` may pass, which never change the verdict; and `equivalences` with `compare({ before, after, equivalence }, ctx) → { verdict, output, counterexample?, details? }` and `preserves({ property, options, equivalence }, ctx)`, for `naima equivalent`; `identityOptions(options)`, the options as they identify a run, so a run made with other effective options is never reused; `propertyFile(property, root)`, the file a property names when it is not inline, so a missing one is said as missing | verifier, verifier-mcrl2 |
 | `tools` | tools | a tool a plugin needs, which `naima tools install` installs into Naima's own directory: name, exact version, licence, homepage, source and authors (its attribution, which `naima credits` prints), programs, how an install is verified, and per platform a source (url, size, sha256, format) or the answer saying why there is none | backup, verifier-mcrl2 |
-| `ui-views` | ui | a view the provisional window shows as a tab, or as a panel of its first screen: `name` (its path), `title`, `says`, `order` (lower first, 0 when absent), `panel` (true: on the first screen, not a tab), `moments` (true: with `?at=` it is rendered from the files as they are, `params.at` the commit's hash), `screen` (true: the new interface has a screen of its own for it, so it is not also one of its tabs), `render(params, ctx) → { data, html, css? }`, rendered at each request | coordination, triage, gates, ui, metrics |
-| `ui-tabs` | ui | a tab of the new UI, with optional subtabs: `name`, `title`, `says`, `order` (lower first, 0 when absent), `subtabs` ([{ name, title, says? }]), `files(ctx)` (the folder its pages and frames show, or null) and `render({ sub, query }, ctx)`, which gives `{ component, data, lead? }` (component one of list, table, chart, gallery, markdown, drawn by the app), `{ page }` (a file of `files`) or `{ html, css? }`; pages are served sandboxed, and no code of the plugin runs in the app |  |
+| `ui-views` | ui | a view the new UI shows as a tab, and whose data the bridge's `data` command answers: `name`, `title`, `says`, `order` (lower first, 0 when absent), `moments` (true: at a commit it is rendered from the files as they are, `params.at` the commit's hash), `screen` (true: the new interface has a screen of its own for it, so it is not also one of its tabs), `render(params, ctx) → { data, html, css? }`, rendered at each request | coordination, triage, gates, ui, metrics |
+| `ui-tabs` | ui | a tab of the new UI, with optional subtabs: `name`, `title`, `says`, `order` (lower first, 0 when absent), `subtabs` ([{ name, title, says? }]), `files(ctx)` (the folder its pages and frames show, or null) and `render({ sub, query }, ctx)`, which gives `{ component, data, lead? }` (component one of list, table, chart, gallery, markdown, drawn by the app), `{ page }` (a file of `files`) or `{ html, css? }`; pages are served sandboxed, and no code of the plugin runs in the app | stance-ui |
 | `metric-kinds` | metrics | how a metric's number is read from its run: `read({ exit, stdout, stderr, seconds }, metric) → number \| { error }`, `readsExit` | metrics |
 | `metrics` | metrics | a named measurement: `run` (a program and its arguments) and `kind`, a code `measure`, a test `suite`'s number or a `file`'s; a bound — `atMost`, `atLeast` or `equals` — and `better` |  |
 | `code-measures` | metrics | a code-quality number taken in process from the files: `measure({ files, source }, metric) → number \| { error }`, with its `unit` and `better` | metrics |
 | `code-languages` | metrics | a language code measures read: `extensions`, `code`, `comments`, `quotes`, `strip(text)` when the generic comment scan cannot read it, and `functions(stripped) → [{ name, line, lines, complexity }]` when it can find them | metrics |
 | `test-formats` | metrics | how a test suite's machine-readable output is read: `parse(text) → [{ name, file, result, seconds, message }] \| { error }` | metrics |
 | `test-suites` | metrics | a test suite: `run` (a program and its arguments), the `format` its report is in, and where the `report` is |  |
-| `rules` | rules | a rule a plugin ships, active in every project that loads it beside the project's own rules items: one Markdown file per rule in a folder the plugin names (`contributes: { rules: "rules/" }`), its front matter `name`, `title`, `audience`, `strength`, and optionally `ack`, `enforcedBy`, `verifiedBy`, `covers` (the files it is about, for a rule an agent verifies) and `when`, its body the rule and a section `## Why`; a project retires one with the rules plugin's `retire` option | coordination, planning, long-work, working-rules |
+| `rules` | rules | a rule a plugin ships, active in every project that loads it beside the project's own rules items: one Markdown file per rule in a folder the plugin names (`contributes: { rules: "rules/" }`), its front matter `name`, `title`, `audience`, `strength`, and optionally `ack`, `enforcedBy`, `verifiedBy`, `covers` (the files it is about, for a rule an agent verifies) and `when`, its body the rule and a section `## Why`; a project retires one with the rules plugin's `retire` option | coordination, planning, long-work, working-rules, stance-ui |
 
 ## core
 
@@ -1642,14 +1644,14 @@ naima event 2026-10-05 "The plan was entered" --kind diary
 |---|---|
 | `trunk-guard` | the trunk guard, a git reference-transaction hook in the data directory's hooks, which refuses a commit, merge or fast-forward of the trunk made by hand, and a pre-push hook beside it, which refuses a push whose commits carry private infrastructure in their messages; core.hooksPath pointed there where unset, in the clone and in each submodule checked out. Nothing while the option trunkGuard is false |
 
-**UI views**, the tabs of the provisional window
+**UI views**, shown as tabs of the new UI
 
-| View | Title | Where | What it shows |
-|---|---|---|---|
-| `claims` | Claims | first screen | who holds what, recombined from every branch, and the items more than one branch holds; its data is `naima claims --json` |
-| `timeline` | Timeline | tab | the project's events — gates, epics, releases, sessions, records — derived from the items and git, oldest first |
-| `notes` | Session notes | tab | the newest session notes, across every branch, newest first; `?n=` says how many (5); its data is `naima pass --list [n] --json` |
-| `lines` | Lines | tab | the open development lines: each one's gate, branch, tip, how far it is ahead of and behind the trunk, its latest update and the items fixed on it; its data is `naima line list --json` |
+| View | Title | What it shows |
+|---|---|---|
+| `claims` | Claims | who holds what, recombined from every branch, and the items more than one branch holds; its data is `naima claims --json` |
+| `timeline` | Timeline | the project's events — gates, epics, releases, sessions, records — derived from the items and git, oldest first |
+| `notes` | Session notes | the newest session notes, across every branch, newest first; `?n=` says how many (5); its data is `naima pass --list [n] --json` |
+| `lines` | Lines | the open development lines: each one's gate, branch, tip, how far it is ahead of and behind the trunk, its latest update and the items fixed on it; its data is `naima line list --json` |
 
 **Shipped rules**, active in every project that loads the plugin, listed by `naima rules`
 
@@ -1742,11 +1744,11 @@ naima triage derive --write
 |---|---|
 | `triage-stamps-its-date` | a change to priority, impact, effort or confidence — by naima set, triage set, or any command — stamps triagedOn with today and drops triagedBy: derived; a write triage derive marks derived stamps nothing |
 
-**UI views**, the tabs of the provisional window
+**UI views**, shown as tabs of the new UI
 
-| View | Title | Where | What it shows |
-|---|---|---|---|
-| `next` | Next up | first screen | the open items, most urgent first, ranked as `naima view next` ranks them; `?n=` says how many (15); its data is `naima view --json next` |
+| View | Title | What it shows |
+|---|---|---|
+| `next` | Next up | the open items, most urgent first, ranked as `naima view next` ranks them; `?n=` says how many (15); its data is `naima view --json next` |
 
 ## gates
 
@@ -1976,13 +1978,13 @@ naima order first-public
 
 **goal-order**: `gates`.
 
-**UI views**, the tabs of the provisional window
+**UI views**, shown as tabs of the new UI
 
-| View | Title | Where | What it shows |
-|---|---|---|---|
-| `gates` | Gates | first screen | every gate and whether it holds, with the items blocking it and those owing only proof, as `naima gates` reports them; its data is `naima gates --json` |
-| `queue` | Queue | tab | the open items on the gates, how many have no code yet and how many owe only proof, and by whose hands, every gate's together and each gate's; its data is `naima queue --json` |
-| `coverage` | Coverage | tab | each normative list the project declares, read from its source now, every entry with the test that proves it or NO TEST |
+| View | Title | What it shows |
+|---|---|---|
+| `gates` | Gates | every gate and whether it holds, with the items blocking it and those owing only proof, as `naima gates` reports them; its data is `naima gates --json` |
+| `queue` | Queue | the open items on the gates, how many have no code yet and how many owe only proof, and by whose hands, every gate's together and each gate's; its data is `naima queue --json` |
+| `coverage` | Coverage | each normative list the project declares, read from its source now, every entry with the test that proves it or NO TEST |
 
 ## epics
 
@@ -3127,21 +3129,21 @@ Options, each with the default it takes when nothing sets it:
 
 ## ui
 
-The views plugins contribute, a provisional window onto the project, shown in a native window or the browser from a server on this machine only, until the new UI replaces it.
+The new interface, served in the default browser from a server on this machine only through Naima's bridge commands, and the views and tabs plugins contribute to it.
 
 Its contributions' qualified ids are `ui/<name>`.
 
-The window starts a server bound to the loopback interface, on a free port, that refuses every request without the token of its run, and opens it in a native window titled Naima. At `/` it serves the new interface, the built bundle the product ships in `ui/dist`: the rail with its metro map of the lines and the goals ahead, the moment, the screens with Home, its logic generated from mCRL2 models; the provisional window below is at `/classic`. Each view is one a plugin contributes to `ui-views`, rendered from the files at each request, so the window shows what the files hold now. The first screen holds the views that are panels — the summary, which this plugin renders from every plugin's summary section exactly as `naima summary` does; the gates, from the gates plugin, as `naima gates` reports them; what is next, from the triage plugin, as `naima view next` ranks it; the claims, from the coordination plugin, as `naima claims` recombines them — and every other view is a tab: the boards, which this plugin renders as `naima board` does, one type at a time; the session notes across branches, from the coordination plugin, as `naima pass --list`; one item, which this plugin renders as `naima show` does, its evidence first — its attachments and the items of a type that can prove it, each marked proves, refutes or not yet — and to which every item reference of the window links; the metrics and the others. `/data/<view>` answers the same view's data as JSON, the same data the command prints with `--json`; with `?at=<commit>`, as that commit had it, read only from its tree, a commit no local branch reaches refused; a view that places a commit itself (`moments`, the metrics) is read from the files as they are, with the commit's full hash as its `at` parameter. `/events` streams one server-sent event when the project changes (a commit, a branch moved, a tracker file written), and the new interface reads again while it shows Live. Any plugin, a stance included, adds tabs to the new interface through `ui-tabs`, each with optional subtabs: for a subtab and the moment shown it gives data the interface draws with one of its own components (a list, a table, a chart, a gallery of framed pages, markdown), or a page, served sandboxed under a key derived from the token, so no code of the plugin runs in the interface; every `ui-views` view is shown as a tab too, its page framed the same way, but for one the interface has a screen of its own for (`screen`, the metrics). `/data/tabs` lists them, `/data/tab/<name>?sub=<subtab>` gives what one shows, with `?at=` too. `/data/metro` gives the rail's map: the trunk, the open lines and the branches with their first-parent commits, where each leaves and rejoins, each worker branch with a status and why, and the goals ahead per line, from `line list`, `claims` and `gates` with `--json`. `POST /action/<name>` runs `decide`, `note`, `gate step`, `claim` or `release` through the command line and answers its output and exit code as JSON, refused without the token's cookie, the run's CSRF value from `/session`, the server's own Origin and a same-origin fetch. Closing the window stops the server. The window is a webview, loaded from JSR at a pinned version, only by it, and in a process of its own: the rest of Naima has no dependency. Where it cannot open — on Node or Bun, on a system it does not run on, offline on its first run, when it fetches its library — the default browser opens instead, and it says so in one line.
+`naima ui` serves the new interface, the built bundle the product ships in `ui/dist`: the rail with its metro map of the lines and the goals ahead, the moment, the screens with Home and Metrics, and a tab for each view and tab the plugins contribute; its logic is generated from mCRL2 models. It is served on the loopback interface, on a free port, to requests that carry the token of its run (in the address the browser opens, then in a cookie), so a port forwarded from another machine reaches it too. The interface reads and acts only through Naima's bridge commands, which the UI stance's bridge carries (POST /bridge/<command>, with JSON in and out): `describe`, `data` (a view's data, the same data its command prints with `--json`; at a commit, as that commit had it, read only from its tree, a commit no local branch reaches refused; a view that places a commit itself, `moments`, read from the files as they are with the commit's full hash as its `at` parameter), `tabs`, `tab` (what a tab shows for a subtab at the moment), `metro` (the rail's map: the trunk, the open lines and the branches with their first-parent commits, each worker branch with a status and why, the goals ahead per line), `action` and `run`. Its one feed, `changes` (GET /bridge/changes, server-sent events), says when the project changed (a commit, a branch moved, a tracker file written), and the interface reads again while it shows Live. Any plugin, a stance included, adds tabs through `ui-tabs`, each with optional subtabs: for a subtab and the moment shown it gives data the interface draws with one of its own components (a list, a table, a chart, a gallery of framed pages, markdown), a page of its folder, served sandboxed under a key derived from the token, or a page it makes, which the interface frames in the same sandbox, so no code of the plugin runs in the interface; every `ui-views` view is shown as a tab too, but for one the interface has a screen of its own for (`screen`, the metrics). `action` runs `decide`, `note`, `gate step`, `claim` or `release` as a run of `naima run`, and `run` shows that run, its state, exit code and log; a bridge command is refused from any page but the server's own. The same commands serve the desktop app, the Tauri shell around the same bundle, through its Naima sidecar, with no network listener.
 
 **Extension points** it declares: `ui-views`, `ui-tabs`.
 
-**UI views**, the tabs of the provisional window
+**UI views**, shown as tabs of the new UI
 
-| View | Title | Where | What it shows |
-|---|---|---|---|
-| `summary` | Summary | first screen | where the project stands: every plugin's summary section, as `naima summary` prints it; its data is `naima summary --json` |
-| `board` | Boards | tab | a type's board, its open items by section, most urgent first: `?type=` picks the type (the first one that takes new items), `?all=1` adds the done ones; its data is `naima board <type> [--all] --json` |
-| `item` | Item | tab | one item, picked by `?item=`: its evidence — its attachments and the items of a type that can prove, whether each proves or refutes now — then its fields, its other links and its prose; its data is `naima show <item> --json`, null when none is picked |
+| View | Title | What it shows |
+|---|---|---|
+| `summary` | Summary | where the project stands: every plugin's summary section, as `naima summary` prints it; its data is `naima summary --json` |
+| `board` | Boards | a type's board, its open items by section, most urgent first: `?type=` picks the type (the first one that takes new items), `?all=1` adds the done ones; its data is `naima board <type> [--all] --json` |
+| `item` | Item | one item, picked by `?item=`: its evidence — its attachments and the items of a type that can prove, whether each proves or refutes now — then its fields, its other links and its prose; its data is `naima show <item> --json`, null when none is picked |
 
 ## metrics
 
@@ -3231,11 +3233,11 @@ naima metrics presets
 |---|---|
 | `code-metrics` | the built-in code-quality metrics that fit the project's languages, with no bounds, declared where plugins.metrics.options has no metrics yet: once, so a project whose owner removed them is not proposed them again |
 
-**UI views**, the tabs of the provisional window
+**UI views**, shown as tabs of the new UI
 
-| View | Title | Where | What it shows |
-|---|---|---|---|
-| `metrics` | Metrics | tab | the project's metrics along the commit timeline: a chart and a table of each, for the metrics and the commits picked; its data's `timeline` places every record on the trunk's commit axis for the new UI, and with `?at=<commit>` each metric's record at that commit |
+| View | Title | What it shows |
+|---|---|---|
+| `metrics` | Metrics | the project's metrics along the commit timeline: a chart and a table of each, for the metrics and the commits picked; its data's `timeline` places every record on the trunk's commit axis for the new UI, and with `?at=<commit>` each metric's record at that commit |
 
 **Metric kinds**, how `naima metrics` reads a number
 
@@ -3777,3 +3779,112 @@ naima docs --check docs/reference.md
 | `reference-current` | with the reference option set, the reference file is what `naima docs` generates from the loaded manifests |
 | `features-documented` | a feature in a documented status names its documentation in `docs`, and every name there resolves to a markdown file, and a heading when it names one |
 | `links-resolve` | every relative link in every markdown file of the project (or under the links option) points at a file, and at an anchor when it names one — a heading's, ATX or setext, in any container, or an HTML id; the markdown is parsed as CommonMark |
+
+## stance-ui
+
+The UI stance by makebecome: logic without UI, one store written by transitions, design tokens in light and dark, accessible at WCAG 2.2 AA, a compositional widget set.
+
+Its contributions' qualified ids are `stance-ui/<name>`.
+
+A stance is a set of authored, opinionated choices and rules a project adopts. This one, by makebecome, is about user interfaces: the app's logic is code with no UI; one deep-reactive Svelte 5 store holds every state machine and is written only through their transitions; machines are composed of simpler ones and modelled first; components keep only their own UI state; every colour, size and duration is a DTCG design token; the mood board is chosen at design time, with a light and a dark theme the user can choose; the interface meets EN 301 549 and WCAG 2.2 AA; the widget set is compositional. Its rules are listed by `naima rules`; its checks run with `naima check` and need Deno on the PATH, and the browser checks need Playwright's Chromium; `naima stance-ui adopt` copies the widget set, the store and a mood board into the project, and scaffolds what a new project needs to build, test and run (never overwriting a file it has).
+
+Options, each with the default it takes when nothing sets it:
+
+| Option | Default | What it does |
+|---|---|---|
+| `app` | `.` | the folder of the Svelte app, from the project's root: where stance-ui.json is |
+| `deno` | `the Deno that runs Naima, else deno on the PATH` | the Deno executable that runs the stance's checks and scripts |
+
+### naima stance-ui
+
+Copies the UI stance into the project, says what the project customized and whether the checks passed since, runs its checks, reruns the fast ones after an agent's edit, or builds and drives the app on every platform the machine reaches.
+
+**Enforces**: Nothing: it copies the stance and reports; the checks hold the rules.
+
+```sh
+naima naima stance-ui adopt [--mood <name>] [--to <dir>] [--tauri] [--server] [--force] [--no-scaffold] [--no-install]
+naima status
+naima check
+naima hook
+naima platforms [--platforms <list>]
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--mood` | `white, or the one recorded` | the mood board to copy |
+| `--to` | `src/lib/ui` | where the widget set and the store go, from the app's folder |
+| `--tauri` |  | also copy the Tauri 2 shell to src-tauri/ |
+| `--server` |  | also copy the Deno bridge server to server/bridge-server.ts |
+| `--force` |  | overwrite files the project changed since they were copied |
+| `--no-scaffold` |  | copy the stance only, without the files a new project needs to build, test and run |
+| `--no-install` |  | do not install the project's npm packages (deno install) after the copy |
+| `--platforms` | `every one` | with platforms: the platforms to try |
+
+Examples:
+
+```sh
+naima stance-ui adopt --mood white --tauri
+naima stance-ui status
+naima stance-ui check
+naima stance-ui hook < hook-input.json
+naima stance-ui platforms
+```
+
+**Checks**, run by `naima check`
+
+| Check | What it holds |
+|---|---|
+| `ui-tokens` | the design tokens follow the W3C Design Tokens (DTCG) format, and every mood board defines the same tokens |
+| `ui-contrast` | every colour pair the widgets use reaches 4.5:1 for text and 3:1 for controls and focus rings, in every theme of every mood board |
+| `ui-no-raw-literals` | components hold no raw colour, size or duration, and read only tokens the mood board defines |
+| `ui-component-imports` | components import no app logic beyond the store; the widgets of the set not even the store |
+| `ui-svelte-check` | svelte-check passes: types hold, and nothing writes the store around its transitions |
+| `ui-no-raw-drag` | only the widget set's Draggable handles dragging, so every drag has the same moves as buttons and keys (WCAG 2.2 SC 2.5.7) |
+| `ui-auth-only` | only the widget set's Auth asks for a password or a one-time code, so every sign-in is accessible (WCAG 2.2 SC 3.3.8) |
+| `ui-a11y` | the app's pages pass axe-core at WCAG 2.2 AA in both themes on desktop and phone, every control is reached with Tab and shows its focus, and the page reflows at 320 CSS px |
+| `ui-target-size` | every pointer target is at least 24 by 24 CSS px, or far enough from the others (WCAG 2.2 SC 2.5.8) |
+| `ui-reduced-motion` | nothing moves when the system asks for reduced motion |
+
+**Agent hooks**, installed in the agent tool's settings by `naima init`, `naima update` and `naima stance adopt`
+
+| Hook | Event | Runs | What it does |
+|---|---|---|---|
+| `ui-edit-hook` | PostToolUse (Edit\|Write\|MultiEdit) | `naima stance-ui hook` | after an agent edits tokens, widgets or components, the stance's fast checks run again |
+
+**Landing reports**, checked by `naima land` before a landing (refuses, or blocks until its proofs are current) or printed after it (reports)
+
+| Report | When | What it says |
+|---|---|---|
+| `ui-stance-checks` | refuses | a landing that changes a file the UI stance's checks read (tokens, mood boards, contrast pairs, widgets, components, stance-ui.json) is refused while any of its checks fails on the branch's files |
+
+**Methods**, which a gate follows with `naima gate set <gate> --method <plugin>/<method>`
+
+| Method | Title | What it is for | Steps, in order |
+|---|---|---|---|
+| `design` | Design the interface | design the look of the app with its owner, from a mood board to the screens, each step closed when the owner chooses among live variants (method/design.md) | `mood-board` (closes when The owner names one variant, or a combination, as the app's direction; its tokens are in tokens/, the checks pass and the decision is recorded.); `palette` (closes when The owner accepts one palette in light and dark; every contrast pair passes; the colour tokens are in tokens/ and the decision is recorded.); `typography` (closes when The owner accepts one type system; nothing clips at 200% zoom or 320 px width; typography.tokens.json is written and the decision is recorded.); `widget-shapes` (closes when The owner accepts one set of radius, spacing, shadow and motion; targets are at least 24 px and focus rings 3:1; the tokens are final and the decision is recorded.); `screens` (closes when The owner accepts every listed screen; each is in check.pages and deno task check passes; the decisions are recorded.) |
+
+**UI tabs**, the tabs of the new UI
+
+| Tab | Title | Subtabs | What it shows |
+|---|---|---|---|
+| `design` | Design | Mood board, Palette, Typography, Widget shapes, Screens | the app's design record, as the UI stance's design method leaves it: for each step (mood board, palette, typography, widget shapes, screens) its rounds as framed pages, the variant chosen and the decision recorded |
+
+**Shipped rules**, active in every project that loads the plugin, listed by `naima rules`
+
+| Rule | Title | For | Strength | Enforced by | Verified by | Ack |
+|---|---|---|---|---|---|---|
+| `ui-accessible` | The interface meets EN 301 549 and WCAG 2.2 at level AA | everyone | must | `ui-a11y` | `ui-a11y` |  |
+| `ui-components-keep-only-local-ui-state` | Components keep only their own UI state, read the store and call transitions | everyone | must | `ui-component-imports` | `ui-component-imports` |  |
+| `ui-compositional-widget-set` | Larger components are built from smaller ones | everyone | should |  | `agent` |  |
+| `ui-consistent-help` | Help, where there is any, is in the same place on every page | agents | must |  | `agent` |  |
+| `ui-design-method-proposed` | Before building a UI, the agent proposes the design method | agents | should |  | `agent` |  |
+| `ui-design-tokens-only` | Every colour, size and duration is a design token | everyone | must | `ui-no-raw-literals` | `ui-no-raw-literals` |  |
+| `ui-drag-only-through-draggable` | Dragging is done only through the Draggable widget, which always offers every move without dragging | everyone | must | `ui-no-raw-drag` | `ui-no-raw-drag` |  |
+| `ui-light-and-dark` | Every mood board has a light and a dark theme, and the user's choice is app state | everyone | must | `ui-contrast` | `ui-contrast` |  |
+| `ui-logic-without-ui` | The app's logic is code with no UI | everyone | must | `ui-component-imports` | `ui-component-imports` |  |
+| `ui-machines-composed-and-modelled-first` | Machines are composed of simpler ones, and modelled first | everyone | should |  | `agent` |  |
+| `ui-mood-board-chosen-at-design-time` | The mood board is chosen at design time | everyone | must | `ui-tokens` | `ui-tokens` |  |
+| `ui-no-redundant-entry` | Nothing entered is asked for again in the same process | agents | must |  | `agent` |  |
+| `ui-one-code-base-six-platforms` | The app runs on six platforms from one code base, and only the platform bridge differs | everyone | must |  | `agent` |  |
+| `ui-one-store-written-by-transitions` | One central store holds every state machine and is written only through their transitions | everyone | must | `ui-svelte-check` | `ui-svelte-check` |  |
+| `ui-sign-in-only-through-auth` | A password or a one-time code is asked for only by the Auth widget | everyone | must | `ui-auth-only` | `ui-auth-only` |  |

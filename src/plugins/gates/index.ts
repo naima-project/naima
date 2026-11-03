@@ -508,7 +508,7 @@ interface GateItemRow {
   runBy: string
 }
 
-/** A gate and whether it holds, as `naima gates --json` prints it and the window's gates panel shows it. */
+/** A gate and whether it holds, as `naima gates --json` prints it and the gates view of naima ui shows it. */
 interface GateRow {
   gate: string
   title: string
@@ -536,7 +536,7 @@ interface GateRow {
   finished: boolean
 }
 
-/** The gates named — every one when none is — each evaluated now: what `naima gates` prints and the gates panel shows. */
+/** The gates named — every one when none is — each evaluated now: what `naima gates` prints and the gates view shows. */
 async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: GateDef; result: GateResult; row: GateRow }[]> {
   const all = gatesOf(ctx).map((g) => g.name)
   let released: Set<string> | null = null
@@ -598,7 +598,7 @@ const gatesCommand: Command = {
 
 const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
 
-/** The gates as a panel of the first screen of `naima ui`: the shape the `ui-views` point takes, declared here since plugins never import each other. */
+/** The gates as a view of `naima ui`: the shape the `ui-views` point takes, declared here since plugins never import each other. */
 /** The queue as a view of naima ui, a tab: every gate's open items, how many have no code yet and how many owe only proof. */
 const queueUiView = {
   name: "queue",
@@ -626,7 +626,6 @@ const gatesUiView = {
   says:
     "every gate and whether it holds, with the items blocking it and those owing only proof, as `naima gates` reports them; its data is `naima gates --json`",
   order: 0,
-  panel: true,
   async render(_params: Record<string, string[]>, ctx: Context) {
     const rows = (await gateRows(ctx)).map((g) => g.row)
     const items = (what: string, list: GateItemRow[]) =>
@@ -1328,7 +1327,7 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
     // What it reads of the trackers' vocabulary: without it loaded, gates would decide on nothing.
     uses: { fields: [FIXED_ON.name, RUN_BY.name, HUMAN_BECAUSE.name], relations: ["verifies", "verified-by"] },
     contributes: { gates: defs, "ui-views": [gatesUiView, queueUiView, coverageUiView(lists)], "goal-order": [goalOrder], "landing-reports": [goalsLanding] },
-    // The gates are a panel of naima ui, coverage a tab, when the ui plugin is loaded; without it, still a command. The goal
+    // The gates are a view of naima ui, coverage a tab, when the ui plugin is loaded; without it, still a command. The goal
     // order and the landing check are for the coordination plugin's development lines, when it is loaded.
     optional: ["ui-views", "goal-order", "landing-reports"],
     migrations: [moveGates],

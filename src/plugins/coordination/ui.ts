@@ -12,14 +12,13 @@ const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;"
 /** An item's reference, linked to the window's item view. */
 const itemLink = (id: string, ref: string): string => `<a href="/view/item?item=${encodeURIComponent(id)}"><code>${esc(ref)}</code></a>`
 
-/** Who holds what, across branches: a panel of the first screen. */
+/** Who holds what, across branches: a view of naima ui. */
 export function claimsUiView(claimsData: (ctx: Context) => ClaimsData) {
   return {
     name: "claims",
     title: "Claims",
     says: "who holds what, recombined from every branch, and the items more than one branch holds; its data is `naima claims --json`",
     order: 20,
-    panel: true,
     render(_params: Record<string, string[]>, ctx: Context) {
       const d = claimsData(ctx)
       const held = d.claims.filter((c) => !c.stale && (c.items.length || c.preparing))

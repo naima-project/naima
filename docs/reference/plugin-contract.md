@@ -204,7 +204,7 @@ term is not async: it is summed while items are sorted.
 
 A plugin adds a tab to the window `naima ui` opens by contributing to `ui-tabs`, a point the ui plugin declares. A tab may have subtabs; the first is shown when
 the tab opens. Its `render` is called for the subtab shown and the moment the window shows (its `ctx` is the tracker as that commit had it, when one is
-selected), at each request, in Naima's process. It returns one of three things:
+selected), at each call of the bridge's `tab` command, in Naima's process. It returns one of three things:
 
 - `{ component, data, lead? }`: data the window draws with one of its own components, the same for every plugin. `list` takes
   `{ items: [{ title, text?, src? }] }`, `table` `{ columns, rows }`, `chart` `{ series: [{ name, points: [{ x, y }] }], unit? }`, `gallery`
@@ -213,10 +213,11 @@ selected), at each request, in Naima's process. It returns one of three things:
 - `{ page }`: a file of the tab's folder, shown in a frame.
 - `{ html, css? }`: a page the plugin makes, shown in a frame.
 
-A `src` and a `page` are paths in the folder `files(ctx)` returns, read at each request. Every page and frame is served under `/page/<key>/`, where the key is
-derived from the run's token: it opens pages and nothing else. Each goes out with a Content-Security-Policy whose `sandbox` (scripts and forms allowed, never
-the same origin) puts it in an opaque origin of its own, even when opened on its own, so its scripts cannot reach the window, its cookie, its data or its
-actions; it loads only from the same server and connects nowhere. No code of the plugin runs in the window.
+A `src` and a `page` are paths in the folder `files(ctx)` returns, read at each request. In a browser every file of that folder is served under
+`/files/<key>/<tab>/`, where the key is derived from the run's token: it opens those files and nothing else. Each goes out with a Content-Security-Policy whose
+`sandbox` (scripts and forms allowed, never the same origin) puts it in an opaque origin of its own, even when opened on its own, so its scripts cannot reach
+the window, its cookie, its data or its actions; it loads only from the same server and connects nowhere. A page the plugin makes (`{ html, css? }`) goes to
+the window whole, which frames it in the same sandbox. No code of the plugin runs in the window.
 
 ```js
 export default function looks() {
@@ -242,9 +243,9 @@ export default function looks() {
 ```
 
 A plugin written as plain JavaScript (`.mjs`), as a stance is, contributes the same way; listing `ui-tabs` under `optional` lets a Naima without it still load
-the plugin. Every view of `ui-views` (the provisional window's tabs) is shown as a tab too: its page in a frame, sandboxed the same way, its own links kept
-inside the frame, unless the view says `screen: true` because the interface has a screen of its own for it, as the metrics view does. `/data/tabs` lists the
-tabs with their subtabs, and `/data/tab/<name>?sub=<subtab>` answers what one shows, with `?at=<commit>` too.
+the plugin. Every view of `ui-views` is shown as a tab too: its page in a frame, sandboxed the same way, unless the view says `screen: true` because the
+interface has a screen of its own for it, as the metrics view does. The bridge's `tabs` command lists the tabs with their subtabs, and `tab` (`name`, `sub`,
+`at`, `query`) answers what one shows.
 
 ## Names
 

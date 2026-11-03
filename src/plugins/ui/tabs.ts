@@ -1,5 +1,5 @@
-// The tabs of the new UI that plugins contribute, stances included: the `ui-tabs` point, the adapter that shows
-// every `ui-views` view as a tab, and the pages a tab shows in a sandboxed frame.
+// The tabs of the new UI that plugins contribute, stances included: the `ui-tabs` point, the views of `ui-views`, the
+// adapter that shows every view as a tab, and the pages a tab shows in a sandboxed frame.
 //
 // A tab has a name, a title, what it shows, an order and, optionally, subtabs. For a subtab, and for the moment
 // the window shows, its `render` gives one of three things:
@@ -9,17 +9,41 @@
 //   { page }                     a file of the tab's folder (`files`), shown as a sandboxed page.
 //   { html, css? }               a page the plugin makes, shown sandboxed.
 //
-// A page, and every frame of a gallery, is served at /page/<key>/…, where the key is derived from the run's token:
-// without it a request is refused, and with it nothing but pages is reached. Every page goes out with a
-// Content-Security-Policy whose `sandbox` puts it in an opaque origin of its own, even opened on its own: its
-// scripts cannot reach the app's page, its cookie, its data or its actions, and it may load nothing from outside
-// this server and connect nowhere.
+// A file of the tab's folder, a page or a frame of a gallery, is served by the bridge's carrier under a key derived
+// from its run's token (serve.ts in a browser), with a Content-Security-Policy whose `sandbox` puts it in an opaque
+// origin of its own: its scripts cannot reach the app's page, its cookie, its data or its actions, and it may load
+// nothing from outside and connect nowhere. A page the plugin makes ({ html }) goes to the app whole, which frames it
+// in the same sandbox.
 
-import { createHmac } from "node:crypto"
-import { existsSync, statSync } from "node:fs"
-import { extname, isAbsolute, join, normalize, sep } from "node:path"
 import type { Context } from "../../core/api.ts"
-import type { UiView } from "./server.ts"
+
+/** A view of the provisional window, which the new UI shows as a tab: what any plugin contributes to the `ui-views` point. */
+export interface UiView {
+  /** Its name, in the bridge's `data` and `tab` commands. */
+  name: string
+  /** Its tab. */
+  title: string
+  says: string
+  /** Where its tab stands: lower first, 0 when absent; equal ones in load order. */
+  order?: number
+  /**
+   * The view places a commit itself: at a commit it is rendered from the files as they are now, its data about that
+   * commit, which `params.at` names by its full hash. A view about the history of commits (the metrics, whose records
+   * of a commit are written after it) needs what is known now, not what the commit's tree held.
+   */
+  moments?: boolean
+  /** The new interface has a screen of its own for this view (the metrics): it is not also shown as one of its tabs. */
+  screen?: boolean
+  /** The view for these parameters, rendered from the files at each request: its data, its HTML, and the styles that HTML needs. */
+  render(params: Record<string, string[]>, ctx: Context): UiRender | Promise<UiRender>
+}
+
+export interface UiRender {
+  data: unknown
+  /** The view's body, inside the page the carrier frames. */
+  html: string
+  css?: string
+}
 
 /** The components the app draws a tab's data with: generic, built with the UI stance, the same for every plugin. */
 export const COMPONENTS = ["list", "table", "chart", "gallery", "markdown"] as const
@@ -61,7 +85,7 @@ export type UiTabContent =
 
 /** A tab of the new UI: what any plugin contributes to the `ui-tabs` point. */
 export interface UiTab {
-  /** Its name, in /data/tab/<name>: lowercase letters, digits and dashes. */
+  /** Its name, in the bridge's `tab` command: lowercase letters, digits and dashes. */
   name: string
   title: string
   says: string
@@ -131,7 +155,7 @@ export function contentProblem(c: unknown): string | null {
   return "is none of { component, data }, { page } and { html }"
 }
 
-/** The tab a `ui-views` view is shown as: its page, sandboxed, the view's own links kept inside the frame. */
+/** The tab a `ui-views` view is shown as: its page, framed in a sandbox. */
 export function viewTab(v: UiView): UiTab {
   return {
     name: v.name,
@@ -161,7 +185,7 @@ export function allTabs(tabs: readonly UiTab[], views: readonly UiView[]): UiTab
     .map(({ t }) => t)
 }
 
-/** The list the app reads at /data/tabs: each tab with its subtabs, and whether it stands for a `ui-views` view. */
+/** The list the bridge's `tabs` answers: each tab with its subtabs, and whether it stands for a `ui-views` view. */
 export function tabList(tabs: readonly UiTab[]): { name: string; title: string; says: string; subtabs: UiSubtab[]; view: boolean }[] {
   return tabs.map((t) => ({
     name: t.name,
@@ -171,9 +195,6 @@ export function tabList(tabs: readonly UiTab[]): { name: string; title: string; 
     view: viewOf(t) !== null,
   }))
 }
-
-/** The key of a run's pages: derived from its token, so it opens pages and nothing else, and changes with each run. */
-export const pageKey = (token: string): string => createHmac("sha256", token).update("naima ui pages").digest("hex").slice(0, 32)
 
 /** The media types of the files a page may load; anything else is not served. */
 export const PAGE_TYPES: Record<string, string> = {
@@ -217,27 +238,6 @@ export function pagePolicy(origin: string): string {
     "base-uri 'none'",
     "object-src 'none'",
   ].join("; ")
-}
-
-/** The file of `dir` the relative path `rel` names, or null when it names none, one outside `dir`, or one no page may load. */
-export function folderFile(dir: string, rel: string): string | null {
-  if (!rel || rel.includes("\u0000") || isAbsolute(rel)) return null
-  const root = normalize(dir.endsWith(sep) ? dir : dir + sep)
-  let file = normalize(join(dir, rel))
-  if (!file.startsWith(root)) return null
-  if (existsSync(file) && statSync(file).isDirectory()) file = join(file, "index.html")
-  if (!PAGE_TYPES[extname(file).toLowerCase()]) return null
-  return existsSync(file) && statSync(file).isFile() ? file : null
-}
-
-/** A relative path of a tab's folder as the URL a frame loads it from, its segments encoded. */
-export function fileUrl(key: string, tab: string, rel: string): string {
-  return `/page/${key}/files/${encodeURIComponent(tab)}/${rel.split(/[\\/]/).filter((s) => s && s !== ".").map(encodeURIComponent).join("/")}`
-}
-
-/** A `ui-views` view's HTML with its own links (/view/<name>…) kept inside the page's frame. */
-export function framedViewHtml(key: string, html: string): string {
-  return html.split('href="/view/').join(`href="/page/${key}/view/`).split('action="/view/').join(`action="/page/${key}/view/`)
 }
 
 /** A page around a body, for a tab's { html } or a view's page in a frame: no tabs, the body and its styles. */

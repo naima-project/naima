@@ -47,10 +47,10 @@ checklist on its own, without being prompted, at a project's first commit.
 - **A dashboard**: a visual page of the project's state, with a look of its own, showing the boards, the gates, the ranked queue, claims and notes across
   branches, and the evidence attached to each item, with a map of the lines and commits on its rail from which a commit of the past is chosen. **Today:**
   [the Naima window](guide/the-window.md) has the new interface with its rail, a metro map of the lines and commits with the goals ahead, from
-  which a commit of the past or a goal is chosen, and its home screen (what waits for the owner, the goals, what waits for proof, the lines), kept
-  live as the project changes; the other screens and the map's git gestures are still to come; its server answers a few commands as
-  actions; the earlier views are at `/classic`; the same views are commands (`naima summary`, `naima board`, `naima gates`, `naima view`), and `naima summary --markdown`
-  prints the state as text you can paste anywhere.
+  which a commit of the past or a goal is chosen, and its home and metrics screens, kept live as the project changes, in a browser; the
+  other screens and the map's git gestures are still to come; it runs a few commands as actions; the earlier views are tabs of it; the same
+  views are commands (`naima summary`, `naima board`, `naima gates`, `naima view`), and `naima summary --markdown` prints the state as text you can
+  paste anywhere.
 
 ## A pointer in the agent's instruction file
 

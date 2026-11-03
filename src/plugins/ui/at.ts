@@ -1,4 +1,4 @@
-// The project as a commit had it, for /data/<view>?at=<commit>: the tracker
+// The project as a commit had it, for the bridge commands read at a commit: the tracker
 // read only from that commit's tree (contextAt, the one `gate show --line` reads
 // a line's tip with), kept per commit so that a commit looked at screen after
 // screen is read from git once. A commit is named by its hash or any ref git
@@ -6,16 +6,13 @@
 
 import { type Context, contextAt, gitOrNull } from "../../core/api.ts"
 
-/** A refusal the server answers 400 with, its message said as it is. */
-export class AtRefused extends Error {}
-
 /** The commit `ref` names, when a local branch reaches it; refused plainly otherwise. */
 export function commitOf(ctx: Context, ref: string): string {
-  if (!/^[\w./@{}^~-]{1,200}$/.test(ref) || ref.startsWith("-")) throw new AtRefused(`naima ui: "${ref}" names no commit`)
+  if (!/^[\w./@{}^~-]{1,200}$/.test(ref) || ref.startsWith("-")) throw new Error(`naima ui: "${ref}" names no commit`)
   const sha = gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", "--end-of-options", `${ref}^{commit}`)
-  if (!sha) throw new AtRefused(`naima ui: no commit ${ref} in this repository`)
+  if (!sha) throw new Error(`naima ui: no commit ${ref} in this repository`)
   const on = gitOrNull(ctx.root, "for-each-ref", "--count=1", "--contains", sha, "--format=%(refname)", "refs/heads")
-  if (!on) throw new AtRefused(`naima ui: commit ${ref} is on no local branch: only a commit a branch reaches can be shown`)
+  if (!on) throw new Error(`naima ui: commit ${ref} is on no local branch: only a commit a branch reaches can be shown`)
   return sha
 }
 

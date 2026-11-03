@@ -16,9 +16,9 @@
 //           otherwise the network is git's, for alignment and update — except for `naima ui` (UI below)
 //
 // `naima ui`, and no other command, may also listen on the loopback interface,
-// read and run the Deno that runs it — to open its window, a process of its
-// own with the webview's permissions (src/plugins/ui/open.ts) — and run the
-// program that opens the default browser. `naima run` and `naima wait`, and no
+// read and run the Deno that runs it — to start the run of an action the UI
+// asks for (src/plugins/ui/bridge.ts) — and run the program that opens the
+// default browser (src/plugins/ui/open.ts). `naima run` and `naima wait`, and no
 // other command, may read and run that Deno too — to start a run's supervisor,
 // a process of its own (src/plugins/long-work/supervisor.ts) — and run ssh,
 // to reach a host; and they are handed the whole environment, which a run's

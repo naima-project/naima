@@ -1,13 +1,15 @@
 # The Naima window
 
-`naima ui` opens a window onto the project. It is served by a small server on your own machine, which only you can reach: it listens on the loopback interface,
-and every request has to carry a token made for that run. Closing the window stops the server.
+`naima ui` opens a window onto the project in your default browser. It is served from your own machine, and only you can reach it: it listens on the
+loopback interface, and every request has to carry a token made for that run. Ctrl-C stops it.
 
 ```sh
-naima ui              # the window, or the default browser where the window cannot open
-naima ui --browser    # the default browser
+naima ui              # serve it and open it in the default browser
 naima ui --no-open    # print the address, with its token, and serve until Ctrl-C
 ```
+
+To use it from another machine, forward the port over ssh (`ssh -L <port>:127.0.0.1:<port> <host>`), run `naima ui --no-open` there and open the address it
+prints, with its token, in your browser here.
 
 ## What the window shows
 
@@ -68,13 +70,12 @@ chart is the list of every metric with its value, its change and a small chart; 
 commits in order, labelled with their dates; a commit of the past is marked by an amber line, and a bound by a dashed one. The range picks every commit or the
 last 500 or 100. Each chart has a text summary that screen readers read. A metric becomes a card with `"card": true` in its declaration, and goes under a
 heading of the list with `"group"`; with no card marked, the first six metrics with records are the cards. Below, the screen says how many of the newest commits
-have no record. Its data is `/data/metrics`, whose `timeline` places every record on the trunk; with `?at=<commit>` it gives each metric's record at that
+have no record. Its data is the metrics view's, whose `timeline` places every record on the trunk; at a commit it gives each metric's record at that
 commit, read from the records as they are now, since a commit's own tree holds none of the records made after it. How the screen reads a moment is a small model
 of its own, checked like the shell's: an answer that arrives after the moment changed is dropped and the new moment read.
 
-The earlier window is still there at `/classic` in the same server: the panels of the first screen (the summary, the gates, what is next, the claims) and the
-tabs of the boards, the metrics, the session notes and each item with its evidence. Every view's data is at `/data/<view>` as JSON, the same data the matching
-command prints with `--json`; the new interface reads it from there.
+The views of the earlier window are tabs: the summary, the gates, what is next, the claims, the boards, the session notes and each item with its evidence.
+Every view's data is the same data the matching command prints with `--json`, and the new interface reads it from there.
 
 ## Tabs from plugins
 
@@ -87,25 +88,22 @@ holds them (the stance's README says how).
 The tabs wait behind More, the last and quietest entry of the navigation: More lists every tab with what it shows, and choosing one opens it, while More stays
 marked as the place you are. A tab opens from More or from another tab, never straight from a screen, so Home shows only what it is made of; that rule is part
 of the interface's model and is checked there. A tab keeps the moment the window shows: opening a tab or a subtab never changes it, and Live stays one step away
-whichever tab is open. Opening a tab or a subtab closes the rail. The views of the earlier window are tabs as well, each showing its page as at `/classic`.
+whichever tab is open. Opening a tab or a subtab closes the rail. The views of the earlier window are tabs as well, each showing its page.
 
 What a plugin shows in a tab is either data, which the window draws with its own components (a list, a table, a chart, a gallery of framed pages, markdown
 text), or a page of its own. Every such page runs in a sandboxed frame, cut off from the window: its scripts cannot read the window, its data or its token, nor
-run an action, and it can load nothing from outside this server. `/data/tabs` lists the tabs, and `/data/tab/<name>?sub=<subtab>` gives what one shows. How a
-plugin adds a tab is in [the plugin contract](../reference/plugin-contract.md#tabs-of-the-window).
+run an action, and it can load nothing from outside. How a plugin adds a tab is in [the plugin contract](../reference/plugin-contract.md#tabs-of-the-window).
 
 ## Live, and the past
 
-The window follows the project as it changes. The server looks at it every second: a new commit, a branch or tag that moved, a file of the tracker written (an
-item, a note, a claim). When something changed and has settled, it sends one event on `/events`, a stream of server-sent events behind the same token, naming
-what kinds of change it saw. While the window shows Live, the screens read their data again; while it shows a commit of the past, nothing moves until you go
+The window follows the project as it changes. Naima looks at it every second: a new commit, a branch or tag that moved, a file of the tracker written (an
+item, a note, a claim). When something changed and has settled, it sends one event, naming what kinds of change it saw. While the window shows Live, the screens read their data again; while it shows a commit of the past, nothing moves until you go
 back to Live. That rule is part of the interface's model and is checked there.
 
-Any view's data can be read as a commit had it: `/data/<view>?at=<commit>` answers what the same view answers on a checkout of that commit, read only, from the
-tracker in that commit's tree. A commit is named by its hash or by any name git knows, such as a branch or `HEAD~3`. One git does not know, or one that no local
+Any view's data can be read as a commit had it: what the same view answers on a checkout of that commit, read only, from the tracker in that commit's tree. A commit is named by its hash or by any name git knows, such as a branch or `HEAD~3`. One git does not know, or one that no local
 branch reaches, is refused with a plain message. The commits looked at are kept, so going back to one is quick.
 
-`/data/metro` gives what the rail's map draws: the trunk and every open line, the other branches that left or rejoined in the last 60 commits of the trunk, each
+The rail's map is drawn from the trunk and every open line, the other branches that left or rejoined in the last 60 commits of the trunk, each
 with its commits and where it left and rejoined; every worker branch with its claim and a status; and, for the trunk and each line, the goals still ahead in
 goal order. A line's goals are its gate's steps not yet closed, then the gate. The trunk's are the gates not yet finished that are goals, by the rule in The
 rail above, with each line's gate shown as that line landing. The parts come from the commands that own them (`naima line list`, `naima claims`, `naima gates`,
@@ -122,18 +120,17 @@ A worker's status is derived, and the data says how in its `why` field:
 ## Actions
 
 The window can run a few naima commands for you: record a decision (`decide`), add a note (`note`), close a gate's step (`gate step`, not adding or removing
-one), claim items or post a step (`claim`) and release a claim (`release`). Each runs through the command line exactly as if you typed it, so every rule and
-check applies, and the window shows what the command printed and its exit code. None of them rewrites history, and the window asks you to confirm before running
-one.
-
-An action is a `POST` to `/action/<name>` (`gate-step` for `gate step`) with the body `{"args": [...]}`, the arguments after the command. The server refuses it
-unless it carries the token's cookie, this run's CSRF value (which the page reads from `/session`), the server's own address as its Origin and, when the browser
-sends it, `Sec-Fetch-Site:
-same-origin`. Another page in your browser cannot run one.
+one), claim items or post a step (`claim`) and release a claim (`release`). Each runs as a run of `naima run`, exactly as if you typed the command, so every
+rule and check applies, and the window can follow the run: its state, its exit code and what it printed. None of them rewrites history. Another page in your
+browser cannot run one.
 
 ## How it is built
 
-The interface is a Svelte app that ships with Naima, already built: Naima needs no npm package and no network to show it. Its logic is generated from a model.
+The interface is a Svelte app that ships with Naima, already built: Naima needs no npm package and no network to show it. It is built with the
+[UI stance](stances.md): its tokens, widgets, store and rules, which the stance's checks hold it to. Everything it reads and does goes through the stance's
+bridge, as commands of Naima's own: `describe`, `data` (a view's data, live or at a commit), `tabs`, `tab` (what a tab shows), `metro` (the rail's map),
+`action` and `run`, and the feed `changes`, which says when the project changed. In the browser the bridge is `POST /bridge/<command>` and, for the feed, a
+stream of server-sent events at `/bridge/changes`, behind the run's token; a command is refused from any page but the server's own. Its logic is generated from a model.
 The moment, the rail, the current screen and the plugin's tab and subtab shown form one state machine, modelled in mCRL2 and checked with its properties, and
 naima-codegen generates the code the screens call. How a screen reads its data is a second one, the reader: a change that comes while a screen is still reading
 is never lost, since the screen reads once more when the first answer comes, and that answer, which may be of the moment before, is set aside. The components

@@ -1,4 +1,4 @@
-// The metro data, /data/metro: what the new UI's rail draws. Plugins never
+// The metro data, the bridge command metro: what the new UI's rail draws. Plugins never
 // import each other, so it is read the way a person would: from the commands
 // that own each part, run here with --json (`line list`, `claims`, `gates`),
 // and from git for the commits. A part whose plugin is not loaded is empty.
