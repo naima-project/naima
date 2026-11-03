@@ -170,14 +170,16 @@ Work for a later goal may go on its development line, the branch `line/<gate>` (
 the line this chat works on; `naima open`, `naima claims` and `naima queue --ready` follow it and say so first, and `naima land` of an item's branch lands it on
 its line, closing nothing. The trunk reaches a line only by `naima line sync <gate>`; a line lands on the trunk with `naima land line/<gate>`, once
 `naima gate show <gate> --line` says it is ready. Never commit on a line by hand, nor merge a line's branch onto the trunk by hand: the trunk guard refuses
-both.
+both. On a line and its branches Naima writes only an item's own work (its fixed mark, its test runs, its session note); file items, notes and links, and change
+`naima.json`, in the trunk's checkout, which Naima otherwise refuses.
 
 Before asking the owner anything, run `naima decisions <words>`: a settled decision answers it, and the owner's answer to a new question is recorded as one
 ([asking the human](../../docs/agents/asking-the-human.md)).
 
 A command that will outlast a few minutes, or run on another machine, goes through `naima run <name> --budget-time <d> -- <command>` and
 `naima wait
-<name> --timeout <d>`, never a hand-written wait loop ([long work](../../docs/agents/long-work.md)).
+<name> --timeout <d>`, never a hand-written wait loop and never the command itself under a long tool timeout: `naima run` returns once the command
+is alive, and a short `naima wait`, repeated, says within seconds that a run has not started or shows no progress ([long work](../../docs/agents/long-work.md)).
 
 Nothing runs unattended: never schedule a run, and never start a long run on your own. When `naima hello` or `naima summary` says a long run is due, pass the
 line on, file it with `naima run due`, and ask the owner before starting it with `naima run <name>`
