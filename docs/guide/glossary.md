@@ -140,6 +140,11 @@ An item of type `artifacts`, for something the work makes and keeps: an analysis
 When it is delivered, Naima records the commit and the inputs it was made from, so `naima check` can tell you when it is out of date
 ([artifacts](artifacts.md)). _Everyday example:_ "the monthly sales report".
 
+### Audit
+
+An item of type `audits`, for an independent check of what was built against what was decided. It names what it checked against, holds the findings, and ends
+with a verdict: `pass`, `pass-with-findings` or `fail` ([audits](audits.md)). _Everyday example:_ "the inspection of the new kitchen against the plans".
+
 ### Knowledge entry
 
 An item of type `knowledge`, for one statement the project knows or is finding out, kept with what it rests on: its [basis](#basis), its [kind](#kind), and the

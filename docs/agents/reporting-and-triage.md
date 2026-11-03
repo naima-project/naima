@@ -28,6 +28,7 @@ and then the owner has to say it again.
 | "yes, do that" / "we go with X" — the owner decides or permits                                     | `decisions`, linked `settles` to the items that waited on it                                                                                                              |
 | a choice the agent made because the owner left it open (a language, a default, something left out) | `decisions`, saying it was the agent's and that the owner may change it                                                                                                   |
 | "I need an analysis / a report / a figure by Friday" — something made and kept                     | `artifacts` with `due`, made by a todo linked `produces`, delivered with `naima set <artifact> status=delivered` ([artifacts](../guide/artifacts.md))                     |
+| "check what was built against what we decided" — an independent audit                              | `audits`, linked `audits` to what it checks against and `fulfils` to the todo that asked for it, concluded with a `verdict` ([audits](../guide/audits.md))                |
 | "the screens are all 4k" / "so it was the eviction" — a fact, a finding, a hypothesis              | `knowledge`, with its `basis` (`given` and `givenBy`, or `evidence` and the items linked `supports` or `contradicts`) and its `kind` ([knowledge](../guide/knowledge.md)) |
 | "next time, do it this way" — what a mistake or a success taught                                   | `knowledge` with `kind=lesson`, its page in the sections What happened, The lesson, How to apply it; the rule or test that holds it afterwards is linked `codifies`       |
 
@@ -138,9 +139,9 @@ naima describe <item> --file triaged.md          # the description, rewritten in
 naima note <item> "Reproduced on 16-bit PNGs only; 8-bit keeps alpha." --by "triage agent"
 ```
 
-- A new item's description is its type's template until it is described: `naima new` warns, and `naima check` notes an item that is open or still in its
-  type's first status (a decision is settled as it is filed) with the template untouched. Describe every item you file in the same turn, a discussion and a
-  decision above all, since a meeting and the next agent read only the page.
+- A new item's description is its type's template until it is described: `naima new` warns, and `naima check` notes an item that is open or still in its type's
+  first status (a decision is settled as it is filed) with the template untouched. Describe every item you file in the same turn, a discussion and a decision
+  above all, since a meeting and the next agent read only the page.
 - `naima describe` replaces the description and keeps the title line and the Notes section. The agent rewrites a report that an agent filed, but never one a
   person wrote; for those, the triage adds a note instead. The title is a field, set with `naima set <item> title="…"`, which also rewrites the page's title
   line in the same write.
