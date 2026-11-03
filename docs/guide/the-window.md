@@ -129,11 +129,18 @@ past it shows the value then and its change against live, and says "recorded at 
 nearest:" with the date of the last record at or before it, the one that holds then. Clicking a card shows its metric in the large chart below. Beside that
 chart is the list of every metric with its value, its change and a small chart; picking one shows it in the large chart. Every chart runs along the trunk's
 commits in order, labelled with their dates; a commit of the past is marked by an amber line, and a bound by a dashed one. The range picks every commit or the
-last 500 or 100. Each chart has a text summary that screen readers read. A metric becomes a card with `"card": true` in its declaration, and goes under a
-heading of the list with `"group"`; with no card marked, the first six metrics with records are the cards. Below, the screen says how many of the newest commits
-have no record. Its data is the metrics view's, whose `timeline` places every record on the trunk; at a commit it gives each metric's record at that commit,
+last 500 or 100. Each chart has a text summary that screen readers read. Clicking a point of the large chart, or pressing Enter on the one the arrow keys are
+on, selects its commit, so the whole window shows that moment, and opens below the chart the record of the run that measured it: the value and whether it kept
+its bound, when it was recorded, and how it was taken. For a test suite's number that is the suite's run, with its command, its counts, its time and the end of
+its log, or the earlier run it reused because nothing the suite reads had changed; for a command's number, the command; for a code measure, the measure. A metric
+becomes a card with `"card": true` in its declaration, and goes under a heading of the list with `"group"`; with no card marked, the first six metrics with
+records are the cards. Below, the screen says how many of the newest commits have no record, with the main action Record metrics, which runs
+`naima metrics run --record` on the commit checked out, under `naima run` with a budget of two hours, and says how the run goes until it ends; one recording runs
+at a time, and when it succeeds the window reads the new records. Its data is the metrics view's, whose `timeline` places every record on the trunk; at a commit it gives each metric's record at that commit,
 read from the records as they are now, since a commit's own tree holds none of the records made after it. How the screen reads a moment is a small model of its
-own, checked like the shell's: an answer that arrives after the moment changed is dropped and the new moment read.
+own, checked like the shell's: an answer that arrives after the moment changed is dropped and the new moment read. So is Record metrics: it starts one
+recording at a time, asks for its run's state one request at a time and only while it runs, and reads again when it succeeded. The record of a point is the
+metrics plugin's metric-run view, which the bridge's `data` command reads with the metric and the commit as its query.
 
 The views of the earlier window are tabs: the summary, the gates, what is next, the claims, the boards, the session notes and each item with its evidence. Every
 view's data is the same data the matching command prints with `--json`, and the new interface reads it from there.

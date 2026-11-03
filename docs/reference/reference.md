@@ -3266,6 +3266,7 @@ naima metrics presets
 | View | Title | What it shows |
 |---|---|---|
 | `metrics` | Metrics | the project's metrics along the commit timeline: a chart and a table of each, for the metrics and the commits picked; its data's `timeline` places every record on the trunk's commit axis for the new UI, and with `?at=<commit>` each metric's record at that commit |
+| `metric-run` | Metric run | the record of the run that measured a metric at a commit, for a point of the new UI's value-against-time graph: `?metric=<name>&commit=<hash>` gives the value, whether it held its bound, when it was recorded and how it was taken — a test suite's run with its counts, its time and the end of its log, or the earlier run it reused; a command; a code measure |
 
 **Metric kinds**, how `naima metrics` reads a number
 
