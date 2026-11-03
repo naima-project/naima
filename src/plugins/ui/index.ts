@@ -32,6 +32,7 @@ import { naimaBridge } from "./bridge.ts"
 import { browserCommand, openBrowser, type Opened, osName } from "./open.ts"
 import { filesKey, filesUrl, newToken, serve } from "./serve.ts"
 import { runSidecar } from "./sidecar.ts"
+import { nameStopCommand } from "./stops.ts"
 import { allTabs, tabsPoint, type UiTab, type UiView } from "./tabs.ts"
 
 export { actionArgv, ACTIONS, naimaBridge } from "./bridge.ts"
@@ -322,13 +323,13 @@ export default function ui(): Plugin {
     about:
       "`naima ui` serves the new interface, the built bundle the product ships in `ui/dist`: the rail with its metro map of the lines and the goals ahead, the moment, the screens with Home and Metrics, and a tab for each view and tab the plugins contribute; its logic is generated from mCRL2 models. " +
       "It is served on the loopback interface, on a free port, to requests that carry the token of its run (in the address the browser opens, then in a cookie), so a port forwarded from another machine reaches it too. " +
-      "The interface reads and acts only through Naima's bridge commands, which the UI stance's bridge carries (POST /bridge/<command>, with JSON in and out): `describe`, `data` (a view's data, the same data its command prints with `--json`; at a commit, as that commit had it, read only from its tree, a commit no local branch reaches refused; a view that places a commit itself, `moments`, read from the files as they are with the commit's full hash as its `at` parameter), `tabs`, `tab` (what a tab shows for a subtab at the moment), `metro` (the rail's map: the trunk, the open lines and the branches with their first-parent commits, each worker branch with a status and why, the goals ahead per line), `action` and `run`. " +
+      "The interface reads and acts only through Naima's bridge commands, which the UI stance's bridge carries (POST /bridge/<command>, with JSON in and out): `describe`, `data` (a view's data, the same data its command prints with `--json`; at a commit, as that commit had it, read only from its tree, a commit no local branch reaches refused; a view that places a commit itself, `moments`, read from the files as they are with the commit's full hash as its `at` parameter), `tabs`, `tab` (what a tab shows for a subtab at the moment), `metro` (the rail's map: the trunk, the open lines and the branches with their first-parent commits, each worker branch with a status derived from its branch's records — its claim, its commits, its runs, the discussions open on what it claims, its silences — and those records in words, the goals ahead per line, the people on it, the main checkout and each worktree with the commit it stands on, and the names given to stops with `naima name-stop`, which keeps each in the tracker's stops/ folder), `action` and `run`. " +
       "Its one feed, `changes` (GET /bridge/changes, server-sent events), says when the project changed (a commit, a branch moved, a tracker file written), and the interface reads again while it shows Live. " +
       "Any plugin, a stance included, adds tabs through `ui-tabs`, each with optional subtabs: for a subtab and the moment shown it gives data the interface draws with one of its own components (a list, a table, a chart, a gallery of framed pages, markdown), a page of its folder, served sandboxed under a key derived from the token, or a page it makes, which the interface frames in the same sandbox, so no code of the plugin runs in the interface; every `ui-views` view is shown as a tab too, but for one the interface has a screen of its own for (`screen`, the metrics). " +
-      "`action` runs `decide`, `note`, `gate step`, `claim` or `release` as a run of `naima run`, and `run` shows that run, its state, exit code and log; a bridge command is refused from any page but the server's own. " +
+      "`action` runs `decide`, `note`, `gate step`, `claim`, `release` or `name-stop` as a run of `naima run`, and `run` shows that run, its state, exit code and log; a bridge command is refused from any page but the server's own. " +
       "The same commands serve the desktop app, the Tauri shell around the same bundle: it starts `naima ui --sidecar` in the project's folder, which answers them on its standard input and output, one JSON object a line, pushes the feed's events there too, and reads a tab's files for the shell's naima-files: scheme, with no network listener.",
     points: [viewsPoint, uiTabsPoint],
     contributes: { "ui-views": [summaryView, boardView, itemView] },
-    commands: [uiCommand],
+    commands: [uiCommand, nameStopCommand],
   }
 }

@@ -8,14 +8,23 @@
 //            the trunk's and the lines' whole history, down to the root commit),
 //            the commit it leaves its base at (fork) and the one it rejoins it at
 //            (land, null while it has not)
-//   workers  each worker branch: its claim and a status, derived from the claim,
-//            its step and its silence, each with the reason it was given
+//   workers  each worker branch: its claim and a status, derived from the records of its branch (its claim and
+//            its step's time, its commits, the runs started from it, the discussions open on what it claims,
+//            the silences between them) by the machine of develop/models/ui/worker-status, never from the
+//            words of its step, each with the records it was given
+//   people   each person on the map: whoever is checked out here (git's user.name), on the branch here, and
+//            each author of the commits the map draws, on the route of their newest commit
+//   checkouts  the main checkout and each worktree: its name, its branch and the commit it stands on
+//   names    the names the owner gave stops (`naima name-stop`, stops.ts), by commit
 //   goals    per route of the trunk and the lines, the goals still ahead in goal
 //            order: a line's gate's steps, then the gate; on the trunk, every
 //            unfinished gate that is a goal (isGoal) no open line stands for, then
 //            each line's landing
 
-import { type Command, type Context, gitOrNull, isAncestor, trunk, worktrees } from "../../core/api.ts"
+import { basename } from "node:path"
+import { type Command, type Context, gitOrNull, isAncestor, isOpen, trunk, worktrees } from "../../core/api.ts"
+import { type Event as StatusEvent, initial, type State, type Status, step as statusStep } from "./generated/worker-status.ts"
+import { stopNames } from "./stops.ts"
 
 /** How many first-parent commits of the trunk the window holds; a branch is shown when it leaves or rejoins within it. */
 export const WINDOW = 60
@@ -56,7 +65,7 @@ export type WorkerStatus = "working" | "testing" | "question" | "idle" | "done-w
 export interface Worker {
   branch: string
   status: WorkerStatus
-  /** How the status was derived, in words. */
+  /** The records the status was derived from, in words. */
   why: string
   /** The claimed items. */
   items: { id: string; ref: string; title: string }[]
@@ -77,6 +86,30 @@ export interface Mark {
   version?: string
 }
 
+/** A person on the map: where they are, and how that is known. */
+export interface Person {
+  name: string
+  /** The route they stand on. */
+  route: string
+  /** "here": checked out here; "commit": the route of their newest commit the map draws. */
+  via: "here" | "commit"
+  /** Their newest commit the map draws, when there is one. */
+  commit?: string
+}
+
+/** A checkout of the project: the main one, or a worktree. */
+export interface Checkout {
+  /** The main checkout's folder name, or the worktree's. */
+  name: string
+  main: boolean
+  /** The one the server runs in. */
+  here: boolean
+  /** Null on a detached HEAD. */
+  branch: string | null
+  /** The commit it stands on. */
+  commit: string | null
+}
+
 export interface Metro {
   trunk: string | null
   /** The branch checked out here, the moment the rail calls live. */
@@ -88,6 +121,10 @@ export interface Metro {
   goals: Record<string, Mark[]>
   /** First-parent commits of the trunk older than those sent and newer than its root: 0 unless past HISTORY. */
   older?: number
+  people: Person[]
+  checkouts: Checkout[]
+  /** The names the owner gave stops, by the commit's full hash. */
+  names: Record<string, string>
 }
 
 /** What a command prints with --json, run here; null when no loaded plugin has it, or it fails. */
@@ -112,10 +149,19 @@ interface LineRow {
 interface ClaimRow {
   branch: string
   stale?: string
+  claimedAt?: string
   step?: { what: string; since: string }
   quietFor?: number
   silent?: boolean
   items: { id: string; ref: string; title: string }[]
+}
+interface RunRow {
+  name: string
+  branch?: string
+  started: string
+  over: boolean
+  ended?: string
+  elapsedMs?: number
 }
 export interface GateRow {
   gate: string
@@ -131,23 +177,118 @@ export interface GateRow {
 
 const git = (ctx: Context, ...args: string[]): string => gitOrNull(ctx.root, ...args) ?? ""
 
-/** First-parent commits of `range`, newest first, at most `n`, each recorded in `commits`. */
-function firstParent(ctx: Context, range: string, n: number, commits: Record<string, MetroCommit>): string[] {
-  return git(ctx, "log", "--first-parent", `-n${n}`, "--format=%H%x09%ct%x09%s", range, "--").split("\n").filter(Boolean).map((l) => {
-    const [h = "", t = "0", ...s] = l.split("\t")
+/** Who wrote each commit the map draws, by hash: where people stand (never sent). */
+type Authors = Map<string, string>
+
+/** First-parent commits of `range`, newest first, at most `n`, each recorded in `commits` and its author in `authors`. */
+function firstParent(ctx: Context, range: string, n: number, commits: Record<string, MetroCommit>, authors?: Authors): string[] {
+  return git(ctx, "log", "--first-parent", `-n${n}`, "--format=%H%x09%ct%x09%an%x09%s", range, "--").split("\n").filter(Boolean).map((l) => {
+    const [h = "", t = "0", an = "", ...s] = l.split("\t")
     commits[h] = { t: Number(t), subject: s.join("\t") }
+    if (authors && an) authors.set(h, an)
     return h
   })
 }
 
-/** Why a worker branch is where it is: its claim and step, or, with no live claim, its commits waiting to land. */
-function statusOf(claim: ClaimRow | undefined, ahead: number): { status: WorkerStatus; why: string } {
-  if (!claim) return { status: "done-waiting-to-land", why: `no live claim, and ${ahead} commit${ahead === 1 ? "" : "s"} its base lacks` }
-  if (claim.silent) return { status: "idle", why: `silent for ${claim.quietFor} min: no step and no commit` }
-  const step = claim.step?.what ?? ""
-  if (/\b(question|asks?|asking|waiting for (the )?(owner|coordinator|answer))\b/i.test(step)) return { status: "question", why: `its step: ${step}` }
-  if (/\b(test|tests|testing|verify|verifying|check|checks|checking)\b/i.test(step)) return { status: "testing", why: `its step: ${step}` }
-  return { status: "working", why: step ? `its step: ${step}` : "claimed, no step posted yet" }
+/** A record of a worker's branch, at its moment in milliseconds: an input of the worker-status machine. */
+export interface StatusRecord {
+  at: number
+  event: StatusEvent["type"]
+}
+
+/** What the metro data knows of a worker's branch: its records, read from Naima's own. */
+export interface BranchRecords {
+  claim?: ClaimRow
+  /** Its own commits' times, in seconds. */
+  commits: number[]
+  runs: RunRow[]
+  /** The discussions open on an item it claims: when each was filed, YYYY-MM-DD. */
+  asks: string[]
+}
+
+/** Records of the same moment in the order they happen: a claim before the work on it, a release last. */
+const ORDER: StatusEvent["type"][] = ["claim", "ask", "answer", "step", "commit", "runStart", "runEnd", "quiet", "release", "land"]
+
+/**
+ * The records of a worker's branch, oldest first, with a silence (quiet) wherever more than `silentAfter` minutes
+ * pass with none after a sign of life, up to `now`: what the worker-status machine is fed. The claim counts from the
+ * day it was made, or from its first record when that is earlier; a claim every item of which is done is released now.
+ */
+export function statusRecords(r: BranchRecords, now: number, silentAfter: number): StatusRecord[] {
+  const out: StatusRecord[] = []
+  for (const t of r.commits) out.push({ at: t * 1000, event: "commit" })
+  for (const run of r.runs) {
+    const start = Date.parse(run.started)
+    if (Number.isNaN(start)) continue
+    out.push({ at: start, event: "runStart" })
+    if (run.over) {
+      const end = run.ended ? Date.parse(run.ended) : start + (run.elapsedMs ?? 0)
+      out.push({ at: Number.isNaN(end) ? start : end, event: "runEnd" })
+    }
+  }
+  for (const d of r.asks) {
+    const t = Date.parse(d)
+    if (!Number.isNaN(t)) out.push({ at: Math.min(t, now), event: "ask" })
+  }
+  if (r.claim) {
+    if (r.claim.step) {
+      const t = Date.parse(r.claim.step.since)
+      if (!Number.isNaN(t)) out.push({ at: t, event: "step" })
+    }
+    const day = r.claim.claimedAt ? Date.parse(r.claim.claimedAt) : NaN
+    const first = Math.min(...out.map((x) => x.at), now)
+    out.push({ at: Number.isNaN(day) ? first : Math.min(day, first), event: "claim" })
+    if (r.claim.stale) out.push({ at: now, event: "release" })
+  }
+  out.sort((a, b) => a.at - b.at || ORDER.indexOf(a.event) - ORDER.indexOf(b.event))
+  // The silence window counts from a sign of life, as the claims' silence does: a claim alone starts no clock.
+  const window = silentAfter * 60_000
+  const fed: StatusRecord[] = []
+  let last: number | null = null
+  for (const x of [...out, { at: now, event: "quiet" as const }]) {
+    if (last !== null && x.at - last > window) fed.push({ at: last + window, event: "quiet" })
+    if (x.event === "quiet") continue
+    fed.push(x)
+    if (x.event !== "claim" && x.event !== "release") last = x.at
+  }
+  return fed
+}
+
+const SHOWN: Record<Status, WorkerStatus | null> = {
+  S_NONE: null,
+  S_WORKING: "working",
+  S_TESTING: "testing",
+  S_QUESTION: "question",
+  S_IDLE: "idle",
+  S_DONE: "done-waiting-to-land",
+}
+
+/** The status the machine says after the last record, or null when there is no worker to draw. */
+export function statusFrom(records: readonly StatusRecord[]): WorkerStatus | null {
+  let state: State = initial({}).state
+  let said: Status = "S_NONE"
+  for (const r of records) {
+    const next = statusStep(state, { type: r.event })
+    if (!next) continue
+    state = next.state
+    for (const a of next.actions) said = a.status
+  }
+  return SHOWN[said]
+}
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+
+/** The records a status was derived from, in words: what the map says of a worker. */
+function recordsSaid(r: BranchRecords, now: number): string {
+  const going = r.runs.filter((x) => !x.over).length
+  const lastSign = Math.max(...r.commits.map((t) => t * 1000), r.claim?.step ? Date.parse(r.claim.step.since) || 0 : 0)
+  return [
+    r.claim ? (r.claim.stale ? `its claim no longer stands (${r.claim.stale})` : "claimed") : "no live claim",
+    plural(r.commits.length, "commit") + " its base lacks",
+    ...(lastSign > 0 ? [`last sign of life ${Math.max(0, Math.floor((now - lastSign) / 60_000))} min ago`] : []),
+    ...(going ? [`${plural(going, "run")} going on`] : []),
+    ...(r.asks.length ? [`${plural(r.asks.length, "discussion")} open on what it claims`] : []),
+  ].join(", ")
 }
 
 /** The goals of `rows` not finished, in goal order: one comes after every goal ordered before it. */
@@ -171,7 +312,12 @@ export async function metroData(ctx: Context): Promise<Metro> {
   const main = trunk(ctx.root)
   const head = gitOrNull(ctx.root, "symbolic-ref", "--quiet", "--short", "HEAD")
   const lines = (await commandJson<{ lines: LineRow[] }>(ctx, ["line", "list"]))?.lines ?? []
-  const claims = ((await commandJson<{ claims: ClaimRow[] }>(ctx, ["claims"]))?.claims ?? []).filter((c) => !c.stale)
+  const claimsJson = await commandJson<{ claims: ClaimRow[]; silentAfter?: number }>(ctx, ["claims"])
+  // A claim every item of which is done still says whose the branch was: it is released now, in the records.
+  const claims = (claimsJson?.claims ?? []).filter((c) => !c.stale || /done or closed/.test(c.stale))
+  const silentAfter = claimsJson?.silentAfter ?? 15
+  const runs = (await commandJson<RunRow[]>(ctx, ["run", "list"])) ?? []
+  const authors: Authors = new Map()
   const gates = (await commandJson<GateRow[]>(ctx, ["gates"])) ?? []
   const routes: Route[] = []
   if (main) {
@@ -180,7 +326,7 @@ export async function metroData(ctx: Context): Promise<Metro> {
       kind: "trunk",
       base: null,
       tip: git(ctx, "rev-parse", main),
-      commits: firstParent(ctx, main, HISTORY, commits),
+      commits: firstParent(ctx, main, HISTORY, commits, authors),
       fork: null,
       land: null,
     })
@@ -206,7 +352,7 @@ export async function metroData(ctx: Context): Promise<Metro> {
       gate: l.gate,
       base: main,
       tip: l.tip,
-      commits: main ? firstParent(ctx, `${main}..${l.branch}`, HISTORY, commits) : [],
+      commits: main ? firstParent(ctx, `${main}..${l.branch}`, HISTORY, commits, authors) : [],
       fork: main ? git(ctx, "merge-base", main, l.branch) || null : null,
       land: null,
     })
@@ -231,16 +377,26 @@ export async function metroData(ctx: Context): Promise<Metro> {
       : null
     if (land && !window.has(land)) continue
     const fork = (land ? git(ctx, "merge-base", `${land}^1`, tip) : git(ctx, "merge-base", base, tip)) || null
-    const list = fork ? firstParent(ctx, `${fork}..${tip}`, WINDOW, commits) : []
+    const list = fork ? firstParent(ctx, `${fork}..${tip}`, WINDOW, commits, authors) : []
     const kind: RouteKind = name.startsWith("sync/") ? "sync" : claimed.has(name) || standing.has(name) || name.startsWith("worker/") ? "worker" : "branch"
     // A branch that left and never rejoined within no window: shown only when it is a worker's.
     if (!land && kind === "branch" && !(fork && window.has(fork))) continue
     routes.push({ name, kind, base, tip, commits: list, fork, land })
     if (!land && (claimed.has(name) || standing.has(name)) && (claimed.has(name) || list.length)) {
       const c = claimed.get(name)
+      const records: BranchRecords = {
+        ...(c ? { claim: c } : {}),
+        commits: list.map((h) => commits[h]!.t),
+        runs: runs.filter((x) => x.branch === name),
+        asks: c && !c.stale ? asksOn(ctx, c.items.map((i) => i.id)) : [],
+      }
+      const now = ctx.now().getTime()
+      const status = statusFrom(statusRecords(records, now, silentAfter))
+      if (!status) continue
       workers.push({
         branch: name,
-        ...statusOf(c, list.length),
+        status,
+        why: recordsSaid(records, now),
         items: c?.items ?? [],
         ...(c?.step ? { step: c.step } : {}),
         ...(c?.quietFor !== undefined ? { quietFor: c.quietFor } : {}),
@@ -271,5 +427,64 @@ export async function metroData(ctx: Context): Promise<Metro> {
       ...(g.version ? { version: g.version } : {}),
     }))
   }
-  return { trunk: main, head, routes, commits, workers, goals, ...(older ? { older } : {}) }
+  return {
+    trunk: main,
+    head,
+    routes,
+    commits,
+    workers,
+    goals,
+    ...(older ? { older } : {}),
+    people: peopleOf(ctx, routes, authors, head, window),
+    checkouts: checkoutsOf(ctx),
+    names: stopNames(ctx),
+  }
+}
+
+/** When each discussion still open on one of `ids` was filed: a question the work on it waits for. */
+function asksOn(ctx: Context, ids: readonly string[]): string[] {
+  const on = new Set(ids)
+  return ctx.repo.items.filter((i) =>
+    i.type === "discussions" && isOpen(ctx, i) &&
+    ((i.meta["links"] as { rel?: string; id?: string }[] | undefined) ?? []).some((l) => l.rel === "concerns" && !!l.id && on.has(l.id))
+  ).map((i) => String(i.meta["created"] ?? ""))
+}
+
+/**
+ * The people on the map: whoever is checked out here, on the branch here; then each author of the commits the map
+ * draws (the trunk's window, the lines, the branches), on the route of their newest one. A name is one person.
+ */
+function peopleOf(ctx: Context, routes: readonly Route[], authors: Authors, head: string | null, window: ReadonlySet<string>): Person[] {
+  const out: Person[] = []
+  const seen = new Set<string>()
+  const me = gitOrNull(ctx.root, "config", "user.name")
+  const here = head ? routes.find((r) => r.name === head) : undefined
+  if (me && here) {
+    out.push({ name: me, route: here.name, via: "here", ...(here.commits[0] ? { commit: here.commits[0] } : {}) })
+    seen.add(me)
+  }
+  // Newest first: each route's commits are; the trunk's are kept to its window.
+  const newest = new Map<string, { route: string; commit: string; t: number }>()
+  for (const r of routes) {
+    for (const h of r.kind === "trunk" ? r.commits.filter((c) => window.has(c)) : r.commits) {
+      const who = authors.get(h)
+      if (!who || seen.has(who)) continue
+      const t = Number(gitOrNull(ctx.root, "log", "-1", "--format=%ct", h) ?? 0)
+      const was = newest.get(who)
+      if (!was || t > was.t) newest.set(who, { route: r.name, commit: h, t })
+    }
+  }
+  for (const [name, n] of [...newest].sort((a, b) => b[1].t - a[1].t)) out.push({ name, route: n.route, via: "commit", commit: n.commit })
+  return out
+}
+
+/** The main checkout and each worktree, with the branch and the commit it stands on. */
+function checkoutsOf(ctx: Context): Checkout[] {
+  return worktrees(ctx.root).map((w, i) => ({
+    name: basename(w.path),
+    main: i === 0,
+    here: w.self,
+    branch: w.branch,
+    commit: w.head,
+  }))
 }

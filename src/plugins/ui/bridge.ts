@@ -10,9 +10,11 @@
 //   tabs                           the tabs plugins contribute to the new UI, each with its subtabs
 //   tab {name, sub?, at?, query?}  what a tab shows for a subtab at the moment: a component's data, the address of a
 //                                  page of its folder, or a page it makes, as a whole HTML document the app frames
-//   metro                          what the rail draws: the trunk, the lines, the branches, the workers, the goals ahead
+//   metro                          what the rail draws: the trunk, the lines, the branches, the workers, the goals ahead,
+//                                  the people, the checkouts and the stops' names
 //   action {name, args}            one naima command of a short list, started through `naima run`: answers its run;
-//                                  record-metrics records the metrics (naima metrics run --record)
+//                                  record-metrics records the metrics (naima metrics run --record), name-stop names a
+//                                  commit of the map (naima name-stop)
 //   run {name}                     that run as `naima run status --json` shows it, with the end of its log
 //
 // and one feed:
@@ -42,6 +44,7 @@ export const ACTIONS: readonly { name: string; words: string[]; says: string; bu
   { name: "gate-step", words: ["gate", "step"], says: "close a step of a gate with the item that records it (not add or remove one)" },
   { name: "claim", words: ["claim"], says: "claim items for this branch, or post its step" },
   { name: "release", words: ["release"], says: "release this branch's claim" },
+  { name: "name-stop", words: ["name-stop"], says: "give a commit of the map a name of the owner's own, or clear it (naima name-stop)" },
   {
     name: "record-metrics",
     words: ["metrics", "run", "--record"],
