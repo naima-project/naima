@@ -84,7 +84,7 @@ import {
 import { claimsUiView, notesUiView } from "./ui.ts"
 import { readStaleAfter, staleCommand, type StaleData, staleData, staleSection } from "./stale.ts"
 import { changeNotesCheck, changesCommand } from "./changes.ts"
-import { land, landingReportsPoint, landingsAreMarkers, landingsPaired } from "./land.ts"
+import { land, landingCheckCommand, landingReportsPoint, landingsAreMarkers, landingsPaired } from "./land.ts"
 import { claimsReports, claimsReportsPoint } from "./claims-reports.ts"
 import { pushCheckCommand } from "./messages.ts"
 import { fixCommand } from "./fix.ts"
@@ -1295,6 +1295,12 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
         default: String(SILENT_AFTER),
       },
       {
+        name: "landingHost",
+        says:
+          "the host heavy landing checks run on (one that declares itself heavy, such as a check that opens a browser): a host declared for naima run --host, in the long-work plugin's hosts option or in the user's private hosts; naima land sends the branch tip there, runs the check through naima run --host and waits on it, and with none named refuses a landing a heavy check applies to rather than running it where it runs",
+        default: "none",
+      },
+      {
         name: "staleAfter",
         says:
           "hours without a sign of life (a commit, a step, a session note, a file changed and not committed) after which naima stale and naima summary list a branch as stale work: a positive whole number",
@@ -1324,6 +1330,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       claimsCommand(silentAfter, policy),
       recoverCommand((ctx, branch) => claimsData(ctx, branch, silentAfter)),
       land,
+      landingCheckCommand,
       fixCommand(policy, openWork),
       guardCommand(guarded),
       guardCheckCommand,

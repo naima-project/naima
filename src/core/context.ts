@@ -112,3 +112,33 @@ export function contextAt(ctx: Context, ref: string): { ctx: Context; dispose():
   const at = createContext({ root: ctx.root, data, program: ctx.program }, ctx.config as Config, ctx.registry, { out: ctx.out, err: ctx.err, now: ctx.now })
   return { ctx: at, dispose }
 }
+
+/**
+ * The project as the commit `rev` has it, files and tracker alike: a detached worktree of it, without its submodules, in
+ * a folder of Naima's state in the git directory, and a context there with this one's configuration and plugins, writing
+ * through `io` (this context's own by default). What a landing check reads of a branch no checkout stands on is read
+ * there. `dispose` removes the worktree.
+ */
+export function checkoutAt(ctx: Context, rev: string, io: IO = { out: ctx.out, err: ctx.err, now: ctx.now }): { ctx: Context; dispose(): void } {
+  const state = stateDir(ctx.root)
+  if (!state) throw new Error("a checkout of a commit is made in Naima's state folder in the git directory: this is not a git repository")
+  const dir = join(state, "checkouts", randomUUID())
+  mkdirSync(join(state, "checkouts"), { recursive: true })
+  const made = runGit(ctx.root, ["worktree", "add", "--detach", "--quiet", dir, rev])
+  if (!made.ok) throw new Error(`no checkout of ${rev}: ${gitReason(made)}`)
+  const dispose = (): void => {
+    if (!runGit(ctx.root, ["worktree", "remove", "--force", dir]).ok) rmSync(dir, { recursive: true, force: true })
+    runGit(ctx.root, ["worktree", "prune"])
+  }
+  return { ctx: contextIn(ctx, dir, io), dispose }
+}
+
+/**
+ * A context at `root`, another checkout of this project (a worktree), with this one's configuration and plugins,
+ * writing through `io` (this context's own by default): with `root` this context's own, it is this context with its
+ * output elsewhere, which is what a command runs another command with when it reads that one's output.
+ */
+export function contextIn(ctx: Context, root: string, io: IO = { out: ctx.out, err: ctx.err, now: ctx.now }): Context {
+  const data = ctx.sibling || root === ctx.root ? ctx.trackerRoot : join(root, ctx.trackerDir)
+  return createContext({ root, data, program: ctx.program }, ctx.config as Config, ctx.registry, io)
+}

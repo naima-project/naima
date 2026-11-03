@@ -9,7 +9,9 @@
 // closes nothing (`Fixes:` trailers); the trunk reaches a line only through a
 // sync, a short branch from the line that merges the trunk and lands with a
 // `Sync:` trailer; the line lands on the trunk as one marker that closes
-// every item fixed on it. Abandoning a line keeps its commits under the tag
+// every item fixed on it. A fixed mark that claimed more than was built is
+// withdrawn by a marker of its own (`Unfixes:`, naima line unfix): the item is
+// open again, and the line's landing leaves it open. Abandoning a line keeps its commits under the tag
 // archive/line/<gate> and deletes the branch: its items are open again on the
 // trunk, where nothing of the line was ever written.
 //
@@ -28,6 +30,7 @@ import {
   runGit,
   sessionLine,
   setSessionLine,
+  str,
   type SummarySection,
   table,
   trunk,
@@ -37,7 +40,7 @@ import {
 } from "../../core/api.ts"
 import { ahead, exists, home, plural, type Policy, SEGMENT, SEGMENT_SAYS, worktreesDir } from "./worktrees.ts"
 import { archiveTag } from "./index.ts"
-import { landOnLine } from "./land.ts"
+import { landOnLine, unfixOnLine } from "./land.ts"
 
 /** The namespace of the lines' branches. */
 export const LINE_PREFIX = "line/"
@@ -45,6 +48,8 @@ export const LINE_PREFIX = "line/"
 export const SYNC_PREFIX = "sync/"
 /** The trailer a landing on a line names each item it fixes with: fixed there, closed when the line lands. */
 export const FIXES = "Fixes"
+/** The trailer of a marker on a line that withdraws an item's fixed mark there: open again, left open when the line lands. */
+export const UNFIXES = "Unfixes"
 /** The trailer of a landing on a line that brings the trunk into it: the trunk commit it merged. */
 export const SYNC = "Sync"
 
@@ -186,12 +191,23 @@ export function baseOf(root: string, ref: string): string | null {
   return trunk(root)
 }
 
-/** The items fixed on a line: the Fixes: trailers of the markers on its first-parent line that the trunk lacks. */
+/**
+ * The items fixed on a line: the Fixes: trailers of the markers on its first-parent line that the trunk lacks, read
+ * oldest first, less those a later marker's Unfixes: trailer withdrew.
+ */
 export function fixedOnLine(root: string, branch: string): string[] {
   const main = trunk(root)
   if (!main) return []
-  const out = gitOrNull(root, "log", "--first-parent", `--format=%(trailers:key=${FIXES},valueonly,separator=%x1d)%x1e`, `${main}..${branch}`) ?? ""
-  return [...new Set(out.replaceAll("\x1d", "\n").replaceAll("\x1e", "\n").split("\n").map((s) => s.trim()).filter(Boolean))]
+  const format = `--format=%(trailers:key=${FIXES},valueonly,separator=%x1d)%x1f%(trailers:key=${UNFIXES},valueonly,separator=%x1d)%x1e`
+  const out = gitOrNull(root, "log", "--first-parent", "--reverse", format, `${main}..${branch}`) ?? ""
+  const ids = (s: string): string[] => s.replaceAll("\x1d", "\n").split("\n").map((v) => v.trim()).filter(Boolean)
+  const fixed = new Set<string>()
+  for (const record of out.split("\x1e")) {
+    const [fixes = "", unfixes = ""] = record.split("\x1f")
+    for (const id of ids(fixes)) fixed.add(id)
+    for (const id of ids(unfixes)) fixed.delete(id)
+  }
+  return [...fixed]
 }
 
 /** The gate the command works on: --line, --trunk, else the line this chat works on; null for the trunk. Refuses a line that is not open. */
@@ -274,7 +290,7 @@ const lineRow = (l: ReturnType<typeof linesData>["lines"][number]): string =>
   })`
 
 /** `line sync`: a short branch from the line that merges the trunk; landed on the line at once when the merge is clean. */
-function syncLine(ctx: Context, policy: Policy, gate: string): number {
+async function syncLine(ctx: Context, policy: Policy, gate: string): Promise<number> {
   refusesSibling(ctx)
   const main = trunk(ctx.root)
   const branch = lineBranch(gate)
@@ -296,7 +312,7 @@ function syncLine(ctx: Context, policy: Policy, gate: string): number {
     return 1
   }
   // Landed, the sync's worktree and branch are removed: landOnLine does it for every sync, this one or one finished by hand.
-  return landOnLine(ctx, sync, gate, [])
+  return await landOnLine(ctx, sync, gate, [])
 }
 
 /** `line abandon`: the line's commits under archive/line/<gate>, the branch deleted; its items open again on the trunk. */
@@ -338,21 +354,38 @@ export function lineCommand(policy: Policy): Command {
   return {
     name: "line",
     says:
-      "parallel development lines, one long-lived branch line/<gate> per goal of the trunk: new starts one from the trunk; list shows the open ones, each with its gate, latest update, how far it lags and the items fixed on it; use sets the line this chat works on (kept outside the repository), which open, claims, queue --ready and land follow; sync merges the trunk into a line through a short branch; abandon keeps its commits under archive/line/<gate> and deletes it",
+      "parallel development lines, one long-lived branch line/<gate> per goal of the trunk: new starts one from the trunk; list shows the open ones, each with its gate, latest update, how far it lags and the items fixed on it; use sets the line this chat works on (kept outside the repository), which open, claims, queue --ready and land follow; sync merges the trunk into a line through a short branch; unfix withdraws an item's fixed mark on a line, so that the line's landing leaves it open; abandon keeps its commits under archive/line/<gate> and deletes it",
     enforces:
-      "a line starts only from the trunk, tied to a gate the project declares, never from another line; the trunk reaches a line only by a sync, never the reverse, and a line reaches the trunk only by landing; abandon keeps every commit under its archive tag and writes nothing on the trunk, so the items fixed on the line are open there again; nothing is supported with the tracker in a repository of its own",
-    usage: "line new <gate> | line list [--json] | line use [<gate> | --trunk] | line sync <gate> | line abandon <gate>",
+      "a line starts only from the trunk, tied to a gate the project declares, never from another line; the trunk reaches a line only by a sync, never the reverse, and a line reaches the trunk only by landing; unfix runs from the main checkout, only for an item fixed on the open line, and moves the line by one marker of its own, a merge whose tree is the line's with the item's fixedOn removed, with an Unfixes: trailer naming the item and the reason in its message, refused when the reason holds private infrastructure; the item's work stays on the line; abandon keeps every commit under its archive tag and writes nothing on the trunk, so the items fixed on the line are open there again; nothing is supported with the tracker in a repository of its own",
+    usage:
+      'line new <gate> | line list [--json] | line use [<gate> | --trunk] | line sync <gate> | line unfix <gate> <item> --reason "<why>" | line abandon <gate>',
     options: [
+      { name: "--reason", says: "with unfix: why the mark is withdrawn, on one line — what the item claimed and was not built; kept in the marker's message" },
       { name: "--trunk", says: "with use: this chat works on the trunk" },
       { name: "--json", says: "with list: the lines as JSON, each one's gate, branch, tip, ahead, behind, updated and the items fixed on it" },
     ],
-    examples: ["line new release-1.2", "line use release-1.2", "line list", "line sync release-1.2", "line use --trunk", "line abandon release-1.2"],
-    run(args, ctx) {
-      const p = parse(args, { trunk: { type: "boolean" }, json: { type: "boolean" } })
+    examples: [
+      "line new release-1.2",
+      "line use release-1.2",
+      "line list",
+      "line sync release-1.2",
+      'line unfix release-1.2 export-drops --reason "only the reader was built: the writer is left"',
+      "line use --trunk",
+      "line abandon release-1.2",
+    ],
+    async run(args, ctx) {
+      const p = parse(args, { trunk: { type: "boolean" }, json: { type: "boolean" }, reason: { type: "string" } })
       const [sub, gate, ...rest] = p.positionals
-      if (rest.length || (bool(p, "json") && sub !== "list") || (bool(p, "trunk") && sub !== "use")) throw usageError(this)
+      if (sub === "unfix") {
+        const reason = str(p, "reason")
+        if (!gate || rest.length !== 1 || reason === undefined || bool(p, "json") || bool(p, "trunk")) throw usageError(this)
+        refusesSibling(ctx)
+        if (!openLines(ctx.root).some((l) => l.gate === gate)) throw new Error(`no open line for ${gate}: naima line list lists them`)
+        return unfixOnLine(ctx, gate, rest[0]!, reason)
+      }
+      if (rest.length || str(p, "reason") !== undefined || (bool(p, "json") && sub !== "list") || (bool(p, "trunk") && sub !== "use")) throw usageError(this)
       if (sub === "new" && gate) return newLine(ctx, gate)
-      if (sub === "sync" && gate) return syncLine(ctx, policy, gate)
+      if (sub === "sync" && gate) return await syncLine(ctx, policy, gate)
       if (sub === "abandon" && gate) return abandonLine(ctx, gate)
       if (sub === "list" && !gate) {
         const d = linesData(ctx)

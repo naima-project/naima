@@ -121,8 +121,8 @@ git merge-base --is-ancestor main HEAD && echo "ready to land"
 ```
 
 A branch opened from a [development line](../guide/lines.md) merges its line instead (`git merge --no-edit line/<gate>`), and lands on it; it never merges the
-trunk, which reaches the line only by `naima line sync <gate>`. A branch whose line has landed in the meantime merges the trunk and lands there. A landing on
-a line asks for no change note, since the line's landing on the trunk does; `--no-change-note "<reason>"` is taken there all the same, and kept on the marker.
+trunk, which reaches the line only by `naima line sync <gate>`. A branch whose line has landed in the meantime merges the trunk and lands there. A landing on a
+line asks for no change note, since the line's landing on the trunk does; `--no-change-note "<reason>"` is taken there all the same, and kept on the marker.
 
 This makes the trunk an ancestor of the branch, which landing requires. Resolve any conflicts here, where you still have the context. Then run step 5 again,
 because the merge brought in code you haven't tested together with yours.
@@ -167,7 +167,9 @@ what the branch changed there. Then it moves the trunk, only if the trunk hasn't
   the branch and commits the runs. A proof that can't be made current before landing, such as a suite that runs for days, is landed with
   `--stale-proofs "<reason>"`, and the marker keeps the reason in a `Stale-proofs:` trailer;
 - a plugin's landing check fails on the branch's files, such as a stance's checks on a file they read. No flag lets this through, `--stale-proofs` included: the
-  worker fixes the branch;
+  worker fixes the branch. A check that declares itself heavy, such as one that opens a browser, never runs where `naima land` runs: it runs on the host the
+  coordination option `landingHost` names, through `naima run --host`, and with no such host the landing is refused. Each check prints one line, where it ran
+  and what it found. The same checks run before a landing on a development line;
 - an untracked file in the main checkout would be overwritten, in which case nothing moves.
 
 After the landing, `naima land` prints what each landing report says. Among them are the reviews recorded with `naima reviewed` that the branch carries, and a

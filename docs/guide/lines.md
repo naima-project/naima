@@ -35,6 +35,9 @@ naima land ada/export-speed                    # lands on line/release-1.2, and 
 - `naima show` on the trunk says of an item fixed on an open line: `fixed on line line/<gate>, not yet on the trunk`.
 - `naima land` of a branch of a line lands it on the line, as one merge whose tree is the branch tip's. It closes nothing: the item stays fixed, named in the
   merge's `Fixes:` trailer, and is closed when the line lands. The trunk does not move, and its copy of the item is untouched.
+- Before it lands on the line, the landing checks run on the branch's files, as they do before a landing on the trunk: in the branch's worktree when it is clean
+  at its tip, else in a checkout of the tip made for them. A failing check refuses the landing. A proof that is not current is only said, since the line's
+  landing on the trunk is the one that asks for it. Each check prints one line, where it ran and what it found.
 - The coordination option `maxWorkers` counts per line: the trunk is one line, each development line another.
 
 Items, notes, decisions and diary entries are still filed on the trunk, as always. Only an item's own work (its fix, its test runs, its change note, its session
@@ -96,6 +99,18 @@ naima prune --branch line/release-1.2 --write
 `naima land` refuses a line that is not ready and says why. A branch that was opened from the line and had not landed when the line did belongs to the trunk
 from then on: bring it up to date with the trunk and land it there.
 
+## Withdraw a fixed mark
+
+When an item marked fixed on a line turns out to hold less than it claimed, the coordinator withdraws the mark, so that the line's landing leaves the item open:
+
+```sh
+naima line unfix release-1.2 export-speed --reason "only the reader was built: the writer is left"
+```
+
+It puts one marker on the line, with an `Unfixes:` trailer naming the item and the reason in its message, and takes the item's `fixedOn` off the line's copy.
+The item's work stays on the line and reaches the trunk with it. A later landing on the line that fixes the item marks it fixed again. Once the line has landed,
+what is left of the item is best split off into an item of its own.
+
 ## Abandon a line
 
 ```sh
@@ -108,8 +123,8 @@ open there again, since the trunk never saw their fix. A branch opened from the 
 
 ## What protects the lines
 
-- The trunk guard also guards every `line/*` branch: a line takes only landings, and a commit made on it by hand is refused. Every checkout runs the main
-  checkout's copy of the guard, so a line made before the program moved needs no sync to be guarded ([the trunk guard](commit-hooks.md)).
+- The trunk guard also guards every `line/*` branch: a line takes only landings and withdrawn marks, and a commit made on it by hand is refused. Every checkout
+  runs the main checkout's copy of the guard, so a line made before the program moved needs no sync to be guarded ([the trunk guard](commit-hooks.md)).
 - `naima land` refuses to put on the trunk a branch that carries commits of a line that has not landed, and refuses a branch carrying commits of two lines.
 - The trunk guard refuses the same by hand: a merge onto the trunk that carries the work of a line that has not landed, or of an abandoned one, is refused even
   when it looks like a landing marker or gives a `Trunk-reason:`; only the line's own landing brings its work.

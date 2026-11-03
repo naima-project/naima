@@ -8,39 +8,52 @@
 
 import { join, relative } from "node:path"
 import { isDeepStrictEqual, stripVTControlCharacters } from "node:util"
+import { randomUUID } from "node:crypto"
+import { mkdirSync, rmSync } from "node:fs"
 import {
   appliesTo,
   bool,
   type Check,
+  checkoutAt,
   CLI_TRAILER,
   code,
   CODE_TRAILER,
   type Command,
   commitTrackerPaths,
   type Context,
+  contextIn,
   currentBranch,
   DATA_FILE,
   type ExtensionPoint,
   filesAt,
   FILLED,
   type Finding,
+  findPrivate,
   flagsOf,
   gitOrNull,
   gitReason,
   type GitRun,
+  type Host,
   isAncestor,
   isUuid,
   type Item,
+  KINDS,
   label,
   linked,
   message,
   META,
   mustGit,
+  noHost,
   parse,
+  privateContext,
+  progressFor,
+  projectHosts,
   proves,
   refutes,
   runGit,
   saveMeta,
+  shellQuote,
+  stateDir,
   str,
   strs,
   table,
@@ -51,13 +64,14 @@ import {
   trunk,
   usageError,
   WAIVERS,
+  windowsArg,
   worktrees,
 } from "../../core/api.ts"
 import { changeNoteTrailers, NO_CHANGE_NOTE } from "./changes.ts"
 import { guardLandingMessages } from "./messages.ts"
 import { CLAIMS } from "./index.ts"
 import { plural } from "./worktrees.ts"
-import { abandonedLineOf, fixedOnLine, FIXES, gateOfLine, lineBranch, lineOf, lineWorkIn, openLines, SYNC, SYNC_PREFIX, unlanded } from "./lines.ts"
+import { abandonedLineOf, fixedOnLine, FIXES, gateOfLine, lineBranch, lineOf, lineWorkIn, openLines, SYNC, SYNC_PREFIX, UNFIXES, unlanded } from "./lines.ts"
 
 /** A landing: the branch, the trunk before it, and every file it changed, from the project root. */
 export interface Landing {
@@ -71,14 +85,18 @@ export interface Landing {
 }
 
 /**
- * What a plugin says about a landing. `refuses` and `blocks` run before the trunk moves, on the branch tip's files in
- * the main checkout. `refuses` names what is wrong with the branch, a check that fails: any line refuses the landing,
- * and no flag lets it through. `blocks` names what the landing changed whose proofs are not current: any line refuses
- * the landing unless --stale-proofs gives a reason. `report` runs once the landing is made, and never refuses it.
+ * What a plugin says about a landing. `refuses` and `blocks` run before the trunk or the line moves, on the branch
+ * tip's files: in the main checkout for a landing on the trunk, in a checkout of the tip for a landing on a line.
+ * `refuses` names what is wrong with the branch, a check that fails: any line refuses the landing, and no flag lets it
+ * through. `blocks` names what the landing changed whose proofs are not current: any line refuses the landing on the
+ * trunk unless --stale-proofs gives a reason. `report` runs once the landing is made, and never refuses it. A `heavy`
+ * check (browsers, a full suite) never runs where naima land runs: it runs on the landing host, through naima run
+ * --host, in a checkout of the tip there, and with no landing host named the landing is refused.
  */
 export interface LandingReport {
   name: string
   says: string
+  heavy?: boolean
   refuses?(ctx: Context, landing: Landing): string[] | Promise<string[]>
   blocks?(ctx: Context, landing: Landing): string[] | Promise<string[]>
   report?(ctx: Context, landing: Landing): string[] | Promise<string[]>
@@ -113,13 +131,14 @@ function notTrackerOnly(branch: string, outside: string[]): string | null {
 export const landingReportsPoint: ExtensionPoint<LandingReport> = {
   id: "landing-reports",
   says:
-    "what `naima land` checks before a branch lands and reports once it has: `name`, `says`, and `refuses(ctx, { branch, from, to, changed }) → lines`, what fails on the branch, any line refusing the landing with no flag to let it through; `blocks(ctx, landing) → lines`, what the landing changed whose proofs are not current, any line refusing the landing unless --stale-proofs gives the reason; or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root",
+    "what `naima land` checks before a branch lands, on the trunk or on a line, and reports once it has: `name`, `says`, and `refuses(ctx, { branch, from, to, changed }) → lines`, what fails on the branch, any line refusing the landing with no flag to let it through; `blocks(ctx, landing) → lines`, what the landing changed whose proofs are not current, any line refusing a landing on the trunk unless --stale-proofs gives the reason; or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root, and `ctx.root` holds the branch tip's files; `heavy: true` says the check runs heavy work (browsers, a full suite): naima land runs it only on the host the coordination option landingHost names, through naima run --host, and refuses the landing when none is named",
   noun: "landing report",
   key: (r) => r.name,
   validate: (v) => {
     const r = v as Partial<LandingReport> | null
     if (!r || typeof r !== "object" || typeof r.name !== "string") return "has no name"
     for (const k of ["refuses", "blocks", "report"] as const) if (r[k] !== undefined && typeof r[k] !== "function") return `has a ${k} that is not a function`
+    if (r.heavy !== undefined && typeof r.heavy !== "boolean") return "has a heavy that is not true or false"
     return r.refuses || r.blocks || r.report ? null : "has no refuses, blocks or report function"
   },
   gaps: (r) => (typeof r.says === "string" && r.says.trim() ? [] : ["does not say what it reports"]),
@@ -128,7 +147,10 @@ export const landingReportsPoint: ExtensionPoint<LandingReport> = {
   ) => [
     "",
     "**Landing reports**, checked by `naima land` before a landing (refuses, or blocks until its proofs are current) or printed after it (reports)",
-    ...table(["Report", "When", "What it says"], rs.map((r) => [code(r.name), r.refuses ? "refuses" : r.blocks ? "blocks" : "reports", r.says])),
+    ...table(
+      ["Report", "When", "What it says"],
+      rs.map((r) => [code(r.name), (r.refuses ? "refuses" : r.blocks ? "blocks" : "reports") + (r.heavy ? ", on the landing host" : ""), r.says]),
+    ),
   ],
 }
 
@@ -136,32 +158,173 @@ export const landingReportsPoint: ExtensionPoint<LandingReport> = {
 const changedFiles = (root: string, from: string, to: string): string[] =>
   (gitOrNull(root, "diff", "--name-only", "--no-renames", "-z", from, to) ?? "").split("\0").filter(Boolean)
 
+/** What one landing check found: what fails (`refused`), what is not current (`notCurrent`), and what could not be asked (`said`). */
+interface Found {
+  refused: string[]
+  notCurrent: string[]
+  said: string[]
+}
+
+/** One landing check's `refuses` and `blocks` on `at`, whose root holds the branch tip's files. */
+async function runCheck(at: Context, check: LandingReport, landing: Landing): Promise<Found> {
+  const found: Found = { refused: [], notCurrent: [], said: [] }
+  if (check.refuses) {
+    try {
+      found.refused.push(...(await check.refuses(at, landing)))
+    } catch (e) {
+      found.refused.push(`could not check: ${message(e)}`)
+    }
+  }
+  if (check.blocks) {
+    try {
+      found.notCurrent.push(...(await check.blocks(at, landing)))
+    } catch (e) {
+      found.said.push(`could not check: ${message(e)}`)
+    }
+  }
+  return found
+}
+
+/** The coordination option `landingHost`: the host, declared for naima run --host, that heavy landing checks run on. */
+export function landingHost(ctx: Context): string | undefined {
+  const v = (ctx.config.plugins["coordination"]?.options ?? {})["landingHost"]
+  return typeof v === "string" && v.trim() ? v.trim() : undefined
+}
+
+/** The prefix of the line on which naima landing-check prints its findings, as JSON. */
+export const LANDING_CHECK_LINE = "NAIMA-LANDING-CHECK "
+
+/** The ref a heavy check's commit is pushed to on the landing host, for the time of the check. */
+const landingRef = (run: string): string => `refs/naima/landing/${run}`
+
+/** How long a heavy landing check may run on the landing host, and how long it may stay silent. */
+const HEAVY_BUDGET = "1h"
+const HEAVY_STALE = "15m"
+
 /**
- * What the landing checks find before the trunk moves, each line prefixed with its check's name: what fails on the
- * branch (`refused`, from `refuses`) and what has proofs not current (`notCurrent`, from `blocks`). A `blocks` that
- * throws says so and blocks nothing; a `refuses` that throws refuses the landing, since the branch was not checked.
+ * A heavy landing check, on the landing host: the tip pushed to the host's checkout, `naima landing-check` run there
+ * through naima run --host and waited on, its findings read from the run's log, then the run and the pushed ref
+ * removed. With no landing host named, no long-work plugin or no such host, it is not run, and it refuses the landing.
  */
-async function landingChecks(ctx: Context, landing: Landing): Promise<{ refused: string[]; notCurrent: string[] }> {
+async function heavyCheck(ctx: Context, name: string, landing: Landing): Promise<Found & { where: string }> {
+  const refusal = (why: string): Found & { where: string } => ({ refused: [why], notCurrent: [], said: [], where: "" })
+  const hostName = landingHost(ctx)
+  if (!hostName) {
+    return refusal(
+      "is heavy, so it runs only on the landing host, and none is named: set the coordination option landingHost to a host naima run --host reaches — not run here",
+    )
+  }
+  const run = ctx.registry.commands.get("run")
+  const wait = ctx.registry.commands.get("wait")
+  if (!run || !wait) return refusal(`is heavy and runs on ${hostName} through naima run --host, which the long-work plugin provides, and it is not loaded`)
+  let host: Host | undefined
+  try {
+    const hosts = projectHosts(ctx.config.plugins["long-work"]?.options ?? {})
+    host = hosts.get(hostName)
+    if (!host) return refusal(`is heavy and its landing host is not declared: ${noHost(hostName, hosts)}`)
+  } catch (e) {
+    return refusal(`is heavy and its landing host cannot be read: ${message(e)}`)
+  }
+  const runName = `landing-${name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").slice(0, 40)}-${landing.to.slice(0, 12)}`
+  const dest = `${host.ssh}:${host.dir}`
+  const pushed = runGit(ctx.root, ["push", "--no-verify", "--quiet", "--force", dest, `${landing.to}:${landingRef(runName)}`])
+  if (!pushed.ok) return refusal(`could not send ${landing.to.slice(0, 12)} to ${host.name}: ${gitReason(pushed)} — not run`)
+  const lines: string[] = []
+  const quiet = contextIn(ctx, ctx.root, { out: (l = "") => void lines.push(l), err: () => {}, now: ctx.now })
+  const quote = host.shell === "cmd" ? (w: string) => windowsArg(w) : shellQuote
+  const command = [host.naima, ...["landing-check", landingRef(runName), "--from", landing.from, "--check", name].map(quote)].join(" ")
+  const clean = async (): Promise<void> => {
+    try {
+      await run.run(["clean", runName], quiet)
+    } catch {
+      // no run of that name: nothing to clean
+    }
+  }
+  try {
+    await clean()
+    lines.length = 0
+    const started = await run.run([runName, "--host", host.name, "--budget-time", HEAVY_BUDGET, "--stale", HEAVY_STALE, "--", command], quiet)
+    if (started !== 0) return refusal(`could not start on ${host.name}: ${lines.filter(Boolean).pop() ?? `exit ${started}`}`)
+    lines.length = 0
+    await wait.run([runName, "--timeout", HEAVY_BUDGET, "--tail", "200", "--json"], quiet)
+    let view: { state?: string; tail?: string[] } = {}
+    try {
+      view = JSON.parse(lines.join("\n")) as typeof view
+    } catch {
+      return refusal(`ran on ${host.name}, and its run could not be read: ${lines.filter(Boolean).pop() ?? "no answer"}`)
+    }
+    const verdict = (view.tail ?? []).filter((l) => l.startsWith(LANDING_CHECK_LINE)).pop()
+    if (view.state !== "succeeded") {
+      return refusal(
+        `ran on ${host.name}, and its run ${view.state ?? "could not be read"}: ${(view.tail ?? []).filter(Boolean).pop() ?? "nothing in its log"}`,
+      )
+    }
+    if (!verdict) {
+      return refusal(
+        `ran on ${host.name} and gave no findings (run ${view.state ?? "unknown"}): ${(view.tail ?? []).filter(Boolean).pop() ?? "nothing in its log"}`,
+      )
+    }
+    const found = JSON.parse(verdict.slice(LANDING_CHECK_LINE.length)) as Partial<Found>
+    return { refused: found.refused ?? [], notCurrent: found.notCurrent ?? [], said: found.said ?? [], where: `on ${host.name}` }
+  } catch (e) {
+    return refusal(`could not run on ${host.name}: ${message(e)}`)
+  } finally {
+    await clean()
+    runGit(ctx.root, ["push", "--no-verify", "--quiet", dest, `:${landingRef(runName)}`])
+  }
+}
+
+/** The one line a landing check prints: where it ran and what it found, or that it did not run. */
+function checkedLine(name: string, where: string, f: Found): string {
+  if (!where) return `${name}: not run, so the landing is refused`
+  const counts = [
+    ...(f.refused.length ? [`${f.refused.length} failing`] : []),
+    ...(f.notCurrent.length ? [`${f.notCurrent.length} not current`] : []),
+  ]
+  return `${name}: checked ${where}, ${counts.length ? counts.join(", ") : "nothing found"}`
+}
+
+/**
+ * What the landing checks find before the trunk or the line moves, each line prefixed with its check's name: what fails
+ * on the branch (`refused`, from `refuses`) and what has proofs not current (`notCurrent`, from `blocks`). `at` is the
+ * context whose root holds the branch tip's files. A `blocks` that throws says so and blocks nothing; a `refuses` that
+ * throws refuses the landing, since the branch was not checked; a heavy check runs on the landing host (heavyCheck).
+ * Each check that ran prints one line, where it ran and what it found, so that a pass is seen.
+ */
+async function landingChecks(ctx: Context, landing: Landing, at: Context = ctx): Promise<{ refused: string[]; notCurrent: string[] }> {
   ctx.reload()
+  at.reload()
   const refused: string[] = []
   const notCurrent: string[] = []
   for (const c of ctx.registry.contributions("landing-reports")) {
     const check = c.value as LandingReport
-    if (check.refuses) {
-      try {
-        for (const line of await check.refuses(ctx, landing)) refused.push(`${c.name}: ${line}`)
-      } catch (e) {
-        refused.push(`${c.name}: could not check: ${message(e)}`)
-      }
-    }
-    if (!check.blocks) continue
-    try {
-      for (const line of await check.blocks(ctx, landing)) notCurrent.push(`${c.name}: ${line}`)
-    } catch (e) {
-      ctx.out(`${c.name}: could not check: ${message(e)}`)
-    }
+    if (!check.refuses && !check.blocks) continue
+    const found = check.heavy ? await heavyCheck(ctx, c.name, landing) : { ...(await runCheck(at, check, landing)), where: "here" }
+    for (const line of found.said) ctx.out(`${c.name}: ${line}`)
+    refused.push(...found.refused.map((l) => `${c.name}: ${l}`))
+    notCurrent.push(...found.notCurrent.map((l) => `${c.name}: ${l}`))
+    ctx.out(checkedLine(c.name, found.where, found))
   }
   return { refused, notCurrent }
+}
+
+/**
+ * The landing checks of a landing on a line, run on the branch tip's files: in the worktree that stands on the branch
+ * when it is clean and at the tip, else in a checkout of the tip made for them. A failing check refuses the landing;
+ * what is not current is said, since the line's landing on the trunk is the one that asks for it.
+ */
+async function lineLandingChecks(ctx: Context, landing: Landing): Promise<void> {
+  const tree = worktrees(ctx.root).find((w) => w.branch === landing.branch && !w.self)
+  const clean = tree && gitOrNull(tree.path, "status", "--porcelain", "--untracked-files=no") === "" &&
+    gitOrNull(tree.path, "rev-parse", "HEAD") === landing.to
+  const made = clean ? null : checkoutAt(ctx, landing.to)
+  try {
+    const { refused, notCurrent } = await landingChecks(ctx, landing, made ? made.ctx : contextIn(ctx, tree!.path))
+    if (refused.length) throw refusedLanding(landing.branch, refused)
+    for (const l of notCurrent) ctx.out(`${l} — not current: the line's landing on the trunk asks for it`)
+  } finally {
+    made?.dispose()
+  }
 }
 
 /** The refusal of a branch a landing check finds failing: no flag lets it through. */
@@ -735,9 +898,9 @@ async function landBoth(
  * tip's, moved with the same compare-and-swap. It closes nothing: an item's work is recorded as fixed there, in a
  * `Fixes:` trailer per item, and closes when the line lands on the trunk; a branch that brings the trunk into the line
  * is a sync, recorded in a `Sync:` trailer naming the trunk commit it merged, and may carry no item's work. Neither the
- * main checkout nor the trunk is touched.
+ * main checkout nor the trunk is touched. The landing checks run first, on the branch tip's files (lineLandingChecks).
  */
-export function landOnLine(ctx: Context, branch: string, gate: string, closes: string[], noChangeNote?: string): number {
+export async function landOnLine(ctx: Context, branch: string, gate: string, closes: string[], noChangeNote?: string): Promise<number> {
   if (noChangeNote !== undefined && (!noChangeNote.trim() || noChangeNote.includes("\n"))) throw new Error(`--no-change-note takes the reason, on one line`)
   const line = lineBranch(gate)
   const trees = worktrees(ctx.root)
@@ -769,6 +932,7 @@ export function landOnLine(ctx: Context, branch: string, gate: string, closes: s
   // A landing on a line asks for no change note: the line's landing on the trunk does. A reason given is kept on the marker.
   if (noChangeNote !== undefined) trailers.push(`${NO_CHANGE_NOTE}: ${noChangeNote.trim()}`)
   guardLandingMessages(ctx, branch, old, tip)
+  await lineLandingChecks(ctx, { branch, from: old, to: tip, changed: changedFiles(ctx.root, old, tip), closes: ids })
   const made = runGit(ctx.root, ["commit-tree", `${tip}^{tree}`, "-p", old, "-p", tip, "-F", "-"], { input: `Land ${branch}\n\n${trailers.join("\n")}\n` })
   if (!made.ok) throw new Error(`git commit-tree: ${gitReason(made)}`)
   const marker = made.out.trim()
@@ -798,6 +962,132 @@ function removeSync(ctx: Context, branch: string, line: string): number {
   mustGit(ctx.root, "branch", "-D", branch)
   ctx.out(`removed ${tree ? `${tree.path} and ` : ""}${branch}: its merge is on ${line}`)
   return 0
+}
+
+/**
+ * Withdraw the fixed mark of `ref` on the line of `gate` (naima line unfix): one marker on the line, a merge whose first
+ * parent is the line and whose second a commit of the line's tree with the item's fixedOn removed, its message giving
+ * the reason and an Unfixes: trailer naming the item, so that fixedOnLine leaves it out and the line's landing on the
+ * trunk leaves it open. The item's work stays on the line. Moved with the compare-and-swap of a landing; neither the main
+ * checkout nor the trunk is touched.
+ */
+export function unfixOnLine(ctx: Context, gate: string, ref: string, reason: string): number {
+  const why = reason.trim()
+  if (!why || why.includes("\n")) throw new Error("--reason takes why the mark is withdrawn, on one line")
+  const leaks = findPrivate(why, privateContext())
+  if (leaks.length) {
+    throw new Error(
+      `the reason holds private infrastructure, which no repository carries: ${
+        leaks.map((f) => `${KINDS[f.kind].says} ${JSON.stringify(f.text)} — write ${KINDS[f.kind].placeholder}`).join("; ")
+      }: nothing withdrawn`,
+    )
+  }
+  const line = lineBranch(gate)
+  const trees = worktrees(ctx.root)
+  if (!trees[0]?.self) throw new Error(`line unfix runs from the main checkout: ${trees[0]?.path ?? "the main worktree"} — only the coordinator moves a line`)
+  const on = trees.find((w) => w.branch === line)
+  if (on) throw new Error(`${on.path} stands on ${line}: a line is moved by markers only — switch that worktree to another branch first`)
+  const main = trunk(ctx.root)
+  if (!main) throw new Error("no trunk (main, master, or origin's HEAD): nothing to measure the line against")
+  const old = mustGit(ctx.root, "rev-parse", `refs/heads/${line}`)
+  const id = idOf(ctx, old, ref)
+  const shown = ctx.repo.byId.get(id) ? label(ctx.repo.byId.get(id)!) : ref
+  if (!fixedOnLine(ctx.root, line).includes(id)) {
+    throw new Error(`${shown} is not fixed on ${line}: only a mark standing there is withdrawn — naima line list names the items fixed on it`)
+  }
+  let tree = mustGit(ctx.root, "rev-parse", `${old}^{tree}`)
+  const paths = metaPathsWith(ctx, old, id)
+  for (const [n, text] of textsAt(ctx.trackerGit, paths.map((p) => `${old}:${p}`)).entries()) {
+    let meta: Record<string, unknown>
+    try {
+      meta = JSON.parse(text ?? "") as Record<string, unknown>
+    } catch {
+      continue
+    }
+    if (meta["id"] !== id || meta["fixedOn"] === undefined) continue
+    delete meta["fixedOn"]
+    tree = treeWith(ctx.root, old, paths[n]!, JSON.stringify(meta, null, 2) + "\n")
+    break
+  }
+  const commit = (parents: string[], text: string): string => {
+    const r = runGit(ctx.root, ["commit-tree", tree, ...parents.flatMap((p) => ["-p", p]), "-F", "-"], { input: text })
+    if (!r.ok) throw new Error(`git commit-tree: ${gitReason(r)}`)
+    return r.out.trim()
+  }
+  const side = commit([old], `Withdraw the fixed mark of ${shown} on ${line}\n\n${why}\n`)
+  const marker = commit([old, side], `Unfix ${shown} on ${line}\n\n${why}\n\n${UNFIXES}: ${id}\n`)
+  moveTrunk(ctx.root, line, marker, old, `unfix: ${id}`)
+  ctx.out(`withdrew the fixed mark of ${shown} on ${line}: ${marker.slice(0, 12)} — it stays open when ${line} lands on ${main}`)
+  return 0
+}
+
+/** The tree of `rev` with the file at `path` (from the repository's top) holding `text`, written through an index of its own. */
+function treeWith(root: string, rev: string, path: string, text: string): string {
+  const state = stateDir(root)
+  if (!state) throw new Error("this is not a git repository")
+  mkdirSync(state, { recursive: true })
+  const env = { GIT_INDEX_FILE: join(state, `tree-${randomUUID()}.index`) }
+  try {
+    const blob = runGit(root, ["hash-object", "-w", "--stdin"], { input: text })
+    if (!blob.ok) throw new Error(`git hash-object: ${gitReason(blob)}`)
+    for (const args of [["read-tree", rev], ["update-index", "--cacheinfo", `100644,${blob.out.trim()},${path}`]]) {
+      const r = runGit(root, args, { env })
+      if (!r.ok) throw new Error(`git ${args[0]}: ${gitReason(r)}`)
+    }
+    const written = runGit(root, ["write-tree"], { env })
+    if (!written.ok) throw new Error(`git write-tree: ${gitReason(written)}`)
+    return written.out.trim()
+  } finally {
+    rmSync(env.GIT_INDEX_FILE, { force: true })
+  }
+}
+
+/** `naima landing-check`: one landing check on a commit's files, in a checkout of it, its findings on one line. */
+export const landingCheckCommand: Command = {
+  name: "landing-check",
+  says:
+    "run one landing check on a commit's files, in a checkout of that commit made for the check and removed after, and print what it found on one line: what naima land runs on the landing host, through naima run --host, for a heavy check",
+  enforces:
+    "reads only: the checkout is a detached worktree in Naima's state folder in the git directory, without submodules, removed when the check ends; the findings are printed as JSON on the line that starts with NAIMA-LANDING-CHECK — what fails, what is not current, what could not be asked — and the exit is 0 whatever they are, other than 0 only when the check could not be run at all",
+  usage: "landing-check <commit> --from <commit> --check <name>",
+  long: { reports: "a line to $NAIMA_RUN_PROGRESS at each stage: the checkout of the commit, then the check" },
+  options: [
+    { name: "--from", says: "the commit the landing starts from, the trunk or the line before it: the files changed are those between it and the commit" },
+    { name: "--check", says: "the landing check to run, by the name its plugin gives it" },
+  ],
+  examples: ["landing-check refs/naima/landing/landing-ui-stance-checks-0123abcd4567 --from 89ab0123cdef --check ui-stance-checks"],
+  async run(args, ctx) {
+    const p = parse(args, { from: { type: "string" }, check: { type: "string" } })
+    const [rev, ...rest] = p.positionals
+    const from = str(p, "from")
+    const name = str(p, "check")
+    if (!rev || rest.length || !from || !name) throw usageError(this)
+    const contribution = ctx.registry.contributions("landing-reports").find((c) => c.name === name)
+    if (!contribution) throw new Error(`no landing check ${name} here: naima docs lists the landing reports the plugins contribute`)
+    const tip = gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `${rev}^{commit}`)
+    const base = gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `${from}^{commit}`)
+    if (!tip || !base) throw new Error(`no commit ${tip ? from : rev} here`)
+    const progress = progressFor(ctx.err)
+    progress.overall(0, 2, "stages")
+    progress.stage("checkout")
+    const made = checkoutAt(ctx, tip)
+    try {
+      progress.overall(1, 2, "stages")
+      progress.stage(name)
+      const found = await runCheck(made.ctx, contribution.value as LandingReport, {
+        branch: rev,
+        from: base,
+        to: tip,
+        changed: changedFiles(ctx.root, base, tip),
+      })
+      progress.overall(2, 2, "stages")
+      ctx.out(`${LANDING_CHECK_LINE}${JSON.stringify(found)}`)
+    } finally {
+      progress.end()
+      made.dispose()
+    }
+    return 0
+  },
 }
 
 /** The trailers naming each requirement a landing meets. */
@@ -1095,7 +1385,7 @@ export const land: Command = {
             )
           }
           ctx.out(`on line ${lineBranch(gate)}`)
-          return landOnLine(ctx, branch, gate, strs(p, "closes"), str(p, "no-change-note"))
+          return await landOnLine(ctx, branch, gate, strs(p, "closes"), str(p, "no-change-note"))
         }
         const gone = abandonedLineOf(ctx.root, branch)
         if (gone) {
@@ -1386,7 +1676,7 @@ export interface Guarded {
 
 /**
  * Each open development line's first-parent line after the commit that opened it: every commit a landing, a merge up
- * to date whose tree is the branch tip's, with a Fixes: or a Sync: trailer; one note per commit that is not.
+ * to date whose tree is the branch tip's, with a Fixes:, a Sync: or an Unfixes: trailer; one note per commit that is not.
  */
 function lineFindings(ctx: Context): Finding[] {
   if (ctx.sibling) return []
@@ -1406,7 +1696,7 @@ function lineFindings(ctx: Context): Finding[] {
       "log",
       "--first-parent",
       "--reverse",
-      `--format=%H%x1f%P%x1f%T%x1f%s%x1f%(trailers:key=${FIXES},valueonly,separator=%x2C)%(trailers:key=${SYNC},valueonly,separator=%x2C)%x1f%(trailers:key=${TRUNK_REASON},valueonly)%x1e`,
+      `--format=%H%x1f%P%x1f%T%x1f%s%x1f%(trailers:key=${FIXES},valueonly,separator=%x2C)%(trailers:key=${SYNC},valueonly,separator=%x2C)%(trailers:key=${UNFIXES},valueonly,separator=%x2C)%x1f%(trailers:key=${TRUNK_REASON},valueonly)%x1e`,
       `${main}..${l.branch}`,
     ) ?? ""
     const commits = log.split("\x1e").map((r) => r.replace(/^\n/, "")).filter(Boolean).map((r) => r.split("\x1f"))
@@ -1420,7 +1710,7 @@ function lineFindings(ctx: Context): Finding[] {
         message:
           `${l.branch} took ${
             sha.slice(0, 12)
-          } "${subject}" without a landing marker: a line takes only landings (naima land, with Fixes: or Sync: trailers) — ` +
+          } "${subject}" without a landing marker: a line takes only landings (naima land, with Fixes: or Sync: trailers) and withdrawn marks (naima line unfix, with Unfixes:) — ` +
           `or accept it once: naima waive landings-are-markers ${sha} --reason "<why>" --as <who>`,
       })
     }

@@ -19,6 +19,7 @@ import { type GateDef, gatesOf, releaseTags, versionKey } from "./index.ts"
 const FEATURES = "features"
 /** The trailer a landing on a line names each item it fixes with, written by the coordination plugin. Read by name. */
 const FIXES = "Fixes"
+const UNFIXES = "Unfixes"
 
 const defOf = (ctx: Context, name: string): GateDef | undefined => gatesOf(ctx).find((g) => g.name === name)?.value
 
@@ -78,12 +79,23 @@ const featuresOf = (ctx: Context, ids: readonly string[]): string[] =>
     return i && i.type === FEATURES ? [`${i.type}/${i.slug}`] : []
   })
 
-/** The items fixed on the line of `gate`, from the Fixes: trailers of its landings the trunk lacks. */
+/**
+ * The items fixed on the line of `gate`, from the Fixes: trailers of its landings the trunk lacks, read oldest first,
+ * less those a later marker's Unfixes: trailer withdrew (the coordination plugin's naima line unfix).
+ */
 export function fixedOnLine(ctx: Context, gate: string): string[] {
   const main = trunk(ctx.root)
   if (!main) return []
-  const out = gitOrNull(ctx.root, "log", "--first-parent", `--format=%(trailers:key=${FIXES},valueonly)`, `${main}..refs/heads/line/${gate}`) ?? ""
-  return [...new Set(out.split("\n").map((s) => s.trim()).filter(Boolean))]
+  const format = `--format=%(trailers:key=${FIXES},valueonly,separator=%x1d)%x1f%(trailers:key=${UNFIXES},valueonly,separator=%x1d)%x1e`
+  const out = gitOrNull(ctx.root, "log", "--first-parent", "--reverse", format, `${main}..refs/heads/line/${gate}`) ?? ""
+  const ids = (s: string): string[] => s.replaceAll("\x1d", "\n").split("\n").map((v) => v.trim()).filter(Boolean)
+  const fixed = new Set<string>()
+  for (const record of out.split("\x1e")) {
+    const [fixes = "", unfixes = ""] = record.split("\x1f")
+    for (const id of ids(fixes)) fixed.add(id)
+    for (const id of ids(unfixes)) fixed.delete(id)
+  }
+  return [...fixed]
 }
 
 /**

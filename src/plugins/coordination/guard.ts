@@ -67,7 +67,7 @@ import {
   writeJson,
 } from "../../core/api.ts"
 import { guardServer, serverHintOf } from "./server.ts"
-import { FIXES, lineWorkIn, SYNC, unlanded } from "./lines.ts"
+import { FIXES, lineWorkIn, SYNC, UNFIXES, unlanded } from "./lines.ts"
 import { CLOSES, initsTracker, MEETS, onlyAddsTrackerData, onlyClosesItems, recordsMarker, TRACKER_ONLY, TRUNK_REASON } from "./land.ts"
 
 export { TRUNK_REASON }
@@ -635,11 +635,15 @@ export function trunkRefusal(ctx: Context, old: string, next: string, side: "cod
   return null
 }
 
-/** Whether a commit is a landing on a development line: a marker naming the items it fixes (`Fixes:`) or the trunk commit it syncs (`Sync:`). */
+/**
+ * Whether a commit is a landing on a development line: a marker naming the items it fixes (`Fixes:`), the trunk commit it
+ * syncs (`Sync:`) or the items whose fixed mark it withdraws (`Unfixes:`).
+ */
 export function isLineMarker(root: string, sha: string): boolean {
   const c = commitsOf(root, ["-1", sha])[0]
   if (!c || c.parents.length !== 2) return false
-  const trailers = gitOrNull(root, "log", "-1", `--format=%(trailers:key=${FIXES},valueonly)%(trailers:key=${SYNC},valueonly)`, sha) ?? ""
+  const trailers =
+    gitOrNull(root, "log", "-1", `--format=%(trailers:key=${FIXES},valueonly)%(trailers:key=${SYNC},valueonly)%(trailers:key=${UNFIXES},valueonly)`, sha) ?? ""
   return !!trailers.trim() && isMarker(root, { ...c, closes: ["line"] })
 }
 

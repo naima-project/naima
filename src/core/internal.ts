@@ -27,7 +27,7 @@ export {
   trackerOf,
   trackerReadme,
 } from "./layout.ts"
-export { consoleIO, createContext, type IO, type Place } from "./context.ts"
+export { consoleIO, createContext, type Place } from "./context.ts"
 export { githubRepo, isLocalRemote, remoteVisibility, type Visibility, VISIBILITY_HOST } from "./visibility.ts"
 export { apiHost, RELEASE_HOSTS, RELEASES_ENV, releasesApi } from "./releases.ts"
 export { installTrailerHooks, pairTracker, projectRootOf, readSiblingMarker, trackerGitOf } from "./repos.ts"
