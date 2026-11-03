@@ -67,11 +67,16 @@ other tool has been removed.
 | `mcrl2`  | 202607.0       | `verifier-mcrl2` | yes                    | yes                    | yes, glibc 2.38 or later | no build published       | yes                |
 | `storm`  | stormpy 1.14.0 | `storm`          | yes, macOS 14 or later | yes, macOS 15 or later | yes, glibc 2.34 or later | yes, glibc 2.34 or later | no build published |
 | `python` | 3.13.16        | `storm`          | yes                    | yes                    | yes                      | yes                      | yes                |
+| `node`   | 24.22.2        | `runtimes`       | yes                    | yes                    | yes                      | yes                      | yes                |
+| `bun`    | 1.4.4          | `runtimes`       | yes                    | yes                    | yes, with AVX2           | yes                      | yes, with AVX2     |
 
 - On Linux, mCRL2 comes from its `.deb` package, which is unpacked into the tools directory and never installed into the system.
 - Storm is installed as its Python package, in a Python environment of its own, on a Python that Naima also installs. The system's Python is never used.
   `naima tools path storm python` prints the path of that Python, which can import `stormpy`, for use in your scripts. The `storm` plugin stays off until the
   project turns it on with `naima plugin enable storm`.
+- Node and Bun are the JavaScript runtimes a project's tests can run on besides Deno. Node 22.18 or later runs TypeScript test files directly, by stripping
+  their types, and the declared version is later. Each comes from its official archive, with the sha256 its release publishes. The `runtimes` plugin stays off
+  until the project turns it on with `naima plugin enable runtimes`.
 - Where a platform has no build, `naima tools` says so and tells you what to do instead, which is to run that work on another machine (see below).
 
 ## On another machine

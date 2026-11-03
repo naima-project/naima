@@ -13,5 +13,8 @@ no Homebrew, no apt, no download into the system and nothing added to `PATH`.
 4. The install checks the tool by running it. If that fails, nothing is left installed and the output says why (for example, a Linux that is too old for the
    build). Report it.
 
+When a gate asks for tests on Node or Bun and the machine lacks the runtime, the gate stops and names the install: put that plan to the owner as above, on the
+machine that runs the gate (`naima tools install node --host <h>`). Never run those tests on another machine instead, such as your own.
+
 `naima tools path <tool> [<program>]` prints the path of an installed program for use in a script (`naima tools path storm python`), and
 `naima tools remove <tool>` removes a tool. The page for people is [tools](../guide/tools.md).

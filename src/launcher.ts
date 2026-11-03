@@ -396,7 +396,7 @@ function otherWorktrees(root: string, data: string | null): string[] {
 }
 
 /** The first-party plugins loaded only when the project's plugins table names them: each starts a program. Kept equal to builtins.ts's `optIn` by a test. */
-export const OPT_IN: readonly string[] = ["verifier-mcrl2", "storm"]
+export const OPT_IN: readonly string[] = ["verifier-mcrl2", "storm", "runtimes"]
 
 /** An entry of the plugins table that switches its plugin on: present, and not `enabled: false`. */
 const isOn = (e: unknown): boolean => !!e && typeof e === "object" && (e as { enabled?: unknown }).enabled !== false
@@ -406,7 +406,7 @@ const isOn = (e: unknown): boolean => !!e && typeof e === "object" && (e as { en
  * project loads code the program does not ship — a third-party plugin, or a
  * replacement for a first-party one — or declares metrics or test suites, each
  * naming the program that measures it, or switches on a first-party plugin that is off
- * until asked for (`OPT_IN`), each starting a model checker: no other
+ * until asked for (`OPT_IN`), each starting a model checker or a runtime it installs: no other
  * first-party contribution starts one.
  * Read in every format: a list of plugins (format 1), or a table whose entries
  * name a source or a replacement, or give the metrics plugin metrics.

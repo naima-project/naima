@@ -23,6 +23,7 @@ import packAnalyses from "./plugins/pack-analyses/index.ts"
 import packPapers from "./plugins/pack-papers/index.ts"
 import planning from "./plugins/planning/index.ts"
 import storm from "./plugins/storm/index.ts"
+import runtimes from "./plugins/runtimes/index.ts"
 import ruleTemplates from "./plugins/rule-templates/index.ts"
 import privacy from "./plugins/privacy/index.ts"
 import roles from "./plugins/roles/index.ts"
@@ -56,6 +57,7 @@ export const firstParty: readonly FirstParty[] = [
   { name: "outside-issues", factory: outsideIssues },
   { name: "verifier-mcrl2", factory: verifierMcrl2, optIn: true },
   { name: "storm", factory: storm, optIn: true },
+  { name: "runtimes", factory: runtimes, optIn: true },
   { name: "pack-analyses", factory: packAnalyses, optIn: true },
   { name: "pack-papers", factory: packPapers, optIn: true },
   { name: "ui", factory: ui },
