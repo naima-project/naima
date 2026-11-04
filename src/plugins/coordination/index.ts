@@ -89,7 +89,7 @@ import { claimsReports, claimsReportsPoint } from "./claims-reports.ts"
 import { pushCheckCommand } from "./messages.ts"
 import { fixCommand } from "./fix.ts"
 import { guardCheckCommand, guardCommand, guardedFrom, guardOffSection, guardSetup, readTrunkGuard, takenByGuard } from "./guard.ts"
-import { diaryCheck, diaryCommand, eventCommand, EVENTS, frontLines, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
+import { diaryCheck, diaryCommand, diaryView, eventCommand, EVENTS, frontLines, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
 import { recoverCommand } from "./recover.ts"
 import { readyLines, readyNow, readySection, readyWorkWaiting, workerLimitSection } from "./ready.ts"
 import {
@@ -1266,7 +1266,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       "A repository of the project with `changes/config.json` — the project itself, or a product it holds as a submodule — names there the paths whose change is a change of behaviour; a branch that changes one adds a change note, `changes/<date>-<slug>.md`, in the same repository. `land` refuses a branch that does not, unless `--no-change-note` gives the reason, which the marker records as a `No-change-note:` trailer; `change-notes` notes it on the branch beforehand, and is a problem for a file of `changes/` that is not a change note. `changes` prints the release notes the change notes of a range make. " +
       "`naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. " +
       "What has no date is counted at the foot, never placed at a guess. Only what nothing derives — a decision taken elsewhere, a build handed out, a policy, an outside fact — is a record, one file per event, `events/<date>-<uuid>.md`, written by `naima event`. " +
-      '`naima diary` tells the records of kind `diary`, every decision with its reason, every artifact delivered (on its `deliveredOn`, when an `artifacts` type is loaded) and every session note, day by day. The plugin ships the rule that agents keep the diary on their own, one entry per decision taken with the owner or notable turn and never a log of routine work, acknowledged as "Diary mode on"; the check `diary-entries` notes, never failing, a day with more diary entries than the option `diaryPerDay` allows, and an entry that only restates a session note of its day or a decision taken that day. ' +
+      '`naima diary` tells the records of kind `diary` and of kind `finding` (a stepping stone worth telling), every decision with its reason, every artifact delivered (on its `deliveredOn`, when an `artifacts` type is loaded) and every session note, day by day; each entry points at the items it is about: its own item for a decision, a delivery or a retirement, those `naima event --about` records, and those its text cites by reference. `naima diary <item>` tells the thread of one item, `naima diary --findings` only the findings, and `naima view diary` gives the entries as data with the version tags and the items filed and closed each day, what the diary screen of the UI draws. The plugin ships the rule that agents keep the diary on their own, one entry per decision taken with the owner or notable turn and never a log of routine work, acknowledged as "Diary mode on"; the check `diary-entries` notes, never failing, a day with more diary entries than the option `diaryPerDay` allows, and an entry that only restates a session note of its day or a decision taken that day. ' +
       `\`pass --ack "<line>"\` writes the acknowledgement line whichever plugin declares a rule's \`ack\` field asks an agent to give back — refused if a phrase is missing from it — and records it in the note's front matter; a note dated after ${ACK_REQUIRED_FROM} missing it, or whose body no longer starts with it, is a problem (\`session-note-ack\`), tolerating one written before — on the day it shipped, or earlier, grandfathered like a closed item on the day \`commits\` shipped — since what it recorded is what the rules asked then. A note is never edited after the fact: one written without the line is accepted with a recorded waiver, \`naima waive session-note-ack passes/<file> --reason "<why>" --as <who>\`.`,
     options: [
       { name: "who", says: "who works, when `naima open` is given no `--as`: the branch's first segment" },
@@ -1344,7 +1344,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       eventCommand,
       diaryCommand(readPasses),
     ],
-    views: [timelineView(readPasses), linesView],
+    views: [timelineView(readPasses), diaryView(readPasses), linesView],
     facts: [lineFacts],
     home: import.meta.url,
     contributes: {

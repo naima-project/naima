@@ -226,6 +226,20 @@ naima diary --from 2026-10-05
 
 Each decision is shown with its reason, taken from its page, and each session note is shown in full. Nothing is stored for the diary apart from those files.
 
+The diary is one line of days, and each item has its own story running alongside it. An entry points at the items it is about, so the two can be read together.
+A decision, a delivery and a retirement point at their own item. An entry also points at every item its text names by reference, such as
+`features/the-new-engine`, and you can name more when you write it.
+
+```sh
+naima event 2026-10-05 "The model found three faults in the protocol before any code" --kind finding --about features/the-new-engine
+naima diary features/the-new-engine
+naima diary --findings
+```
+
+The first line writes a finding, the kind for a stepping stone you will want to tell later. The second tells only the entries about that item, and the third
+only the findings. `naima check` notes an entry whose `--about` names an item that no longer exists. `naima view diary --json` gives the whole diary as data,
+with the version tags and the items filed and closed each day, and it is what the diary screen of `naima ui` shows.
+
 The agents write diary entries on their own, without being asked, for a decision taken with you in conversation, a change in the direction of the work, or
 something notable that happens outside the tracker. They write none for routine work, and none for what a session note or a decision already says, so the diary
 stays short enough to read ([the rule](rules.md#agents-keep-the-diary)). `naima check` notes a day with more than five diary entries, and an entry that only
