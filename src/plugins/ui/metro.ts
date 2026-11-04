@@ -128,7 +128,7 @@ export interface Metro {
 }
 
 /** What a command prints with --json, run here; null when no loaded plugin has it, or it fails. */
-async function commandJson<T>(ctx: Context, words: string[]): Promise<T | null> {
+export async function commandJson<T>(ctx: Context, words: string[]): Promise<T | null> {
   const cmd = ctx.registry.find<Command>("commands", words[0]!)?.value
   if (!cmd) return null
   const out: string[] = []
@@ -168,7 +168,7 @@ export interface GateRow {
   title: string
   holds: boolean
   blocking: unknown[]
-  steps?: { name: string; title: string; state: string }[]
+  steps?: { name: string; title: string; state: string; closedBy?: string[] }[]
   version?: string
   due?: string
   before?: string[]

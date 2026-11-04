@@ -93,6 +93,7 @@ import {
 import { builtinFormats, type TestFormat } from "./formats.ts"
 import { htmlReport, plotSvg, REPORT_CSS, selectionPage, type Series } from "./plot.ts"
 import { PRESETS, SUITE_PRESETS } from "./presets.ts"
+import { testRunsView } from "./test-history.ts"
 import { metricsSetup } from "./proposal.ts"
 import { performanceRequirements, satisfiesChecked } from "./requirements.ts"
 import {
@@ -1944,7 +1945,7 @@ export default function metrics(options: Record<string, unknown> = {}): Plugin {
       "test-suites": suiteDefs,
       metrics: defs,
       gates: [...(defs.length ? [metricsGate] : []), ...(suiteDefs.length ? [suitesGate] : [])],
-      "ui-views": [metricsView, metricRunView],
+      "ui-views": [metricsView, metricRunView, testRunsView],
       "landing-reports": suiteDefs.length ? [suitesCurrent] : [],
     },
     // The gate is for the gates plugin, the view for the ui plugin, the landing check for the coordination plugin, when

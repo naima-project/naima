@@ -59,6 +59,7 @@ import {
   writeJson,
 } from "../../core/api.ts"
 import { exampleRegex } from "./adapters/example-regex.ts"
+import { propertyRunsView } from "./history.ts"
 import { CODEGEN_PIN, CODEGEN_REPOSITORY, naimaCodegen } from "./adapters/naima-codegen.ts"
 import { type CompareResult, type Verdict, type Verifier, verifiersPoint, type VerifyRequest, type VerifyResult } from "./contract.ts"
 
@@ -1492,9 +1493,11 @@ export default function verifier(): Plugin {
       gates: [allHold],
       "landing-reports": [propertiesCurrent],
       summary: [codegenSection, missingSection],
+      "ui-views": [propertyRunsView(TYPE)],
     },
-    // Its gate is there when a gates plugin is, its landing report when the coordination plugin is: without them, nothing lists either.
-    optional: ["gates", "landing-reports"],
+    // Its gate is there when a gates plugin is, its landing report when the coordination plugin is, its view when the ui plugin is:
+    // without them, nothing lists either.
+    optional: ["gates", "landing-reports", "ui-views"],
     relations: [
       { name: WITNESSES, inverse: WITNESSED_BY, says: "is a witness property, showing that the behaviour is reachable, for" },
       { name: WITNESSED_BY, inverse: WITNESSES, says: "is backed by the witness property" },
