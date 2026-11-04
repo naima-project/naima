@@ -92,7 +92,7 @@ import {
 } from "./code.ts"
 import { builtinFormats, type TestFormat } from "./formats.ts"
 import { htmlReport, plotSvg, REPORT_CSS, selectionPage, type Series } from "./plot.ts"
-import { PRESETS, SUITE_PRESETS } from "./presets.ts"
+import { PRESETS, type Reference, SUITE_PRESETS } from "./presets.ts"
 import { testRunsView } from "./test-history.ts"
 import { metricsSetup } from "./proposal.ts"
 import { performanceRequirements, satisfiesChecked } from "./requirements.ts"
@@ -125,6 +125,7 @@ import {
 
 export type { CodeMeasure, CodeSource, FunctionInfo, Language } from "./code.ts"
 export type { Series } from "./plot.ts"
+export type { Reference } from "./presets.ts"
 export type { TestFormat, TestResult } from "./formats.ts"
 export type { RunOutput, SuiteConfig, SuiteDef, SuiteRun } from "./suites.ts"
 export { parseJunit, parseLibtest, parseTap, parseXml } from "./formats.ts"
@@ -143,6 +144,10 @@ export interface MetricKind {
 
 export interface MetricConfig {
   says?: string
+  /** What the metric measures and how to read it, in a few plain sentences: the UI's metrics screen shows it above the chart, and naima metrics lists it. */
+  description?: string
+  /** Further reading on the metric, one or two links: a paper, a reference page. */
+  references?: Reference[]
   /** The command: a program and its arguments. `{tmp}` in an argument is a fresh temporary path, the same for `prepare`. */
   run?: string[]
   /** A command run first, whose exit must be 0: the test run a coverage report reads. */
@@ -416,6 +421,19 @@ export function readMetrics(options: Record<string, unknown>): Record<string, Me
     if (raw["label"] !== undefined && !(typeof raw["label"] === "string" && raw["label"].trim())) {
       throw new Error(`${at}: label is the name the metrics screen shows, a string`)
     }
+    if (raw["description"] !== undefined && !(typeof raw["description"] === "string" && raw["description"].trim())) {
+      throw new Error(`${at}: description says what the metric measures and how to read it, a string`)
+    }
+    const refs = raw["references"]
+    if (
+      refs !== undefined &&
+      !(Array.isArray(refs) &&
+        refs.every((r) =>
+          isObject(r) && typeof r["title"] === "string" && r["title"].trim() && typeof r["url"] === "string" && /^https?:\/\/\S+$/.test(r["url"])
+        ))
+    ) {
+      throw new Error(`${at}: references is a list of links, each { "title": "…", "url": "https://…" }`)
+    }
     for (const key of ["says", "kind", "pattern", "unit", "because", "statistic", "field", "group"]) {
       if (raw[key] !== undefined && typeof raw[key] !== "string") throw new Error(`${at}: ${key} is a string`)
     }
@@ -469,9 +487,26 @@ const SOURCES = ["run", "measure", "suite", "file"] as const
 
 /** The metrics every suite gives: what passed, what failed — held to none — and how long it took. */
 const SUITE_METRICS: Record<string, MetricConfig> = {
-  passed: { says: "tests that pass", unit: "tests", better: "higher" },
-  failed: { says: "tests that fail", unit: "tests", equals: 0, better: "lower" },
-  seconds: { says: "how long the tests take", unit: "s", better: "lower" },
+  passed: {
+    says: "tests that pass",
+    description: "How many of the suite's tests pass, read from its report test by test. Higher is better; a drop means tests failed or were removed.",
+    unit: "tests",
+    better: "higher",
+  },
+  failed: {
+    says: "tests that fail",
+    description: "How many of the suite's tests fail, read from its report test by test. It is held to none: any failing test breaks the bound.",
+    unit: "tests",
+    equals: 0,
+    better: "lower",
+  },
+  seconds: {
+    says: "how long the tests take",
+    description:
+      "How long the suite takes to run, in seconds, as its report gives it. Slow tests are run less often, so lower is better; the time varies a little from run to run.",
+    unit: "s",
+    better: "lower",
+  },
 }
 
 /** The kind a metric's number is read with: its own, or the default — exit for a command, number for a file. */
@@ -953,6 +988,9 @@ export interface TimelineMetric {
   bound?: { word: string; value: number }
   /** The name the screen shows, when the declaration gives one. */
   label?: string
+  /** What it measures and how to read it, and links to further reading, when the declaration gives them. */
+  description?: string
+  references?: Reference[]
   /** One of the key numbers: a card at the top of the screen. */
   card: boolean
   /** A card's place among the cards, when its declaration gives one: the cards are shown in that order, those without one after, in the list's order. */
@@ -1070,6 +1108,8 @@ function timelineRest(
       name: m.name,
       ...(m.label ? { label: m.label } : {}),
       ...(m.says ? { says: m.says } : {}),
+      ...(m.description ? { description: m.description } : {}),
+      ...(m.references?.length ? { references: m.references } : {}),
       ...(unit ? { unit } : {}),
       better: betterOf(m),
       ...(b && BOUNDS.some((k) => num(m[k])) ? { bound: { word: BOUND_WORD[b.bound], value: b.value } } : {}),
@@ -1380,8 +1420,25 @@ export function testHistoryOf(ctx: Context, ref: string, at?: string, open?: str
   const { tests, points } = testPoints(ctx, item)
   const placed = points.map((p) => ({ p, at: place(p.commit, reach.get(p.commit) ?? p.date) }))
     .sort((a, b) => a.at.pos - b.at.pos || (a.p.recordedAt ?? a.p.run.at).localeCompare(b.p.recordedAt ?? b.p.run.at))
-  const result: TimelineMetric = { name: "result", label: "Result", says: "1 when every test of the item that ran passed, 0 when one failed", better: "higher", card: false, points: [], fails: [] }
-  const duration: TimelineMetric = { name: "duration", label: "Duration", says: "the seconds the item's tests took, as the runner reported them", unit: "s", better: "lower", card: false, points: [], fails: [] }
+  const result: TimelineMetric = {
+    name: "result",
+    label: "Result",
+    says: "1 when every test of the item that ran passed, 0 when one failed",
+    better: "higher",
+    card: false,
+    points: [],
+    fails: [],
+  }
+  const duration: TimelineMetric = {
+    name: "duration",
+    label: "Duration",
+    says: "the seconds the item's tests took, as the runner reported them",
+    unit: "s",
+    better: "lower",
+    card: false,
+    points: [],
+    fails: [],
+  }
   const ofResult = { points: [] as string[], fails: [] as string[] }
   const ofDuration = { points: [] as string[], fails: [] as string[] }
   const runs: History["runs"] = { result: ofResult, duration: ofDuration }
@@ -1452,7 +1509,9 @@ function testRecordOf(ctx: Context, tests: (r: SuiteRun) => SuiteRun["tests"], p
     at: p.recordedAt ?? p.run.at,
     result: failed.length ? "failed" : "passed",
     good: failed.length === 0,
-    ...(p.reused ? { reused: { from: p.path, commit: p.run.commit, at: p.run.at, how: "the suite was not run again: its inputs were those of this earlier run" } } : {}),
+    ...(p.reused
+      ? { reused: { from: p.path, commit: p.run.commit, at: p.run.at, how: "the suite was not run again: its inputs were those of this earlier run" } }
+      : {}),
     rows: [
       { label: "Result", value: failed.length ? `${failed.length} of ${ran.length} failed` : `${ran.length} passed` },
       { label: "Took", value: `${Math.round(seconds * 1000) / 1000} s` },
@@ -1461,7 +1520,12 @@ function testRecordOf(ctx: Context, tests: (r: SuiteRun) => SuiteRun["tests"], p
       { label: "Suite result", value: `${p.run.counts.passed} passed, ${p.run.counts.failed} failed, ${p.run.counts.skipped} skipped, exit ${p.run.exit}` },
       { label: "Run", value: p.path, mono: true },
     ],
-    tests: mine.map((t) => ({ name: t.name, result: t.result, ...(t.seconds !== undefined ? { seconds: t.seconds } : {}), ...(t.message ? { message: t.message } : {}) })),
+    tests: mine.map((t) => ({
+      name: t.name,
+      result: t.result,
+      ...(t.seconds !== undefined ? { seconds: t.seconds } : {}),
+      ...(t.message ? { message: t.message } : {}),
+    })),
     log,
   }
 }
@@ -1579,6 +1643,8 @@ const metricsCommand: Command = {
             m.ratchet ? ", ratchet" : ""
           }${better === "neither" ? "" : `, ${better} is better`}; last ${fmt(lastValue?.value, m.unit)}  — ${measuredBy(m)}`,
         )
+        if (m.description) ctx.out(`  ${m.description}`)
+        for (const r of m.references ?? []) ctx.out(`  see ${r.title}: ${r.url}`)
       }
       for (const s of suitesOf(ctx)) {
         const last = recordedRuns(ctx, s.name).at(-1)?.run
