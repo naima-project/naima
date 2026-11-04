@@ -20,7 +20,7 @@ import { DEFAULT_ENTRY_FILES } from "./pointer.ts"
 import type { Config, Extension, PluginConfig, PluginOptions, PluginSource, Severity } from "./types.ts"
 
 /** The lock's keys: the same names and meanings in every format, the core's own words. */
-export const LOCK_KEYS = ["source", "commit", "version", "sha256", "verify", "program"] as const
+export const LOCK_KEYS = ["source", "commit", "version", "sha256", "verify", "branch", "program"] as const
 const CORE_KEYS = ["format", "formats", ...LOCK_KEYS, "plugins", "rename", "extends", "agents", "entryFiles", "updates"]
 /** Every key naima.json may hold: the core's, and the owner's answers about the tracker's remotes (core/exposure.ts). */
 const KEYS = new Set([...CORE_KEYS, "privateRemotes"])
@@ -28,7 +28,7 @@ const COMMIT = /^[0-9a-f]{40}$/
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v)
 
-export type Lock = Pick<Config, "source" | "commit" | "version" | "sha256" | "verify" | "program">
+export type Lock = Pick<Config, "source" | "commit" | "version" | "sha256" | "verify" | "branch" | "program">
 
 /**
  * Why a naima.json's `carry`, which data before format 3 may hold, keeps the
@@ -83,6 +83,10 @@ export function parseLock(raw: Record<string, unknown>): Lock {
   if (typeof program !== "string" || !program.trim()) throw new Error(`${DATA_FILE}: program must be a path, relative to the data directory`)
   const verify = raw["verify"]
   if (verify !== undefined && verify !== "signed") throw new Error(`${DATA_FILE}: verify is "signed", or absent`)
+  const branch = raw["branch"]
+  if (branch !== undefined && (typeof branch !== "string" || !isBranchName(branch))) {
+    throw new Error(`${DATA_FILE}: branch must be the name of a branch of the source, such as line/release-1.2, or absent to follow its main`)
+  }
   const { version, sha256 } = raw
   if ((version === undefined) !== (sha256 === undefined)) {
     throw new Error(`${DATA_FILE}: version and sha256 go together: the release the commit is, and its archive's checksum`)
@@ -98,8 +102,15 @@ export function parseLock(raw: Record<string, unknown>): Lock {
     commit,
     ...(typeof version === "string" && typeof sha256 === "string" ? { version, sha256 } : {}),
     ...(verify ? { verify } : {}),
+    ...(typeof branch === "string" ? { branch } : {}),
     program,
   }
+}
+
+/** A branch name git accepts, with nothing a command line could take for an option or a range. */
+export function isBranchName(name: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(name) && !name.includes("..") && !name.endsWith("/") && !name.endsWith(".lock") &&
+    !name.includes("//")
 }
 
 /**

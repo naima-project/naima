@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { dirname, join, relative, resolve } from "node:path"
 import {
   carryRefusal,
+  isBranchName,
   type Lock,
   parseConfig,
   parseLock,
@@ -255,6 +256,7 @@ function targetOf(place: Place, lock: Lock, opts: CliOptions): Target {
     source: lock.source,
     commit: lock.commit,
     ...(lock.verify ? { verify: lock.verify } : {}),
+    ...(lock.branch ? { branch: lock.branch } : {}),
     ...(repo ? { seeds: [repo] } : {}),
     ...(lock.version && lock.sha256 ? { release: { version: lock.version, sha256: lock.sha256 } } : {}),
   }
@@ -857,6 +859,11 @@ function migratedBy(place: Place, raw: Record<string, unknown>): string | null {
   return last
 }
 
+/** naima.json's branch as `raw` holds it, or its removal: what a change of the followed branch writes. */
+function lockOnly(raw: Record<string, unknown>): Record<string, unknown> {
+  return { branch: raw["branch"] }
+}
+
 /** The full hash of `commit` in the program, fetched when it is a full hash the program lacks; an error naming it otherwise. */
 function resolveCommit(t: Target, commit: string): string {
   if (!/^[0-9a-f]{4,40}$/.test(commit)) throw new Error(`${commit} is not a commit: name it by its hash`)
@@ -881,10 +888,12 @@ async function moveLock(
   release?: { version: string; sha256: string },
 ): Promise<number> {
   const { release: _was, ...t } = targetOf(place, lock, opts)
-  // A release's commit was checked against its archive; any other must be of the source's main.
-  const onMain = release !== undefined || runGit(t.program, ["merge-base", "--is-ancestor", to, "refs/remotes/origin/main"]).ok ||
+  // A release's commit was checked against its archive; any other must be of the branch the lock follows: its main, or `branch`.
+  const branch = t.branch ?? "main"
+  if (t.branch) fetchHead(t)
+  const onMain = release !== undefined || runGit(t.program, ["merge-base", "--is-ancestor", to, `refs/remotes/origin/${branch}`]).ok ||
     runGit(t.program, ["merge-base", "--is-ancestor", to, lock.commit]).ok
-  if (!onMain) throw new Error(`${short(to)} is not a commit of the source's main: the lock names only those`)
+  if (!onMain) throw new Error(`${short(to)} is not a commit of the source's ${branch}: the lock names only those`)
   verifySigned(t.program, { ...t, commit: to })
   const change = await changeOf(t.program, raw, lock.commit, to)
   const tracker = posixRelative(place.root, trackerOf(place.data))
@@ -1039,8 +1048,11 @@ async function toRelease(
   return { kind: "moved", code: await moveLock(opts, place, lock, raw, io, commit, release) }
 }
 
-async function update(args: string[], opts: CliOptions, place: Place, lock: Lock, raw: Record<string, unknown>, io: IO): Promise<number> {
+async function update(args: string[], opts: CliOptions, place: Place, given: Lock, givenRaw: Record<string, unknown>, io: IO): Promise<number> {
+  let lock = given
+  let raw = givenRaw
   const p = parse(args, {
+    branch: { type: "string" },
     check: { type: "boolean" },
     "accept-source": { type: "boolean" },
     to: { type: "string" },
@@ -1052,13 +1064,27 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
   const to = str(p, "to")
   const mode = str(p, "mode")
   const main = bool(p, "main")
+  const followBranch = str(p, "branch")
   const pre = bool(p, "pre")
   const accept = bool(p, "accept-source")
   const exclusive = [check, accept, to !== undefined, mode !== undefined].filter((x) => x).length > 1
   const mainWith = main && (accept || to !== undefined || mode !== undefined)
   const preWith = pre && (main || accept || mode !== undefined)
-  if (exclusive || mainWith || preWith || p.positionals.length) {
+  const branchWith = followBranch !== undefined && (main || check || accept || pre || mode !== undefined)
+  if (exclusive || mainWith || preWith || branchWith || p.positionals.length) {
     throw new Error(usage("update"))
+  }
+  // --branch: the lock follows that branch of the source, a development line say, instead of its main and its releases;
+  // --main: back to the main. Recorded in naima.json's branch, which a later naima update follows.
+  if (followBranch !== undefined) {
+    if (!isBranchName(followBranch)) throw new Error(`${followBranch} is not a branch name`)
+    lock = { ...lock, branch: followBranch }
+    raw = { ...raw, branch: followBranch }
+  } else if (main && lock.branch !== undefined) {
+    const { branch: _left, ...rest } = lock
+    const { branch: _gone, ...others } = raw
+    lock = rest
+    raw = others
   }
   if (bool(p, "accept-source")) {
     // The entry point has aligned the program to the new source already: accepting it is all this asks,
@@ -1088,7 +1114,7 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
   const t = targetOf(place, lock, opts)
   const named = to !== undefined && isVersion(to) ? bareVersion(to) : undefined
   // A commit named, or main asked for: the source's main, as for a source that publishes no releases.
-  const byCommit = main || (to !== undefined && named === undefined)
+  const byCommit = main || lock.branch !== undefined || (to !== undefined && named === undefined)
   if (check) {
     if (!byCommit) {
       const news = await releaseNews(t, lock)
@@ -1137,6 +1163,8 @@ async function update(args: string[], opts: CliOptions, place: Place, lock: Lock
     target = head ? head.commit : resolveCommit(t, to as string)
     if (target !== lock.commit || (main && lock.version)) return await moveLock(opts, place, lock, raw, io, target)
   }
+  // The branch followed changed but the lock did not move (its tip is the locked commit): record the branch all the same.
+  if ((raw["branch"] ?? null) !== (givenRaw["branch"] ?? null)) writeValidatedRaw(place.data, { ...readRaw(place.data), ...lockOnly(raw) })
   const now = readRaw(place.data)
   const from = now["format"]
   const { all } = await owed(now, place, opts)

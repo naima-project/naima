@@ -581,6 +581,8 @@ export interface Config {
   sha256?: string
   /** `"signed"`: run a locked commit only when git verifies its signature. Absent: no signature is asked for. */
   verify?: "signed"
+  /** The branch of `source` the lock follows instead of its main and its releases, such as a development line: set by `naima update --branch`. */
+  branch?: string
   /** The program directory, relative to the data directory. */
   program: string
   /** Every plugin the project configures, first-party or third-party, by name. A first-party plugin it does not name is loaded as it is. */
