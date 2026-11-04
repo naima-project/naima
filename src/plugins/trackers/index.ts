@@ -623,6 +623,78 @@ const bugCounts: SummarySection = {
   },
 }
 
+/** One item of a type, as the new UI's lists show it: the `items` view's row. */
+export interface ItemRow {
+  id: string
+  /** The item as the tracker names it now: `<type>/<slug>`, `closed/<slug>` once closed. */
+  ref: string
+  /** Its type, the one it was closed from once closed. */
+  type: string
+  title: string
+  status: string
+  open: boolean
+  lifecycle: Lifecycle
+  created: string | null
+  gate: string | null
+  priority: string | null
+  impact: string | null
+  fixedOn: string | null
+  closedOn: string | null
+  /** The items that verify it: its proofs, each with its type and status. */
+  proofs: { ref: string; type: string; title: string; status: string }[]
+}
+
+const GATE = { name: "gate", kind: "string" } as const
+const PRIORITY = { name: "priority", kind: "enum" } as const
+const IMPACT = { name: "impact", kind: "enum" } as const
+
+/** Every item of a type, open and closed, retired ones left out, oldest first: the `items` view's data. */
+export function itemRows(ctx: Context, type: string): ItemRow[] {
+  const of = (i: Item) => (i.type === "closed" ? fieldValue(i, CLOSED_FROM) ?? "" : i.type)
+  return ctx.repo.items
+    .filter((i) => of(i) === type && !isRetired(ctx, i))
+    .map((i): ItemRow => ({
+      id: i.meta.id,
+      ref: label(i),
+      type,
+      title: i.meta.title,
+      status: i.meta.status,
+      open: i.type !== "closed" && isOpen(ctx, i),
+      lifecycle: lifecycle(ctx, i),
+      created: typeof i.meta["created"] === "string" ? i.meta["created"] : null,
+      gate: fieldValue(i, GATE) ?? null,
+      priority: fieldValue(i, PRIORITY) ?? null,
+      impact: fieldValue(i, IMPACT) ?? null,
+      fixedOn: fieldValue(i, FIXED_ON) ?? null,
+      closedOn: fieldValue(i, CLOSED_ON) ?? null,
+      proofs: linked(ctx, i, "verified-by").map((p) => ({ ref: label(p), type: p.type, title: p.meta.title, status: p.meta.status })),
+    }))
+    .sort((a, b) => (a.created ?? "").localeCompare(b.created ?? "") || a.ref.localeCompare(b.ref))
+}
+
+const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+
+/** The items of a type, as a view of naima ui (the bugs and features screens read it): the shape the `ui-views` point takes, declared here since plugins never import each other. */
+const itemsUiView = {
+  name: "items",
+  title: "Items",
+  says:
+    "every item of a type, open and closed, oldest first, each with its status, where it stands (unfixed, fixed, resolved, closed), its dates, gate, priority, impact and proofs: `?type=` picks the type (bugs); the bugs and features screens of naima ui read it",
+  screen: true,
+  render(params: Record<string, string[]>, ctx: Context) {
+    const type = params["type"]?.[0] ?? "bugs"
+    const rows = itemRows(ctx, type)
+    return {
+      data: { type, items: rows },
+      html: rows.length
+        ? `<table><thead><tr>${["Item", "Status", "Title"].map((h) => `<th scope="col">${h}</th>`).join("")}</tr></thead><tbody>${
+          rows.map((r) => `<tr><td><code>${esc(r.ref)}</code></td><td>${esc(r.status)}</td><td>${esc(r.title)}</td></tr>`).join("")
+        }</tbody></table>`
+        : `<p>No item of the type ${esc(type)}.</p>`,
+    }
+  },
+}
+
 export default function trackers(options: Record<string, unknown> = {}): Plugin {
   const { commitsRequiredFrom, repositories } = readOptions(options)
   const closedNamesCommits: Check = {
@@ -820,6 +892,9 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
       excusesItself(phrases),
     ],
     commands: [closeCommand(repositories), retire, bugs],
+    contributes: { "ui-views": [itemsUiView] },
+    // The items are a view of naima ui when the ui plugin is loaded; without it, nothing is lost.
+    optional: ["ui-views"],
     hooks: [retiredOnlyByRetire],
     summary: [bugCounts, closingSection],
   }

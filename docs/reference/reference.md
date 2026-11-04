@@ -167,7 +167,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `roles` | roles | a role of the company of agents: `title`, what it `owns`, what it `refuses` (never empty), the `kinds` and `types` on its queue, and `queue(ctx)`, its open items most urgent first | roles |
 | `verifiers` | verifier | an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest; `toolArgs`, the flags `naima verify --tool-args` may pass, which never change the verdict; and `equivalences` with `compare({ before, after, equivalence }, ctx) → { verdict, output, counterexample?, details? }` and `preserves({ property, options, equivalence }, ctx)`, for `naima equivalent`; `identityOptions(options)`, the options as they identify a run, so a run made with other effective options is never reused; `propertyFile(property, root)`, the file a property names when it is not inline, so a missing one is said as missing | verifier, verifier-mcrl2 |
 | `tools` | tools | a tool a plugin needs, which `naima tools install` installs into Naima's own directory: name, exact version, licence, homepage, source and authors (its attribution, which `naima credits` prints), programs, how an install is verified, and per platform a source (url, size, sha256, format) or the answer saying why there is none | backup, verifier-mcrl2 |
-| `ui-views` | ui | a view the new UI shows as a tab, and whose data the bridge's `data` command answers: `name`, `title`, `says`, `order` (lower first, 0 when absent), `moments` (true: at a commit it is rendered from the files as they are, `params.at` the commit's hash), `screen` (true: the new interface has a screen of its own for it, so it is not also one of its tabs), `render(params, ctx) → { data, html, css? }`, rendered at each request | coordination, triage, gates, verifier, ui, metrics, schedule |
+| `ui-views` | ui | a view the new UI shows as a tab, and whose data the bridge's `data` command answers: `name`, `title`, `says`, `order` (lower first, 0 when absent), `moments` (true: at a commit it is rendered from the files as they are, `params.at` the commit's hash), `screen` (true: the new interface has a screen of its own for it, so it is not also one of its tabs), `render(params, ctx) → { data, html, css? }`, rendered at each request | trackers, coordination, triage, gates, verifier, ui, metrics, schedule |
 | `ui-tabs` | ui | a tab of the new UI, with optional subtabs: `name`, `title`, `says`, `order` (lower first, 0 when absent), `subtabs` ([{ name, title, says? }]), `files(ctx)` (the folder its pages and frames show, or null) and `render({ sub, query }, ctx)`, which gives `{ component, data, lead? }` (component one of list, table, chart, gallery, markdown, drawn by the app), `{ page }` (a file of `files`) or `{ html, css? }`; pages are served sandboxed, and no code of the plugin runs in the app | stance-ui |
 | `metric-kinds` | metrics | how a metric's number is read from its run: `read({ exit, stdout, stderr, seconds }, metric) → number \| { error }`, `readsExit` | metrics |
 | `metrics` | metrics | a named measurement: `run` (a program and its arguments) and `kind`, a code `measure`, a test `suite`'s number or a `file`'s; a bound — `atMost`, `atLeast` or `equals` — and `better` |  |
@@ -1155,6 +1155,12 @@ Traits: `fixable`, `archive`.
 | Hook | What it does |
 |---|---|
 | `retired-only-by-retire` | an item's status becomes retired only by naima retire, with the reason and the owner's consent, and a retired item's status is never changed by hand |
+
+**UI views**, shown as tabs of the new UI
+
+| View | Title | What it shows |
+|---|---|---|
+| `items` | Items | every item of a type, open and closed, oldest first, each with its status, where it stands (unfixed, fixed, resolved, closed), its dates, gate, priority, impact and proofs: `?type=` picks the type (bugs); the bugs and features screens of naima ui read it |
 
 ## coordination
 
