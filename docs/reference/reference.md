@@ -229,6 +229,7 @@ Move the lock to the newest release of the source, or to the version or commit -
 naima update [--check
 naima --to <version|commit>
 naima --main
+naima --branch <name> [--to <commit>]
 naima --pre
 naima --mode off|check|update
 naima --accept-source]
@@ -238,6 +239,7 @@ naima --accept-source]
 |---|---|---|
 | `--check` |  | only say whether a newer release exists (for a source without releases, whether its main has moved past the locked commit), and what it changes — and rehearse it: its own naima check, run on the project from a temporary copy of it, writing nothing, says what would newly fail or be noted; exit 1 when it has moved |
 | `--to` |  | move the lock to this release (1.2.0 or v1.2.0), or to this commit of the source's main, forward or back; back across a data format is refused, naming the commit to revert; the option updates is removed when that commit does not know it, and said |
+| `--branch` |  | follow the head of another branch of the source, such as a development line (line/release-1.2), rather than its main and its releases, recorded as branch in naima.json so that every later naima update follows it, with --to naming a commit of that branch; naima update --main goes back to the main; the tracker's history is kept, as for any move of the lock |
 | `--main` |  | follow the head of the source's main rather than its releases, as for Naima's own development or a fork that publishes no releases; the lock then names a commit, with no version, and is not counted as an install of a release |
 | `--pre` |  | include pre-releases (1.2.0-rc.1) when choosing the newest release; a project that already runs a pre-release includes them without it |
 | `--mode` | `check` | set naima.json's updates, what naima hello does at a session start: off (nothing asked of the source), check (say when a newer Naima exists), update (say what it changes, and offer it; applied only after the owner's yes) |
