@@ -102,7 +102,7 @@ function _nat2pos(x: number): number {
 }
 
 function _cmp1(a: V, b: V): number {
-  if (typeof a === "string") return _RANK[a] - _RANK[b];
+  if (typeof a === "string") return _RANK[a]! - _RANK[b]!;
   if (typeof a === "boolean") return (a ? 1 : 0) - (b ? 1 : 0);
   return a < b ? -1 : a > b ? 1 : 0;
 }
@@ -181,7 +181,15 @@ class _Col {
 
 class _Upd {
   // f[k -> v] over a view, read only.
-  constructor(readonly b: V, readonly k: V, readonly v: V) {}
+  readonly b: V;
+  readonly k: V;
+  readonly v: V;
+
+  constructor(b: V, k: V, v: V) {
+    this.b = b;
+    this.k = k;
+    this.v = v;
+  }
 
   get(x: V): V {
     return _eq(x, this.k) ? this.v : this.b.get(x);
@@ -190,9 +198,11 @@ class _Upd {
 
 class _Ov {
   // An overlay (docs/spec.md §3.4.8): the entries written during a call over an unchanged view.
+  readonly b: V;
   m: Map<string, V>;
 
-  constructor(readonly b: V) {
+  constructor(b: V) {
+    this.b = b;
     this.m = new Map();
   }
 
@@ -273,8 +283,10 @@ class _Index {
   // Order keys: the id (least), the key's value (key), minus the entry stamp (newest), the stamp (oldest).
   ent: Map<number, [number, V]>;
   stamp: number;
+  readonly order: number;
 
-  constructor(readonly order: number) {
+  constructor(order: number) {
+    this.order = order;
     this.ent = new Map();
     this.stamp = 0;
   }
@@ -373,7 +385,7 @@ function _dec(data: Uint8Array, pos: number, d: V): [V, number] {
     if (op[0] === "v") {
       const k = op[1][0];
       if (k === "b") {
-        if (pos >= data.length || data[pos] > 1) throw new DecodeError("a Bool");
+        if (pos >= data.length || data[pos]! > 1) throw new DecodeError("a Bool");
         vals.push(data[pos] === 1);
         pos += 1;
       } else if (k === "n" || k === "i" || k === "e") {
@@ -381,7 +393,7 @@ function _dec(data: Uint8Array, pos: number, d: V): [V, number] {
         let sh = 1;
         for (;;) {
           if (pos >= data.length || sh > 2 ** 56) throw new DecodeError("a number");
-          const b = data[pos];
+          const b = data[pos]!;
           pos += 1;
           x += (b % 128) * sh;
           sh *= 128;
@@ -537,7 +549,7 @@ function _make(type: string, args: V[], table: V): V {
 export function encode(entry: Entry): Uint8Array {
   const out: number[] = [];
   const [side, x, table] = "event" in entry ? [0, entry.event, _EV] : [1, entry.action, _ACT];
-  const c = table[x.type];
+  const c = table[x.type]!;
   out.push(side);
   _enc(c.code, ["n"], out);
   _args(x, table).forEach((v, j) => _enc(v, c.descs[j], out));
@@ -545,14 +557,14 @@ export function encode(entry: Entry): Uint8Array {
 }
 
 export function decode(data: Uint8Array): Entry {
-  if (data.length === 0 || data[0] > 1) throw new DecodeError("a side");
+  if (data.length === 0 || data[0]! > 1) throw new DecodeError("a side");
   const side = data[0];
   let [code, pos] = _dec(data, 1, ["n"]);
   const table = side === 0 ? _EV : _ACT;
   const type = (side === 0 ? _EV_BY_CODE : _ACT_BY_CODE)[code];
   if (type === undefined) throw new DecodeError("a label code");
   const args: V[] = [];
-  for (const d of table[type].descs) {
+  for (const d of table[type]!.descs) {
     let v: V;
     [v, pos] = _dec(data, pos, d);
     args.push(v);
@@ -641,7 +653,7 @@ function _match0(s: V, a: V[]): V[] | null {
 function _fire0(s: V, env: V[]): void {
   const _n_phase = "CLAIMED";
   const _n_quiet = false;
-  const _n_status = ((0 < s.asks) ? "S_QUESTION" : ((0 < s.runs) ? "S_TESTING" : "S_WORKING"));
+  const _n_status = _m_statusOf("CLAIMED", s.worked, false, s.runs, s.asks);
   const _n_due = true;
   s.phase = _n_phase;
   s.quiet = _n_quiet;
@@ -657,7 +669,7 @@ function _match1(s: V, a: V[]): V[] | null {
 
 function _fire1(s: V, env: V[]): void {
   const _n_quiet = false;
-  const _n_status = ((s.phase === "CLAIMED") ? ((0 < s.asks) ? "S_QUESTION" : ((0 < s.runs) ? "S_TESTING" : "S_WORKING")) : ((s.phase === "LANDED") ? "S_NONE" : (s.worked ? "S_DONE" : "S_NONE")));
+  const _n_status = _m_statusOf(s.phase, s.worked, false, s.runs, s.asks);
   const _n_due = true;
   s.quiet = _n_quiet;
   s.status = _n_status;
@@ -674,7 +686,7 @@ function _fire2(s: V, env: V[]): void {
   const _n_phase = ((s.phase === "LANDED") ? "UNCLAIMED" : s.phase);
   const _n_worked = true;
   const _n_quiet = false;
-  const _n_status = ((((s.phase === "LANDED") ? "UNCLAIMED" : s.phase) === "CLAIMED") ? ((0 < s.asks) ? "S_QUESTION" : ((0 < s.runs) ? "S_TESTING" : "S_WORKING")) : ((((s.phase === "LANDED") ? "UNCLAIMED" : s.phase) === "LANDED") ? "S_NONE" : "S_DONE"));
+  const _n_status = _m_statusOf(((s.phase === "LANDED") ? "UNCLAIMED" : s.phase), true, false, s.runs, s.asks);
   const _n_due = true;
   s.phase = _n_phase;
   s.worked = _n_worked;
@@ -692,7 +704,7 @@ function _match3(s: V, a: V[]): V[] | null {
 function _fire3(s: V, env: V[]): void {
   const _n_quiet = false;
   const _n_runs = _add(s.runs, 1);
-  const _n_status = ((s.phase === "CLAIMED") ? ((0 < s.asks) ? "S_QUESTION" : ((0 < _add(s.runs, 1)) ? "S_TESTING" : "S_WORKING")) : ((s.phase === "LANDED") ? "S_NONE" : (s.worked ? "S_DONE" : "S_NONE")));
+  const _n_status = _m_statusOf(s.phase, s.worked, false, _add(s.runs, 1), s.asks);
   const _n_due = true;
   s.quiet = _n_quiet;
   s.runs = _fit(_n_runs, 0, 4294967295, "runs");
@@ -702,14 +714,14 @@ function _fire3(s: V, env: V[]): void {
 
 function _match4(s: V, a: V[]): V[] | null {
   // c_run_end
-  if (!(((!s.due) && (0 < s.runs)))) return null;
+  if (!(((!s.due) && (s.runs > 0)))) return null;
   return [];
 }
 
 function _fire4(s: V, env: V[]): void {
   const _n_quiet = false;
   const _n_runs = _int2nat(_sub(s.runs, 1));
-  const _n_status = ((s.phase === "CLAIMED") ? ((0 < s.asks) ? "S_QUESTION" : ((0 < _int2nat(_sub(s.runs, 1))) ? "S_TESTING" : "S_WORKING")) : ((s.phase === "LANDED") ? "S_NONE" : (s.worked ? "S_DONE" : "S_NONE")));
+  const _n_status = _m_statusOf(s.phase, s.worked, false, _int2nat(_sub(s.runs, 1)), s.asks);
   const _n_due = true;
   s.quiet = _n_quiet;
   s.runs = _fit(_n_runs, 0, 4294967295, "runs");
@@ -725,7 +737,7 @@ function _match5(s: V, a: V[]): V[] | null {
 
 function _fire5(s: V, env: V[]): void {
   const _n_quiet = false;
-  const _n_status = ((s.phase === "CLAIMED") ? ((0 < s.asks) ? "S_QUESTION" : ((0 < s.runs) ? "S_TESTING" : "S_WORKING")) : ((s.phase === "LANDED") ? "S_NONE" : (s.worked ? "S_DONE" : "S_NONE")));
+  const _n_status = _m_statusOf(s.phase, s.worked, false, s.runs, s.asks);
   const _n_due = true;
   s.quiet = _n_quiet;
   s.status = _n_status;
@@ -741,7 +753,7 @@ function _match6(s: V, a: V[]): V[] | null {
 function _fire6(s: V, env: V[]): void {
   const _n_quiet = false;
   const _n_asks = _add(s.asks, 1);
-  const _n_status = ((s.phase === "CLAIMED") ? ((0 < _add(s.asks, 1)) ? "S_QUESTION" : ((0 < s.runs) ? "S_TESTING" : "S_WORKING")) : ((s.phase === "LANDED") ? "S_NONE" : (s.worked ? "S_DONE" : "S_NONE")));
+  const _n_status = _m_statusOf(s.phase, s.worked, false, s.runs, _add(s.asks, 1));
   const _n_due = true;
   s.quiet = _n_quiet;
   s.asks = _fit(_n_asks, 0, 4294967295, "asks");
@@ -751,14 +763,14 @@ function _fire6(s: V, env: V[]): void {
 
 function _match7(s: V, a: V[]): V[] | null {
   // c_answer
-  if (!(((!s.due) && (0 < s.asks)))) return null;
+  if (!(((!s.due) && (s.asks > 0)))) return null;
   return [];
 }
 
 function _fire7(s: V, env: V[]): void {
   const _n_quiet = false;
   const _n_asks = _int2nat(_sub(s.asks, 1));
-  const _n_status = ((s.phase === "CLAIMED") ? ((0 < _int2nat(_sub(s.asks, 1))) ? "S_QUESTION" : ((0 < s.runs) ? "S_TESTING" : "S_WORKING")) : ((s.phase === "LANDED") ? "S_NONE" : (s.worked ? "S_DONE" : "S_NONE")));
+  const _n_status = _m_statusOf(s.phase, s.worked, false, s.runs, _int2nat(_sub(s.asks, 1)));
   const _n_due = true;
   s.quiet = _n_quiet;
   s.asks = _fit(_n_asks, 0, 4294967295, "asks");
@@ -774,7 +786,7 @@ function _match8(s: V, a: V[]): V[] | null {
 
 function _fire8(s: V, env: V[]): void {
   const _n_quiet = false;
-  const _n_status = ((s.phase === "CLAIMED") ? ((0 < s.asks) ? "S_QUESTION" : ((0 < s.runs) ? "S_TESTING" : "S_WORKING")) : ((s.phase === "LANDED") ? "S_NONE" : (s.worked ? "S_DONE" : "S_NONE")));
+  const _n_status = _m_statusOf(s.phase, s.worked, false, s.runs, s.asks);
   const _n_due = true;
   s.quiet = _n_quiet;
   s.status = _n_status;
@@ -789,7 +801,7 @@ function _match9(s: V, a: V[]): V[] | null {
 
 function _fire9(s: V, env: V[]): void {
   const _n_quiet = true;
-  const _n_status = ((s.phase === "CLAIMED") ? ((0 < s.asks) ? "S_QUESTION" : ((0 < s.runs) ? "S_TESTING" : "S_IDLE")) : ((s.phase === "LANDED") ? "S_NONE" : (s.worked ? "S_DONE" : "S_NONE")));
+  const _n_status = _m_statusOf(s.phase, s.worked, true, s.runs, s.asks);
   const _n_due = true;
   s.quiet = _n_quiet;
   s.status = _n_status;
@@ -804,7 +816,7 @@ function _match10(s: V, a: V[]): V[] | null {
 
 function _fire10(s: V, env: V[]): void {
   const _n_phase = "RELEASED";
-  const _n_status = (s.worked ? "S_DONE" : "S_NONE");
+  const _n_status = _m_statusOf("RELEASED", s.worked, s.quiet, s.runs, s.asks);
   const _n_due = true;
   s.phase = _n_phase;
   s.status = _n_status;
@@ -813,12 +825,12 @@ function _fire10(s: V, env: V[]): void {
 
 function _match11(s: V, a: V[]): V[] | null {
   // c_release#2
-  if (!(((!s.due) && (!(s.phase === "CLAIMED"))))) return null;
+  if (!(((!s.due) && (s.phase !== "CLAIMED")))) return null;
   return [];
 }
 
 function _fire11(s: V, env: V[]): void {
-  const _n_status = ((s.phase === "CLAIMED") ? ((0 < s.asks) ? "S_QUESTION" : ((0 < s.runs) ? "S_TESTING" : (s.quiet ? "S_IDLE" : "S_WORKING"))) : ((s.phase === "LANDED") ? "S_NONE" : (s.worked ? "S_DONE" : "S_NONE")));
+  const _n_status = _m_statusOf(s.phase, s.worked, s.quiet, s.runs, s.asks);
   const _n_due = true;
   s.status = _n_status;
   s.due = _n_due;
@@ -833,7 +845,7 @@ function _match12(s: V, a: V[]): V[] | null {
 function _fire12(s: V, env: V[]): void {
   const _n_phase = "LANDED";
   const _n_worked = false;
-  const _n_status = "S_NONE";
+  const _n_status = _m_statusOf("LANDED", false, s.quiet, s.runs, s.asks);
   const _n_due = true;
   s.phase = _n_phase;
   s.worked = _n_worked;
@@ -888,7 +900,8 @@ export class Acceptor {
     if (found.length === 0) throw new Rejected(entry);
     if (found.length > 1) throw new Ambiguous(entry);
     const s = { ...this.#s };
-    found[0][0](s, found[0][1]);
+    const [fire, env] = found[0]!;
+    fire(s, env);
     this.#s = s;
   }
 
@@ -921,7 +934,7 @@ function _match_s0(s: V, a: V[]): V[] | null {
 function _fire_s0(s: V, env: V[]): void {
   const _n_phase = "CLAIMED";
   const _n_quiet = false;
-  const _n_status = ((0 < s.asks) ? "S_QUESTION" : ((0 < s.runs) ? "S_TESTING" : "S_WORKING"));
+  const _n_status = _m_statusOf("CLAIMED", s.worked, false, s.runs, s.asks);
   const _n_due = true;
   s.phase = _n_phase;
   s.quiet = _n_quiet;
@@ -937,7 +950,7 @@ function _match_s1(s: V, a: V[]): V[] | null {
 
 function _fire_s1(s: V, env: V[]): void {
   const _n_quiet = false;
-  const _n_status = ((s.phase === "CLAIMED") ? ((0 < s.asks) ? "S_QUESTION" : ((0 < s.runs) ? "S_TESTING" : "S_WORKING")) : ((s.phase === "LANDED") ? "S_NONE" : (s.worked ? "S_DONE" : "S_NONE")));
+  const _n_status = _m_statusOf(s.phase, s.worked, false, s.runs, s.asks);
   const _n_due = true;
   s.quiet = _n_quiet;
   s.status = _n_status;
@@ -954,7 +967,7 @@ function _fire_s2(s: V, env: V[]): void {
   const _n_phase = ((s.phase === "LANDED") ? "UNCLAIMED" : s.phase);
   const _n_worked = true;
   const _n_quiet = false;
-  const _n_status = ((((s.phase === "LANDED") ? "UNCLAIMED" : s.phase) === "CLAIMED") ? ((0 < s.asks) ? "S_QUESTION" : ((0 < s.runs) ? "S_TESTING" : "S_WORKING")) : ((((s.phase === "LANDED") ? "UNCLAIMED" : s.phase) === "LANDED") ? "S_NONE" : "S_DONE"));
+  const _n_status = _m_statusOf(((s.phase === "LANDED") ? "UNCLAIMED" : s.phase), true, false, s.runs, s.asks);
   const _n_due = true;
   s.phase = _n_phase;
   s.worked = _n_worked;
@@ -972,7 +985,7 @@ function _match_s3(s: V, a: V[]): V[] | null {
 function _fire_s3(s: V, env: V[]): void {
   const _n_quiet = false;
   const _n_runs = _add(s.runs, 1);
-  const _n_status = ((s.phase === "CLAIMED") ? ((0 < s.asks) ? "S_QUESTION" : ((0 < _add(s.runs, 1)) ? "S_TESTING" : "S_WORKING")) : ((s.phase === "LANDED") ? "S_NONE" : (s.worked ? "S_DONE" : "S_NONE")));
+  const _n_status = _m_statusOf(s.phase, s.worked, false, _add(s.runs, 1), s.asks);
   const _n_due = true;
   s.quiet = _n_quiet;
   s.runs = _fit(_n_runs, 0, 4294967295, "runs");
@@ -982,14 +995,14 @@ function _fire_s3(s: V, env: V[]): void {
 
 function _match_s4(s: V, a: V[]): V[] | null {
   // c_run_end
-  if (!(((!s.due) && (0 < s.runs)))) return null;
+  if (!(((!s.due) && (s.runs > 0)))) return null;
   return [];
 }
 
 function _fire_s4(s: V, env: V[]): void {
   const _n_quiet = false;
   const _n_runs = _int2nat(_sub(s.runs, 1));
-  const _n_status = ((s.phase === "CLAIMED") ? ((0 < s.asks) ? "S_QUESTION" : ((0 < _int2nat(_sub(s.runs, 1))) ? "S_TESTING" : "S_WORKING")) : ((s.phase === "LANDED") ? "S_NONE" : (s.worked ? "S_DONE" : "S_NONE")));
+  const _n_status = _m_statusOf(s.phase, s.worked, false, _int2nat(_sub(s.runs, 1)), s.asks);
   const _n_due = true;
   s.quiet = _n_quiet;
   s.runs = _fit(_n_runs, 0, 4294967295, "runs");
@@ -1005,7 +1018,7 @@ function _match_s5(s: V, a: V[]): V[] | null {
 
 function _fire_s5(s: V, env: V[]): void {
   const _n_quiet = false;
-  const _n_status = ((s.phase === "CLAIMED") ? ((0 < s.asks) ? "S_QUESTION" : ((0 < s.runs) ? "S_TESTING" : "S_WORKING")) : ((s.phase === "LANDED") ? "S_NONE" : (s.worked ? "S_DONE" : "S_NONE")));
+  const _n_status = _m_statusOf(s.phase, s.worked, false, s.runs, s.asks);
   const _n_due = true;
   s.quiet = _n_quiet;
   s.status = _n_status;
@@ -1021,7 +1034,7 @@ function _match_s6(s: V, a: V[]): V[] | null {
 function _fire_s6(s: V, env: V[]): void {
   const _n_quiet = false;
   const _n_asks = _add(s.asks, 1);
-  const _n_status = ((s.phase === "CLAIMED") ? ((0 < _add(s.asks, 1)) ? "S_QUESTION" : ((0 < s.runs) ? "S_TESTING" : "S_WORKING")) : ((s.phase === "LANDED") ? "S_NONE" : (s.worked ? "S_DONE" : "S_NONE")));
+  const _n_status = _m_statusOf(s.phase, s.worked, false, s.runs, _add(s.asks, 1));
   const _n_due = true;
   s.quiet = _n_quiet;
   s.asks = _fit(_n_asks, 0, 4294967295, "asks");
@@ -1031,14 +1044,14 @@ function _fire_s6(s: V, env: V[]): void {
 
 function _match_s7(s: V, a: V[]): V[] | null {
   // c_answer
-  if (!(((!s.due) && (0 < s.asks)))) return null;
+  if (!(((!s.due) && (s.asks > 0)))) return null;
   return [];
 }
 
 function _fire_s7(s: V, env: V[]): void {
   const _n_quiet = false;
   const _n_asks = _int2nat(_sub(s.asks, 1));
-  const _n_status = ((s.phase === "CLAIMED") ? ((0 < _int2nat(_sub(s.asks, 1))) ? "S_QUESTION" : ((0 < s.runs) ? "S_TESTING" : "S_WORKING")) : ((s.phase === "LANDED") ? "S_NONE" : (s.worked ? "S_DONE" : "S_NONE")));
+  const _n_status = _m_statusOf(s.phase, s.worked, false, s.runs, _int2nat(_sub(s.asks, 1)));
   const _n_due = true;
   s.quiet = _n_quiet;
   s.asks = _fit(_n_asks, 0, 4294967295, "asks");
@@ -1054,7 +1067,7 @@ function _match_s8(s: V, a: V[]): V[] | null {
 
 function _fire_s8(s: V, env: V[]): void {
   const _n_quiet = false;
-  const _n_status = ((s.phase === "CLAIMED") ? ((0 < s.asks) ? "S_QUESTION" : ((0 < s.runs) ? "S_TESTING" : "S_WORKING")) : ((s.phase === "LANDED") ? "S_NONE" : (s.worked ? "S_DONE" : "S_NONE")));
+  const _n_status = _m_statusOf(s.phase, s.worked, false, s.runs, s.asks);
   const _n_due = true;
   s.quiet = _n_quiet;
   s.status = _n_status;
@@ -1069,7 +1082,7 @@ function _match_s9(s: V, a: V[]): V[] | null {
 
 function _fire_s9(s: V, env: V[]): void {
   const _n_quiet = true;
-  const _n_status = ((s.phase === "CLAIMED") ? ((0 < s.asks) ? "S_QUESTION" : ((0 < s.runs) ? "S_TESTING" : "S_IDLE")) : ((s.phase === "LANDED") ? "S_NONE" : (s.worked ? "S_DONE" : "S_NONE")));
+  const _n_status = _m_statusOf(s.phase, s.worked, true, s.runs, s.asks);
   const _n_due = true;
   s.quiet = _n_quiet;
   s.status = _n_status;
@@ -1084,7 +1097,7 @@ function _match_s10(s: V, a: V[]): V[] | null {
 
 function _fire_s10(s: V, env: V[]): void {
   const _n_phase = "RELEASED";
-  const _n_status = (s.worked ? "S_DONE" : "S_NONE");
+  const _n_status = _m_statusOf("RELEASED", s.worked, s.quiet, s.runs, s.asks);
   const _n_due = true;
   s.phase = _n_phase;
   s.status = _n_status;
@@ -1093,12 +1106,12 @@ function _fire_s10(s: V, env: V[]): void {
 
 function _match_s11(s: V, a: V[]): V[] | null {
   // c_release#2
-  if (!(((!s.due) && (!(s.phase === "CLAIMED"))))) return null;
+  if (!(((!s.due) && (s.phase !== "CLAIMED")))) return null;
   return [];
 }
 
 function _fire_s11(s: V, env: V[]): void {
-  const _n_status = ((s.phase === "CLAIMED") ? ((0 < s.asks) ? "S_QUESTION" : ((0 < s.runs) ? "S_TESTING" : (s.quiet ? "S_IDLE" : "S_WORKING"))) : ((s.phase === "LANDED") ? "S_NONE" : (s.worked ? "S_DONE" : "S_NONE")));
+  const _n_status = _m_statusOf(s.phase, s.worked, s.quiet, s.runs, s.asks);
   const _n_due = true;
   s.status = _n_status;
   s.due = _n_due;
@@ -1113,7 +1126,7 @@ function _match_s12(s: V, a: V[]): V[] | null {
 function _fire_s12(s: V, env: V[]): void {
   const _n_phase = "LANDED";
   const _n_worked = false;
-  const _n_status = "S_NONE";
+  const _n_status = _m_statusOf("LANDED", false, s.quiet, s.runs, s.asks);
   const _n_due = true;
   s.phase = _n_phase;
   s.worked = _n_worked;
@@ -1217,7 +1230,7 @@ export const inputs: readonly InputTransition[] = [
     type: "claim",
     args: [],
     next(state: State, event: Event): State | null {
-      const [type, match, fire] = _INS[0];
+      const [type, match, fire] = _INS[0]!;
       if (event.type !== type) return null;
       const s = _clone(state);
       const env = match(s, _args(event, _EV));
@@ -1233,7 +1246,7 @@ export const inputs: readonly InputTransition[] = [
     type: "step",
     args: [],
     next(state: State, event: Event): State | null {
-      const [type, match, fire] = _INS[1];
+      const [type, match, fire] = _INS[1]!;
       if (event.type !== type) return null;
       const s = _clone(state);
       const env = match(s, _args(event, _EV));
@@ -1249,7 +1262,7 @@ export const inputs: readonly InputTransition[] = [
     type: "commit",
     args: [],
     next(state: State, event: Event): State | null {
-      const [type, match, fire] = _INS[2];
+      const [type, match, fire] = _INS[2]!;
       if (event.type !== type) return null;
       const s = _clone(state);
       const env = match(s, _args(event, _EV));
@@ -1265,7 +1278,7 @@ export const inputs: readonly InputTransition[] = [
     type: "runStart",
     args: [],
     next(state: State, event: Event): State | null {
-      const [type, match, fire] = _INS[3];
+      const [type, match, fire] = _INS[3]!;
       if (event.type !== type) return null;
       const s = _clone(state);
       const env = match(s, _args(event, _EV));
@@ -1281,7 +1294,7 @@ export const inputs: readonly InputTransition[] = [
     type: "runEnd",
     args: [],
     next(state: State, event: Event): State | null {
-      const [type, match, fire] = _INS[4];
+      const [type, match, fire] = _INS[4]!;
       if (event.type !== type) return null;
       const s = _clone(state);
       const env = match(s, _args(event, _EV));
@@ -1297,7 +1310,7 @@ export const inputs: readonly InputTransition[] = [
     type: "runEnd",
     args: [],
     next(state: State, event: Event): State | null {
-      const [type, match, fire] = _INS[5];
+      const [type, match, fire] = _INS[5]!;
       if (event.type !== type) return null;
       const s = _clone(state);
       const env = match(s, _args(event, _EV));
@@ -1313,7 +1326,7 @@ export const inputs: readonly InputTransition[] = [
     type: "ask",
     args: [],
     next(state: State, event: Event): State | null {
-      const [type, match, fire] = _INS[6];
+      const [type, match, fire] = _INS[6]!;
       if (event.type !== type) return null;
       const s = _clone(state);
       const env = match(s, _args(event, _EV));
@@ -1329,7 +1342,7 @@ export const inputs: readonly InputTransition[] = [
     type: "answer",
     args: [],
     next(state: State, event: Event): State | null {
-      const [type, match, fire] = _INS[7];
+      const [type, match, fire] = _INS[7]!;
       if (event.type !== type) return null;
       const s = _clone(state);
       const env = match(s, _args(event, _EV));
@@ -1345,7 +1358,7 @@ export const inputs: readonly InputTransition[] = [
     type: "answer",
     args: [],
     next(state: State, event: Event): State | null {
-      const [type, match, fire] = _INS[8];
+      const [type, match, fire] = _INS[8]!;
       if (event.type !== type) return null;
       const s = _clone(state);
       const env = match(s, _args(event, _EV));
@@ -1361,7 +1374,7 @@ export const inputs: readonly InputTransition[] = [
     type: "quiet",
     args: [],
     next(state: State, event: Event): State | null {
-      const [type, match, fire] = _INS[9];
+      const [type, match, fire] = _INS[9]!;
       if (event.type !== type) return null;
       const s = _clone(state);
       const env = match(s, _args(event, _EV));
@@ -1377,7 +1390,7 @@ export const inputs: readonly InputTransition[] = [
     type: "release",
     args: [],
     next(state: State, event: Event): State | null {
-      const [type, match, fire] = _INS[10];
+      const [type, match, fire] = _INS[10]!;
       if (event.type !== type) return null;
       const s = _clone(state);
       const env = match(s, _args(event, _EV));
@@ -1393,7 +1406,7 @@ export const inputs: readonly InputTransition[] = [
     type: "release",
     args: [],
     next(state: State, event: Event): State | null {
-      const [type, match, fire] = _INS[11];
+      const [type, match, fire] = _INS[11]!;
       if (event.type !== type) return null;
       const s = _clone(state);
       const env = match(s, _args(event, _EV));
@@ -1409,7 +1422,7 @@ export const inputs: readonly InputTransition[] = [
     type: "land",
     args: [],
     next(state: State, event: Event): State | null {
-      const [type, match, fire] = _INS[12];
+      const [type, match, fire] = _INS[12]!;
       if (event.type !== type) return null;
       const s = _clone(state);
       const env = match(s, _args(event, _EV));
@@ -1431,9 +1444,9 @@ export const outputs: readonly OutputTransition[] = [
     next(state: State) {
       const s = _clone(state);
       const out: Action[] = [];
-      if (!_OUTS[0](s, out)) return null;
+      if (!_OUTS[0]!(s, out)) return null;
       _refresh(s);
-      return { state: s, action: out[0] };
+      return { state: s, action: out[0]! };
     },
   },
 ];

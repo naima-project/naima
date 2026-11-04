@@ -128,6 +128,10 @@ export interface RunRecord {
   counts?: Record<string, number>
   /** The flags `--tool-args` passed to the tool, which change what it prints, never the verdict; absent when none. Not part of the run's identity. */
   toolArgs?: string[]
+  /** The seconds the verifier took, wall-clock; absent in runs recorded before it was kept, and for a run carried over. */
+  seconds?: number
+  /** The commit checked out where the run was made (`HEAD`); absent in runs recorded before it was kept. */
+  commit?: string
   at: string
 }
 
@@ -245,10 +249,11 @@ function asRun(value: unknown): RunRecord | string {
   const missing = ["verifier", "model", "modelSha256", "property", "output", "at"].filter((k) => typeof r[k] !== "string")
   if (missing.length) return `${missing.join(", ")} missing or not text`
   if (!VERDICTS.includes(r["verdict"] as Verdict)) return `verdict ${JSON.stringify(r["verdict"])} is not one of ${VERDICTS.join(", ")}`
-  for (const k of ["optionsSha256", "counterexample", "toolVersion", "inputsSha256", "forced", "host"]) {
+  for (const k of ["optionsSha256", "counterexample", "toolVersion", "inputsSha256", "forced", "host", "commit"]) {
     if (r[k] !== undefined && typeof r[k] !== "string") return `${k} is not text`
   }
   if (r["details"] !== undefined && !isObject(r["details"])) return "details is not a JSON object"
+  if (r["seconds"] !== undefined && !(typeof r["seconds"] === "number" && Number.isFinite(r["seconds"]) && r["seconds"] >= 0)) return "seconds is not a number of seconds"
   const counts = r["counts"]
   if (
     counts !== undefined &&
@@ -496,11 +501,14 @@ export async function decideItem(ctx: Context, item: Item, progress: Progress = 
   }
   const hash = sha256(path)
   let result: VerifyResult
+  const started = performance.now()
   try {
     result = unversioned !== undefined ? { verdict: "error", output: unversioned } : inContract(id, await verifier.verify(request, ctx))
   } catch (e) {
     result = { verdict: "error", output: e instanceof Error ? e.message : String(e) }
   }
+  const seconds = Math.round((performance.now() - started) / 10) / 100
+  const commit = gitOrNull(ctx.root, "rev-parse", "HEAD")
   const counts = steps.counts(conclusive(result.verdict))
   return {
     record: {
@@ -520,6 +528,8 @@ export async function decideItem(ctx: Context, item: Item, progress: Progress = 
       ...(opts.force !== undefined ? { forced: opts.force } : {}),
       ...(toolArgs.length ? { toolArgs } : {}),
       ...(Object.keys(counts).length ? { counts } : {}),
+      seconds,
+      ...(commit ? { commit } : {}),
     },
   }
 }
@@ -1423,6 +1433,192 @@ const allHold: Gate = {
   },
 }
 
+// ── a property's history, for the new UI ─────────────────────────────────────
+
+/** A view of `naima ui`: the shape the `ui-views` point takes, declared here since plugins never import each other. */
+interface UiView {
+  name: string
+  title: string
+  says: string
+  moments?: boolean
+  screen?: boolean
+  render(params: Record<string, string[]>, ctx: Context): { data: unknown; html: string; css?: string }
+}
+
+type Point = [number, number, string, string]
+type Fail = [number, string, string]
+interface Series {
+  name: string
+  label: string
+  says: string
+  unit?: string
+  better: "higher" | "lower" | "neither"
+  card: false
+  points: Point[]
+  fails: Fail[]
+  at?: { value: number; commit: string; date: string; exact: boolean } | null
+}
+
+/** The longest end of a run's output a record carries, in lines. */
+const HISTORY_LOG_LINES = 80
+
+/** The trunk's commits, oldest first, and where a commit, or a time when the commit is not known, stands on it. */
+function trunkPlacing(ctx: Context) {
+  const split = (s: string | null) => (s ?? "").split("\n").filter(Boolean).map((l) => l.split(" ") as [string, string])
+  const trunk = split(gitOrNull(ctx.root, "log", "--first-parent", "--reverse", "--format=%H %cI", "HEAD")).map(([commit, date]) => ({ commit, date, t: Date.parse(date) }))
+  const index = new Map(trunk.map((c, i) => [c.commit, i]))
+  const reach = new Map(split(gitOrNull(ctx.root, "log", "--format=%H %cI", "HEAD")))
+  const posAt = (t: number): number => {
+    let lo = 0, hi = trunk.length - 1, r = 0
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1
+      if (trunk[mid]!.t <= t) (r = mid), (lo = mid + 1)
+      else hi = mid - 1
+    }
+    return r
+  }
+  const days: [number, string][] = []
+  trunk.forEach((c, i) => {
+    const d = c.date.slice(0, 10)
+    if (days.at(-1)?.[1] !== d) days.push([i, d])
+  })
+  /** A run's place: its commit's when it names one the trunk reaches, else the trunk's commit at its time. */
+  const place = (commit: string | undefined, at: string) => {
+    if (commit && reach.has(commit)) {
+      const date = reach.get(commit)!
+      return { commit, date, pos: index.get(commit) ?? posAt(Date.parse(date)) }
+    }
+    const pos = posAt(Date.parse(at))
+    return { commit: trunk[pos]?.commit ?? "", date: at, pos }
+  }
+  return { trunk, index, reach, place, days }
+}
+
+/** The states a run explored: the minimised LTS's when it built one, else the count lps2lts ended on. */
+const statesOf = (run: RunRecord): number | null => {
+  const lts = run.details?.["lts"] as { states?: unknown } | undefined
+  if (lts && typeof lts.states === "number") return lts.states
+  const n = run.counts?.["lps2lts"]
+  return typeof n === "number" ? n : null
+}
+
+/** A property's history: its verdict, the states explored and the time taken at each run kept, placed on the trunk. */
+export function propertyHistoryOf(ctx: Context, ref: string, at?: string, open?: string) {
+  const item = ctx.repo.resolve(ref)
+  if (item.type !== TYPE) throw new Error(`${label(item)} is not a property`)
+  const { trunk, index, reach, place, days } = trunkPlacing(ctx)
+  const kept = runsOf(item).map((k) => ({ k, p: place(k.run.commit, k.run.at) })).sort((a, b) => a.p.pos - b.p.pos || a.k.run.at.localeCompare(b.k.run.at))
+  const mk = (name: string, lab: string, says: string, better: Series["better"], unit?: string): Series => ({
+    name,
+    label: lab,
+    says,
+    ...(unit ? { unit } : {}),
+    better,
+    card: false,
+    points: [],
+    fails: [],
+  })
+  const verdict = mk("verdict", "Verdict", "1 when the property held, 0 when it was violated; a run that reached no verdict is marked", "higher")
+  const states = mk("states", "States", "the states the run explored", "lower")
+  const time = mk("seconds", "Time", "the seconds the verifier took", "lower", "s")
+  const runs: Record<string, { points: string[]; fails: string[] }> = {}
+  for (const s of [verdict, states, time]) runs[s.name] = { points: [], fails: [] }
+  const put = (s: Series, v: number | null, q: { pos: number; commit: string; date: string }, id: string) => {
+    const day = q.date.slice(0, 10)
+    if (v === null) (s.fails.push([q.pos, q.commit, day]), runs[s.name]!.fails.push(id))
+    else (s.points.push([q.pos, v, q.commit, day]), runs[s.name]!.points.push(id))
+  }
+  for (const { k, p } of kept) {
+    const v = k.run.verdict
+    put(verdict, v === "holds" ? 1 : v === "violated" ? 0 : null, p, k.name)
+    const n = statesOf(k.run)
+    if (n !== null) put(states, n, p, k.name)
+    if (typeof k.run.seconds === "number") put(time, k.run.seconds, p, k.name)
+  }
+  let moment: { pos: number; commit: string; date: string; onTrunk: boolean } | null = null
+  if (at) {
+    const date = reach.get(at) ?? gitOrNull(ctx.root, "log", "-1", "--format=%cI", at) ?? ""
+    moment = { ...place(at, date), commit: at, date: date.slice(0, 10), onTrunk: index.has(at) }
+    for (const s of [verdict, states, time]) {
+      const before = s.points.filter((x) => x[0] <= moment!.pos).at(-1)
+      s.at = before ? { value: before[1], commit: before[2], date: before[3], exact: before[2] === at } : null
+    }
+  }
+  const last = kept.at(-1)?.p ?? null
+  const shown = [verdict, ...[states, time].filter((s) => s.points.length)]
+  const history = {
+    item: `${item.type}/${item.slug}`,
+    title: item.meta.title,
+    kind: "property" as const,
+    timeline: {
+      n: trunk.length,
+      head: trunk.at(-1)?.commit ?? "",
+      days,
+      lastRecord: last ? { ...last, date: last.date.slice(0, 10) } : null,
+      moment,
+      metrics: shown,
+    },
+    runs: Object.fromEntries(shown.map((s) => [s.name, runs[s.name]!])),
+    ...(open !== undefined ? { record: propertyRecordOf(item, kept.map((x) => ({ ...x.k, commit: x.p.commit })), open) } : {}),
+  }
+  return history
+}
+
+/** The record of one run of a property, by its file's name in the item's attachments. */
+function propertyRecordOf(item: Item, kept: (KeptRun & { commit: string })[], name: string) {
+  const k = kept.find((x) => x.name === name)
+  if (!k) return { run: name, found: false, rows: [], log: "" }
+  const r = k.run
+  const n = statesOf(r)
+  const route = r.details?.["route"]
+  const rows: { label: string; value: string; mono?: boolean }[] = [
+    { label: "Verdict", value: r.verdict },
+    { label: "Property", value: r.property, mono: true },
+    { label: "Model", value: r.model, mono: true },
+    { label: "Verifier", value: r.verifier + (r.toolVersion ? `, ${r.toolVersion}` : "") },
+    ...(n !== null ? [{ label: "States", value: String(n) }] : []),
+    ...(typeof r.seconds === "number" ? [{ label: "Took", value: `${r.seconds} s` }] : []),
+    ...(typeof route === "string" ? [{ label: "Route", value: route }] : []),
+    ...(r.host ? [{ label: "Host", value: r.host }] : []),
+    ...(r.forced ? [{ label: "Run again because", value: r.forced }] : []),
+    { label: "Run", value: `${item.type}/${item.slug}/${ATTACHMENTS}/${k.name}`, mono: true },
+  ]
+  return {
+    run: k.name,
+    found: true,
+    commit: r.commit ?? k.commit,
+    at: r.at,
+    result: r.verdict,
+    good: r.verdict === "holds",
+    ...(r.carried
+      ? { reused: { from: r.carried.from, how: `carried over from an earlier version of the model, found equivalent modulo ${r.carried.equivalence}` } }
+      : {}),
+    rows,
+    log: r.output.split("\n").slice(-HISTORY_LOG_LINES - 1).join("\n").trimEnd(),
+  }
+}
+
+/**
+ * A property's value-against-time history, for the new UI: `item` names it; with `run=<file>` (a point's run) the
+ * record of that run as well. It has no tab: the metrics screen and an item's page show it.
+ */
+export const propertyHistoryView: UiView = {
+  name: "property-history",
+  title: "Property history",
+  says:
+    "a property's verdict, the states explored and the time taken at every run kept, on the trunk's commit axis, each point naming its run: `?item=<id>` gives the history, `&run=<file>` also the record of that run — verdict, model, tool, states, time, the end of its output, or the earlier version's run it was carried over from",
+  moments: true,
+  screen: true,
+  render(params, ctx) {
+    const ref = params["item"]?.[0]
+    if (!ref) throw new Error("property-history needs item=<id>")
+    const data = propertyHistoryOf(ctx, ref, params["at"]?.[0], params["run"]?.[0])
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    const rows = data.timeline.metrics.map((m) => `<tr><th>${esc(m.label)}</th><td>${m.points.length} points</td></tr>`).join("")
+    return { data, html: `<h1>${esc(data.title)}</h1><table>${rows}</table>` }
+  },
+}
+
 export default function verifier(): Plugin {
   return {
     name: "verifier",
@@ -1439,6 +1635,7 @@ export default function verifier(): Plugin {
     about:
       "A `properties` item names a `verifier` (an adapter any plugin can contribute), a `model` file (a path from the project root) and a `property` in the verifier's own language. " +
       "`naima verify` runs the adapter and attaches the run — verdict, output, the adapter's `details` of how it reached the verdict when it gives them, the model's sha256, and one digest over every file the run read (the model and what the adapter's `inputs` says it includes) and the tool's version (the adapter's `version`) — and the counterexample as its own file, then sets the status from the verdict. What the tool printed (the output, the counterexample, the details) is attached redacted: the project's root as `<root>`, a home-directory path, a machine or user name and an address as their placeholders. Every file is hashed by the content git commits: a text file's CRLF line endings are read as LF, so a run made on a Windows checkout with core.autocrlf is current on any other. " +
+      "Each run also keeps the seconds the verifier took and the commit checked out; the new UI's `property-history` view draws a property's verdict, states and time at every run kept, on the trunk's commit axis, each point opening its run's record. " +
       "`--tool-args=<flags>` passes the tool flags the adapter declares in `toolArgs` as changing what it prints, never the verdict, and keeps them with the run, outside its identity. `--host <host>` runs the verifier in the checkout of a host the long-work plugin declares, through that host's Naima (`naima verify --emit`, which prints the run and writes nothing), and attaches the run here, marked with the host, only when it was made on exactly what this checkout has. " +
       'A conclusive run (holds or violated) already recorded on the property with the same identity — verifier, model, property, `verifierOptions`, and the one digest over every input and the tool\'s version — is reused instead of repeated: `naima verify` says `reused` and names the run, and `--force "<reason>"` runs it again, keeping the reason with the new run. An error is never reused. Every run is kept, two made in the same instant included. A run records in `counts` the count each step that finished ended on (the states explored, the BES equations generated); the next run of the same property, model and `verifierOptions`, whatever the inputs now hold, reports that count as the estimated total of the step (`estimate: true` in its progress line, `~` in its text), which grows as the step passes it. ' +
       "A property that holds is evidence exactly as a passed test is: it can `verify` a bug and close it. A verdict is only as good as what it was reached on, so `naima check` fails when a property claims to hold and its property, verifier, model path, `verifierOptions`, model contents, any file it includes, the set of files it reads, or the tool's version have changed since the run. " +
@@ -1492,9 +1689,10 @@ export default function verifier(): Plugin {
       gates: [allHold],
       "landing-reports": [propertiesCurrent],
       summary: [codegenSection, missingSection],
+      "ui-views": [propertyHistoryView],
     },
-    // Its gate is there when a gates plugin is, its landing report when the coordination plugin is: without them, nothing lists either.
-    optional: ["gates", "landing-reports"],
+    // Its gate is there when a gates plugin is, its landing report when the coordination plugin is, its history view when the ui plugin is: without them, nothing lists either.
+    optional: ["gates", "landing-reports", "ui-views"],
     relations: [
       { name: WITNESSES, inverse: WITNESSED_BY, says: "is a witness property, showing that the behaviour is reachable, for" },
       { name: WITNESSED_BY, inverse: WITNESSES, says: "is backed by the witness property" },

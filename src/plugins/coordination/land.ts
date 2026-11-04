@@ -9,6 +9,7 @@
 import { join, relative } from "node:path"
 import { isDeepStrictEqual, stripVTControlCharacters } from "node:util"
 import { randomUUID } from "node:crypto"
+import { fileURLToPath } from "node:url"
 import { mkdirSync, readFileSync, rmSync } from "node:fs"
 import {
   appliesTo,
@@ -90,8 +91,9 @@ export interface Landing {
  * `refuses` names what is wrong with the branch, a check that fails: any line refuses the landing, and no flag lets it
  * through. `blocks` names what the landing changed whose proofs are not current: any line refuses the landing on the
  * trunk unless --stale-proofs gives a reason. `report` runs once the landing is made, and never refuses it. A `heavy`
- * check (browsers, a full suite) never runs where naima land runs: it runs on the landing host, through naima run
- * --host, in a checkout of the tip there, and with no landing host named the landing is refused. A heavy check may say
+ * check (browsers, a full suite) never runs inside naima land: it runs detached through naima run, in a checkout of
+ * the tip, and is waited on: on the landing host through naima run --host, or on this machine when no landing host is
+ * named or it is "here". A heavy check may say
  * up front, with `covers`, which of the files the landing changed it reads, where naima land runs and cheaply: when
  * it covers none, it is not needed, runs nowhere, and needs no landing host.
  */
@@ -134,7 +136,7 @@ function notTrackerOnly(branch: string, outside: string[]): string | null {
 export const landingReportsPoint: ExtensionPoint<LandingReport> = {
   id: "landing-reports",
   says:
-    "what `naima land` checks before a branch lands, on the trunk or on a line, and reports once it has: `name`, `says`, and `refuses(ctx, { branch, from, to, changed }) → lines`, what fails on the branch, any line refusing the landing with no flag to let it through; `blocks(ctx, landing) → lines`, what the landing changed whose proofs are not current, any line refusing a landing on the trunk unless --stale-proofs gives the reason; or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root, and `ctx.root` holds the branch tip's files; `heavy: true` says the check runs heavy work (browsers, a full suite): naima land runs it only on the host the coordination option landingHost names, through naima run --host, and refuses the landing when none is named; a heavy check may give `covers(ctx, landing) → files`, the files of `changed` it reads, computed where naima land runs without heavy work: when it covers none, the check is not needed and needs no landing host; the landing host is the one the branch tip's configuration names, else the trunk's",
+    "what `naima land` checks before a branch lands, on the trunk or on a line, and reports once it has: `name`, `says`, and `refuses(ctx, { branch, from, to, changed }) → lines`, what fails on the branch, any line refusing the landing with no flag to let it through; `blocks(ctx, landing) → lines`, what the landing changed whose proofs are not current, any line refusing a landing on the trunk unless --stale-proofs gives the reason; or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root, and `ctx.root` holds the branch tip's files; `heavy: true` says the check runs heavy work (browsers, a full suite): naima land runs it detached and waits on it, in a checkout of the tip: on the host the coordination option landingHost names, through naima run --host, or on this machine through naima run when none is named or it is `here`; a heavy check may give `covers(ctx, landing) → files`, the files of `changed` it reads, computed where naima land runs without heavy work: when it covers none, the check is not needed and needs no landing host; the landing host is the one the branch tip's configuration names, else the trunk's",
   noun: "landing report",
   key: (r) => r.name,
   validate: (v) => {
@@ -159,7 +161,7 @@ export const landingReportsPoint: ExtensionPoint<LandingReport> = {
       ) => [
         code(r.name),
         (r.refuses ? "refuses" : r.blocks ? "blocks" : "reports") +
-        (r.heavy ? (r.covers ? ", on the landing host when it changes a file it covers" : ", on the landing host") : ""),
+        (r.heavy ? (r.covers ? ", through naima run when it changes a file it covers" : ", through naima run") : ""),
         r.says,
       ]),
     ),
@@ -241,39 +243,55 @@ const landingRef = (run: string): string => `refs/naima/landing/${run}`
 const HEAVY_BUDGET = "1h"
 const HEAVY_STALE = "15m"
 
+/** The landingHost value that runs heavy landing checks on this machine, as an unset option does. */
+export const LANDING_HERE = "here"
+
+/** The program that runs this Naima, as a command's words: what a heavy landing check run on this machine starts. */
+function naimaHere(): string[] {
+  const program = fileURLToPath(new URL("../../../", import.meta.url))
+  const deno = (globalThis as { Deno?: { execPath(): string } }).Deno
+  return deno ? [deno.execPath(), "run", "-A", join(program, "naima.ts")] : [process.execPath, join(program, "src", "cli.ts")]
+}
+
 /**
- * A heavy landing check, on the landing host: the tip pushed to the host's checkout, `naima landing-check` run there
- * through naima run --host and waited on, its findings read from the run's log, then the run and the pushed ref
- * removed. The landing host is the one the branch tip's files name (`at`), else the trunk's. With no landing host named,
- * no long-work plugin or no such host, it is not run, and it refuses the landing.
+ * A heavy landing check, run detached through naima run and waited on with naima wait, its findings read from the
+ * run's log, then the run removed. On the landing host the tip is pushed to the host's checkout first, `naima
+ * landing-check` runs there through naima run --host, and the pushed ref is removed after. With no landing host named,
+ * or the host "here", it runs on this machine, through naima run, in a checkout of the tip as on a host. The landing host
+ * is the one the branch tip's files name (`at`), else the trunk's. With no long-work plugin, or a named host not
+ * declared, it is not run, and it refuses the landing.
  */
 async function heavyCheck(ctx: Context, name: string, landing: Landing, at: Context = ctx): Promise<Found & { where: string }> {
   const refusal = (why: string): Found & { where: string } => ({ refused: [why], notCurrent: [], said: [], where: "" })
-  const hostName = landingHost(ctx, at)
-  if (!hostName) {
-    return refusal(
-      "is heavy, so it runs only on the landing host, and none is named: set the coordination option landingHost to a host naima run --host reaches — not run here",
-    )
-  }
+  const named = landingHost(ctx, at)
+  const hostName = named === LANDING_HERE ? undefined : named
+  const place = hostName ?? "this machine"
   const run = ctx.registry.commands.get("run")
   const wait = ctx.registry.commands.get("wait")
-  if (!run || !wait) return refusal(`is heavy and runs on ${hostName} through naima run --host, which the long-work plugin provides, and it is not loaded`)
+  if (!run || !wait) return refusal(`is heavy and runs on ${place} through naima run, which the long-work plugin provides, and it is not loaded`)
   let host: Host | undefined
-  try {
-    const hosts = projectHosts(ctx.config.plugins["long-work"]?.options ?? {})
-    host = hosts.get(hostName)
-    if (!host) return refusal(`is heavy and its landing host is not declared: ${noHost(hostName, hosts)}`)
-  } catch (e) {
-    return refusal(`is heavy and its landing host cannot be read: ${message(e)}`)
+  if (hostName) {
+    try {
+      const hosts = projectHosts(ctx.config.plugins["long-work"]?.options ?? {})
+      host = hosts.get(hostName)
+      if (!host) return refusal(`is heavy and its landing host is not declared: ${noHost(hostName, hosts)}`)
+    } catch (e) {
+      return refusal(`is heavy and its landing host cannot be read: ${message(e)}`)
+    }
   }
   const runName = `landing-${name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").slice(0, 40)}-${landing.to.slice(0, 12)}`
-  const dest = `${host.ssh}:${host.dir}`
-  const pushed = runGit(ctx.root, ["push", "--no-verify", "--quiet", "--force", dest, `${landing.to}:${landingRef(runName)}`])
-  if (!pushed.ok) return refusal(`could not send ${landing.to.slice(0, 12)} to ${host.name}: ${gitReason(pushed)} — not run`)
+  const dest = host ? `${host.ssh}:${host.dir}` : ""
+  if (host) {
+    const pushed = runGit(ctx.root, ["push", "--no-verify", "--quiet", "--force", dest, `${landing.to}:${landingRef(runName)}`])
+    if (!pushed.ok) return refusal(`could not send ${landing.to.slice(0, 12)} to ${host.name}: ${gitReason(pushed)} — not run`)
+  }
   const lines: string[] = []
   const quiet = contextIn(ctx, ctx.root, { out: (l = "") => void lines.push(l), err: () => {}, now: ctx.now })
-  const quote = host.shell === "cmd" ? (w: string) => windowsArg(w) : shellQuote
-  const command = [host.naima, ...["landing-check", landingRef(runName), "--from", landing.from, "--check", name].map(quote)].join(" ")
+  const checkArgs = (rev: string): string[] => ["landing-check", rev, "--from", landing.from, "--check", name]
+  // On a host, one command line for its shell; here, the program and its arguments, with no shell between them.
+  const command = host
+    ? [[host.naima, ...checkArgs(landingRef(runName)).map(host.shell === "cmd" ? (w: string) => windowsArg(w) : shellQuote)].join(" ")]
+    : [...naimaHere(), ...checkArgs(landing.to)]
   const clean = async (): Promise<void> => {
     try {
       await run.run(["clean", runName], quiet)
@@ -284,34 +302,37 @@ async function heavyCheck(ctx: Context, name: string, landing: Landing, at: Cont
   try {
     await clean()
     lines.length = 0
-    const started = await run.run([runName, "--host", host.name, "--budget-time", HEAVY_BUDGET, "--stale", HEAVY_STALE, "--", command], quiet)
-    if (started !== 0) return refusal(`could not start on ${host.name}: ${lines.filter(Boolean).pop() ?? `exit ${started}`}`)
+    const started = await run.run(
+      [runName, ...(host ? ["--host", host.name] : []), "--budget-time", HEAVY_BUDGET, "--stale", HEAVY_STALE, "--", ...command],
+      quiet,
+    )
+    if (started !== 0) return refusal(`could not start on ${place}: ${lines.filter(Boolean).pop() ?? `exit ${started}`}`)
     lines.length = 0
     await wait.run([runName, "--timeout", HEAVY_BUDGET, "--tail", "200", "--json"], quiet)
     let view: { state?: string; tail?: string[] } = {}
     try {
       view = JSON.parse(lines.join("\n")) as typeof view
     } catch {
-      return refusal(`ran on ${host.name}, and its run could not be read: ${lines.filter(Boolean).pop() ?? "no answer"}`)
+      return refusal(`ran on ${place}, and its run could not be read: ${lines.filter(Boolean).pop() ?? "no answer"}`)
     }
     const verdict = (view.tail ?? []).filter((l) => l.startsWith(LANDING_CHECK_LINE)).pop()
     if (view.state !== "succeeded") {
       return refusal(
-        `ran on ${host.name}, and its run ${view.state ?? "could not be read"}: ${(view.tail ?? []).filter(Boolean).pop() ?? "nothing in its log"}`,
+        `ran on ${place}, and its run ${view.state ?? "could not be read"}: ${(view.tail ?? []).filter(Boolean).pop() ?? "nothing in its log"}`,
       )
     }
     if (!verdict) {
       return refusal(
-        `ran on ${host.name} and gave no findings (run ${view.state ?? "unknown"}): ${(view.tail ?? []).filter(Boolean).pop() ?? "nothing in its log"}`,
+        `ran on ${place} and gave no findings (run ${view.state ?? "unknown"}): ${(view.tail ?? []).filter(Boolean).pop() ?? "nothing in its log"}`,
       )
     }
     const found = JSON.parse(verdict.slice(LANDING_CHECK_LINE.length)) as Partial<Found>
-    return { refused: found.refused ?? [], notCurrent: found.notCurrent ?? [], said: found.said ?? [], where: `on ${host.name}` }
+    return { refused: found.refused ?? [], notCurrent: found.notCurrent ?? [], said: found.said ?? [], where: host ? `on ${host.name}` : "on this machine" }
   } catch (e) {
-    return refusal(`could not run on ${host.name}: ${message(e)}`)
+    return refusal(`could not run on ${place}: ${message(e)}`)
   } finally {
     await clean()
-    runGit(ctx.root, ["push", "--no-verify", "--quiet", dest, `:${landingRef(runName)}`])
+    if (host) runGit(ctx.root, ["push", "--no-verify", "--quiet", dest, `:${landingRef(runName)}`])
   }
 }
 

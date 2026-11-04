@@ -171,7 +171,9 @@ export async function supervise(dir: string, graceMs: number = DEFAULTS.graceMs)
       cwd: spec.cwd,
       env,
       stdio: ["ignore", "pipe", "pipe"],
-      detached: true,
+      // A group of its own on POSIX, ended as one. Never detached on Windows: a detached command line's cmd has no console,
+      // and the programs it starts write to a console of their own, not to the log; the tree is ended through taskkill.
+      detached: p.groups,
       windowsHide: true,
       ...(spec.shell && process.platform === "win32" ? { windowsVerbatimArguments: true } : {}),
     })

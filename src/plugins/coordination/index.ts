@@ -1298,8 +1298,8 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       {
         name: "landingHost",
         says:
-          "the host heavy landing checks run on (one that declares itself heavy, such as a check that opens a browser): a host declared for naima run --host, in the long-work plugin's hosts option or in the user's private hosts; naima land sends the branch tip there, runs the check through naima run --host and waits on it, and with none named refuses a landing a heavy check applies to rather than running it where it runs; the host the branch being landed names comes first, so that the branch that sets it lands by it",
-        default: "none",
+          "the host heavy landing checks run on (one that declares itself heavy, such as a check that opens a browser): a host declared for naima run --host, in the long-work plugin's hosts option or in the user's private hosts; naima land sends the branch tip there, runs the check through naima run --host and waits on it; with none named, or `here`, it runs the check on this machine through naima run, in a checkout of the tip, and waits on it; the host the branch being landed names comes first, so that the branch that sets it lands by it",
+        default: "none: this machine",
       },
       {
         name: "staleAfter",
