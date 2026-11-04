@@ -375,7 +375,11 @@ export const eventCommand: Command = {
   enforces: "an event has a YYYY-MM-DD date and a one-word kind, and is one new file; what the timeline derives is never recorded",
   usage: 'event <YYYY-MM-DD> "<what happened>" [--kind <kind>] [--at <HH:MM | ISO timestamp>] [--about <item>[,<item>...]]',
   options: [
-    { name: "--kind", says: "what sort of event: decision, build, policy, fact, diary, finding (a stepping stone worth telling), or any word", default: "fact" },
+    {
+      name: "--kind",
+      says: "what sort of event: decision, build, policy, fact, diary, finding (a stepping stone worth telling), or any word",
+      default: "fact",
+    },
     { name: "--about", says: "the items the event is about, by reference, separated by commas: each must name an item; naima diary <item> tells them" },
     {
       name: "--at",
@@ -408,7 +412,9 @@ export const eventCommand: Command = {
     const record = frontLines(beforeTextWrite(ctx, "the event"))
     writeFileAtomic(
       join(dir, name),
-      `---\ndate: ${date}\n${at ? `at: ${at}\n` : ""}kind: ${kind}\n${about.length ? `about: ${JSON.stringify(about)}\n` : ""}${record}---\n\n${[text, allowance].filter(Boolean).join("\n\n")}\n`,
+      `---\ndate: ${date}\n${at ? `at: ${at}\n` : ""}kind: ${kind}\n${about.length ? `about: ${JSON.stringify(about)}\n` : ""}${record}---\n\n${
+        [text, allowance].filter(Boolean).join("\n\n")
+      }\n`,
     )
     ctx.out(`wrote ${ctx.trackerDir}/${EVENTS}/${name} — commit it ${commitOn(ctx.root)}`)
     return 0
@@ -533,8 +539,7 @@ export function diaryDataOf(ctx: Context, passes: SessionNote[]): DiaryData {
 export function diaryView(passes: (ctx: Context) => SessionNote[]): View {
   return {
     name: "diary",
-    says:
-      "the diary's entries, each with the items it is about, with the version tags and the items filed and closed on each day: what the diary screen draws",
+    says: "the diary's entries, each with the items it is about, with the version tags and the items filed and closed on each day: what the diary screen draws",
     render(_args, ctx) {
       const d = diaryDataOf(ctx, passes(ctx))
       const line = (e: DiaryEntry) => `${e.date}  ${e.kind.padEnd(8)}  ${e.text}${e.about.length ? `  [${e.about.join(", ")}]` : ""}`
@@ -651,7 +656,8 @@ export function diaryCheck(passes: (ctx: Context) => SessionNote[], perDay: numb
         for (const ref of r.about.filter((x) => !refs.has(x))) {
           out.push({
             level: "note",
-            message: `${ctx.trackerDir}/${EVENTS}/${r.file}: its about names ${ref}, which is no item (moved or renamed?): the diary cannot point at it (${rule})`,
+            message:
+              `${ctx.trackerDir}/${EVENTS}/${r.file}: its about names ${ref}, which is no item (moved or renamed?): the diary cannot point at it (${rule})`,
           })
         }
       }
