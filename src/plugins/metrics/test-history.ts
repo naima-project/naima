@@ -73,7 +73,9 @@ export const testRunsView = {
     const rows = testHistory(ctx)
     const html = rows.length
       ? `<table><thead><tr><th>Test</th><th>Runs</th><th>Last</th></tr></thead><tbody>${
-        rows.map((r) => `<tr><td><code>${esc(r.ref)}</code> ${esc(r.title)}</td><td>${r.runs.length}</td><td>${r.runs.at(-1)!.ok ? "passed" : "failed"}</td></tr>`).join("")
+        rows.map((r) =>
+          `<tr><td><code>${esc(r.ref)}</code> ${esc(r.title)}</td><td>${r.runs.length}</td><td>${r.runs.at(-1)!.ok ? "passed" : "failed"}</td></tr>`
+        ).join("")
       }</tbody></table>`
       : "<p>No test item has a recorded run.</p>"
     return { data: { rows }, html }

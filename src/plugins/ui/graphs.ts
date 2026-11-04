@@ -126,7 +126,9 @@ export const mapView = {
   async render(_params: Record<string, string[]>, ctx: Context) {
     const data = await mapGraphs(ctx)
     const html = [
-      `<h3>Goals</h3><ul>${data.goals.map((g) => `<li><code>${esc(g.gate)}</code> ${esc(g.title)}${g.due ? `, due ${esc(g.due)}` : ""}, ${g.steps.length} steps</li>`).join("")}</ul>`,
+      `<h3>Goals</h3><ul>${
+        data.goals.map((g) => `<li><code>${esc(g.gate)}</code> ${esc(g.title)}${g.due ? `, due ${esc(g.due)}` : ""}, ${g.steps.length} steps</li>`).join("")
+      }</ul>`,
       `<h3>Dependencies</h3><p>${data.deps.edges.length} items wait for others, among ${data.deps.nodes.length} items.</p>`,
     ].join("\n")
     return { data, html }
