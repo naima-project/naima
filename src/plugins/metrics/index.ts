@@ -116,6 +116,7 @@ import {
   suiteDigest,
   type SuiteField,
   type SuiteOutcome,
+  type SuiteRun,
   suiteValue,
   TEST_NAMES,
   TEST_SUITE,
@@ -989,6 +990,28 @@ const DEFAULT_CARDS = 6
 
 /** The metrics along the trunk, and each one's record at `at` (a full hash) when a commit is selected. */
 export function timelineOf(ctx: Context, metrics: MetricDef[], at?: string): Timeline {
+  const { trunk, index, reach, place, days } = trunkOf(ctx)
+  // Each reachable commit's latest record, placed, oldest first.
+  const latest = new Map<string, MetricRecord>()
+  for (const r of readRecords(ctx)) {
+    if (!reach.has(r.commit)) continue
+    const prior = latest.get(r.commit)
+    if (!prior || prior.at < r.at) latest.set(r.commit, r)
+  }
+  const placed = [...latest.values()].map((r) => ({ r, p: place(r.commit, reach.get(r.commit) ?? r.date ?? "") }))
+    .sort((a, b) => a.p.pos - b.p.pos || Date.parse(a.p.date) - Date.parse(b.p.date))
+  let moment: Timeline["moment"] = null
+  let own: MetricRecord | undefined
+  if (at) {
+    const date = reach.get(at) ?? git(ctx, "log", "-1", "--format=%cI", at) ?? ""
+    moment = { ...place(at, date), onTrunk: index.has(at) }
+    own = readRecords(ctx).filter((r) => r.commit === at).sort((a, b) => (a.at < b.at ? 1 : -1))[0]
+  }
+  return timelineRest(metrics, trunk, days, placed, moment, own)
+}
+
+/** The trunk's commits, oldest first, and how any commit is placed on it: what every value-against-time graph's x axis counts. */
+function trunkOf(ctx: Context) {
   const trunk = lines(git(ctx, "log", "--first-parent", "--reverse", "--format=%H %cI", "HEAD")).map((l) => {
     const [commit = "", date = ""] = l.split(" ")
     return { commit, date, t: Date.parse(date) }
@@ -1011,27 +1034,23 @@ export function timelineOf(ctx: Context, metrics: MetricDef[], at?: string): Tim
     }),
   )
   const place = (commit: string, date: string): Placed => ({ commit, date, pos: index.get(commit) ?? posAt(Date.parse(date)) })
-  // Each reachable commit's latest record, placed, oldest first.
-  const latest = new Map<string, MetricRecord>()
-  for (const r of readRecords(ctx)) {
-    if (!reach.has(r.commit)) continue
-    const prior = latest.get(r.commit)
-    if (!prior || prior.at < r.at) latest.set(r.commit, r)
-  }
-  const placed = [...latest.values()].map((r) => ({ r, p: place(r.commit, reach.get(r.commit) ?? r.date ?? "") }))
-    .sort((a, b) => a.p.pos - b.p.pos || Date.parse(a.p.date) - Date.parse(b.p.date))
   const days: [number, string][] = []
   trunk.forEach((c, i) => {
     const d = c.date.slice(0, 10)
     if (days.at(-1)?.[1] !== d) days.push([i, d])
   })
-  let moment: Timeline["moment"] = null
-  let own: MetricRecord | undefined
-  if (at) {
-    const date = reach.get(at) ?? git(ctx, "log", "-1", "--format=%cI", at) ?? ""
-    moment = { ...place(at, date), onTrunk: index.has(at) }
-    own = readRecords(ctx).filter((r) => r.commit === at).sort((a, b) => (a.at < b.at ? 1 : -1))[0]
-  }
+  return { trunk, index, reach, place, days }
+}
+
+/** The metrics drawn on the trunk: each placed record's value of each metric, and its record at the moment. */
+function timelineRest(
+  metrics: MetricDef[],
+  trunk: { commit: string; date: string }[],
+  days: [number, string][],
+  placed: { r: MetricRecord; p: Placed }[],
+  moment: Timeline["moment"],
+  own: MetricRecord | undefined,
+): Timeline {
   const marked = (m: MetricDef): boolean => m.card === true || typeof m.card === "number"
   const someCard = metrics.some(marked)
   let defaults = 0
@@ -1266,6 +1285,205 @@ export const metricRunView: UiView = {
     ]
     const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
     return { data, html: `<table>${rows.map(([k, v]) => `<tr><th>${esc(k!)}</th><td>${esc(v!)}</td></tr>`).join("")}</table>` }
+  },
+}
+
+/**
+ * A value-against-time history of one test or property, for the new UI: its series on the trunk's commit axis (as the
+ * metrics screen's timeline places them), and beside each series' points the run each came from, which a point opens.
+ * The metrics plugin gives a test item's (`test-history`), the verifier a property's (`property-history`).
+ */
+export interface History {
+  item: string
+  title: string
+  kind: "test" | "property"
+  /** The series as metrics of a timeline: a test's result (1 passed, 0 failed) and its duration. */
+  timeline: Timeline
+  /** By series, the run behind each point and each failure, in the same order: what `run=<id>` opens. */
+  runs: Record<string, { points: string[]; fails: string[] }>
+  /** With `run=<id>`: the record of that run. */
+  record?: HistoryRecord
+}
+
+/** The record of the run behind a point of a history: what it found, how, and whether it reused an earlier run. */
+export interface HistoryRecord {
+  run: string
+  found: boolean
+  commit?: string
+  at?: string
+  /** passed or failed for a test; holds, violated, error or unknown for a property. */
+  result?: string
+  good?: boolean
+  /** The value was not measured by this run but taken over from an earlier one: which, and how. */
+  reused?: { from: string; commit?: string; at?: string; how: string }
+  rows: { label: string; value: string; mono?: boolean }[]
+  /** For a test: each test of the item in the run, with its result, its time and what the runner said of a failure. */
+  tests?: { name: string; result: string; seconds?: number; message?: string }[]
+  /** The end of the run's log or output, private infrastructure already replaced. */
+  log: string
+}
+
+/** One run of a test item: a record's suite run (run then or reused) or a recorded run no record names. */
+interface TestPoint {
+  id: string
+  commit: string
+  date: string
+  recordedAt?: string
+  path: string
+  run: SuiteRun
+  reused: boolean
+}
+
+/** The suite runs that speak for a test item, each where it stands on the trunk, oldest first. */
+function testPoints(ctx: Context, item: Item): { tests: (r: SuiteRun) => SuiteRun["tests"]; points: TestPoint[] } {
+  const names = fieldValue(item, TEST_NAMES) ?? []
+  const only = fieldValue(item, TEST_SUITE)
+  const tests = (r: SuiteRun) => r.tests.filter((t) => names.some((p) => testMatches(p, t)))
+  const runs = new Map<string, SuiteRun>()
+  const read = (path: string): SuiteRun | null => {
+    if (!runs.has(path)) {
+      const r = readSuiteRun(ctx, path)
+      if (r) runs.set(path, r)
+    }
+    return runs.get(path) ?? null
+  }
+  const points: TestPoint[] = []
+  const used = new Set<string>()
+  const records = recordFiles(ctx).map((f) => f.record).sort((a, b) => (a.at < b.at ? -1 : 1))
+  for (const rec of records) {
+    for (const [suite, path] of Object.entries(rec.runs ?? {})) {
+      if (only !== undefined && suite !== only) continue
+      const run = read(path)
+      if (!run || run.error || !tests(run).some((t) => t.result !== "skipped")) continue
+      const reused = run.commit !== rec.commit || used.has(path)
+      used.add(path)
+      points.push({ id: `${path}@${rec.commit}`, commit: rec.commit, date: rec.date ?? run.date ?? rec.at, recordedAt: rec.at, path, run, reused })
+    }
+  }
+  // A run recorded with no record naming it stands at its own commit.
+  const suites = existsSync(join(ctx.trackerRoot, RUNS_DIR)) ? readdirSync(join(ctx.trackerRoot, RUNS_DIR)) : []
+  for (const suite of suites) {
+    if (only !== undefined && suite !== only) continue
+    for (const { path, run } of recordedRuns(ctx, suite)) {
+      if (used.has(path) || run.error || !run.commit || !tests(run).some((t) => t.result !== "skipped")) continue
+      points.push({ id: `${path}@${run.commit}`, commit: run.commit, date: run.date ?? run.at, path, run, reused: false })
+    }
+  }
+  return { tests, points }
+}
+
+/** A test item's history: its result and its duration at each run that ran its tests, placed on the trunk. */
+export function testHistoryOf(ctx: Context, ref: string, at?: string, open?: string): History {
+  const item = ctx.repo.resolve(ref)
+  if (item.type !== "tests") throw new Error(`${label(item)} is not a test`)
+  const { trunk, index, reach, place, days } = trunkOf(ctx)
+  const { tests, points } = testPoints(ctx, item)
+  const placed = points.map((p) => ({ p, at: place(p.commit, reach.get(p.commit) ?? p.date) }))
+    .sort((a, b) => a.at.pos - b.at.pos || (a.p.recordedAt ?? a.p.run.at).localeCompare(b.p.recordedAt ?? b.p.run.at))
+  const result: TimelineMetric = { name: "result", label: "Result", says: "1 when every test of the item that ran passed, 0 when one failed", better: "higher", card: false, points: [], fails: [] }
+  const duration: TimelineMetric = { name: "duration", label: "Duration", says: "the seconds the item's tests took, as the runner reported them", unit: "s", better: "lower", card: false, points: [], fails: [] }
+  const ofResult = { points: [] as string[], fails: [] as string[] }
+  const ofDuration = { points: [] as string[], fails: [] as string[] }
+  const runs: History["runs"] = { result: ofResult, duration: ofDuration }
+  for (const { p, at: q } of placed) {
+    const ran = tests(p.run).filter((t) => t.result !== "skipped")
+    const failed = ran.some((t) => t.result === "failed")
+    const day = q.date.slice(0, 10)
+    result.points.push([q.pos, failed ? 0 : 1, q.commit, day])
+    ofResult.points.push(p.id)
+    const timed = ran.filter((t) => typeof t.seconds === "number")
+    if (timed.length) {
+      duration.points.push([q.pos, Math.round(timed.reduce((s, t) => s + t.seconds!, 0) * 1000) / 1000, q.commit, day])
+      ofDuration.points.push(p.id)
+    }
+    if (failed) {
+      duration.fails.push([q.pos, q.commit, day])
+      ofDuration.fails.push(p.id)
+    }
+  }
+  let moment: Timeline["moment"] = null
+  if (at) {
+    const date = reach.get(at) ?? git(ctx, "log", "-1", "--format=%cI", at) ?? ""
+    moment = { ...place(at, date), onTrunk: index.has(at) }
+    for (const m of [result, duration]) {
+      const before = m.points.filter((x) => x[0] <= moment!.pos).at(-1)
+      m.at = before ? { value: before[1], commit: before[2], date: before[3], exact: before[2] === at } : null
+    }
+  }
+  const last = placed.at(-1)?.at ?? null
+  const history: History = {
+    item: `${item.type}/${item.slug}`,
+    title: item.meta.title,
+    kind: "test",
+    timeline: {
+      n: trunk.length,
+      head: trunk.at(-1)?.commit ?? "",
+      days,
+      lastRecord: last ? { ...last, date: last.date.slice(0, 10) } : null,
+      moment: moment ? { ...moment, date: moment.date.slice(0, 10) } : null,
+      metrics: duration.points.length || duration.fails.length ? [result, duration] : [result],
+    },
+    runs,
+  }
+  if (open !== undefined) history.record = testRecordOf(ctx, tests, points, open)
+  return history
+}
+
+/** The record of one run of a test item, by the id its point carries. */
+function testRecordOf(ctx: Context, tests: (r: SuiteRun) => SuiteRun["tests"], points: TestPoint[], id: string): HistoryRecord {
+  const p = points.find((x) => x.id === id)
+  if (!p) return { run: id, found: false, rows: [], log: "" }
+  const mine = tests(p.run)
+  const ran = mine.filter((t) => t.result !== "skipped")
+  const failed = ran.filter((t) => t.result === "failed")
+  const seconds = ran.filter((t) => typeof t.seconds === "number").reduce((s, t) => s + t.seconds!, 0)
+  let log = ""
+  if (p.run.log) {
+    try {
+      log = readFileSync(join(ctx.trackerRoot, dirname(p.path), p.run.log), "utf8").split("\n").slice(-RUN_LOG_LINES - 1).join("\n").trimEnd()
+    } catch {
+      log = ""
+    }
+  }
+  return {
+    run: id,
+    found: true,
+    commit: p.commit,
+    at: p.recordedAt ?? p.run.at,
+    result: failed.length ? "failed" : "passed",
+    good: failed.length === 0,
+    ...(p.reused ? { reused: { from: p.path, commit: p.run.commit, at: p.run.at, how: "the suite was not run again: its inputs were those of this earlier run" } } : {}),
+    rows: [
+      { label: "Result", value: failed.length ? `${failed.length} of ${ran.length} failed` : `${ran.length} passed` },
+      { label: "Took", value: `${Math.round(seconds * 1000) / 1000} s` },
+      { label: "Suite", value: p.run.suite },
+      { label: "Command", value: [...(p.run.prepare ? [...p.run.prepare, "&&"] : []), ...p.run.command].join(" "), mono: true },
+      { label: "Suite result", value: `${p.run.counts.passed} passed, ${p.run.counts.failed} failed, ${p.run.counts.skipped} skipped, exit ${p.run.exit}` },
+      { label: "Run", value: p.path, mono: true },
+    ],
+    tests: mine.map((t) => ({ name: t.name, result: t.result, ...(t.seconds !== undefined ? { seconds: t.seconds } : {}), ...(t.message ? { message: t.message } : {}) })),
+    log,
+  }
+}
+
+/**
+ * A test item's value-against-time history, for the new UI: `item` names it; with `run=<id>` (a point's run) the
+ * record of that run as well. It has no tab: the metrics screen and an item's page show it.
+ */
+export const testHistoryView: UiView = {
+  name: "test-history",
+  title: "Test history",
+  says:
+    "a test item's result and duration at every run of its tests, on the trunk's commit axis, each point naming its run: `?item=<id>` gives the history, `&run=<id>` also the record of that run — its tests, its time, its suite's command and counts, the end of its log, or the earlier run it reused",
+  moments: true,
+  screen: true,
+  render(params, ctx) {
+    const ref = params["item"]?.[0]
+    if (!ref) throw new Error("test-history needs item=<id>")
+    const data = testHistoryOf(ctx, ref, params["at"]?.[0], params["run"]?.[0])
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    const rows = data.timeline.metrics.map((m) => `<tr><th>${esc(m.label ?? m.name)}</th><td>${m.points.length} points</td></tr>`).join("")
+    return { data, html: `<h1>${esc(data.title)}</h1><table>${rows}</table>` }
   },
 }
 
@@ -1945,7 +2163,7 @@ export default function metrics(options: Record<string, unknown> = {}): Plugin {
       "test-suites": suiteDefs,
       metrics: defs,
       gates: [...(defs.length ? [metricsGate] : []), ...(suiteDefs.length ? [suitesGate] : [])],
-      "ui-views": [metricsView, metricRunView, testRunsView],
+      "ui-views": [metricsView, metricRunView, testRunsView, testHistoryView],
       "landing-reports": suiteDefs.length ? [suitesCurrent] : [],
     },
     // The gate is for the gates plugin, the view for the ui plugin, the landing check for the coordination plugin, when
