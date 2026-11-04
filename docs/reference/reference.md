@@ -167,7 +167,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `roles` | roles | a role of the company of agents: `title`, what it `owns`, what it `refuses` (never empty), the `kinds` and `types` on its queue, and `queue(ctx)`, its open items most urgent first | roles |
 | `verifiers` | verifier | an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest; `toolArgs`, the flags `naima verify --tool-args` may pass, which never change the verdict; and `equivalences` with `compare({ before, after, equivalence }, ctx) → { verdict, output, counterexample?, details? }` and `preserves({ property, options, equivalence }, ctx)`, for `naima equivalent`; `identityOptions(options)`, the options as they identify a run, so a run made with other effective options is never reused; `propertyFile(property, root)`, the file a property names when it is not inline, so a missing one is said as missing | verifier, verifier-mcrl2 |
 | `tools` | tools | a tool a plugin needs, which `naima tools install` installs into Naima's own directory: name, exact version, licence, homepage, source and authors (its attribution, which `naima credits` prints), programs, how an install is verified, and per platform a source (url, size, sha256, format) or the answer saying why there is none | backup, verifier-mcrl2 |
-| `ui-views` | ui | a view the new UI shows as a tab, and whose data the bridge's `data` command answers: `name`, `title`, `says`, `order` (lower first, 0 when absent), `moments` (true: at a commit it is rendered from the files as they are, `params.at` the commit's hash), `screen` (true: the new interface has a screen of its own for it, so it is not also one of its tabs), `render(params, ctx) → { data, html, css? }`, rendered at each request | coordination, triage, gates, ui, metrics, schedule |
+| `ui-views` | ui | a view the new UI shows as a tab, and whose data the bridge's `data` command answers: `name`, `title`, `says`, `order` (lower first, 0 when absent), `moments` (true: at a commit it is rendered from the files as they are, `params.at` the commit's hash), `screen` (true: the new interface has a screen of its own for it, so it is not also one of its tabs), `render(params, ctx) → { data, html, css? }`, rendered at each request | coordination, triage, gates, verifier, ui, metrics, schedule |
 | `ui-tabs` | ui | a tab of the new UI, with optional subtabs: `name`, `title`, `says`, `order` (lower first, 0 when absent), `subtabs` ([{ name, title, says? }]), `files(ctx)` (the folder its pages and frames show, or null) and `render({ sub, query }, ctx)`, which gives `{ component, data, lead? }` (component one of list, table, chart, gallery, markdown, drawn by the app), `{ page }` (a file of `files`) or `{ html, css? }`; pages are served sandboxed, and no code of the plugin runs in the app | stance-ui |
 | `metric-kinds` | metrics | how a metric's number is read from its run: `read({ exit, stdout, stderr, seconds }, metric) → number \| { error }`, `readsExit` | metrics |
 | `metrics` | metrics | a named measurement: `run` (a program and its arguments) and `kind`, a code `measure`, a test `suite`'s number or a `file`'s; a bound — `atMost`, `atLeast` or `equals` — and `better` |  |
@@ -2963,6 +2963,12 @@ Models: a model, or another artifact properties are verified on, named by its pa
 | `example-regex` | line-regex properties over a text file: "some <re>" or "never <re>" |
 | `naima-codegen` | a naima-codegen project, its codegen.toml the model: "refines" runs check-refinement, that the generated machine stays inside the model; "properties", or one property's .mcf file, runs check-refinement --properties on the refined systems; every file of the project is an input |
 
+**UI views**, shown as tabs of the new UI
+
+| View | Title | What it shows |
+|---|---|---|
+| `property-runs` | Property runs | every property with the runs recorded on it, oldest first: when, and its verdict (holds, violated, error); the new UI's failed-tests matrix reads it |
+
 ## tools
 
 The tools plugins need, installed by Naima into its own directory on the machine it runs on: naima tools reports them, installs one with consent, removes one.
@@ -3198,6 +3204,7 @@ naima name-stop 3ab303aa --clear
 | `summary` | Summary | where the project stands: every plugin's summary section, as `naima summary` prints it; its data is `naima summary --json` |
 | `board` | Boards | a type's board, its open items by section, most urgent first: `?type=` picks the type (the first one that takes new items), `?all=1` adds the done ones; its data is `naima board <type> [--all] --json` |
 | `item` | Item | one item, picked by `?item=`: its evidence — its attachments and the items of a type that can prove, whether each proves or refutes now — then its fields, its other links and its prose; its data is `naima show <item> --json`, null when none is picked |
+| `map` | Map | the graphs the new UI's map draws besides the lines and their commits: each gate's goal with its start, due date and steps (with the day each closed), and the items that wait for others, as edges from the item first to the one that waits |
 
 ## metrics
 
@@ -3293,6 +3300,7 @@ naima metrics presets
 |---|---|---|
 | `metrics` | Metrics | the project's metrics along the commit timeline: a chart and a table of each, for the metrics and the commits picked; its data's `timeline` places every record on the trunk's commit axis for the new UI, and with `?at=<commit>` each metric's record at that commit |
 | `metric-run` | Metric run | the record of the run that measured a metric at a commit, for a point of the new UI's value-against-time graph: `?metric=<name>&commit=<hash>` gives the value, whether it held its bound, when it was recorded and how it was taken — a test suite's run with its counts, its time and the end of its log, or the earlier run it reused; a command; a code measure |
+| `test-runs` | Test runs | every test item with the runs recorded on it by suites' runs, oldest first: when, the commit, passed or failed; the new UI's failed-tests matrix reads it |
 
 **Metric kinds**, how `naima metrics` reads a number
 
