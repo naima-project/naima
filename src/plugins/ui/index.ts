@@ -30,6 +30,7 @@ import {
 } from "../../core/api.ts"
 import { naimaBridge } from "./bridge.ts"
 import { mapView } from "./graphs.ts"
+import { projectsView } from "./projects.ts"
 import { browserCommand, openBrowser, type Opened, osName } from "./open.ts"
 import { filesKey, filesUrl, newToken, serve } from "./serve.ts"
 import { runSidecar } from "./sidecar.ts"
@@ -330,7 +331,7 @@ export default function ui(): Plugin {
       "`action` runs `decide`, `note`, `gate step`, `claim`, `release` or `name-stop` as a run of `naima run`, and `run` shows that run, its state, exit code and log; a bridge command is refused from any page but the server's own. " +
       "The same commands serve the desktop app, the Tauri shell around the same bundle: it starts `naima ui --sidecar` in the project's folder, which answers them on its standard input and output, one JSON object a line, pushes the feed's events there too, and reads a tab's files for the shell's naima-files: scheme, with no network listener.",
     points: [viewsPoint, uiTabsPoint],
-    contributes: { "ui-views": [summaryView, boardView, itemView, mapView] },
+    contributes: { "ui-views": [summaryView, boardView, itemView, mapView, projectsView] },
     commands: [uiCommand, nameStopCommand],
   }
 }

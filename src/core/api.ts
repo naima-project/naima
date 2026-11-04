@@ -39,7 +39,8 @@ export {
 } from "./item.ts"
 export { storedLinks } from "./repo.ts"
 export { filerRole, sessionLine, setSessionLine } from "./origin.ts"
-export { checkoutAt, contextAt, contextIn, type IO } from "./context.ts"
+export { checkoutAt, contextAt, contextIn, contextOfProject, type IO } from "./context.ts"
+export { type KnownProject, knownProjects } from "./projects.ts"
 export { READY, readyQueue, type ReadyRecord, readyRecord } from "./ready.ts"
 export { groupBy } from "./collections.ts"
 export {
