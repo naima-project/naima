@@ -26,8 +26,8 @@
 // command inherits as the caller's. `naima verify`, and no other command, may
 // run naima-codegen, the program of the first-party naima-codegen verifier
 // (VERIFY_PROGRAM), and with --host ssh too, to run the verifier in the host's
-// checkout. `naima land` may run ssh, to start a heavy landing check on the
-// landing host through naima run --host and wait on it there. `naima recover`, and no other command, may read the folders the
+// checkout. `naima land` may run ssh, and read and run that Deno, to start a
+// heavy landing check through naima run, on the landing host or here, and wait on it. `naima recover`, and no other command, may read the folders the
 // agent tools keep their transcripts in (core/adapters, TranscriptReader), to
 // brief the worker that resumes a dead or stuck one. `naima describe`, `naima note`,
 // `naima attach` and `naima pass`, and no other command, may read the system's temporary folder (TEMP_READERS),
@@ -230,7 +230,7 @@ export function uiGrant(
     }
   }
   // ssh for naima land: a heavy landing check runs on the landing host, started and waited on through naima run --host in process.
-  if (command === "land") return { net: [], read: [], runs: ["ssh"] }
+  if (command === "land") return { net: [], read: [deno], runs: [deno, "ssh", ...(os === "windows" ? ["powershell.exe"] : [])] }
   if (command === "tools") return { net: [], read: [], runs: [], write: tools ? [tools] : [], netAll: true, runAll: true }
   // naima backup create installs gh through the tools plugin, as naima tools install does, then runs it: the same grant.
   if (command === "backup" && rest[0] === "create") return { net: [], read: [], runs: [], write: tools ? [tools] : [], netAll: true, runAll: true }
