@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto"
 import { mkdirSync, rmSync } from "node:fs"
 import { join } from "node:path"
-import { posixRelative } from "./config.ts"
+import { parseConfig, posixRelative, readRaw } from "./config.ts"
 import { gitReason, runGit } from "./git.ts"
 import { stateDir } from "./tick.ts"
 import { deepFreeze } from "./collections.ts"
@@ -141,4 +141,17 @@ export function checkoutAt(ctx: Context, rev: string, io: IO = { out: ctx.out, e
 export function contextIn(ctx: Context, root: string, io: IO = { out: ctx.out, err: ctx.err, now: ctx.now }): Context {
   const data = ctx.sibling || root === ctx.root ? ctx.trackerRoot : join(root, ctx.trackerDir)
   return createContext({ root, data, program: ctx.program }, ctx.config as Config, ctx.registry, io)
+}
+
+/**
+ * Another project on this machine, read only: its checkout `root` and its tracker's `data`, with this context's plugins,
+ * and the project's own configuration when this Naima reads it as it is (this context's otherwise), writing through
+ * `io`. The home across projects reads every project Naima knows through one of these.
+ */
+export function contextOfProject(ctx: Context, root: string, data: string, io: IO = { out: ctx.out, err: ctx.err, now: ctx.now }): Context {
+  let config = ctx.config as Config
+  try {
+    config = parseConfig(readRaw(data))
+  } catch { /* data at another format: read with this project's configuration */ }
+  return createContext({ root, data, program: ctx.program }, config, ctx.registry, io)
 }

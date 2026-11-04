@@ -48,6 +48,7 @@
 // commit it was loaded from: a launcher from before releases cannot let the
 // newer program download one.
 
+import { PROJECTS_ENV, rememberProject } from "./core/projects.ts"
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs"
 import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -543,8 +544,11 @@ export async function launch(args: string[], cwd: string): Promise<number> {
   const tracker = given ? trackerOf(data) : dirname(own)
   const root = toplevel(existing(tracker)) ?? resolve(cwd)
   // The machine's name and the private word list, which the program may not ask for itself: what tracker text is checked against.
+  // naima ui: this project joins the projects Naima knows on this machine, which the UI's home across projects reads (core/projects.ts).
+  const known = parsed.rest[0] === "ui" ? rememberProject(Deno.env.toObject(), Deno.build.os, { root, data }) : null
   const marks = {
     ...privateEnv(Deno.env.toObject(), Deno.build.os),
+    ...(known ? { [PROJECTS_ENV]: JSON.stringify(known) } : {}),
     NAIMA_LAUNCHED: "1",
     ...(given ? { NAIMA_DATA: real(data) } : {}),
   }
@@ -556,7 +560,11 @@ export async function launch(args: string[], cwd: string): Promise<number> {
   const tools = toolsDir(Deno.env.toObject(), Deno.build.os)
   // The tick's state, naima/ in the clone's git directory, shared by its worktrees; the program is told its tick/ folder.
   const tickState = tickFolder(root)
-  const ui = uiGrant(parsed.rest[0], Deno.build.os, Deno.execPath(), tools, parsed.rest.slice(1), parsed.rest[0] === "hello" && githubOrigin(root))
+  const granted = uiGrant(parsed.rest[0], Deno.build.os, Deno.execPath(), tools, parsed.rest.slice(1), parsed.rest[0] === "hello" && githubOrigin(root))
+  // And reads each of them, read only; a folder that is gone, or one Deno cannot name (a comma), is left out.
+  const ui = granted && known
+    ? { ...granted, read: [...granted.read, ...known.flatMap((p) => [p.root, p.data]).filter((x) => existsSync(x) && !real(x).includes(","))] }
+    : granted
   // A program whose own entry is gone cannot repair itself: when files deleted from its clone are all that differs, git restores them.
   if (!runtimeOf(program)) {
     const restored = restoreDeleted(program)

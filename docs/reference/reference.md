@@ -3217,6 +3217,7 @@ naima name-stop 3ab303aa --clear
 | `board` | Boards | a type's board, its open items by section, most urgent first: `?type=` picks the type (the first one that takes new items), `?all=1` adds the done ones; its data is `naima board <type> [--all] --json` |
 | `item` | Item | one item, picked by `?item=`: its evidence — its attachments and the items of a type that can prove, whether each proves or refutes now — then its fields, its other links and its prose; its data is `naima show <item> --json`, null when none is picked |
 | `map` | Map | the graphs the new UI's map draws besides the lines and their commits: each gate's goal with its start, due date and steps (with the day each closed), and the items that wait for others, as edges from the item first to the one that waits |
+| `projects` | All projects | every project Naima knows on this machine, this one first: its gates, its queue, its open bugs, its failing tests and its last change |
 
 ## metrics
 
