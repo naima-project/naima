@@ -61,7 +61,7 @@ export const cliCommands: Omit<Command, "run">[] = [
       `move the lock to the newest release of the source, or to the version or commit --to names: download the release's archive, check it against its SHA-256 and against the commit its tag names, and record the version and checksum with the commit (a source that publishes no releases, or --main, follows the head of its main instead; a lock that still names a commit of main moves to the newest release once, and says so; a commit of main past the newest release stays until a newer release; with no network the lock stays where it is, and says why); say what changes (the commits, the change notes they add — breaking first, then those that ask an action —, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, rename and remove options in naima.json as the change notes say and remove those it reads nowhere, each said with its value, and record the new commit; moving forward, the new Naima finishes: it migrates the data if its format moved, names the rules agents acknowledge again, runs naima check, and files an item in the type with the trait follow-up for each problem or note that is new since the commit before; writes, and says, what makes agents run naima hello at every session start where it is missing — the pointer line, rewritten when it does not say so, and each session-start hook as naima init installs them; all as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima`,
     enforces:
       "the lock moves only to a release whose archive matches its checksum and its tag's commit, or, for a source without releases or with --main, to a commit of the source's main, with the data migrated forward in the same change; never back past a migration, which runs forward only; a source naima.json names other than the program's origin is refused, by every command, until --accept-source; with the tracker in a repository of its own, an update that moves the lock is refused on the code's trunk while the trunk guard runs there, before anything moves, and is made in an item's worktree, the tracker moved first to the branch that pairs with the code's, so that its two halves land together with naima land",
-    usage: "update [--check | --to <version|commit> | --main | --pre | --mode off|check|update | --accept-source]",
+    usage: "update [--check | --to <version|commit> | --main | --branch <name> [--to <commit>] | --pre | --mode off|check|update | --accept-source]",
     options: [
       {
         name: "--check",
@@ -72,6 +72,11 @@ export const cliCommands: Omit<Command, "run">[] = [
         name: "--to",
         says:
           "move the lock to this release (1.2.0 or v1.2.0), or to this commit of the source's main, forward or back; back across a data format is refused, naming the commit to revert; the option updates is removed when that commit does not know it, and said",
+      },
+      {
+        name: "--branch",
+        says:
+          "follow the head of another branch of the source, such as a development line (line/release-1.2), rather than its main and its releases, recorded as branch in naima.json so that every later naima update follows it, with --to naming a commit of that branch; naima update --main goes back to the main; the tracker's history is kept, as for any move of the lock",
       },
       {
         name: "--main",

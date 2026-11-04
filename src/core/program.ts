@@ -46,6 +46,8 @@ export interface Target {
   acceptSource?: boolean
   /** `verify: "signed"` in naima.json: run a commit only when git verifies its signature. */
   verify?: "signed"
+  /** The branch of the source the lock follows (naima.json's `branch`); absent, its main. */
+  branch?: string
   /** Repositories on this disk that may hold the commit, tried before the source: the running Naima's own clone. */
   seeds?: string[]
   /** The release the commit is, from the lock: fetched from the network, the commit comes with its release's archive, verified. */
@@ -490,12 +492,13 @@ export const sourceMoved = (from: string, to: string): string =>
 
 /** The head `naima update --check` compares with: the source's main. Reads the source; changes nothing. */
 export function remoteHead(t: Target): Head {
-  const r = runGit(t.root, ["ls-remote", "--", t.source, "refs/heads/main"])
-  if (!r.ok) throw new Error(`cannot read main from ${t.source}: ${gitReason(r)}`)
+  const branch = t.branch ?? "main"
+  const r = runGit(t.root, ["ls-remote", "--", t.source, `refs/heads/${branch}`])
+  if (!r.ok) throw new Error(`cannot read ${branch} from ${t.source}: ${gitReason(r)}`)
   const commit = r.out.split(/\s+/)[0]
-  if (!commit) throw new Error(`cannot read main from ${t.source}: it has no main branch`)
+  if (!commit) throw new Error(`cannot read ${branch} from ${t.source}: it has no ${branch} branch`)
   const movedTo = redirectedTo(r.err)
-  return { branch: "main", commit, ...(movedTo ? { movedTo } : {}) }
+  return { branch, commit, ...(movedTo ? { movedTo } : {}) }
 }
 
 /**
@@ -506,10 +509,11 @@ export function remoteHead(t: Target): Head {
  * Not `--quiet`: git's lines go to the captured stderr, and a refused ref is reported only there.
  */
 export function fetchHead(t: Target): Head {
-  const r = runGit(t.program, ["fetch", "--tags", "--force", "origin", "+refs/heads/main:refs/remotes/origin/main"])
-  if (!r.ok) throw new Error(`cannot fetch main from ${t.source}: ${gitReason(r)}`)
+  const branch = t.branch ?? "main"
+  const r = runGit(t.program, ["fetch", "--tags", "--force", "origin", `+refs/heads/${branch}:refs/remotes/origin/${branch}`])
+  if (!r.ok) throw new Error(`cannot fetch ${branch} from ${t.source}: ${gitReason(r)}`)
   const movedTo = redirectedTo(r.err)
-  return { branch: "main", commit: mustGit(t.program, "rev-parse", "refs/remotes/origin/main"), ...(movedTo ? { movedTo } : {}) }
+  return { branch, commit: mustGit(t.program, "rev-parse", `refs/remotes/origin/${branch}`), ...(movedTo ? { movedTo } : {}) }
 }
 
 const IGNORE = ".gitignore"
