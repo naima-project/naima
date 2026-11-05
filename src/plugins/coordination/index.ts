@@ -89,7 +89,7 @@ import { claimsReports, claimsReportsPoint } from "./claims-reports.ts"
 import { pushCheckCommand } from "./messages.ts"
 import { fixCommand } from "./fix.ts"
 import { guardCheckCommand, guardCommand, guardedFrom, guardOffSection, guardSetup, readTrunkGuard, takenByGuard } from "./guard.ts"
-import { diaryCheck, diaryCommand, diaryView, eventCommand, EVENTS, frontLines, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
+import { diaryCheck, diaryCommand, diaryUiView, diaryView, eventCommand, EVENTS, frontLines, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
 import { recoverCommand } from "./recover.ts"
 import { readyLines, readyNow, readySection, readyWorkWaiting, workerLimitSection } from "./ready.ts"
 import {
@@ -1351,6 +1351,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       "ui-views": [
         claimsUiView((ctx) => claimsData(ctx, undefined, silentAfter)),
         timelineUiView(readPasses),
+        diaryUiView(readPasses),
         notesUiView(readPasses),
         linesUiView,
       ],

@@ -124,13 +124,44 @@ function idNamed(ctx: Context, name: string): string | undefined {
 /** The branch a marker landed, from its subject (`Land <branch>`), when it says one. */
 const landedBranch = (l: Landing): string | undefined => l.subject.match(/^Land (\S+)/)?.[1]
 
-/** The commits on a branch's own line from `since` on: each commit, its moment and subject. */
-function branchCommits(ctx: Context, tip: string, since: string): { commit: string; at: string; subject: string }[] {
-  const out = gitOrNull(ctx.root, "log", "--first-parent", `--since=${since}`, `--format=%H${US}%cI${US}%s`, tip, "--") ?? ""
-  return out.split("\n").flatMap((line) => {
-    const [commit = "", at = "", subject = ""] = line.split(US)
-    return commit && !Number.isNaN(Date.parse(at)) ? [{ commit, at: iso(at), subject }] : []
-  })
+/** Every commit of the repository, each with its moment, subject and first parent, read once: the branches' own
+ * lines are walked from it in memory, never with a git call per branch. */
+interface Commit {
+  at: string
+  subject: string
+  first?: string
+}
+
+function allCommits(ctx: Context): Map<string, Commit> {
+  const out = gitOrNull(ctx.root, "log", "--all", `--format=${RS}%H${US}%cI${US}%P${US}%s`) ?? ""
+  const all = new Map<string, Commit>()
+  for (const chunk of out.split(RS)) {
+    const [commit = "", at = "", parents = "", subject = ""] = chunk.replace(/\n$/, "").split(US)
+    if (!commit || Number.isNaN(Date.parse(at))) continue
+    const first = parents.split(" ").find(Boolean)
+    all.set(commit, { at: iso(at), subject, ...(first ? { first } : {}) })
+  }
+  return all
+}
+
+/** The commits on a branch's own line from `since` on, newest first, as `git log --first-parent --since` gives them. */
+function branchCommits(all: Map<string, Commit>, tip: string, since: string): { commit: string; at: string; subject: string }[] {
+  const out: { commit: string; at: string; subject: string }[] = []
+  for (let at: string | undefined = tip, c = all.get(tip); at && c && c.at >= since; at = c.first, c = at ? all.get(at) : undefined) {
+    out.push({ commit: at, at: c.at, subject: c.subject })
+  }
+  return out
+}
+
+/** Every local branch's tip, by its name, from one listing. */
+function branchTips(ctx: Context): Map<string, string> {
+  const out = gitOrNull(ctx.root, "for-each-ref", `--format=%(refname:strip=2)${US}%(objectname)`, "refs/heads/") ?? ""
+  return new Map(
+    out.split("\n").flatMap((l) => {
+      const [name = "", sha = ""] = l.split(US)
+      return name && sha ? [[name, sha] as [string, string]] : []
+    }),
+  )
 }
 
 /** When a closed or fixed piece ended by its day: after its last record of that day, else at the day's start. */
@@ -244,16 +275,17 @@ export function recordsOf(ctx: Context, items: Item[]): Records {
 
   // The commits on each claiming branch, inside the windows in which it held the piece.
   const branches = new Set([...windows.keys()].map((k) => k.split("\t")[0] ?? ""))
+  const heads = branches.size ? branchTips(ctx) : new Map<string, string>()
+  const all = branches.size ? allCommits(ctx) : new Map<string, Commit>()
   for (const branch of branches) {
-    const own = gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`)
-    const tips = [own?.trim(), tipOf.get(branch)].filter((t): t is string => !!t)
+    const tips = [heads.get(branch), tipOf.get(branch)].filter((t): t is string => !!t)
     if (!tips.length) continue
     const held = [...windows].filter(([k]) => k.startsWith(`${branch}\t`))
     const from = held.flatMap(([, ws]) => ws.map((w) => w.from)).sort()[0]
     if (!from) continue
     const seen = new Set<string>()
     for (const tip of tips) {
-      for (const c of branchCommits(ctx, tip, from)) {
+      for (const c of branchCommits(all, tip, from)) {
         if (seen.has(c.commit)) continue
         seen.add(c.commit)
         for (const [k, ws] of held) {

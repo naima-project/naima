@@ -559,6 +559,31 @@ export function diaryView(passes: (ctx: Context) => SessionNote[]): View {
   }
 }
 
+/** The diary as a view of `naima ui`, the data its diary screen reads (`data` with the view `diary`): the shape of
+ * `naima view diary --json`, with the entries as a plain list for the page that has no screen. */
+export function diaryUiView(passes: (ctx: Context) => SessionNote[]) {
+  return {
+    name: "diary",
+    title: "Diary",
+    order: 11,
+    screen: true,
+    says: "the diary's entries, each with the items it is about, with the version tags and the items filed and closed on each day",
+    render(_params: Record<string, string[]>, ctx: Context) {
+      const d = diaryDataOf(ctx, passes(ctx))
+      const rows = d.entries.map((e) => `<tr><td>${e.date}</td><td>${esc(e.kind)}</td><td>${esc(e.text)}</td></tr>`)
+      return {
+        data: d,
+        html: [
+          "<h1>Diary</h1>",
+          rows.length
+            ? `<table><thead><tr><th>Date</th><th>Kind</th><th>What</th></tr></thead><tbody>${rows.join("")}</tbody></table>`
+            : "<p>The diary is empty.</p>",
+        ].join("\n"),
+      }
+    },
+  }
+}
+
 /** `naima diary`: the project's story, day by day. */
 export function diaryCommand(passes: (ctx: Context) => SessionNote[]): Command {
   return {
