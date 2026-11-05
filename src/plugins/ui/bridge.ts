@@ -30,7 +30,7 @@ import type { Command, Context } from "../../core/api.ts"
 import { AtCache, commitOf } from "./at.ts"
 import type { Feeds, Handlers, Json } from "./bridge-handler.ts"
 import { watchProject } from "./live.ts"
-import { metroData } from "./metro.ts"
+import { commandJson, type JsonOf, metroData } from "./metro.ts"
 import { contentProblem, framePage, tabList, type UiTab, type UiTabContent, type UiView } from "./tabs.ts"
 
 /**
@@ -116,10 +116,42 @@ const text = (v: Json | undefined): string | null => (typeof v === "string" && v
 
 const json = (v: unknown): Json => JSON.parse(JSON.stringify(v ?? null)) as Json
 
+/**
+ * How long a live read's answer is shared with the same read asked again, in ms, unless the project changes first.
+ * The app asks every screen's reads at once when it opens and again on every change, many of them the same (the gates,
+ * the schedule); each read is the files and git read anew, so sharing them is what keeps the first screen fast.
+ */
+export const SHARE_MS = 10_000
+
+/** The views whose data is what a command prints with --json, by the command's words: the metro reads them through the view. */
+const VIEW_OF_COMMAND: Record<string, string> = { gates: "gates", claims: "claims", "line list": "lines" }
+
 /** Naima's bridge commands on the project `ctx` is about. */
 export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
   const atCache = new AtCache()
   let runs = 0
+  // The live reads under way or answered, by what they read: one answer for every ask until it is SHARE_MS old, the
+  // project changes (the changes feed saw it) or an action runs; a read that fails is not kept.
+  const shared = new Map<string, { at: number; answer: Promise<unknown> }>()
+  const share = <T>(key: string, read: () => Promise<T>): Promise<T> => {
+    const now = performance.now()
+    const kept = shared.get(key)
+    if (kept && now - kept.at < SHARE_MS) return kept.answer as Promise<T>
+    const answer = read()
+    shared.set(key, { at: now, answer })
+    answer.catch(() => {
+      if (shared.get(key)?.answer === answer) shared.delete(key)
+    })
+    return answer
+  }
+  /** A view's data, live, shared with the same read asked again; `from` is the live context, read again when absent. */
+  const live = (view: UiView, params: Record<string, string[]>, from?: Context): Promise<unknown> =>
+    share(`view ${view.name} ${JSON.stringify(params)}`, async () => (await view.render(params, from ?? momentOf(null))).data)
+  /** What a command prints with --json, through the view whose data it is when there is one: what the metro reads. */
+  const viaViews: JsonOf = async <T>(c: Context, words: string[]) => {
+    const view = opts.views.find((v) => v.name === VIEW_OF_COMMAND[words.join(" ")])
+    return view ? json(await live(view, {}, c)) as T : await commandJson<T>(c, words)
+  }
   /** The context of the moment `at` names, the live one, read again, when absent. */
   const momentOf = (at: string | null): Context => {
     if (at === null) {
@@ -158,7 +190,8 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       }
       // A view that places a commit itself is read from the files as they are, with the commit as its parameter.
       if (sha !== null && view.moments) params["at"] = [sha]
-      const from = sha !== null && !view.moments ? atCache.get(ctx, sha) : momentOf(null)
+      if (sha === null) return json(await live(view, params))
+      const from = view.moments ? momentOf(null) : atCache.get(ctx, sha)
       return json((await view.render(params, from)).data)
     },
     tabs: () => json(tabList(opts.tabs)),
@@ -179,8 +212,9 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       if (problem) throw new Error(`the ${tab.name} tab's content ${problem}`)
       return shown(tab, sub, content)
     },
-    metro: async () => json(await metroData(momentOf(null))),
+    metro: async () => json(await share("metro", () => metroData(momentOf(null), viaViews))),
     action: async (args) => {
+      shared.clear()
       const argv = actionArgv(String(args["name"]), args["args"] ?? [])
       if (typeof argv === "string") throw new Error(argv)
       const action = actionOf(String(args["name"]))!
@@ -208,9 +242,19 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
   }
   const feeds: Feeds = {
     changes: (emit) => {
-      const watch = watchProject(ctx, (c) => emit(json(c)), opts.watch ?? {})
+      const watch = watchProject(ctx, (c) => {
+        shared.clear()
+        emit(json(c))
+      }, opts.watch ?? {})
       return () => watch.stop()
     },
   }
-  return { handlers, feeds, close: () => atCache.clear() }
+  return {
+    handlers,
+    feeds,
+    close: () => {
+      atCache.clear()
+      shared.clear()
+    },
+  }
 }

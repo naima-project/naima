@@ -1,12 +1,13 @@
 // The view of every project Naima knows on this machine (core/projects.ts), what the new UI's home across projects
 // is drawn from: for each, its name, a line of what it is (the first sentence of its README), its gates and its
 // queue (what `naima gates --json` and `naima queue --json` print there), its open bugs, its failing tests (a test
-// whose status refutes what it verifies) and the day of its last commit. Each is read live, with this Naima's
+// or property whose last recorded run failed, read from the test-runs and property-runs views, as the failed-tests
+// screen counts them) and the day of its last commit. Each is read live, with this Naima's
 // plugins and its own configuration; one that cannot be read says why instead. The project the UI runs in is first.
 
 import { readFileSync } from "node:fs"
 import { basename, join, resolve } from "node:path"
-import { type Context, contextOfProject, isOpen, isRetired, type KnownProject, knownProjects, refutes, runGit } from "../../core/api.ts"
+import { type Context, contextOfProject, isOpen, isRetired, type KnownProject, knownProjects, runGit } from "../../core/api.ts"
 import { runCommand } from "./bridge.ts"
 import type { UiView } from "./tabs.ts"
 
@@ -38,6 +39,22 @@ function saysOf(root: string): string {
   return first.length > 90 ? first.slice(0, 89).trimEnd() + "…" : first
 }
 
+/**
+ * The tests and properties failing now: those whose last recorded run failed, as the test-runs and property-runs
+ * views give them. The failed-tests screen's "Failing now" counts by the same rule from the same views, so that the
+ * two screens show one number.
+ */
+export async function failingNow(ctx: Context): Promise<{ ref: string; title: string }[]> {
+  const out: { ref: string; title: string }[] = []
+  for (const name of ["test-runs", "property-runs"]) {
+    const view = ctx.registry.contributions("ui-views").map((c) => c.value as UiView).find((v) => v.name === name)
+    if (!view) continue
+    const rows = ((await view.render({}, ctx)).data as { rows?: { ref: string; title: string; runs: { ok: boolean }[] }[] }).rows ?? []
+    for (const r of rows) if (r.runs.at(-1)?.ok === false) out.push({ ref: r.ref, title: r.title })
+  }
+  return out
+}
+
 const json = async (ctx: Context, words: string[]): Promise<unknown> => {
   const r = await runCommand(ctx, words)
   if (r.code !== 0) throw new Error(r.err.split("\n").filter(Boolean).at(-1) ?? `naima ${words[0]} failed`)
@@ -62,7 +79,7 @@ export async function projectRow(ctx: Context, here: boolean): Promise<ProjectRo
         title: i.meta.title,
         created: String(i.meta["created"] ?? ""),
       })),
-      tests: items.filter((i) => i.type === "tests" && refutes(ctx, i)).map((i) => ({ ref: ref(i), title: i.meta.title })),
+      tests: await failingNow(ctx),
       lastChange: last.ok ? last.out.trim() || null : null,
     }
   } catch (e) {

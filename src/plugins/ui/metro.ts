@@ -307,18 +307,21 @@ export function isGoal(g: GateRow, all: readonly GateRow[]): boolean {
 
 const goalState = (g: GateRow): string => (g.holds ? "holds" : `blocked by ${g.blocking.length}`)
 
-export async function metroData(ctx: Context): Promise<Metro> {
+/** How the metro reads what a command prints with --json: the bridge reads it through the view whose data it is, shared with the screens. */
+export type JsonOf = <T>(ctx: Context, words: string[]) => Promise<T | null>
+
+export async function metroData(ctx: Context, read: JsonOf = commandJson): Promise<Metro> {
   const commits: Record<string, MetroCommit> = {}
   const main = trunk(ctx.root)
   const head = gitOrNull(ctx.root, "symbolic-ref", "--quiet", "--short", "HEAD")
-  const lines = (await commandJson<{ lines: LineRow[] }>(ctx, ["line", "list"]))?.lines ?? []
-  const claimsJson = await commandJson<{ claims: ClaimRow[]; silentAfter?: number }>(ctx, ["claims"])
+  const lines = (await read<{ lines: LineRow[] }>(ctx, ["line", "list"]))?.lines ?? []
+  const claimsJson = await read<{ claims: ClaimRow[]; silentAfter?: number }>(ctx, ["claims"])
   // A claim every item of which is done still says whose the branch was: it is released now, in the records.
   const claims = (claimsJson?.claims ?? []).filter((c) => !c.stale || /done or closed/.test(c.stale))
   const silentAfter = claimsJson?.silentAfter ?? 15
-  const runs = (await commandJson<RunRow[]>(ctx, ["run", "list"])) ?? []
+  const runs = (await read<RunRow[]>(ctx, ["run", "list"])) ?? []
   const authors: Authors = new Map()
-  const gates = (await commandJson<GateRow[]>(ctx, ["gates"])) ?? []
+  const gates = (await read<GateRow[]>(ctx, ["gates"])) ?? []
   const routes: Route[] = []
   if (main) {
     routes.push({
@@ -363,13 +366,16 @@ export async function metroData(ctx: Context): Promise<Metro> {
   const standing = new Set(worktrees(ctx.root).filter((w) => !w.self).flatMap((w) => (w.branch ? [w.branch] : [])))
   const workers: Worker[] = []
   const refs = git(ctx, "for-each-ref", "--format=%(refname:short)%09%(objectname)", "refs/heads").split("\n").filter(Boolean)
+  // Whether a commit is on the trunk, asked of git once per commit: the branches cut from a line share their merge base with it.
+  const known = new Map<string, boolean>()
+  const onTrunk = (c: string): boolean => known.get(c) ?? known.set(c, !!main && isAncestor(ctx.root, c, main)).get(c)!
   for (const r of refs) {
     const [name = "", tip = ""] = r.split("\t")
     if (!main || name === main || lineNames.has(name) || name.startsWith("line/")) continue
     // Its base: the open line whose own commits it carries, else the trunk.
     const base = lines.find((l) => {
       const mb = gitOrNull(ctx.root, "merge-base", name, l.branch)
-      return !!mb && !isAncestor(ctx.root, mb, main)
+      return !!mb && !onTrunk(mb)
     })?.branch ?? main
     // Rejoined: the oldest commit of the base's first-parent history that carries it; none for a branch with no work yet.
     const land = isAncestor(ctx.root, tip, base)
