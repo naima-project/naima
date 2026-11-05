@@ -102,6 +102,8 @@ export interface GateResult {
   blocking: Item[]
   /** What is still owed but does not stop it. */
   owed: Item[]
+  /** How many items it waits for, done or not: what a goal's progress counts, on every screen (absent for a gate on no items). */
+  items?: number
   /** What stops it that is no item, in words: a number past its bound. */
   reasons?: string[]
   /** The recorded evidence it stands on, in words: a record, a suite's run. */
@@ -452,7 +454,7 @@ export function evaluateGate(ctx: Context, name: string, holdsOn: "code" | "proo
   const blocking = holdsOn === "proof" ? open : open.filter((i) => !owesOnlyProof(ctx, i))
   const owed = open.filter((i) => !blocking.includes(i))
   const retired = retiredUnder(ctx, on)
-  return { holds: blocking.length === 0, blocking, owed, ...(retired.length ? { retired } : {}) }
+  return { holds: blocking.length === 0, blocking, owed, items: on.length, ...(retired.length ? { retired } : {}) }
 }
 
 /**
@@ -522,6 +524,11 @@ interface GateRow {
   retired: string[]
   blocking: GateItemRow[]
   owed: GateItemRow[]
+  /**
+   * How many items it waits for, done or not; those neither blocking nor owed are done. The one count of a goal's
+   * progress every screen shows (Home, Goals, Roadmap), so that none counts its own way.
+   */
+  items: number
   /** For a gate with steps: the method it follows, if any, and its steps in order, the method's then its own. */
   method?: string
   steps?: StepState[]
@@ -559,6 +566,7 @@ async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: Gate
         retired: result.retired ?? [],
         blocking: result.blocking.map(item),
         owed: result.owed.map(item),
+        items: Math.max(result.items ?? 0, result.blocking.length + result.owed.length),
         ...(result.method ? { method: result.method } : {}),
         ...(result.steps ? { steps: result.steps } : {}),
         ...(def.version ? { version: def.version } : {}),
