@@ -1,7 +1,8 @@
 // The view of every project Naima knows on this machine (core/projects.ts), what the new UI's home across projects
 // is drawn from: for each, its name, a line of what it is (the first sentence of its README), its gates and its
 // queue (what `naima gates --json` and `naima queue --json` print there), its open bugs, its failing tests (a test
-// or property whose last recorded run failed, read from the test-runs and property-runs views, as the failed-tests
+// or property whose latest result failed, its last recorded run or a status set after it that says it fails, read from
+// the test-runs and property-runs views, as the failed-tests
 // screen counts them) and the day of its last commit. Each is read live, with this Naima's
 // plugins and its own configuration; one that cannot be read says why instead. The project the UI runs in is first.
 
@@ -40,8 +41,8 @@ function saysOf(root: string): string {
 }
 
 /**
- * The tests and properties failing now: those whose last recorded run failed, as the test-runs and property-runs
- * views give them. The failed-tests screen's "Failing now" counts by the same rule from the same views, so that the
+ * The tests and properties failing now: those whose latest result failed (their last recorded run, or a status set
+ * after it that says they fail), as the test-runs and property-runs views give them. The failed-tests screen's "Failing now" counts by the same rule from the same views, so that the
  * two screens show one number.
  */
 export async function failingNow(ctx: Context): Promise<{ ref: string; title: string }[]> {

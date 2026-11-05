@@ -1,17 +1,20 @@
 // The property-runs view: every property with the runs recorded on it, oldest first, for the failed-tests matrix of the
 // new UI. Each check of a property attaches its run as run-<time>.json, with the verdict (holds, violated, error) and
 // when it was made: that is the property's history, read here as it is, one entry a run. A property never checked
-// has no history and is not listed.
+// has no history and is not listed, unless its status refutes (violated) and was set after its last run, or with
+// none: that status is then its latest result, a failed run at the time it was set (from: "status").
 
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { ATTACHMENTS, type Context, type Item, label } from "../../core/api.ts"
+import { ATTACHMENTS, type Context, type Item, label, refutedAt } from "../../core/api.ts"
 
 /** One recorded run of a property: when, and whether it held; a run that ended in an error did not. */
 export interface HistoryRun {
   at: string
   ok: boolean
   verdict: string
+  /** "status" for the failure its status says, set after its last recorded run. */
+  from?: "status"
 }
 
 export interface HistoryRow {
@@ -40,10 +43,12 @@ export function propertyRuns(item: Item): HistoryRun[] {
   }).sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
 }
 
-/** Every property of `type` with at least one recorded run. */
+/** Every property of `type` with at least one recorded run or a status that says it fails. */
 export function propertyHistory(ctx: Context, type: string): HistoryRow[] {
   return ctx.repo.items.filter((i) => i.type === type).flatMap((item) => {
     const runs = propertyRuns(item)
+    const failedAt = refutedAt(ctx, item)
+    if (failedAt && !((runs.at(-1)?.at ?? "") > failedAt)) runs.push({ at: failedAt, ok: false, verdict: String(item.meta["status"]), from: "status" })
     if (!runs.length) return []
     return [{
       id: String(item.meta["id"] ?? ""),

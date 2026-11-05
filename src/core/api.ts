@@ -80,6 +80,7 @@ export {
   statusDef,
   urgency,
 } from "./lifecycle.ts"
+export { refutedAt } from "./refuted.ts"
 export { flagsOf } from "./vocabulary.ts"
 export {
   addLink,
