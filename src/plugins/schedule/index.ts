@@ -14,6 +14,7 @@ import {
   type Command,
   type Context,
   CONTRACT,
+  gitOrNull,
   type Item,
   label,
   linked,
@@ -22,6 +23,7 @@ import {
   type PluginOptions,
   rendered,
   str,
+  trunk,
   usageError,
   type View,
 } from "../../core/api.ts"
@@ -55,7 +57,25 @@ function optionsOf(ctx: Context, own: PluginOptions): ScheduleOptions {
 /** The schedule, for every piece or for those asked for by reference. */
 function dataOf(ctx: Context, own: PluginOptions, refs: string[] = []): ScheduleData {
   const items = refs.length ? refs.map((r) => ctx.repo.resolve(r)) : ctx.repo.items
-  return scheduleOf(ctx, readPlans(ctx), optionsOf(ctx, own), items)
+  const d = scheduleOf(ctx, readPlans(ctx), optionsOf(ctx, own), items)
+  return { ...d, commits: trunkCommits(ctx, d) }
+}
+
+/** The most trunk commits the view carries: the Gantt's commit axis needs no more. */
+const MAX_COMMITS = 5000
+
+/** The trunk's first-parent commits over the span the pieces cover, up to the moment derived, oldest first: the
+ * Gantt's time axis spaces them evenly, each its own point, with the dates marked along it. One git call. */
+function trunkCommits(ctx: Context, d: ScheduleData): { commit: string; at: string }[] {
+  const main = trunk(ctx.root)
+  const starts = d.pieces.flatMap((p) => [p.actual.start, p.planned?.first?.start ?? p.planned?.start, p.expected?.start]).filter((x): x is string => !!x)
+  if (!main || !starts.length) return []
+  const since = new Date(Math.min(...starts.map((x) => Date.parse(x))) - 7 * 86_400_000).toISOString()
+  const out = gitOrNull(ctx.root, "log", "--first-parent", `--since=${since}`, `--until=${d.at}`, `--max-count=${MAX_COMMITS}`, "--format=%H %cI", main) ?? ""
+  return out.split("\n").flatMap((l) => {
+    const [commit = "", at = ""] = l.trim().split(" ")
+    return commit && !Number.isNaN(Date.parse(at)) ? [{ commit, at: new Date(at).toISOString() }] : []
+  }).reverse()
 }
 
 const day = (m?: string): string => (m ? m.slice(0, 16).replace("T", " ") : "—")
