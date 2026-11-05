@@ -230,4 +230,6 @@ export interface ScheduleData {
   histogram: ResourceDay[]
   /** Per kind of work, then "all". */
   quality: PredictionQuality[]
+  /** The trunk's first-parent commits over the span the pieces cover, oldest first: the Gantt's commit axis. */
+  commits?: { commit: string; at: Moment }[]
 }
