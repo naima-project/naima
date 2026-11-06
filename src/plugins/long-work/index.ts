@@ -498,12 +498,18 @@ function hostRuns(host: Host): string {
   if (!last?.asking && (!last || Date.now() - last.at > LISTED_FOR_MS)) {
     listed.set(host.name, { at: last?.at ?? 0, out: last?.out ?? "", asking: true })
     let out = ""
-    const child = spawn("ssh", sshArgs(host, ["run", "list", "--json"]), { stdio: ["ignore", "pipe", "ignore"] })
-    child.unref()
-    child.stdout?.on("data", (d) => void (out += String(d)))
     const done = (ok: boolean) => void listed.set(host.name, { at: Date.now(), out: ok ? out : "", asking: false })
-    child.on("error", () => done(false))
-    child.on("close", (code) => done(code === 0))
+    // spawn throws when this program may not run ssh (the UI server's Deno lacks --allow-run for it): the host's runs
+    // stay unknown, and the server goes on serving.
+    try {
+      const child = spawn("ssh", sshArgs(host, ["run", "list", "--json"]), { stdio: ["ignore", "pipe", "ignore"] })
+      child.unref()
+      child.stdout?.on("data", (d) => void (out += String(d)))
+      child.on("error", () => done(false))
+      child.on("close", (code) => done(code === 0))
+    } catch {
+      done(false)
+    }
   }
   return listed.get(host.name)!.out
 }
