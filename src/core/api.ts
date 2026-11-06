@@ -134,6 +134,7 @@ export {
   readAcrossBranches,
   refsWorthReading,
   runGit,
+  runGitAsync,
   SETUP_STEPS,
   SETUP_TRAILER,
   setupCommit,

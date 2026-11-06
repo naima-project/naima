@@ -16,13 +16,15 @@
 //            each author of the commits the map draws, on the route of their newest commit
 //   checkouts  the main checkout and each worktree: its name, its branch and the commit it stands on
 //   names    the names the owner gave stops (`naima name-stop`, stops.ts), by commit
+//   local    per route, how many of its newest commits are on no remote, and per checkout how many tracked files
+//            hold work not committed: from git alone, comparing with the remote-tracking refs, never the network
 //   goals    per route of the trunk and the lines, the goals still ahead in goal
 //            order: a line's gate's steps, then the gate; on the trunk, every
 //            unfinished gate that is a goal (isGoal) no open line stands for, then
 //            each line's landing
 
 import { basename } from "node:path"
-import { type Command, type Context, gitOrNull, isAncestor, isOpen, trunk, worktrees } from "../../core/api.ts"
+import { type Command, type Context, gitOrNull, isAncestor, isOpen, runGitAsync, trunk, worktrees } from "../../core/api.ts"
 import { type Event as StatusEvent, initial, type State, type Status, step as statusStep } from "./generated/worker-status.ts"
 import { stopNames } from "./stops.ts"
 
@@ -52,6 +54,9 @@ export interface Route {
   fork: string | null
   /** The commit of its base that merged it; null while it has not rejoined. */
   land: string | null
+  /** How many of its newest commits are on no remote (the remote-tracking refs, as git last fetched them); absent
+   *  for none, or when the project has no remote. */
+  local?: number
 }
 
 export interface MetroCommit {
@@ -108,6 +113,8 @@ export interface Checkout {
   branch: string | null
   /** The commit it stands on. */
   commit: string | null
+  /** How many tracked files hold changes not committed; absent for none. */
+  dirty?: number
 }
 
 export interface Metro {
@@ -125,6 +132,8 @@ export interface Metro {
   checkouts: Checkout[]
   /** The names the owner gave stops, by the commit's full hash. */
   names: Record<string, string>
+  /** The remote a branch is pushed to (origin when there is one); absent when the project has none. */
+  remote?: string
 }
 
 /** What a command prints with --json, run here; null when no loaded plugin has it, or it fails. */
@@ -433,6 +442,14 @@ export async function metroData(ctx: Context, read: JsonOf = commandJson): Promi
       ...(g.version ? { version: g.version } : {}),
     }))
   }
+  const remote = remoteOf(ctx)
+  if (remote) {
+    const here = localCommits(ctx)
+    for (const r of routes) {
+      const n = r.commits.filter((h) => here.has(h)).length
+      if (n) r.local = n
+    }
+  }
   return {
     trunk: main,
     head,
@@ -442,9 +459,21 @@ export async function metroData(ctx: Context, read: JsonOf = commandJson): Promi
     goals,
     ...(older ? { older } : {}),
     people: peopleOf(ctx, routes, authors, head, window),
-    checkouts: checkoutsOf(ctx),
+    checkouts: await checkoutsOf(ctx),
     names: stopNames(ctx),
+    ...(remote ? { remote } : {}),
   }
+}
+
+/** The remote branches are pushed to: origin, or the first there is; null for none. */
+function remoteOf(ctx: Context): string | null {
+  const all = (gitOrNull(ctx.root, "remote") ?? "").split("\n").filter(Boolean)
+  return all.includes("origin") ? "origin" : all[0] ?? null
+}
+
+/** Every commit of a local branch on no remote: reachable from the branches and not from a remote-tracking ref. */
+function localCommits(ctx: Context): Set<string> {
+  return new Set((gitOrNull(ctx.root, "rev-list", "--branches", "--not", "--remotes") ?? "").split("\n").filter(Boolean))
 }
 
 /** When each discussion still open on one of `ids` was filed: a question the work on it waits for. */
@@ -484,13 +513,27 @@ function peopleOf(ctx: Context, routes: readonly Route[], authors: Authors, head
   return out
 }
 
-/** The main checkout and each worktree, with the branch and the commit it stands on. */
-function checkoutsOf(ctx: Context): Checkout[] {
-  return worktrees(ctx.root).map((w, i) => ({
+/** The main checkout and each worktree, with the branch and the commit it stands on, and its work not committed. */
+async function checkoutsOf(ctx: Context): Promise<Checkout[]> {
+  const all = worktrees(ctx.root)
+  const dirty = await Promise.all(all.map((w) => dirtyOf(w.path)))
+  return all.map((w, i) => ({
     name: basename(w.path),
     main: i === 0,
     here: w.self,
     branch: w.branch,
     commit: w.head,
+    ...dirty[i],
   }))
+}
+
+/** How long a checkout's look for work not committed may take before the map goes without it, in ms. */
+const DIRTY_MS = 2000
+
+/** How many tracked files of a checkout differ from its commit (untracked files are not counted: listing them walks
+ *  every folder); nothing when none, or git cannot tell in time. Every checkout is asked at once, none waits on another. */
+async function dirtyOf(path: string): Promise<{ dirty?: number }> {
+  const r = await runGitAsync(path, ["diff", "HEAD", "--name-only", "--ignore-submodules=all"], DIRTY_MS)
+  const n = r.ok ? r.out.split("\n").filter(Boolean).length : 0
+  return n ? { dirty: n } : {}
 }
