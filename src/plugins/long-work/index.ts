@@ -499,16 +499,21 @@ function hostRuns(host: Host): string {
     listed.set(host.name, { at: last?.at ?? 0, out: last?.out ?? "", asking: true })
     let out = ""
     const done = (ok: boolean) => void listed.set(host.name, { at: Date.now(), out: ok ? out : "", asking: false })
-    // spawn throws when this program may not run ssh (the UI server's Deno lacks --allow-run for it): the host's runs
-    // stay unknown, and the server goes on serving.
-    try {
-      const child = spawn("ssh", sshArgs(host, ["run", "list", "--json"]), { stdio: ["ignore", "pipe", "ignore"] })
-      child.unref()
-      child.stdout?.on("data", (d) => void (out += String(d)))
-      child.on("error", () => done(false))
-      child.on("close", (code) => done(code === 0))
-    } catch {
-      done(false)
+    // When this program may not run ssh (the UI server's Deno lacks --allow-run for it), Deno raises it a tick after
+    // spawn, outside any try, and the server would end: the permission is asked first, and the host's runs stay unknown.
+    const deno = (globalThis as { Deno?: { permissions?: { querySync?: (d: { name: "run"; command: string }) => { state: string } } } }).Deno
+    const mayRun = !deno || deno.permissions?.querySync?.({ name: "run", command: "ssh" }).state === "granted"
+    if (!mayRun) done(false)
+    else {
+      try {
+        const child = spawn("ssh", sshArgs(host, ["run", "list", "--json"]), { stdio: ["ignore", "pipe", "ignore"] })
+        child.unref()
+        child.stdout?.on("data", (d) => void (out += String(d)))
+        child.on("error", () => done(false))
+        child.on("close", (code) => done(code === 0))
+      } catch {
+        done(false)
+      }
     }
   }
   return listed.get(host.name)!.out
