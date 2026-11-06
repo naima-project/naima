@@ -146,7 +146,15 @@ export function serve(opts: ServeOptions): Promise<Served> {
   const bundle = opts.bundle ?? BUNDLE
   let listening = ""
   const handle = bridgeHandler({ handlers: opts.handlers, feeds: opts.feeds })
-  const server = createServer(async (req, res) => {
+  // A request the client gives up on (a page reloaded with its commands on their way) rejects while its body is read
+  // or its answer written: it ends that request alone, never the server, whose every other page goes on.
+  const server = createServer((req, res) => {
+    serveOne(req, res).catch(() => {
+      if (!res.headersSent && !res.destroyed) plain(res, 500, "the request could not be answered")
+      else res.destroy()
+    })
+  })
+  const serveOne = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const url = new URL(req.url ?? "/", `http://${HOST}`)
     // The origin the page was opened at: this address, or a forwarded port's, which the browser names in Host.
     const host = req.headers.host ?? ""
@@ -193,7 +201,7 @@ export function serve(opts: ServeOptions): Promise<Served> {
     const found = fileIn(bundle, rel, PAGE_TYPES)
     if (!found) return plain(res, 404, `no ${url.pathname}`, cookie)
     return file(req, res, found, PAGE_TYPES[extname(found).toLowerCase()]!, { ...cookie, "content-security-policy": POLICY })
-  })
+  }
   return new Promise((resolve, reject) => {
     server.once("error", reject)
     server.listen(opts.port ?? 0, HOST, () => {
