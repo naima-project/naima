@@ -48,7 +48,7 @@
 // commit it was loaded from: a launcher from before releases cannot let the
 // newer program download one.
 
-import { PROJECTS_ENV, rememberProject } from "./core/projects.ts"
+import { PROJECTS_ENV, rememberProject, switchTarget, UI_SWITCH, UI_SWITCH_ENV, type UiSwitch } from "./core/projects.ts"
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs"
 import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -306,6 +306,8 @@ export function permissions(
     program: string
     entry: string
     hostFiles?: string[]
+    /** The files `naima ui` may write besides: the one where it names the project to switch to, as given and as resolved. */
+    uiFiles?: string[]
     /** The folders outside the project the command may read besides: naima recover's agent transcripts. */
     hostReads?: string[]
     /** The temporary folders the command may read besides, each as given and as resolved: describe's, note's, attach's and pass's input files. */
@@ -363,7 +365,7 @@ export function permissions(
         ...hostReads,
       ])
     }${[...temps, ...folder].map((t) => `,${t}`).join("")}`,
-    `--allow-write=${list([p.tracker, p.data, p.program, ...tick, ...(p.hostFiles ?? []), ...(p.ui?.write ?? []).filter((w) => tools.includes(w))])}`,
+    `--allow-write=${list([p.tracker, p.data, p.program, ...tick, ...(p.hostFiles ?? []), ...(p.uiFiles ?? []), ...(p.ui?.write ?? []).filter((w) => tools.includes(w))])}`,
     ...runFlag(p.ui?.runAll ? null : ["git", "tar", ...(p.runs ?? []), ...(p.ui?.runs ?? [])], p.found ?? runnable),
     "--allow-env",
     ...(p.ui?.netAll
@@ -525,7 +527,11 @@ export function worktreeData(cwd: string, own: string): string | undefined {
   return existsSync(join(data, DATA_FILE)) ? data : undefined
 }
 
-export async function launch(args: string[], cwd: string): Promise<number> {
+/**
+ * Run Naima as `args` say, in `cwd`. `resume` is the address a `naima ui` that switched project keeps: the port and the
+ * token of the run before, handed to this one alone (core/projects.ts, UI_SWITCH).
+ */
+export async function launch(args: string[], cwd: string, resume?: Omit<UiSwitch, "root">): Promise<number> {
   let parsed: ReturnType<typeof globalOptions>
   try {
     parsed = globalOptions(args)
@@ -546,10 +552,15 @@ export async function launch(args: string[], cwd: string): Promise<number> {
   // The machine's name and the private word list, which the program may not ask for itself: what tracker text is checked against.
   // naima ui: this project joins the projects Naima knows on this machine, which the UI's home across projects reads (core/projects.ts).
   const known = parsed.rest[0] === "ui" ? rememberProject(Deno.env.toObject(), Deno.build.os, { root, data }) : null
+  // naima ui in a browser may switch to another project of the list: it writes which in this file, the one file outside
+  // the tracker it is granted to write, and exits with UI_SWITCH; the launcher then serves that project on the same address.
+  const switchFile = known && !parsed.rest.includes("--sidecar") ? Deno.makeTempFileSync({ prefix: "naima-ui-switch-", suffix: ".json" }) : null
   const marks = {
     ...privateEnv(Deno.env.toObject(), Deno.build.os),
     ...(known ? { [PROJECTS_ENV]: JSON.stringify(known) } : {}),
     NAIMA_LAUNCHED: "1",
+    ...(switchFile ? { [UI_SWITCH_ENV.file]: switchFile } : {}),
+    ...(resume ? { [UI_SWITCH_ENV.port]: String(resume.port), [UI_SWITCH_ENV.token]: resume.token } : {}),
     ...(given ? { NAIMA_DATA: real(data) } : {}),
   }
   // Which of them are the launcher's alone, so a command the program starts is handed the caller's environment without them.
@@ -584,6 +595,7 @@ export async function launch(args: string[], cwd: string): Promise<number> {
         program,
         entry,
         hostFiles: hostFiles(parsed.rest, root, data),
+        uiFiles: switchFile ? [...new Set([switchFile, real(switchFile)])].filter((x) => !x.includes(",")) : [],
         hostReads: parsed.rest[0] === "recover" ? transcriptRoots(Deno.env.toObject()) : [],
         tempReads: TEMP_READERS.includes(parsed.rest[0] ?? "") ? tempRoots() : [],
         worktrees: others,
@@ -617,6 +629,21 @@ export async function launch(args: string[], cwd: string): Promise<number> {
     const wait = () => {}
     if (ui) Deno.addSignalListener("SIGINT", wait)
     const { code } = await child.status
+    if (switchFile) {
+      const next = code === UI_SWITCH ? switchTarget(readSwitch(switchFile), known ?? []) : null
+      try {
+        Deno.removeSync(switchFile)
+      } catch { /* already gone */ }
+      if (code === UI_SWITCH) {
+        if (ui) Deno.removeSignalListener("SIGINT", wait)
+        if (!next) {
+          console.error("naima: naima ui asked to switch to a project that is not one of the recent projects")
+          return 1
+        }
+        // The chosen project's own data names its program and its permissions, as if run there with --data.
+        return launch(["--data", next.data, ...parsed.rest], next.root, { port: next.port, token: next.token })
+      }
+    }
     if (ui) Deno.removeSignalListener("SIGINT", wait)
     if (code !== RELAUNCH) return code
     entry = real(runtimeOf(program) ?? program) // resolved, as the permissions name it: the program may have just been made
@@ -637,4 +664,13 @@ export async function launch(args: string[], cwd: string): Promise<number> {
   }
   console.error(`naima: ${program} did not settle after ${MAX_RUNS} runs — its alignment keeps moving`)
   return 2
+}
+
+/** A switch file's text, or null when it cannot be read. */
+function readSwitch(file: string): string | null {
+  try {
+    return Deno.readTextFileSync(file)
+  } catch {
+    return null
+  }
 }

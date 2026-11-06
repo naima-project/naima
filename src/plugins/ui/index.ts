@@ -32,7 +32,9 @@ import { naimaBridge } from "./bridge.ts"
 import { mapView } from "./graphs.ts"
 import { projectsView } from "./projects.ts"
 import { browserCommand, openBrowser, type Opened, osName } from "./open.ts"
-import { filesKey, filesUrl, newToken, serve } from "./serve.ts"
+import { filesKey, filesUrl, newToken, serve, type ServeOptions } from "./serve.ts"
+import { resumed, switchFile, writeSwitch } from "./switch.ts"
+import { UI_SWITCH } from "../../core/projects.ts"
 import { runSidecar } from "./sidecar.ts"
 import { nameStopCommand } from "./stops.ts"
 import { allTabs, tabsPoint, type UiTab, type UiView } from "./tabs.ts"
@@ -223,7 +225,14 @@ export interface UiDeps {
   /** Stop listening for Ctrl-C, once `naima ui` is done: a listener left behind would keep the process alive. */
   forget?(): void
   log?(line: string): void
+  /** The file a switch to another recent project is written to, null when this run may not switch: the launcher's by default. */
+  switchFile?: string | null
+  /** The address a run that switched keeps: the launcher's by default, null for a run started afresh. */
+  resume?: { port: number; token: string } | null
 }
+
+/** How long a run that switches serves on after answering the switch, so that the answer reaches the page, in ms. */
+export const SWITCH_GRACE_MS = 300
 
 const listening: (() => void)[] = []
 
@@ -255,25 +264,42 @@ export function tabFolder(ctx: Context, tabs: readonly UiTab[], name: string): s
 
 /** `naima ui`: serve the UI through the bridge, open it in the browser unless asked not to, and stop on Ctrl-C. */
 export async function runUi(ctx: Context, flags: { open: boolean }, deps: UiDeps = realDeps): Promise<number> {
-  const token = newToken()
+  // A run that switched project from another keeps its address and token, so the page that asked finds it there.
+  const back = deps.resume !== undefined ? deps.resume : resumed()
+  const file = deps.switchFile !== undefined ? deps.switchFile : switchFile()
+  const token = back?.token ?? newToken()
   const key = filesKey(token)
   const tabs = allTabs(tabsOf(ctx), viewsOf(ctx))
-  const bridge = naimaBridge(ctx, { views: viewsOf(ctx), tabs, fileUrl: (tab, rel) => filesUrl(key, tab, rel) })
-  const served = await serve({
-    ...bridge,
-    token,
-    tabFolder: (name) => tabFolder(ctx, tabs, name),
-    ...(deps.log ? { log: deps.log } : {}),
+  let port = 0
+  let switched = () => {}
+  const switching = new Promise<number>((done) => (switched = () => done(UI_SWITCH)))
+  const bridge = naimaBridge(ctx, {
+    views: viewsOf(ctx),
+    tabs,
+    fileUrl: (tab, rel) => filesUrl(key, tab, rel),
+    switcher: {
+      can: file !== null,
+      to: (project) => {
+        writeSwitch(file!, { root: project.root, port, token })
+        setTimeout(switched, SWITCH_GRACE_MS)
+        return Promise.resolve()
+      },
+    },
   })
+  const options: ServeOptions = { ...bridge, token, tabFolder: (name) => tabFolder(ctx, tabs, name), ...(deps.log ? { log: deps.log } : {}) }
+  // The port the run before listened on may have been taken meanwhile: then a free one, which the address printed says.
+  const served = back ? await serve({ ...options, port: back.port }).catch(() => serve(options)) : await serve(options)
+  port = served.port
   try {
-    if (flags.open) {
+    if (back) {
+      ctx.out(`naima ui: serving ${ctx.root.split(/[\\/]/).filter(Boolean).pop() ?? ""} at ${served.url} — Ctrl-C stops it`)
+    } else if (flags.open) {
       const b = await deps.browser(served.url)
       ctx.out(`naima ui: ${b.opened ? `opened ${served.url} in the browser` : `open ${served.url} in a browser (${b.reason})`} — Ctrl-C stops it`)
     } else {
       ctx.out(`naima ui: serving ${served.url} — open it in a browser; Ctrl-C stops it`)
     }
-    await deps.interrupted()
-    return 0
+    return await Promise.race([deps.interrupted().then(() => 0), switching])
   } finally {
     deps.forget?.()
     bridge.close()
