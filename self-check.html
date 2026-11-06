@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Naima checks itself</title>
+<meta name="description" content="An experiment: two small mCRL2 models of how Naima coordinates its agents, the properties checked on them, and how to run the checks yourself.">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="alternate" type="text/plain" href="llms.txt" title="Naima, for AI agents: how to install it">
+<link rel="preload" href="fonts/inter-tight-latin.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+  /* palette */
+  :root {
+    color-scheme: light;
+    --bg: #fbfaf7;
+    --panel: #ffffff;
+    --fg: #16181d;
+    --text: #3a3d44;
+    --muted: #6a6d75;
+    --line: #e6e3dc;
+    --accent: #2a3f8f;
+    --accent-soft: #eef1fb;
+    --ok: #1f7a4d;
+    --ok-soft: #e6f4ec;
+    --bad: #9a3b2f;
+    --bad-soft: #fbeeee;
+    --warn-soft: #fbf3e2;
+    --warn-line: #ead9b4;
+    --term: #12141a;
+    --term-text: #d7dae3;
+    --term-dim: #8b93a7;
+    --sans: "Inter Tight", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  /* end palette */
+  @font-face { font-family: "Inter Tight"; font-style: normal; font-weight: 100 900; font-display: block; src: url("fonts/inter-tight-latin.woff2") format("woff2"); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow-x: clip; line-height: 1.55; }
+  a { color: inherit; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 24px; }
+
+  .bar { display: flex; align-items: center; justify-content: space-between; padding-block: 22px; }
+  .logo { font-weight: 650; font-size: 22px; letter-spacing: -.5px; text-decoration: none; }
+  .logo .ai { color: var(--accent); }
+  .bar nav { display: flex; gap: 26px; align-items: center; font-size: 15px; }
+  .bar nav a { text-decoration: none; color: var(--text); }
+  .bar nav a:hover { color: var(--accent); }
+
+  .k { font: 600 12.5px var(--mono); letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  h1 { margin: 0; font-size: clamp(38px, 5vw, 56px); line-height: 1.04; letter-spacing: -2px; font-weight: 650; }
+  h1 em { font-style: normal; color: var(--accent); }
+  h2 { font-size: clamp(24px, 2.8vw, 30px); letter-spacing: -.8px; margin: 0 0 16px; font-weight: 650; }
+  h3 { font-size: 18px; letter-spacing: -.3px; margin: 30px 0 8px; }
+  p { color: var(--text); font-size: 16.5px; margin: 0 0 14px; }
+  p b, li b { color: var(--fg); }
+  code { font: 14px var(--mono); background: var(--accent-soft); color: var(--accent); padding: 1px 5px; border-radius: 5px; }
+  section { padding-block: 44px 8px; }
+
+  .intro { padding-block: 40px 8px; }
+  .lead { margin: 20px 0 0; font-size: 19px; }
+  .exp { margin: 26px 0 0; padding: 18px 22px; border-radius: 14px; background: var(--warn-soft); border: 1px solid var(--warn-line); color: var(--text); font-size: 16.5px; }
+  .exp b { color: var(--fg); }
+
+  .rules { margin: 6px 0 14px; padding-left: 22px; color: var(--text); font-size: 16.5px; }
+  .rules li { margin-bottom: 6px; }
+
+  .props { list-style: none; margin: 8px 0 18px; padding: 0; display: grid; gap: 12px; }
+  .props li { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 20px; }
+  .props li > b { display: block; font-size: 17px; letter-spacing: -.2px; margin-bottom: 4px; }
+  .props li > span { color: var(--text); font-size: 15.5px; }
+  .verdicts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .holds, .fails { font: 600 12.5px var(--mono); border-radius: 999px; padding: 3px 10px; }
+  .holds { color: var(--ok); background: var(--ok-soft); }
+  .fails { color: var(--bad); background: var(--bad-soft); }
+
+  pre.src { margin: 12px 0 22px; background: var(--term); color: var(--term-text); border-radius: 14px; padding: 18px 20px; font: 13px/1.6 var(--mono); white-space: pre; overflow-x: auto; }
+  pre.src .cm { color: var(--term-dim); }
+  pre.cmd .p { color: var(--term-dim); user-select: none; }
+
+  .files { list-style: none; margin: 8px 0 18px; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .files a { display: block; text-decoration: none; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; transition: border-color .2s ease; }
+  .files a:hover { border-color: var(--accent); }
+  .files b { display: block; font: 600 14px var(--mono); color: var(--accent); }
+  .files span { color: var(--muted); font-size: 14px; }
+
+  .back { padding-block: 48px 64px; text-align: center; }
+  .button { display: inline-block; text-decoration: none; border-radius: 12px; font-size: 16.5px; font-weight: 550; padding: 14px 24px; border: 1px solid var(--line); background: var(--panel); }
+
+  @media (max-width: 880px) {
+    .bar nav a.hide { display: none; }
+  }
+  /* A phone: the code keeps its columns, smaller, and scrolls sideways inside itself. */
+  @media (max-width: 560px) {
+    .bar { padding-block: 18px; }
+    .bar nav { gap: 16px; font-size: 14px; }
+    h1 { font-size: 36px; letter-spacing: -1.2px; line-height: 1.08; }
+    h2 { font-size: 26px; }
+    .lead { font-size: 17px; }
+    pre.src { font-size: 11px; padding: 14px; }
+    .files { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header class="wrap bar">
+  <a class="logo" href="./" aria-label="Naima, home">N<span class="ai">AI</span>MA</a>
+  <nav aria-label="Site">
+    <a class="hide" href="one-minute.html">How it works</a>
+    <a class="hide" href="docs.html?p=README.md">Docs</a>
+    <a href="https://github.com/naima-project/naima">GitHub</a>
+  </nav>
+</header>
+
+<main class="wrap">
+  <section class="intro">
+    <p class="k">An experiment</p>
+    <h1>Naima checks <em>itself</em></h1>
+    <p class="lead">Naima lets many AI agents work on one repository at the same time. Two small models of how it coordinates them were written in mCRL2 and checked with its model checker. This page shows them, with the properties checked and how to run the checks yourself.</p>
+    <p class="exp"><b>This is only an experiment.</b> The models and the formulas below are hard to read without knowing mCRL2, and we are working on making them understandable. For now they are shown as they are, with their comments.</p>
+  </section>
+
+  <section aria-labelledby="protocol">
+    <h2 id="protocol">What the models are about</h2>
+    <p>Git records the history of a set of files as <em>commits</em>. Each commit is a snapshot of all the files with a reference to its <em>parents</em>. A <em>branch</em> is a name for a line of work. The <em>trunk</em> is the main line, to which work returns. A <em>merge</em> commit has two parents. Following only first parents back from the tip of the trunk gives its <em>first-parent line</em>. A <em>worktree</em> is a separate folder checked out on one branch.</p>
+    <p>In Naima, every agent works in a worktree of its own, on a branch of its own. It records the items it works on in a <em>claim file</em> on that branch. Its work lands on the trunk in two steps: first the trunk is merged into the branch, where conflicts are resolved and the tests are run again; then the coordinator, the only agent that writes the trunk, adds to it a <em>marker</em>, i.e., a merge commit with exactly the files of the branch, whose message names the items closed by the landing. The first-parent line of the trunk is thus the list of the landings.</p>
+    <p>Claims are read from the worktree of a branch while the branch exists. Afterwards they are read from the copy of its claim file on the trunk. Every commit carries a copy of every claim file, possibly stale. A stale copy could reach the trunk and hide a claim, or bring back one that was released. The protocol relies on two rules to prevent this:</p>
+    <ol class="rules">
+      <li>each agent writes only its own claim file;</li>
+      <li>a branch lands only after taking in the trunk. When it lands, the copies it carries of the other claim files are therefore current.</li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="results">
+    <h2 id="results">What was checked</h2>
+    <ul class="props">
+      <li><b>No claim is ever lost</b><span>For every branch <i>b</i> and item <i>i</i>, once <i>b</i> claims <i>i</i>, and as long as <i>b</i> does not release <i>i</i>, every read of the claims of <i>b</i> shows <i>i</i>.</span>
+        <div class="verdicts"><span class="holds">holds</span><span class="fails">fails with either rule turned off</span></div></li>
+      <li><b>A released claim never reappears</b><span>Once <i>b</i> releases <i>i</i>, and until <i>b</i> claims <i>i</i> again, no read of the claims of <i>b</i> shows <i>i</i>.</span>
+        <div class="verdicts"><span class="holds">holds</span></div></li>
+      <li><b>Every landing stays detectable</b><span>Once a landing <i>l</i> is on the trunk, however it was made and however many landings follow, no later read misses it.</span>
+        <div class="verdicts"><span class="holds">holds with markers</span><span class="fails">fails with fast-forward</span></div></li>
+    </ul>
+    <p>With mCRL2 202607.0, the claims model has 73,984 states and 668,032 transitions. Both claims properties hold. Turning off either rule makes the first property fail, and mCRL2 returns a counterexample in which a branch lands a stale copy of the claim file of another branch.</p>
+    <p>The landings property holds with markers (85 states, 211 transitions). It fails when markers are replaced by plain fast-forward landings: a fast-forward moves the trunk to the tip of the branch without creating a commit, so the landing leaves no commit of its own on the trunk. A landing made by hand is then absorbed by the next one and disappears from the record.</p>
+  </section>
+
+  <section aria-labelledby="mcrl2">
+    <h2 id="mcrl2">A few notions of mCRL2</h2>
+    <p>Data are described by <em>sorts</em>, i.e., types, built with <code>struct</code>, and by functions declared with <code>map</code> and defined by equations (<code>eqn</code>). <code>FSet(D)</code> is the sort of finite sets over <code>D</code> and <code>List(D)</code> that of lists, where <code>x |&gt; r</code> is the list with head <code>x</code> and tail <code>r</code>, and <code>++</code> is concatenation.</p>
+    <p>Behaviour is described by <em>processes</em> (<code>proc</code>), which perform <em>actions</em> (<code>act</code>). A process is a choice (<code>+</code>) between summands. A summand <code>c -&gt; a . P</code> may happen only when the condition <code>c</code> holds. It performs action <code>a</code> and continues as <code>P</code>. The operator <code>sum</code> ranges over all values of a sort. A process with parameters is called again with only the parameters that change, e.g., <code>Repo(disk = …)</code>. The initial state is given by <code>init</code>.</p>
+    <p>The properties are formulas of the modal μ-calculus of mCRL2 with regular expressions over actions. A formula <code>[R] false</code> says that no run of the model contains a sequence of actions matching the regular expression <code>R</code>, i.e., that what <code>R</code> describes never happens. In <code>R</code>, <code>true</code> matches any action, <code>*</code> is repetition, <code>.</code> is sequence and <code>!</code> is negation. A condition on the data of an action is written with <code>val</code>. The quantifier <code>forall</code> in front makes the formula hold for all values of its sort.</p>
+  </section>
+
+  <section aria-labelledby="claims">
+    <p class="k">Model 1 · claims.mcrl2</p>
+    <h2 id="claims">Claims</h2>
+    <p>The model abstracts the claim protocol to two branches, two items and the trunk. Only claim files are modelled: the other files of a branch play no role in the protocol. There are several copies of the claim file of a branch: one on the disk of its worktree, one in the last commit of every branch, and one on the trunk.</p>
+    <pre class="src" data-src="models/claims.mcrl2" data-lines="1-4"><span class="cm">% The claim protocol of Naima. Two branches, b1 and b2, each in a worktree of</span>
+<span class="cm">% its own, and a trunk. Each branch owns one claim file. Every tree (the</span>
+<span class="cm">% working copy of a branch, the commit of a branch, the trunk) holds a copy of</span>
+<span class="cm">% both claim files.</span></pre>
+
+    <h3>Data</h3>
+    <p>A tree is modelled by the sort <code>Files</code>, which holds the claim file of each branch, i.e., the set of items the branch claims. The sort <code>Refs</code> holds the last commit of each branch. The functions <code>get</code> and <code>put</code> read and write the claim file of a branch in a tree, and <code>ref</code> and <code>setref</code> do the same for the commit of a branch.</p>
+    <pre class="src" data-src="models/claims.mcrl2" data-lines="6-31"><span class="cm">% Part 1. Data.</span>
+sort Br = struct b1 | b2;                    <span class="cm">% the branches</span>
+     It = struct i1 | i2;                    <span class="cm">% the items that can be claimed</span>
+     Files = struct files(f1: FSet(It), f2: FSet(It));
+                                             <span class="cm">% a tree: the claim file of b1,</span>
+                                             <span class="cm">% the claim file of b2</span>
+     Refs = struct refs(r1: Files, r2: Files);
+                                             <span class="cm">% the commit of b1, of b2</span>
+
+map  get: Files # Br -&gt; FSet(It);            <span class="cm">% the claim file of a branch</span>
+     put: Files # Br # FSet(It) -&gt; Files;    <span class="cm">% in a tree, read and written</span>
+     ref: Refs # Br -&gt; Files;                <span class="cm">% the commit of a branch,</span>
+     setref: Refs # Br # Files -&gt; Refs;      <span class="cm">% read and written</span>
+     none: Files;                            <span class="cm">% a tree with no claims</span>
+
+var  x, y, s: FSet(It);
+     p, q, f: Files;
+eqn  get(files(x, y), b1) = x;
+     get(files(x, y), b2) = y;
+     put(files(x, y), b1, s) = files(s, y);
+     put(files(x, y), b2, s) = files(x, s);
+     ref(refs(p, q), b1) = p;
+     ref(refs(p, q), b2) = q;
+     setref(refs(p, q), b1, f) = refs(f, q);
+     setref(refs(p, q), b2, f) = refs(p, f);
+     none = files({}, {});</pre>
+
+    <h3>Rules</h3>
+    <p>The two rules of the protocol are Boolean constants. The first, <code>ff_only</code>, says that a branch lands only after taking in the trunk. The second, <code>own_files_only</code>, says that a branch writes only its own claim file. Both are true in the protocol. Setting one of them to false removes that rule from the model.</p>
+    <pre class="src" data-src="models/claims.mcrl2" data-lines="33-38"><span class="cm">% Part 2. The rules of the protocol, as switches. Both are true in the</span>
+<span class="cm">% protocol. Setting one to false is the negative experiment.</span>
+map  ff_only: Bool;          <span class="cm">% a branch lands only after taking in the trunk</span>
+     own_files_only: Bool;   <span class="cm">% a branch writes only its own claim file</span>
+eqn  ff_only = true;
+     own_files_only = true;</pre>
+
+    <h3>Landing strategy</h3>
+    <p>A third constant, <code>semi_linear</code>, says how a branch lands. In Naima it is true: each landing is a marker. The marker is a new commit, so after a landing no branch contains the whole trunk, and every branch must take in the trunk before landing again. When it is false, a landing is a fast-forward, and the branch that just landed still contains the trunk.</p>
+    <pre class="src" data-src="models/claims.mcrl2" data-lines="40-45"><span class="cm">% Part 3. The landing strategy. True: each landing is a marker, so after it</span>
+<span class="cm">% the branch no longer contains the trunk and must take it in again before</span>
+<span class="cm">% its next landing. False: a plain fast-forward, after which the commit of</span>
+<span class="cm">% the branch is the trunk.</span>
+map  semi_linear: Bool;
+eqn  semi_linear = true;</pre>
+
+    <h3>Actions</h3>
+    <p>The actions are the steps of the protocol: claiming and releasing an item, committing, landing (<code>merge</code>), taking in the trunk (<code>sync</code>) and retiring a branch, i.e., removing its worktree and deleting it. The action <code>write_other</code> is the only step that breaks a rule: a branch overwrites the claim file of another. The action <code>read</code> is an observation: it says which items a branch is read to claim, and it is the action on which the properties are stated.</p>
+    <pre class="src" data-src="models/claims.mcrl2" data-lines="47-56"><span class="cm">% Part 4. Actions.</span>
+act  claim, release: Br # It;   <span class="cm">% the branch claims or releases an item,</span>
+                                <span class="cm">% on its working copy</span>
+     commit: Br;                <span class="cm">% the branch commits its claim file</span>
+     merge: Br;                 <span class="cm">% the branch lands: the trunk takes its commit</span>
+     sync: Br;                  <span class="cm">% the branch takes in the trunk</span>
+     write_other: Br # Br;      <span class="cm">% the branch overwrites the claim file of</span>
+                                <span class="cm">% another branch (only without own_files_only)</span>
+     retire: Br;                <span class="cm">% the worktree is removed, the branch deleted</span>
+     read: Br # FSet(It);       <span class="cm">% the claims the branch is read to hold</span></pre>
+
+    <h3>The repository</h3>
+    <p>The process <code>Repo</code> holds the whole state: the working copies, the commits, the trunk, the set <code>fresh</code> of branches whose commit contains the trunk, and the set <code>alive</code> of branches not yet retired. Each summand is one step. A branch may commit only when its working copy differs from its commit. It may land only when its commit differs from the trunk and, under <code>ff_only</code>, when it is fresh. Landing replaces the tree of the trunk with the commit of the branch, which is what a marker does, since a marker has exactly the files of the branch. Taking in the trunk copies every claim file from the trunk into the commit of the branch, except its own. A branch may be retired only when its claims are the same on its disk, in its commit and on the trunk. Finally, <code>read</code> follows the protocol: the claims of a branch are read from its worktree while the branch exists, and from the copy of its claim file on the trunk afterwards. Initially both branches are alive and fresh, and nothing is claimed.</p>
+    <pre class="src" data-src="models/claims.mcrl2" data-lines="58-104"><span class="cm">% Part 5. The repository.</span>
+<span class="cm">%   disk:   the claim files on the working copy of each branch</span>
+<span class="cm">%   branch: the commit of each branch</span>
+<span class="cm">%   trunk:  the tree of the trunk</span>
+<span class="cm">%   fresh:  the branches whose commit contains the trunk</span>
+<span class="cm">%   alive:  the branches not yet retired</span>
+proc Repo(disk: Files, branch: Refs, trunk: Files,
+          fresh: FSet(Br), alive: FSet(Br)) =
+    <span class="cm">% An item is claimed or released on the working copy.</span>
+    sum b: Br, i: It. (b in alive &amp;&amp; !(i in get(disk, b))) -&gt;
+      claim(b, i) .
+      Repo(disk = put(disk, b, get(disk, b) + {i}))
+  + sum b: Br, i: It. (b in alive &amp;&amp; i in get(disk, b)) -&gt;
+      release(b, i) .
+      Repo(disk = put(disk, b, get(disk, b) - {i}))
+    <span class="cm">% The branch commits its own claim file.</span>
+  + sum b: Br. (b in alive &amp;&amp; get(ref(branch, b), b) != get(disk, b)) -&gt;
+      commit(b) .
+      Repo(branch = setref(branch, b, put(ref(branch, b), b, get(disk, b))))
+    <span class="cm">% The branch lands. Under ff_only, only if it contains the trunk.</span>
+  + sum b: Br. (b in alive &amp;&amp; ref(branch, b) != trunk
+                &amp;&amp; (b in fresh || !ff_only)) -&gt;
+      merge(b) .
+      Repo(trunk = ref(branch, b), fresh = if(semi_linear, {}, {b}))
+    <span class="cm">% The branch takes in the trunk: every claim file comes from the</span>
+    <span class="cm">% trunk, except its own.</span>
+  + sum b: Br. (b in alive &amp;&amp; !(b in fresh)) -&gt;
+      sync(b) .
+      Repo(branch = setref(branch, b, put(trunk, b, get(ref(branch, b), b))),
+           fresh = fresh + {b})
+    <span class="cm">% Without own_files_only, a branch may empty the claim file of another.</span>
+  + sum b, o: Br. (!own_files_only &amp;&amp; b in alive &amp;&amp; o != b
+                   &amp;&amp; get(ref(branch, b), o) != {}) -&gt;
+      write_other(b, o) .
+      Repo(branch = setref(branch, b, put(ref(branch, b), o, {})))
+    <span class="cm">% A branch whose claims are all on the trunk may be retired.</span>
+  + sum b: Br. (b in alive &amp;&amp; get(disk, b) == get(trunk, b)
+                &amp;&amp; get(ref(branch, b), b) == get(trunk, b)) -&gt;
+      retire(b) .
+      Repo(alive = alive - {b})
+    <span class="cm">% Claims are read from the working copy while the branch exists,</span>
+    <span class="cm">% and afterwards from the copy of its claim file on the trunk.</span>
+  + sum b: Br.
+      read(b, if(b in alive, get(disk, b), get(trunk, b))) .
+      Repo();
+
+init Repo(none, refs(none, none), none, {b1, b2}, {b1, b2});</pre>
+
+    <h3>Properties</h3>
+    <p>The first property says that no claim is ever lost. The forbidden sequence is: any prefix, then branch <code>b</code> claims item <code>i</code>, then any number of actions other than <code>b</code> releasing <code>i</code>, then a read of the claims of <code>b</code> that does not contain <code>i</code>. Between the claim and the read, the branch may commit, take in the trunk, land and be retired, and other branches may do the same. The claim must survive all of it.</p>
+    <pre class="src" data-src="models/no-claim-lost.mcf"><span class="cm">% No claim is ever lost: once branch b claims item i, every read of the</span>
+<span class="cm">% claims of b shows i until b releases it.</span>
+forall b: Br, i: It.
+  [true* . claim(b, i) . (!release(b, i))* .
+   (exists s: FSet(It). read(b, s) &amp;&amp; val(!(i in s)))] false</pre>
+    <p>The second property is the mirror image of the first: once <code>b</code> releases <code>i</code>, no read of the claims of <code>b</code> contains <code>i</code> until <code>b</code> claims it again. It rules out a stale copy of a claim file bringing back a released claim.</p>
+    <pre class="src" data-src="models/released-claim-never-reappears.mcf"><span class="cm">% A released claim never reappears: once branch b releases item i, no read</span>
+<span class="cm">% of the claims of b shows i until b claims it again.</span>
+forall b: Br, i: It.
+  [true* . release(b, i) . (!claim(b, i))* .
+   (exists s: FSet(It). read(b, s) &amp;&amp; val(i in s))] false</pre>
+    <p>Both properties hold. When <code>ff_only</code> is false, a branch may land without taking in the trunk, and the copy it carries of the claim file of another branch may be stale. For instance, branch <code>b1</code> claims an item, commits, lands and is retired; branch <code>b2</code>, which still holds the empty copy of the claim file of <code>b1</code>, then lands, and the next read of the claims of <code>b1</code> misses the item. When <code>own_files_only</code> is false, the same happens with a copy that <code>b2</code> emptied itself. In both cases mCRL2 reports that the first property fails and returns a counterexample of this kind.</p>
+  </section>
+
+  <section aria-labelledby="landings">
+    <p class="k">Model 2 · landings.mcrl2</p>
+    <h2 id="landings">Landings</h2>
+    <p>The model abstracts the trunk to its first-parent line, which is the record of the landings. It checks that Naima can always tell, from the record alone, which landings it holds, also when some of them are made by hand. The model is a single process: the trunk, written by one landing at a time, and an observer that reads it.</p>
+    <pre class="src" data-src="models/landings.mcrl2" data-lines="1-6"><span class="cm">% The landings on the trunk of Naima. The first-parent line of the trunk is</span>
+<span class="cm">% the record of the landings. An observer reads it, as Naima does, to tell</span>
+<span class="cm">% which landings it holds. Up to three landings, l1, l2, l3, happen one after</span>
+<span class="cm">% another, since the trunk has a single writer. Each is made by Naima or by</span>
+<span class="cm">% hand. A landing names the item it closes. The model identifies the two,</span>
+<span class="cm">% since an item is closed by one landing.</span></pre>
+
+    <h3>Data</h3>
+    <p>A landing is made in one of three ways: by Naima, by a plain fast-forward, or by a plain merge, both by hand. A commit on the first-parent line is modelled by the sort <code>C</code>. It records whether the commit is a merge and its trailer, i.e., the line of its message that names the item closed by the landing. These are the only things the observer can see. The commit also records, as a <em>ghost</em> field that the observer never reads, the landing that actually put it there. The ghost is what allows the property to compare what the observer reads with what really happened.</p>
+    <pre class="src" data-src="models/landings.mcrl2" data-lines="8-18"><span class="cm">% Part 1. Data. A commit on the first-parent line carries what the observer</span>
+<span class="cm">% sees (whether it is a merge, and its trailer, i.e., the line of its message</span>
+<span class="cm">% naming the item it closes) and, as a ghost the observer never reads, the</span>
+<span class="cm">% landing that put it there.</span>
+sort L = struct l1 | l2 | l3;                <span class="cm">% the landings, in order</span>
+     How = struct by_command | by_hand_ff | by_hand_merge;
+                                             <span class="cm">% made by Naima, by a plain</span>
+                                             <span class="cm">% fast-forward, by a plain merge</span>
+     Tr = struct none | closes(item: L);     <span class="cm">% the trailer of a commit</span>
+     C = struct c(is_merge: Bool, trailer: Tr, owner: L);
+                                             <span class="cm">% a commit; owner is the ghost</span></pre>
+
+    <h3>Landing strategy</h3>
+    <p>As in the claims model, <code>semi_linear</code> is true when landings by Naima are markers. When it is false, a landing by Naima is a fast-forward, and the trailer is written on the last commit of the branch. This is the negative experiment.</p>
+    <pre class="src" data-src="models/landings.mcrl2" data-lines="20-24"><span class="cm">% Part 2. The landing strategy. True: each landing by Naima is a marker.</span>
+<span class="cm">% False, the negative experiment: a fast-forward, with the trailer on the</span>
+<span class="cm">% tip of the branch.</span>
+map  semi_linear: Bool;
+eqn  semi_linear = true;</pre>
+
+    <h3>Landings</h3>
+    <p>The function <code>landed</code> gives the commits that a landing adds to the first-parent line. Its last argument says whether the branch has one commit or two, which is enough to show a landing spread over several commits. A marker adds a single merge commit, whatever the number of commits of the branch, since those stay on the side of its second parent. A fast-forward adds all commits of the branch. A plain merge by hand adds a merge commit with the default message of git, which has no trailer.</p>
+    <pre class="src" data-src="models/landings.mcrl2" data-lines="26-47"><span class="cm">% Part 3. What a landing adds to the first-parent line. The flag two says</span>
+<span class="cm">% whether the branch has one commit or two.</span>
+map  id: Nat -&gt; L;
+     landed: How # L # Bool -&gt; List(C);
+var  l: L;
+     two: Bool;
+eqn  id(0) = l1;
+     id(1) = l2;
+     id(2) = l3;
+     <span class="cm">% By Naima. With markers, one merge commit naming the item: the commits</span>
+     <span class="cm">% of the branch stay on its second-parent side, off the first-parent</span>
+     <span class="cm">% line. With fast-forward, the commits of the branch, the tip carrying</span>
+     <span class="cm">% the trailer.</span>
+     landed(by_command, l, two) =
+       if(semi_linear, [c(true, closes(l), l)],
+          if(two, [c(false, none, l)], []) ++ [c(false, closes(l), l)]);
+     <span class="cm">% By hand. A plain fast-forward puts the commits of the branch on the</span>
+     <span class="cm">% line, with no trailer. A plain merge makes a merge commit with the</span>
+     <span class="cm">% message of git, with no trailer.</span>
+     landed(by_hand_ff, l, two) =
+       if(two, [c(false, none, l), c(false, none, l)], [c(false, none, l)]);
+     landed(by_hand_merge, l, two) = [c(true, none, l)];</pre>
+
+    <h3>The observer</h3>
+    <p>The function <code>owners</code> gives the landings in the record, read from the ghosts. The functions <code>lost_ff</code> and <code>lost_sl</code> give the landings that the observer misreads under each strategy, i.e., those it neither identifies by a trailer nor flags as landed by hand. With fast-forward, the observer has no way to tell where a landing begins: it reads every commit since the previous trailer as part of the landing named by the next one. With markers, every commit on the first-parent line is a landing of its own, so the observer either identifies it by its trailer or flags it. The function <code>accounted</code> gives the landings that the observer reads correctly.</p>
+    <pre class="src" data-src="models/landings.mcrl2" data-lines="49-80"><span class="cm">% Part 4. The observer. owners gives the landings the record holds (from the</span>
+<span class="cm">% ghosts). lost_ff and lost_sl give the landings the observer misreads, for</span>
+<span class="cm">% each strategy. accounted gives the landings it identifies or flags.</span>
+map  owners: List(C) -&gt; FSet(L);
+     lost_ff: List(C) # FSet(L) -&gt; FSet(L);
+     lost_sl: List(C) -&gt; FSet(L);
+     accounted: List(C) -&gt; FSet(L);
+var  x: C;
+     r: List(C);
+     p: FSet(L);
+eqn  owners([]) = {};
+     owners(x |&gt; r) = {owner(x)} + owners(r);
+     <span class="cm">% Fast-forward, oldest commit first. A commit with a trailer ends a</span>
+     <span class="cm">% landing, and every commit since the previous trailer is read as part</span>
+     <span class="cm">% of that landing. The commits after the last trailer are flagged as</span>
+     <span class="cm">% landed without one. p holds the landings of the commits read so far</span>
+     <span class="cm">% since the last trailer.</span>
+     lost_ff([], p) = {};
+     (trailer(x) == none) -&gt;
+       lost_ff(x |&gt; r, p) = lost_ff(r, p + {owner(x)});
+     (trailer(x) != none) -&gt;
+       lost_ff(x |&gt; r, p) = ((p + {owner(x)}) - {item(trailer(x))})
+                            + lost_ff(r, {});
+     <span class="cm">% Markers. Every commit on the first-parent line is a landing of its</span>
+     <span class="cm">% own. A merge with a trailer is identified by it. A merge without one,</span>
+     <span class="cm">% or a commit that is not a merge, is flagged as landed by hand.</span>
+     lost_sl([]) = {};
+     lost_sl(x |&gt; r) =
+       if(is_merge(x) &amp;&amp; trailer(x) != none &amp;&amp; item(trailer(x)) != owner(x),
+          {owner(x)}, {})
+       + lost_sl(r);
+     accounted(r) = owners(r) - if(semi_linear, lost_sl(r), lost_ff(r, {}));</pre>
+
+    <h3>The process</h3>
+    <p>The process <code>Main</code> holds the record and the number of landings so far. At each step, either the next landing happens, in any of the three ways and with one or two commits, or the observer reads the record.</p>
+    <pre class="src" data-src="models/landings.mcrl2" data-lines="82-92"><span class="cm">% Part 5. Actions and process. rec is the first-parent line, n the number</span>
+<span class="cm">% of landings so far.</span>
+act  land: L # How;          <span class="cm">% a landing on the trunk</span>
+     read: FSet(L);          <span class="cm">% the observer reads the record</span>
+
+proc Main(rec: List(C), n: Nat) =
+    sum h: How, two: Bool. (n &lt; 3) -&gt;
+      land(id(n), h) . Main(rec ++ landed(h, id(n), two), n + 1)
+  + read(accounted(rec)) . Main();
+
+init Main([], 0);</pre>
+
+    <h3>Property</h3>
+    <p>The property says that every landing stays detectable. The forbidden sequence is: any prefix, then landing <code>l</code> in any of the three ways, then any actions, then a read that does not account for <code>l</code>. Since any number of landings may happen between the landing and the read, the property covers a landing followed by others.</p>
+    <pre class="src" data-src="models/every-landing-detectable.mcf"><span class="cm">% Every landing stays detectable: once landing l is on the trunk, every later</span>
+<span class="cm">% read of the record identifies it by its trailer or flags it as landed by</span>
+<span class="cm">% hand, however many landings follow.</span>
+forall l: L.
+  [true* . (exists h: How. land(l, h)) . true* .
+   (exists s: FSet(L). read(s) &amp;&amp; val(!(l in s)))] false</pre>
+    <p>The property holds with markers. It fails with fast-forward: if a landing by hand is followed by a landing by Naima, the observer reads the commits of both as the commits of the second, and the first disappears from the record.</p>
+  </section>
+
+  <section aria-labelledby="run">
+    <h2 id="run">Run the checks yourself</h2>
+    <p>The two models and the three properties, as plain text files:</p>
+    <ul class="files">
+      <li><a href="models/claims.mcrl2" download><b>claims.mcrl2</b><span>the claims model</span></a></li>
+      <li><a href="models/landings.mcrl2" download><b>landings.mcrl2</b><span>the landings model</span></a></li>
+      <li><a href="models/no-claim-lost.mcf" download><b>no-claim-lost.mcf</b><span>no claim is ever lost</span></a></li>
+      <li><a href="models/released-claim-never-reappears.mcf" download><b>released-claim-never-reappears.mcf</b><span>a released claim never reappears</span></a></li>
+      <li><a href="models/every-landing-detectable.mcf" download><b>every-landing-detectable.mcf</b><span>every landing stays detectable</span></a></li>
+    </ul>
+    <p>You need the <a href="https://www.mcrl2.org/">mCRL2 toolset</a>; the results above are from version 202607.0. Put the files in one folder and run, there, three tools for each property: <code>mcrl22lps</code> turns the model into a linear process, <code>lps2pbes -f</code> combines it with the formula into an equation system, and <code>pbes2bool</code> solves it and prints <code>true</code> when the property holds, <code>false</code> when it does not.</p>
+    <pre class="src cmd"><span class="p">$ </span>mcrl22lps claims.mcrl2 claims.lps
+<span class="p">$ </span>lps2pbes -f no-claim-lost.mcf claims.lps no-claim-lost.pbes
+<span class="p">$ </span>pbes2bool no-claim-lost.pbes
+true
+<span class="p">$ </span>lps2pbes -f released-claim-never-reappears.mcf claims.lps released.pbes
+<span class="p">$ </span>pbes2bool released.pbes
+true
+
+<span class="p">$ </span>mcrl22lps landings.mcrl2 landings.lps
+<span class="p">$ </span>lps2pbes -f every-landing-detectable.mcf landings.lps landings.pbes
+<span class="p">$ </span>pbes2bool landings.pbes
+true</pre>
+    <p>Each claims property takes about a minute; the landings property takes a moment. For the negative experiments, change one line of a model and run its checks again: in <code>claims.mcrl2</code>, set <code>ff_only</code> or <code>own_files_only</code> to <code>false</code>, and <code>pbes2bool</code> prints <code>false</code> for <code>no-claim-lost.mcf</code>; in <code>landings.mcrl2</code>, set <code>semi_linear</code> to <code>false</code>, and it prints <code>false</code> for <code>every-landing-detectable.mcf</code>.</p>
+  </section>
+
+  <div class="back">
+    <a class="button" href="./">Back to the home page</a>
+  </div>
+</main>
+</body>
+</html>

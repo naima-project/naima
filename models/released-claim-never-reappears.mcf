@@ -1,0 +1,5 @@
+% A released claim never reappears: once branch b releases item i, no read
+% of the claims of b shows i until b claims it again.
+forall b: Br, i: It.
+  [true* . release(b, i) . (!claim(b, i))* .
+   (exists s: FSet(It). read(b, s) && val(i in s))] false

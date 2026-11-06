@@ -145,6 +145,12 @@
   .diagram svg .elbl { font-size: 12px; fill: var(--muted); }
   .diagram .cap { margin: 12px 4px 0; font-size: 14px; color: var(--muted); }
   .diagram .cap code { font: 13px var(--mono); color: var(--fg); }
+  .selfcheck { display: block; margin: 44px auto 0; max-width: 820px; text-decoration: none; text-align: center; padding: 22px 26px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); transition: border-color .2s ease, transform .2s ease; }
+  .selfcheck:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .selfcheck > b { display: block; font-size: 21px; letter-spacing: -.4px; color: var(--accent); margin-bottom: 4px; }
+  .selfcheck span { color: var(--text); font-size: 16px; }
+  .selfcheck span b { color: var(--fg); }
+  .selfcheck + .alsofor { margin-top: 16px; }
   .alsofor { margin: 44px auto 0; max-width: 820px; text-align: center; text-wrap: balance; padding: 20px 26px; border-radius: 14px; background: var(--accent-soft); color: var(--text); font-size: 16px; }
   .alsofor b { color: var(--fg); }
 
@@ -362,6 +368,7 @@ run tests: <span class="ok">succeeded</span> <span class="dim">— exit 0</span>
         <figcaption class="cap"><code>property: always count(retry) ≤ 2</code></figcaption>
       </figure>
     </div>
+    <a class="selfcheck" href="self-check.html"><b>Naima checks itself!</b><span>Its own coordination protocol, modelled in mCRL2 and checked with the model checker. <b>How? See here →</b></span></a>
     <p class="alsofor"><b>Born for software, not only for it.</b> The same discipline runs a data analysis or a paper written with colleagues, with that work's own checks in place of tests.</p>
   </section>
 

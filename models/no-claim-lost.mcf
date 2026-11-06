@@ -1,0 +1,5 @@
+% No claim is ever lost: once branch b claims item i, every read of the
+% claims of b shows i until b releases it.
+forall b: Br, i: It.
+  [true* . claim(b, i) . (!release(b, i))* .
+   (exists s: FSet(It). read(b, s) && val(!(i in s)))] false

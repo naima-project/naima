@@ -1,0 +1,104 @@
+% The claim protocol of Naima. Two branches, b1 and b2, each in a worktree of
+% its own, and a trunk. Each branch owns one claim file. Every tree (the
+% working copy of a branch, the commit of a branch, the trunk) holds a copy of
+% both claim files.
+
+% Part 1. Data.
+sort Br = struct b1 | b2;                    % the branches
+     It = struct i1 | i2;                    % the items that can be claimed
+     Files = struct files(f1: FSet(It), f2: FSet(It));
+                                             % a tree: the claim file of b1,
+                                             % the claim file of b2
+     Refs = struct refs(r1: Files, r2: Files);
+                                             % the commit of b1, of b2
+
+map  get: Files # Br -> FSet(It);            % the claim file of a branch
+     put: Files # Br # FSet(It) -> Files;    % in a tree, read and written
+     ref: Refs # Br -> Files;                % the commit of a branch,
+     setref: Refs # Br # Files -> Refs;      % read and written
+     none: Files;                            % a tree with no claims
+
+var  x, y, s: FSet(It);
+     p, q, f: Files;
+eqn  get(files(x, y), b1) = x;
+     get(files(x, y), b2) = y;
+     put(files(x, y), b1, s) = files(s, y);
+     put(files(x, y), b2, s) = files(x, s);
+     ref(refs(p, q), b1) = p;
+     ref(refs(p, q), b2) = q;
+     setref(refs(p, q), b1, f) = refs(f, q);
+     setref(refs(p, q), b2, f) = refs(p, f);
+     none = files({}, {});
+
+% Part 2. The rules of the protocol, as switches. Both are true in the
+% protocol. Setting one to false is the negative experiment.
+map  ff_only: Bool;          % a branch lands only after taking in the trunk
+     own_files_only: Bool;   % a branch writes only its own claim file
+eqn  ff_only = true;
+     own_files_only = true;
+
+% Part 3. The landing strategy. True: each landing is a marker, so after it
+% the branch no longer contains the trunk and must take it in again before
+% its next landing. False: a plain fast-forward, after which the commit of
+% the branch is the trunk.
+map  semi_linear: Bool;
+eqn  semi_linear = true;
+
+% Part 4. Actions.
+act  claim, release: Br # It;   % the branch claims or releases an item,
+                                % on its working copy
+     commit: Br;                % the branch commits its claim file
+     merge: Br;                 % the branch lands: the trunk takes its commit
+     sync: Br;                  % the branch takes in the trunk
+     write_other: Br # Br;      % the branch overwrites the claim file of
+                                % another branch (only without own_files_only)
+     retire: Br;                % the worktree is removed, the branch deleted
+     read: Br # FSet(It);       % the claims the branch is read to hold
+
+% Part 5. The repository.
+%   disk:   the claim files on the working copy of each branch
+%   branch: the commit of each branch
+%   trunk:  the tree of the trunk
+%   fresh:  the branches whose commit contains the trunk
+%   alive:  the branches not yet retired
+proc Repo(disk: Files, branch: Refs, trunk: Files,
+          fresh: FSet(Br), alive: FSet(Br)) =
+    % An item is claimed or released on the working copy.
+    sum b: Br, i: It. (b in alive && !(i in get(disk, b))) ->
+      claim(b, i) .
+      Repo(disk = put(disk, b, get(disk, b) + {i}))
+  + sum b: Br, i: It. (b in alive && i in get(disk, b)) ->
+      release(b, i) .
+      Repo(disk = put(disk, b, get(disk, b) - {i}))
+    % The branch commits its own claim file.
+  + sum b: Br. (b in alive && get(ref(branch, b), b) != get(disk, b)) ->
+      commit(b) .
+      Repo(branch = setref(branch, b, put(ref(branch, b), b, get(disk, b))))
+    % The branch lands. Under ff_only, only if it contains the trunk.
+  + sum b: Br. (b in alive && ref(branch, b) != trunk
+                && (b in fresh || !ff_only)) ->
+      merge(b) .
+      Repo(trunk = ref(branch, b), fresh = if(semi_linear, {}, {b}))
+    % The branch takes in the trunk: every claim file comes from the
+    % trunk, except its own.
+  + sum b: Br. (b in alive && !(b in fresh)) ->
+      sync(b) .
+      Repo(branch = setref(branch, b, put(trunk, b, get(ref(branch, b), b))),
+           fresh = fresh + {b})
+    % Without own_files_only, a branch may empty the claim file of another.
+  + sum b, o: Br. (!own_files_only && b in alive && o != b
+                   && get(ref(branch, b), o) != {}) ->
+      write_other(b, o) .
+      Repo(branch = setref(branch, b, put(ref(branch, b), o, {})))
+    % A branch whose claims are all on the trunk may be retired.
+  + sum b: Br. (b in alive && get(disk, b) == get(trunk, b)
+                && get(ref(branch, b), b) == get(trunk, b)) ->
+      retire(b) .
+      Repo(alive = alive - {b})
+    % Claims are read from the working copy while the branch exists,
+    % and afterwards from the copy of its claim file on the trunk.
+  + sum b: Br.
+      read(b, if(b in alive, get(disk, b), get(trunk, b))) .
+      Repo();
+
+init Repo(none, refs(none, none), none, {b1, b2}, {b1, b2});

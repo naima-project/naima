@@ -1,0 +1,92 @@
+% The landings on the trunk of Naima. The first-parent line of the trunk is
+% the record of the landings. An observer reads it, as Naima does, to tell
+% which landings it holds. Up to three landings, l1, l2, l3, happen one after
+% another, since the trunk has a single writer. Each is made by Naima or by
+% hand. A landing names the item it closes. The model identifies the two,
+% since an item is closed by one landing.
+
+% Part 1. Data. A commit on the first-parent line carries what the observer
+% sees (whether it is a merge, and its trailer, i.e., the line of its message
+% naming the item it closes) and, as a ghost the observer never reads, the
+% landing that put it there.
+sort L = struct l1 | l2 | l3;                % the landings, in order
+     How = struct by_command | by_hand_ff | by_hand_merge;
+                                             % made by Naima, by a plain
+                                             % fast-forward, by a plain merge
+     Tr = struct none | closes(item: L);     % the trailer of a commit
+     C = struct c(is_merge: Bool, trailer: Tr, owner: L);
+                                             % a commit; owner is the ghost
+
+% Part 2. The landing strategy. True: each landing by Naima is a marker.
+% False, the negative experiment: a fast-forward, with the trailer on the
+% tip of the branch.
+map  semi_linear: Bool;
+eqn  semi_linear = true;
+
+% Part 3. What a landing adds to the first-parent line. The flag two says
+% whether the branch has one commit or two.
+map  id: Nat -> L;
+     landed: How # L # Bool -> List(C);
+var  l: L;
+     two: Bool;
+eqn  id(0) = l1;
+     id(1) = l2;
+     id(2) = l3;
+     % By Naima. With markers, one merge commit naming the item: the commits
+     % of the branch stay on its second-parent side, off the first-parent
+     % line. With fast-forward, the commits of the branch, the tip carrying
+     % the trailer.
+     landed(by_command, l, two) =
+       if(semi_linear, [c(true, closes(l), l)],
+          if(two, [c(false, none, l)], []) ++ [c(false, closes(l), l)]);
+     % By hand. A plain fast-forward puts the commits of the branch on the
+     % line, with no trailer. A plain merge makes a merge commit with the
+     % message of git, with no trailer.
+     landed(by_hand_ff, l, two) =
+       if(two, [c(false, none, l), c(false, none, l)], [c(false, none, l)]);
+     landed(by_hand_merge, l, two) = [c(true, none, l)];
+
+% Part 4. The observer. owners gives the landings the record holds (from the
+% ghosts). lost_ff and lost_sl give the landings the observer misreads, for
+% each strategy. accounted gives the landings it identifies or flags.
+map  owners: List(C) -> FSet(L);
+     lost_ff: List(C) # FSet(L) -> FSet(L);
+     lost_sl: List(C) -> FSet(L);
+     accounted: List(C) -> FSet(L);
+var  x: C;
+     r: List(C);
+     p: FSet(L);
+eqn  owners([]) = {};
+     owners(x |> r) = {owner(x)} + owners(r);
+     % Fast-forward, oldest commit first. A commit with a trailer ends a
+     % landing, and every commit since the previous trailer is read as part
+     % of that landing. The commits after the last trailer are flagged as
+     % landed without one. p holds the landings of the commits read so far
+     % since the last trailer.
+     lost_ff([], p) = {};
+     (trailer(x) == none) ->
+       lost_ff(x |> r, p) = lost_ff(r, p + {owner(x)});
+     (trailer(x) != none) ->
+       lost_ff(x |> r, p) = ((p + {owner(x)}) - {item(trailer(x))})
+                            + lost_ff(r, {});
+     % Markers. Every commit on the first-parent line is a landing of its
+     % own. A merge with a trailer is identified by it. A merge without one,
+     % or a commit that is not a merge, is flagged as landed by hand.
+     lost_sl([]) = {};
+     lost_sl(x |> r) =
+       if(is_merge(x) && trailer(x) != none && item(trailer(x)) != owner(x),
+          {owner(x)}, {})
+       + lost_sl(r);
+     accounted(r) = owners(r) - if(semi_linear, lost_sl(r), lost_ff(r, {}));
+
+% Part 5. Actions and process. rec is the first-parent line, n the number
+% of landings so far.
+act  land: L # How;          % a landing on the trunk
+     read: FSet(L);          % the observer reads the record
+
+proc Main(rec: List(C), n: Nat) =
+    sum h: How, two: Bool. (n < 3) ->
+      land(id(n), h) . Main(rec ++ landed(h, id(n), two), n + 1)
+  + read(accounted(rec)) . Main();
+
+init Main([], 0);

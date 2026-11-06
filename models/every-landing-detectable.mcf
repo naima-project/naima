@@ -1,0 +1,6 @@
+% Every landing stays detectable: once landing l is on the trunk, every later
+% read of the record identifies it by its trailer or flags it as landed by
+% hand, however many landings follow.
+forall l: L.
+  [true* . (exists h: How. land(l, h)) . true* .
+   (exists s: FSet(L). read(s) && val(!(l in s)))] false
