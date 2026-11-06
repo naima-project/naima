@@ -33,6 +33,7 @@ import { mapView } from "./graphs.ts"
 import { projectsView } from "./projects.ts"
 import { browserCommand, openBrowser, type Opened, osName } from "./open.ts"
 import { filesKey, filesUrl, newToken, serve } from "./serve.ts"
+import { runMcp } from "./mcp.ts"
 import { runSidecar } from "./sidecar.ts"
 import { nameStopCommand } from "./stops.ts"
 import { allTabs, tabsPoint, type UiTab, type UiView } from "./tabs.ts"
@@ -288,7 +289,7 @@ const uiCommand: Command = {
   enforces:
     "the interface is served only on the loopback interface, and every request without this run's token is refused; a bridge command comes only from the server's own page; an action runs only a command of its short list, through naima run",
   hidden: true,
-  usage: "ui [--no-open] [--log] | ui --sidecar",
+  usage: "ui [--no-open] [--log] | ui --sidecar | ui --mcp",
   options: [
     { name: "--no-open", says: "open no browser: print the address, with its token, and serve until Ctrl-C (for a port forwarded from another machine)" },
     { name: "--log", says: "print one line per request on stderr: its status, method and path" },
@@ -296,11 +297,26 @@ const uiCommand: Command = {
       name: "--sidecar",
       says: "answer the bridge commands on standard input and output, one JSON object a line, with no network listener: what the desktop app's shell starts",
     },
+    {
+      name: "--mcp",
+      says:
+        "serve the bridge commands to an agent as an MCP server on standard input and output, with the tool show, which shows the owner a place in the UI open on the project: what an agent's client starts (claude mcp add naima -- naima ui --mcp)",
+    },
   ],
-  examples: ["ui", "ui --no-open", "ui --sidecar"],
+  examples: ["ui", "ui --no-open", "ui --sidecar", "ui --mcp"],
   run(args, ctx) {
-    const p = parse(args, { "no-open": { type: "boolean" }, log: { type: "boolean" }, sidecar: { type: "boolean" } })
-    if (p.positionals.length || (bool(p, "sidecar") && (bool(p, "no-open") || bool(p, "log")))) throw usageError(this)
+    const p = parse(args, { "no-open": { type: "boolean" }, log: { type: "boolean" }, sidecar: { type: "boolean" }, mcp: { type: "boolean" } })
+    const alone = [bool(p, "sidecar"), bool(p, "mcp"), bool(p, "no-open") || bool(p, "log")].filter(Boolean).length > 1
+    if (p.positionals.length || alone) throw usageError(this)
+    if (bool(p, "mcp")) {
+      return runMcp(ctx, {
+        views: viewsOf(ctx),
+        tabs: allTabs(tabsOf(ctx), viewsOf(ctx)),
+        version: "1.2",
+        input: process.stdin,
+        write: (line) => void process.stdout.write(line + "\n"),
+      })
+    }
     if (bool(p, "sidecar")) {
       const tabs = allTabs(tabsOf(ctx), viewsOf(ctx))
       return runSidecar(ctx, {
@@ -329,7 +345,8 @@ export default function ui(): Plugin {
       "Its one feed, `changes` (GET /bridge/changes, server-sent events), says when the project changed (a commit, a branch moved, a tracker file written), and the interface reads again while it shows Live. " +
       "Any plugin, a stance included, adds tabs through `ui-tabs`, each with optional subtabs: for a subtab and the moment shown it gives data the interface draws with one of its own components (a list, a table, a chart, a gallery of framed pages, markdown), a page of its folder, served sandboxed under a key derived from the token, or a page it makes, which the interface frames in the same sandbox, so no code of the plugin runs in the interface; every `ui-views` view is shown as a tab too, but for one the interface has a screen of its own for (`screen`, the metrics). " +
       "`action` runs `decide`, `note`, `gate step`, `claim`, `release` or `name-stop` as a run of `naima run`, and `run` shows that run, its state, exit code and log; a bridge command is refused from any page but the server's own. " +
-      "The same commands serve the desktop app, the Tauri shell around the same bundle: it starts `naima ui --sidecar` in the project's folder, which answers them on its standard input and output, one JSON object a line, pushes the feed's events there too, and reads a tab's files for the shell's naima-files: scheme, with no network listener.",
+      "The same commands serve the desktop app, the Tauri shell around the same bundle: it starts `naima ui --sidecar` in the project's folder, which answers them on its standard input and output, one JSON object a line, pushes the feeds' events there too, and reads a tab's files for the shell's naima-files: scheme, with no network listener. " +
+      "`naima ui --mcp` serves the same commands to an agent as an MCP server on standard input and output (the UI stance's bridge-mcp.ts), with one more, `show` (a screen, a plugin's view, an item, a commit or a line), which every UI open on the project hears on the feed `show` and goes to at once: an agent shows the owner something in the UI instead of making a page of its own, and is told when no UI is open.",
     points: [viewsPoint, uiTabsPoint],
     contributes: { "ui-views": [summaryView, boardView, itemView, mapView, projectsView] },
     commands: [uiCommand, nameStopCommand],

@@ -16,11 +16,14 @@
 //                                  record-metrics records the metrics (naima metrics run --record), name-stop names a
 //                                  commit of the map (naima name-stop)
 //   run {name}                     that run as `naima run status --json` shows it, with the end of its log
+//   show {screen|view|item|commit|line}  asks every UI open on the project to show that place (show.ts): what an
+//                                  agent calls to show the owner something; answers how many open UIs took it
 //
-// and one feed:
+// and two feeds:
 //
 //   changes                        one event each time the project changes: a commit, a branch moved, the tracker's
 //                                  files (live.ts); a hint to read again, never the data
+//   show                           each place an agent asked to show, while the UI listening is open (show.ts)
 //
 // Every command reads the files when it is called, so the UI is live.
 
@@ -30,6 +33,7 @@ import { askHostsInBackground, type Command, type Context } from "../../core/api
 import { AtCache, commitOf } from "./at.ts"
 import type { Feeds, Handlers, Json } from "./bridge-handler.ts"
 import { watchProject } from "./live.ts"
+import { askShow, listenShows, openUis, type Place, SCREENS, taken } from "./show.ts"
 import { commandJson, type JsonOf, metroData } from "./metro.ts"
 import { contentProblem, framePage, tabList, type UiTab, type UiTabContent, type UiView } from "./tabs.ts"
 
@@ -103,6 +107,35 @@ export interface BridgeOptions {
   watch?: { interval?: number; debounce?: number }
   /** How an action's command line is started under `naima run`: this program, as a person types it, by default. */
   entry?: readonly string[]
+  /** What carries the UI that listens to the feed show, as an open UI says: browser or desktop. */
+  carrier?: string
+  /** How long the command show waits for the open UIs to take a show, in ms. */
+  showWait?: number
+}
+
+/** The place a show's arguments name: exactly one of screen, view, item, commit or line; or why it is refused. */
+export function placeOf(ctx: Context, args: { [key: string]: Json }, views: readonly string[]): Place | string {
+  const given = ["screen", "view", "item", "commit", "line"].filter((k) => text(args[k]) !== null)
+  if (given.length !== 1) return "show takes exactly one of screen, view, item, commit or line"
+  const v = text(args[given[0]!])!.trim()
+  switch (given[0]) {
+    case "screen": {
+      const screen = v.toUpperCase().replace(/[\s-]+/g, "_")
+      return SCREENS.includes(screen) ? { kind: "screen", screen } : `no screen ${v}: the screens are ${SCREENS.map((s) => s.toLowerCase()).join(", ")}`
+    }
+    case "view":
+      return views.includes(v) ? { kind: "view", name: v } : `no view ${v}: the views are ${views.join(", ")}`
+    case "item":
+      return /^[a-z0-9-]+\/[a-z0-9-]+$/.test(v) ? { kind: "item", ref: v } : `${v} is not an item's reference, <type>/<slug>`
+    case "commit":
+      try {
+        return { kind: "commit", hash: commitOf(ctx, v) }
+      } catch (e) {
+        return e instanceof Error ? e.message : String(e)
+      }
+    default:
+      return { kind: "line", name: v }
+  }
 }
 
 /** Naima's bridge: its commands and its feed, for a carrier to serve; `close` drops what the commands keep. */
@@ -234,6 +267,22 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       if (started.code !== 0) throw new Error(started.err.trim() || started.out.trim() || `naima run exited with ${started.code}`)
       return json({ run, command: ["naima", ...argv] })
     },
+    show: async (args) => {
+      const place = placeOf(ctx, args, opts.tabs.map((t) => t.name))
+      if (typeof place === "string") throw new Error(place)
+      if (!openUis(ctx.root).length) {
+        return json({ shown: false, open: 0, place, says: "no Naima UI is open on this project: the owner opens one with naima ui" })
+      }
+      const id = askShow(ctx.root, place)
+      const { open, took } = await taken(ctx.root, id, opts.showWait ?? 8000)
+      return json({
+        shown: took > 0,
+        open,
+        took,
+        place,
+        says: took > 0 ? `shown in ${took} of the ${open} open UIs` : `none of the ${open} open UIs said it took it within 8 s: one busy reading may still`,
+      })
+    },
     run: async (args) => {
       const name = text(args["name"])
       if (name === null || !name.startsWith("ui-")) throw new Error("run names a run an action started")
@@ -249,6 +298,10 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
         emit(json(c))
       }, opts.watch ?? {})
       return () => watch.stop()
+    },
+    show: (emit) => {
+      const listening = listenShows(ctx.root, opts.carrier ?? "browser", (place) => emit(json(place)))
+      return () => listening.stop()
     },
   }
   return {

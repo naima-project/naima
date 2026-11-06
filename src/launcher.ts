@@ -16,7 +16,7 @@
 //           otherwise the network is git's, for alignment and update — except for `naima ui` (UI below)
 //
 // `naima ui`, and no other command, may also listen on the loopback interface
-// (not with --sidecar, the desktop app's, which speaks over its standard input and output),
+// (not with --sidecar, the desktop app's, nor with --mcp, an agent's, which speak over their standard input and output),
 // read and run the Deno that runs it — to start the run of an action the UI
 // asks for (src/plugins/ui/bridge.ts) — and run the program that opens the
 // default browser (src/plugins/ui/open.ts). `naima run` and `naima wait`, and no
@@ -244,6 +244,8 @@ export function uiGrant(
   if (command !== "ui") return null
   // The desktop app's sidecar talks over its standard input and output: no network, no browser to open.
   if (rest.includes("--sidecar")) return { net: [], read: [deno], runs: [deno] }
+  // So does the MCP server an agent's client starts: no network, no browser; Deno to start an action's run.
+  if (rest.includes("--mcp")) return { net: [], read: [deno], runs: [deno] }
   return { net: ["127.0.0.1"], read: [deno], runs: [deno, BROWSER_OPENER[os] ?? "xdg-open"] }
 }
 

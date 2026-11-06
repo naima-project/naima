@@ -50,6 +50,7 @@ follow them, and Naima's own repository does.
 | [Tools](tools.md)                                                     | when a verifier says `tool missing:`, or work needs mCRL2 or Storm on a machine                            |
 | [The non-stop loop](the-non-stop-loop.md)                             | when work should go on while the owner is away, until only the owner's is left                             |
 | [Code-quality metrics over time](code-quality-metrics.md)             | when the owner asks how the code's quality moves, or for a chart of a metric over the commits              |
+| [Showing the owner](showing-the-owner.md)                             | when the owner should see a screen, an item, a commit or a line: show it in their open UI, not an artifact |
 | [Release](release.md)                                                 | the runbook from a gate holding to a release being announced                                               |
 | [Announcer](announcer.md)                                             | release notes, changelog entries, README and site copy: only features that are announceable                |
 | [Documentarian](documentarian.md)                                     | writing the changelog, the announcement page, and keeping docs current once a release hands off            |

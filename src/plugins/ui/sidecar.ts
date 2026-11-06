@@ -6,6 +6,7 @@
 //   in   {"id": 1, "command": "data", "args": {"view": "gates"}}
 //   out  {"id": 1, "ok": <answer>}  or  {"id": 1, "error": "..."}
 //   out  {"feed": "changes", "event": {...}}          each change of the project, pushed as it comes
+//   out  {"feed": "show", "event": {...}}             each place an agent asked to show (show.ts), pushed the same way
 //
 // It stops when its standard input ends, as it does when the shell quits, once every request it read is answered: the
 // machine below, which follows the protocol's model, decides when.
@@ -124,6 +125,7 @@ export async function runSidecar(ctx: Context, opts: SidecarOptions): Promise<nu
     views: opts.views,
     tabs: opts.tabs,
     fileUrl: (tab, rel) => desktopFileUrl(opts.os, tab, rel),
+    carrier: "desktop",
     ...(opts.watch ? { watch: opts.watch } : {}),
   })
   const handlers: Handlers = {
@@ -138,16 +140,20 @@ export async function runSidecar(ctx: Context, opts: SidecarOptions): Promise<nu
   const send = (message: { [key: string]: Json }) => opts.write(JSON.stringify(message))
   let exited: () => void = () => {}
   const stopped = new Promise<void>((resolve) => (exited = resolve))
-  // The feed's event to push: the machine decides whether it is pushed, the event travels beside it.
-  let event: Json = null
+  // The feed's event to push, with its feed: the machine decides whether it is pushed, the event travels beside it.
+  // Both feeds are its one input change, which it pushes at once: a show is pushed as a change of the project is.
+  let event: { feed: string; event: Json } = { feed: "changes", event: null }
   const machine = new SidecarMachine((action) => {
-    if (action === "push") send({ feed: "changes", event })
+    if (action === "push") send(event)
     else exited()
   }, opts.record)
-  const stop = bridge.feeds["changes"]!((e) => {
-    event = e
-    machine.change()
-  })
+  const stops = (["changes", "show"] as const).map((feed) =>
+    bridge.feeds[feed]!((e) => {
+      event = { feed, event: e }
+      machine.change()
+    })
+  )
+  const stop = () => stops.forEach((s) => s())
   try {
     for await (const line of createInterface({ input: opts.input, crlfDelay: Infinity })) {
       if (!line.trim()) continue
