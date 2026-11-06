@@ -79,6 +79,17 @@ over the page as the whole map when you point at it, reach it with Tab or press 
 Failed tests and Metrics, then More, which lists the views the plugins add. Home and Metrics are described below; Diary, Bugs, Features and Failed tests are
 placeholders and say so.
 
+### Switching project
+
+Beside the name "naima" at the top is the name of the project shown. Click it for the projects you opened recently, the most recent first, and pick one:
+the same window opens it, and every screen shows that project. In a browser, `naima ui` stops serving this project and serves the one you picked at the same
+address, so the page reloads on it by itself; the terminal where `naima ui` runs keeps it, and Ctrl-C stops it as before. The desktop app restarts its Naima in
+the project you picked.
+
+The list is `projects.json` in your standard config folder: `~/Library/Application Support/Naima` on macOS, `%APPDATA%\Naima` on Windows,
+`$XDG_CONFIG_HOME/naima` (or `~/.config/naima`) on Linux. Each time `naima ui` or the desktop app opens a project, that project moves to the top, and a
+project whose folder is gone is dropped. The All projects screen reads the same list.
+
 ### The rail
 
 Closed, the rail is the metro map drawn small, over the newest 24 commits only: main and the open lines in their colours, the branches that leave and rejoin
