@@ -1160,11 +1160,13 @@ export const metricsView: UiView = {
   name: "metrics",
   title: "Metrics",
   says:
-    "the project's metrics along the commit timeline: a chart and a table of each, for the metrics and the commits picked; its data's `timeline` places every record on the trunk's commit axis for the new UI, and with `?at=<commit>` each metric's record at that commit",
+    "the project's metrics along the commit timeline: a chart and a table of each, for the metrics and the commits picked; its data's `timeline` places every record on the trunk's commit axis for the new UI, and with `?at=<commit>` each metric's record at that commit; with `?part=timeline`, the timeline alone",
   moments: true,
   screen: true,
   render(params, ctx) {
     const all = metricsOf(ctx)
+    // `?part=timeline`: the timeline alone, what the failed-tests screen reads, without the series it does not show.
+    if (params["part"]?.[0] === "timeline") return { data: { timeline: timelineOf(ctx, all, params["at"]?.[0]) }, html: "" }
     const wanted = params["metric"]?.filter((n) => all.some((m) => m.name === n)) ?? []
     const picked = wanted.length ? all.filter((m) => wanted.includes(m.name)) : all
     const commits = historyTable(ctx, all.map((m) => m.name)).map(({ commit, date }) => ({ commit, date }))

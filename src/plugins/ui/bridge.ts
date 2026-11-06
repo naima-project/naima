@@ -26,7 +26,7 @@
 
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
-import type { Command, Context } from "../../core/api.ts"
+import { askHostsInBackground, type Command, type Context } from "../../core/api.ts"
 import { AtCache, commitOf } from "./at.ts"
 import type { Feeds, Handlers, Json } from "./bridge-handler.ts"
 import { watchProject } from "./live.ts"
@@ -128,6 +128,8 @@ const VIEW_OF_COMMAND: Record<string, string> = { gates: "gates", claims: "claim
 
 /** Naima's bridge commands on the project `ctx` is about. */
 export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
+  // The bridge lives as long as the page: a read never waits on a host over ssh (bugs/failed-tests-cold-load-waits-hosts-over).
+  askHostsInBackground()
   const atCache = new AtCache()
   let runs = 0
   // The live reads under way or answered, by what they read: one answer for every ask until it is SHARE_MS old, the

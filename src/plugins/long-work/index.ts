@@ -65,7 +65,7 @@ import {
   writeJsonAtomic,
 } from "./records.ts"
 import { windowsLaunch } from "./launch.ts"
-import { type Host, noHost, projectHosts, sshArgs } from "./remote.ts"
+import { type Host, hostsInBackground, noHost, projectHosts, sshArgs } from "./remote.ts"
 
 const SUPERVISOR = fileURLToPath(new URL("./supervisor.ts", import.meta.url))
 const isDeno = typeof (globalThis as { Deno?: unknown }).Deno !== "undefined"
@@ -484,6 +484,30 @@ function branchHere(dir: string): { branch?: string } {
   return b ? { branch: b } : {}
 }
 
+/** What each host last answered to `run list --json`, while hosts are asked in the background (hostsInBackground). */
+const listed = new Map<string, { at: number; out: string; asking: boolean }>()
+const LISTED_FOR_MS = 30_000
+
+/**
+ * A host's `run list --json`: asked now and waited for; or, while hosts are asked in the background, its last answer
+ * ("" before the first), asked again without waiting when older than LISTED_FOR_MS. A host that cannot be asked answers "".
+ */
+function hostRuns(host: Host): string {
+  if (!hostsInBackground()) return onHost(host, ["run", "list", "--json"]).out
+  const last = listed.get(host.name)
+  if (!last?.asking && (!last || Date.now() - last.at > LISTED_FOR_MS)) {
+    listed.set(host.name, { at: last?.at ?? 0, out: last?.out ?? "", asking: true })
+    let out = ""
+    const child = spawn("ssh", sshArgs(host, ["run", "list", "--json"]), { stdio: ["ignore", "pipe", "ignore"] })
+    child.unref()
+    child.stdout?.on("data", (d) => void (out += String(d)))
+    const done = (ok: boolean) => void listed.set(host.name, { at: Date.now(), out: ok ? out : "", asking: false })
+    child.on("error", () => done(false))
+    child.on("close", (code) => done(code === 0))
+  }
+  return listed.get(host.name)!.out
+}
+
 /** Every run recorded here, newest first, as its reader reports it; a host is asked once for all of its runs. */
 function allViews(ctx: Context, hosts: Map<string, Host>): RunView[] {
   const now = Date.now()
@@ -494,10 +518,9 @@ function allViews(ctx: Context, hosts: Map<string, Host>): RunView[] {
     const host = hosts.get(spec.host)
     if (!host) return { ...view(dir, now), host: spec.host, state: "unknown", over: false, error: `host "${spec.host}" is no longer declared` }
     if (!answers.has(host.name)) {
-      const r = onHost(host, ["run", "list", "--json"])
       const byName = new Map<string, RunView>()
       try {
-        for (const v of JSON.parse(r.out) as RunView[]) byName.set(v.name, { ...v, state: currentState(v.state) })
+        for (const v of JSON.parse(hostRuns(host)) as RunView[]) byName.set(v.name, { ...v, state: currentState(v.state) })
       } catch { /* the host could not be asked */ }
       answers.set(host.name, byName)
     }

@@ -149,6 +149,20 @@ export interface HostAnswer {
   code: number
 }
 
+let background = false
+
+/**
+ * Hosts are asked without waiting from now on: in a long-lived process, the UI's bridge, a read must never wait on ssh
+ * (a host that is off holds each ask for the whole ConnectTimeout). The run list then says what each host answered last,
+ * asked again in the background when that answer is older than half a minute; until a first answer, its runs are unknown.
+ */
+export function askHostsInBackground(on = true): void {
+  background = on
+}
+
+/** Whether hosts are asked in the background (askHostsInBackground). */
+export const hostsInBackground = (): boolean => background
+
 /** Ask the host's Naima `args`, through one ssh call; its answer, or why there is none. */
 export function askHost(host: Host, args: string[], timeoutMs = 120_000): HostAnswer {
   const r = spawnSync("ssh", sshArgs(host, args), { encoding: "utf8", timeout: timeoutMs, stdio: ["ignore", "pipe", "pipe"] })

@@ -7,6 +7,7 @@ export {
   cmdQuote,
   DEFAULT_REMOTE_NAIMA,
   type Host,
+  hostsInBackground,
   noHost,
   projectHosts,
   readHosts,
