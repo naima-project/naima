@@ -365,7 +365,9 @@ export function permissions(
         ...hostReads,
       ])
     }${[...temps, ...folder].map((t) => `,${t}`).join("")}`,
-    `--allow-write=${list([p.tracker, p.data, p.program, ...tick, ...(p.hostFiles ?? []), ...(p.uiFiles ?? []), ...(p.ui?.write ?? []).filter((w) => tools.includes(w))])}`,
+    `--allow-write=${
+      list([p.tracker, p.data, p.program, ...tick, ...(p.hostFiles ?? []), ...(p.uiFiles ?? []), ...(p.ui?.write ?? []).filter((w) => tools.includes(w))])
+    }`,
     ...runFlag(p.ui?.runAll ? null : ["git", "tar", ...(p.runs ?? []), ...(p.ui?.runs ?? [])], p.found ?? runnable),
     "--allow-env",
     ...(p.ui?.netAll
