@@ -554,7 +554,8 @@ export async function launch(args: string[], cwd: string, resume?: Omit<UiSwitch
   const known = parsed.rest[0] === "ui" ? rememberProject(Deno.env.toObject(), Deno.build.os, { root, data }) : null
   // naima ui in a browser may switch to another project of the list: it writes which in this file, the one file outside
   // the tracker it is granted to write, and exits with UI_SWITCH; the launcher then serves that project on the same address.
-  const switchFile = known && !parsed.rest.includes("--sidecar") ? Deno.makeTempFileSync({ prefix: "naima-ui-switch-", suffix: ".json" }) : null
+  // Resolved, as the permissions name it: Deno checks the path the program writes as given, and /tmp is a link on macOS.
+  const switchFile = known && !parsed.rest.includes("--sidecar") ? real(Deno.makeTempFileSync({ prefix: "naima-ui-switch-", suffix: ".json" })) : null
   const marks = {
     ...privateEnv(Deno.env.toObject(), Deno.build.os),
     ...(known ? { [PROJECTS_ENV]: JSON.stringify(known) } : {}),
@@ -595,7 +596,7 @@ export async function launch(args: string[], cwd: string, resume?: Omit<UiSwitch
         program,
         entry,
         hostFiles: hostFiles(parsed.rest, root, data),
-        uiFiles: switchFile ? [...new Set([switchFile, real(switchFile)])].filter((x) => !x.includes(",")) : [],
+        uiFiles: switchFile && !switchFile.includes(",") ? [switchFile] : [],
         hostReads: parsed.rest[0] === "recover" ? transcriptRoots(Deno.env.toObject()) : [],
         tempReads: TEMP_READERS.includes(parsed.rest[0] ?? "") ? tempRoots() : [],
         worktrees: others,
