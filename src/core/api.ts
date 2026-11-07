@@ -58,6 +58,7 @@ export {
   privateDataOf,
   type PrivateFinding,
   redactPrivate,
+  userConfigDir,
 } from "./private.ts"
 export { trackerExposure } from "./exposure.ts"
 export { callerEnv } from "./launched.ts"
@@ -90,6 +91,7 @@ export {
   boardData,
   type BoardRow,
   goalsAtSessionStart,
+  greetingsAtSessionStart,
   type ItemData,
   itemData,
   type ItemLink,
@@ -176,14 +178,14 @@ export { githubRepo } from "./visibility.ts"
 export { WAIVERS } from "./waivers.ts"
 export {
   askHost,
+  askHostsInBackground,
   cmdEscape,
   cmdQuote,
-  askHostsInBackground,
   DEFAULT_REMOTE_NAIMA,
   type Host,
   type HostAnswer,
-  hostsInBackground,
   type HostShell,
+  hostsInBackground,
   noHost,
   projectHosts,
   readHosts,

@@ -22,7 +22,10 @@ import {
   label,
   parse,
   type Plugin,
+  rendered,
   shortOrId,
+  str,
+  type SummarySection,
   summarySections,
   table,
   typeOrThrow,
@@ -34,6 +37,7 @@ import { projectsView } from "./projects.ts"
 import { browserCommand, openBrowser, type Opened, osName } from "./open.ts"
 import { filesKey, filesUrl, newToken, serve } from "./serve.ts"
 import { runSidecar } from "./sidecar.ts"
+import { desktopApp, desktopAppDirs, naimaCommand, offReason, openAtStart, register, registryDir, unregister, userAtStart } from "./at-start.ts"
 import { nameStopCommand } from "./stops.ts"
 import { allTabs, tabsPoint, type UiTab, type UiView } from "./tabs.ts"
 
@@ -254,8 +258,8 @@ export function tabFolder(ctx: Context, tabs: readonly UiTab[], name: string): s
 }
 
 /** `naima ui`: serve the UI through the bridge, open it in the browser unless asked not to, and stop on Ctrl-C. */
-export async function runUi(ctx: Context, flags: { open: boolean }, deps: UiDeps = realDeps): Promise<number> {
-  const token = newToken()
+export async function runUi(ctx: Context, flags: { open: boolean; port?: number; token?: string }, deps: UiDeps = realDeps): Promise<number> {
+  const token = flags.token ?? newToken()
   const key = filesKey(token)
   const tabs = allTabs(tabsOf(ctx), viewsOf(ctx))
   const bridge = naimaBridge(ctx, { views: viewsOf(ctx), tabs, fileUrl: (tab, rel) => filesUrl(key, tab, rel) })
@@ -263,8 +267,11 @@ export async function runUi(ctx: Context, flags: { open: boolean }, deps: UiDeps
     ...bridge,
     token,
     tabFolder: (name) => tabFolder(ctx, tabs, name),
+    ...(flags.port ? { port: flags.port } : {}),
     ...(deps.log ? { log: deps.log } : {}),
   })
+  // Named in the registry, so that naima hello reuses it instead of opening a second one (at-start.ts).
+  const registered = register(ctx.root, { how: "browser", url: served.url })
   try {
     if (flags.open) {
       const b = await deps.browser(served.url)
@@ -275,6 +282,7 @@ export async function runUi(ctx: Context, flags: { open: boolean }, deps: UiDeps
     await deps.interrupted()
     return 0
   } finally {
+    unregister(registered)
     deps.forget?.()
     bridge.close()
     await served.close()
@@ -288,10 +296,15 @@ const uiCommand: Command = {
   enforces:
     "the interface is served only on the loopback interface, and every request without this run's token is refused; a bridge command comes only from the server's own page; an action runs only a command of its short list, through naima run",
   hidden: true,
-  usage: "ui [--no-open] [--log] | ui --sidecar",
+  usage: "ui [--no-open] [--log] [--port <port>] | ui --sidecar",
   options: [
     { name: "--no-open", says: "open no browser: print the address, with its token, and serve until Ctrl-C (for a port forwarded from another machine)" },
     { name: "--log", says: "print one line per request on stderr: its status, method and path" },
+    {
+      name: "--port",
+      says:
+        "serve on this port of the loopback interface instead of a free one; with NAIMA_UI_TOKEN in the environment, that token instead of a fresh one: how naima hello starts it, knowing its address before it listens",
+    },
     {
       name: "--sidecar",
       says: "answer the bridge commands on standard input and output, one JSON object a line, with no network listener: what the desktop app's shell starts",
@@ -299,10 +312,14 @@ const uiCommand: Command = {
   ],
   examples: ["ui", "ui --no-open", "ui --sidecar"],
   run(args, ctx) {
-    const p = parse(args, { "no-open": { type: "boolean" }, log: { type: "boolean" }, sidecar: { type: "boolean" } })
-    if (p.positionals.length || (bool(p, "sidecar") && (bool(p, "no-open") || bool(p, "log")))) throw usageError(this)
+    const p = parse(args, { "no-open": { type: "boolean" }, log: { type: "boolean" }, sidecar: { type: "boolean" }, port: { type: "string" } })
+    const port = str(p, "port") === undefined ? undefined : Number(str(p, "port"))
+    if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) throw usageError(this)
+    if (p.positionals.length || (bool(p, "sidecar") && (bool(p, "no-open") || bool(p, "log") || port !== undefined))) throw usageError(this)
     if (bool(p, "sidecar")) {
       const tabs = allTabs(tabsOf(ctx), viewsOf(ctx))
+      // The desktop app's sidecar names the app in the registry, unless the hello that opened it already did.
+      const registered = register(ctx.root, { how: "desktop" })
       return runSidecar(ctx, {
         views: viewsOf(ctx),
         tabs,
@@ -310,13 +327,43 @@ const uiCommand: Command = {
         os: osName(),
         input: process.stdin,
         write: (line) => void process.stdout.write(line + "\n"),
-      })
+      }).finally(() => unregister(registered))
     }
-    return runUi(ctx, { open: !bool(p, "no-open") }, bool(p, "log") ? { ...realDeps, log: (l) => ctx.err(l) } : realDeps)
+    const token = port !== undefined ? process.env["NAIMA_UI_TOKEN"] || undefined : undefined
+    return runUi(
+      ctx,
+      { open: !bool(p, "no-open"), ...(port !== undefined ? { port } : {}), ...(token ? { token } : {}) },
+      bool(p, "log") ? { ...realDeps, log: (l) => ctx.err(l) } : realDeps,
+    )
   },
 }
 
-export default function ui(): Plugin {
+/** The ui plugin's option atStart: false keeps naima hello from opening the UI. */
+export function readAtStart(options: Record<string, unknown>): boolean {
+  const v = options["atStart"] ?? true
+  if (typeof v !== "boolean") {
+    throw new Error(`ui: option atStart must be true or false, whether naima hello opens the UI at a session start; got ${JSON.stringify(v)}`)
+  }
+  return v
+}
+
+/** What naima hello does with the UI at a session start: opens it, or reuses the one open on the project, and says so on its greeting's line. */
+export const atStartSection = (on: boolean): SummarySection => ({
+  name: "ui",
+  render: () => rendered(null, () => []),
+  async greeting(ctx) {
+    const env = process.env
+    if (offReason(ctx.root, env, on, userAtStart(env, osName()))) return null
+    const dir = registryDir(ctx.root)
+    const naima = naimaCommand(ctx.program, ctx.trackerRoot)
+    const desktop = desktopApp(desktopAppDirs(env, osName()))
+    if (!dir || (!desktop && !naima)) return null
+    return await openAtStart({ root: ctx.root, dir, app: desktop, naima: naima ?? [] })
+  },
+})
+
+export default function ui(options: Record<string, unknown> = {}): Plugin {
+  const on = readAtStart(options)
   return {
     name: "ui",
     contract: CONTRACT,
@@ -329,9 +376,19 @@ export default function ui(): Plugin {
       "Its one feed, `changes` (GET /bridge/changes, server-sent events), says when the project changed (a commit, a branch moved, a tracker file written), and the interface reads again while it shows Live. " +
       "Any plugin, a stance included, adds tabs through `ui-tabs`, each with optional subtabs: for a subtab and the moment shown it gives data the interface draws with one of its own components (a list, a table, a chart, a gallery of framed pages, markdown), a page of its folder, served sandboxed under a key derived from the token, or a page it makes, which the interface frames in the same sandbox, so no code of the plugin runs in the interface; every `ui-views` view is shown as a tab too, but for one the interface has a screen of its own for (`screen`, the metrics). " +
       "`action` runs `decide`, `note`, `gate step`, `claim`, `release` or `name-stop` as a run of `naima run`, and `run` shows that run, its state, exit code and log; a bridge command is refused from any page but the server's own. " +
-      "The same commands serve the desktop app, the Tauri shell around the same bundle: it starts `naima ui --sidecar` in the project's folder, which answers them on its standard input and output, one JSON object a line, pushes the feed's events there too, and reads a tab's files for the shell's naima-files: scheme, with no network listener.",
+      "The same commands serve the desktop app, the Tauri shell around the same bundle: it starts `naima ui --sidecar` in the project's folder, which answers them on its standard input and output, one JSON object a line, pushes the feed's events there too, and reads a tab's files for the shell's naima-files: scheme, with no network listener. " +
+      "At a session start `naima hello` opens the UI on the project by itself, in the background, and says so on its greeting's line, with the address in a browser: the desktop app when it is installed, else `naima ui` on a port it picks, which opens the browser; a UI already open on the project, named in a registry in the clone's Naima state folder that `naima ui` and the sidecar write too, is reused instead. It is off with the option `atStart` false, for a user with `{\"atStart\": false}` in the ui.json of their Naima config folder, and never on CI, with NAIMA_NO_UI or NAIMA_DATA set, nor in a worktree other than the clone's main checkout.",
     points: [viewsPoint, uiTabsPoint],
     contributes: { "ui-views": [summaryView, boardView, itemView, mapView, projectsView] },
     commands: [uiCommand, nameStopCommand],
+    options: [
+      {
+        name: "atStart",
+        says:
+          'false keeps naima hello from opening the UI at a session start; on, it opens the desktop app when it is installed, else naima ui in the browser, and reuses a UI already open on the project; never on CI, with NAIMA_NO_UI or NAIMA_DATA set, nor in a worktree other than the clone\'s main checkout; a user turns it off everywhere with {"atStart": false} in the ui.json of their Naima config folder',
+        default: "true",
+      },
+    ],
+    summary: [atStartSection(on)],
   }
 }

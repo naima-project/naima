@@ -49,7 +49,8 @@
 // newer program download one.
 
 import { PROJECTS_ENV, rememberProject } from "./core/projects.ts"
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs"
+import { desktopAppDirs } from "./plugins/ui/desktop.ts"
 import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
@@ -172,6 +173,15 @@ export interface UiGrant {
 }
 
 /** The program that opens the default browser, by operating system: the same src/plugins/ui/open.ts starts. */
+/** The programs a folder holds, by path: none when it cannot be read. */
+function programsIn(dir: string): string[] {
+  try {
+    return readdirSync(dir).filter((f) => !f.startsWith(".")).map((f) => join(dir, f))
+  } catch {
+    return []
+  }
+}
+
 export const BROWSER_OPENER: Record<string, string> = { darwin: "open", windows: "rundll32", linux: "xdg-open" }
 
 /** The program `naima verify` may start besides the loaded contributions' `runs`: the verifier plugin's naima-codegen adapter's, found on PATH. Kept equal to that adapter's `CODEGEN_PROGRAM` by a test. */
@@ -212,12 +222,23 @@ export function uiGrant(
   tools: string | null = null,
   rest: readonly string[] = [],
   github = false,
+  env: Record<string, string | undefined> = {},
 ): UiGrant | null {
   // gh only for guard server, which sends the ruleset; --print sends nothing.
   if (command === "guard") return rest[0] === "server" && !rest.includes("--print") ? { net: [], read: [], runs: ["gh"] } : null
   // gh for naima issues, the outside-issues plugin's command; and for the session start of a project on GitHub, whose tick runs its daily intake.
   // A project that never uses issues is granted gh nowhere else: no loaded contribution declares it.
-  if (command === "issues" || (command === "hello" && github)) return { net: [], read: [], runs: ["gh"] }
+  if (command === "issues") return { net: [], read: [], runs: ["gh"] }
+  // naima hello opens the UI at a session start (src/plugins/ui/at-start.ts): it starts this Naima's launcher with Deno,
+  // or the desktop app, and tells a UI that runs by ps (tasklist on Windows), since it may send no signal.
+  if (command === "hello") {
+    const apps = desktopAppDirs(env, os).filter((d) => existsSync(d))
+    return {
+      net: [],
+      read: [deno, ...apps],
+      runs: [deno, os === "windows" ? "tasklist" : "ps", ...apps.flatMap((d) => programsIn(d)), ...(github ? ["gh"] : [])],
+    }
+  }
   // naima-codegen, the verifier plugin's naima-codegen adapter (adapters/naima-codegen.ts): a first-party verifier's program, granted to verify alone.
   if (command === "verify") {
     return {
@@ -560,7 +581,15 @@ export async function launch(args: string[], cwd: string): Promise<number> {
   const tools = toolsDir(Deno.env.toObject(), Deno.build.os)
   // The tick's state, naima/ in the clone's git directory, shared by its worktrees; the program is told its tick/ folder.
   const tickState = tickFolder(root)
-  const granted = uiGrant(parsed.rest[0], Deno.build.os, Deno.execPath(), tools, parsed.rest.slice(1), parsed.rest[0] === "hello" && githubOrigin(root))
+  const granted = uiGrant(
+    parsed.rest[0],
+    Deno.build.os,
+    Deno.execPath(),
+    tools,
+    parsed.rest.slice(1),
+    parsed.rest[0] === "hello" && githubOrigin(root),
+    Deno.env.toObject(),
+  )
   // And reads each of them, read only; a folder that is gone, or one Deno cannot name (a comma), is left out.
   const ui = granted && known
     ? { ...granted, read: [...granted.read, ...known.flatMap((p) => [p.root, p.data]).filter((x) => existsSync(x) && !real(x).includes(","))] }
