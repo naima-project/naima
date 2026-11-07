@@ -223,6 +223,12 @@ export interface SummarySection {
   goals?(ctx: Context): Rendered | Promise<Rendered>
   /** What the agent can do on request, a line each, as `naima hello` says it among its offers, after what waits on the owner: such as generating code from a model the project has. A block with nothing to offer renders no lines. */
   offers?(ctx: Context): Rendered | Promise<Rendered>
+  /**
+   * What a session start does for the owner, said in a few words on the one line of the greeting the owner sees, such
+   * as opening the UI: only `naima hello` calls it, and only when launched, as a session-start hook or in a terminal. It must
+   * return at once, never fail the greeting (a throw is said nothing), and returns null when it has nothing to say.
+   */
+  greeting?(ctx: Context): string | null | Promise<string | null>
   render(ctx: Context): Rendered | Promise<Rendered>
 }
 

@@ -1391,13 +1391,17 @@ function testPoints(ctx: Context, item: Item): { tests: (r: SuiteRun) => SuiteRu
   }
   const points: TestPoint[] = []
   const used = new Set<string>()
-  const records = recordFiles(ctx).map((f) => f.record).sort((a, b) => (a.at < b.at ? -1 : 1))
+  // Which record made a run, and which reused it, is told by commits, never by the records' order: records written
+  // in the same instant (a fixed clock, a fast machine) tie on `at`, and their files then come in any order.
+  const madeAt = new Set<string>()
+  const records = recordFiles(ctx).map((f) => f.record).sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
   for (const rec of records) {
     for (const [suite, path] of Object.entries(rec.runs ?? {})) {
       if (only !== undefined && suite !== only) continue
       const run = read(path)
       if (!run || run.error || !tests(run).some((t) => t.result !== "skipped")) continue
-      const reused = run.commit !== rec.commit || used.has(path)
+      const reused = run.commit !== rec.commit || madeAt.has(`${path}@${rec.commit}`)
+      if (run.commit === rec.commit) madeAt.add(`${path}@${rec.commit}`)
       used.add(path)
       points.push({ id: `${path}@${rec.commit}`, commit: rec.commit, date: rec.date ?? run.date ?? rec.at, recordedAt: rec.at, path, run, reused })
     }

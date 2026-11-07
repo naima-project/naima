@@ -8,17 +8,25 @@ naima ui              # serve it and open it in the default browser
 naima ui --no-open    # print the address, with its token, and serve until Ctrl-C
 ```
 
+You rarely need to type it. When an agent session starts, `naima hello` opens the window on the project by itself, in the background, and its one-line greeting
+says so, with the address: the desktop app when it is installed (on macOS, Naima.app in an Applications folder), otherwise `naima ui` in the browser. If a
+window is already open on the project, it is reused rather than opened a second time. It stays closed on CI, with `NAIMA_NO_UI` or `NAIMA_DATA` set, and in a
+worktree other than the clone's main checkout, so agents working in their own worktrees never open one. To turn it off for a project, run
+`naima plugin set ui atStart=false`; to turn it off for yourself everywhere, put `{"atStart": false}` in `ui.json` in your Naima config folder
+(`~/.config/naima/` on macOS and Linux).
+
 ## The token in the address
 
 The address `naima ui` opens looks like `http://127.0.0.1:53817/?token=9f3c…`, with a long string of letters and digits at the end. That string is the token.
 `naima ui` makes a new one, at random, every time it starts, and the server answers only requests that carry it. A request without it gets a short error saying
 that the address needs the token it was opened with.
 
-The browser gets the token from the address and from nowhere else. When the first page arrives, the server also stores the token in a cookie of its own,
-named `naima-ui-` followed by a few characters that come from the token, and from then on the browser sends that cookie with every request the window makes: its scripts, the data of each screen, the actions, and the live feed that
-says when the project changed. This is why only the first address needs the token. The cookie is marked so that no script can read it, and so that the browser
-sends it only with requests made by the window itself, never with requests that a page of another site starts. The pages a plugin's tab shows run in a sandbox
-without the cookie; they load their own files under a separate key that the server derives from the token, which opens those files and nothing else.
+The browser gets the token from the address and from nowhere else. When the first page arrives, the server also stores the token in a cookie of its own, named
+`naima-ui-` followed by a few characters that come from the token, and from then on the browser sends that cookie with every request the window makes: its
+scripts, the data of each screen, the actions, and the live feed that says when the project changed. This is why only the first address needs the token. The
+cookie is marked so that no script can read it, and so that the browser sends it only with requests made by the window itself, never with requests that a page
+of another site starts. The pages a plugin's tab shows run in a sandbox without the cookie; they load their own files under a separate key that the server
+derives from the token, which opens those files and nothing else.
 
 The token lasts as long as the run. When you stop `naima ui` and start it again, you get a new port and a new token, and the old address stops working. Each run
 names its cookie differently, so two runs open in one browser at the same time, for two projects or two worktrees, each keep working with their own.
@@ -79,6 +87,17 @@ over the page as the whole map when you point at it, reach it with Tab or press 
 Failed tests and Metrics, then More, which lists the views the plugins add. Home and Metrics are described below; Diary, Bugs, Features and Failed tests are
 placeholders and say so.
 
+### Switching project
+
+Beside the name "naima" at the top is the name of the project shown. Click it for the projects you opened recently, the most recent first, and pick one: the
+same window opens it, and every screen shows that project. In a browser, `naima ui` stops serving this project and serves the one you picked at the same
+address, so the page reloads on it by itself; the terminal where `naima ui` runs keeps it, and Ctrl-C stops it as before. The desktop app restarts its Naima in
+the project you picked.
+
+The list is `projects.json` in your standard config folder: `~/Library/Application Support/Naima` on macOS, `%APPDATA%\Naima` on Windows,
+`$XDG_CONFIG_HOME/naima` (or `~/.config/naima`) on Linux. Each time `naima ui` or the desktop app opens a project, that project moves to the top, and a project
+whose folder is gone is dropped. The All projects screen reads the same list.
+
 ### The rail
 
 Closed, the rail is the metro map drawn small, over the newest 24 commits only: main and the open lines in their colours, the branches that leave and rejoin
@@ -96,12 +115,12 @@ own, above their line or below main. A branch leaves its base and rejoins it at 
 lands are drawn larger, as interchanges. Past the last commit, main and every line go on, dashed, with a station for each goal and step still ahead in the order
 they come, and a line's future comes down onto main where it will land. Robots stand on the worker branches, each with a look of its own and a badge for its
 status: a gear while it works, a flask while it tests, a question mark when it waits for an answer, a pause when it is idle or silent, a check when it is done
-and waits to land. Working robots step in place at a few frames a second, and stand still when your system asks for reduced motion. The people of the
-project stand on the map too, each under their own name: whoever is checked out here (git's `user.name`) on the branch checked out, and every other author of
-the commits the map draws on the route of their newest commit. A small pin marks where the main checkout and each worktree stand, on the commit each has
-checked out, with its name and branch; the main checkout's label and the one the window is served from are always shown, the others when you point at them.
-A commit you have named with `naima name-stop <commit> "<name>"` shows that name under its station, and says it when you reach it with Tab, on the open map and
-on the closed rail alike. The names are kept in the tracker's `stops/` folder, one file per commit, written on the trunk like any other addition to the tracker.
+and waits to land. Working robots step in place at a few frames a second, and stand still when your system asks for reduced motion. The people of the project
+stand on the map too, each under their own name: whoever is checked out here (git's `user.name`) on the branch checked out, and every other author of the
+commits the map draws on the route of their newest commit. A small pin marks where the main checkout and each worktree stand, on the commit each has checked
+out, with its name and branch; the main checkout's label and the one the window is served from are always shown, the others when you point at them. A commit you
+have named with `naima name-stop <commit> "<name>"` shows that name under its station, and says it when you reach it with Tab, on the open map and on the closed
+rail alike. The names are kept in the tracker's `stops/` folder, one file per commit, written on the trunk like any other addition to the tracker.
 
 Choosing a commit, on the strip or on the map, shows every screen as the project was at that commit; choosing a mark ahead shows that goal, step or landing on
 Home, with its status as it is now. The left and right arrow keys step from one commit to the next on the rail, and on into the marks ahead. Escape, or the one
@@ -136,17 +155,18 @@ commits in order, labelled with their dates; a commit of the past is marked by a
 last 500 or 100. Each chart has a text summary that screen readers read. Clicking a point of the large chart, or pressing Enter on the one the arrow keys are
 on, selects its commit, so the whole window shows that moment, and opens below the chart the record of the run that measured it: the value and whether it kept
 its bound, when it was recorded, and how it was taken. For a test suite's number that is the suite's run, with its command, its counts, its time and the end of
-its log, or the earlier run it reused because nothing the suite reads had changed; for a command's number, the command; for a code measure, the measure. A metric
-becomes a card with `"card": true` in its declaration, or with its place among the cards, `"card": 2`, and goes under a heading of the list with `"group"`;
-with no card marked, the first six metrics with records are the cards. The cards with a place come first, in that order, and the others after them in the
-list's order, which is the order of the declarations. The screen names a metric by its `"label"`, such as `"Function size, mean"`, or else by its declared
-name written as words, `function-size` as Function size. Below, the screen says how many of the newest commits have no record, with the main action Record metrics, which runs
-`naima metrics run --record` on the commit checked out, under `naima run` with a budget of two hours, and says how the run goes until it ends; one recording runs
-at a time, and when it succeeds the window reads the new records. Its data is the metrics view's, whose `timeline` places every record on the trunk; at a commit it gives each metric's record at that commit,
-read from the records as they are now, since a commit's own tree holds none of the records made after it. How the screen reads a moment is a small model of its
-own, checked like the shell's: an answer that arrives after the moment changed is dropped and the new moment read. So is Record metrics: it starts one
-recording at a time, asks for its run's state one request at a time and only while it runs, and reads again when it succeeded. The record of a point is the
-metrics plugin's metric-run view, which the bridge's `data` command reads with the metric and the commit as its query.
+its log, or the earlier run it reused because nothing the suite reads had changed; for a command's number, the command; for a code measure, the measure. A
+metric becomes a card with `"card": true` in its declaration, or with its place among the cards, `"card": 2`, and goes under a heading of the list with
+`"group"`; with no card marked, the first six metrics with records are the cards. The cards with a place come first, in that order, and the others after them in
+the list's order, which is the order of the declarations. The screen names a metric by its `"label"`, such as `"Function size, mean"`, or else by its declared
+name written as words, `function-size` as Function size. Below, the screen says how many of the newest commits have no record, with the main action Record
+metrics, which runs `naima metrics run --record` on the commit checked out, under `naima run` with a budget of two hours, and says how the run goes until it
+ends; one recording runs at a time, and when it succeeds the window reads the new records. Its data is the metrics view's, whose `timeline` places every record
+on the trunk; at a commit it gives each metric's record at that commit, read from the records as they are now, since a commit's own tree holds none of the
+records made after it. How the screen reads a moment is a small model of its own, checked like the shell's: an answer that arrives after the moment changed is
+dropped and the new moment read. So is Record metrics: it starts one recording at a time, asks for its run's state one request at a time and only while it runs,
+and reads again when it succeeded. The record of a point is the metrics plugin's metric-run view, which the bridge's `data` command reads with the metric and
+the commit as its query.
 
 The views of the earlier window are tabs: the summary, the gates, what is next, the claims, the boards, the session notes and each item with its evidence. Every
 view's data is the same data the matching command prints with `--json`, and the new interface reads it from there.
@@ -184,8 +204,8 @@ goals are its gate's steps not yet closed, then the gate. The trunk's are the ga
 line's gate shown as that line landing. The parts come from the commands that own them (`naima line list`, `naima claims`, `naima gates`, each with `--json`),
 so the map and the commands always agree.
 
-A worker's status comes from the records Naima keeps of its branch, never from the words of its step: its claim and the time of its last step, its commits,
-the runs started from its worktree with `naima run` (each run records the branch it was started on), the discussions still open on an item it claims, and the
+A worker's status comes from the records Naima keeps of its branch, never from the words of its step: its claim and the time of its last step, its commits, the
+runs started from its worktree with `naima run` (each run records the branch it was started on), the discussions still open on an item it claims, and the
 silences between them. The records are read oldest first by a small state machine, generated with naima-codegen from its mCRL2 model
 (`develop/models/ui/worker-status` in the workshop), whose properties are checked; its `why` field lists the records it was given. While the branch holds a
 claim, the first of these that applies is its status:
@@ -200,9 +220,9 @@ With no live claim, a branch that has commits its base lacks is **done, waiting 
 ## Actions
 
 The window can run a few naima commands for you: record a decision (`decide`), add a note (`note`), close a gate's step (`gate step`, not adding or removing
-one), claim items or post a step (`claim`), release a claim (`release`) and name a commit of the map (`name-stop`). Each runs as a run of `naima run`, exactly as if you typed the command, so every
-rule and check applies, and the window can follow the run: its state, its exit code and what it printed. None of them rewrites history. Another page in your
-browser cannot run one.
+one), claim items or post a step (`claim`), release a claim (`release`) and name a commit of the map (`name-stop`). Each runs as a run of `naima run`, exactly
+as if you typed the command, so every rule and check applies, and the window can follow the run: its state, its exit code and what it printed. None of them
+rewrites history. Another page in your browser cannot run one.
 
 ## How it is built
 

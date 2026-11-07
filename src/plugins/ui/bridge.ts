@@ -27,10 +27,11 @@
 //
 // Every command reads the files when it is called, so the UI is live.
 
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { askHostsInBackground, type Command, type Context } from "../../core/api.ts"
+import { askHostsInBackground, type Command, type Context, type KnownProject, knownProjects } from "../../core/api.ts"
 import { AtCache, commitOf } from "./at.ts"
+import { knownAt, recentProjects } from "./switch.ts"
 import type { Feeds, Handlers, Json } from "./bridge-handler.ts"
 import { watchProject } from "./live.ts"
 import { askShow, listenShows, openUis, type Place, SCREENS, taken } from "./show.ts"
@@ -111,6 +112,15 @@ export interface BridgeOptions {
   carrier?: string
   /** How long the command show waits for the open UIs to take a show, in ms. */
   showWait?: number
+  /** Opens a UI on the project when a show finds none open (hello's opener, at-start.ts): what it says, or null when it opened none. */
+  openUi?(): Promise<string | null>
+  /**
+   * Switching to another recent project (switch.ts): whether this carrier can, and how; `to` is given a project of the
+   * list other than this one. Without it the bridge lists the recent projects and switches to none.
+   */
+  switcher?: { can: boolean; to?(project: KnownProject): Promise<void> }
+  /** The recent projects, the most recently opened first: the launcher's list by default. */
+  known?(): readonly KnownProject[]
 }
 
 /** The place a show's arguments name: exactly one of screen, view, item, commit or line; or why it is refused. */
@@ -210,8 +220,19 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
     }
     return json({ ...head, ...c })
   }
+  const known = opts.known ?? (() => knownProjects())
   const handlers: Handlers = {
-    describe: () => json({ app: "naima", root: ctx.root.split(/[\\/]/).filter(Boolean).pop() ?? "", actions: ACTIONS }),
+    describe: () => json({ app: "naima", root: ctx.root.split(/[\\/]/).filter(Boolean).pop() ?? "", path: resolve(ctx.root), actions: ACTIONS }),
+    recent: () => json({ projects: recentProjects(ctx.root, known()), canSwitch: opts.switcher?.can ?? false }),
+    switch: async (args) => {
+      const root = text(args["root"])
+      const project = root === null ? null : knownAt(root, known())
+      if (!project) throw new Error(`${String(args["root"])} is not one of the recent projects`)
+      if (resolve(project.root) === resolve(ctx.root)) throw new Error("that is the project shown now")
+      if (!opts.switcher?.can || !opts.switcher.to) throw new Error("this UI cannot switch project: start it with naima ui")
+      await opts.switcher.to(project)
+      return json({ root: project.root, path: resolve(project.root) })
+    },
     data: async (args) => {
       const name = text(args["view"])
       const view = opts.views.find((v) => v.name === name)
@@ -271,7 +292,20 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       const place = placeOf(ctx, args, opts.tabs.map((t) => t.name))
       if (typeof place === "string") throw new Error(place)
       if (!openUis(ctx.root).length) {
-        return json({ shown: false, open: 0, place, says: "no Naima UI is open on this project: the owner opens one with naima ui" })
+        const opened = opts.openUi ? await opts.openUi() : null
+        // A UI just opened listens once its page has loaded: wait for it, a little longer than for a show.
+        const until = Date.now() + (opts.showWait ?? 8000) * 3
+        while (opened && !openUis(ctx.root).length && Date.now() < until) await new Promise((r) => setTimeout(r, 250))
+        if (!openUis(ctx.root).length) {
+          return json({
+            shown: false,
+            open: 0,
+            place,
+            says: opened
+              ? `no Naima UI was open on this project; one is opening (${opened}) but did not listen in time: show again`
+              : "no Naima UI is open on this project, and none could be opened: the owner opens one with naima ui",
+          })
+        }
       }
       const id = askShow(ctx.root, place)
       const { open, took } = await taken(ctx.root, id, opts.showWait ?? 8000)

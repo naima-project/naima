@@ -89,7 +89,18 @@ import { claimsReports, claimsReportsPoint } from "./claims-reports.ts"
 import { pushCheckCommand } from "./messages.ts"
 import { fixCommand } from "./fix.ts"
 import { guardCheckCommand, guardCommand, guardedFrom, guardOffSection, guardSetup, readTrunkGuard, takenByGuard } from "./guard.ts"
-import { diaryCheck, diaryCommand, diaryUiView, diaryView, eventCommand, EVENTS, frontLines, readDiaryPerDay, timelineUiView, timelineView } from "./timeline.ts"
+import {
+  diaryCheck,
+  diaryCommand,
+  diaryUiView,
+  diaryView,
+  eventCommand,
+  EVENTS,
+  frontLines,
+  readDiaryPerDay,
+  timelineUiView,
+  timelineView,
+} from "./timeline.ts"
 import { recoverCommand } from "./recover.ts"
 import { readyLines, readyNow, readySection, readyWorkWaiting, workerLimitSection } from "./ready.ts"
 import {
@@ -109,6 +120,7 @@ import {
   onLine,
   openLines,
 } from "./lines.ts"
+import { atRiskSection } from "./at-risk.ts"
 import { trunkOnlyTracker } from "./trunk-only.ts"
 
 export { type NextStep, type StaleData, type StaleEntry } from "./stale.ts"
@@ -1258,6 +1270,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       "There are no locks: a claim says who works on what and never excludes anyone. What one session at a time must touch — the trunk, the published site, the releases — is touched by one writer, the coordinator; workers only prepare on their own branches, and the owner decides what lands and when, when it matters. " +
       "Work happens by one scheme, checked: the worktree `<worktrees>/<what>` stands on the branch `<who>/<what>` and carries a claim; `open` makes all three in one step. " +
       "A claim marked `--preparing` is told when the trunk moves under it, and which commits were made on the trunk directly; `prune --branch` deletes a branch only when the trunk or an `archive/<branch>` tag holds its commits. A claim is stale when its branch is gone, or merged into the trunk that carries its file, or every item it claims is done or closed: `claims` lists it apart, `stale-claims` notes it, and `prune --write` releases it; a claim that still names a closed item among open ones is noted by `claims-on-closed-items`. " +
+      "Work at risk is said by `naima hello` and the summary, one line each with the command that makes it safe, from git alone and the remote-tracking refs as the last fetch left them: the trunk and every open line with commits their remote branch lacks, every other branch with commits on no remote and the age of the oldest, every worktree with changes not committed and how long they have sat; nothing for a clone with no remote. " +
       "Work left behind is listed by `stale` and in the summary: every branch, worktree and claim whose claim is stale, or with no sign of life (commit, step, session note, file not committed) for `staleAfter` hours, with its facts — last commit, files not committed, commits ahead of the trunk, whether it is up to date with it, items held and their status — and the next step: resume, land, archive or drop. " +
       "Landings are semi-linear: a branch the trunk is an ancestor of enters it as one marker commit, a merge whose tree is the branch tip's and whose message names the items it closes in `Closes:` trailers; `land` makes it from the main checkout, the shortcut for `git merge --no-ff`, and moves the trunk only from the commit it read. " +
       "From the first marker on the trunk's first-parent line every first-parent commit is a marker, or `landings-are-markers` notes it, one note per commit, which `naima waive landings-are-markers <commit>` accepts with a reason; before it nothing is asked, so a history of fast-forwards keeps working. " +
@@ -1361,7 +1374,16 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
     // The diary rule is listed by naima rules when the rules plugin is loaded; without it, the check still notes.
     optional: ["ui-views", "rules"],
     points: [landingReportsPoint, claimsReportsPoint, goalOrderPoint],
-    summary: [whereWeWere, linesSection, inHand(silentAfter), workerLimitSection(policy), readySection(policy), staleSection(stale), guardOffSection(guarded)],
+    summary: [
+      whereWeWere,
+      linesSection,
+      atRiskSection,
+      inHand(silentAfter),
+      workerLimitSection(policy),
+      readySection(policy),
+      staleSection(stale),
+      guardOffSection(guarded),
+    ],
     setup: [guardSetup(guarded)],
     hooks: [noClosingOwnWork, trunkOnlyTracker],
   }

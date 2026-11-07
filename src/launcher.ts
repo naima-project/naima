@@ -48,8 +48,9 @@
 // commit it was loaded from: a launcher from before releases cannot let the
 // newer program download one.
 
-import { PROJECTS_ENV, rememberProject } from "./core/projects.ts"
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs"
+import { PROJECTS_ENV, rememberProject, switchTarget, UI_SWITCH, UI_SWITCH_ENV, type UiSwitch } from "./core/projects.ts"
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs"
+import { desktopAppDirs } from "./plugins/ui/desktop.ts"
 import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
@@ -172,6 +173,15 @@ export interface UiGrant {
 }
 
 /** The program that opens the default browser, by operating system: the same src/plugins/ui/open.ts starts. */
+/** The programs a folder holds, by path: none when it cannot be read. */
+function programsIn(dir: string): string[] {
+  try {
+    return readdirSync(dir).filter((f) => !f.startsWith(".")).map((f) => join(dir, f))
+  } catch {
+    return []
+  }
+}
+
 export const BROWSER_OPENER: Record<string, string> = { darwin: "open", windows: "rundll32", linux: "xdg-open" }
 
 /** The program `naima verify` may start besides the loaded contributions' `runs`: the verifier plugin's naima-codegen adapter's, found on PATH. Kept equal to that adapter's `CODEGEN_PROGRAM` by a test. */
@@ -212,12 +222,23 @@ export function uiGrant(
   tools: string | null = null,
   rest: readonly string[] = [],
   github = false,
+  env: Record<string, string | undefined> = {},
 ): UiGrant | null {
   // gh only for guard server, which sends the ruleset; --print sends nothing.
   if (command === "guard") return rest[0] === "server" && !rest.includes("--print") ? { net: [], read: [], runs: ["gh"] } : null
   // gh for naima issues, the outside-issues plugin's command; and for the session start of a project on GitHub, whose tick runs its daily intake.
   // A project that never uses issues is granted gh nowhere else: no loaded contribution declares it.
-  if (command === "issues" || (command === "hello" && github)) return { net: [], read: [], runs: ["gh"] }
+  if (command === "issues") return { net: [], read: [], runs: ["gh"] }
+  // naima hello opens the UI at a session start (src/plugins/ui/at-start.ts): it starts this Naima's launcher with Deno,
+  // or the desktop app, and tells a UI that runs by ps (tasklist on Windows), since it may send no signal.
+  if (command === "hello") {
+    const apps = desktopAppDirs(env, os).filter((d) => existsSync(d))
+    return {
+      net: [],
+      read: [deno, ...apps],
+      runs: [deno, os === "windows" ? "tasklist" : "ps", ...apps.flatMap((d) => programsIn(d)), ...(github ? ["gh"] : [])],
+    }
+  }
   // naima-codegen, the verifier plugin's naima-codegen adapter (adapters/naima-codegen.ts): a first-party verifier's program, granted to verify alone.
   if (command === "verify") {
     return {
@@ -245,7 +266,11 @@ export function uiGrant(
   // The desktop app's sidecar talks over its standard input and output: no network, no browser to open.
   if (rest.includes("--sidecar")) return { net: [], read: [deno], runs: [deno] }
   // So does the MCP server an agent's client starts: no network, no browser; Deno to start an action's run.
-  if (rest.includes("--mcp")) return { net: [], read: [deno], runs: [deno] }
+  // Its show opens a UI when none is open, as hello does (src/plugins/ui/at-start.ts): the same grant as hello's, without gh.
+  if (rest.includes("--mcp")) {
+    const apps = desktopAppDirs(env, os).filter((d) => existsSync(d))
+    return { net: [], read: [deno, ...apps], runs: [deno, os === "windows" ? "tasklist" : "ps", ...apps.flatMap((d) => programsIn(d))] }
+  }
   return { net: ["127.0.0.1"], read: [deno], runs: [deno, BROWSER_OPENER[os] ?? "xdg-open"] }
 }
 
@@ -308,6 +333,8 @@ export function permissions(
     program: string
     entry: string
     hostFiles?: string[]
+    /** The files `naima ui` may write besides: the one where it names the project to switch to, as given and as resolved. */
+    uiFiles?: string[]
     /** The folders outside the project the command may read besides: naima recover's agent transcripts. */
     hostReads?: string[]
     /** The temporary folders the command may read besides, each as given and as resolved: describe's, note's, attach's and pass's input files. */
@@ -365,7 +392,9 @@ export function permissions(
         ...hostReads,
       ])
     }${[...temps, ...folder].map((t) => `,${t}`).join("")}`,
-    `--allow-write=${list([p.tracker, p.data, p.program, ...tick, ...(p.hostFiles ?? []), ...(p.ui?.write ?? []).filter((w) => tools.includes(w))])}`,
+    `--allow-write=${
+      list([p.tracker, p.data, p.program, ...tick, ...(p.hostFiles ?? []), ...(p.uiFiles ?? []), ...(p.ui?.write ?? []).filter((w) => tools.includes(w))])
+    }`,
     ...runFlag(p.ui?.runAll ? null : ["git", "tar", ...(p.runs ?? []), ...(p.ui?.runs ?? [])], p.found ?? runnable),
     "--allow-env",
     ...(p.ui?.netAll
@@ -527,7 +556,11 @@ export function worktreeData(cwd: string, own: string): string | undefined {
   return existsSync(join(data, DATA_FILE)) ? data : undefined
 }
 
-export async function launch(args: string[], cwd: string): Promise<number> {
+/**
+ * Run Naima as `args` say, in `cwd`. `resume` is the address a `naima ui` that switched project keeps: the port and the
+ * token of the run before, handed to this one alone (core/projects.ts, UI_SWITCH).
+ */
+export async function launch(args: string[], cwd: string, resume?: Omit<UiSwitch, "root">): Promise<number> {
   let parsed: ReturnType<typeof globalOptions>
   try {
     parsed = globalOptions(args)
@@ -548,10 +581,16 @@ export async function launch(args: string[], cwd: string): Promise<number> {
   // The machine's name and the private word list, which the program may not ask for itself: what tracker text is checked against.
   // naima ui: this project joins the projects Naima knows on this machine, which the UI's home across projects reads (core/projects.ts).
   const known = parsed.rest[0] === "ui" ? rememberProject(Deno.env.toObject(), Deno.build.os, { root, data }) : null
+  // naima ui in a browser may switch to another project of the list: it writes which in this file, the one file outside
+  // the tracker it is granted to write, and exits with UI_SWITCH; the launcher then serves that project on the same address.
+  // Resolved, as the permissions name it: Deno checks the path the program writes as given, and /tmp is a link on macOS.
+  const switchFile = known && !parsed.rest.includes("--sidecar") ? real(Deno.makeTempFileSync({ prefix: "naima-ui-switch-", suffix: ".json" })) : null
   const marks = {
     ...privateEnv(Deno.env.toObject(), Deno.build.os),
     ...(known ? { [PROJECTS_ENV]: JSON.stringify(known) } : {}),
     NAIMA_LAUNCHED: "1",
+    ...(switchFile ? { [UI_SWITCH_ENV.file]: switchFile } : {}),
+    ...(resume ? { [UI_SWITCH_ENV.port]: String(resume.port), [UI_SWITCH_ENV.token]: resume.token } : {}),
     ...(given ? { NAIMA_DATA: real(data) } : {}),
   }
   // Which of them are the launcher's alone, so a command the program starts is handed the caller's environment without them.
@@ -562,7 +601,15 @@ export async function launch(args: string[], cwd: string): Promise<number> {
   const tools = toolsDir(Deno.env.toObject(), Deno.build.os)
   // The tick's state, naima/ in the clone's git directory, shared by its worktrees; the program is told its tick/ folder.
   const tickState = tickFolder(root)
-  const granted = uiGrant(parsed.rest[0], Deno.build.os, Deno.execPath(), tools, parsed.rest.slice(1), parsed.rest[0] === "hello" && githubOrigin(root))
+  const granted = uiGrant(
+    parsed.rest[0],
+    Deno.build.os,
+    Deno.execPath(),
+    tools,
+    parsed.rest.slice(1),
+    parsed.rest[0] === "hello" && githubOrigin(root),
+    Deno.env.toObject(),
+  )
   // And reads each of them, read only; a folder that is gone, or one Deno cannot name (a comma), is left out.
   const ui = granted && known
     ? { ...granted, read: [...granted.read, ...known.flatMap((p) => [p.root, p.data]).filter((x) => existsSync(x) && !real(x).includes(","))] }
@@ -586,6 +633,7 @@ export async function launch(args: string[], cwd: string): Promise<number> {
         program,
         entry,
         hostFiles: hostFiles(parsed.rest, root, data),
+        uiFiles: switchFile && !switchFile.includes(",") ? [switchFile] : [],
         hostReads: parsed.rest[0] === "recover" ? transcriptRoots(Deno.env.toObject()) : [],
         tempReads: TEMP_READERS.includes(parsed.rest[0] ?? "") ? tempRoots() : [],
         worktrees: others,
@@ -619,6 +667,21 @@ export async function launch(args: string[], cwd: string): Promise<number> {
     const wait = () => {}
     if (ui) Deno.addSignalListener("SIGINT", wait)
     const { code } = await child.status
+    if (switchFile) {
+      const next = code === UI_SWITCH ? switchTarget(readSwitch(switchFile), known ?? []) : null
+      try {
+        Deno.removeSync(switchFile)
+      } catch { /* already gone */ }
+      if (code === UI_SWITCH) {
+        if (ui) Deno.removeSignalListener("SIGINT", wait)
+        if (!next) {
+          console.error("naima: naima ui asked to switch to a project that is not one of the recent projects")
+          return 1
+        }
+        // The chosen project's own data names its program and its permissions, as if run there with --data.
+        return launch(["--data", next.data, ...parsed.rest], next.root, { port: next.port, token: next.token })
+      }
+    }
     if (ui) Deno.removeSignalListener("SIGINT", wait)
     if (code !== RELAUNCH) return code
     entry = real(runtimeOf(program) ?? program) // resolved, as the permissions name it: the program may have just been made
@@ -639,4 +702,13 @@ export async function launch(args: string[], cwd: string): Promise<number> {
   }
   console.error(`naima: ${program} did not settle after ${MAX_RUNS} runs — its alignment keeps moving`)
   return 2
+}
+
+/** A switch file's text, or null when it cannot be read. */
+function readSwitch(file: string): string | null {
+  try {
+    return Deno.readTextFileSync(file)
+  } catch {
+    return null
+  }
 }

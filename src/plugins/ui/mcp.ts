@@ -47,7 +47,7 @@ export function naimaTools(views: readonly string[], tabs: readonly string[]): {
     },
     show: {
       description:
-        "Show the owner a place in the Naima UI open on this project (the desktop app or a browser), live: a screen, a plugin's view, an item, a commit (moving the playhead there) or a line. Give exactly one. Prefer this to making a page or an artifact of your own. Answers whether an open UI took it; when none is open, says so.",
+        "Show the owner a place in the Naima UI open on this project (the desktop app or a browser), live: a screen, a plugin's view, an item, a commit (moving the playhead there) or a line. Give exactly one. Prefer this to making a page or an artifact of your own. Answers whether an open UI took it; when none is open, it opens one as naima hello does (the desktop app, else a browser) and shows there.",
       inputSchema: obj({
         screen: str("home, metrics, diary, bugs, features, failed_tests, goals, roadmap, map, all_projects or more"),
         view: str(`a plugin's view: ${tabs.join(", ")}`),
@@ -60,12 +60,14 @@ export function naimaTools(views: readonly string[], tabs: readonly string[]): {
 }
 
 export const INSTRUCTIONS =
-  "Naima's project tracker and UI. Read the project through data, tab and metro, exactly as the UI does. To show the owner something (a screen, an item, a commit, a line), call show: it navigates the Naima UI the owner has open, live, and is preferred to making a separate page or artifact. If show says no UI is open, tell the owner to run naima ui."
+  "Naima's project tracker and UI. Read the project through data, tab and metro, exactly as the UI does. To show the owner something (a screen, an item, a commit, a line), call show: it navigates the Naima UI the owner has open, live, and is preferred to making a separate page or artifact. When no UI is open, show opens one; if it says none could be opened, tell the owner to run naima ui."
 
 export interface McpOptions {
   views: readonly UiView[]
   tabs: readonly UiTab[]
   version: string
+  /** Opens a UI on the project when a show finds none open: hello's opener by default. */
+  openUi?(): Promise<string | null>
   input: Readable
   write(line: string): void
 }
@@ -77,6 +79,7 @@ export async function runMcp(ctx: Context, opts: McpOptions): Promise<number> {
     tabs: opts.tabs,
     // A tab's file is the UI's to frame: an agent is told its path in the tab's folder.
     fileUrl: (tab, rel) => `naima-tab-file:${encodeURIComponent(tab)}/${rel}`,
+    ...(opts.openUi ? { openUi: opts.openUi } : {}),
   })
   const mcp = bridgeMcp({
     name: "naima",

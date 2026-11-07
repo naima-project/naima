@@ -126,6 +126,8 @@ export async function runSidecar(ctx: Context, opts: SidecarOptions): Promise<nu
     tabs: opts.tabs,
     fileUrl: (tab, rel) => desktopFileUrl(opts.os, tab, rel),
     carrier: "desktop",
+    // The shell switches project itself, restarting the sidecar in the one chosen: the sidecar only lists them.
+    switcher: { can: true },
     ...(opts.watch ? { watch: opts.watch } : {}),
   })
   const handlers: Handlers = {
