@@ -11,7 +11,7 @@
 
 import { type Context, rendered, runGitAsync, type SummarySection, trunk, worktrees } from "../../core/api.ts"
 import { statSync } from "node:fs"
-import { join, relative } from "node:path"
+import { join, relative, sep } from "node:path"
 import { LINE_PREFIX } from "./lines.ts"
 
 /** How long one git run of the listing may take before it is left out. */
@@ -94,7 +94,9 @@ export async function atRisk(root: string, now: number = Date.now()): Promise<At
         // a deleted file has no time
       }
     }
-    const name = relative(root, w.path) || "."
+    // From the root when it is beside it or within; a worktree further away by its full path.
+    const rel = relative(root, w.path) || "."
+    const name = rel.startsWith(`..${sep}..`) ? w.path : rel
     const at = name === "." ? "" : `-C ${name} `
     return {
       kind: "worktree",

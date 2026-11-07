@@ -164,6 +164,14 @@ item it claims is done or closed. `naima claims` lists stale claims apart, at th
 check` adds a note for each one. A claim that still names an
 item already closed, next to items that are still open, gets a note of its own with the `naima release` that drops the closed item.
 
+## Work at risk
+
+Naima pushes nothing by itself: `naima land` merges without pushing, and a worker's branch may exist only on your machine. So `naima hello` lists, one line
+each, what a lost disk would take with it: the trunk and every open line with commits their remote branch does not have yet, every other branch with commits on
+no remote (and how old the oldest is), and every worktree with changes not committed (and how long they have sat). Each line ends with the command that makes it
+safe, such as `git push origin main`. Nothing is listed when everything is safe, or when the clone has no remote at all. It reads only git, from the remote
+branches as your last fetch left them, so it never touches the network.
+
 ## Work left behind
 
 ```sh

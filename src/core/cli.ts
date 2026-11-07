@@ -1512,6 +1512,10 @@ async function hello(args: string[], opts: CliOptions, place: Located, io: IO): 
   // The session it starts: given, else the tool's own from its hook's input, read only when launched as a hook.
   const hookInput = tool?.sessionOf ? (opts.hookInput ?? (opts.launched ? readHookInput : () => ""))() : ""
   startSession(place.root, now(), given ?? (hookInput ? tool?.sessionOf?.(hookInput) : undefined))
+  // The project, and what waits on the owner, read while the update check runs: a section that runs git, such as the
+  // work at risk, runs beside it. Said after it, in their place.
+  const early = openProject(place, opts, { ...io, err: () => {} }).then((ctx) => ({ ctx, waiting: atSessionStart(ctx) }))
+  early.then((e) => e.waiting).catch(() => {})
   const dir = ticks(opts) ? tickDir(place.root) : null
   /** The day's update check, done here: recorded, so the tick does not ask the source again today. */
   const recorded = (outcome: JobOutcome): void => {
@@ -1587,14 +1591,14 @@ async function hello(args: string[], opts: CliOptions, place: Located, io: IO): 
    */
   const done: string[] = []
   try {
-    const ctx = await openProject(place, opts, { ...io, err: () => {} })
+    const { ctx, waiting } = await early
     if (opts.launched && (tool || process.stdout.isTTY)) done.push(...await greetingsAtSessionStart(ctx))
     try {
       lines.push(...await goalsAtSessionStart(ctx))
     } catch {
       // a goal that cannot be evaluated here: naima gates says why
     }
-    decisions.push(...await atSessionStart(ctx))
+    decisions.push(...await waiting)
     try {
       offers.push(...await offersAtSessionStart(ctx))
     } catch {
