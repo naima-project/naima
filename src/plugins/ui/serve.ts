@@ -75,7 +75,7 @@ function file(req: IncomingMessage, res: ServerResponse, path: string, type: str
   res.end(req.method === "HEAD" ? undefined : readFileSync(path))
 }
 
-/** A request as the web's Request, its body read whole as text (64 KB at most: a command's JSON), for the stance's handler. */
+/** A request as the web's Request, its body read whole as text (1 MB at most: a command's JSON, the page the UI answers an agent with included), for the stance's handler. */
 async function webRequest(req: IncomingMessage, origin: string): Promise<Request | null> {
   const headers = new Headers()
   for (const [k, v] of Object.entries(req.headers)) if (typeof v === "string") headers.set(k, v)
@@ -85,7 +85,7 @@ async function webRequest(req: IncomingMessage, origin: string): Promise<Request
     let size = 0
     for await (const chunk of req) {
       size += (chunk as Buffer).length
-      if (size > 64_000) return null
+      if (size > 1_000_000) return null
       chunks.push(chunk as Buffer)
     }
     body = Buffer.concat(chunks).toString("utf8")

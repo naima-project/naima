@@ -266,10 +266,15 @@ export function uiGrant(
   // The desktop app's sidecar talks over its standard input and output: no network, no browser to open.
   if (rest.includes("--sidecar")) return { net: [], read: [deno], runs: [deno] }
   // So does the MCP server an agent's client starts: no network, no browser; Deno to start an action's run.
-  // Its show opens a UI when none is open, as hello does (src/plugins/ui/at-start.ts): the same grant as hello's, without gh.
+  // Its show opens a UI when none is open, as hello does (src/plugins/ui/at-start.ts): the same grant as hello's, without gh;
+  // and its screenshot runs macOS's screencapture on the UI window's place (src/plugins/ui/mcp.ts).
   if (rest.includes("--mcp")) {
     const apps = desktopAppDirs(env, os).filter((d) => existsSync(d))
-    return { net: [], read: [deno, ...apps], runs: [deno, os === "windows" ? "tasklist" : "ps", ...apps.flatMap((d) => programsIn(d))] }
+    return {
+      net: [],
+      read: [deno, ...apps],
+      runs: [deno, os === "windows" ? "tasklist" : "ps", ...(os === "darwin" ? ["screencapture"] : []), ...apps.flatMap((d) => programsIn(d))],
+    }
   }
   return { net: ["127.0.0.1"], read: [deno], runs: [deno, BROWSER_OPENER[os] ?? "xdg-open"] }
 }

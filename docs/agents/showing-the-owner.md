@@ -28,3 +28,10 @@ Call `show` with exactly one of:
 Every UI open on the project, the desktop app or a browser tab, goes there at once. The answer says how many open UIs took it. When none is open, `show` opens
 one as `naima hello` does, the desktop app when it is installed, else `naima ui` in the browser, and shows the place there; when none could be opened, it says
 so: tell the owner to open the UI with `naima ui`, then show again. Say in one line what you showed and why; the owner looks at the UI, not at a copy of it.
+
+## Seeing what the owner sees
+
+`read_page` answers the open UI's page as compact text: headings, landmarks, controls with their state, and the text, or raw HTML with `html`, optionally under
+a CSS `selector`. Use it to check what a `show` did and what the owner is looking at. `screenshot` answers a PNG of the UI's window as it is on the screen,
+taken with the system's screen capture on macOS; elsewhere it says it cannot. A picture costs far more than the text: take one only for a rare visual check that
+the text cannot answer, such as a layout or a colour.

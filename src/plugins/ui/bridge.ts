@@ -18,6 +18,8 @@
 //   run {name}                     that run as `naima run status --json` shows it, with the end of its log
 //   show {screen|view|item|commit|line}  asks every UI open on the project to show that place (show.ts): what an
 //                                  agent calls to show the owner something; answers how many open UIs took it
+//   answer {id, ...}               the open UI's answer to an agent's question the feed show carried (the page as
+//                                  text, where its window is), kept for the agent (show.ts)
 //
 // and two feeds:
 //
@@ -34,7 +36,7 @@ import { AtCache, commitOf } from "./at.ts"
 import { knownAt, recentProjects } from "./switch.ts"
 import type { Feeds, Handlers, Json } from "./bridge-handler.ts"
 import { watchProject } from "./live.ts"
-import { askShow, listenShows, openUis, type Place, SCREENS, taken } from "./show.ts"
+import { askShow, listenShows, openUis, type Place, SCREENS, taken, writeAnswer } from "./show.ts"
 import { commandJson, type JsonOf, metroData } from "./metro.ts"
 import { contentProblem, framePage, tabList, type UiTab, type UiTabContent, type UiView } from "./tabs.ts"
 
@@ -316,6 +318,13 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
         place,
         says: took > 0 ? `shown in ${took} of the ${open} open UIs` : `none of the ${open} open UIs said it took it within 8 s: one busy reading may still`,
       })
+    },
+    answer: (args) => {
+      const id = text(args["id"])
+      if (id === null) throw new Error("answer names the request it answers: id")
+      if (JSON.stringify(args).length > 1_000_000) throw new Error("the answer is too large")
+      writeAnswer(ctx.root, id, args)
+      return true
     },
     run: async (args) => {
       const name = text(args["name"])

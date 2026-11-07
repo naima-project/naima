@@ -25,6 +25,11 @@ export type Place =
   | { kind: "commit"; hash: string }
   | { kind: "line"; name: string }
 
+/** A question to the open UI, carried as a show is: the page it shows as text (or raw HTML), or where its window is. */
+export type UiRequest =
+  | { kind: "read"; id: string; selector?: string; html?: boolean }
+  | { kind: "rect"; id: string }
+
 /** The screens a show can name, as the UI's shell names them. */
 export const SCREENS = ["HOME", "METRICS", "DIARY", "BUGS", "FEATURES", "FAILED_TESTS", "GOALS", "ROADMAP", "MAP", "ALL_PROJECTS", "MORE"]
 
@@ -40,7 +45,7 @@ export interface OpenUi {
 interface Show {
   id: string
   root: string
-  place: Place
+  place: Place | UiRequest
   at: number
 }
 
@@ -83,7 +88,7 @@ export function openUis(root: string, now = Date.now()): OpenUi[] {
 }
 
 /** Asks every UI open on the project at `root` to show `place`; returns the show's id. */
-export function askShow(root: string, place: Place, now = Date.now()): string {
+export function askShow(root: string, place: Place | UiRequest, now = Date.now()): string {
   const dir = dirOf(root)
   if (!dir) throw new Error("not a git repository: Naima's UI shows only a project in git")
   mkdirSync(dir, { recursive: true })
@@ -107,7 +112,7 @@ export async function taken(root: string, id: string, ms: number): Promise<{ ope
  * A UI open on the project at `root`, through `carrier`, listening for shows: says it is open until `stop`, and
  * calls `show` with each place asked for its project after it opened.
  */
-export function listenShows(root: string, carrier: string, show: (place: Place) => void): { stop(): void } {
+export function listenShows(root: string, carrier: string, show: (place: Place | UiRequest) => void): { stop(): void } {
   const dir = dirOf(root)
   if (!dir) return { stop() {} }
   const id = randomBytes(8).toString("hex")
@@ -149,5 +154,38 @@ export function listenShows(root: string, carrier: string, show: (place: Place) 
       clearInterval(timer)
       rmSync(mine, { force: true })
     },
+  }
+}
+
+/** A fresh id for a request to the open UI. */
+export const requestId = (): string => randomBytes(8).toString("hex")
+
+/** Where the open UI's answer to request `id` is written (the bridge's command answer). */
+function answerFile(root: string, id: string): string | null {
+  const dir = dirOf(root)
+  return dir && /^[0-9a-f]{16}$/.test(id) ? join(dir, "answers", `${id}.json`) : null
+}
+
+/** Keeps the open UI's answer to request `id`: the first one counts. */
+export function writeAnswer(root: string, id: string, answer: unknown): void {
+  const file = answerFile(root, id)
+  if (!file) throw new Error("answer names no request")
+  mkdirSync(join(file, ".."), { recursive: true })
+  writeWhole(file, answer)
+}
+
+/** The open UI's answer to request `id`, waiting up to `ms`; removed once read. Null when none came. */
+export async function awaitAnswer<T>(root: string, id: string, ms: number): Promise<T | null> {
+  const file = answerFile(root, id)
+  if (!file) return null
+  const end = Date.now() + ms
+  for (;;) {
+    const a = readJson<T>(file)
+    if (a !== null) {
+      rmSync(file, { force: true })
+      return a
+    }
+    if (Date.now() >= end) return null
+    await new Promise((r) => setTimeout(r, 100))
   }
 }
