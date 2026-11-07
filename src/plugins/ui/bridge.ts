@@ -24,10 +24,11 @@
 //
 // Every command reads the files when it is called, so the UI is live.
 
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { askHostsInBackground, type Command, type Context } from "../../core/api.ts"
+import { askHostsInBackground, type Command, type Context, type KnownProject, knownProjects } from "../../core/api.ts"
 import { AtCache, commitOf } from "./at.ts"
+import { knownAt, recentProjects } from "./switch.ts"
 import type { Feeds, Handlers, Json } from "./bridge-handler.ts"
 import { watchProject } from "./live.ts"
 import { commandJson, type JsonOf, metroData } from "./metro.ts"
@@ -103,6 +104,13 @@ export interface BridgeOptions {
   watch?: { interval?: number; debounce?: number }
   /** How an action's command line is started under `naima run`: this program, as a person types it, by default. */
   entry?: readonly string[]
+  /**
+   * Switching to another recent project (switch.ts): whether this carrier can, and how; `to` is given a project of the
+   * list other than this one. Without it the bridge lists the recent projects and switches to none.
+   */
+  switcher?: { can: boolean; to?(project: KnownProject): Promise<void> }
+  /** The recent projects, the most recently opened first: the launcher's list by default. */
+  known?(): readonly KnownProject[]
 }
 
 /** Naima's bridge: its commands and its feed, for a carrier to serve; `close` drops what the commands keep. */
@@ -177,8 +185,19 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
     }
     return json({ ...head, ...c })
   }
+  const known = opts.known ?? (() => knownProjects())
   const handlers: Handlers = {
-    describe: () => json({ app: "naima", root: ctx.root.split(/[\\/]/).filter(Boolean).pop() ?? "", actions: ACTIONS }),
+    describe: () => json({ app: "naima", root: ctx.root.split(/[\\/]/).filter(Boolean).pop() ?? "", path: resolve(ctx.root), actions: ACTIONS }),
+    recent: () => json({ projects: recentProjects(ctx.root, known()), canSwitch: opts.switcher?.can ?? false }),
+    switch: async (args) => {
+      const root = text(args["root"])
+      const project = root === null ? null : knownAt(root, known())
+      if (!project) throw new Error(`${String(args["root"])} is not one of the recent projects`)
+      if (resolve(project.root) === resolve(ctx.root)) throw new Error("that is the project shown now")
+      if (!opts.switcher?.can || !opts.switcher.to) throw new Error("this UI cannot switch project: start it with naima ui")
+      await opts.switcher.to(project)
+      return json({ root: project.root, path: resolve(project.root) })
+    },
     data: async (args) => {
       const name = text(args["view"])
       const view = opts.views.find((v) => v.name === name)
