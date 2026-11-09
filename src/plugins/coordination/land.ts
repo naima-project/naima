@@ -10,7 +10,7 @@ import { join, relative } from "node:path"
 import { isDeepStrictEqual, stripVTControlCharacters } from "node:util"
 import { randomUUID } from "node:crypto"
 import { fileURLToPath } from "node:url"
-import { mkdirSync, readFileSync, rmSync } from "node:fs"
+import { mkdirSync, readFileSync, rmSync, statSync } from "node:fs"
 import {
   appliesTo,
   bool,
@@ -193,7 +193,8 @@ async function runCheck(at: Context, check: LandingReport, landing: Landing): Pr
     try {
       found.notCurrent.push(...(await check.blocks(at, landing)))
     } catch (e) {
-      found.said.push(`could not check: ${message(e)}`)
+      // A check that could not run is not a pass: its proofs are not known current, so it asks for --stale-proofs like any other.
+      found.notCurrent.push(`could not check: ${message(e)}`)
     }
   }
   return found
@@ -349,7 +350,7 @@ function checkedLine(name: string, where: string, f: Found): string {
 /**
  * What the landing checks find before the trunk or the line moves, each line prefixed with its check's name: what fails
  * on the branch (`refused`, from `refuses`) and what has proofs not current (`notCurrent`, from `blocks`). `at` is the
- * context whose root holds the branch tip's files. A `blocks` that throws says so and blocks nothing; a `refuses` that
+ * context whose root holds the branch tip's files. A `blocks` that throws counts as proofs not current, which only --stale-proofs lets through; a `refuses` that
  * throws refuses the landing, since the branch was not checked; a heavy check runs on the landing host (heavyCheck),
  * unless its `covers` finds no file of the landing it reads.
  * Each check that ran prints one line, where it ran and what it found, so that a pass is seen.
@@ -376,13 +377,26 @@ async function landingChecks(ctx: Context, landing: Landing, at: Context = ctx):
 }
 
 /**
+ * Whether this run may read the tree at `dir`: a worktree made while the program runs (a line sync's) is outside what
+ * the launcher fenced the program to, and reading it is refused as outside the project, though git works in it.
+ */
+export function readableTree(dir: string): boolean {
+  try {
+    statSync(join(dir, ".git"))
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * The landing checks of a landing on a line, run on the branch tip's files: in the worktree that stands on the branch
  * when it is clean and at the tip, else in a checkout of the tip made for them. A failing check refuses the landing;
  * what is not current is said, since the line's landing on the trunk is the one that asks for it.
  */
 async function lineLandingChecks(ctx: Context, landing: Landing): Promise<void> {
   const tree = worktrees(ctx.root).find((w) => w.branch === landing.branch && !w.self)
-  const clean = tree && gitOrNull(tree.path, "status", "--porcelain", "--untracked-files=no") === "" &&
+  const clean = tree && readableTree(tree.path) && gitOrNull(tree.path, "status", "--porcelain", "--untracked-files=no") === "" &&
     gitOrNull(tree.path, "rev-parse", "HEAD") === landing.to
   const made = clean ? null : checkoutAt(ctx, landing.to)
   try {

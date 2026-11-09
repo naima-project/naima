@@ -1851,6 +1851,7 @@ naima --no-full-suite] [--method <stance>/<method>] [--after <gate>,...] [--free
 naima gate add <gate> <item>...
 naima gate remove <gate> <item>...
 naima gate step <gate> <step> --by <item>
+naima gate step <gate> <step> --reopen --reason "<why>"
 naima gate step add <gate> <step> "<title>" --exit <exit> [--after <step>
 naima --first]
 naima gate step remove <gate> <step>
@@ -1869,6 +1870,8 @@ naima gate show <gate> [--line]
 | `--no-full-suite` |  | gate set: no longer a release gate that waits for the full suite |
 | `--method` |  | gate new and set: the method the gate follows, as <stance>/<method> or <plugin>/<method>: its steps become sub-goals the gate waits for, closed in order; with set, "" takes it off |
 | `--by` |  | gate step: the settled item, such as a decision, that records the step's exit criterion holds; it gets closesStep=<gate>/<step> |
+| `--reopen` |  | gate step: reopen a closed step whose exit does not hold; the records closing it lose the step and each gets a note with the reason |
+| `--reason` |  | gate step --reopen: why the exit does not hold, on one line |
 | `--exit` |  | gate step add: the step's exit criterion, what must be true and recorded for it to close |
 | `--after` |  | gate new and set: the goals this one comes after, comma-separated, added to the order by version and due date; with set, "" takes them off. gate step add: the step the new one goes right after, one of the gate's own or its method's last; without it, last |
 | `--first` |  | gate step add: the new step goes first among the gate's own, right after its method's |

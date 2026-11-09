@@ -111,6 +111,14 @@ open. Because the steps are worked out from the records every time, their order 
 once every step before it is closed, and if a decision is reopened, its step and every step after it are open again. `naima check` notes a record that names a
 gate with no steps, or a step the gate doesn't have, and reports a gate whose method no adopted stance provides.
 
+When a closed step's exit turns out not to hold, reopen it:
+
+```sh
+naima gate step beta palette --reopen --reason "the variants were never shown to the owner"
+```
+
+Every record that closed the step loses it and gets a note with the reason, and the steps after it wait again.
+
 ## Break a goal into steps of its own
 
 A gate can also have steps of its own, with no stance involved: you, or an agent, break a goal into sub-goals, each with a name, a title and what must be true

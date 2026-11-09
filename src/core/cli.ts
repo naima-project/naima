@@ -61,7 +61,17 @@ import {
   writeSiblingMarker,
 } from "./repos.ts"
 import { exclusions } from "./excludes.ts"
-import { ALLOW_PRIVATE, allowPrivateOption, applyPrivateData, findPrivate, guardPrivate, privateContext, REVISED, revisedOption } from "./private.ts"
+import {
+  ALLOW_PRIVATE,
+  allowPrivateOption,
+  applyPrivateData,
+  findPrivate,
+  guardPrivate,
+  privateContext,
+  REVISED,
+  revisedOption,
+  revisedPath,
+} from "./private.ts"
 import { DATA_DIR, DATA_FILE, DEFAULT_DATA, findData, globalOptions, PROGRAM_DIR, real, RELAUNCH, runtimeOf, trackerOf, trackerReadme } from "./layout.ts"
 import { SH_LAUNCHER } from "./launchers.ts"
 import {
@@ -2134,7 +2144,7 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     const { reason, rest: unsigned } = allowPrivateOption(args)
     if (reason !== undefined) ctx.allowPrivate = reason
     const { path: revised, rest: commandArgs } = revisedOption(unsigned)
-    if (revised !== undefined) ctx.revised = resolve(opts.cwd, revised)
+    if (revised !== undefined) ctx.revised = revisedPath(revised, opts.cwd, ctx.root)
     const cmd = ctx.registry.find<Command>("commands", command as string)?.value
     if (!cmd) throw new Error(`unknown command "${command}" — naima help`)
     if (args.includes("--help") || args.includes("-h")) return commandHelp(cmd, io)

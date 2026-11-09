@@ -10,10 +10,10 @@
 // private; what leaves the project is scrubbed either way
 // (docs/guide/rules.md#no-machine-names-or-private-infrastructure-in-a-repository).
 
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { isIPv6 } from "node:net"
 import { homedir, hostname } from "node:os"
-import { join } from "node:path"
+import { isAbsolute, join, resolve } from "node:path"
 import process from "node:process"
 import { NaimaError } from "./errors.ts"
 
@@ -306,6 +306,22 @@ export const REVISED = "--revised"
 export function revisedOption(args: string[]): { path?: string | undefined; rest: string[] } {
   const { value, rest } = globalOption(args, REVISED, `${REVISED} needs a path: ${REVISED} <the no-leaks checklist the program ships>`)
   return { path: value, rest }
+}
+
+/**
+ * The file `--revised` names: a relative path is the project's (the checklist is under its program directory), so it is
+ * read from where the command runs when it is there, and from the project's root otherwise. The shell may stand
+ * anywhere, in a folder above the project or in another worktree, and a path resolved against that folder is outside
+ * the project, which Naima refuses to read.
+ */
+export function revisedPath(given: string, cwd: string, root: string, exists: (path: string) => boolean = existsSync): string {
+  if (isAbsolute(given)) return given
+  const here = resolve(cwd, given)
+  try {
+    return exists(here) ? here : resolve(root, given)
+  } catch {
+    return resolve(root, given)
+  }
 }
 
 /** The arguments without `<flag> <value>` (or `<flag>=<value>`), and the value, trimmed; an empty value is refused with `empty`. */
