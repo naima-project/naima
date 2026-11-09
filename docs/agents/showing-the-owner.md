@@ -15,6 +15,12 @@ claude mcp add naima -- naima ui --mcp
 Any other MCP client starts the same command. The tools are the bridge's commands: `describe`, `data` (a view's data, live or at a commit), `tabs`, `tab`,
 `metro` (the rail's map), `action` and `run` (the UI's short list of actions, run through `naima run`), and `show`.
 
+A reply stays under 60 000 characters, which an agent's client can take whole. An answer that fits comes whole. A larger one comes shortened, with `cut`
+naming each part that was cut by its `path` and its whole length. The read tools (`describe`, `data`, `tabs`, `tab`, `metro`, `run`) take the same arguments
+to read the rest: `path` picks a part of the answer (`items`, `pieces`, `routes.0.commits`), `offset` and `limit` page its list, its object of many keys or its
+text, and `where` (`{"type": "bugs", "status": "open", "gate": "release-1.2"}`), `search`, `since` and `until` (a date, a time or a commit) and `fields`
+narrow its entries. A page says `total` and `next`, the offset of the next page. `read_page` takes `offset` and `limit` in characters.
+
 ## Showing a place
 
 Call `show` with exactly one of:
