@@ -193,7 +193,8 @@ async function runCheck(at: Context, check: LandingReport, landing: Landing): Pr
     try {
       found.notCurrent.push(...(await check.blocks(at, landing)))
     } catch (e) {
-      found.said.push(`could not check: ${message(e)}`)
+      // A check that could not run is not a pass: its proofs are not known current, so it asks for --stale-proofs like any other.
+      found.notCurrent.push(`could not check: ${message(e)}`)
     }
   }
   return found
@@ -349,7 +350,7 @@ function checkedLine(name: string, where: string, f: Found): string {
 /**
  * What the landing checks find before the trunk or the line moves, each line prefixed with its check's name: what fails
  * on the branch (`refused`, from `refuses`) and what has proofs not current (`notCurrent`, from `blocks`). `at` is the
- * context whose root holds the branch tip's files. A `blocks` that throws says so and blocks nothing; a `refuses` that
+ * context whose root holds the branch tip's files. A `blocks` that throws counts as proofs not current, which only --stale-proofs lets through; a `refuses` that
  * throws refuses the landing, since the branch was not checked; a heavy check runs on the landing host (heavyCheck),
  * unless its `covers` finds no file of the landing it reads.
  * Each check that ran prints one line, where it ran and what it found, so that a pass is seen.
