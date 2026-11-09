@@ -67,7 +67,7 @@
   .os button:hover { color: var(--fg); }
   .home { transition: color .2s ease; }
   .home:hover b { color: var(--accent); }
-  @media (prefers-reduced-motion: reduce) { .copy, .box, .os button, a { transition: none; } .copy:active { transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .copy, .box, .os button, .home, a { transition: none; } .copy:active { transform: none; } }
   .os { display: flex; gap: 6px; margin: 0 0 12px; }
   .os button { background: none; border-color: transparent; color: var(--muted); }
   .os button[aria-pressed="true"] { color: var(--fg); border-color: var(--line); background: var(--surface); }
@@ -81,10 +81,15 @@
     .box { flex-direction: column; align-items: stretch; }
     .tools { align-self: flex-end; }
   }
+  .skip { position: absolute; left: 12px; top: -80px; z-index: 10; background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-weight: 600; text-decoration: none; }
+  .skip:focus { top: 12px; }
+  .foot { text-align: center; padding: 32px 24px 40px; font-size: 14px; }
+  .foot a { display: inline-block; padding: 4px 8px; color: var(--text); text-underline-offset: 3px; }
 </style>
 </head>
 <body>
-<main>
+<a class="skip" href="#main">Skip to the content</a>
+<main id="main">
   <a class="home" href="./">← <b>Naima</b></a>
 
   <div>
@@ -152,5 +157,6 @@
   }
 })()
 </script>
+<footer class="foot"><a href="accessibility.html">Accessibility</a></footer>
 </body>
 </html>

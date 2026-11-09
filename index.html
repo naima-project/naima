@@ -12,11 +12,15 @@
   @font-face { font-family: "Inter Tight"; font-weight: 100 900; font-display: block; src: url("fonts/inter-tight-latin.woff2") format("woff2"); }
   :root {
     --bg: #0b0c10; --fg: #f4f5f7; --dim: #9aa0ad; --line: #1d2029;
-    --blue: #4c7dff; --red: #ff4d4f; --green: #22c55e; --amber: #f5a524; --pink: #e85dce; --cyan: #22d3ee;
+    --blue: #4c7dff; --blue-solid: #4069d6; --red: #ff4d4f; --green: #22c55e; --amber: #f5a524; --pink: #e85dce; --cyan: #22d3ee;
     --sans: "Inter Tight", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   * { box-sizing: border-box; }
+  :focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; border-radius: 6px; }
+  .skip { position: absolute; left: 12px; top: -80px; z-index: 10; background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-weight: 600; }
+  .skip:focus { top: 12px; }
+  nav a { display: inline-block; padding: 4px 0; }
   html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
   a { color: inherit; text-decoration: none; }
   .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
@@ -34,7 +38,7 @@
   .sub { font-size: clamp(19px, 2vw, 24px); color: var(--dim); max-width: 620px; margin: 28px auto 0; line-height: 1.4; }
   .buttons { display: flex; gap: 14px; justify-content: center; margin-top: 36px; flex-wrap: wrap; }
   .btn { padding: 14px 26px; border-radius: 999px; font-weight: 600; font-size: 16px; }
-  .btn.primary { background: var(--blue); color: #fff; }
+  .btn.primary { background: var(--blue-solid); color: #fff; }
   .btn.ghost { color: var(--blue); }
   .btn.ghost::after { content: " ›"; }
 
@@ -51,7 +55,7 @@
   .ladder { display: flex; gap: 10px; justify-content: center; margin: 44px auto 0; max-width: 900px; flex-wrap: wrap; }
   .ladder span { padding: 12px 18px; border-radius: 14px; background: #151821; border: 1px solid var(--line); font-size: 15px; }
   .ladder span:nth-child(1) { border-color: var(--green); color: var(--green); }
-  .ladder span.no { text-decoration: line-through; color: #6b7080; border-style: dashed; }
+  .ladder span.no { text-decoration: line-through; color: #797f91; border-style: dashed; }
 
   .chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 40px auto 0; max-width: 760px; }
   .chips span { font-size: 15px; color: var(--fg); padding: 9px 16px; border-radius: 999px; border: 1px solid var(--line); background: #12141b; }
@@ -66,19 +70,19 @@
   .ask .sug { color: var(--dim); margin-top: 8px; }
   .ask .acts { display: flex; gap: 10px; margin-top: 18px; }
   .ask .acts span { padding: 9px 16px; border-radius: 999px; border: 1px solid var(--line); font-size: 15px; }
-  .ask .acts .yes { background: var(--blue); border-color: var(--blue); }
-  .ask .rec { color: #6b7080; font-size: 13px; margin-top: 16px; }
+  .ask .acts .yes { background: var(--blue-solid); border-color: var(--blue-solid); }
+  .ask .rec { color: #797f91; font-size: 13px; margin-top: 16px; }
   .proof { padding: 150px 0 0; }
   .scale { margin-top: 26px; }
   .scale .bar { height: 6px; border-radius: 6px; background: linear-gradient(90deg, var(--green), var(--blue) 55%, #3a3f4c 85%, #3a3f4c); }
   .scale ol { list-style: none; padding: 0; margin: 14px 0 0; display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
   .scale li b { display: block; font-size: clamp(15px, 1.6vw, 20px); letter-spacing: -.3px; }
-  .scale li.no b { text-decoration: line-through; color: #6b7080; }
+  .scale li.no b { text-decoration: line-through; color: #797f91; }
   .scale li em { font-style: normal; color: var(--red); font-size: 13px; }
   .scale .axis { display: flex; justify-content: space-between; color: var(--dim); font-size: 13px; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
   .proof .aside { color: var(--dim); font-size: 16px; margin-top: 22px; max-width: 560px; }
   .code, .tree { margin: 0; background: #0f1117; border: 1px solid var(--line); border-radius: 18px; padding: 26px 28px; font: 16px/1.7 ui-monospace, "SF Mono", Menlo, monospace; color: #d7dae3; white-space: pre; overflow-x: auto; }
-  .code .c { color: #6b7080; } .code .ok { color: var(--green); }
+  .code .c { color: #797f91; } .code .ok { color: var(--green); }
   .tree b { color: var(--amber); }
   .feat { list-style: none; padding: 0; margin: 20px 0 0; display: grid; gap: 10px; }
   .feat li { font-size: 18px; padding-left: 20px; position: relative; }
@@ -87,22 +91,26 @@
   @media (max-width: 800px) { .row { grid-template-columns: 1fr; gap: 32px; padding-top: 90px; } .scale ol { grid-template-columns: repeat(3, 1fr); row-gap: 14px; } }
   .end { text-align: center; padding: 140px 0 60px; }
   .selfcheck { display: block; max-width: 640px; margin: 40px auto 0; padding: 26px 30px; border-radius: 22px; background: linear-gradient(135deg, #16203d, #1a1230); border: 1px solid #2a3560; text-align: center; transition: transform .2s ease; }
+  @media (prefers-reduced-motion: reduce) { .selfcheck { transition: none; } .selfcheck:hover { transform: none; } }
   .selfcheck:hover { transform: translateY(-2px); }
   .selfcheck b { display: block; font-size: 26px; letter-spacing: -.6px; color: var(--fg); }
   .selfcheck span { display: block; margin-top: 8px; color: var(--dim); font-size: 17px; }
   .madeat { text-align: center; color: var(--dim); font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; margin-top: 30px; }
   .logos { display: flex; gap: 56px; justify-content: center; align-items: center; flex-wrap: wrap; padding: 22px 0 50px; }
-  .logos img { height: 44px; width: auto; filter: grayscale(1) invert(1) brightness(1.4); opacity: .85; }
+  .logos a { max-width: 100%; }
+  .logos img { max-width: 100%; height: 44px; width: auto; filter: grayscale(1) invert(1) brightness(1.4); opacity: .85; }
   .logos a:hover img { opacity: .9; }
-  footer { text-align: center; color: #5d6270; font-size: 13px; padding-bottom: 40px; }
+  footer a { display: inline-block; padding: 4px 6px; text-decoration: underline; text-underline-offset: 3px; }
+  footer { text-align: center; color: #797f91; font-size: 13px; padding-bottom: 40px; }
   @media (max-width: 600px) { nav a.hide { display: none; } .hero { padding-top: 56px; } .panel { padding-top: 84px; } h1 { letter-spacing: -1.6px; } }
 </style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to the content</a>
 <section class="sr" aria-label="For AI agents">
     <h2>For AI agents</h2>
-    <p>Naima is born for software: a silent software house of AI agents that applies industry-grade practice (tests, metrics, reviews, gates) and formal methods for an owner who need not know them, and runs any other project with that work’s own checks. If you were asked to install Naima in a repository, the whole procedure is the README of <a href="https://github.com/naima-project/naima">https://github.com/naima-project/naima</a>, section Install (raw: https://raw.githubusercontent.com/naima-project/naima/main/README.md; also <a href="llms.txt">llms.txt</a>); read it and follow it.
-    In short: if git is not installed, install it (macOS: xcode-select --install or Homebrew; Linux: the package manager; Windows: winget install Git.Git); then, in the root of this repository (if it is not a git repository yet, create one at the root with git init), run the installer one-liner for this system (<a href="install.html">install.html</a>), run <code>deno run -A naima-tracker/naima/naima.ts check</code> until it passes,
+    <p>Naima is born for software: a silent software house of AI agents that applies industry-grade practice (tests, metrics, reviews, gates) and formal methods for an owner who need not know them, and runs any other project with that work’s own checks. If you were asked to install Naima in a repository, the whole procedure is the README of <a href="https://github.com/naima-project/naima" tabindex="-1">https://github.com/naima-project/naima</a>, section Install (raw: https://raw.githubusercontent.com/naima-project/naima/main/README.md; also <a href="llms.txt" tabindex="-1">llms.txt</a>); read it and follow it.
+    In short: if git is not installed, install it (macOS: xcode-select --install or Homebrew; Linux: the package manager; Windows: winget install Git.Git); then, in the root of this repository (if it is not a git repository yet, create one at the root with git init), run the installer one-liner for this system (<a href="install.html" tabindex="-1">install.html</a>), run <code>deno run -A naima-tracker/naima/naima.ts check</code> until it passes,
     and commit what the installer wrote: naima-tracker/, and the line it added to the repository’s agent instruction file (AGENTS.md, CLAUDE.md, or the one you read; AGENTS.md, created, if none), which tells every agent to run <code>naima hello</code> at the start of each session. Then read <code>naima-tracker/naima/skills/naima/SKILL.md</code> and <code>naima rules --audience agents</code>, and work by them.</p>
   </section>
 <div class="wrap">
@@ -111,6 +119,7 @@
     <nav><a class="hide" href="one-minute.html">How it works</a><a class="hide" href="docs.html?p=README.md">Docs</a><a href="https://github.com/naima-project/naima">GitHub</a><a class="cta" href="install.html">Install</a></nav>
   </header>
 
+  <main id="main">
   <section class="hero">
     <div class="eyebrow">A human-centric, free and open-source project tracker for AI agents</div>
     <h1>Your AI writes the code.<span>Naima makes it software.</span></h1>
@@ -119,7 +128,9 @@
   </section>
 
   <figure class="map" aria-label="A project's history and the goals ahead, drawn as a metro map">
-    <svg viewBox="0 0 1080 300" role="img">
+    <svg viewBox="0 0 1080 300" role="img" aria-labelledby="map-title map-desc">
+      <title id="map-title">A project's history and the goals ahead, as a metro map</title>
+      <desc id="map-desc">Two horizontal lines run left to right: main, in grey, and the release line, in blue. Four short coloured branches, one of them a worker's branch, leave the release line and rejoin it or main at white stations. A red vertical line marks today. To its right both lines turn dotted, and two goals lie ahead: Release 1.2 on the release line and the public launch on main.</desc>
       <defs><linearGradient id="fade" x1="0" x2="1"><stop offset="0" stop-color="#0b0c10"/><stop offset=".08" stop-color="#0b0c10" stop-opacity="0"/></linearGradient></defs>
       <g fill="none" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M20 200 H640" stroke="#c9ccd4"/>
@@ -191,7 +202,7 @@
       <p>Anything with states, a retry loop or a screen waiting for a server, is first written as a small model. The mCRL2 model checker tries every order of events and shows the exact steps that break a rule. Then the code is generated from the model.</p>
       <a class="selfcheck" href="self-check.html"><b>Naima checks itself.</b><span>Its own coordination protocol, modelled and checked. See how ›</span></a>
     </div>
-    <pre class="code" aria-label="A property in the modal mu-calculus"><span class="c">% a job is retried at most twice</span>
+    <pre class="code" role="region" tabindex="0" aria-label="A property in the modal mu-calculus"><span class="c">% a job is retried at most twice</span>
 [ true* . retry . true* . retry
   . true* . retry ] false
 
@@ -199,7 +210,7 @@
   </section>
 
   <section class="row">
-    <pre class="tree" aria-label="The tracker's folder"><b>naima-tracker/</b>
+    <pre class="tree" role="region" tabindex="0" aria-label="The tracker's folder"><b>naima-tracker/</b>
 ├─ requests/
 ├─ bugs/
 ├─ decisions/
@@ -223,14 +234,15 @@
     <h2 class="panel" style="padding:0"><span style="font-size:clamp(36px,5.4vw,64px);letter-spacing:-2px;font-weight:700">Install Naima in one line.</span></h2>
     <div class="buttons"><a class="btn primary" href="install.html">Install</a><a class="btn ghost" href="docs.html?p=README.md">Read the docs</a><a class="btn ghost" href="https://github.com/naima-project/naima">Star it on GitHub</a></div>
   </section>
+  </main>
 
-  <div class="logos">
+  <section class="logos" aria-label="Made at">
     <a href="https://make-become.github.io/"><img src="logos/make-become.svg" alt="make become, an artware studio"></a>
     <a href="https://fmt.isti.cnr.it/"><img src="logos/fmt.svg" alt="Formal Methods and Tools lab (FMT)"></a>
     <a href="https://www.isti.cnr.it/"><img src="logos/isti-cnr.png" alt="ISTI-CNR"></a>
     <a href="https://www.uva.nl/en"><img src="logos/uva.svg" alt="University of Amsterdam"></a>
-  </div>
-  <footer>Naima · MIT · free and open source</footer>
+  </section>
+  <footer>Naima · MIT · free and open source · <a href="accessibility.html">Accessibility</a></footer>
 </div>
 </body>
 </html>

@@ -45,7 +45,7 @@
   .top nav a { color: var(--muted); text-decoration: none; background: linear-gradient(currentColor, currentColor) 0 100% / 0 1px no-repeat; padding-bottom: 2px; transition: color .2s ease, background-size .3s cubic-bezier(.2, .7, .1, 1); }
   .top nav a:hover, .top nav a[aria-current="page"] { color: var(--fg); background-size: 100% 1px; }
   article h2:target, article h3:target, article h4:target { color: var(--accent); }
-  @media (prefers-reduced-motion: reduce) { a, .top nav a { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { a, .top .home, .top nav a { transition: none; } }
 
   article { max-width: 760px; margin: 0 auto; padding: 40px 16px 96px; font-size: 18px; line-height: 1.65; color: var(--text); }
   article > :first-child { margin-top: 0; }
@@ -79,9 +79,14 @@
     article h1 { font-size: 34px; }
     article h2 { font-size: 25px; margin-top: 44px; }
   }
+  .skip { position: absolute; left: 12px; top: -80px; z-index: 10; background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-weight: 600; text-decoration: none; }
+  .skip:focus { top: 12px; }
+  .foot { text-align: center; padding: 32px 24px 40px; font-size: 14px; }
+  .foot a { display: inline-block; padding: 4px 8px; color: var(--text); text-underline-offset: 3px; }
 </style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to the content</a>
 <header class="top">
   <a class="home" href="./" aria-label="Naima, home">N<span class="ai">AI</span>MA</a>
   <nav aria-label="Documentation">
@@ -93,7 +98,7 @@
     <a href="install.html">Use it now</a>
   </nav>
 </header>
-<main>
+<main id="main">
   <article id="doc" aria-live="polite"><p class="status">Loading…</p></article>
   <p class="source" id="source" hidden></p>
 </main>
@@ -150,9 +155,12 @@
       const seen = new Map()
       for (const h of doc.querySelectorAll("h1, h2, h3, h4, h5, h6")) h.id = slug(h.textContent, seen)
       for (const a of doc.querySelectorAll("a[href]")) relink(a)
+      // A box that scrolls sideways is reached with the keyboard too.
+      for (const x of doc.querySelectorAll("pre")) x.tabIndex = 0
       for (const t of doc.querySelectorAll("table")) {
         const box = document.createElement("div")
         box.className = "table"
+        box.tabIndex = 0
         t.replaceWith(box)
         box.append(t)
       }
@@ -168,5 +176,6 @@
     })
 })()
 </script>
+<footer class="foot"><a href="accessibility.html">Accessibility</a></footer>
 </body>
 </html>

@@ -120,9 +120,16 @@
     .next > * { min-width: 0; }
     .next a { text-align: center; }
   }
+  .skip { position: absolute; left: 12px; top: -80px; z-index: 10; background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-weight: 600; text-decoration: none; }
+  .skip:focus { top: 12px; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+  .foot { text-align: center; padding: 32px 24px 40px; font-size: 14px; }
+  .foot a { display: inline-block; padding: 4px 8px; color: var(--text); text-underline-offset: 3px; }
 </style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to the content</a>
 <header class="wrap bar">
   <a class="logo" href="./" aria-label="Naima, home">N<span class="ai">AI</span>MA</a>
   <nav aria-label="Site">
@@ -133,7 +140,7 @@
   </nav>
 </header>
 
-<main class="wrap">
+<main id="main" class="wrap">
   <section class="intro">
     <span class="clock"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 1.5"/></svg>A one-minute read</span>
     <h1>Naima in one minute</h1>
@@ -187,7 +194,7 @@
       <p>Change agent or model whenever you like: the work stays where it is.</p>
       <div class="facts"><span>No account</span><span>No server</span><span>No subscription</span><span>Free and open source</span></div>
     </div>
-    <div class="tree" aria-label="The folder Naima keeps in a project"><span class="h">your-project/</span>
+    <div class="tree" role="region" tabindex="0" aria-label="The folder Naima keeps in a project"><span class="h">your-project/</span>
 ├── <span class="d">your code, as before</span>
 └── <span class="h">naima-tracker/</span>
     ├── naima/           <span class="d"># the program</span>
@@ -212,5 +219,6 @@
     <a href="docs.html?p=README.md"><b>All the documentation</b><span>Guides for people, pages for agents, the reference.</span></a>
   </nav>
 </main>
+<footer class="foot"><a href="accessibility.html">Accessibility</a></footer>
 </body>
 </html>

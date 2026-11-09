@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accessibility of this site</title>
+<meta name="description" content="How accessible the Naima project website is: the standard aimed at, the conformance status, how it was checked, known limitations and how to report a problem.">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preload" href="fonts/inter-tight-latin.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+  /* palette */
+  :root {
+    color-scheme: light;
+    --bg: #fbfaf7;
+    --panel: #ffffff;
+    --fg: #16181d;
+    --text: #3a3d44;
+    --muted: #6a6d75;
+    --line: #e6e3dc;
+    --accent: #2a3f8f;
+    --accent-soft: #eef1fb;
+    --ok: #1f7a4d;
+    --ok-soft: #e6f4ec;
+    --bad: #9a3b2f;
+    --bad-soft: #fbeeee;
+    --warn-soft: #fbf3e2;
+    --warn-line: #ead9b4;
+    --term: #12141a;
+    --term-text: #d7dae3;
+    --term-dim: #8b93a7;
+    --sans: "Inter Tight", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  /* end palette */
+  @font-face { font-family: "Inter Tight"; font-style: normal; font-weight: 100 900; font-display: block; src: url("fonts/inter-tight-latin.woff2") format("woff2"); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow-x: clip; line-height: 1.6; }
+  a { color: var(--accent); text-underline-offset: 3px; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+  .skip { position: absolute; left: 12px; top: -80px; z-index: 10; background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-weight: 600; text-decoration: none; }
+  .skip:focus { top: 12px; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 24px; }
+  .bar { display: flex; align-items: center; justify-content: space-between; padding-block: 22px; }
+  .logo { font-weight: 650; font-size: 22px; letter-spacing: -.5px; text-decoration: none; color: var(--fg); }
+  .logo .ai { color: var(--accent); }
+  .bar nav { display: flex; gap: 26px; align-items: center; font-size: 15px; }
+  .bar nav a { text-decoration: none; color: var(--text); display: inline-block; padding: 4px 0; }
+  .bar nav a:hover { color: var(--accent); }
+  h1 { margin: 32px 0 0; font-size: clamp(34px, 5vw, 48px); line-height: 1.06; letter-spacing: -1.5px; font-weight: 650; }
+  h2 { margin: 40px 0 8px; font-size: 24px; letter-spacing: -.5px; font-weight: 650; }
+  p, li { color: var(--text); font-size: 17px; }
+  p { margin: 8px 0 0; }
+  ul { margin: 8px 0 0; padding-left: 22px; }
+  li { margin-top: 6px; }
+  .lead { font-size: 19px; margin-top: 16px; }
+  .foot { text-align: center; padding: 48px 24px 40px; font-size: 14px; }
+  .foot a { display: inline-block; padding: 4px 8px; color: var(--text); }
+  main { padding-bottom: 24px; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to the content</a>
+<header class="wrap bar">
+  <a class="logo" href="./" aria-label="Naima, home">N<span class="ai">AI</span>MA</a>
+  <nav aria-label="Site">
+    <a href="one-minute.html">How it works</a>
+    <a href="docs.html?p=README.md">Docs</a>
+    <a href="https://github.com/naima-project/naima">GitHub</a>
+  </nav>
+</header>
+
+<main id="main" class="wrap">
+  <h1>Accessibility of this site</h1>
+  <p class="lead">We want everyone to be able to read this site and use it, with a keyboard, a screen reader, a phone or a larger text size. This page says how far we have got.</p>
+
+  <section aria-labelledby="standard">
+    <h2 id="standard">The standard we aim at</h2>
+    <p>The site aims at the Web Content Accessibility Guidelines (WCAG) 2.2, level AA. These guidelines cover the web criteria of the European standard EN 301 549, which the European Accessibility Act and the Web Accessibility Directive refer to.</p>
+  </section>
+
+  <section aria-labelledby="status">
+    <h2 id="status">Where we stand</h2>
+    <p>As of the audit of 2026-11-09, the site fully conforms to WCAG 2.2 level AA. The audit covered these five pages:</p>
+    <ul>
+      <li><a href="./">the home page</a></li>
+      <li><a href="docs.html?p=README.md">the documentation page</a></li>
+      <li><a href="install.html">the install page</a></li>
+      <li><a href="one-minute.html">the “Naima in one minute” page</a></li>
+      <li><a href="self-check.html">the “Naima checks itself” page</a></li>
+    </ul>
+    <p>This statement page was checked the same way.</p>
+  </section>
+
+  <section aria-labelledby="how">
+    <h2 id="how">How it was checked</h2>
+    <p>On 2026-11-09 each page was checked three ways, on a desktop screen (1280 pixels wide) and on a phone screen (375 pixels wide):</p>
+    <ul>
+      <li>the automated accessibility checks of Naima’s user-interface stance, which test colour contrast, keyboard focus, the size of touch targets, reflow at narrow widths, larger text and reduced motion;</li>
+      <li>axe, an open-source accessibility testing engine, with the WCAG 2.2 rules;</li>
+      <li>a manual review of keyboard order and the focus ring, the skip link, headings and landmarks, text alternatives for images and the metro-map figure, link names, the page language and zoom to 200%.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="limits">
+    <h2 id="limits">Known limitations</h2>
+    <ul>
+      <li>The documentation page shows text that it fetches from the Naima repository on GitHub when it opens. The page around the text is checked; the text itself comes from the product’s documentation and is written in plain markdown, which is rendered as headings, lists, tables and code.</li>
+      <li>Pages on GitHub that this site links to are not part of this site and are outside this statement.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="feedback">
+    <h2 id="feedback">Tell us about a problem</h2>
+    <p>If something on this site is hard or impossible to use, please report it as an issue on the Naima repository, with the label “accessibility”. <a href="https://github.com/naima-project/naima/issues/new?labels=accessibility&amp;title=Accessibility%3A%20&amp;body=Page%3A%20%0AWhat%20happened%3A%20%0AWhat%20I%20use%20to%20read%20the%20page%20(browser%2C%20screen%20reader%2C%20zoom%2C%20keyboard)%3A%20%0A">Open a new accessibility issue</a>: the form already has the label and a few questions to answer. We read these reports and answer them on the issue.</p>
+  </section>
+
+  <section aria-labelledby="when">
+    <h2 id="when">When this statement was prepared</h2>
+    <p>This statement was prepared on 2026-11-09. It is reviewed at each release of Naima.</p>
+  </section>
+</main>
+<footer class="foot"><a href="accessibility.html" aria-current="page">Accessibility</a></footer>
+</body>
+</html>
