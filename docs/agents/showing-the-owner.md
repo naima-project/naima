@@ -12,14 +12,23 @@ in the project's folder. In Claude Code:
 claude mcp add naima -- naima ui --mcp
 ```
 
-Any other MCP client starts the same command. The tools are the bridge's commands: `describe`, `data` (a view's data, live or at a commit), `tabs`, `tab`,
-`metro` (the rail's map), `action` and `run` (the UI's short list of actions, run through `naima run`), and `show`.
+Any other MCP client starts the same command. Its answers are short plain text, like a screen at a glance; ask for one thing by its id
+for more. Which tool for what:
 
-A reply stays under 60 000 characters, which an agent's client can take whole. An answer that fits comes whole. A larger one comes shortened, with `cut`
-naming each part that was cut by its `path` and its whole length. The read tools (`describe`, `data`, `tabs`, `tab`, `metro`, `run`) take the same arguments
-to read the rest: `path` picks a part of the answer (`items`, `pieces`, `routes.0.commits`), `offset` and `limit` page its list, its object of many keys or its
-text, and `where` (`{"type": "bugs", "status": "open", "gate": "release-1.2"}`), `search`, `since` and `until` (a date, a time or a commit) and `fields`
-narrow its entries. A page says `total` and `next`, the offset of the next page. `read_page` takes `offset` and `limit` in characters.
+- `overview`: the project at a glance. Start here.
+- `items`: one item by its ref (the slug or the id's start will do), or a search by words, type, status, gate or open, with counts.
+- `gates`: every gate in a line each, or one gate by name: why it is blocked and by what.
+- `lines`: the trunk, the lines and the branches, or one by name with its goals and last commits.
+- `history`: the last days in a line each, or one `day`, or one `commit`.
+- `work`: claims, the ready queue, stale work and work at risk, or one `worker`.
+- `metrics`: every metric's value and trend, or one metric's recent points.
+- `view`: a view's raw data, shortened, in pages (`path`, `offset`, `limit`, `where`, `search`, `since`, `until`, `fields`), only when the tools above do
+  not answer.
+- `action` and `run`: the UI's short list of actions, run through `naima run`.
+- `show`, `read_page` (an outline of what the owner sees; the text with `mode`) and `screenshot` (rarely).
+
+A bare call answers in about 2 000 characters at most; `detail: "full"` gives an item or a gate whole, as compact JSON. No reply passes 20 000 characters,
+and a reply cut there says how to narrow the call.
 
 ## Showing a place
 
@@ -37,7 +46,7 @@ so: tell the owner to open the UI with `naima ui`, then show again. Say in one l
 
 ## Seeing what the owner sees
 
-`read_page` answers the open UI's page as compact text: headings, landmarks, controls with their state, and the text, or raw HTML with `html`, optionally under
-a CSS `selector`. Use it to check what a `show` did and what the owner is looking at. `screenshot` answers a PNG of the UI's window as it is on the screen,
+`read_page` answers an outline of the open UI's page: its landmarks, its headings each with the first line under it, and its controls with their state, in
+about 2 000 characters. `mode: "text"` gives the page's text and `mode: "html"` its raw HTML, in pages, and `selector` reads only the part under a CSS selector. Use it to check what a `show` did and what the owner is looking at. `screenshot` answers a PNG of the UI's window as it is on the screen,
 taken with the system's screen capture on macOS; elsewhere it says it cannot. A picture costs far more than the text: take one only for a rare visual check that
 the text cannot answer, such as a layout or a colour.

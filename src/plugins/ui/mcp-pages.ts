@@ -1,7 +1,7 @@
-// The MCP server's replies in pages: an agent's client takes a tool's reply only up to a size (about 25 000 tokens), and
-// a view's whole data can be far more (the schedule's is megabytes). Every read tool answers within REPLY_BOUND
-// characters, the reply's line as written: an answer that fits is given whole; one that does not is given shortened,
-// with what was cut and how to read it. The arguments that choose a part, the same for every read tool:
+// A view's raw data in pages, for the MCP server's tool view (mcp.ts): a view's whole data can be megabytes (the
+// schedule's), far past what an agent should read. A reply stays within REPLY_BOUND characters of JSON: an answer that
+// fits is given whole; one that does not comes shortened to SHORT_BUDGET, with what was cut and how to read it. The
+// arguments that choose a part:
 //
 //   path          where to read in the answer: keys and indexes joined by dots, such as items or routes.0.commits
 //   offset, limit a page of the list (or of an object's keys, or of a text's characters) at the path
@@ -16,15 +16,15 @@
 
 import type { Json } from "./bridge-handler.ts"
 
-/** The most characters a tool's reply takes, as the line the server writes. */
-export const REPLY_BOUND = 60_000
-/** What the answer's text may take, the rest left to the reply's envelope and the escapes it adds. */
-const BUDGET = REPLY_BOUND - 4_000
+/** The most characters of JSON a reply takes: the server's hard bound. */
+export const REPLY_BOUND = 20_000
+/** What a page may take, leaving room for the note a cut reply carries. */
+const BUDGET = REPLY_BOUND - 500
 /** What a bare call's answer takes when it is shortened, so that a first look stays small. */
-const SHORT_BUDGET = 24_000
+export const SHORT_BUDGET = 4_000
 /** Entries in a page, and characters of a text, when the call does not say. */
 export const DEFAULT_LIMIT = 20
-export const DEFAULT_TEXT_LIMIT = 20_000
+export const DEFAULT_TEXT_LIMIT = 8_000
 /** An object with more keys than this is a map of entries (commits by hash), shortened like a list. */
 const MAP_KEYS = 50
 /** How far each try shortens what is nested: entries kept in a list, characters in a text. */
@@ -37,28 +37,19 @@ const DATE_KEYS = ["date", "day", "at", "created", "t", "start", "from", "time",
 
 /** The paging arguments, as every read tool's schema declares them. */
 export const PAGE_PROPERTIES: Record<string, unknown> = {
-  path: { type: "string", description: "where to read in the answer, keys and indexes joined by dots (items, routes.0.commits); absent: all of it" },
-  offset: { type: "integer", minimum: 0, description: "the first entry (character, for a text) of the page: the reply's next; default 0" },
-  limit: {
-    type: "integer",
-    minimum: 1,
-    description: `entries in the page (characters, for a text): default ${DEFAULT_LIMIT} (${DEFAULT_TEXT_LIMIT}); fewer when more would pass the reply's bound`,
-  },
+  path: { type: "string", description: "a part of the answer: keys and indexes joined by dots, such as pieces or routes.0.commits" },
+  offset: { type: "integer", minimum: 0, description: "the page's first entry (character, for a text): the reply's next" },
+  limit: { type: "integer", minimum: 1, description: `entries (characters) in the page: default ${DEFAULT_LIMIT} (${DEFAULT_TEXT_LIMIT})` },
   where: {
     type: "object",
     additionalProperties: { type: "string" },
-    description:
-      "only the entries whose fields (dots for nested ones) equal these values, ignoring case; a|b for either; a list field matches when it holds the value. Such as {type: bugs, status: open, gate: release-1.2}",
+    description: "entries whose fields equal these values, such as {status: open}; a|b for either",
   },
-  search: { type: "string", description: "only the entries whose JSON holds this text, ignoring case" },
-  since: { type: "string", description: "only the entries dated from this on: a date (2026-11-01), a time, or a commit (its commit date)" },
-  until: { type: "string", description: "only the entries dated up to this, the whole day for a date: a date, a time or a commit" },
-  fields: { type: "array", items: { type: "string" }, description: "only these fields of each entry (dots for nested ones)" },
+  search: { type: "string", description: "entries whose JSON holds this text" },
+  since: { type: "string", description: "entries dated from this on: a date, a time or a commit" },
+  until: { type: "string", description: "entries dated up to this: a date, a time or a commit" },
+  fields: { type: "array", items: { type: "string" }, description: "only these fields of each entry" },
 }
-
-/** What a reply says about reading more, the same for every tool. */
-export const PAGES_SAY =
-  `Replies stay under ${REPLY_BOUND} characters: a larger answer comes shortened, with total, next (the next page's offset) and cut (the parts shortened, each with its path); read a part with path, a page with offset and limit, and narrow with where, search, since, until and fields.`
 
 export interface PageArgs {
   path?: string
@@ -98,8 +89,8 @@ export function splitArgs(args: { [k: string]: Json }): { page: PageArgs; rest: 
   return { page, rest }
 }
 
-/** The size a value takes in the reply: its JSON, as a JSON string in the reply's line. */
-export const replySize = (v: unknown): number => JSON.stringify(JSON.stringify(v)).length
+/** The size a value takes in the reply: its JSON's characters. */
+export const replySize = (v: unknown): number => JSON.stringify(v).length
 
 /** A date's or a time's milliseconds, or a commit's by `commitTime`; the end of the day for an `until` date. */
 function bound(v: string, end: boolean, commitTime: (ref: string) => number | null): number {
@@ -206,7 +197,7 @@ const listed = (cuts: Cut[]): Json => {
 /** The reply to one call: the answer whole when it fits and no page was asked for, else the part and page asked. */
 export function paged(answer: Json, page: PageArgs, commitTime: (ref: string) => number | null = () => null): Json {
   const asked = Object.keys(page).length > 0
-  if (!asked && replySize(answer) <= BUDGET) return answer
+  if (!asked && replySize(answer) <= SHORT_BUDGET) return answer
   const path = page.path ?? ""
   const target = path ? at(answer, path) : answer
   if (target === undefined) {
