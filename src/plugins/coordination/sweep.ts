@@ -9,7 +9,19 @@
 
 import { mkdirSync, rmSync, statSync, unlinkSync } from "node:fs"
 import { join } from "node:path"
-import { type Context, gitOrNull, gitReason, isAncestor, isGitRepo, mustGit, runGit, stateDir, trunk, worktrees as treesOf } from "../../core/api.ts"
+import {
+  type Context,
+  currentBranch,
+  gitOrNull,
+  gitReason,
+  isAncestor,
+  isGitRepo,
+  mustGit,
+  runGit,
+  stateDir,
+  trunk,
+  worktrees as treesOf,
+} from "../../core/api.ts"
 import type { Claim } from "./index.ts"
 import { changes, type StaleEntry, type StaleInputs } from "./stale.ts"
 import { gateOfLine, openLines } from "./lines.ts"
@@ -265,7 +277,22 @@ export function planSweep(ctx: Context, inputs: SweepInputs, entries: StaleEntry
       continue
     }
     const subject = `${c.branch} (${c.file}${c.ref !== c.branch ? ` on ${c.ref}` : ""})`
-    if (c.local) {
+    const file = `${inputs.claimsPath}/${c.file}`
+    const here = currentBranch(ctx.trackerGit)
+    // On the trunk's or a line's own checkout the removal is committed with the claim file alone, so the checkout stays clean for a landing.
+    const committed = c.local && inMain && here !== null && (here === main || !!gateOfLine(here)) &&
+      gitOrNull(ctx.trackerGit, "ls-files", "--error-unmatch", "--", file) !== null
+    if (committed) {
+      drops.push({
+        kind: "orphan claim",
+        subject,
+        next: `committed its removal on ${here}`,
+        run: () => {
+          mustGit(ctx.trackerGit, "rm", "-q", "--", file)
+          mustGit(ctx.trackerGit, "commit", "-q", "-m", `Drop the claim of ${c.branch}: ${why}`, "--", file)
+        },
+      })
+    } else if (c.local) {
       drops.push({
         kind: "orphan claim",
         subject,
