@@ -8,7 +8,7 @@
 import { writeFileSync } from "node:fs"
 import { basename, resolve } from "node:path"
 import process from "node:process"
-import { type KnownProject, knownProjects, UI_SWITCH_ENV, type UiSwitch } from "../../core/projects.ts"
+import { type KnownProject, knownProjects, UI_SWITCH_ENV, type UiSwitch } from "../../core/api.ts"
 
 export interface RecentProject {
   name: string

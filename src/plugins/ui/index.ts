@@ -29,6 +29,7 @@ import {
   summarySections,
   table,
   typeOrThrow,
+  UI_SWITCH,
   usageError,
 } from "../../core/api.ts"
 import { naimaBridge } from "./bridge.ts"
@@ -37,7 +38,6 @@ import { projectsView } from "./projects.ts"
 import { browserCommand, openBrowser, type Opened, osName } from "./open.ts"
 import { filesKey, filesUrl, newToken, serve, type ServeOptions } from "./serve.ts"
 import { resumed, switchFile, writeSwitch } from "./switch.ts"
-import { UI_SWITCH } from "../../core/projects.ts"
 import { runMcp } from "./mcp.ts"
 import { runSidecar } from "./sidecar.ts"
 import { desktopApp, desktopAppDirs, naimaCommand, offReason, openAtStart, register, registryDir, unregister, userAtStart } from "./at-start.ts"

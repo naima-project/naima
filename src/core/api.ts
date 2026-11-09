@@ -40,7 +40,7 @@ export {
 export { storedLinks } from "./repo.ts"
 export { filerRole, sessionLine, setSessionLine } from "./origin.ts"
 export { checkoutAt, contextAt, contextIn, contextOfProject, type IO } from "./context.ts"
-export { type KnownProject, knownProjects } from "./projects.ts"
+export { type KnownProject, knownProjects, UI_SWITCH, UI_SWITCH_ENV, type UiSwitch } from "./projects.ts"
 export { READY, readyQueue, type ReadyRecord, readyRecord } from "./ready.ts"
 export { groupBy } from "./collections.ts"
 export {
