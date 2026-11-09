@@ -72,7 +72,8 @@ naima schedule --json                       # the data
 ```
 
 The data is the shape written in the product's `src/plugins/schedule/types.ts`. The new interface reads the same data through its bridge, as the view
-`schedule`, and draws the Gantt from it. The chart only shows. Moving a planned bar in the interface is not part of this plugin.
+`schedule`, and draws the Gantt from it. The roadmap, goals and features screens all draw the one Gantt component. For each piece it shows the planned, the expected and the actual schedule on one time
+axis, with the drift and the overlap worked out from them. The chart only shows. Moving a planned bar in the interface is not part of this plugin.
 
 ## Options
 

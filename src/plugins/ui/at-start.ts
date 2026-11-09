@@ -18,7 +18,7 @@
 
 import { spawn, spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { runGit, stateDir, userConfigDir } from "../../core/api.ts"
 import { HOST, newToken } from "./serve.ts"
@@ -221,7 +221,7 @@ export const openLine = (r: UiRecord): string =>
  * Open the UI on the project, or reuse the one open on it: the line the greeting says, or null when nothing is open.
  * Returns at once: what it starts runs on its own. Never throws.
  */
-export async function openAtStart(plan: AtStartPlan, deps: AtStartDeps = realAtStartDeps): Promise<string | null> {
+export function openAtStart(plan: AtStartPlan, deps: AtStartDeps = realAtStartDeps): string | null {
   try {
     writeDirs(plan.dir)
     const got = claim(plan.dir, { pid: process.pid, how: "claim" }, deps.alive)

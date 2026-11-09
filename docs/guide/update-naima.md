@@ -32,6 +32,12 @@ Some projects follow a branch rather than releases: Naima's own workshop, which 
 `naima update --main` moves the lock to the head of the source's main branch, as every update did before releases; the lock then names a commit with no version.
 A source that publishes no releases at all is followed that way by plain `naima update` too.
 
+### Following another branch
+
+To run a development line of Naima, such as `line/release-1.2`, in a project before it is released, use `naima update --branch <name>`. It moves the lock to the
+head of that branch of the source and records `branch` in `naima.json`, so every later `naima update` follows the branch. `--to <commit>` names a commit of the
+branch instead of its head. The tracker and its history stay as they are, as for any move of the lock. `naima update --main` goes back to the main branch.
+
 ## What happens when a session starts
 
 At the start of every conversation, the agent runs this:

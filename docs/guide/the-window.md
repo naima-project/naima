@@ -87,6 +87,8 @@ over the page as the whole map when you point at it, reach it with Tab or press 
 Failed tests and Metrics, then More, which lists the views the plugins add. Home and Metrics are described below; Diary, Bugs, Features and Failed tests are
 placeholders and say so.
 
+The strip at the top of the window, with the project and the moment, stays on screen while a screen scrolls under it, on every screen and at every width.
+
 ### Switching project
 
 Beside the name "naima" at the top is the name of the project shown. Click it for the projects you opened recently, the most recent first, and pick one: the
