@@ -9,7 +9,7 @@
 //   out  {"feed": "show", "event": {...}}             each place an agent asked to show (show.ts), pushed the same way
 //
 // It stops when its standard input ends, as it does when the shell quits, once every request it read is answered: the
-// machine below, which follows the protocol's model, decides when.
+// machine below, generated from the protocol's model, decides when.
 
 import { readFileSync } from "node:fs"
 import { extname } from "node:path"
@@ -17,6 +17,7 @@ import { createInterface } from "node:readline"
 import type { Readable } from "node:stream"
 import type { Context } from "../../core/api.ts"
 import { naimaBridge } from "./bridge.ts"
+import * as Model from "./generated/sidecar.ts"
 import type { Handlers, Json } from "./bridge-handler.ts"
 import { fileIn } from "./serve.ts"
 import { PAGE_TYPES, type UiTab, type UiView } from "./tabs.ts"
@@ -46,17 +47,15 @@ export type SidecarEntry =
   | { action: { type: "push" | "exit" } }
 
 /**
- * The sidecar's own state, the Core of its model in the workshop (develop/models/ui/sidecar/model/core.mcrl2),
- * followed by hand while naima-codegen's TypeScript is not erasable TypeScript, which Node needs: whether the
- * standard input is open, how many handlers are in flight, whether a change is to be pushed and whether the sidecar
- * has stopped. Each method is the summand of the same name; `#outputs` is the policy, a change pushed before the
- * sidecar stops. The id of a request travels with it, so the machine only counts.
+ * The sidecar's own state, the Core of its model in the workshop (develop/models/ui/sidecar/model/core.mcrl2), stepped
+ * by the module naima-codegen generates from it (generated/sidecar.ts, a copy kept equal to the generated one): whether
+ * the standard input is open, how many handlers are in flight, whether a change is to be pushed and whether the
+ * sidecar has stopped. Each method is the input of the same name; the model decides the outputs, a change pushed before
+ * the sidecar stops. The id of a request travels with it, so the machine only counts, and every request is the model's
+ * first.
  */
 export class SidecarMachine {
-  #open = true
-  #pending = 0
-  #feed = false
-  #done = false
+  #state: Model.State = Model.initial({}).state
   readonly #act: (action: "push" | "exit") => void
   readonly #record: ((entry: SidecarEntry) => void) | undefined
 
@@ -66,56 +65,39 @@ export class SidecarMachine {
   }
 
   get done(): boolean {
-    return this.#done
+    return this.#state.done
   }
 
   /** A request line read: its handler starts. Refused once the input has ended. */
   request(req: number | null): boolean {
-    if (!this.#open) return false
-    this.#record?.({ event: { type: "request", req } })
-    this.#pending += 1
-    return this.#outputs()
+    return this.#input({ type: "request", req: "R1" }, { event: { type: "request", req } })
   }
 
   /** A handler settled, its answer line written. */
   answer(req: number | null): boolean {
-    if (this.#pending === 0) return false
-    this.#record?.({ event: { type: "answer", req } })
-    this.#pending -= 1
-    return this.#outputs()
+    return this.#input({ type: "answer", req: "R1" }, { event: { type: "answer", req } })
   }
 
   /** The standard input ended. */
   stdinEnd(): boolean {
-    if (!this.#open) return false
-    this.#record?.({ event: { type: "stdinEnd" } })
-    this.#open = false
-    return this.#outputs()
+    return this.#input({ type: "stdinEnd" }, { event: { type: "stdinEnd" } })
   }
 
   /** The project changed: pushed while the sidecar runs, refused once it has stopped. */
   change(): boolean {
-    if (this.#done) return false
-    this.#record?.({ event: { type: "change" } })
-    this.#feed = true
-    return this.#outputs()
+    return this.#input({ type: "change" }, { event: { type: "change" } })
   }
 
-  #outputs(): true {
-    for (;;) {
-      if (this.#feed) {
-        this.#feed = false
-        this.#take("push")
-      } else if (!this.#open && this.#pending === 0 && !this.#done) {
-        this.#done = true
-        this.#take("exit")
-      } else return true
+  #input(event: Model.Event, entry: SidecarEntry): boolean {
+    const next = Model.step(this.#state, event)
+    if (next === null) return false
+    this.#record?.(entry)
+    this.#state = next.state
+    for (const action of next.actions) {
+      this.#record?.({ action: { type: action.type } })
+      this.#act(action.type)
     }
-  }
-
-  #take(action: "push" | "exit"): void {
-    this.#record?.({ action: { type: action } })
-    this.#act(action)
+    return true
   }
 }
 

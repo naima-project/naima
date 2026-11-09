@@ -120,7 +120,9 @@ stand on the map too, each under their own name: whoever is checked out here (gi
 commits the map draws on the route of their newest commit. A small pin marks where the main checkout and each worktree stand, on the commit each has checked
 out, with its name and branch; the main checkout's label and the one the window is served from are always shown, the others when you point at them. A commit you
 have named with `naima name-stop <commit> "<name>"` shows that name under its station, and says it when you reach it with Tab, on the open map and on the closed
-rail alike. The names are kept in the tracker's `stops/` folder, one file per commit, written on the trunk like any other addition to the tracker.
+rail alike. You can also name it from the window: with a commit chosen and the map open, a field under the map holds that commit's name; type one and
+press Name, or empty the field and press Remove name. The window runs `naima name-stop` for you, says when the name is kept, and reads the map again. The names
+are kept in the tracker's `stops/` folder, one file per commit, written on the trunk like any other addition to the tracker.
 
 Choosing a commit, on the strip or on the map, shows every screen as the project was at that commit; choosing a mark ahead shows that goal, step or landing on
 Home, with its status as it is now. The left and right arrow keys step from one commit to the next on the rail, and on into the marks ahead. Escape, or the one

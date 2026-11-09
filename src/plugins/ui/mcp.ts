@@ -1,20 +1,24 @@
-// Naima's bridge for agents: `naima ui --mcp` serves the bridge commands the new UI uses (bridge.ts) as an MCP server
-// on its standard input and output, through the UI stance's bridge-mcp.ts, copied unchanged like its request handler.
-// An agent reads the project's views and runs the UI's actions through exactly what the UI uses, and shows the owner
-// a place in the UI open on the project (the command show), instead of making a page of its own.
+// Naima's bridge for agents: `naima ui --mcp` serves an MCP server on its standard input and output, through the UI
+// stance's bridge-mcp.ts, copied unchanged like its request handler. Its tools are made for an agent with a budget of
+// tokens: each read tool answers like a screen at a glance, in plain text, and gives one thing's details by its id
+// (mcp-tools.ts), all read through the bridge commands the UI itself uses (bridge.ts); view gives a view's raw data in
+// pages (mcp-pages.ts) for what they do not answer. action and run run the UI's actions; show, read_page and
+// screenshot drive and look at the UI the owner has open, instead of a page of the agent's own.
 //
 //   claude mcp add naima -- naima ui --mcp        (run in the project's folder; any MCP client starts it the same way)
 
 import { Buffer } from "node:buffer"
 import { spawnSync } from "node:child_process"
 import { mkdirSync, readFileSync, rmSync } from "node:fs"
-import { join } from "node:path"
+import { basename, join, resolve } from "node:path"
 import { createInterface } from "node:readline"
 import type { Readable } from "node:stream"
-import { type Context, stateDir } from "../../core/api.ts"
-import { naimaBridge } from "./bridge.ts"
+import { type Context, gitOrNull, stateDir } from "../../core/api.ts"
+import { ACTIONS, naimaBridge } from "./bridge.ts"
 import { bridgeMcp, type McpServer, type McpTool, serveMcpLines } from "./bridge-mcp.ts"
-import type { Json } from "./bridge-handler.ts"
+import type { Handlers, Json } from "./bridge-handler.ts"
+import { PAGE_PROPERTIES, paged, splitArgs } from "./mcp-pages.ts"
+import { agentTools, bounded, cut, HARD_BOUND, type Reader, TOOL_SPECS } from "./mcp-tools.ts"
 import { askShow, awaitAnswer, openUis, requestId } from "./show.ts"
 import type { UiTab, UiView } from "./tabs.ts"
 
@@ -23,41 +27,43 @@ const obj = (properties: Record<string, unknown>, required: string[] = []) =>
 
 const str = (description: string) => ({ type: "string", description })
 
-/** The bridge commands offered as tools, with what each does for an agent. */
+/** The tools, with what each does for an agent: the read tools, view, the actions, and show. */
 export function naimaTools(views: readonly string[], tabs: readonly string[]): { [command: string]: McpTool } {
   return {
-    describe: { description: "The project this server is on, and the actions the UI may run (the tool action)." },
-    data: {
-      description: `A view's data, what its naima command prints with --json; with at, as that commit had it. The views: ${views.join(", ")}.`,
+    ...TOOL_SPECS,
+    view: {
+      description:
+        `A view's raw data as compact JSON, for what the tools above do not answer; with at, as that commit had it. A bare call comes shortened, naming each cut part's path; read a part with path, page it with offset and limit, narrow it with where, search, since, until and fields. The views: ${
+          views.join(", ")
+        }.`,
       inputSchema: obj({
         view: str("the view's name"),
         at: str("a commit (a hash or a ref a local branch reaches); absent: live"),
-        query: { type: "object", description: "the view's parameters, each a string", additionalProperties: { type: "string" } },
+        query: { type: "object", description: "the view's parameters, each a string, such as {type: features}", additionalProperties: { type: "string" } },
+        ...PAGE_PROPERTIES,
       }, ["view"]),
     },
-    tabs: { description: "The tabs the plugins contribute to the UI, each with its subtabs." },
-    tab: {
-      description: `What a tab shows for a subtab, at a commit or live. The tabs: ${tabs.join(", ")}.`,
-      inputSchema: obj({ name: str("the tab"), sub: str("the subtab; absent: the first"), at: str("a commit; absent: live") }, ["name"]),
-    },
-    metro: { description: "The rail's map: the trunk, the lines, the branches, the workers, the goals ahead, the checkouts and the named stops." },
     action: {
-      description: "Run one of the UI's actions (see describe) as a naima run; answers the run's name, which the tool run reads.",
+      description: `Run one of the UI's actions as a naima run; answers the run's name, which run reads. The actions: ${
+        ACTIONS.map((a) => `${a.name} (${a.says})`).join("; ")
+      }.`,
       inputSchema: obj({ name: str("the action"), args: { type: "array", items: { type: "string" }, description: "the arguments after the command" } }, [
         "name",
       ]),
     },
     run: {
-      description: "A run an action started: its state, exit code and the end of its log.",
-      inputSchema: obj({ name: str("the run's name, as action answered it") }, ["name"]),
+      description: "A run action started: its state, exit code and the last lines of its log.",
+      inputSchema: obj({ name: str("the run's name, as action answered it"), lines: { type: "integer", minimum: 1, description: "log lines, default 20" } }, [
+        "name",
+      ]),
     },
     show: {
       description:
-        "Show the owner a place in the Naima UI open on this project (the desktop app or a browser), live: a screen, a plugin's view, an item, a commit (moving the playhead there) or a line. Give exactly one. Prefer this to making a page or an artifact of your own. Answers whether an open UI took it; when none is open, it opens one as naima hello does (the desktop app, else a browser) and shows there.",
+        "Show the owner a place in the Naima UI open on this project, live: a screen, a plugin's view, an item, a commit (moving the playhead there) or a line. Give exactly one. Prefer it to a page or an artifact of your own. Opens a UI when none is open.",
       inputSchema: obj({
         screen: str("home, metrics, diary, bugs, features, failed_tests, goals, roadmap, map, all_projects or more"),
         view: str(`a plugin's view: ${tabs.join(", ")}`),
-        item: str("an item's reference, <type>/<slug>, such as bugs/some-bug"),
+        item: str("an item's ref, such as bugs/some-bug"),
         commit: str("a commit a local branch reaches: a hash or a ref"),
         line: str("a line's name, such as main or line/release-1.2"),
       }),
@@ -65,27 +71,129 @@ export function naimaTools(views: readonly string[], tabs: readonly string[]): {
   }
 }
 
-export const INSTRUCTIONS =
-  "Naima's project tracker and UI. Read the project through data, tab and metro, exactly as the UI does. To show the owner something (a screen, an item, a commit, a line), call show: it navigates the Naima UI the owner has open, live, and is preferred to making a separate page or artifact. To check what the owner sees, call read_page; screenshot only for a rare visual check, since it costs far more. When no UI is open, show opens one; if it says none could be opened, tell the owner to run naima ui."
+export const INSTRUCTIONS = "Naima's project tracker and UI. Answers are short plain text; ask for one thing by its id for more. " +
+  "Start with overview. items: one item by ref, or a search with counts. gates: why a gate is blocked. lines: the trunk, lines and branches. " +
+  "history: a day or a commit. work: claims, queue, stale work. metrics: values and trends. view: a view's raw data, in pages, only when those do not answer. " +
+  `No reply passes ${HARD_BOUND} characters; a cut one says how to narrow it. ` +
+  "To show the owner something, call show: it moves the Naima UI the owner has open, and is preferred to a page or an artifact of your own. " +
+  "read_page outlines what the owner sees; screenshot only for a rare visual check, since it costs far more. If show says no UI could be opened, tell the owner to run naima ui."
+
+/** What the read tools read, through the bridge's commands: the views, the map, and a commit as git tells it. */
+export function bridgeReader(ctx: Context, bridge: Handlers): Reader {
+  return {
+    name: basename(resolve(ctx.root)),
+    today: () => ctx.now().toISOString().slice(0, 10),
+    view: async (name, query) => await bridge["data"]!({ view: name, ...(query ? { query } : {}) }),
+    metro: async () => await bridge["metro"]!({}),
+    commit: (ref) => {
+      if (!/^[\w./@{}^~-]{1,200}$/.test(ref) || ref.startsWith("-")) return null
+      const s = gitOrNull(ctx.root, "show", "-s", "--format=%H%x1f%cI%x1f%s%x1f%b", "--end-of-options", `${ref}^{commit}`)
+      if (!s) return null
+      const [hash = "", date = "", subject = "", body = ""] = s.split("\x1f")
+      const files = (gitOrNull(ctx.root, "show", "--name-only", "--format=", "--end-of-options", hash) ?? "").split("\n").filter(Boolean)
+      return { hash, date, subject, body, files }
+    },
+  }
+}
+
+/** The server's commands: the read tools, view in pages, run's log cut short, and the bridge's action and show. */
+export function agentHandlers(bridge: Handlers, reader: Reader, commitTime: (ref: string) => number | null): Handlers {
+  const out: Handlers = {}
+  // The bridge's own answers as one line: what show says it did, the run action started.
+  for (const name of ["action", "show"]) {
+    const command = bridge[name]
+    if (!command) continue
+    out[name] = async (args) => {
+      const a = await command(args)
+      const says = typeof a === "object" && a !== null && !Array.isArray(a) ? a["says"] : undefined
+      return typeof says === "string" ? says : typeof a === "string" ? a : JSON.stringify(a)
+    }
+  }
+  for (const [name, answer] of Object.entries(agentTools(reader))) out[name] = async (args) => bounded(await answer(args), "narrow the call")
+  out["view"] = async (args) => {
+    const { page, rest } = splitArgs(args)
+    return JSON.stringify(paged(await bridge["data"]!(rest), page, commitTime))
+  }
+  if (bridge["run"]) {
+    out["run"] = async (args) => {
+      const r = (await bridge["run"]!({ name: args["name"] ?? null })) as { [k: string]: Json }
+      const lines = typeof args["lines"] === "number" && args["lines"] > 0 ? args["lines"] : 20
+      const log = Object.values(r).find((v) => Array.isArray(v) || (typeof v === "string" && v.includes("\n")))
+      const tail = (Array.isArray(log) ? log.map(String) : typeof log === "string" ? log.split("\n") : []).slice(-lines)
+      const head = Object.entries(r).filter(([, v]) => v !== log && (v === null || typeof v !== "object")).map(([k, v]) => `${k} ${cut(String(v), 120)}`)
+      return bounded([head.join(" · "), ...tail].join("\n"), "ask for fewer lines")
+    }
+  }
+  return out
+}
+
+/** A commit's date in milliseconds, for since and until: null when `ref` names no commit. */
+export const commitTime = (root: string) => (ref: string): number | null => {
+  if (!/^[\w./@{}^~-]{1,200}$/.test(ref) || ref.startsWith("-")) return null
+  const t = gitOrNull(root, "log", "-1", "--format=%ct", "--end-of-options", `${ref}^{commit}`)
+  return t && /^\d+$/.test(t.trim()) ? Number(t.trim()) * 1000 : null
+}
+
+/** The landmarks an outline keeps. */
+const LANDMARKS = /^<(main|banner|navigation|region|dialog|form|complementary|contentinfo|status|alert)\b/
+
+/**
+ * A page's text as an outline: its landmarks and headings, each heading with the first line under it, and its controls
+ * gathered on a line, held to `max` characters.
+ */
+export function outline(text: string, max = 2000): string {
+  const out: string[] = []
+  let controls: string[] = []
+  let underHeading = false
+  const flush = () => {
+    if (controls.length) out.push(cut(controls.join(" "), 240))
+    controls = []
+  }
+  for (const raw of text.split("\n")) {
+    const l = raw.trim()
+    if (!l) continue
+    if (l.startsWith("#")) {
+      flush()
+      out.push(cut(l, 120))
+      underHeading = true
+    } else if (l.startsWith("[")) controls.push(cut(l, 48))
+    else if (LANDMARKS.test(l)) {
+      flush()
+      out.push(cut(l, 80))
+      underHeading = false
+    } else if (underHeading && !l.startsWith("<")) {
+      flush()
+      out.push(`  ${cut(l, 120)}`)
+      underHeading = false
+    }
+  }
+  flush()
+  const all = out.join("\n")
+  if (all.length <= max) return all
+  const note = `\n[outline cut at ${max} of ${all.length} characters: read a part with selector, or the text with mode text]`
+  return all.slice(0, all.lastIndexOf("\n", max - note.length)) + note
+}
 
 /** The tools that look at the open UI itself, beside the bridge's: what its page shows, as text, or as a picture. */
 export const LOOK_TOOLS = [
   {
     name: "read_page",
     description:
-      "Read what the owner sees: the open Naima UI's page as text, compact (headings, landmarks, controls and their state, the text) by default, raw HTML with html=true, optionally only under a CSS selector. Prefer this to screenshot: it costs a small fraction of a picture and says exactly what is on the page; use it to check what show did.",
+      "What the owner sees in the open Naima UI: an outline (landmarks, headings with their first line, controls) by default; the page's text or raw HTML with mode, in pages; optionally under a CSS selector. Use it to check what show did; far cheaper than screenshot.",
     inputSchema: {
       type: "object",
       properties: {
         selector: { type: "string", description: "a CSS selector: only that part of the page" },
-        html: { type: "boolean", description: "raw HTML instead of the compact text" },
+        mode: { type: "string", enum: ["outline", "text", "html"], description: "outline (default, about 2 000 characters), text, or html" },
+        offset: { type: "integer", minimum: 0, description: "text and html: the first character, the reply's next" },
+        limit: { type: "integer", minimum: 1, description: "text and html: characters, default 8 000" },
       },
     },
   },
   {
     name: "screenshot",
     description:
-      "A PNG picture of the open Naima UI's window, as it is on the screen. Costs far more than read_page: use it only for a rare visual check that text cannot answer (a layout, a colour). Taken by the system's screen capture where there is one (macOS); otherwise it says plainly that it cannot.",
+      "A PNG picture of the open Naima UI's window. Costs far more than read_page: only for a rare visual check that text cannot answer (a layout, a colour). macOS only; elsewhere it says so.",
     inputSchema: { type: "object", properties: {} },
   },
 ]
@@ -96,11 +204,14 @@ const said = (text: string, isError = false): Json => ({ content: [{ type: "text
 /** Asks the UI open on the project a question over the feed show and waits for its answer. */
 async function askUi<T>(root: string, request: { kind: "read" | "rect"; [k: string]: Json }, ms: number): Promise<T | string> {
   if (!openUis(root).length) return "no Naima UI is open on this project: show something first, which opens one, or ask the owner to run naima ui"
-  const id = requestId()
-  askShow(root, { ...request, id } as never)
-  const a = await awaitAnswer<T & { error?: string }>(root, id, ms)
-  if (a === null) return "the open UI did not answer in time"
-  return a.error ? a.error : a
+  // Asked twice at most: a question can reach a page the moment it reloads, which never answers it.
+  for (const wait of [ms / 2, ms / 2]) {
+    const id = requestId()
+    askShow(root, { ...request, id } as never)
+    const a = await awaitAnswer<T & { error?: string }>(root, id, wait)
+    if (a !== null) return a.error ? a.error : a
+  }
+  return "the open UI did not answer in time"
 }
 
 /** The look tools' answers: the page as text, or a capture of the window's place on the screen. */
@@ -110,10 +221,17 @@ export function lookTools(root: string, capture: (rect: Rect) => Uint8Array | st
       const a = await askUi<{ text: string; truncated?: boolean }>(root, {
         kind: "read",
         ...(typeof args["selector"] === "string" ? { selector: args["selector"] } : {}),
-        html: args["html"] === true,
+        html: args["mode"] === "html",
       }, ms)
       if (typeof a === "string") return said(a, true)
-      return said(a.text + (a.truncated ? "\n[cut: the page is longer; read a part of it with selector]" : ""))
+      const mode = args["mode"] === "text" || args["mode"] === "html" ? args["mode"] : "outline"
+      const more = a.truncated ? "\n[the page is longer than the UI reads at once: read a part of it with selector]" : ""
+      if (mode === "outline") return said(outline(a.text) + more)
+      const { page } = splitArgs({ offset: args["offset"] ?? null, limit: args["limit"] ?? 8000 })
+      const p = paged(a.text, page) as { offset: number; next: number | null; total: number; data: string }
+      return said(
+        `${p.data}\n[characters ${p.offset} to ${p.offset + p.data.length} of ${p.total}${p.next === null ? "" : `; the next page: offset ${p.next}`}]${more}`,
+      )
     }
     const r = await askUi<Rect>(root, { kind: "rect" }, ms)
     if (typeof r === "string") return said(r, true)
@@ -194,7 +312,7 @@ export async function runMcp(ctx: Context, opts: McpOptions): Promise<number> {
     name: "naima",
     version: opts.version,
     instructions: INSTRUCTIONS,
-    handlers: bridge.handlers,
+    handlers: agentHandlers(bridge.handlers, bridgeReader(ctx, bridge.handlers), commitTime(ctx.root)),
     tools: naimaTools(opts.views.map((v) => v.name), opts.tabs.map((t) => t.name)),
   })
   try {

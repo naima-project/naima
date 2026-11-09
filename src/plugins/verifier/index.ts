@@ -254,7 +254,9 @@ function asRun(value: unknown): RunRecord | string {
     if (r[k] !== undefined && typeof r[k] !== "string") return `${k} is not text`
   }
   if (r["details"] !== undefined && !isObject(r["details"])) return "details is not a JSON object"
-  if (r["seconds"] !== undefined && !(typeof r["seconds"] === "number" && Number.isFinite(r["seconds"]) && r["seconds"] >= 0)) return "seconds is not a number of seconds"
+  if (r["seconds"] !== undefined && !(typeof r["seconds"] === "number" && Number.isFinite(r["seconds"]) && r["seconds"] >= 0)) {
+    return "seconds is not a number of seconds"
+  }
   const counts = r["counts"]
   if (
     counts !== undefined &&
@@ -1466,7 +1468,11 @@ const HISTORY_LOG_LINES = 80
 /** The trunk's commits, oldest first, and where a commit, or a time when the commit is not known, stands on it. */
 function trunkPlacing(ctx: Context) {
   const split = (s: string | null) => (s ?? "").split("\n").filter(Boolean).map((l) => l.split(" ") as [string, string])
-  const trunk = split(gitOrNull(ctx.root, "log", "--first-parent", "--reverse", "--format=%H %cI", "HEAD")).map(([commit, date]) => ({ commit, date, t: Date.parse(date) }))
+  const trunk = split(gitOrNull(ctx.root, "log", "--first-parent", "--reverse", "--format=%H %cI", "HEAD")).map(([commit, date]) => ({
+    commit,
+    date,
+    t: Date.parse(date),
+  }))
   const index = new Map(trunk.map((c, i) => [c.commit, i]))
   const reach = new Map(split(gitOrNull(ctx.root, "log", "--format=%H %cI", "HEAD")))
   const posAt = (t: number): number => {

@@ -80,6 +80,9 @@ This lists the stances the project has adopted, the commit each one is pinned to
 the newer commit, read what changed in the stance's repository, then adopt it again: `naima stance adopt ui` moves the pin to the newest commit and runs the
 adoption step again. Without a network, the status says which stances it couldn't reach.
 
+You don't have to ask. The daily update check also looks at every adopted stance, and the greeting at the start of a session says, one line per stance, that a
+newer version exists and how to take it. When updates are off, none of this is asked of any source.
+
 ## Examples
 
 A stance may ship examples, such as a small app that follows its rules. It lists them in its manifest as paths inside its repository, under `examples`. Once the
