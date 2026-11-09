@@ -3952,7 +3952,8 @@ Copies the UI stance into the project, says what the project customized and whet
 **Enforces**: Nothing: it copies the stance and reports; the checks hold the rules.
 
 ```sh
-naima naima stance-ui adopt [--mood <name>] [--to <dir>] [--tauri] [--server] [--force] [--no-scaffold] [--no-install]
+naima naima stance-ui adopt [--mood <name>] [--to <dir>] [--tauri] [--server] [--mcp
+naima --no-mcp] [--force] [--no-scaffold] [--no-install]
 naima status
 naima check
 naima hook
@@ -3966,6 +3967,8 @@ naima toolchain [--check]
 | `--to` | `src/lib/ui` | where the widget set and the store go, from the app's folder |
 | `--tauri` |  | also copy the Tauri 2 shell to src-tauri/ |
 | `--server` |  | also copy the Deno bridge server to server/bridge-server.ts |
+| `--mcp` |  | the project's answer to the design-time question whether agents reach the app's bridge as an MCP server: copy it to server/bridge-mcp.ts, and record the answer (--no-mcp records no) |
+| `--no-mcp` |  | with adopt: the project's answer no to the same question: record that agents do not reach the bridge as an MCP server, and copy nothing |
 | `--force` |  | overwrite files the project changed since they were copied |
 | `--no-scaffold` |  | copy the stance only, without the files a new project needs to build, test and run |
 | `--no-install` |  | do not install the project's npm packages (deno install) after the copy |
