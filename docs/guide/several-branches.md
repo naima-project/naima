@@ -176,6 +176,7 @@ branches as your last fetch left them, so it never touches the network.
 
 ```sh
 naima stale            # every branch, worktree and claim left behind, with the next step
+naima stale --write    # drop what nothing needs, as prune --write does
 naima stale --json     # the same, as data
 ```
 
@@ -194,6 +195,22 @@ trunk, and the items its claim holds with their status. Then it suggests what to
 - **drop** when the trunk already has everything, or the branch is gone: `naima prune --branch <branch> --write`, then `naima prune --write` for the claim.
 
 `naima summary` has a "stale work" section with one line per entry, so the leftovers show up at the start of a session without asking.
+
+### Dropped by itself
+
+Naima does not wait for you to run `naima stale --write`. It drops what nothing needs, without asking, at `naima hello`, after every `naima land` and at
+`naima claims`, which is the coordinator's periodic check. What nothing needs is:
+
+- a branch the trunk or a line already holds all of, with its clean worktree, in the project and in Naima's own clone (the product clone);
+- a landed branch whose worktree holds only a claim file left over from the landing, dropped at once;
+- a worktree git itself reports as prunable, because its folder is gone;
+- a claim whose branch is gone, or is only a remote-tracking ref whose work is on a line or the trunk and has been quiet for `staleAfter` hours. A claim on your
+  disk is removed like `naima prune --write` does, to be committed; one that a development line carries is removed by a commit on that line, made from the main
+  checkout, never touching a worktree that stands on the line.
+
+Everything else is only named, with its next step: a worktree with uncommitted changes, a branch with commits no line holds, a detached worktree, a claim whose
+items are all closed. `naima hello` says one line for each kind dropped, and one for what needs you. The whole check reads git alone, with no network, and takes
+under a second on top of the list `naima stale` already makes.
 
 Only release someone else's claim by hand when nothing is being worked on there and nothing on that branch is left unmerged.
 

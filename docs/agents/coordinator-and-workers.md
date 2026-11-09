@@ -193,6 +193,11 @@ another number). Each entry comes with its facts and a next step. Resume means h
 never discards anything. Land means running the branch's gates and landing it. Archive means tagging its commits and removing it. Drop means removing a branch
 the trunk already holds, or a claim whose branch is gone. `naima summary` shows the same list in its "stale work" section.
 
+What nothing needs is dropped without asking, as `naima stale --write` does it: at `naima hello`, after each `naima land`, and at `naima claims`, the periodic
+check. That is a merged branch with its clean worktree (the project's and the product clone's), a landed branch whose worktree holds only a leftover claim file,
+a worktree git reports prunable, and a claim whose branch is gone, by a commit on the development line that carries it when it is not on your disk (from the
+main checkout only). The rest is named with its next step: act on it, never discard uncommitted work.
+
 ## Safety rules
 
 - **A worker never merges.** Candidate property for a later model. Nothing yet checks that a commit merging into the trunk came from the lead developer's

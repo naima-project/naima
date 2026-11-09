@@ -7,8 +7,9 @@ import { statSync } from "node:fs"
 import { join } from "node:path"
 import { allRefNames, bool, type Command, type Context, gitOrNull, isAncestor, parse, rendered, type SummarySection, trunk, worktrees } from "../../core/api.ts"
 import type { Claim, Pass } from "./index.ts"
-import { ahead, plural } from "./worktrees.ts"
+import { ahead, landedTip, plural } from "./worktrees.ts"
 import { baseOf, gateOfLine } from "./lines.ts"
+import type { SweepItem, SweepResult } from "./sweep.ts"
 
 /** What to do with a piece of stale work. */
 export type NextStep = "land" | "resume" | "archive" | "drop"
@@ -29,6 +30,8 @@ export interface StaleEntry {
   ahead?: number
   /** The trunk is an ancestor of the branch: it can enter the trunk as it is. */
   upToDate?: true
+  /** The branch landed (a landing marker holds its tip) and the only change left in its worktree is a claim file: nothing needs it. */
+  leftoverClaim?: true
   /** The claim on the branch, with each item's status. */
   claim?: { file: string; ref: string; claimedAt: string; items: { ref: string; title: string; status: string; closed: boolean }[] }
   /** Why the work counts as stale. */
@@ -76,7 +79,7 @@ export function readStaleAfter(options: Record<string, unknown>): number {
 const localBranches = (repo: string): string[] => (gitOrNull(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads") ?? "").split("\n").filter(Boolean)
 
 /** The paths `git status` reports in a worktree, with the newest instant one of them changed. */
-function changes(path: string): { paths: string[]; newest: number } {
+export function changes(path: string): { paths: string[]; newest: number } {
   const out = gitOrNull(path, "status", "--porcelain", "--untracked-files=all", "--ignore-submodules=none") ?? ""
   const paths = out.split("\n").filter(Boolean).map((l) => l.slice(3).replace(/^.* -> /, ""))
   let newest = NaN
@@ -91,16 +94,19 @@ function changes(path: string): { paths: string[]; newest: number } {
 /** The next step for a stale branch, and what to run for it. */
 function nextStep(e: Omit<StaleEntry, "next" | "how">, claim: Claim | undefined, inputs: StaleInputs, main: string | null): { next: NextStep; how: string } {
   const release = claim ? inputs.releaseLine(claim) : undefined
-  if (e.dirty.length) {
+  if (e.dirty.length && !e.leftoverClaim) {
     return {
       next: "resume",
       how: `hand ${e.worktree ?? e.branch} to a new worker, who reads git status there first and never discards what is not committed`,
     }
   }
-  if (e.gone) return { next: "drop", how: `drop the claim: ${release}` }
+  if (e.gone) return { next: "drop", how: `drop the claim: ${release} (naima stale --write does it)` }
   const open = claim?.items.some((i) => !inputs.closed(i.id)) ?? false
   if (!e.ahead) {
-    return { next: "drop", how: `nothing the trunk lacks: naima prune --branch ${e.branch} --write${release ? `, then ${release}` : ""}` }
+    return {
+      next: "drop",
+      how: `nothing the trunk lacks: naima stale --write, or naima prune --branch ${e.branch} --write${release ? `, then ${release}` : ""}`,
+    }
   }
   if (!open) {
     return {
@@ -184,7 +190,10 @@ export function staleData(ctx: Context, inputs: StaleInputs): StaleData {
         : {}),
       why,
     }
-    out.push({ ...facts, ...nextStep(facts, claim, inputs, main) })
+    const dirty = facts.dirty
+    const onlyClaims = dirty.length > 0 && dirty.every((p) => p.startsWith(`${ctx.trackerDir ? `${ctx.trackerDir}/` : ""}claims/`))
+    const withFlag = local && onlyClaims && landedTip(repo, branch) ? { ...facts, leftoverClaim: true as const } : facts
+    out.push({ ...withFlag, ...nextStep(withFlag, claim, inputs, main) })
   }
   return { trunk: main, staleAfter: inputs.staleAfter, stale: out.sort((a, b) => (a.branch < b.branch ? -1 : 1)) }
 }
@@ -213,24 +222,47 @@ function entryLines(e: StaleEntry): string[] {
   ]
 }
 
-export const staleCommand = (read: (ctx: Context) => StaleData, staleAfter: number): Command => ({
+export const staleCommand = (
+  staleAfter: number,
+  sweep: (ctx: Context, write: boolean) => SweepResult & { planned: SweepItem[]; data: StaleData },
+): Command => ({
   name: "stale",
   says:
     "the work left behind: every branch, worktree and claim with no sign of life for staleAfter hours, or whose branch is gone or merged, with what it holds and the next step",
   enforces:
-    `nothing: it only reads; a branch counts as stale when its claim is stale (branch gone or merged into the trunk, or every item closed) or nothing happened on it for staleAfter hours (${staleAfter} here) — no commit, step, session note or file changed; the next step is resume when anything is not committed, land when it is ahead of the trunk, up to date with it and holds open items, resume when it is behind, archive when no open item is claimed, drop when the trunk has all of it or the branch is gone`,
-  usage: "stale [--json]",
+    `without --write it only reads, and says what it would drop; with it, only what nothing needs goes — a branch the trunk or a line holds all of, with its clean worktree, or one landed whose worktree holds only a leftover claim file; the same in the product clone once idle staleAfter hours; a worktree git reports prunable; a claim whose branch is gone or merged, by a commit on the line that carries it, from the main checkout only — never uncommitted work, a branch with commits no line holds, or a detached worktree, which are only named; a branch counts as stale when its claim is stale (branch gone or merged into the trunk, or every item closed) or nothing happened on it for staleAfter hours (${staleAfter} here) — no commit, step, session note or file changed; the next step is resume when anything is not committed, land when it is ahead of the trunk, up to date with it and holds open items, resume when it is behind, archive when no open item is claimed, drop when the trunk has all of it or the branch is gone`,
+  usage: "stale [--write] [--json]",
   options: [
+    {
+      name: "--write",
+      says:
+        "drop what nothing needs, as naima prune --write does: a branch the trunk or a line holds all of, with its clean worktree; the same in the product clone; a worktree git reports prunable; a claim whose branch is gone or merged, by a commit on the line that carries it; the rest is only named",
+    },
     { name: "--json", says: "print the stale work as JSON: each entry's facts, why it is stale, the next step and what to run" },
   ],
-  examples: ["stale", "stale --json"],
+  examples: ["stale", "stale --write", "stale --json"],
   run(args, ctx) {
-    const p = parse(args, { json: { type: "boolean" } })
-    const d = read(ctx)
+    const p = parse(args, { json: { type: "boolean" }, write: { type: "boolean" } })
+    const done = sweep(ctx, bool(p, "write"))
+    const d = done.data
+    const dropping = bool(p, "write") ? done.dropped : done.planned
+    const named = done.needs
     if (bool(p, "json")) {
-      ctx.out(JSON.stringify(d, null, 2))
+      ctx.out(JSON.stringify({ ...d, [bool(p, "write") ? "dropped" : "droppable"]: dropping, failed: done.failed, needs: named }, null, 2))
       return 0
     }
+    const extra = [
+      ...(dropping.length
+        ? [
+          "",
+          bool(p, "write") ? "dropped:" : "droppable without asking (naima stale --write):",
+          ...dropping.map((i) => `  ${i.kind}: ${i.subject} — ${i.next}`),
+        ]
+        : []),
+      ...(done.failed.length ? ["", "could not drop:", ...done.failed.map((i) => `  ${i.kind}: ${i.subject} — ${i.next}`)] : []),
+      ...(named.length ? ["", "named, for a person:", ...named.map((i) => `  ${i.kind}: ${i.subject} — ${i.next}`)] : []),
+    ]
+    if (extra.length) ctx.out(extra.slice(1).join("\n") + "\n")
     if (!d.stale.length) {
       ctx.out(`no stale work: every branch and claim moved in the last ${plural(d.staleAfter, "hour")}, on a live branch with open work`)
       return 0

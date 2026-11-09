@@ -83,6 +83,7 @@ import {
 } from "./worktrees.ts"
 import { claimsUiView, notesUiView } from "./ui.ts"
 import { readStaleAfter, staleCommand, type StaleData, staleData, staleSection } from "./stale.ts"
+import { applyPlan, planSweep, type SweepInputs, type SweepItem, sweepLines, type SweepResult } from "./sweep.ts"
 import { changeNotesCheck, changesCommand } from "./changes.ts"
 import { land, landingCheckCommand, landingReportsPoint, landingsAreMarkers, landingsPaired } from "./land.ts"
 import { claimsReports, claimsReportsPoint } from "./claims-reports.ts"
@@ -533,12 +534,12 @@ export function claimsData(ctx: Context, only?: string, silentAfter: number = SI
   }
 }
 
-const claimsCommand = (silentAfter: number, policy: Policy): Command => ({
+const claimsCommand = (silentAfter: number, policy: Policy, sweeping: (ctx: Context) => void): Command => ({
   name: "claims",
   says:
     "who holds what, recombined from every branch, with what each branch's worker is doing now, and after them what other plugins report for the coordinator, such as the runs Naima watches",
   enforces:
-    `nothing: it only reads; a claim whose last sign of life (its step, or its branch's last commit) is more than silentAfter minutes old (${silentAfter} here) is flagged possibly stuck; a stale claim (branch gone or merged into the trunk, or every item closed) is listed apart, at the end, and released by naima prune --write`,
+    `it reads, and first sweeps the stale work as naima stale --write does (what nothing needs is dropped, the rest named); a claim whose last sign of life (its step, or its branch's last commit) is more than silentAfter minutes old (${silentAfter} here) is flagged possibly stuck; a stale claim (branch gone or merged into the trunk, or every item closed) is listed apart, at the end, and released by naima prune --write`,
   usage: "claims [--branch <b>] [--line <gate> | --trunk] [--json]",
   options: [
     { name: "--branch", says: "only the claim of this branch" },
@@ -556,6 +557,11 @@ const claimsCommand = (silentAfter: number, policy: Policy): Command => ({
   examples: ["claims", "claims --branch fix/export-alpha", "claims --json"],
   run(args, ctx) {
     const p = parse(args, { branch: { type: "string" }, json: { type: "boolean" }, line: { type: "string" }, trunk: { type: "boolean" } })
+    // The coordinator's periodic check also sweeps the stale work, before it reads: what it drops is not listed.
+    if (!str(p, "branch")) {
+      if (bool(p, "json")) sweeping(Object.create(ctx, { out: { value: () => {} } }) as Context)
+      else sweeping(ctx)
+    }
     const all = claimsData(ctx, str(p, "branch"), silentAfter)
     // Claims follow the line this chat works on, once one is chosen: those of the branches of that line, or of the trunk.
     const follow = str(p, "line") !== undefined || bool(p, "trunk") || (sessionLine(ctx.root) !== undefined && !str(p, "branch"))
@@ -1271,11 +1277,85 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
     staleData(ctx, {
       claims: readClaims(ctx),
       notes: readPasses(ctx),
-      staleReason: (c) => staleReason(ctx, c),
+      staleReason: reasoner(ctx),
       closed: (id) => closed(ctx, id),
       releaseLine,
       staleAfter,
     })
+  /** `staleReason` with the trunk and the refs read once for every claim asked about. */
+  const reasoner = (ctx: Context): (c: Claim) => string | undefined => {
+    const main = trunk(ctx.trackerGit)
+    const alive = allRefNames(ctx.trackerGit)
+    return (c) => staleReason(ctx, c, main, alive)
+  }
+  const sweepInputs = (ctx: Context): SweepInputs => ({
+    claims: readClaims(ctx),
+    notes: readPasses(ctx),
+    staleReason: reasoner(ctx),
+    closed: (id) => closed(ctx, id),
+    releaseLine,
+    staleAfter,
+    claimsPath: inGit(ctx, CLAIMS),
+    readClaims: () => readClaims(ctx),
+  })
+  /** The stale work nothing needs dropped (when `write`) or planned, and what is only named; the stale facts it read last. */
+  const sweep = (ctx: Context, write: boolean): SweepResult & { planned: SweepItem[]; data: StaleData } => {
+    const dropped: SweepItem[] = []
+    const failed: SweepItem[] = []
+    // A further pass takes the claims of the branches the one before dropped; with nothing to drop, one pass is all it costs.
+    for (let pass = 0;; pass++) {
+      const inputs = sweepInputs(ctx)
+      const data = staleData(ctx, inputs)
+      const plan = planSweep(ctx, inputs, data.stale)
+      if (!write || !plan.drops.length || pass >= 2) return namedAfter(data, plan, dropped, failed, write ? [] : plan.drops)
+      const r = applyPlan(plan)
+      dropped.push(...r.dropped)
+      failed.push(...r.failed)
+      if (r.failed.length) {
+        const again = sweepInputs(ctx)
+        const d2 = staleData(ctx, again)
+        return namedAfter(d2, planSweep(ctx, again, d2.stale), dropped, failed, [])
+      }
+    }
+  }
+  const namedAfter = (data: StaleData, plan: ReturnType<typeof planSweep>, dropped: SweepItem[], failed: SweepItem[], planned: SweepItem[]) => {
+    const entries = data.stale
+    const droppable = new Set(plan.drops.map((d) => d.subject))
+    const named: SweepItem[] = entries.filter((e) => !e.gone && !droppable.has(e.branch) && e.next !== "drop").map((e) => ({
+      kind: e.dirty.length ? "worktree with changes not committed" as const : "idle branch" as const,
+      subject: e.worktree ?? e.branch,
+      next: e.how,
+    }))
+    const byBranch = new Set(entries.filter((e) => !e.gone).map((e) => e.branch))
+    const rest = plan.needs.filter((n) => n.kind !== "claim to release" || ![...byBranch].some((b) => n.subject.startsWith(`${b} `)))
+    return {
+      dropped,
+      failed,
+      needs: [...named, ...rest],
+      planned: planned.map(({ kind, subject, next }) => ({ kind, subject, next })),
+      data,
+    }
+  }
+  const sweepSection: SummarySection = {
+    name: "stale sweep",
+    render: () => rendered([], () => []),
+    atStart: (ctx) => sweepLines(sweep(ctx, true)),
+  }
+  /** The sweep, run where a command ends: what it dropped and what needs a person, said on the command's own output. */
+  const sweeping = (ctx: Context): void => {
+    try {
+      const { said, needs } = sweepLines(sweep(ctx, true))
+      for (const l of [...said, ...needs]) ctx.out(l)
+    } catch { /* housekeeping never fails the command */ }
+  }
+  const landing: Command = {
+    ...land,
+    async run(args, ctx) {
+      const code = await land.run.call(land, args, ctx)
+      if (code === 0) sweeping(ctx)
+      return code
+    },
+  }
   return {
     name: "coordination",
     contract: CONTRACT,
@@ -1360,9 +1440,9 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       openCommand(policy),
       claimCommand,
       release,
-      claimsCommand(silentAfter, policy),
+      claimsCommand(silentAfter, policy, sweeping),
       recoverCommand((ctx, branch) => claimsData(ctx, branch, silentAfter)),
-      land,
+      landing,
       landingCheckCommand,
       fixCommand(policy, openWork),
       guardCommand(guarded),
@@ -1371,7 +1451,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       changesCommand,
       prune,
       lineCommand(policy),
-      staleCommand(stale, staleAfter),
+      staleCommand(staleAfter, sweep),
       pass,
       eventCommand,
       diaryCommand(readPasses),
@@ -1401,6 +1481,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       workerLimitSection(policy),
       readySection(policy),
       staleSection(stale),
+      sweepSection,
       guardOffSection(guarded),
     ],
     setup: [guardSetup(guarded)],
