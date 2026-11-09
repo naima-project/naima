@@ -24,7 +24,7 @@
 //            each line's landing
 
 import { basename } from "node:path"
-import { type Command, type Context, gitOrNull, isAncestor, isOpen, runGitAsync, trunk, worktrees } from "../../core/api.ts"
+import { type Command, type Context, gitOrNull, isAncestor, isOpen, runGit, runGitAsync, trunk, worktrees } from "../../core/api.ts"
 import { type Event as StatusEvent, initial, type State, type Status, step as statusStep } from "./generated/worker-status.ts"
 import { stopNames } from "./stops.ts"
 
@@ -485,6 +485,20 @@ function asksOn(ctx: Context, ids: readonly string[]): string[] {
   ).map((i) => String(i.meta["created"] ?? ""))
 }
 
+/** The committer time of each of `hashes`, read by one git call: a call for each commit costs a process each, about 40 ms on Windows. */
+function commitTimes(ctx: Context, hashes: readonly string[]): Map<string, number> {
+  const times = new Map<string, number>()
+  const unique = [...new Set(hashes)]
+  if (!unique.length) return times
+  const r = runGit(ctx.root, ["log", "--no-walk=unsorted", "--stdin", "--format=%H %ct"], { input: unique.join("\n") + "\n" })
+  if (!r.ok) return times
+  for (const line of r.out.split("\n")) {
+    const [h, t] = line.split(" ")
+    if (h && t) times.set(h, Number(t))
+  }
+  return times
+}
+
 /**
  * The people on the map: whoever is checked out here, on the branch here; then each author of the commits the map
  * draws (the trunk's window, the lines, the branches), on the route of their newest one. A name is one person.
@@ -500,11 +514,16 @@ function peopleOf(ctx: Context, routes: readonly Route[], authors: Authors, head
   }
   // Newest first: each route's commits are; the trunk's are kept to its window.
   const newest = new Map<string, { route: string; commit: string; t: number }>()
-  for (const r of routes) {
-    for (const h of r.kind === "trunk" ? r.commits.filter((c) => window.has(c)) : r.commits) {
+  const drawn = (r: Route): string[] =>
+    (r.kind === "trunk" ? r.commits.filter((c) => window.has(c)) : r.commits).filter((h) => {
       const who = authors.get(h)
-      if (!who || seen.has(who)) continue
-      const t = Number(gitOrNull(ctx.root, "log", "-1", "--format=%ct", h) ?? 0)
+      return !!who && !seen.has(who)
+    })
+  const times = commitTimes(ctx, routes.flatMap(drawn))
+  for (const r of routes) {
+    for (const h of drawn(r)) {
+      const who = authors.get(h) as string
+      const t = times.get(h) ?? 0
       const was = newest.get(who)
       if (!was || t > was.t) newest.set(who, { route: r.name, commit: h, t })
     }
