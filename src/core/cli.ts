@@ -1318,19 +1318,44 @@ function updateCheck(opts: CliOptions, place: Place, lock: Lock, raw: Record<str
         "Run naima update --check to see why it fails (no network, a source that moved or was removed, missing credentials). Nothing is updated without the owner's yes.",
     }),
     async run(signal) {
-      if (opts.tick?.check) return await opts.tick.check(signal)
-      try {
-        const news = await releaseNews(targetOf(place, lock, opts), lock, UPDATE_CHECK.timeoutMs ?? 8_000)
-        if (news) return checkedRelease(news)
-      } catch (e) {
-        return { ok: false, error: message(e) }
-      }
-      const r = await runGitAsync(place.root, ["ls-remote", "--", lock.source, "refs/heads/main"], UPDATE_CHECK.timeoutMs ?? 8_000)
-      const head = r.ok ? r.out.split(/\s+/)[0] : undefined
-      if (!head) return { ok: false, error: r.ok ? "the source has no main branch" : gitReason(r) }
-      return checked(lock, head)
+      const outcome = await sourceCheck(signal)
+      return outcome.ok ? { ...outcome, notices: [...(outcome.notices ?? []), ...stanceNews(place.root, raw).notices] } : outcome
     },
   }
+  async function sourceCheck(signal: AbortSignal): Promise<JobOutcome> {
+    if (opts.tick?.check) return await opts.tick.check(signal)
+    try {
+      const news = await releaseNews(targetOf(place, lock, opts), lock, UPDATE_CHECK.timeoutMs ?? 8_000)
+      if (news) return checkedRelease(news)
+    } catch (e) {
+      return { ok: false, error: message(e) }
+    }
+    const r = await runGitAsync(place.root, ["ls-remote", "--", lock.source, "refs/heads/main"], UPDATE_CHECK.timeoutMs ?? 8_000)
+    const head = r.ok ? r.out.split(/\s+/)[0] : undefined
+    if (!head) return { ok: false, error: r.ok ? "the source has no main branch" : gitReason(r) }
+    return checked(lock, head)
+  }
+}
+
+/** What the adopted stances' sources say against their pins: one line each for a newer version, one for those not reached, and the owner's messages, one per stance and version. */
+function stanceNews(root: string, raw: Record<string, unknown>): { lines: string[]; notices: Notice[]; newer: number } {
+  const lines: string[] = []
+  const notices: Notice[] = []
+  const unreached: string[] = []
+  for (const s of adoptedStances(raw)) {
+    const head = stanceHead(root, s.git)
+    if ("reason" in head) unreached.push(s.name)
+    else if (head.commit !== s.commit) {
+      const text = `The stance ${s.name} has a newer version: ${short(s.commit)} → ${short(head.commit)}. ` +
+        `Read what changed, then naima stance adopt ${s.name} moves the pin to it; nothing moves without the owner's yes.`
+      lines.push(text)
+      notices.push({ id: messageId("stance-update", `${s.name}-${short(head.commit)}`), level: "info", text })
+    }
+  }
+  if (unreached.length) {
+    lines.push(`Could not check for newer versions of the stance${unreached.length > 1 ? "s" : ""} ${unreached.join(", ")}: its source could not be reached.`)
+  }
+  return { lines, notices, newer: notices.length }
 }
 
 /** A plugin's job as the tick runs it, in the project's context. */
@@ -1567,6 +1592,11 @@ async function hello(args: string[], opts: CliOptions, place: Located, io: IO): 
       recorded({ ok: false, error: message(e) })
       lines.push(`Could not check for a newer Naima: ${message(e)}.`)
     }
+  }
+  if (policy !== "off") {
+    const stances = stanceNews(place.root, raw)
+    lines.push(...stances.lines)
+    if (stances.newer) waits = true
   }
   /** The news of the source's main, for a source that publishes no releases. */
   async function mainNews(t: Target): Promise<void> {
