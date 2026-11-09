@@ -229,6 +229,12 @@ export interface SummarySection {
    * return at once, never fail the greeting (a throw is said nothing), and returns null when it has nothing to say.
    */
   greeting?(ctx: Context): string | null | Promise<string | null>
+  /**
+   * What a session start does about the project by itself, as `naima hello` says it: lines for what it did, and lines
+   * for what waits on the owner or the agent. Called by `naima hello` whenever it runs; it must stay fast and never fail
+   * the greeting (a throw says nothing).
+   */
+  atStart?(ctx: Context): { said: string[]; needs: string[] } | Promise<{ said: string[]; needs: string[] }>
   render(ctx: Context): Rendered | Promise<Rendered>
 }
 

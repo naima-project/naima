@@ -625,6 +625,23 @@ export async function greetingsAtSessionStart(ctx: Context): Promise<string[]> {
   return out
 }
 
+/** What the summary sections do by themselves at a session start (their `atStart`), and what they say of it: a failing one says nothing. */
+export async function actionsAtSessionStart(ctx: Context): Promise<{ said: string[]; needs: string[] }> {
+  const out = { said: [] as string[], needs: [] as string[] }
+  for (const c of ctx.registry.contributions("summary")) {
+    const section = c.value as SummarySection
+    if (!section.atStart) continue
+    try {
+      const r = await section.atStart(ctx)
+      out.said.push(...r.said)
+      out.needs.push(...r.needs)
+    } catch {
+      // never fails the greeting
+    }
+  }
+  return out
+}
+
 /** The summary sections marked `hello: true`, rendered now, their lines as they are: what `naima hello` says after the update check. */
 export async function atSessionStart(ctx: Context): Promise<string[]> {
   const out: string[] = []

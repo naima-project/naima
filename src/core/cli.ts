@@ -141,7 +141,7 @@ import type { Command, Context, GuideSection, Plugin, Setup } from "./types.ts"
 import { asRendered, linesAs } from "./rendered.ts"
 import { shortOrId } from "./names.ts"
 import { apiFor, FETCHED } from "./plugins.ts"
-import { atSessionStart, goalsAtSessionStart, greetingsAtSessionStart, offersAtSessionStart } from "./base.ts"
+import { actionsAtSessionStart, atSessionStart, goalsAtSessionStart, greetingsAtSessionStart, offersAtSessionStart } from "./base.ts"
 import { installPluginHooks } from "./plugin-hooks.ts"
 import { committedLock as lockOfLastCommit, type SessionConfig, sessionStartGaps, startSessions, unfinishedUpdate } from "./session-start.ts"
 import { adapter, ADAPTERS, setupPaths } from "./adapters/index.ts"
@@ -1633,6 +1633,13 @@ async function hello(args: string[], opts: CliOptions, place: Located, io: IO): 
   try {
     const { ctx, waiting } = await early
     if (opts.launched && (tool || process.stdout.isTTY)) done.push(...await greetingsAtSessionStart(ctx))
+    try {
+      const acted = await actionsAtSessionStart(ctx)
+      lines.push(...acted.said)
+      decisions.push(...acted.needs)
+    } catch {
+      // nothing it did is lost: it is said again at the next run
+    }
     try {
       lines.push(...await goalsAtSessionStart(ctx))
     } catch {
