@@ -958,6 +958,7 @@ export function openWork(
     }
   }
   mustGit(ctx.root, "worktree", "add", "-q", "-b", branch, path, base)
+  if (line && !ctx.sibling) bringTrunkItems(ctx, path, items)
   // The tracker's own worktree, on the branch of the same name, where the code's worktree keeps its data.
   const trackerTree = join(path, ctx.trackerDir)
   if (trackerBase) mustGit(ctx.trackerGit, "worktree", "add", "-q", "-b", branch, trackerTree, trackerBase)
@@ -1000,6 +1001,24 @@ export function openWork(
   else if (unsaved) ctx.out(`claimed ${refs} in ${file}, not committed (${unsaved}): commit it on the tracker's ${branch}`)
   else ctx.out(`claimed ${refs} in ${file}, committed on the tracker's ${branch}`)
   return { path, branch, claimFile: file }
+}
+
+/**
+ * An item filed on the trunk after a line was cut is not on the line, so a branch from the line could neither release
+ * nor close it: its folder is copied from the trunk into the new branch, in a commit of its own. The same files reach
+ * the line by a sync later, and identical additions merge without a conflict.
+ */
+function bringTrunkItems(ctx: Context, path: string, items: Item[]): void {
+  const main = trunk(ctx.root)
+  if (!main) return
+  const missing = items.map((i) => posixRelative(ctx.root, i.dir)).filter((dir) =>
+    !dir.startsWith("..") && gitOrNull(path, "rev-parse", "--verify", "--quiet", `HEAD:${dir}`) === null &&
+    gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `refs/heads/${main}:${dir}`) !== null
+  )
+  if (!missing.length) return
+  mustGit(path, "checkout", main, "--", ...missing)
+  mustGit(path, "commit", "-q", "-m", `Bring ${missing.length === 1 ? "an item" : "items"} filed on ${main} after the line was cut\n\n${missing.join("\n")}\n`)
+  ctx.out(`brought from ${main}, filed after the line was cut: ${missing.join(", ")}`)
 }
 
 /** Who holds each branch, for the policy: a claim with items, or a session note written on it. */

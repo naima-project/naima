@@ -74,10 +74,24 @@ export function samePath(a: string, b: string, platform: string = process.platfo
 }
 const same = (a: string, b: string): boolean => samePath(a, b)
 
-/** The worker worktrees open now: every worktree but the main one that is a folder of the worktrees directory, on a branch the scheme applies to. */
+/** Whether a landing marker, on the trunk or on a line, has the branch's present tip as its second parent: the branch is landed and done. */
+export function landedTip(root: string, branch: string): boolean {
+  const tip = gitOrNull(root, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}^{commit}`)
+  if (!tip) return false
+  const log = gitOrNull(root, "log", "--all", "--merges", "-F", `--grep=Land ${branch}`, "--format=%P%x09%s") ?? ""
+  return log.split("\n").some((l) => {
+    const [parents = "", subject = ""] = l.split("\t")
+    return subject === `Land ${branch}` && parents.split(" ")[1] === tip
+  })
+}
+
+/**
+ * The worker worktrees open now: every worktree but the main one that is a folder of the worktrees directory, on a branch the scheme applies to,
+ * and not landed: a worktree whose branch tip a landing marker holds is finished work waiting to be pruned, and holds no slot.
+ */
 export function workerTrees(root: string, policy: Policy, trees: Worktree[] = worktrees(root)): Worktree[] {
   const dir = worktreesDir(policy, home(root, trees))
-  return trees.slice(1).filter((w) => !!w.branch && !isExempt(policy, w.branch) && same(dirname(w.path), dir))
+  return trees.slice(1).filter((w) => !!w.branch && !isExempt(policy, w.branch) && same(dirname(w.path), dir) && !landedTip(root, w.branch))
 }
 
 /**
@@ -99,7 +113,7 @@ export function workerBoundReason(
       line ? ` ${line.name}` : ""
     }, the coordination option maxWorkers (${policy.maxWorkers}): open no more until one is done`,
     ...open.map((w) => `  ${w.branch}  ${w.path}`),
-    "free one that has landed with naima prune --branch <branch> --write, or give two small items to one worker (naima open <item> <item>);",
+    "finish and land one, or give two small items to one worker (naima open <item> <item>);",
     `raise the bound only on purpose, in naima.json: "plugins": { "coordination": { "options": { "maxWorkers": ${policy.maxWorkers + 1} } } }`,
   ].join("\n")
 }

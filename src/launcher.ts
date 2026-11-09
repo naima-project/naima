@@ -211,6 +211,16 @@ export function githubOrigin(root: string): boolean {
 }
 
 /**
+ * The signals the launcher passes on to the program: an MCP server's (naima ui --mcp) interrupt and termination, which
+ * its client sends to the launcher's process alone; none for any other command, whose Ctrl-C reaches the program's
+ * process group from the terminal. Windows has no termination signal to listen to.
+ */
+export function passedSignals(rest: readonly string[], os: string): Deno.Signal[] {
+  if (rest[0] !== "ui" || !rest.includes("--mcp")) return []
+  return os === "windows" ? ["SIGINT"] : ["SIGINT", "SIGTERM"]
+}
+
+/**
  * The grant of `command`: only `ui`, `run`, `wait`, `land`, `tools`, `backup create`, `verify`, `stance adopt`, `guard server`, `issues` and, in a project
  * whose origin is on GitHub, `hello` have one; `tools` is the tools directory to write; `rest`, the arguments after the command; `github`, whether
  * the project's origin is on GitHub.
@@ -668,9 +678,24 @@ export async function launch(args: string[], cwd: string, resume?: Omit<UiSwitch
       stdout: "inherit",
       stderr: "inherit",
     }).spawn()
-    // Ctrl-C reaches the program too, which stops `naima ui`'s server and says how it ended: wait for it.
+    // Ctrl-C reaches the program too, which stops `naima ui`'s server and says how it ended: wait for it. An MCP server's
+    // client signals this process alone, not its group: the signal is passed on, and the launcher waits for the end.
+    const passed = passedSignals(parsed.rest, Deno.build.os)
     const wait = () => {}
-    if (ui) Deno.addSignalListener("SIGINT", wait)
+    const pass = (signal: Deno.Signal) => () => {
+      try {
+        child.kill(signal)
+      } catch { /* already ended */ }
+    }
+    const passers = passed.map((signal) => [signal, pass(signal)] as const)
+    const listeners: (readonly [Deno.Signal, () => void])[] = passers.length ? passers : ui ? [["SIGINT", wait]] : []
+    const listen = (on: boolean) => {
+      for (const [signal, f] of listeners) {
+        if (on) Deno.addSignalListener(signal, f)
+        else Deno.removeSignalListener(signal, f)
+      }
+    }
+    listen(true)
     const { code } = await child.status
     if (switchFile) {
       const next = code === UI_SWITCH ? switchTarget(readSwitch(switchFile), known ?? []) : null
@@ -678,7 +703,7 @@ export async function launch(args: string[], cwd: string, resume?: Omit<UiSwitch
         Deno.removeSync(switchFile)
       } catch { /* already gone */ }
       if (code === UI_SWITCH) {
-        if (ui) Deno.removeSignalListener("SIGINT", wait)
+        listen(false)
         if (!next) {
           console.error("naima: naima ui asked to switch to a project that is not one of the recent projects")
           return 1
@@ -687,7 +712,7 @@ export async function launch(args: string[], cwd: string, resume?: Omit<UiSwitch
         return launch(["--data", next.data, ...parsed.rest], next.root, { port: next.port, token: next.token })
       }
     }
-    if (ui) Deno.removeSignalListener("SIGINT", wait)
+    listen(false)
     if (code !== RELAUNCH) return code
     entry = real(runtimeOf(program) ?? program) // resolved, as the permissions name it: the program may have just been made
     // The program moved to another commit: its own launcher, which may grant what this one does not (a release's
