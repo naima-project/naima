@@ -303,7 +303,8 @@ export function writeRaw(data: string, raw: Record<string, unknown>): void {
   } catch {
     // no naima.json yet: init writes the first one
   }
-  if (was === text) return
+  // A checkout with core.autocrlf (Git for Windows's default) holds the file with CRLF line ends: the same content.
+  if (was?.replaceAll("\r\n", "\n") === text) return
   if (was !== null) refuseConfigOnLine(data)
   writeFileAtomic(path, text)
 }

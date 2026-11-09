@@ -96,7 +96,8 @@ export async function atRisk(root: string, now: number = Date.now()): Promise<At
     }
     // From the root when it is beside it or within; a worktree further away by its full path.
     const rel = relative(root, w.path) || "."
-    const name = rel.startsWith(`..${sep}..`) ? w.path : rel
+    // Written with `/` on every platform: it is shown, and typed into a shell, which git on Windows reads the same.
+    const name = rel.startsWith(`..${sep}..`) ? w.path : rel.split(sep).join("/")
     const at = name === "." ? "" : `-C ${name} `
     return {
       kind: "worktree",
