@@ -10,7 +10,7 @@ import { join, relative } from "node:path"
 import { isDeepStrictEqual, stripVTControlCharacters } from "node:util"
 import { randomUUID } from "node:crypto"
 import { fileURLToPath } from "node:url"
-import { mkdirSync, readFileSync, rmSync } from "node:fs"
+import { mkdirSync, readFileSync, rmSync, statSync } from "node:fs"
 import {
   appliesTo,
   bool,
@@ -376,13 +376,26 @@ async function landingChecks(ctx: Context, landing: Landing, at: Context = ctx):
 }
 
 /**
+ * Whether this run may read the tree at `dir`: a worktree made while the program runs (a line sync's) is outside what
+ * the launcher fenced the program to, and reading it is refused as outside the project, though git works in it.
+ */
+export function readableTree(dir: string): boolean {
+  try {
+    statSync(join(dir, ".git"))
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * The landing checks of a landing on a line, run on the branch tip's files: in the worktree that stands on the branch
  * when it is clean and at the tip, else in a checkout of the tip made for them. A failing check refuses the landing;
  * what is not current is said, since the line's landing on the trunk is the one that asks for it.
  */
 async function lineLandingChecks(ctx: Context, landing: Landing): Promise<void> {
   const tree = worktrees(ctx.root).find((w) => w.branch === landing.branch && !w.self)
-  const clean = tree && gitOrNull(tree.path, "status", "--porcelain", "--untracked-files=no") === "" &&
+  const clean = tree && readableTree(tree.path) && gitOrNull(tree.path, "status", "--porcelain", "--untracked-files=no") === "" &&
     gitOrNull(tree.path, "rev-parse", "HEAD") === landing.to
   const made = clean ? null : checkoutAt(ctx, landing.to)
   try {
