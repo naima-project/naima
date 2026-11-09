@@ -914,6 +914,35 @@ function closeStep(ctx: Context, gate: GateDef, step: string, record: string): n
 }
 
 /**
+ * Reopen a closed step whose exit turns out not to hold: every record that names it loses the name, with the reason
+ * written as a note on that record, so the close and its undoing are both on the record. Later steps wait again, since a
+ * step is closed only when every step before it is.
+ */
+function reopenStep(ctx: Context, gate: GateDef, step: string, reason: string): number {
+  const r = gateSteps(ctx, gate)
+  const s = r.steps.find((x) => x.name === step)
+  if (!s) throw new Error(`gate ${gate.name} has no step "${step}" — steps: ${r.steps.map((x) => x.name).join(", ")}`)
+  if (s.state !== "closed") throw new Error(`step ${step} of gate ${gate.name} is not closed (${s.state}): there is nothing to reopen`)
+  if (!reason.trim() || reason.includes("\n")) throw new Error("--reason is one line: what the exit turned out to lack")
+  const ref = `${gate.name}/${step}`
+  const records = ctx.repo.items.filter((i) => (fieldValue(i, CLOSES_STEP) ?? []).includes(ref))
+  const note = ctx.registry.commands.get("note")
+  for (const rec of records) {
+    const rest = (fieldValue(rec, CLOSES_STEP) ?? []).filter((x) => x !== ref)
+    setFields(ctx, rec, [[CLOSES_STEP.name, rest.length ? JSON.stringify(rest) : ""]])
+    note?.run([
+      label(rec),
+      `Step ${step} of gate ${gate.name} reopened: ${reason.trim()}`,
+      "--by",
+      gitOrNull(ctx.root, "config", "user.name")?.trim() || "naima gate step",
+    ], ctx)
+  }
+  const after = gateSteps(ctx, gate).steps.find((x) => x.state === "next")
+  ctx.out(`gate ${gate.name}: step ${s.index}, ${step}, reopened (${reason.trim()})${after ? ` — next: ${after.name}, closed when ${after.exit}` : ""}`)
+  return 0
+}
+
+/**
  * Add a step of the gate's own, after the method's steps: last, right after `after` (one of its own steps, or the
  * method's last), or first of its own. Its name is refused when the gate already has a step by that name.
  */
@@ -967,7 +996,7 @@ const gateCommand: Command = {
     "declare a gate — a milestone, with a date and a version, or one that follows a stance's method — put items on it or take them off, add steps of its own, close its steps, and show one; writes go to naima.json and to the items, validated, through the write hooks",
   enforces: "writes to naima.json and to the items are validated and pass the write hooks",
   usage:
-    'gate new <name> "<title>" [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite] [--method <stance>/<method>] | gate set <name> [--title <t>] [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite | --no-full-suite] [--method <stance>/<method>] [--after <gate>,...] [--freeze YYYY-MM-DD] | gate add <gate> <item>... | gate remove <gate> <item>... | gate step <gate> <step> --by <item> | gate step add <gate> <step> "<title>" --exit <exit> [--after <step> | --first] | gate step remove <gate> <step> | gate show <gate> [--line]',
+    'gate new <name> "<title>" [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite] [--method <stance>/<method>] | gate set <name> [--title <t>] [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite | --no-full-suite] [--method <stance>/<method>] [--after <gate>,...] [--freeze YYYY-MM-DD] | gate add <gate> <item>... | gate remove <gate> <item>... | gate step <gate> <step> --by <item> | gate step <gate> <step> --reopen --reason "<why>" | gate step add <gate> <step> "<title>" --exit <exit> [--after <step> | --first] | gate step remove <gate> <step> | gate show <gate> [--line]',
   options: [
     { name: "--title", says: "gate set: its new title" },
     { name: "--says", says: "gate new and set: what the gate is for, in one sentence" },
@@ -993,6 +1022,11 @@ const gateCommand: Command = {
       name: "--by",
       says: "gate step: the settled item, such as a decision, that records the step's exit criterion holds; it gets closesStep=<gate>/<step>",
     },
+    {
+      name: "--reopen",
+      says: "gate step: reopen a closed step whose exit does not hold; the records closing it lose the step and each gets a note with the reason",
+    },
+    { name: "--reason", says: "gate step --reopen: why the exit does not hold, on one line" },
     { name: "--exit", says: "gate step add: the step's exit criterion, what must be true and recorded for it to close" },
     {
       name: "--after",
@@ -1042,6 +1076,8 @@ const gateCommand: Command = {
       first: { type: "boolean" },
       freeze: { type: "string" },
       line: { type: "boolean" },
+      reopen: { type: "boolean" },
+      reason: { type: "string" },
     })
     const [sub, name, ...rest] = p.positionals
     const after = str(p, "after")?.split(",").map((g) => g.trim()).filter(Boolean)
@@ -1109,6 +1145,11 @@ const gateCommand: Command = {
       return addStep(ctx, findGate(ctx, gate), { name: step, title, exit }, { ...(after !== undefined ? { after } : {}), first: bool(p, "first") })
     }
     if (sub === "step" && name === "remove" && rest.length === 2) return removeStep(ctx, findGate(ctx, rest[0]), rest[1]!)
+    if (sub === "step" && bool(p, "reopen")) {
+      const reason = str(p, "reason")
+      if (!name || rest.length !== 1 || reason === undefined || str(p, "by") !== undefined) throw usageError(this)
+      return reopenStep(ctx, findGate(ctx, name), rest[0]!, reason)
+    }
     if (sub === "step") {
       const by = str(p, "by")
       if (!name || rest.length !== 1 || !by) throw usageError(this)
