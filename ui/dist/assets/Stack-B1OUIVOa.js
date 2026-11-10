@@ -1,1 +1,0 @@
-import{Ct as e,Ut as t,Vt as n,_n as r,an as i,jt as a,lt as o,tn as s}from"./app.svelte-CwIZuevX.js";var c=t(`<div><!></div>`);function l(t,l){let u=o(l,`gap`,3,`md`),d=o(l,`align`,3,`stretch`);var f=c(),p=i(f);a(p,()=>l.children),r(f),s(()=>e(f,1,`stack gap-${u()??``} align-${d()??``}`,`svelte-1382wtz`)),n(t,f)}export{l as t};
