@@ -172,6 +172,9 @@ export const landingReportsPoint: ExtensionPoint<LandingReport> = {
   ],
 }
 
+/** git's empty tree: what a first checkpoint measures the changed files from, since there is no commit before it. */
+export const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
 /** Every file between two commits, from the project root. */
 const changedFiles = (root: string, from: string, to: string): string[] =>
   (gitOrNull(root, "diff", "--name-only", "--no-renames", "-z", from, to) ?? "").split("\0").filter(Boolean)
@@ -1175,7 +1178,7 @@ export const landingCheckCommand: Command = {
     const contribution = ctx.registry.contributions("landing-reports").find((c) => c.name === name)
     if (!contribution) throw new Error(`no landing check ${name} here: naima docs lists the landing reports the plugins contribute`)
     const tip = gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `${rev}^{commit}`)
-    const base = gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `${from}^{commit}`)
+    const base = from === EMPTY_TREE ? from : gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `${from}^{commit}`)
     if (!tip || !base) throw new Error(`no commit ${tip ? from : rev} here`)
     const progress = progressFor(ctx.err)
     progress.overall(0, 2, "stages")
