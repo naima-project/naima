@@ -144,6 +144,31 @@ start now (`naima meeting <meeting> --close`). Whenever fewer workers are open t
 `naima queue --ready` with a worker, without asking: `naima hello` and `naima claims` name the items to start, and the check `ready-work-waiting` notes a slot
 left idle while approved work waits. Nothing is started while a meeting is on; the model of this is `develop/models/meeting/` in the workshop.
 
+### Meetings with the owner
+
+The coordinator keeps `naima meeting wait` running in the background for the whole session, started with the tool's own background mode. It blocks until the
+owner takes a meeting (Take this meeting now on the UI's Meetings screen, or `naima meeting take <meeting>`), then prints the meeting and its agenda in order
+and ends. When it ends, the coordinator opens the meeting in the chat with that agenda, one question per message, records each answer at once, closes the
+meeting with `naima meeting <meeting> --close` when the owner stops, and starts `naima meeting wait` again. Each take wakes one waiter once, and a take made
+while no waiter runs is kept until one starts, so nothing is lost between two waits. Over MCP the same is the tool `meetings` and the store's machine
+`meetings`, whose `taken` is the last meeting taken from the open UI.
+
+Agents schedule the meetings; the owner asks for it in the chat. Each request is one command, or the MCP tool `action` with the same words:
+
+| The owner asks                          | The command                                     | The action     |
+| --------------------------------------- | ----------------------------------------------- | -------------- |
+| a new meeting, with a date or none      | `naima meeting new <name> "<title>" [--on <day>]` | `meeting-new`  |
+| put something on a meeting              | `naima meeting add <meeting> <item>...`         | `meeting-add`  |
+| move something to another meeting       | `naima meeting move <meeting> <item>...`        | `meeting-move` |
+| take something off every meeting        | `naima meeting off <item>...`                   | `meeting-off`  |
+| set, change or clear a meeting's date   | `naima meeting date <meeting> <day\|none>`      | `meeting-date` |
+| start a meeting now                     | `naima meeting take <meeting>`                  | `meeting-take` |
+
+Any open item that needs the owner can go on a meeting: an open question, a discussion, an approval, a landing waiting for a yes. An item other than a
+discussion is on one meeting at a time, a moved item is on that meeting only, and every add, move or removal is noted on the item, so its history says where it went. A discussion is on the meetings of its gate, any other item on
+the one its `meeting` field names. The store has the same moves as transitions of `meetings` (`move`, `off`, `date`, `take`), for an agent working through the
+open UI. The model of the take-now handshake is `develop/models/meeting/take-now/` in the workshop.
+
 When a worker dies, the coordinator salvages its work before spawning a replacement. The dead worker's worktree still holds everything it hadn't committed.
 Separate the real work from mechanical churn, commit the work as WIP marked unreviewed, and give the replacement that commit to read instead of starting it from
 nothing.

@@ -66,7 +66,7 @@ export function naimaTools(views: readonly string[], tabs: readonly string[]): {
       description:
         "Show the owner a place in the Naima UI open on this project, live: a screen, a plugin's view, an item, a commit (moving the playhead there) or a line. Give exactly one. It calls the UI's named sequence for it (agent.showScreen, showView, showItem, showCommit, showLine), which transition calls the same way. Prefer it to a page or an artifact of your own. Opens a UI when none is open.",
       inputSchema: obj({
-        screen: str("home, metrics, diary, bugs, features, failed_tests, goals, roadmap, map, all_projects or more"),
+        screen: str("home, metrics, diary, bugs, features, failed_tests, goals, roadmap, map, all_projects, meetings or more"),
         view: str(`a plugin's view: ${tabs.join(", ")}`),
         item: str("an item's ref, such as bugs/some-bug"),
         commit: str("a commit a local branch reaches: a hash or a ref"),

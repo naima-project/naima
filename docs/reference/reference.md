@@ -104,7 +104,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`ready`](#naima-ready) | gates | the open items that wait on nothing still open -- every `blocked-by` target settled -- most urgent first: what can start now; on a gate, only its items | nothing: it prints derived state, never stored |
 | [`order`](#naima-order) | gates | every open item in an order that puts it after everything it waits on (`blocked-by`), with its depth -- how many waits stand before it; items stuck on a cycle are listed apart | nothing: it prints derived state, never stored |
 | [`epic`](#naima-epic) | epics | each epic with its progress — n of m closed, what it waits for and whose hands — or put items in an epic and take them out | only an epic groups items and never itself, and its status follows its items: setting it against them is refused |
-| [`meeting`](#naima-meeting) | discussions | declare a meeting — who it needs, and a date or whenever they are present — put discussions on its agenda, and show the agenda | only a discussion goes on a meeting's agenda, and a meeting is written to naima.json validated, as the next load reads it |
+| [`meeting`](#naima-meeting) | discussions | declare a meeting — who it needs, and a date or whenever they are present — put what needs them on its agenda, move it between meetings, set or clear its date, take it now, wait for it to be taken, and show the agenda | an item other than a discussion is on one meeting at most, a moved item is on that meeting only, and each change is noted on the item; a meeting is written to naima.json validated, as the next load reads it; a meeting is taken once until it closes, and each take wakes one waiting agent |
 | [`decide`](#naima-decide) | discussions | record the decision a discussion reached and mark it decided — a commit the trunk takes, during a meeting; a follow-up is filed only with the owner's yes | a discussion is decided only with its decision recorded; follow-up work is filed only with --consent, the owner's yes restated, and linked from the discussion |
 | [`spec`](#naima-spec) | planning | each specification: its current version, its drafts, and the open items that follow it; or revise one into its next version | a revision is a new spec item, its next version, that supersedes the old one; the old version is kept as it was |
 | [`decisions`](#naima-decisions) | planning | search the owner's decisions before asking: the settled ones whose title or page hold every word given, newest first | nothing: it only searches, so a settled question is looked up before it is asked again |
@@ -168,7 +168,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `roles` | roles | a role of the company of agents: `title`, what it `owns`, what it `refuses` (never empty), the `kinds` and `types` on its queue, and `queue(ctx)`, its open items most urgent first | roles |
 | `verifiers` | verifier | an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest; `toolArgs`, the flags `naima verify --tool-args` may pass, which never change the verdict; and `equivalences` with `compare({ before, after, equivalence }, ctx) → { verdict, output, counterexample?, details? }` and `preserves({ property, options, equivalence }, ctx)`, for `naima equivalent`; `identityOptions(options)`, the options as they identify a run, so a run made with other effective options is never reused; `propertyFile(property, root)`, the file a property names when it is not inline, so a missing one is said as missing | verifier, verifier-mcrl2 |
 | `tools` | tools | a tool a plugin needs, which `naima tools install` installs into Naima's own directory: name, exact version, licence, homepage, source and authors (its attribution, which `naima credits` prints), programs, how an install is verified, and per platform a source (url, size, sha256, format) or the answer saying why there is none | backup, verifier-mcrl2 |
-| `ui-views` | ui | a view the new UI shows as a tab, and whose data the bridge's `data` command answers: `name`, `title`, `says`, `order` (lower first, 0 when absent), `moments` (true: at a commit it is rendered from the files as they are, `params.at` the commit's hash), `screen` (true: the new interface has a screen of its own for it, so it is not also one of its tabs), `render(params, ctx) → { data, html, css? }`, rendered at each request | trackers, coordination, triage, gates, verifier, ui, metrics, schedule |
+| `ui-views` | ui | a view the new UI shows as a tab, and whose data the bridge's `data` command answers: `name`, `title`, `says`, `order` (lower first, 0 when absent), `moments` (true: at a commit it is rendered from the files as they are, `params.at` the commit's hash), `screen` (true: the new interface has a screen of its own for it, so it is not also one of its tabs), `render(params, ctx) → { data, html, css? }`, rendered at each request | trackers, coordination, triage, gates, discussions, verifier, ui, metrics, schedule |
 | `ui-tabs` | ui | a tab of the new UI, with optional subtabs: `name`, `title`, `says`, `order` (lower first, 0 when absent), `subtabs` ([{ name, title, says? }]), `files(ctx)` (the folder its pages and frames show, or null) and `render({ sub, query }, ctx)`, which gives `{ component, data, lead? }` (component one of list, table, chart, gallery, markdown, drawn by the app), `{ page }` (a file of `files`) or `{ html, css? }`; pages are served sandboxed, and no code of the plugin runs in the app | stance-ui |
 | `metric-kinds` | metrics | how a metric's number is read from its run: `read({ exit, stdout, stderr, seconds }, metric) → number \| { error }`, `readsExit` | metrics |
 | `metrics` | metrics | a named measurement: `run` (a program and its arguments) and `kind`, a code `measure`, a test `suite`'s number or a `file`'s; a bound — `atMost`, `atLeast` or `equals` — and `better` |  |
@@ -2144,15 +2144,20 @@ Options, each with the default it takes when nothing sets it:
 
 ### naima meeting
 
-Declare a meeting — who it needs, and a date or whenever they are present — put discussions on its agenda, and show the agenda.
+Declare a meeting — who it needs, and a date or whenever they are present — put what needs them on its agenda, move it between meetings, set or clear its date, take it now, wait for it to be taken, and show the agenda.
 
-**Enforces**: Only a discussion goes on a meeting's agenda, and a meeting is written to naima.json validated, as the next load reads it.
+**Enforces**: An item other than a discussion is on one meeting at most, a moved item is on that meeting only, and each change is noted on the item; a meeting is written to naima.json validated, as the next load reads it; a meeting is taken once until it closes, and each take wakes one waiting agent.
 
 ```sh
 naima meeting [<name>]
 naima meeting <name> --close [--consent "<the owner's yes>"] [--start <item>,...] [--skip <item>,...]
 naima meeting new <name> "<title>" [--needs <who>,...] [--on YYYY-MM-DD]
-naima meeting add <meeting> <discussion>...
+naima meeting add <meeting> <item>...
+naima meeting move <meeting> <item>...
+naima meeting off <item>...
+naima meeting date <meeting> <YYYY-MM-DD|none>
+naima meeting take <meeting>
+naima meeting wait [<meeting>] [--timeout <seconds>]
 ```
 
 | Option | Default | What it does |
@@ -2163,6 +2168,7 @@ naima meeting add <meeting> <discussion>...
 | `--skip` |  | --close: the packages the owner said not to queue now; comma-separated or repeated |
 | `--needs` |  | meeting new: who must be present, comma-separated; the owner when not given |
 | `--on` |  | meeting new: a fixed date, YYYY-MM-DD; without one, it takes place whenever the people it needs are present |
+| `--timeout` |  | meeting wait: give up after this many seconds, exit 1; without it, wait until a meeting is taken |
 
 Examples:
 
@@ -2171,6 +2177,12 @@ naima meeting
 naima meeting new owner "With the owner"
 naima meeting new review "Design review" --needs owner,reviewer --on 2026-11-03
 naima meeting add owner discussions/plugin-names
+naima meeting move review features/export-formats
+naima meeting off features/export-formats
+naima meeting date review 2026-11-20
+naima meeting date review none
+naima meeting take owner
+naima meeting wait
 naima meeting owner
 naima meeting owner --close
 naima meeting owner --close --consent "yes, queue them; start the export fix now" --start bugs/export-alpha
@@ -2214,6 +2226,7 @@ Discussions: a question that needs time with a person, not a quick answer: the t
 | `decision` | string | discussions | what the discussion decided, recorded by naima decide |  |
 | `decisionOn` | date | discussions | when the discussion was decided, stamped by naima decide |  |
 | `packaged` | date | discussions | when the decision was turned into work, stamped by naima meeting <m> --close |  |
+| `meeting` | string | every type | the meeting an item that needs the owner waits on (an approval, a landing, a question on it), written by naima meeting add, move and off; a discussion is on the meetings of its gate instead |  |
 
 **Link relations** — only the direction written is stored; the inverse is derived when read.
 
@@ -2239,6 +2252,12 @@ Discussions: a question that needs time with a person, not a quick answer: the t
 | Hook | What it does |
 |---|---|
 | `discussion-decided` | a discussion is decided only with its decision recorded |
+
+**UI views**, shown as tabs of the new UI
+
+| View | Title | What it shows |
+|---|---|---|
+| `meetings` | Meetings | the meetings with the owner, dated ones by date and the rest waiting, each with its agenda; the UI's Meetings screen draws it |
 
 ## planning
 

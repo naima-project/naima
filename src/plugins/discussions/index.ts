@@ -54,6 +54,10 @@ import {
   type Finding,
   isOpen,
   type Item,
+  joinProse,
+  NOTES_HEADING,
+  readReadme,
+  splitProse,
   label,
   linked,
   parse,
@@ -507,6 +511,21 @@ function closeMeeting(ctx: Context, name: string, m: MeetingConfig, p: ReturnTyp
 }
 
 /**
+ * A move noted on the item, under a dated heading in its Notes section, appended as naima note appends: the words are
+ * Naima's own, made of the meetings' names and titles, so the write is not an authored one.
+ */
+function noteMove(ctx: Context, item: Item, said: string): void {
+  const fresh = ctx.repo.resolve(label(item))
+  const raw = readReadme(fresh)
+  const prose = splitProse(raw)
+  const entry = `### ${today(ctx)} — naima meeting\n\n${said}`
+  const head = raw.replace(/\n+$/, "")
+  const last = !prose.notes || head.endsWith(prose.notes.replace(/\n+$/, ""))
+  const next = last ? `${head}\n\n${prose.notes ? "" : `${NOTES_HEADING}\n\n`}${entry}\n` : joinProse({ ...prose, notes: [prose.notes, entry].join("\n\n") })
+  saveProse(ctx, fresh, next)
+}
+
+/**
  * Put an item on a meeting's agenda, move it to another, or take it off every one (`to` null). A discussion is on the
  * meetings of its gate field: add puts it on one more, move leaves it on that one only. Any other item is on the one
  * meeting its meeting field names. Each change is noted on the item, so its history says where it went. What it did,
@@ -531,8 +550,7 @@ function placeOnMeeting(ctx: Context, item: Item, to: string | null, move: boole
     : from && from !== to && (move || !isDiscussion(item))
     ? `Moved from the meeting ${titled(from)} to ${titled(to)}.`
     : `Put on the agenda of the meeting ${titled(to)}.`
-  const note = ctx.registry.find<Command>("commands", "note")?.value
-  if (note) void note.run([label(item), said, "--by", "naima meeting"], Object.create(ctx, { out: { value: () => {} } }) as Context)
+  noteMove(ctx, item, said)
   return `${label(item)}: ${said.charAt(0).toLowerCase()}${said.slice(1, -1)}`
 }
 
@@ -547,7 +565,7 @@ function meetingCommand(base: Record<string, MeetingConfig>): Command {
     says:
       "declare a meeting — who it needs, and a date or whenever they are present — put what needs them on its agenda, move it between meetings, set or clear its date, take it now, wait for it to be taken, and show the agenda",
     enforces:
-      "an item is on one meeting at most, and each move is noted on the item; a meeting is written to naima.json validated, as the next load reads it; a meeting is taken once until it closes, and each take wakes one waiting agent",
+      "an item other than a discussion is on one meeting at most, a moved item is on that meeting only, and each change is noted on the item; a meeting is written to naima.json validated, as the next load reads it; a meeting is taken once until it closes, and each take wakes one waiting agent",
     usage:
       'meeting [<name>] | meeting <name> --close [--consent "<the owner\'s yes>"] [--start <item>,...] [--skip <item>,...] | meeting new <name> "<title>" [--needs <who>,...] [--on YYYY-MM-DD] | meeting add <meeting> <item>... | meeting move <meeting> <item>... | meeting off <item>... | meeting date <meeting> <YYYY-MM-DD|none> | meeting take <meeting> | meeting wait [<meeting>] [--timeout <seconds>]',
     options: [

@@ -7,7 +7,7 @@ you.
 | Word           | What it is                                                                                  | Made with                                |
 | -------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------- |
 | **discussion** | a question that needs time with a person: the question, the options, and later the decision | `naima new discussions "<topic>"`        |
-| **meeting**    | a gate whose agenda is the discussions on it; it holds once every one is decided            | `naima meeting new <name> "<title>"`     |
+| **meeting**    | a gate whose agenda is the discussions on it, and anything else that waits for you; it holds once every discussion on it is decided | `naima meeting new <name> "<title>"`     |
 | **decision**   | what a discussion settled, recorded on it                                                   | `naima decide <discussion> "<decision>"` |
 | **package**    | the work the decisions of a meeting call for, one per item they concern                     | `naima meeting <name> --close`           |
 | **ready queue** | the work you approved, which the coordinator starts on its own when a worker is free       | `naima queue --ready`                    |
@@ -63,6 +63,34 @@ owner — With the owner (needs owner; whenever owner is present): 3 open of 4
 
 A meeting is also a gate, so `naima gates` lists it with the discussions still open, and it holds once each one is decided.
 
+Anything else that waits for you can go on a meeting too: a question on a feature, an approval, a landing waiting for your yes. `naima meeting add` puts it
+there, and the agenda lists it after the discussions. Such an item is on one meeting at a time:
+
+```sh
+naima meeting add review features/export-formats
+naima meeting move owner features/export-formats    # to another meeting
+naima meeting off features/export-formats           # off every meeting: it still needs you
+```
+
+Each of these is noted on the item, so its page says where it went and when. A meeting's date can be set, changed or cleared at any time:
+
+```sh
+naima meeting date review 2026-11-20
+naima meeting date review none                     # no date: whenever you're ready
+```
+
+You don't need to type these. Ask the agent in the chat ("put this on Friday's review", "move the review to Monday") and it runs them.
+
+## In the app
+
+The Meetings screen lists your meetings: the one on now, then those coming up by date, then those waiting with no date, which take place whenever you're ready.
+Each says when it is, how many things are on it, and opens to show its agenda. Every item that waits for you, on any screen, says so, and says which meeting
+it is on, or that it is on none yet. Home's Needs you starts with your next meeting and the others waiting.
+
+When you are ready, press **Take this meeting now**. Naima records that the meeting started and tells the agent in your chat, which opens with the agenda.
+The same from a terminal is `naima meeting take <meeting>`. The agent learns of it because it keeps `naima meeting wait` running in the background: the
+command ends when a meeting is taken and prints its agenda.
+
 ## At the start of a session
 
 `naima hello` names each meeting that has discussions to take and is due, which means any meeting without a date, and a dated one from its date on:
@@ -93,7 +121,7 @@ The follow-up is a todo, linked to the discussion with `concerns`.
 
 ## Close the meeting
 
-When you stop, the agent closes the meeting. Naima groups the decisions you just made into work packages, one for each open item they concern, and proposes
+When you stop, the agent closes the meeting, and a meeting you took is marked held. Naima groups the decisions you just made into work packages, one for each open item they concern, and proposes
 them:
 
 ```text
