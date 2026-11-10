@@ -554,7 +554,7 @@ function itemAt(ctx: Context, rev: string, id: string): Landed | null {
 }
 
 /** The id `ref` names: an id, an item of this checkout, or `<type or dir>/<slug>` at `rev`. */
-function idOf(ctx: Context, rev: string, ref: string): string {
+export function idOf(ctx: Context, rev: string, ref: string): string {
   if (isUuid(ref as unknown)) return ref
   try {
     return ctx.repo.resolve(ref).meta.id
