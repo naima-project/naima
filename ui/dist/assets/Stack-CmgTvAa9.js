@@ -1,1 +1,0 @@
-import{$ as e,F as t,Ot as n,S as r,V as i,Z as a,ft as o,gt as s}from"./Figure-BzE5D-Ly.js";var c=e(`<div><!></div>`);function l(e,l){let u=r(l,`gap`,3,`md`),d=r(l,`align`,3,`stretch`);var f=c(),p=s(f);i(p,()=>l.children),n(f),o(()=>t(f,1,`stack gap-${u()??``} align-${d()??``}`,`svelte-1382wtz`)),a(e,f)}export{l as t};
