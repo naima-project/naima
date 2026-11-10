@@ -1,1 +1,0 @@
-import{it as e,mn as t,pn as n}from"./app.svelte-Cd-1CTgz.js";import{t as r}from"./App-C8fz0Qkq.js";function i(i,a){t(a,!0),e(a.store),r(i,{}),n()}export{i as default};
