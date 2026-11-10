@@ -1,0 +1,1 @@
+import{K as e,lt as t,ut as n}from"./app.svelte-Cd-1CTgz.js";var r={name:`check`,size:24,node:[[`path`,{d:`M20 6 9 17l-5-5`}]]};r.node;var i=new Set([`$$slots`,`$$events`,`$$legacy`]);function a(a,o){let s=t(o,i);e(a,n(()=>s,{get icon(){return r}}))}export{a as t};
