@@ -13,6 +13,24 @@ import type { PluginScope } from "./types.ts"
 export type PluginApi = Omit<typeof Api, "CONTRACT" | "OLDEST_CONTRACT"> & PluginScope & { readonly contract: number }
 
 export { CONTRACT, OLDEST_CONTRACT } from "./contract.ts"
+export {
+  type CheckMode,
+  checkMode,
+  checkpointAfter,
+  checkpointBlock,
+  checkpointChecks,
+  type CheckpointRecord,
+  CHECKPOINTS,
+  CHECKS_OWED,
+  fastChecks,
+  lastPass,
+  owedLine,
+  owedNames,
+  owedSince,
+  owedTrailer,
+  readCheckpoints,
+  writeCheckpoint,
+} from "./checkpoints.ts"
 
 export { bool, type Flags, pairs, parse, type Parsed, positiveInt, str, strs, usageError } from "./args.ts"
 export { appliesTo, enumRank, fieldError, type FieldRef, fieldsOf, fieldValue, fieldValues, parseFieldValue, setFieldValue, type ValueOf } from "./fields.ts"

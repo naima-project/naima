@@ -107,7 +107,9 @@ refactor or a new test, say so in the hand-over instead (step 7), so the coordin
 
 ## 5. Run the gates, and read what breaks
 
-Run the project's full [gate](../guide/glossary.md#gate) set, including `naima check`. Where the project declares [metrics](../guide/metrics-and-budgets.md),
+Which checks to run depends on the project's check mode (the coordination option `checks`; `naima plugin` shows it). In `continuous` mode, run the project's full [gate](../guide/glossary.md#gate) set, including `naima check`, as follows. In `checkpoint` mode, run a build and the one or two test files you wrote or touched, and nothing wider: no suite, no model check, no landing check. `naima land` runs only the checks the project names as fast (`fastChecks`) and writes the rest into the landing marker as owed, `naima gates` lists them, and `naima checkpoint` runs them at a gate step closing, a goal reached, or when asked. Say in the report which wider runs are owed.
+
+In `continuous` mode: Where the project declares [metrics](../guide/metrics-and-budgets.md),
 also run `naima metrics run --record` and commit the record with the work. Report each number together with the one it is compared to, as the command prints it.
 A bound loosened to make the work fit is refused unless an item says why (`--because`). If a red result arrives with the trunk, don't absorb it quietly. Find
 out where it comes from (a detached worktree at the trunk settles it in one command), and if it is the trunk's, open an item and say so in the
