@@ -110,6 +110,8 @@ export function agentHandlers(bridge: Handlers, reader: Reader, commitTime: (ref
     const command = bridge[name]
     if (!command) continue
     out[name] = async (args) => {
+      // An agent proposes a plan; approving it is the owner's, from the UI.
+      if (name === "action" && args["name"] === "plan-approve") throw new Error("plan-approve is the owner's: an agent proposes with plan-propose, and the owner approves on the Plan view")
       const a = await command(args)
       const says = typeof a === "object" && a !== null && !Array.isArray(a) ? a["says"] : undefined
       return typeof says === "string" ? says : typeof a === "string" ? a : JSON.stringify(a)

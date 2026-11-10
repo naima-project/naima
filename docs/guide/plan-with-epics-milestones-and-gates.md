@@ -210,6 +210,39 @@ isn't listed either, because it is what the work is held to, and it is met when 
 requirement, `naima check` notes it (the check `dependencies-wait-on-work`), and the link should wait on the work that delivers or proves the requirement
 instead.
 
+## See how a goal will be reached: its plan
+
+`naima plan <goal>` lays out the work a goal still needs as waves that can run at the same time.
+
+```sh
+naima plan paper-ready          # the plan in a few lines
+naima plan paper-ready --json   # the whole graph, as the plan view gives it
+naima plan                      # one line for each goal with open work
+```
+
+The plan holds the goal's open items and every open item they wait for, even on another goal. An item waits for another
+through `blocked-by`, for its parts through `has-part`, and the proof of an item (`verified-by`) runs after the item. Each
+wave holds what is ready once the waves before it are done, at most as many items as the coordination option `maxWorkers`
+allows, the item with the longest chain after it first. The critical path is the heaviest chain: an item weighs its effort
+(S is half a unit, M one, L two, XL four) and one unit when it has none. The heavy runs come at the checkpoint, once every
+piece of work is done: items whose code is done and whose proof is owed, properties to check, tests and metrics to run, and
+the full test suite of a release gate.
+
+An agent proposes or revises a note on the plan with `naima plan <goal> --propose "<note>"`, and the owner approves the
+plan with `naima plan <goal> --approve`, or with the Approve button of the Plan view in `naima ui`. A new note clears the
+approval. An approval records the plan as it was, so when the work changes the plan says it needs approving again. A worker
+or an agent can't approve.
+
+The plan also shows where the work stops for you. An open discussion, something only a person can do (an item whose
+`runBy` is `human`) and each meeting with one of them on its agenda are nodes of their own, labelled "meeting with you",
+dated when the meeting has a date and waiting otherwise. Everything after them waits until the meeting is held, and a
+meeting takes no worker's place. An item a discussion is about (`concerns`) waits for its decision.
+
+In the UI, select a goal on the Roadmap to unfold its waves under its bar, placed at the pace
+its items closed lately, and open the Plan view to see the whole graph with the critical path drawn strong. Under the Roadmap's time axis, each
+checkpoint run (`naima checkpoint`) is a small square joined to the goal it checks: filled when it passed, red when it
+failed, and hollow at a goal's expected end while one is owed.
+
 ## Keep a diary
 
 The timeline says when gates opened and when epics finished. A diary says what happened and why, day by day, and it is written as things happen.
