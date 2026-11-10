@@ -220,6 +220,11 @@ The window follows the project as it changes. Naima looks at it every second: a 
 a note, a claim). When something changed and has settled, it sends one event, naming what kinds of change it saw. While the window shows Live, the screens read
 their data again; while it shows a commit of the past, nothing moves until you go back to Live. That rule is part of the interface's model and is checked there.
 
+What a live change brings is shown as it arrives. New cards, rows, items and stations fade in with a slight rise, what went away fades out, and what changed
+place slides to its new one. In the Days panel a new day or moment grows into its space, so the line of days lengthens as the project fills. Only what is new
+since the last reading moves: opening the window, changing screen or choosing a filter shows the page at once. When your system asks for reduced motion, every
+change is shown at once, with no movement.
+
 Any view's data can be read as a commit had it: what the same view answers on a checkout of that commit, read only, from the tracker in that commit's tree. A
 commit is named by its hash or by any name git knows, such as a branch or `HEAD~3`. One git does not know, or one that no local branch reaches, is refused with
 a plain message. The commits looked at are kept, so going back to one is quick.
