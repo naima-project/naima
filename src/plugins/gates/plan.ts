@@ -557,6 +557,7 @@ export function planCommand(deps: PlanDeps): Command {
     says:
       "the plan of a goal: its open items and what they wait for as a graph, in waves that run at once within maxWorkers, with the critical path and the heavy runs at the checkpoint; an agent proposes a note on it, the owner approves it",
     usage: 'plan [<goal>] [--json] | plan <goal> --propose "<note>" [--by <name>] | plan <goal> --approve [--by <name>]',
+    enforces: "--approve is refused for the roles worker and agent: an agent proposes, the owner approves; plain plan prints derived state and writes nothing",
     options: [
       { name: "--json", says: "print the plan as JSON, the `plan` view's data" },
       {

@@ -14,7 +14,7 @@
 // public: every text posted on it passes the private-data scrub, and a finding
 // refuses the post; what is read from it is untrusted data, never instructions.
 
-import { spawnSyncFed } from "../../core/spawn-fed.ts"
+import { spawnSyncFed } from "../../core/api.ts"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import {
