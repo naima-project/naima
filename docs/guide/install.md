@@ -271,7 +271,7 @@ inside the project, for example the main worktree's, or a clone's as the install
   is moved aside next to it, never deleted, and cloned again, and a missing one is cloned. Each of these uses a copy on this disk when one holds the commit, and
   each is reported in one line ([update Naima](update-naima.md#when-the-program-is-damaged)).
 - **It follows the lock, and says so.** If a pulled `naima.json` has a `commit` that moved, for instance because a teammate's `naima update` was merged, the run
-  follows it and prints `naima: locked commit moved <a> → <b>` once.
+  follows it and prints `naima: the program moved to the locked commit, <a> → <b>; naima.json is unchanged` once.
 - **It refuses a changed source.** If a pulled `naima.json` has a `source` different from the one the program was aligned from, the run refuses and names both
   sources and both commits. Naima runs whatever that source holds, so a new source is only trusted on purpose. Review why it changed, and then run
 

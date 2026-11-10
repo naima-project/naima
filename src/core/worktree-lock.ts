@@ -20,6 +20,8 @@ export const PROMPTED = new Set(["hello", "verify", "run"])
 /** Why the program of a worktree is held, with the prompt that says how to fix it; null when it is aligned as usual. */
 export interface Hold {
   prompt: string
+  /** One line for the other commands, when the program runs another commit than this worktree's lock; null when it runs the lock's. */
+  note: string | null
 }
 
 /** The main checkout of the repository at `root`, when `root` is another worktree of it; else null. */
@@ -68,6 +70,9 @@ export function worktreeHold(t: { root: string; data: string; program: string; c
   const mine = named(repo, t.commit)
   const trunks = theirs ? named(repo, theirs) : null
   const lines: string[] = []
+  const note = head && head !== t.commit
+    ? `naima: this worktree's program runs ${named(repo, head)}, and its lock names ${mine}: Naima moved nothing, and runs it (naima hello says how to fix it)`
+    : null
   if (link) {
     lines.push(
       `naima: this worktree (${at}, branch ${branch}) runs the program ${program}, a link to ${
@@ -86,7 +91,7 @@ export function worktreeHold(t: { root: string; data: string; program: string; c
         theirs && theirs !== t.commit ? ` Then bring the branch to the trunk's Naima, ${trunks}: merge ${trunkName} into ${branch}.` : ""
       }`,
     )
-    return { prompt: lines.join("\n") }
+    return { prompt: lines.join("\n"), note }
   }
   if (!theirs || theirs === t.commit) return null
   const newer = runGit(t.root, ["-C", t.program, "merge-base", "--is-ancestor", theirs, t.commit]).ok
@@ -97,5 +102,5 @@ export function worktreeHold(t: { root: string; data: string; program: string; c
       ? `  In the main checkout of this repository, the worktree at ${at} (branch ${branch}) locks Naima ${mine}, newer than the trunk's ${trunks}: if that update is meant to land, merge ${trunkName} into ${branch}, then land ${branch} with naima land; if not, merge ${trunkName} into ${branch} and keep the trunk's lock, ${trunks}.`
       : `  In the main checkout of this repository, the worktree at ${at} (branch ${branch}) still locks Naima ${mine}, older than the trunk's ${trunks}: merge ${trunkName} into ${branch} in that worktree, so its lock becomes ${trunks}, then run naima hello there, which moves its own clone to it; if ${branch} is finished, land it with naima land after that merge.`,
   )
-  return { prompt: lines.join("\n") }
+  return { prompt: lines.join("\n"), note }
 }

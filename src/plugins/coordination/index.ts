@@ -87,7 +87,7 @@ import { readStaleAfter, staleCommand, type StaleData, staleData, staleSection }
 import { applyPlan, planSweep, type SweepInputs, type SweepItem, sweepLines, type SweepResult } from "./sweep.ts"
 import { changeNotesCheck, changesCommand } from "./changes.ts"
 import { checkpointCommand } from "./checkpoint.ts"
-import { land, landingCheckCommand, landingReportsPoint, landingsAreMarkers, landingsPaired } from "./land.ts"
+import { idOf, land, landingCheckCommand, landingReportsPoint, landingsAreMarkers, landingsPaired } from "./land.ts"
 import { claimsReports, claimsReportsPoint } from "./claims-reports.ts"
 import { pushCheckCommand } from "./messages.ts"
 import { fixCommand } from "./fix.ts"
@@ -412,6 +412,26 @@ const claimCommand: Command = {
   },
 }
 
+/**
+ * The id of the item `ref` names, for releasing it: an item of this checkout; else, for an item filed on the trunk after
+ * the branch was cut, one of the claim's entries by its id, ref or slug, or the item as the trunk has it.
+ */
+function claimedId(ctx: Context, entries: readonly ClaimEntry[], ref: string): string {
+  try {
+    return ctx.repo.resolve(ref).meta.id
+  } catch (e) {
+    const entry = entries.find((x) => x.id === ref || x.ref === ref || x.ref.split("/").pop() === ref)
+    if (entry) return entry.id
+    const main = trunk(ctx.trackerGit)
+    if (!main) throw e
+    try {
+      return idOf(ctx, `refs/heads/${main}`, ref)
+    } catch {
+      throw e
+    }
+  }
+}
+
 const release: Command = {
   name: "release",
   says: "drop this branch's claim on items; the last one removes the file, unless the branch is being prepared (claim --preparing)",
@@ -425,7 +445,7 @@ const release: Command = {
     const branch = currentBranch(ctx.root)
     const mine = myClaim(ctx, branch)
     if (!mine) throw new Error(`nothing to release: ${branch} holds no claim here`)
-    const ids = new Set(refs.map((r) => ctx.repo.resolve(r).meta.id))
+    const ids = new Set(refs.map((r) => claimedId(ctx, mine.items, r)))
     const kept = mine.items.filter((e) => !ids.has(e.id))
     if (kept.length === mine.items.length) throw new Error(`none of ${refs.join(", ")} is claimed on ${branch}; nothing changed`)
     ctx.out(`released ${mine.items.length - kept.length} on ${branch}`)
