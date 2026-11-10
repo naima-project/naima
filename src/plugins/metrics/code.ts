@@ -17,11 +17,10 @@
 // closures, and counts if, while, for, each match arm after the first, ?,
 // let-else, && and ||. Good enough to see a trend; not a type checker.
 
-import { spawnSyncFed } from "../../core/spawn-fed.ts"
 import { spawnSync } from "node:child_process"
 import { existsSync, readFileSync, statSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { pathMatches } from "../../core/api.ts"
+import { pathMatches, spawnSyncFed } from "../../core/api.ts"
 
 /** A function a language found in a file. */
 export interface FunctionInfo {
