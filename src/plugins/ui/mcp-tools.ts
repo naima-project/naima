@@ -124,6 +124,11 @@ export const TOOL_SPECS: { [name: string]: { description: string; inputSchema: {
     description: "Who works on what: claims with their step and silence, the ready queue, stale work and unpushed work at risk; or one worker by branch.",
     inputSchema: schema({ worker: str_("one worker's branch, such as worker/x") }) as { [k: string]: Json },
   },
+  meetings: {
+    description:
+      "The meetings with the owner in a line each (taken now, dated by date, then those waiting, with how many items on each), or one meeting by name with its agenda in order. To schedule, move or take one, use action: meeting-new, meeting-add, meeting-move, meeting-off, meeting-date, meeting-take.",
+    inputSchema: schema({ name: str_("one meeting, such as owner") }) as { [k: string]: Json },
+  },
   metrics: {
     description: "Every metric's latest value, change and trend in a line each, or one metric by name with its recent points.",
     inputSchema: schema({ name: str_("one metric, such as tests"), limit: int_("points shown, default 12") }) as { [k: string]: Json },
@@ -140,7 +145,27 @@ export function agentTools(r: Reader): { [name: string]: (args: O) => Promise<st
     history: (a) => history(r, a),
     work: (a) => work(r, a),
     metrics: (a) => metrics(r, a),
+    meetings: (a) => meetings(r, a),
   }
+}
+
+// meetings
+
+const MEETING_STATE: Record<string, string> = { taken: "taken now", scheduled: "scheduled", waiting: "waiting, no date", held: "held" }
+
+async function meetings(r: Reader, a: O): Promise<string> {
+  const all = arr(get(await r.view("meetings"), "meetings")).map(obj)
+  const name = textArg(a, "name")
+  const line = (m: O) =>
+    `${str(m["name"])}: ${MEETING_STATE[str(m["state"])] ?? str(m["state"])}${m["on"] ? ` · ${str(m["on"])}` : ""} · ${plural(arr(m["agenda"]).length, "item")} · ${
+      cut(str(m["title"]), 60)
+    }`
+  if (!name) return all.length ? all.map(line).join("\n") : 'no meetings: declare one with action meeting-new ["<name>", "<title>"]'
+  const m = all.find((x) => str(x["name"]) === name)
+  if (!m) throw new Error(`no meeting ${name}; the meetings: ${all.map((x) => str(x["name"])).join(", ") || "none"}`)
+  const agenda = arr(m["agenda"]).map(obj)
+  return [line(m), ...(m["taken"] ? [`taken at ${str(m["taken"])}`] : []), ...agenda.map((i, n) => `  ${n + 1}. ${str(i["ref"])} · ${cut(str(i["title"]), 70)}`)]
+    .join("\n")
 }
 
 const limitOf = (a: O, dflt: number, max = LIST_MAX) => {

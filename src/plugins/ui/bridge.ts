@@ -54,6 +54,12 @@ export const ACTIONS: readonly { name: string; words: string[]; says: string; bu
   { name: "claim", words: ["claim"], says: "claim items for this branch, or post its step" },
   { name: "release", words: ["release"], says: "release this branch's claim" },
   { name: "name-stop", words: ["name-stop"], says: "give a commit of the map a name of the owner's own, or clear it (naima name-stop)" },
+  { name: "meeting-take", words: ["meeting", "take"], says: "take a meeting now: record that it started and wake the agent waiting with naima meeting wait (naima meeting take <meeting>)" },
+  { name: "meeting-new", words: ["meeting", "new"], says: 'declare a meeting, with a date or none (naima meeting new <name> "<title>" [--on YYYY-MM-DD])' },
+  { name: "meeting-add", words: ["meeting", "add"], says: "put items that need the owner on a meeting's agenda (naima meeting add <meeting> <item>...)" },
+  { name: "meeting-move", words: ["meeting", "move"], says: "move items to another meeting, noted on each (naima meeting move <meeting> <item>...)" },
+  { name: "meeting-off", words: ["meeting", "off"], says: "take items off every meeting, back to needing the owner (naima meeting off <item>...)" },
+  { name: "meeting-date", words: ["meeting", "date"], says: "set a meeting's date, or clear it with none (naima meeting date <meeting> <YYYY-MM-DD|none>)" },
   {
     name: "record-metrics",
     words: ["metrics", "run", "--record"],

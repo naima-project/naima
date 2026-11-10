@@ -35,7 +35,7 @@
 // properties (nothing starts without the owner's yes, no work starts during a
 // meeting, approved work is started).
 
-import { readFileSync } from "node:fs"
+import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import {
   addLink,
@@ -66,6 +66,7 @@ import {
   saveProse,
   setFields,
   setFieldValue,
+  stateDir,
   str,
   strs,
   type SummarySection,
@@ -83,6 +84,8 @@ const DECISION_ON = { name: "decisionOn", kind: "date" } as const
 const PACKAGED = { name: "packaged", kind: "date" } as const
 const GATE = { name: "gate", kind: "enum" } as const
 const DUE = { name: "due", kind: "date" } as const
+/** The meeting an item other than a discussion waits on, written by naima meeting add, move and off. */
+const MEETING = { name: "meeting", kind: "string" } as const
 const PRIORITY = { name: "priority", kind: "enum" } as const
 /** The priorities that defer a discussion: it stays queued, after the rest. */
 const DEFERRING = ["later", "parked"]
@@ -110,11 +113,20 @@ export interface MeetingConfig {
   needs?: string[]
   /** A fixed date, YYYY-MM-DD; without one, it takes place whenever the people it needs are present. */
   on?: string
+  /** When it was taken, an ISO time: `naima meeting take` sets it, closing clears it. */
+  taken?: string
+  /** The day it was last closed, YYYY-MM-DD. */
+  held?: string
 }
+
+/** Where a meeting stands: dated and not taken yet, undated and waiting, taken now, or held with nothing left on it. */
+export type MeetingState = "scheduled" | "waiting" | "taken" | "held"
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 const isDate = (v: unknown): v is string => typeof v === "string" && DATE.test(v) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v
 const NAME = /^[a-z0-9][a-z0-9._-]*$/
+/** The words of `naima meeting` that no meeting may be called. */
+const RESERVED = ["new", "add", "move", "off", "date", "take", "wait", "none"]
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v)
 
 function readMeetings(options: Record<string, unknown>): Record<string, MeetingConfig> {
@@ -128,6 +140,11 @@ function readMeetings(options: Record<string, unknown>): Record<string, MeetingC
       throw new Error(`discussions: meeting "${name}": needs is a non-empty list of names`)
     }
     if (m["on"] !== undefined && !isDate(m["on"])) throw new Error(`discussions: meeting "${name}": on is a date, YYYY-MM-DD, got ${JSON.stringify(m["on"])}`)
+    if (m["held"] !== undefined && !isDate(m["held"])) throw new Error(`discussions: meeting "${name}": held is a date, YYYY-MM-DD, got ${JSON.stringify(m["held"])}`)
+    if (m["taken"] !== undefined && (typeof m["taken"] !== "string" || Number.isNaN(Date.parse(m["taken"])))) {
+      throw new Error(`discussions: meeting "${name}": taken is a time, as naima meeting take writes it, got ${JSON.stringify(m["taken"])}`)
+    }
+    if (RESERVED.includes(name)) throw new Error(`discussions: meeting "${name}": the name is a word of naima meeting; choose another`)
   }
   return meetings as Record<string, MeetingConfig>
 }
@@ -136,9 +153,24 @@ const needsOf = (m: MeetingConfig): string[] => m.needs ?? ["owner"]
 const whenOf = (m: MeetingConfig): string => (m.on ? `on ${m.on}` : `whenever ${needsOf(m).join(" and ")} ${needsOf(m).length > 1 ? "are" : "is"} present`)
 
 const isDiscussion = (i: Item): boolean => i.type === discussionsType.id
-/** A meeting's agenda: the discussions on it. */
+/** A meeting's discussions: those on its gate. The gate holds once each is decided. */
 const agendaOf = (ctx: Context, name: string): Item[] => ctx.repo.items.filter((i) => isDiscussion(i) && fieldValues(i, GATE).includes(name))
 const openAgenda = (ctx: Context, name: string): Item[] => agendaOf(ctx, name).filter((i) => isOpen(ctx, i))
+/** The other open items on a meeting's agenda: an approval, a landing, a question on an item, each moved there by its meeting field. */
+const othersOn = (ctx: Context, name: string): Item[] =>
+  ctx.repo.items.filter((i) => !isDiscussion(i) && fieldValue(i, MEETING) === name && isOpen(ctx, i))
+/** The meeting an item is on: a discussion's first meeting gate, another item's meeting field; null when none. */
+function meetingOfItem(i: Item, meetings: Record<string, MeetingConfig>): string | null {
+  if (isDiscussion(i)) return fieldValues(i, GATE).find((g) => Object.hasOwn(meetings, g)) ?? null
+  const m = fieldValue(i, MEETING)
+  return m && Object.hasOwn(meetings, m) ? m : null
+}
+/** Where a meeting stands. */
+function stateOf(ctx: Context, name: string, m: MeetingConfig): MeetingState {
+  if (m.taken) return "taken"
+  if (m.held && !openAgenda(ctx, name).length && !othersOn(ctx, name).length) return "held"
+  return m.on ? "scheduled" : "waiting"
+}
 
 /** Where an open discussion stands on the agenda, in the order the meeting takes them. */
 export type Place = "now" | "blocks" | "rest" | "deferred"
@@ -207,24 +239,65 @@ const meetingGate = (name: string, m: MeetingConfig): MeetingGate => ({
 
 const DATA_PATH = (ctx: Context): string => join(ctx.trackerRoot, DATA_FILE)
 
-/** Write a meeting into naima.json, validated as the next load reads it. */
-function declareMeeting(ctx: Context, name: string, meeting: MeetingConfig, known: Record<string, MeetingConfig>): void {
-  if (ctx.registry.find("gates", name) || Object.hasOwn(known, name)) throw new Error(`a gate or meeting "${name}" already exists — naima gates`)
+/**
+ * The meetings as naima.json has them now, over those the plugin was loaded with: a long-running process (naima ui,
+ * naima meeting wait) sees a meeting declared, taken or dated since it started.
+ */
+function liveMeetings(ctx: Context, base: Record<string, MeetingConfig>): Record<string, MeetingConfig> {
+  try {
+    const raw = JSON.parse(readFileSync(DATA_PATH(ctx), "utf8")) as Record<string, unknown>
+    const plugins = isObject(raw["plugins"]) ? raw["plugins"] : {}
+    const entry = isObject(plugins["discussions"]) ? plugins["discussions"] : {}
+    const options = isObject(entry["options"]) ? entry["options"] : {}
+    return { ...base, ...readMeetings(options) }
+  } catch {
+    return base
+  }
+}
+
+/** Change the meetings in naima.json, validated as the next load reads it: `change` is given them as the file has them. */
+function writeMeetings(ctx: Context, change: (current: Record<string, MeetingConfig>) => Record<string, MeetingConfig>): void {
   const raw = JSON.parse(readFileSync(DATA_PATH(ctx), "utf8")) as Record<string, unknown>
   const plugins = isObject(raw["plugins"]) ? raw["plugins"] : {}
   const entry = isObject(plugins["discussions"]) ? plugins["discussions"] : {}
   const options = isObject(entry["options"]) ? entry["options"] : {}
-  const current = isObject(options["meetings"]) ? options["meetings"] : {}
-  if (Object.hasOwn(current, name)) throw new Error(`a meeting "${name}" already exists — naima meeting show ${name}`)
-  const next = { ...options, meetings: { ...current, [name]: meeting } }
+  const current = (isObject(options["meetings"]) ? options["meetings"] : {}) as Record<string, MeetingConfig>
+  const next = { ...options, meetings: change(current) }
   readMeetings(next)
   writeJson(DATA_PATH(ctx), { ...raw, plugins: { ...plugins, discussions: { ...entry, options: next } } })
+}
+
+/** Write a meeting into naima.json, validated as the next load reads it. */
+function declareMeeting(ctx: Context, name: string, meeting: MeetingConfig, known: Record<string, MeetingConfig>): void {
+  if (ctx.registry.find("gates", name) || Object.hasOwn(known, name)) throw new Error(`a gate or meeting "${name}" already exists — naima gates`)
+  writeMeetings(ctx, (current) => {
+    if (Object.hasOwn(current, name)) throw new Error(`a meeting "${name}" already exists — naima meeting ${name}`)
+    return { ...current, [name]: meeting }
+  })
+}
+
+/** Change one meeting in naima.json; the others stay as they are. */
+function changeMeeting(ctx: Context, name: string, change: (m: MeetingConfig) => MeetingConfig): MeetingConfig {
+  let out: MeetingConfig | undefined
+  writeMeetings(ctx, (current) => {
+    const m = current[name]
+    if (!m) throw new Error(`no meeting "${name}" in ${DATA_FILE}`)
+    out = change(m)
+    return { ...current, [name]: out }
+  })
+  return out!
 }
 
 function agendaLines(ctx: Context, name: string, m: MeetingConfig, meetings: Record<string, MeetingConfig>): string[] {
   const all = agendaOf(ctx, name)
   const ordered = orderedAgenda(ctx, name, meetings)
-  const out = [`${name} — ${m.title} (needs ${needsOf(m).join(", ")}; ${whenOf(m)}): ${ordered.length} open of ${all.length}`]
+  const others = othersOn(ctx, name)
+  const state = stateOf(ctx, name, m)
+  const out = [
+    `${name} — ${m.title} (needs ${needsOf(m).join(", ")}; ${whenOf(m)}${state === "taken" ? `; taken ${m.taken}` : ""}): ${ordered.length} open of ${all.length}${
+      others.length ? `, and ${others.length} other item${others.length === 1 ? "" : "s"}` : ""
+    }`,
+  ]
   let n = 0
   for (const place of PLACES) {
     const here = ordered.filter((o) => o.place === place)
@@ -244,9 +317,81 @@ function agendaLines(ctx: Context, name: string, m: MeetingConfig, meetings: Rec
       )
     }
   }
+  if (others.length) {
+    out.push("  also on the agenda, waiting for a word from them:")
+    for (const i of others) out.push(`  ${++n}. ✗ ${label(i)}  ${i.meta.title}  [${i.meta.status}]`)
+  }
   for (const d of all.filter((i) => !isOpen(ctx, i))) out.push(`  ✓ ${label(d)}  ${d.meta.title}: ${fieldValue(d, DECISION) ?? ""}`)
   return out
 }
+
+// Taking a meeting now: the owner asks for it (the UI's Take this meeting now, or naima meeting take), the meeting is
+// recorded as taken in naima.json, and an event is left for the agents waiting with naima meeting wait. Each event is a
+// file of its own under the state folder's meetings/pending/; a waiter takes it by renaming it into meetings/seen/,
+// which only one rename can do, so each take wakes exactly one waiter, and a take made while no waiter runs is kept
+// until one starts. The model: develop/models/meeting/take-now.mcrl2 in the workshop.
+
+/** A meeting taken, as the event file holds it. */
+export interface TakenEvent {
+  id: string
+  meeting: string
+  title: string
+  at: string
+}
+
+function eventsDir(ctx: Context): string {
+  const s = stateDir(ctx.root)
+  if (!s) throw new Error("a meeting is taken in a git project: naima keeps the event for the waiting agent in its state folder")
+  return join(s, "meetings")
+}
+
+/** Record that the meeting started, and leave the event for a waiting agent. */
+function takeMeeting(ctx: Context, name: string, m: MeetingConfig): TakenEvent {
+  if (m.taken) throw new Error(`${name} is taken already, since ${m.taken}: close it first (naima meeting ${name} --close)`)
+  if (!openAgenda(ctx, name).length && !othersOn(ctx, name).length) throw new Error(`${name} has nothing on its agenda: there is nothing to take`)
+  const at = ctx.now().toISOString()
+  changeMeeting(ctx, name, (c) => ({ ...c, taken: at }))
+  const event: TakenEvent = { id: `${at.replace(/\D/g, "")}-${name}`, meeting: name, title: m.title, at }
+  const dir = join(eventsDir(ctx), "pending")
+  mkdirSync(dir, { recursive: true })
+  const tmp = join(dir, `.${event.id}.tmp`)
+  writeFileSync(tmp, JSON.stringify(event) + "\n")
+  renameSync(tmp, join(dir, `${event.id}.json`))
+  return event
+}
+
+/** Take the oldest pending event of `name` (any meeting when absent): null when none waits, or another waiter took it. */
+function takeEvent(ctx: Context, name: string | undefined): TakenEvent | null {
+  const dir = eventsDir(ctx)
+  const pending = join(dir, "pending")
+  let files: string[]
+  try {
+    files = readdirSync(pending).filter((f) => f.endsWith(".json")).sort()
+  } catch {
+    return null
+  }
+  for (const f of files) {
+    let e: TakenEvent
+    try {
+      e = JSON.parse(readFileSync(join(pending, f), "utf8")) as TakenEvent
+    } catch {
+      continue
+    }
+    if (name !== undefined && e.meeting !== name) continue
+    mkdirSync(join(dir, "seen"), { recursive: true })
+    try {
+      renameSync(join(pending, f), join(dir, "seen", f))
+    } catch {
+      continue // another waiter took it first
+    }
+    return e
+  }
+  return null
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+/** How often naima meeting wait looks for a meeting taken, in ms. */
+export const WAIT_POLL_MS = 500
 
 /** Whether a meeting is due now: always without a date, from its date on with one. */
 const dueNow = (ctx: Context, m: MeetingConfig): boolean => !m.on || m.on <= today(ctx)
@@ -293,6 +438,12 @@ function namedPackages(ctx: Context, refs: string[], packages: Package[], option
  * Without --consent it proposes them and writes nothing; with it, it records the owner's choice on each package's item
  * (a ready record, queued unless --start names it; nothing for one --skip names) and marks every decision packaged.
  */
+/** A meeting taken and now closed: no longer taken, held today. A meeting never taken is left as it is. */
+function endMeeting(ctx: Context, name: string, m: MeetingConfig): void {
+  if (!m.taken) return
+  changeMeeting(ctx, name, ({ taken: _, ...rest }) => ({ ...rest, held: today(ctx) }))
+}
+
 function closeMeeting(ctx: Context, name: string, m: MeetingConfig, p: ReturnType<typeof parse>): number {
   const { packages, loose } = packagesOf(ctx, name)
   const start = namedPackages(ctx, strs(p, "start"), packages, "--start")
@@ -301,6 +452,7 @@ function closeMeeting(ctx: Context, name: string, m: MeetingConfig, p: ReturnTyp
   const consent = str(p, "consent")?.trim()
   const open = openAgenda(ctx, name).length
   if (!packages.length && !loose.length) {
+    endMeeting(ctx, name, m)
     ctx.out(
       `${name}: no decision waits to become work${
         open ? `; ${open} discussion${open === 1 ? "" : "s"} stay${open === 1 ? "s" : ""} open, for the next meeting` : ""
@@ -349,22 +501,55 @@ function closeMeeting(ctx: Context, name: string, m: MeetingConfig, p: ReturnTyp
     setFields(ctx, ctx.repo.resolve(label(d)), [[PACKAGED.name, on]])
   }
   if (loose.length) ctx.out(`decided, nothing to queue: ${loose.map(label).join(", ")}`)
+  endMeeting(ctx, name, m)
   ctx.out("The ready queue: naima queue --ready. The coordinator starts the next item whenever a worker slot is free, without asking.")
   return 0
 }
 
-function meetingCommand(meetings: Record<string, MeetingConfig>): Command {
-  const meetingOrThrow = (name: string | undefined): [string, MeetingConfig] => {
+/**
+ * Put an item on a meeting's agenda, move it to another, or take it off every one (`to` null). A discussion is on the
+ * meetings of its gate field: add puts it on one more, move leaves it on that one only. Any other item is on the one
+ * meeting its meeting field names. Each change is noted on the item, so its history says where it went. What it did,
+ * in one line.
+ */
+function placeOnMeeting(ctx: Context, item: Item, to: string | null, move: boolean, meetings: Record<string, MeetingConfig>): string {
+  if (!isOpen(ctx, item)) throw new Error(`${label(item)} is not open: only what still waits goes on a meeting`)
+  const from = meetingOfItem(item, meetings)
+  const titled = (n: string) => `${n} (${meetings[n]?.title ?? n})`
+  if (isDiscussion(item)) {
+    const gates = fieldValues(item, GATE)
+    const kept = move ? gates.filter((g) => !Object.hasOwn(meetings, g)) : gates
+    const next = to === null || kept.includes(to) ? kept : [...kept, to]
+    if (next.join(",") === gates.join(",")) return `${label(item)}: ${to ? `on the agenda of ${to} already` : "on no meeting already"}`
+    setFields(ctx, item, [[GATE.name, next.join(",")]])
+  } else {
+    if ((fieldValue(item, MEETING) ?? null) === to) return `${label(item)}: ${to ? `on the agenda of ${to} already` : "on no meeting already"}`
+    setFields(ctx, item, [[MEETING.name, to ?? ""]])
+  }
+  const said = to === null
+    ? `Taken off the meeting ${titled(from ?? "?")}: it needs the owner, on no meeting yet.`
+    : from && from !== to && (move || !isDiscussion(item))
+    ? `Moved from the meeting ${titled(from)} to ${titled(to)}.`
+    : `Put on the agenda of the meeting ${titled(to)}.`
+  const note = ctx.registry.find<Command>("commands", "note")?.value
+  if (note) void note.run([label(item), said, "--by", "naima meeting"], Object.create(ctx, { out: { value: () => {} } }) as Context)
+  return `${label(item)}: ${said.charAt(0).toLowerCase()}${said.slice(1, -1)}`
+}
+
+function meetingCommand(base: Record<string, MeetingConfig>): Command {
+  const orThrow = (meetings: Record<string, MeetingConfig>, name: string | undefined): [string, MeetingConfig] => {
     const m = name === undefined ? undefined : meetings[name]
     if (!name || !m) throw new Error(`no meeting "${name}" — meetings: ${Object.keys(meetings).join(", ") || 'none yet: naima meeting new <name> "<title>"'}`)
     return [name, m]
   }
   return {
     name: "meeting",
-    says: "declare a meeting — who it needs, and a date or whenever they are present — put discussions on its agenda, and show the agenda",
-    enforces: "only a discussion goes on a meeting's agenda, and a meeting is written to naima.json validated, as the next load reads it",
+    says:
+      "declare a meeting — who it needs, and a date or whenever they are present — put what needs them on its agenda, move it between meetings, set or clear its date, take it now, wait for it to be taken, and show the agenda",
+    enforces:
+      "an item is on one meeting at most, and each move is noted on the item; a meeting is written to naima.json validated, as the next load reads it; a meeting is taken once until it closes, and each take wakes one waiting agent",
     usage:
-      'meeting [<name>] | meeting <name> --close [--consent "<the owner\'s yes>"] [--start <item>,...] [--skip <item>,...] | meeting new <name> "<title>" [--needs <who>,...] [--on YYYY-MM-DD] | meeting add <meeting> <discussion>...',
+      'meeting [<name>] | meeting <name> --close [--consent "<the owner\'s yes>"] [--start <item>,...] [--skip <item>,...] | meeting new <name> "<title>" [--needs <who>,...] [--on YYYY-MM-DD] | meeting add <meeting> <item>... | meeting move <meeting> <item>... | meeting off <item>... | meeting date <meeting> <YYYY-MM-DD|none> | meeting take <meeting> | meeting wait [<meeting>] [--timeout <seconds>]',
     options: [
       {
         name: "--close",
@@ -376,17 +561,26 @@ function meetingCommand(meetings: Record<string, MeetingConfig>): Command {
       { name: "--skip", says: "--close: the packages the owner said not to queue now; comma-separated or repeated" },
       { name: "--needs", says: "meeting new: who must be present, comma-separated; the owner when not given" },
       { name: "--on", says: "meeting new: a fixed date, YYYY-MM-DD; without one, it takes place whenever the people it needs are present" },
+      { name: "--timeout", says: "meeting wait: give up after this many seconds, exit 1; without it, wait until a meeting is taken" },
     ],
     examples: [
       "meeting",
       'meeting new owner "With the owner"',
       'meeting new review "Design review" --needs owner,reviewer --on 2026-11-03',
       "meeting add owner discussions/plugin-names",
+      "meeting move review features/export-formats",
+      "meeting off features/export-formats",
+      "meeting date review 2026-11-20",
+      "meeting date review none",
+      "meeting take owner",
+      "meeting wait",
       "meeting owner",
       "meeting owner --close",
       'meeting owner --close --consent "yes, queue them; start the export fix now" --start bugs/export-alpha',
     ],
-    run(args, ctx) {
+    async run(args, ctx) {
+      const meetings = liveMeetings(ctx, base)
+      const meetingOrThrow = (name: string | undefined) => orThrow(meetings, name)
       const p = parse(args, {
         needs: { type: "string" },
         on: { type: "string" },
@@ -394,6 +588,7 @@ function meetingCommand(meetings: Record<string, MeetingConfig>): Command {
         consent: { type: "string" },
         start: { type: "string", multiple: true },
         skip: { type: "string", multiple: true },
+        timeout: { type: "string" },
       })
       const [sub, name, ...rest] = p.positionals
       if (sub === "new") {
@@ -405,17 +600,58 @@ function meetingCommand(meetings: Record<string, MeetingConfig>): Command {
         ctx.out(`meeting ${name} declared in ${ctx.trackerDir}/${DATA_FILE} — put discussions on its agenda: naima meeting add ${name} <discussion>...`)
         return 0
       }
-      if (sub === "add") {
+      if (sub === "add" || sub === "move") {
         if (!rest.length) throw usageError(this)
         const [meeting] = meetingOrThrow(name)
-        for (const ref of rest) {
-          const item = ctx.repo.resolve(ref)
-          if (!isDiscussion(item)) throw new Error(`${label(item)} is not a discussion — file one: naima new discussions "<topic>"`)
-          const on = fieldValues(item, GATE)
-          if (!on.includes(meeting)) setFields(ctx, item, [[GATE.name, [...on, meeting].join(",")]])
-          ctx.out(`${label(item)}: on the agenda of ${meeting}`)
-        }
+        for (const ref of rest) ctx.out(placeOnMeeting(ctx, ctx.repo.resolve(ref), meeting, sub === "move", meetings))
         return 0
+      }
+      if (sub === "off") {
+        const refs = [name, ...rest].filter((r): r is string => r !== undefined)
+        if (!refs.length) throw usageError(this)
+        for (const ref of refs) ctx.out(placeOnMeeting(ctx, ctx.repo.resolve(ref), null, true, meetings))
+        return 0
+      }
+      if (sub === "date") {
+        const [meeting, m] = meetingOrThrow(name)
+        const on = rest[0]
+        if (!on || rest.length > 1) throw usageError(this)
+        if (on !== "none" && !isDate(on)) throw new Error(`a date is YYYY-MM-DD, or none to clear it: got ${on}`)
+        changeMeeting(ctx, meeting, ({ on: _, ...c }) => (on === "none" ? c : { ...c, on }))
+        ctx.out(on === "none" ? `${meeting}: no date now — it takes place ${whenOf({ title: m.title, ...(m.needs ? { needs: m.needs } : {}) })}` : `${meeting}: on ${on}`)
+        return 0
+      }
+      if (sub === "take") {
+        if (rest.length) throw usageError(this)
+        const [meeting, m] = meetingOrThrow(name)
+        const e = takeMeeting(ctx, meeting, m)
+        ctx.out(`${meeting}: taken at ${e.at} — the agent waiting with naima meeting wait opens with its agenda`)
+        for (const l of agendaLines(ctx, meeting, { ...m, taken: e.at }, meetings)) ctx.out(l)
+        return 0
+      }
+      if (sub === "wait") {
+        if (rest.length) throw usageError(this)
+        if (name !== undefined) meetingOrThrow(name)
+        const t = str(p, "timeout")
+        if (t !== undefined && !/^\d+$/.test(t)) throw new Error(`--timeout is a number of seconds: got ${t}`)
+        const until = t === undefined ? Infinity : Date.now() + Number(t) * 1000
+        for (;;) {
+          const e = takeEvent(ctx, name)
+          if (e) {
+            ctx.reload()
+            const now = liveMeetings(ctx, base)
+            const m = now[e.meeting] ?? { title: e.title }
+            ctx.out(`Meeting ${e.meeting} (${e.title}) was taken at ${e.at}: the owner is here. Open with its agenda, in its order, one question per message:`)
+            for (const l of agendaLines(ctx, e.meeting, { ...m, taken: e.at }, now)) ctx.out(l)
+            ctx.out(`When it ends: naima meeting ${e.meeting} --close. Then start naima meeting wait again, in the background.`)
+            return 0
+          }
+          if (Date.now() >= until) {
+            ctx.out(`no meeting was taken in ${t} s`)
+            return 1
+          }
+          await sleep(WAIT_POLL_MS)
+        }
       }
       if (sub !== undefined && (name !== undefined || rest.length)) throw usageError(this)
       if (bool(p, "close")) {
@@ -432,7 +668,7 @@ function meetingCommand(meetings: Record<string, MeetingConfig>): Command {
   }
 }
 
-const decideCommand = (meetings: Record<string, MeetingConfig>): Command => ({
+const decideCommand = (base: Record<string, MeetingConfig>): Command => ({
   name: "decide",
   says:
     "record the decision a discussion reached and mark it decided — a commit the trunk takes, during a meeting; a follow-up is filed only with the owner's yes",
@@ -448,6 +684,7 @@ const decideCommand = (meetings: Record<string, MeetingConfig>): Command => ({
     'decide discussions/meeting-time "Whenever the owner is present" --follow-up "Say the agenda at session start" --consent "yes, file it"',
   ],
   run(args, ctx) {
+    const meetings = liveMeetings(ctx, base)
     const p = parse(args, { "follow-up": { type: "string" }, consent: { type: "string" } })
     const [ref, decision, ...rest] = p.positionals
     if (!ref || !decision?.trim() || rest.length) throw usageError(this)
@@ -497,13 +734,20 @@ const hook: WriteHook = {
   },
 }
 
-function checks(meetings: Record<string, MeetingConfig>): Check {
+function checks(base: Record<string, MeetingConfig>): Check {
   return {
     name: "discussions",
     says:
       "a decided discussion records its decision; an open one is on a meeting's agenda, or it waits for no one; a decision taken in a meeting is turned into work when the meeting closes",
     run(ctx) {
+      const meetings = liveMeetings(ctx, base)
       const out: Finding[] = []
+      for (const i of ctx.repo.items) {
+        const m = isDiscussion(i) ? undefined : fieldValue(i, MEETING)
+        if (m && !Object.hasOwn(meetings, m)) {
+          out.push({ level: "problem", item: i, message: `${label(i)} is on the meeting ${m}, which is not declared — naima meeting move <meeting> ${i.slug}, or naima meeting off ${i.slug}` })
+        }
+      }
       for (const d of ctx.repo.items.filter(isDiscussion)) {
         if (!isOpen(ctx, d) && !fieldValue(d, DECISION)) {
           out.push({ level: "problem", item: d, message: `${label(d)} is decided but records no decision — naima set ${d.slug} decision="<decision>"` })
@@ -521,12 +765,73 @@ function checks(meetings: Record<string, MeetingConfig>): Check {
   }
 }
 
+/** A meeting as the UI's Meetings view shows it. */
+export interface MeetingRow {
+  name: string
+  title: string
+  needs: string[]
+  on: string | null
+  state: MeetingState
+  taken: string | null
+  held: string | null
+  /** Whether it is due now: always without a date, from its date on with one. */
+  due: boolean
+  /** The open items on its agenda, in the order it takes them: its discussions, then the other items moved there. */
+  agenda: { ref: string; title: string; type: string; status: string; place: Place | "other" }[]
+  /** The decided discussions not yet turned into work. */
+  toClose: number
+}
+
+/** Every meeting, the one taken first, then the dated by date, then those waiting; and the meeting of each item on one. */
+export function meetingsData(ctx: Context, meetings: Record<string, MeetingConfig>): { today: string; meetings: MeetingRow[]; on: Record<string, string> } {
+  const rows: MeetingRow[] = Object.entries(meetings).map(([name, m]) => ({
+    name,
+    title: m.title,
+    needs: needsOf(m),
+    on: m.on ?? null,
+    state: stateOf(ctx, name, m),
+    taken: m.taken ?? null,
+    held: m.held ?? null,
+    due: dueNow(ctx, m),
+    agenda: [
+      ...orderedAgenda(ctx, name, meetings).map(({ item, place }) => ({ ref: label(item), title: item.meta.title, type: item.type, status: item.meta.status, place })),
+      ...othersOn(ctx, name).map((i) => ({ ref: label(i), title: i.meta.title, type: i.type, status: i.meta.status, place: "other" as const })),
+    ],
+    toClose: packagesOf(ctx, name).packages.length,
+  }))
+  const rank = (r: MeetingRow) => (r.state === "taken" ? 0 : r.state === "held" ? 3 : r.on ? 1 : 2)
+  rows.sort((a, b) => rank(a) - rank(b) || (a.on ?? "").localeCompare(b.on ?? "") || a.name.localeCompare(b.name))
+  const on: Record<string, string> = {}
+  for (const r of rows) for (const a of r.agenda) on[a.ref] ??= r.name
+  return { today: today(ctx), meetings: rows, on }
+}
+
+const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+
+/** The meetings as a view of naima ui: the shape the `ui-views` point takes, declared here since plugins never import each other. */
+const meetingsUiView = (base: Record<string, MeetingConfig>) => ({
+  name: "meetings",
+  title: "Meetings",
+  says: "the meetings with the owner, dated ones by date and the rest waiting, each with its agenda; the UI's Meetings screen draws it",
+  order: 5,
+  render(_params: Record<string, string[]>, ctx: Context) {
+    const data = meetingsData(ctx, liveMeetings(ctx, base))
+    const html = data.meetings.map((r) =>
+      `<h3>${esc(r.title)}</h3><p>${r.on ? esc(r.on) : "Whenever you're ready"} · ${r.state} · ${r.agenda.length} on the agenda</p>${
+        r.agenda.length ? `<ol>${r.agenda.map((a) => `<li><code>${esc(a.ref)}</code> ${esc(a.title)}</li>`).join("")}</ol>` : ""
+      }`
+    ).join("") || "<p>No meetings yet.</p>"
+    return { data, html }
+  },
+})
+
 /** What `naima hello` says: each meeting due now with discussions to take, how it runs, and the decisions waiting for its close. */
-function helloSection(meetings: Record<string, MeetingConfig>): SummarySection {
+function helloSection(base: Record<string, MeetingConfig>): SummarySection {
   return {
     name: "meetings",
     hello: true,
     render(ctx) {
+      const meetings = liveMeetings(ctx, base)
       const rows = Object.entries(meetings)
         .filter(([, m]) => dueNow(ctx, m))
         .map(([name, m]) => {
@@ -535,19 +840,23 @@ function helloSection(meetings: Record<string, MeetingConfig>): SummarySection {
             meeting: name,
             title: m.title,
             needs: needsOf(m),
-            open: ordered.filter((o) => o.place !== "deferred").map((o) => label(o.item)),
+            open: [...ordered.filter((o) => o.place !== "deferred").map((o) => label(o.item)), ...othersOn(ctx, name).map(label)],
+            taken: m.taken ?? null,
             deferred: ordered.filter((o) => o.place === "deferred").map((o) => label(o.item)),
             toClose: packagesOf(ctx, name).packages.map((k) => label(k.item)),
           }
         })
-        .filter((r) => r.open.length || r.toClose.length)
+        .filter((r) => r.taken || r.open.length || r.toClose.length)
       return rendered(
         rows,
         (rs) =>
           rs.flatMap((r) => {
             const who = `${r.needs.join(" and ")} ${r.needs.length > 1 ? "are" : "is"}`
             return [
-              ...(r.open.length
+              ...(r.taken
+                ? [`Meeting ${r.meeting} (${r.title}) was taken at ${r.taken}: ${who} here now. Open with its agenda — naima meeting ${r.meeting} — and close it when it ends.`]
+                : []),
+              ...(!r.taken && r.open.length
                 ? [
                   `Meeting ${r.meeting} (${r.title}) has ${r.open.length} discussion${r.open.length === 1 ? "" : "s"} to take${
                     r.deferred.length ? ` (${r.deferred.length} more deferred)` : ""
@@ -615,6 +924,13 @@ export default function discussions(options: Record<string, unknown> = {}): Plug
         says: "when the decision was turned into work, stamped by naima meeting <m> --close",
         appliesTo: [discussionsType.id],
       },
+      {
+        name: MEETING.name,
+        kind: MEETING.kind,
+        filled: true,
+        says:
+          "the meeting an item that needs the owner waits on (an approval, a landing, a question on it), written by naima meeting add, move and off; a discussion is on the meetings of its gate instead",
+      },
     ],
     // A discussion may carry a date: due, it comes first on the agenda; to come, it is deferred until then.
     extends: [{ field: DUE.name, appliesTo: [discussionsType.id] }],
@@ -623,7 +939,8 @@ export default function discussions(options: Record<string, unknown> = {}): Plug
       { name: CONCERNED_BY, inverse: CONCERNS, says: "is discussed in" },
     ],
     uses: { fields: [GATE.name, DUE.name] },
-    contributes: { gates: Object.entries(meetings).map(([name, m]) => meetingGate(name, m)) },
+    contributes: { gates: Object.entries(meetings).map(([name, m]) => meetingGate(name, m)), "ui-views": [meetingsUiView(meetings)] },
+    optional: ["ui-views"],
     commands: [meetingCommand(meetings), decideCommand(meetings)],
     hooks: [hook],
     checks: [checks(meetings)],
