@@ -16,8 +16,10 @@
 //                                  record-metrics records the metrics (naima metrics run --record), name-stop names a
 //                                  commit of the map (naima name-stop)
 //   run {name}                     that run as `naima run status --json` shows it, with the end of its log
-//   show {screen|view|item|commit|line}  asks every UI open on the project to show that place (show.ts): what an
-//                                  agent calls to show the owner something; answers how many open UIs took it
+//   show {screen|view|item|commit|line}  asks every UI open on the project to show that place (show.ts), as the
+//                                  transition of the UI's sequence that shows it (agent.showScreen and the like):
+//                                  what an agent calls to show the owner something; answers how many open UIs took it
+//                                  and, when the UI refused it, why
 //   answer {id, ...}               the open UI's answer to an agent's question the feed show carried (the page as
 //                                  text, where its window is), kept for the agent (show.ts)
 //
@@ -36,7 +38,7 @@ import { AtCache, commitOf } from "./at.ts"
 import { knownAt, recentProjects } from "./switch.ts"
 import type { Feeds, Handlers, Json } from "./bridge-handler.ts"
 import { watchProject } from "./live.ts"
-import { askShow, listenShows, openUis, type Place, SCREENS, taken, writeAnswer } from "./show.ts"
+import { askShow, awaitAnswer, listenShows, openUis, requestId, taken, writeAnswer } from "./show.ts"
 import { commandJson, type JsonOf, metroData } from "./metro.ts"
 import { contentProblem, framePage, tabList, type UiTab, type UiTabContent, type UiView } from "./tabs.ts"
 
@@ -125,28 +127,24 @@ export interface BridgeOptions {
   known?(): readonly KnownProject[]
 }
 
-/** The place a show's arguments name: exactly one of screen, view, item, commit or line; or why it is refused. */
-export function placeOf(ctx: Context, args: { [key: string]: Json }, views: readonly string[]): Place | string {
-  const given = ["screen", "view", "item", "commit", "line"].filter((k) => text(args[k]) !== null)
+/** The named sequence of the UI's machine agent that shows each kind of place. */
+export const SHOW_SEQUENCES = { screen: "showScreen", view: "showView", item: "showItem", commit: "showCommit", line: "showLine" } as const
+
+/**
+ * The transition a show's arguments name: exactly one of screen, view, item, commit or line, as the sequence of the
+ * UI's machine agent that shows it, with the name as its argument; or why it is refused. The UI decides whether it
+ * knows the place; here a commit is only made a full hash, which takes git.
+ */
+export function showOf(ctx: Context, args: { [key: string]: Json }): { name: string; arg: string } | string {
+  const given = Object.keys(SHOW_SEQUENCES).filter((k) => text(args[k]) !== null) as (keyof typeof SHOW_SEQUENCES)[]
   if (given.length !== 1) return "show takes exactly one of screen, view, item, commit or line"
-  const v = text(args[given[0]!])!.trim()
-  switch (given[0]) {
-    case "screen": {
-      const screen = v.toUpperCase().replace(/[\s-]+/g, "_")
-      return SCREENS.includes(screen) ? { kind: "screen", screen } : `no screen ${v}: the screens are ${SCREENS.map((s) => s.toLowerCase()).join(", ")}`
-    }
-    case "view":
-      return views.includes(v) ? { kind: "view", name: v } : `no view ${v}: the views are ${views.join(", ")}`
-    case "item":
-      return /^[a-z0-9-]+\/[a-z0-9-]+$/.test(v) ? { kind: "item", ref: v } : `${v} is not an item's reference, <type>/<slug>`
-    case "commit":
-      try {
-        return { kind: "commit", hash: commitOf(ctx, v) }
-      } catch (e) {
-        return e instanceof Error ? e.message : String(e)
-      }
-    default:
-      return { kind: "line", name: v }
+  const kind = given[0]!
+  const v = text(args[kind])!.trim()
+  if (kind !== "commit") return { name: SHOW_SEQUENCES[kind], arg: v }
+  try {
+    return { name: SHOW_SEQUENCES.commit, arg: commitOf(ctx, v) }
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e)
   }
 }
 
@@ -291,8 +289,9 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       return json({ run, command: ["naima", ...argv] })
     },
     show: async (args) => {
-      const place = placeOf(ctx, args, opts.tabs.map((t) => t.name))
-      if (typeof place === "string") throw new Error(place)
+      const show = showOf(ctx, args)
+      if (typeof show === "string") throw new Error(show)
+      const place = { sequence: show.name, arg: show.arg }
       if (!openUis(ctx.root).length) {
         const opened = opts.openUi ? await opts.openUi() : null
         // A UI just opened listens once its page has loaded: wait for it, a little longer than for a show.
@@ -309,14 +308,23 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
           })
         }
       }
-      const id = askShow(ctx.root, place)
-      const { open, took } = await taken(ctx.root, id, opts.showWait ?? 8000)
+      // The show is the transition of the agent's sequence, which the UI carries out and answers.
+      const id = requestId()
+      const asked = askShow(ctx.root, { kind: "transition", id, machine: "agent", name: show.name, args: [show.arg] })
+      const wait = opts.showWait ?? 8000
+      const answer = await awaitAnswer<{ done?: boolean; says?: string; error?: string }>(ctx.root, id, wait)
+      const { open, took } = await taken(ctx.root, asked, 1000)
+      const shown = answer?.done === true
       return json({
-        shown: took > 0,
+        shown,
         open,
         took,
         place,
-        says: took > 0 ? `shown in ${took} of the ${open} open UIs` : `none of the ${open} open UIs said it took it within 8 s: one busy reading may still`,
+        says: answer === null
+          ? `none of the ${open} open UIs answered within ${Math.round(wait / 1000)} s: one busy reading may still`
+          : shown
+          ? `shown in ${took} of the ${open} open UIs`
+          : `not shown: ${answer.error ?? answer.says ?? "the UI refused it now"}`,
       })
     },
     answer: (args) => {
