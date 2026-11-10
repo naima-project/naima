@@ -1,0 +1,1 @@
+import{It as e,Jt as t,Pt as n,Qt as r,et as i,gt as a,un as o,wt as s}from"./app.svelte-Yf9gD6ro.js";var c=e(`<div><!></div>`);function l(e,l){let u=i(l,`gap`,3,`sm`),d=i(l,`justify`,3,`start`),f=i(l,`align`,3,`center`);var p=c(),m=r(p);s(m,()=>l.children),o(p),t(()=>a(p,1,`cluster gap-${u()??``} justify-${d()??``} align-${f()??``}`,`svelte-2y2hj5`)),n(e,p)}export{l as t};
