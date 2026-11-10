@@ -112,6 +112,11 @@ export function claim(dir: string, rec: UiRecord, alive: (pid: number) => boolea
   return null
 }
 
+/** Remove generation `gen`, the holder's own, when what it named did not open. */
+export function drop(dir: string, gen: number): void {
+  rmSync(fileOf(dir, gen), { force: true })
+}
+
 /** Register a UI this process serves, when none stands: its generation, or null. Never throws. */
 export function register(root: string, rec: Omit<UiRecord, "pid">): { dir: string; gen: number } | null {
   try {

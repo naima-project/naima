@@ -1,0 +1,1 @@
+import{V as e,et as t,tt as n}from"./app.svelte-Sfsr2Gs0.js";var r={name:`chevron-left`,size:24,node:[[`path`,{d:`m15 18-6-6 6-6`}]]};r.node;var i=new Set([`$$slots`,`$$events`,`$$legacy`]);function a(a,o){let s=t(o,i);e(a,n(()=>s,{get icon(){return r}}))}export{a as t};

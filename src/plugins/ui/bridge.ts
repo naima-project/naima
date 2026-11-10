@@ -373,7 +373,9 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       return () => watch.stop()
     },
     show: (emit) => {
-      const listening = listenShows(ctx.root, opts.carrier ?? "browser", (place) => emit(json(place)))
+      const carrier = opts.carrier ?? "browser"
+      // A raise is the desktop app's window coming forward, which its shell takes: a page in a browser has nothing to do.
+      const listening = listenShows(ctx.root, carrier, (place) => place.kind === "raise" && carrier !== "desktop" ? undefined : emit(json(place)))
       return () => listening.stop()
     },
   }

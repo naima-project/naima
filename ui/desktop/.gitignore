@@ -1,0 +1,3 @@
+# Cargo's build output, and the native projects `tauri ios init` and `tauri android init` generate.
+/target/
+/gen/
