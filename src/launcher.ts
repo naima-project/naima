@@ -49,7 +49,7 @@
 // newer program download one.
 
 import { PROJECTS_ENV, rememberProject, switchTarget, UI_SWITCH, UI_SWITCH_ENV, type UiSwitch } from "./core/projects.ts"
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs"
 import { buildDir, desktopAppDirs, installedApp } from "./plugins/ui/desktop.ts"
 import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -667,6 +667,12 @@ export async function launch(args: string[], cwd: string, resume?: Omit<UiSwitch
     parsed.rest[0] === "hello" && githubOrigin(root),
     Deno.env.toObject(),
   )
+  // naima ui --install-desktop's build folder is made here, whole, so that the program's fence need reach no folder above it (the caches).
+  if (granted?.writeDirs?.includes(buildDir(Deno.env.toObject()))) {
+    try {
+      mkdirSync(buildDir(Deno.env.toObject()), { recursive: true })
+    } catch { /* the build says why it cannot write there */ }
+  }
   // And reads each of them, read only; a folder that is gone, or one Deno cannot name (a comma), is left out.
   const ui = granted && known
     ? { ...granted, read: [...granted.read, ...known.flatMap((p) => [p.root, p.data]).filter((x) => existsSync(x) && !real(x).includes(","))] }

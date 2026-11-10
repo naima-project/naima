@@ -9,7 +9,7 @@
 // opens a second.
 
 import { spawn } from "node:child_process"
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { delimiter, join, posix } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { Context, Progress } from "../../core/api.ts"
@@ -89,6 +89,22 @@ export async function openDesktop(root: string, dir: string | null, app: string,
   }
 }
 
+/**
+ * Copies the folder `from` to `to`, links kept as links and modes kept. It touches only the paths it copies: Deno's cpSync
+ * looks up the folders above the destination too, which the launcher's fence does not let Naima read.
+ */
+export function copyTree(from: string, to: string): void {
+  mkdirSync(to)
+  for (const name of readdirSync(from)) {
+    const source = join(from, name)
+    const target = join(to, name)
+    const kind = lstatSync(source)
+    if (kind.isSymbolicLink()) symlinkSync(readlinkSync(source), target)
+    else if (kind.isDirectory()) copyTree(source, target)
+    else copyFileSync(source, target)
+  }
+}
+
 /** The line `naima ui` says about the desktop app it opened. */
 export const desktopLine = (o: DesktopOpened & { opened: true }, project: string): string =>
   o.how === "raised"
@@ -119,8 +135,17 @@ export async function desktopFirst(ctx: Context, env: Record<string, string | un
 
 export { buildDir, installedApp } from "./desktop.ts"
 
+/** Whether a file is there; a folder the launcher does not let Naima read (a PATH folder it has no business in) holds none. */
+function there(path: string): boolean {
+  try {
+    return existsSync(path)
+  } catch {
+    return false
+  }
+}
+
 /** Cargo, as PATH finds it, else in rustup's usual place: null when Rust is not installed. */
-export function findCargo(env: Record<string, string | undefined>, exists: (path: string) => boolean = existsSync): string | null {
+export function findCargo(env: Record<string, string | undefined>, exists: (path: string) => boolean = there): string | null {
   const dirs = [...(env["PATH"] ?? "").split(delimiter).filter(Boolean), posix.join(env["HOME"] ?? "", ".cargo", "bin")]
   for (const d of dirs) if (exists(join(d, "cargo"))) return join(d, "cargo")
   return null
@@ -192,9 +217,9 @@ export async function installDesktop(
     mkdirSync(o.build, { recursive: true })
     rmSync(join(o.build, "src-tauri"), { recursive: true, force: true })
     rmSync(join(o.build, "dist"), { recursive: true, force: true })
-    cpSync(shell, join(o.build, "src-tauri"), { recursive: true })
+    copyTree(shell, join(o.build, "src-tauri"))
     o.progress.at(1)
-    cpSync(dist, join(o.build, "dist"), { recursive: true })
+    copyTree(dist, join(o.build, "dist"))
     o.progress.at(2)
   } catch (e) {
     o.err(`naima ui --install-desktop: cannot copy the shell into ${o.build}: ${(e as Error).message}`)
@@ -237,7 +262,7 @@ export async function installDesktop(
     o.progress.stage("install the app", 1, "app")
     mkdirSync(posix.dirname(o.dest), { recursive: true })
     rmSync(o.dest, { recursive: true, force: true })
-    cpSync(built, o.dest, { recursive: true, verbatimSymlinks: true })
+    copyTree(built, o.dest)
     o.progress.at(1)
   } catch (e) {
     o.err(`naima ui --install-desktop: cannot install it at ${o.dest}: ${(e as Error).message}`)
