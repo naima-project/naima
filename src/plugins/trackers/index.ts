@@ -642,6 +642,17 @@ export interface ItemRow {
   closedOn: string | null
   /** The items that verify it: its proofs, each with its type and status. */
   proofs: { ref: string; type: string; title: string; status: string }[]
+  /** Who asked for it, as its origin says (owner or agent), or null. */
+  askedBy: string | null
+  /** The branch it was filed on, as its origin says, or null. */
+  line: string | null
+}
+
+/** A string field of an item's origin, or null. */
+const originOf = (i: Item, key: "askedBy" | "branch"): string | null => {
+  const o = i.meta["origin"]
+  const v = o && typeof o === "object" ? (o as Record<string, unknown>)[key] : undefined
+  return typeof v === "string" && v ? v : null
 }
 
 const GATE = { name: "gate", kind: "string" } as const
@@ -668,6 +679,8 @@ export function itemRows(ctx: Context, type: string): ItemRow[] {
       fixedOn: fieldValue(i, FIXED_ON) ?? null,
       closedOn: fieldValue(i, CLOSED_ON) ?? null,
       proofs: linked(ctx, i, "verified-by").map((p) => ({ ref: label(p), type: p.type, title: p.meta.title, status: p.meta.status })),
+      askedBy: originOf(i, "askedBy"),
+      line: originOf(i, "branch"),
     }))
     .sort((a, b) => (a.created ?? "").localeCompare(b.created ?? "") || a.ref.localeCompare(b.ref))
 }
@@ -679,7 +692,7 @@ const itemsUiView = {
   name: "items",
   title: "Items",
   says:
-    "every item of a type, open and closed, oldest first, each with its status, where it stands (unfixed, fixed, resolved, closed), its dates, gate, priority, impact and proofs: `?type=` picks the type (bugs); the bugs and features screens of naima ui read it",
+    "every item of a type, open and closed, oldest first, each with its status, where it stands (unfixed, fixed, resolved, closed), its dates, gate, priority, impact, proofs, who asked for it and the branch it was filed on: `?type=` picks the type (bugs); the bugs and features screens of naima ui read it",
   screen: true,
   render(params: Record<string, string[]>, ctx: Context) {
     const type = params["type"]?.[0] ?? "bugs"

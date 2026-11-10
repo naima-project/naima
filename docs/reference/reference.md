@@ -1164,7 +1164,7 @@ Traits: `fixable`, `archive`.
 
 | View | Title | What it shows |
 |---|---|---|
-| `items` | Items | every item of a type, open and closed, oldest first, each with its status, where it stands (unfixed, fixed, resolved, closed), its dates, gate, priority, impact and proofs: `?type=` picks the type (bugs); the bugs and features screens of naima ui read it |
+| `items` | Items | every item of a type, open and closed, oldest first, each with its status, where it stands (unfixed, fixed, resolved, closed), its dates, gate, priority, impact, proofs, who asked for it and the branch it was filed on: `?type=` picks the type (bugs); the bugs and features screens of naima ui read it |
 
 ## coordination
 

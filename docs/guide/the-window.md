@@ -134,6 +134,21 @@ The window the timeline shows is also the time filter of the screens. Zoom in or
 lists those days alone, and the screen says which ones in words, for example "Showing Mon 3 – Sun 9 Nov", with an All time button beside it. All time, or
 zooming out until the window covers the whole history, shows every day again. Until you zoom or move the window, every day is shown.
 
+### The Filter button
+
+Every screen with entries (the Diary, Bugs, Features, Failed tests, Goals, Roadmap, Meetings and the list of Metrics) has the same Filter button above its
+list. It opens a panel under it: words to search for in the titles and what the entries say, then a menu for each thing the screen's entries can be told apart
+by (the kind of item, the goal, the line of work, the person or agent who asked, the status in the screen's own words), each value with how many entries it
+would keep, and the time window: All time, the last 7, 30 or 90 days. The time window is the time filter above, so choosing one narrows every screen, as
+zooming the timeline does. A menu shows only when the screen's entries differ in it. What you chose shows beside the button as chips, each with a cross that
+takes it away, with Clear all when there are two or more, and "Showing 12 of 87" says how many entries are shown of all the screen lists. The Diary filters its
+moments and the folded routine of each day alike.
+
+Each screen keeps its own choice, and the window remembers it for your next visit. The address carries it too, after the screen's name, as in
+`#bugs?goal=release-2&q=slow`, so a link opens the screen filtered the same way; changing the choice replaces the address rather than adding a step to Back.
+An agent can set the same choice through the UI's MCP server, with the store's `filters` transitions: `pick`, `drop`, `search`, `clear`, `within`, `show`
+and `hide`.
+
 ### Days, on the left of every screen
 
 Every screen has a Days button at the top left. It opens a time panel down the left side of the window, and closes it again; the window remembers whether you
