@@ -22,6 +22,7 @@ import {
   label,
   parse,
   type Plugin,
+  progressFor,
   rendered,
   shortOrId,
   str,
@@ -40,6 +41,7 @@ import { filesKey, filesUrl, newToken, serve, type ServeOptions } from "./serve.
 import { resumed, switchFile, writeSwitch } from "./switch.ts"
 import { runMcp } from "./mcp.ts"
 import { runSidecar } from "./sidecar.ts"
+import { buildDir, desktopFirst, findCargo, installDesktop, installedApp, PRODUCT } from "./desktop-app.ts"
 import { desktopApp, desktopAppDirs, naimaCommand, offReason, openAtStart, register, registryDir, unregister, userAtStart } from "./at-start.ts"
 import { nameStopCommand } from "./stops.ts"
 import { allTabs, tabsPoint, type UiTab, type UiView } from "./tabs.ts"
@@ -324,12 +326,26 @@ export async function runUi(ctx: Context, flags: { open: boolean; port?: number;
 const uiCommand: Command = {
   name: "ui",
   says:
-    "serve the new interface in the default browser, from this machine only, live from the files: the rail, the screens and the tabs the plugins contribute — the summary, the boards, the metrics, each item with its evidence and the others; Ctrl-C stops it",
+    "open the new interface on the project: the desktop app when it is installed, its window already open there brought forward, else served in the default browser, from this machine only, live from the files: the rail, the screens and the tabs the plugins contribute — the summary, the boards, the metrics, each item with its evidence and the others; Ctrl-C stops it",
   enforces:
     "the interface is served only on the loopback interface, and every request without this run's token is refused; a bridge command comes only from the server's own page; an action runs only a command of its short list, through naima run",
   hidden: true,
-  usage: "ui [--no-open] [--log] [--port <port>] | ui --sidecar | ui --mcp",
+  usage: "ui [--browser] [--no-open] [--log] [--port <port>] | ui --install-desktop | ui --sidecar | ui --mcp",
+  long: {
+    reports:
+      "--install-desktop reports its stage (copy, compile, install) and, while Cargo compiles, the crates done of the count the last build ended on, on standard error or into the run's progress file",
+  },
   options: [
+    {
+      name: "--browser",
+      says:
+        "serve the interface in the browser even when the desktop app is installed (naima ui opens the app on the project when it is, and brings forward its window already open there)",
+    },
+    {
+      name: "--install-desktop",
+      says:
+        "build the desktop app from the shell this Naima ships and install it as Naima.app in the user's Applications folder, on macOS; it needs Rust, and its first build takes some minutes",
+    },
     { name: "--no-open", says: "open no browser: print the address, with its token, and serve until Ctrl-C (for a port forwarded from another machine)" },
     { name: "--log", says: "print one line per request on stderr: its status, method and path" },
     {
@@ -347,9 +363,11 @@ const uiCommand: Command = {
         "serve the bridge commands to an agent as an MCP server on standard input and output, with the tool show, which shows the owner a place in the UI open on the project: what an agent's client starts (claude mcp add naima -- naima ui --mcp)",
     },
   ],
-  examples: ["ui", "ui --no-open", "ui --sidecar", "ui --mcp"],
-  run(args, ctx) {
+  examples: ["ui", "ui --browser", "ui --install-desktop", "ui --no-open", "ui --sidecar", "ui --mcp"],
+  async run(args, ctx) {
     const p = parse(args, {
+      browser: { type: "boolean" },
+      "install-desktop": { type: "boolean" },
       "no-open": { type: "boolean" },
       log: { type: "boolean" },
       sidecar: { type: "boolean" },
@@ -360,6 +378,21 @@ const uiCommand: Command = {
     if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) throw usageError(this)
     if (p.positionals.length || (bool(p, "sidecar") && (bool(p, "no-open") || bool(p, "log") || port !== undefined))) throw usageError(this)
     if (bool(p, "mcp") && (bool(p, "sidecar") || bool(p, "no-open") || bool(p, "log") || port !== undefined)) throw usageError(this)
+    if ((bool(p, "sidecar") || bool(p, "mcp")) && (bool(p, "browser") || bool(p, "install-desktop"))) throw usageError(this)
+    if (bool(p, "install-desktop")) {
+      if (bool(p, "browser") || bool(p, "no-open") || bool(p, "log") || port !== undefined) throw usageError(this)
+      const env = process.env
+      return await installDesktop({
+        product: PRODUCT,
+        build: buildDir(env),
+        dest: installedApp(env),
+        os: osName(),
+        cargo: findCargo(env),
+        progress: progressFor((l) => ctx.err(l)),
+        out: (l) => ctx.out(l),
+        err: (l) => ctx.err(l),
+      })
+    }
     if (bool(p, "mcp")) {
       return runMcp(ctx, {
         views: viewsOf(ctx),
@@ -389,8 +422,10 @@ const uiCommand: Command = {
         write: (line) => void process.stdout.write(line + "\n"),
       }).finally(() => unregister(registered))
     }
+    // The desktop app when it is installed, on the project; the browser when asked, when the address is wanted, or when the app cannot open.
+    if (!bool(p, "browser") && !bool(p, "no-open") && port === undefined && await desktopFirst(ctx, process.env, osName())) return 0
     const token = port !== undefined ? process.env["NAIMA_UI_TOKEN"] || undefined : undefined
-    return runUi(
+    return await runUi(
       ctx,
       { open: !bool(p, "no-open"), ...(port !== undefined ? { port } : {}), ...(token ? { token } : {}) },
       bool(p, "log") ? { ...realDeps, log: (l) => ctx.err(l) } : realDeps,
@@ -436,7 +471,7 @@ export default function ui(options: Record<string, unknown> = {}): Plugin {
       "Its one feed, `changes` (GET /bridge/changes, server-sent events), says when the project changed (a commit, a branch moved, a tracker file written), and the interface reads again while it shows Live. " +
       "Any plugin, a stance included, adds tabs through `ui-tabs`, each with optional subtabs: for a subtab and the moment shown it gives data the interface draws with one of its own components (a list, a table, a chart, a gallery of framed pages, markdown), a page of its folder, served sandboxed under a key derived from the token, or a page it makes, which the interface frames in the same sandbox, so no code of the plugin runs in the interface; every `ui-views` view is shown as a tab too, but for one the interface has a screen of its own for (`screen`, the metrics). " +
       "`action` runs `decide`, `note`, `gate step`, `claim`, `release` or `name-stop` as a run of `naima run`, and `run` shows that run, its state, exit code and log; a bridge command is refused from any page but the server's own. " +
-      "The same commands serve the desktop app, the Tauri shell around the same bundle: it starts `naima ui --sidecar` in the project's folder, which answers them on its standard input and output, one JSON object a line, pushes the feeds' events there too, and reads a tab's files for the shell's naima-files: scheme, with no network listener. " +
+      "Plain `naima ui` opens the desktop app on the project when it is installed, as hello does, and brings forward its window already open on the project (a show the shell takes for itself) instead of opening a second one; it serves the browser with `--browser`, `--no-open` or `--port`, when the app is not installed (on macOS saying that `naima ui --install-desktop` installs it) and when the app cannot start. `naima ui --install-desktop` builds the app on macOS from the shell the product ships beside the bundle (ui/desktop, the Tauri project) with Rust and Tauri's command-line tool, in Naima's folder of the user's caches, kept between builds, and installs it as Naima.app in the user's Applications folder, reporting its stage and the crates compiled; the app also takes its project from its first argument. The same commands serve the desktop app, the Tauri shell around the same bundle: it starts `naima ui --sidecar` in the project's folder, which answers them on its standard input and output, one JSON object a line, pushes the feeds' events there too, and reads a tab's files for the shell's naima-files: scheme, with no network listener. " +
       "`naima ui --mcp` serves the same commands to an agent as an MCP server on standard input and output (the UI stance's bridge-mcp.ts), with one more, `show` (a screen, a plugin's view, an item, a commit or a line), which every UI open on the project hears on the feed `show` and goes to at once, a UI opened as naima hello opens one when none is: an agent shows the owner something in the UI instead of making a page of its own. " +
       "At a session start `naima hello` opens the UI on the project by itself, in the background, and says so on its greeting's line, with the address in a browser: the desktop app when it is installed, else `naima ui` on a port it picks, which opens the browser; a UI already open on the project, named in a registry in the clone's Naima state folder that `naima ui` and the sidecar write too, is reused instead. It is off with the option `atStart` false, for a user with `{\"atStart\": false}` in the ui.json of their Naima config folder, and never on CI, with NAIMA_NO_UI or NAIMA_DATA set, nor in a worktree other than the clone's main checkout.",
     points: [viewsPoint, uiTabsPoint],
