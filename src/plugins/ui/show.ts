@@ -33,8 +33,8 @@ export type Place =
 
 /**
  * A request to the open UI, carried as a show is: the page it shows as text (or raw HTML), or where its window is; the
- * central store's snapshot (in short, or one machine, or a path in it); its registry of transitions; or a transition
- * called on a machine by its name, as the components call it. A show is the transition of a named sequence of the
+ * central store's snapshot (in short, or one machine, or a path in it); its registry of transitions; a transition
+ * called on a machine by its name, as the components call it; or, for the desktop app, its window brought forward. A show is the transition of a named sequence of the
  * UI's machine agent (showScreen, showView, showItem, showCommit, showLine).
  */
 export type UiRequest =
@@ -43,6 +43,8 @@ export type UiRequest =
   | { kind: "store"; id: string; machine?: string; path?: string }
   | { kind: "registry"; id: string; machine?: string }
   | { kind: "transition"; id: string; machine: string; name: string; args: unknown[] | { [arg: string]: unknown } }
+  /** The desktop app's window, brought to the front: taken by the app's shell, which the page never sees (desktop-app.ts). */
+  | { kind: "raise" }
 
 /** An open UI, as its file says. */
 export interface OpenUi {

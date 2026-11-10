@@ -1,0 +1,1 @@
+import{X as e,cn as t,sn as n}from"./app.svelte-HerBYbFJ.js";import{t as r}from"./App-BQo8jDWH.js";function i(i,a){t(a,!0),e(a.store),r(i,{}),n()}export{i as default};
