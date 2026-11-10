@@ -99,7 +99,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`triage`](#naima-triage) | triage | coverage of the four fields; set them; list what needs a human; derive what the page proves | the four fields take only their declared values, through the write hooks; derive writes only with --write |
 | [`gates`](#naima-gates) | gates | every gate, whoever declared it, and whether it holds; --check exits 1 if one does not | with --check, every listed gate holds: exit 1 if one does not |
 | [`gate`](#naima-gate) | gates | declare a gate — a milestone, with a date and a version, or one that follows a stance's method — put items on it or take them off, add steps of its own, close its steps, and show one; writes go to naima.json and to the items, validated, through the write hooks | writes to naima.json and to the items are validated and pass the write hooks |
-| [`plan`](#naima-plan) | gates | the plan of a goal: its open items and what they wait for as a graph, in waves that run at once within maxWorkers, with the critical path and the heavy runs at the checkpoint; an agent proposes a note on it, the owner approves it |  |
+| [`plan`](#naima-plan) | gates | the plan of a goal: its open items and what they wait for as a graph, in waves that run at once within maxWorkers, with the critical path and the heavy runs at the checkpoint; an agent proposes a note on it, the owner approves it | --approve is refused for the roles worker and agent: an agent proposes, the owner approves; plain plan prints derived state and writes nothing |
 | [`queue`](#naima-queue) | gates | open items on a gate, split by whose hands the proof needs; at its foot, the summary sections that stand beside the work, such as the metrics. With --role, one role's queue instead | nothing: it prints derived state, never stored |
 | [`coverage`](#naima-coverage) | gates | each normative list the project declares — read from its source now, never copied — every entry with the test that proves it, or NO TEST | nothing: it reads each list from its source every time, never a copy, and marks an entry no test proves NO TEST |
 | [`ready`](#naima-ready) | gates | the open items that wait on nothing still open -- every `blocked-by` target settled -- most urgent first: what can start now; on a gate, only its items | nothing: it prints derived state, never stored |
@@ -1936,6 +1936,8 @@ naima gate step remove beta screens
 ### naima plan
 
 The plan of a goal: its open items and what they wait for as a graph, in waves that run at once within maxWorkers, with the critical path and the heavy runs at the checkpoint; an agent proposes a note on it, the owner approves it.
+
+**Enforces**: --approve is refused for the roles worker and agent: an agent proposes, the owner approves; plain plan prints derived state and writes nothing.
 
 ```sh
 naima plan [<goal>] [--json]
