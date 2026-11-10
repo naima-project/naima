@@ -1,0 +1,1 @@
+import{$ as e,F as t,Ot as n,S as r,V as i,Z as a,ft as o,gt as s}from"./Figure-BzE5D-Ly.js";var c=e(`<div><!></div>`);function l(e,l){let u=r(l,`gap`,3,`sm`),d=r(l,`justify`,3,`start`),f=r(l,`align`,3,`center`);var p=c(),m=s(p);i(m,()=>l.children),n(p),o(()=>t(p,1,`cluster gap-${u()??``} justify-${d()??``} align-${f()??``}`,`svelte-2y2hj5`)),a(e,p)}export{l as t};
