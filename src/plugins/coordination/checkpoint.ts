@@ -18,11 +18,8 @@ import {
   writeCheckpoint,
 } from "../../core/api.ts"
 import { type LandingReport } from "./land.ts"
-import { landingChecks } from "./land.ts"
+import { EMPTY_TREE, landingChecks } from "./land.ts"
 import { settle, startRuns, statusLines } from "./checkpoint-runs.ts"
-
-/** git's empty tree: what a first checkpoint measures the changed files from. */
-const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 /** The names of the landing checks a checkpoint runs: what landings owe, and the declared ones (the heavy ones when none are declared). */
 export function checkpointNames(ctx: Context): string[] {
