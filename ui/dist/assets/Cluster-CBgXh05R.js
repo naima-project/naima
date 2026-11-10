@@ -1,1 +1,0 @@
-import{$ as e,Gt as t,Nt as n,Yt as r,jt as i,pt as a,sn as o,xt as s}from"./app.svelte-DLri_wwy.js";var c=n(`<div><!></div>`);function l(n,l){let u=e(l,`gap`,3,`sm`),d=e(l,`justify`,3,`start`),f=e(l,`align`,3,`center`);var p=c(),m=r(p);s(m,()=>l.children),o(p),t(()=>a(p,1,`cluster gap-${u()??``} justify-${d()??``} align-${f()??``}`,`svelte-2y2hj5`)),i(n,p)}export{l as t};
