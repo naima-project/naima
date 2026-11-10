@@ -15,7 +15,9 @@ import {
   appliesTo,
   bool,
   type Check,
+  checkMode,
   checkoutAt,
+  checkpointAfter,
   CLI_TRAILER,
   code,
   CODE_TRAILER,
@@ -26,6 +28,7 @@ import {
   currentBranch,
   DATA_FILE,
   type ExtensionPoint,
+  fastChecks,
   filesAt,
   FILLED,
   type Finding,
@@ -45,6 +48,7 @@ import {
   META,
   mustGit,
   noHost,
+  owedTrailer,
   parse,
   privateContext,
   progressFor,
@@ -355,14 +359,37 @@ function checkedLine(name: string, where: string, f: Found): string {
  * unless its `covers` finds no file of the landing it reads.
  * Each check that ran prints one line, where it ran and what it found, so that a pass is seen.
  */
-async function landingChecks(ctx: Context, landing: Landing, at: Context = ctx): Promise<{ refused: string[]; notCurrent: string[] }> {
+export async function landingChecks(
+  ctx: Context,
+  landing: Landing,
+  at: Context = ctx,
+  only?: readonly string[],
+): Promise<{ refused: string[]; notCurrent: string[]; owed: string[] }> {
   ctx.reload()
   at.reload()
   const refused: string[] = []
   const notCurrent: string[] = []
+  const owed: string[] = []
+  // In checkpoint mode a landing runs only the checks the project names as fast and owes the rest; a checkpoint (`only`) runs exactly the ones it names.
+  const checkpointing = !only && checkMode(ctx, at) === "checkpoint"
+  const fast = checkpointing ? fastChecks(ctx, at) : []
   for (const c of ctx.registry.contributions("landing-reports")) {
     const check = c.value as LandingReport
     if (!check.refuses && !check.blocks) continue
+    if (only && !only.includes(c.name)) continue
+    if (checkpointing && !fast.includes(c.name)) {
+      owed.push(c.name)
+      ctx.out(`${c.name}: owed at the next checkpoint, not run on this landing`)
+      continue
+    }
+    if (only && check.heavy) {
+      const found = { ...(await heavyCheck(ctx, c.name, landing, at)) }
+      for (const line of found.said) ctx.out(`${c.name}: ${line}`)
+      refused.push(...found.refused.map((l) => `${c.name}: ${l}`))
+      notCurrent.push(...found.notCurrent.map((l) => `${c.name}: ${l}`))
+      ctx.out(checkedLine(c.name, found.where, found))
+      continue
+    }
     if (check.heavy && !(await heavyNeeded(at, check, landing))) {
       ctx.out(`${c.name}: not needed, the landing changes no file it covers`)
       continue
@@ -373,7 +400,7 @@ async function landingChecks(ctx: Context, landing: Landing, at: Context = ctx):
     notCurrent.push(...found.notCurrent.map((l) => `${c.name}: ${l}`))
     ctx.out(checkedLine(c.name, found.where, found))
   }
-  return { refused, notCurrent }
+  return { refused, notCurrent, owed }
 }
 
 /**
@@ -394,15 +421,16 @@ export function readableTree(dir: string): boolean {
  * when it is clean and at the tip, else in a checkout of the tip made for them. A failing check refuses the landing;
  * what is not current is said, since the line's landing on the trunk is the one that asks for it.
  */
-async function lineLandingChecks(ctx: Context, landing: Landing): Promise<void> {
+async function lineLandingChecks(ctx: Context, landing: Landing): Promise<string[]> {
   const tree = worktrees(ctx.root).find((w) => w.branch === landing.branch && !w.self)
   const clean = tree && readableTree(tree.path) && gitOrNull(tree.path, "status", "--porcelain", "--untracked-files=no") === "" &&
     gitOrNull(tree.path, "rev-parse", "HEAD") === landing.to
   const made = clean ? null : checkoutAt(ctx, landing.to)
   try {
-    const { refused, notCurrent } = await landingChecks(ctx, landing, made ? made.ctx : contextIn(ctx, tree!.path))
+    const { refused, notCurrent, owed } = await landingChecks(ctx, landing, made ? made.ctx : contextIn(ctx, tree!.path))
     if (refused.length) throw refusedLanding(landing.branch, refused)
     for (const l of notCurrent) ctx.out(`${l} — not current: the line's landing on the trunk asks for it`)
+    return owed
   } finally {
     made?.dispose()
   }
@@ -918,9 +946,9 @@ async function landBoth(
   }
   let tm: string
   try {
-    const { refused, notCurrent } = await landingChecks(ctx, { branch, from: code.old, to: code.tip, changed })
+    const { refused, notCurrent, owed } = await landingChecks(ctx, { branch, from: code.old, to: code.tip, changed })
     if (refused.length) throw refusedLanding(branch, refused)
-    const own: string[] = []
+    const own: string[] = [...owedTrailer(owed)]
     if (notCurrent.length && stale === undefined) {
       throw new Error(
         `${branch} changes what has proofs not current:\n${notCurrent.map((l) => `  ${l}`).join("\n")}\n` +
@@ -971,6 +999,7 @@ async function landBoth(
   const subs = cm ? (gitOrNull(ctx.root, "diff-tree", "-r", "--no-commit-id", code.old, cm) ?? "").split("\n").filter((l) => /^:\d+ 160000 /.test(l)) : []
   if (subs.length) ctx.out(`${plural(subs.length, "submodule")} moved: git submodule update --init`)
   ctx.out(nextAfterLanding(branch))
+  await goalReached(ctx, branch)
   return 0
 }
 
@@ -1013,7 +1042,7 @@ export async function landOnLine(ctx: Context, branch: string, gate: string, clo
   // A landing on a line asks for no change note: the line's landing on the trunk does. A reason given is kept on the marker.
   if (noChangeNote !== undefined) trailers.push(`${NO_CHANGE_NOTE}: ${noChangeNote.trim()}`)
   guardLandingMessages(ctx, branch, old, tip)
-  await lineLandingChecks(ctx, { branch, from: old, to: tip, changed: changedFiles(ctx.root, old, tip), closes: ids })
+  trailers.push(...owedTrailer(await lineLandingChecks(ctx, { branch, from: old, to: tip, changed: changedFiles(ctx.root, old, tip), closes: ids })))
   const made = runGit(ctx.root, ["commit-tree", `${tip}^{tree}`, "-p", old, "-p", tip, "-F", "-"], { input: `Land ${branch}\n\n${trailers.join("\n")}\n` })
   if (!made.ok) throw new Error(`git commit-tree: ${gitReason(made)}`)
   const marker = made.out.trim()
@@ -1183,6 +1212,15 @@ const closingLine = (items: Landed[], trackerOnly: string | undefined, met: read
   ].join("; ")
 
 /** What follows a landing: the prune. Closing its proven items is the landing's own last step (closeLanded). */
+/**
+ * A line landing on the trunk is its goal reached: in checkpoint mode that runs the checkpoint for the gate. The landing
+ * stands whatever the checkpoint finds; a failure is recorded, says so, and blocks the gate.
+ */
+async function goalReached(ctx: Context, branch: string): Promise<void> {
+  const gate = gateOfLine(branch)
+  if (gate) await checkpointAfter(ctx, gate)
+}
+
 const nextAfterLanding = (branch: string): string => `next: naima prune --branch ${branch} --write`
 
 /** Whether `item` is fixed and its proof has passed: fixedOn set, an item verifying it proves it and none refutes it. */
@@ -1497,8 +1535,9 @@ export const land: Command = {
     }
     let marker: string
     try {
-      const { refused, notCurrent } = await landingChecks(ctx, { branch, from: old, to: tip, changed, closes: items.map((i) => i.id) })
+      const { refused, notCurrent, owed } = await landingChecks(ctx, { branch, from: old, to: tip, changed, closes: items.map((i) => i.id) })
       if (refused.length) throw refusedLanding(branch, refused)
+      trailers.push(...owedTrailer(owed))
       if (notCurrent.length && stale === undefined) {
         throw new Error(
           `${branch} changes what has proofs not current:\n${notCurrent.map((l) => `  ${l}`).join("\n")}\n` +
@@ -1524,6 +1563,7 @@ export const land: Command = {
     const subs = (gitOrNull(ctx.root, "diff-tree", "-r", "--no-commit-id", old, marker) ?? "").split("\n").filter((l) => /^:\d+ 160000 /.test(l))
     if (subs.length) ctx.out(`${plural(subs.length, "submodule")} moved: git submodule update --init`)
     ctx.out(nextAfterLanding(branch))
+    await goalReached(ctx, branch)
     return 0
   },
 }
