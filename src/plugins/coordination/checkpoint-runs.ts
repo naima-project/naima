@@ -270,8 +270,14 @@ export async function settle(ctx: Context, record: CheckpointRecord): Promise<Ch
   if (open) return updateCheckpoint(ctx, record.id, { runs })
   const out = runs.map((r) => {
     if (r.state !== "failed" || r.bug) return r
-    const bug = fileBug(ctx, r, record.tip)
-    return bug ? { ...r, bug } : r
+    try {
+      const bug = fileBug(ctx, r, record.tip)
+      return bug ? { ...r, bug } : r
+    } catch (e) {
+      // On a development line tracker data is not written (the trunk's alone): the failure stays in the record, and the bug is filed from the trunk.
+      const first = (e instanceof Error ? e.message : String(e)).split("\n")[0]!
+      return { ...r, why: `${r.why ?? "failed"} — file the bug "Checkpoint run ${r.name} fails" from the trunk's checkout (${clean(ctx, first)})` }
+    }
   })
   const failed = [...record.failed, ...out.filter((r) => r.state === "failed").map((r) => `${r.name}: ${r.why ?? "failed"}`)]
   return updateCheckpoint(ctx, record.id, { runs: out, pending: false, passed: failed.length === 0, failed })
