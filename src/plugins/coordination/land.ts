@@ -252,7 +252,7 @@ const HEAVY_STALE = "15m"
 export const LANDING_HERE = "here"
 
 /** The program that runs this Naima, as a command's words: what a heavy landing check run on this machine starts. */
-function naimaHere(): string[] {
+export function naimaHere(): string[] {
   const program = fileURLToPath(new URL("../../../", import.meta.url))
   const deno = (globalThis as { Deno?: { execPath(): string } }).Deno
   return deno ? [deno.execPath(), "run", "-A", join(program, "naima.ts")] : [process.execPath, join(program, "src", "cli.ts")]
