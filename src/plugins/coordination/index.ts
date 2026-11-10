@@ -436,13 +436,14 @@ const release: Command = {
   name: "release",
   says: "drop this branch's claim on items; the last one removes the file, unless the branch is being prepared (claim --preparing)",
   enforces: "only this branch's own claim is dropped, and only on items it holds; while the branch is being prepared, the emptied file is kept",
-  usage: "release <item>...",
-  examples: ["release export-drops"],
+  usage: "release <item>... [--of <branch>]",
+  examples: ["release export-drops", "release export-drops --of worker/export-alpha"],
   run(args, ctx) {
-    const p = parse(args, {})
+    const p = parse(args, { of: { type: "string" } })
     const refs = p.positionals
     if (!refs.length) throw usageError(this)
-    const branch = currentBranch(ctx.root)
+    // --of: a finished worker's claim, dropped from here (the owner's window does it); an emptied copy on this branch overrides the worker's.
+    const branch = (p.values["of"] as string | undefined) ?? currentBranch(ctx.root)
     const mine = myClaim(ctx, branch)
     if (!mine) throw new Error(`nothing to release: ${branch} holds no claim here`)
     const ids = new Set(refs.map((r) => claimedId(ctx, mine.items, r)))
@@ -479,7 +480,8 @@ export interface ClaimsData {
     preparing?: true
     /** Why the claim no longer stands for work in progress — its branch gone or merged into the trunk, or every item it claims closed — released by `naima prune --write`. */
     stale?: string
-    items: ClaimEntry[]
+    /** The items it claims; `status` is the item's own, and `done` says it is no longer open (fixed, proven or closed), so a worker holding only done items is finished, not stuck. */
+    items: (ClaimEntry & { status?: string; done?: boolean })[]
   }[]
   /** The items more than one branch claims — allowed, and worth knowing. */
   contested: { id: string; ref: string; branches: string[] }[]
@@ -569,7 +571,10 @@ export function claimsData(ctx: Context, only?: string, silentAfter: number = SI
         ...(quiet !== undefined ? { quietFor: quiet } : {}),
         ...(quiet !== undefined && quiet > silentAfter ? { silent: true as const } : {}),
         ...(c.preparing ? { preparing: true as const } : {}),
-        items: c.items,
+        items: c.items.map((e) => {
+          const item = ctx.repo.byId.get(e.id)
+          return { ...e, ...(item ? { status: String(item.meta["status"]) } : {}), ...(closed(ctx, e.id) ? { done: true } : {}) }
+        }),
       }
     }),
     contested: [...holders].filter(([, b]) => b.size > 1).map(([id, b]) => {
