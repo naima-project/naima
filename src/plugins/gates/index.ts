@@ -40,6 +40,8 @@ import {
   alongside,
   bool,
   type Check,
+  checkpointAfter,
+  checkpointBlock,
   code,
   type Command,
   type Context,
@@ -62,6 +64,7 @@ import {
   label,
   linked,
   type Migration,
+  owedLine,
   parse,
   type Plugin,
   readyQueue,
@@ -599,7 +602,11 @@ const gatesCommand: Command = {
     const p = parse(args, { check: { type: "boolean" }, json: { type: "boolean" } })
     const gates = await gateRows(ctx, p.positionals)
     if (bool(p, "json")) ctx.out(JSON.stringify(gates.map((g) => g.row), null, 2))
-    else for (const g of gates) printGate(ctx, g.def, g.result)
+    else {
+      for (const g of gates) printGate(ctx, g.def, g.result)
+      const owed = owedLine(ctx)
+      if (owed) ctx.out(owed)
+    }
     return bool(p, "check") && gates.some((g) => !g.result.holds) ? 1 : 0
   },
 }
@@ -887,7 +894,7 @@ function gateSteps(ctx: Context, gate: GateDef): { steps: StepState[]; reasons: 
  * Close a step of a gate, of its method or its own: `by`, a settled item recording that the step's exit criterion holds,
  * gets closesStep=<gate>/<step>. Refused while the step before is not closed, or while `by` is still open.
  */
-function closeStep(ctx: Context, gate: GateDef, step: string, record: string): number {
+async function closeStep(ctx: Context, gate: GateDef, step: string, record: string): Promise<number> {
   const r = gateSteps(ctx, gate)
   if (gate.method !== undefined && !r.method) throw new Error(r.reasons[0])
   const s = r.steps.find((x) => x.name === step)
@@ -910,6 +917,8 @@ function closeStep(ctx: Context, gate: GateDef, step: string, record: string): n
       following ? ` — next: ${following.name} (${following.title}), closed when ${following.exit}` : " — every step of the gate is closed"
     }`,
   )
+  // In checkpoint mode a step closing is a checkpoint: the owed checks run now, and a failure blocks the gate.
+  await checkpointAfter(ctx, gate.name)
   return 0
 }
 
@@ -1153,7 +1162,7 @@ const gateCommand: Command = {
     if (sub === "step") {
       const by = str(p, "by")
       if (!name || rest.length !== 1 || !by) throw usageError(this)
-      return closeStep(ctx, findGate(ctx, name), rest[0]!, by)
+      return await closeStep(ctx, findGate(ctx, name), rest[0]!, by)
     }
     if (sub === "show") {
       if (rest.length) throw usageError(this)
@@ -1296,6 +1305,9 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
       if (c.version && !ctx.repo.items.some((i) => onGates(i).includes(name))) {
         reasons.push(`nothing is on it yet — naima gate add ${name} <item>...`)
       }
+      // A failed checkpoint blocks the gate until a later one passes.
+      const failed = checkpointBlock(ctx, name)
+      if (failed) reasons.push(failed)
       const own = reasons.length ? { ...r, holds: false, reasons } : r
       // A gate that is not a release gate answers at once, as it always has; a release gate awaits its parts.
       return c.fullSuite ? withFullSuite(ctx, own) : own
