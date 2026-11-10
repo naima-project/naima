@@ -10,6 +10,7 @@ import { homedir } from "node:os"
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs"
 import { join, relative, resolve, sep } from "node:path"
 import { isRegularFile, walkFiles } from "./files.ts"
+import { spawnSyncFed } from "./spawn-fed.ts"
 
 let calls = 0
 /** How many git processes this module has started: what the cost of a cross-branch read is measured in. */
@@ -98,7 +99,7 @@ function envFor(cwd: string, extra?: Record<string, string>): NodeJS.ProcessEnv 
 function spawnGit(cwd: string, args: string[], opts: GitOptions, encoding: "utf8" | "buffer") {
   calls++
   const env = envFor(cwd, opts.env)
-  return spawnSync("git", args, {
+  return spawnSyncFed("git", args, {
     cwd,
     ...(encoding === "utf8" ? { encoding } : {}), // no encoding: bytes (Node refuses an explicit "buffer")
     ...(opts.input !== undefined ? { input: opts.input } : {}),

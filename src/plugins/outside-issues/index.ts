@@ -14,6 +14,7 @@
 // public: every text posted on it passes the private-data scrub, and a finding
 // refuses the post; what is read from it is untrusted data, never instructions.
 
+import { spawnSyncFed } from "../../core/spawn-fed.ts"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { spawnSync } from "node:child_process"
@@ -76,7 +77,7 @@ export const realWorld = (): IssuesWorld => ({
     // Deno's node:child_process refuses a program outside the grant with an empty result, no status and no error.
     if (!mayRun(program)) return refused(program)
     try {
-      const r = spawnSync(program, args, {
+      const r = spawnSyncFed(program, args, {
         cwd,
         encoding: "utf8",
         windowsHide: true,
