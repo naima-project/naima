@@ -1,0 +1,1 @@
+import{It as e,Jt as t,Pt as n,Qt as r,et as i,gt as a,un as o,wt as s}from"./app.svelte-CEdosJEi.js";var c=e(`<div><!></div>`);function l(e,l){let u=i(l,`gap`,3,`md`),d=i(l,`align`,3,`stretch`);var f=c(),p=r(f);s(p,()=>l.children),o(f),t(()=>a(f,1,`stack gap-${u()??``} align-${d()??``}`,`svelte-1382wtz`)),n(e,f)}export{l as t};
