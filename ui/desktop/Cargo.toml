@@ -1,0 +1,33 @@
+# The Tauri 2 shell of Naima's desktop app: the new UI's page in the system's webview, on Windows, Linux and macOS.
+# Its job besides showing the page is the platform bridge's Rust side: the commands in src/bridge.rs, which it forwards
+# to the Naima sidecar it starts, and the naima-files: scheme in src/files.rs.
+[package]
+name = "naima"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+# The mobile targets load the app as a library; the desktop ones link it into src/main.rs.
+name = "naima_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.4", features = [] }
+
+[dependencies]
+tauri = { version = "2.12.5", features = [] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+base64 = "0.22.1"
+
+# The menu's pinch to zoom: WKWebView's magnification, set through the Objective-C runtime.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.4"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

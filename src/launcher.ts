@@ -50,7 +50,7 @@
 
 import { PROJECTS_ENV, rememberProject, switchTarget, UI_SWITCH, UI_SWITCH_ENV, type UiSwitch } from "./core/projects.ts"
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs"
-import { desktopAppDirs } from "./plugins/ui/desktop.ts"
+import { buildDir, desktopAppDirs, installedApp } from "./plugins/ui/desktop.ts"
 import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
@@ -165,6 +165,8 @@ export interface UiGrant {
   runs: string[]
   /** Directories it may write besides the tracker folder. */
   write?: string[]
+  /** Folders outside the project it may write besides: naima ui --install-desktop's build folder and Applications folder. */
+  writeDirs?: string[]
   /** Any host, any program: what an install needs (`naima tools`). */
   netAll?: boolean
   runAll?: boolean
@@ -286,7 +288,18 @@ export function uiGrant(
       runs: [deno, os === "windows" ? "tasklist" : "ps", ...(os === "darwin" ? ["screencapture"] : []), ...apps.flatMap((d) => programsIn(d))],
     }
   }
-  return { net: ["127.0.0.1"], read: [deno], runs: [deno, BROWSER_OPENER[os] ?? "xdg-open"] }
+  // naima ui --install-desktop builds the desktop app with Rust's tools and Tauri's, fetched as they need, and installs it
+  // in the user's Applications folder: it writes only its build folder and that one, and runs and reaches what a build does.
+  if (rest.includes("--install-desktop")) {
+    return { net: [], read: [deno], runs: [], writeDirs: [buildDir(env), dirname(installedApp(env))], netAll: true, runAll: true }
+  }
+  // Plain naima ui opens the desktop app when it is installed, as hello does, and tells it runs by ps; else the browser.
+  const apps = desktopAppDirs(env, os).filter((d) => existsSync(d))
+  return {
+    net: ["127.0.0.1"],
+    read: [deno, ...apps],
+    runs: [deno, BROWSER_OPENER[os] ?? "xdg-open", ...(apps.length ? [os === "windows" ? "tasklist" : "ps"] : []), ...apps.flatMap((d) => programsIn(d))],
+  }
 }
 
 /**
@@ -408,7 +421,16 @@ export function permissions(
       ])
     }${[...temps, ...folder].map((t) => `,${t}`).join("")}`,
     `--allow-write=${
-      list([p.tracker, p.data, p.program, ...tick, ...(p.hostFiles ?? []), ...(p.uiFiles ?? []), ...(p.ui?.write ?? []).filter((w) => tools.includes(w))])
+      list([
+        p.tracker,
+        p.data,
+        p.program,
+        ...tick,
+        ...(p.hostFiles ?? []),
+        ...(p.uiFiles ?? []),
+        ...(p.ui?.write ?? []).filter((w) => tools.includes(w)),
+        ...(p.ui?.writeDirs ?? []),
+      ])
     }`,
     ...runFlag(p.ui?.runAll ? null : ["git", "tar", ...(p.runs ?? []), ...(p.ui?.runs ?? [])], p.found ?? runnable),
     "--allow-env",

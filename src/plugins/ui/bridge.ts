@@ -52,7 +52,7 @@ export const ACTIONS: readonly { name: string; words: string[]; says: string; bu
   { name: "note", words: ["note"], says: "add a note to an item" },
   { name: "gate-step", words: ["gate", "step"], says: "close a step of a gate with the item that records it (not add or remove one)" },
   { name: "claim", words: ["claim"], says: "claim items for this branch, or post its step" },
-  { name: "release", words: ["release"], says: "release this branch's claim" },
+  { name: "release", words: ["release"], says: "release items from this branch's claim, or from another branch's with --of <branch>: args are the items, then --of and the branch (naima release)" },
   { name: "plan-propose", words: ["plan"], says: "propose or revise the note on a goal's plan: args are the goal and the note (naima plan <goal> --propose)" },
   {
     name: "plan-approve",
@@ -373,7 +373,9 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       return () => watch.stop()
     },
     show: (emit) => {
-      const listening = listenShows(ctx.root, opts.carrier ?? "browser", (place) => emit(json(place)))
+      const carrier = opts.carrier ?? "browser"
+      // A raise is the desktop app's window coming forward, which its shell takes: a page in a browser has nothing to do.
+      const listening = listenShows(ctx.root, carrier, (place) => place.kind === "raise" && carrier !== "desktop" ? undefined : emit(json(place)))
       return () => listening.stop()
     },
   }
