@@ -7,12 +7,14 @@
 // the check can take its screenshot with the result on screen, and then ends it. Without the variable
 // nothing of this runs.
 mod bridge;
+mod bundle;
 mod files;
 mod menu;
 
 use bridge::{Current, Sidecar};
+use bundle::{Bundle, Dir, Nothing};
 use tauri::webview::PageLoadEvent;
-use tauri::{Manager, RunEvent};
+use tauri::{Manager, RunEvent, WebviewWindowBuilder};
 
 #[tauri::command]
 fn e2e_report(report: serde_json::Value) {
@@ -26,10 +28,21 @@ pub fn run() {
         .ok()
         .map(|s| s.trim().trim_end_matches(';').to_string())
         .filter(|s| !s.is_empty());
+    // The page is the project's own bundle (bundle.rs), the one the sidecar names: the window opens once it has.
+    let mut context = tauri::generate_context!();
+    let dir = Dir::default();
+    let embedded = std::mem::replace(&mut context.assets, Box::new(Nothing));
+    context.assets = Box::new(Bundle::new(embedded, dir.clone()));
+    let shown = dir.clone();
     let app = tauri::Builder::default()
-        .setup(|app| {
+        .manage(dir)
+        .setup(move |app| {
             let sidecar = Sidecar::start(app.handle().clone())?;
+            bridge::show_bundle(&sidecar, &shown);
             app.manage(Current::new(sidecar));
+            for window in app.config().app.windows.iter().filter(|w| !w.create) {
+                WebviewWindowBuilder::from_config(app.handle(), window)?.build()?;
+            }
             app.manage(menu::Zoom::default());
             #[cfg(target_os = "macos")]
             {
@@ -73,7 +86,7 @@ pub fn run() {
                 }
             }
         })
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("the app could not start");
     app.run(|handle, event| {
         if let RunEvent::Exit = event {

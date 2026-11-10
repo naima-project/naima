@@ -174,6 +174,26 @@ export interface UiGrant {
   wholeEnv?: boolean
 }
 
+/**
+ * What `naima ui --install-desktop` reads besides Naima: the Rust toolchain (cargo's folder and rustup's, where cargo as PATH
+ * finds it or in its usual place), Tauri's command-line tool in Deno's cache, the build folder it copies the app out of and
+ * the Applications folder it installs into. The tools it starts run on their own; these are Naima's own reads, of cargo
+ * (to find it), the build's files and the installed app. A path with a comma cannot be granted and is left out.
+ */
+export function installReads(env: Record<string, string | undefined>): string[] {
+  const home = env["HOME"] ?? ""
+  const cargoBin = (env["PATH"] ?? "").split(delimiter).filter(Boolean).find((d) => existsSync(join(d, "cargo")))
+  const dirs = [
+    env["CARGO_HOME"] || join(home, ".cargo"),
+    env["RUSTUP_HOME"] || join(home, ".rustup"),
+    ...(cargoBin ? [cargoBin] : []),
+    env["DENO_DIR"] || join(home, "Library", "Caches", "deno"),
+    buildDir(env),
+    dirname(installedApp(env)),
+  ]
+  return [...new Set(dirs.filter((d) => isAbsolute(d) && !d.includes(",")))]
+}
+
 /** The program that opens the default browser, by operating system: the same src/plugins/ui/open.ts starts. */
 /** The programs a folder holds, by path: none when it cannot be read. */
 function programsIn(dir: string): string[] {
@@ -291,7 +311,7 @@ export function uiGrant(
   // naima ui --install-desktop builds the desktop app with Rust's tools and Tauri's, fetched as they need, and installs it
   // in the user's Applications folder: it writes only its build folder and that one, and runs and reaches what a build does.
   if (rest.includes("--install-desktop")) {
-    return { net: [], read: [deno], runs: [], writeDirs: [buildDir(env), dirname(installedApp(env))], netAll: true, runAll: true }
+    return { net: [], read: [deno, ...installReads(env)], runs: [], writeDirs: [buildDir(env), dirname(installedApp(env))], netAll: true, runAll: true }
   }
   // Plain naima ui opens the desktop app when it is installed, as hello does, and tells it runs by ps; else the browser.
   const apps = desktopAppDirs(env, os).filter((d) => existsSync(d))

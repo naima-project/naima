@@ -1,7 +1,8 @@
 // Naima as the desktop app's sidecar: `naima ui --sidecar`, which the Tauri shell starts in the project's folder and
 // talks to over its standard input and output, one JSON object a line, with no network listener. It answers the same
-// bridge commands the browser reaches over HTTP (bridge.ts), and one more the shell itself needs, `file`, which reads a
-// file of a tab's folder for the shell's naima-files: scheme, the desktop's way of framing a tab's pages.
+// bridge commands the browser reaches over HTTP (bridge.ts), and two more the shell itself needs: `file`, which reads a
+// file of a tab's folder for the shell's naima-files: scheme, the desktop's way of framing a tab's pages, and `bundle`,
+// which names the folder of the UI bundle this Naima serves (ui/dist), so that the app shows the project's current UI.
 //
 //   in   {"id": 1, "command": "data", "args": {"view": "gates"}}
 //   out  {"id": 1, "ok": <answer>}  or  {"id": 1, "error": "..."}
@@ -19,7 +20,7 @@ import type { Context } from "../../core/api.ts"
 import { naimaBridge } from "./bridge.ts"
 import * as Model from "./generated/sidecar.ts"
 import type { Handlers, Json } from "./bridge-handler.ts"
-import { fileIn } from "./serve.ts"
+import { BUNDLE, fileIn } from "./serve.ts"
 import { PAGE_TYPES, type UiTab, type UiView } from "./tabs.ts"
 
 /** Where the desktop's webview loads a file of a tab's folder: the shell's naima-files: scheme, which WebView2 names as a host. */
@@ -34,6 +35,8 @@ export interface SidecarOptions {
   /** The folder of a tab's files now, by the tab's name. */
   tabFolder(tab: string): string | null
   os: string
+  /** The folder of the UI bundle the shell shows: this Naima's ui/dist by default. */
+  bundle?: string
   input: Readable
   write(line: string): void
   watch?: { interval?: number; debounce?: number }
@@ -114,6 +117,7 @@ export async function runSidecar(ctx: Context, opts: SidecarOptions): Promise<nu
   })
   const handlers: Handlers = {
     ...bridge.handlers,
+    bundle: () => ({ dir: opts.bundle ?? BUNDLE }),
     file: ({ tab, path }) => {
       const dir = opts.tabFolder(String(tab))
       const found = dir ? fileIn(dir, String(path ?? ""), PAGE_TYPES) : null

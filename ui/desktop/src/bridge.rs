@@ -18,6 +18,8 @@ use std::time::Duration;
 use tauri::ipc::{InvokeBody, Request};
 use tauri::{AppHandle, Emitter, Manager, State};
 
+use crate::bundle::Dir;
+
 /// How long a command may take before the page is told it failed: an action runs as a run of `naima run`.
 const TIMEOUT: Duration = Duration::from_secs(300);
 
@@ -45,6 +47,15 @@ fn project() -> Result<PathBuf, String> {
         .find(|d| d.join("naima-tracker").join("naima.sh").is_file())
         .map(Path::to_path_buf)
         .ok_or_else(|| format!("no Naima project in {} or a folder above it: set NAIMA_PROJECT", here.display()))
+}
+
+/// Has the page come from the bundle of the project's program, which the sidecar names: the one the app was built with
+/// when it names none (a program older than the shell) or the folder holds no page.
+pub fn show_bundle(sidecar: &Sidecar, dir: &Dir) {
+    let named = sidecar.call("bundle", json!({})).ok().and_then(|a| a.get("dir").and_then(Value::as_str).map(PathBuf::from));
+    dir.set(named.clone());
+    // Said once per project, as the commands are: which bundle the window shows.
+    println!("bundle: {}", if dir.in_use() { named.map(|d| d.display().to_string()).unwrap_or_default() } else { "the one the app was built with".into() });
 }
 
 /// Brings the app's window to the front, out of the Dock if it was minimised.
@@ -198,7 +209,7 @@ pub fn chosen(recent: &Value, root: &str) -> Result<PathBuf, String> {
 
 /// The page's `switch`: Naima is restarted in the recent project chosen, and answers there from then on.
 #[tauri::command]
-pub async fn switch(app: AppHandle, current: State<'_, Current>, request: Request<'_>) -> Answer {
+pub async fn switch(app: AppHandle, current: State<'_, Current>, dir: State<'_, Dir>, request: Request<'_>) -> Answer {
     let root = match request.body() {
         InvokeBody::Json(v) => v.get("root").and_then(Value::as_str).map(str::to_string),
         _ => None,
@@ -210,6 +221,9 @@ pub async fn switch(app: AppHandle, current: State<'_, Current>, request: Reques
         .map_err(|e| e.to_string())??;
     let at = chosen(&recent, &root)?;
     let next = Sidecar::start_in(app, at.clone())?;
+    let shown = Arc::clone(&next);
+    let page = dir.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || show_bundle(&shown, &page)).await.map_err(|e| e.to_string())?;
     current.replace(next).stop();
     println!("bridge: switch -> ok");
     Ok(json!({ "root": root, "path": at.display().to_string() }))

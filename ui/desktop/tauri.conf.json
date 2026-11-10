@@ -10,7 +10,7 @@
     "beforeDevCommand": ""
   },
   "app": {
-    "windows": [{ "label": "main", "title": "Naima", "width": 1280, "height": 860, "minWidth": 320, "minHeight": 480 }],
+    "windows": [{ "create": false, "label": "main", "title": "Naima", "width": 1280, "height": 860, "minWidth": 320, "minHeight": 480 }],
     "security": {
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ipc: http://ipc.localhost; frame-src naima-files: http://naima-files.localhost"
     }
