@@ -1,7 +1,8 @@
 // The map view: the graphs the new UI's map draws besides the lines and their commits (the bridge's metro):
 //
 //   goals  each gate the project declares, as `naima gates --json` gives it, with the date its goal started (the
-//          earliest creation of an item on the gate) and, for each step, the date of the record that closed it
+//          earliest creation of an item on the gate), for a finished goal the day it held (its release's day, or else
+//          the last day an item on it closed) and, for each step, the date of the record that closed it
 //   deps   the items that wait for others: every `blocks` / `blocked-by` link with an open item on either end, as an
 //          edge from the item that comes first to the one that waits for it, and each item at its ends
 //
@@ -28,6 +29,8 @@ export interface Goal {
   finished: boolean
   /** The day its first item was created, or null when no item is on it. */
   start: string | null
+  /** A finished goal: the day it held, its release's day or else the last day an item on it closed; absent when neither is known. */
+  ended?: string
   /** The goals ordered before it. */
   before: string[]
   steps: GoalStep[]
@@ -59,7 +62,13 @@ const gatesOf = (item: Item): string[] => {
 export function goalGraph(ctx: Context, gates: readonly GateRow[]): Goal[] {
   const byRef = new Map(ctx.repo.items.map((i) => [label(i), i]))
   return gates.map((g) => {
-    const created = ctx.repo.items.filter((i) => gatesOf(i).includes(g.gate)).map((i) => day(i.meta["created"])).filter((d): d is string => !!d).sort()
+    const on = ctx.repo.items.filter((i) => gatesOf(i).includes(g.gate))
+    const created = on.map((i) => day(i.meta["created"])).filter((d): d is string => !!d).sort()
+    // The day a finished goal held: the day its release was made (a release record on the gate), or else the last
+    // day an item on it was closed or fixed.
+    const released = on.filter((i) => i.type === "releases" && i.meta["status"] === "released").map((i) => day(i.meta["created"])).filter((d): d is string => !!d).sort().at(-1)
+    const lastClose = on.map((i) => day(i.meta["closedOn"]) ?? day(i.meta["fixedOn"])).filter((d): d is string => !!d).sort().at(-1)
+    const ended = g.finished === true ? released ?? lastClose : undefined
     const steps = (g.steps ?? []).map((s) => {
       const by = (s.closedBy ?? []).map((r) => byRef.get(r)).filter((i): i is Item => !!i)
       const on = by.map((i) => day(i.meta["closedOn"]) ?? day(i.meta["fixedOn"])).filter((d): d is string => !!d).sort().at(-1)
@@ -73,6 +82,7 @@ export function goalGraph(ctx: Context, gates: readonly GateRow[]): Goal[] {
       holds: g.holds,
       finished: g.finished === true,
       start: created[0] ?? null,
+      ...(ended ? { ended } : {}),
       before: g.before ?? [],
       steps,
     }
