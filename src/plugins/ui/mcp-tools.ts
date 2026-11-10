@@ -157,14 +157,18 @@ async function meetings(r: Reader, a: O): Promise<string> {
   const all = arr(get(await r.view("meetings"), "meetings")).map(obj)
   const name = textArg(a, "name")
   const line = (m: O) =>
-    `${str(m["name"])}: ${MEETING_STATE[str(m["state"])] ?? str(m["state"])}${m["on"] ? ` · ${str(m["on"])}` : ""} · ${plural(arr(m["agenda"]).length, "item")} · ${
-      cut(str(m["title"]), 60)
-    }`
+    `${str(m["name"])}: ${MEETING_STATE[str(m["state"])] ?? str(m["state"])}${m["on"] ? ` · ${str(m["on"])}` : ""} · ${
+      plural(arr(m["agenda"]).length, "item")
+    } · ${cut(str(m["title"]), 60)}`
   if (!name) return all.length ? all.map(line).join("\n") : 'no meetings: declare one with action meeting-new ["<name>", "<title>"]'
   const m = all.find((x) => str(x["name"]) === name)
   if (!m) throw new Error(`no meeting ${name}; the meetings: ${all.map((x) => str(x["name"])).join(", ") || "none"}`)
   const agenda = arr(m["agenda"]).map(obj)
-  return [line(m), ...(m["taken"] ? [`taken at ${str(m["taken"])}`] : []), ...agenda.map((i, n) => `  ${n + 1}. ${str(i["ref"])} · ${cut(str(i["title"]), 70)}`)]
+  return [
+    line(m),
+    ...(m["taken"] ? [`taken at ${str(m["taken"])}`] : []),
+    ...agenda.map((i, n) => `  ${n + 1}. ${str(i["ref"])} · ${cut(str(i["title"]), 70)}`),
+  ]
     .join("\n")
 }
 

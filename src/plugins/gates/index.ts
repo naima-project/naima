@@ -594,7 +594,14 @@ const planDeps: PlanDeps = {
     if (!def) return null
     const r = await def.evaluate(ctx)
     const opts = ctx.config.plugins["gates"]?.options?.["gates"] as Record<string, { fullSuite?: boolean }> | undefined
-    return { title: def.title, ...(def.due ? { due: def.due } : {}), blocking: r.blocking, owed: r.owed, fullSuite: opts?.[name]?.fullSuite === true, holds: r.holds }
+    return {
+      title: def.title,
+      ...(def.due ? { due: def.due } : {}),
+      blocking: r.blocking,
+      owed: r.owed,
+      fullSuite: opts?.[name]?.fullSuite === true,
+      holds: r.holds,
+    }
   },
   names: (ctx) => gatesOf(ctx).map((g) => g.name),
   update: (ctx, name, changes) => updateGate(ctx, name, changes),
@@ -1404,7 +1411,12 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
     points: [gatesPoint, methodsPoint],
     // What it reads of the trackers' vocabulary: without it loaded, gates would decide on nothing.
     uses: { fields: [FIXED_ON.name, RUN_BY.name, HUMAN_BECAUSE.name], relations: ["verifies", "verified-by"] },
-    contributes: { gates: defs, "ui-views": [gatesUiView, queueUiView, coverageUiView(lists), planUiView(planDeps), checkpointsUiView], "goal-order": [goalOrder], "landing-reports": [goalsLanding] },
+    contributes: {
+      gates: defs,
+      "ui-views": [gatesUiView, queueUiView, coverageUiView(lists), planUiView(planDeps), checkpointsUiView],
+      "goal-order": [goalOrder],
+      "landing-reports": [goalsLanding],
+    },
     // The gates are a view of naima ui, coverage a tab, when the ui plugin is loaded; without it, still a command. The goal
     // order and the landing check are for the coordination plugin's development lines, when it is loaded.
     optional: ["ui-views", "goal-order", "landing-reports"],

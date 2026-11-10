@@ -39,7 +39,9 @@ export const checkpointsUiView = {
   screen: true,
   render(_params: Record<string, string[]>, ctx: Context) {
     const d = checkpointsData(ctx)
-    const rows = d.records.map((r) => `<li>${esc(r.on.slice(0, 10))} ${r.gate ? esc(r.gate) : "every gate"}: ${r.passed ? "passed" : `failed (${esc(r.failed.join(", "))})`}</li>`)
+    const rows = d.records.map((r) =>
+      `<li>${esc(r.on.slice(0, 10))} ${r.gate ? esc(r.gate) : "every gate"}: ${r.passed ? "passed" : `failed (${esc(r.failed.join(", "))})`}</li>`
+    )
     return {
       data: d,
       html: `<p>Checks: ${d.mode}.${d.owed.names.length ? ` Owed: ${esc(d.owed.names.join(", "))}.` : ""}</p><ul>${rows.join("")}</ul>`,

@@ -55,13 +55,12 @@ import {
   isOpen,
   type Item,
   joinProse,
-  NOTES_HEADING,
-  readReadme,
-  splitProse,
   label,
   linked,
+  NOTES_HEADING,
   parse,
   type Plugin,
+  readReadme,
   READY,
   type ReadyRecord,
   readyRecord,
@@ -70,6 +69,7 @@ import {
   saveProse,
   setFields,
   setFieldValue,
+  splitProse,
   stateDir,
   str,
   strs,
@@ -144,7 +144,9 @@ function readMeetings(options: Record<string, unknown>): Record<string, MeetingC
       throw new Error(`discussions: meeting "${name}": needs is a non-empty list of names`)
     }
     if (m["on"] !== undefined && !isDate(m["on"])) throw new Error(`discussions: meeting "${name}": on is a date, YYYY-MM-DD, got ${JSON.stringify(m["on"])}`)
-    if (m["held"] !== undefined && !isDate(m["held"])) throw new Error(`discussions: meeting "${name}": held is a date, YYYY-MM-DD, got ${JSON.stringify(m["held"])}`)
+    if (m["held"] !== undefined && !isDate(m["held"])) {
+      throw new Error(`discussions: meeting "${name}": held is a date, YYYY-MM-DD, got ${JSON.stringify(m["held"])}`)
+    }
     if (m["taken"] !== undefined && (typeof m["taken"] !== "string" || Number.isNaN(Date.parse(m["taken"])))) {
       throw new Error(`discussions: meeting "${name}": taken is a time, as naima meeting take writes it, got ${JSON.stringify(m["taken"])}`)
     }
@@ -161,8 +163,7 @@ const isDiscussion = (i: Item): boolean => i.type === discussionsType.id
 const agendaOf = (ctx: Context, name: string): Item[] => ctx.repo.items.filter((i) => isDiscussion(i) && fieldValues(i, GATE).includes(name))
 const openAgenda = (ctx: Context, name: string): Item[] => agendaOf(ctx, name).filter((i) => isOpen(ctx, i))
 /** The other open items on a meeting's agenda: an approval, a landing, a question on an item, each moved there by its meeting field. */
-const othersOn = (ctx: Context, name: string): Item[] =>
-  ctx.repo.items.filter((i) => !isDiscussion(i) && fieldValue(i, MEETING) === name && isOpen(ctx, i))
+const othersOn = (ctx: Context, name: string): Item[] => ctx.repo.items.filter((i) => !isDiscussion(i) && fieldValue(i, MEETING) === name && isOpen(ctx, i))
 /** The meeting an item is on: a discussion's first meeting gate, another item's meeting field; null when none. */
 function meetingOfItem(i: Item, meetings: Record<string, MeetingConfig>): string | null {
   if (isDiscussion(i)) return fieldValues(i, GATE).find((g) => Object.hasOwn(meetings, g)) ?? null
@@ -298,9 +299,9 @@ function agendaLines(ctx: Context, name: string, m: MeetingConfig, meetings: Rec
   const others = othersOn(ctx, name)
   const state = stateOf(ctx, name, m)
   const out = [
-    `${name} — ${m.title} (needs ${needsOf(m).join(", ")}; ${whenOf(m)}${state === "taken" ? `; taken ${m.taken}` : ""}): ${ordered.length} open of ${all.length}${
-      others.length ? `, and ${others.length} other item${others.length === 1 ? "" : "s"}` : ""
-    }`,
+    `${name} — ${m.title} (needs ${needsOf(m).join(", ")}; ${whenOf(m)}${
+      state === "taken" ? `; taken ${m.taken}` : ""
+    }): ${ordered.length} open of ${all.length}${others.length ? `, and ${others.length} other item${others.length === 1 ? "" : "s"}` : ""}`,
   ]
   let n = 0
   for (const place of PLACES) {
@@ -636,7 +637,11 @@ function meetingCommand(base: Record<string, MeetingConfig>): Command {
         if (!on || rest.length > 1) throw usageError(this)
         if (on !== "none" && !isDate(on)) throw new Error(`a date is YYYY-MM-DD, or none to clear it: got ${on}`)
         changeMeeting(ctx, meeting, ({ on: _, ...c }) => (on === "none" ? c : { ...c, on }))
-        ctx.out(on === "none" ? `${meeting}: no date now — it takes place ${whenOf({ title: m.title, ...(m.needs ? { needs: m.needs } : {}) })}` : `${meeting}: on ${on}`)
+        ctx.out(
+          on === "none"
+            ? `${meeting}: no date now — it takes place ${whenOf({ title: m.title, ...(m.needs ? { needs: m.needs } : {}) })}`
+            : `${meeting}: on ${on}`,
+        )
         return 0
       }
       if (sub === "take") {
@@ -763,7 +768,11 @@ function checks(base: Record<string, MeetingConfig>): Check {
       for (const i of ctx.repo.items) {
         const m = isDiscussion(i) ? undefined : fieldValue(i, MEETING)
         if (m && !Object.hasOwn(meetings, m)) {
-          out.push({ level: "problem", item: i, message: `${label(i)} is on the meeting ${m}, which is not declared — naima meeting move <meeting> ${i.slug}, or naima meeting off ${i.slug}` })
+          out.push({
+            level: "problem",
+            item: i,
+            message: `${label(i)} is on the meeting ${m}, which is not declared — naima meeting move <meeting> ${i.slug}, or naima meeting off ${i.slug}`,
+          })
         }
       }
       for (const d of ctx.repo.items.filter(isDiscussion)) {
@@ -812,7 +821,13 @@ export function meetingsData(ctx: Context, meetings: Record<string, MeetingConfi
     held: m.held ?? null,
     due: dueNow(ctx, m),
     agenda: [
-      ...orderedAgenda(ctx, name, meetings).map(({ item, place }) => ({ ref: label(item), title: item.meta.title, type: item.type, status: item.meta.status, place })),
+      ...orderedAgenda(ctx, name, meetings).map(({ item, place }) => ({
+        ref: label(item),
+        title: item.meta.title,
+        type: item.type,
+        status: item.meta.status,
+        place,
+      })),
       ...othersOn(ctx, name).map((i) => ({ ref: label(i), title: i.meta.title, type: i.type, status: i.meta.status, place: "other" as const })),
     ],
     toClose: packagesOf(ctx, name).packages.length,
@@ -834,11 +849,12 @@ const meetingsUiView = (base: Record<string, MeetingConfig>) => ({
   order: 5,
   render(_params: Record<string, string[]>, ctx: Context) {
     const data = meetingsData(ctx, liveMeetings(ctx, base))
-    const html = data.meetings.map((r) =>
-      `<h3>${esc(r.title)}</h3><p>${r.on ? esc(r.on) : "Whenever you're ready"} · ${r.state} · ${r.agenda.length} on the agenda</p>${
-        r.agenda.length ? `<ol>${r.agenda.map((a) => `<li><code>${esc(a.ref)}</code> ${esc(a.title)}</li>`).join("")}</ol>` : ""
-      }`
-    ).join("") || "<p>No meetings yet.</p>"
+    const html =
+      data.meetings.map((r) =>
+        `<h3>${esc(r.title)}</h3><p>${r.on ? esc(r.on) : "Whenever you're ready"} · ${r.state} · ${r.agenda.length} on the agenda</p>${
+          r.agenda.length ? `<ol>${r.agenda.map((a) => `<li><code>${esc(a.ref)}</code> ${esc(a.title)}</li>`).join("")}</ol>` : ""
+        }`
+      ).join("") || "<p>No meetings yet.</p>"
     return { data, html }
   },
 })
@@ -872,7 +888,9 @@ function helloSection(base: Record<string, MeetingConfig>): SummarySection {
             const who = `${r.needs.join(" and ")} ${r.needs.length > 1 ? "are" : "is"}`
             return [
               ...(r.taken
-                ? [`Meeting ${r.meeting} (${r.title}) was taken at ${r.taken}: ${who} here now. Open with its agenda — naima meeting ${r.meeting} — and close it when it ends.`]
+                ? [
+                  `Meeting ${r.meeting} (${r.title}) was taken at ${r.taken}: ${who} here now. Open with its agenda — naima meeting ${r.meeting} — and close it when it ends.`,
+                ]
                 : []),
               ...(!r.taken && r.open.length
                 ? [

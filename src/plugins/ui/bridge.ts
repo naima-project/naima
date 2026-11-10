@@ -54,9 +54,17 @@ export const ACTIONS: readonly { name: string; words: string[]; says: string; bu
   { name: "claim", words: ["claim"], says: "claim items for this branch, or post its step" },
   { name: "release", words: ["release"], says: "release this branch's claim" },
   { name: "plan-propose", words: ["plan"], says: "propose or revise the note on a goal's plan: args are the goal and the note (naima plan <goal> --propose)" },
-  { name: "plan-approve", words: ["plan"], says: "the owner approves a goal's plan as it is now: args are the goal (naima plan <goal> --approve); the owner's alone, never an agent's" },
+  {
+    name: "plan-approve",
+    words: ["plan"],
+    says: "the owner approves a goal's plan as it is now: args are the goal (naima plan <goal> --approve); the owner's alone, never an agent's",
+  },
   { name: "name-stop", words: ["name-stop"], says: "give a commit of the map a name of the owner's own, or clear it (naima name-stop)" },
-  { name: "meeting-take", words: ["meeting", "take"], says: "take a meeting now: record that it started and wake the agent waiting with naima meeting wait (naima meeting take <meeting>)" },
+  {
+    name: "meeting-take",
+    words: ["meeting", "take"],
+    says: "take a meeting now: record that it started and wake the agent waiting with naima meeting wait (naima meeting take <meeting>)",
+  },
   { name: "meeting-new", words: ["meeting", "new"], says: 'declare a meeting, with a date or none (naima meeting new <name> "<title>" [--on YYYY-MM-DD])' },
   { name: "meeting-add", words: ["meeting", "add"], says: "put items that need the owner on a meeting's agenda (naima meeting add <meeting> <item>...)" },
   { name: "meeting-move", words: ["meeting", "move"], says: "move items to another meeting, noted on each (naima meeting move <meeting> <item>...)" },
@@ -85,7 +93,9 @@ export function actionArgv(name: string, args: unknown): string[] | string {
   if (action.noArgs && args.length) return `${action.name} takes no arguments`
   // The plan's actions take the goal (and the note), never a flag of their own: the flag is the action's.
   const plain = (args as string[]).every((a) => !a.startsWith("-"))
-  if (action.name === "plan-propose") return args.length === 2 && plain ? ["plan", args[0] as string, "--propose", args[1] as string] : "plan-propose takes the goal and the note"
+  if (action.name === "plan-propose") {
+    return args.length === 2 && plain ? ["plan", args[0] as string, "--propose", args[1] as string] : "plan-propose takes the goal and the note"
+  }
   if (action.name === "plan-approve") return args.length === 1 && plain ? ["plan", args[0] as string, "--approve"] : "plan-approve takes the goal"
   return [...action.words, ...(args as string[])]
 }

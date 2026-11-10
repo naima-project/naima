@@ -66,7 +66,9 @@ export function goalGraph(ctx: Context, gates: readonly GateRow[]): Goal[] {
     const created = on.map((i) => day(i.meta["created"])).filter((d): d is string => !!d).sort()
     // The day a finished goal held: the day its release was made (a release record on the gate), or else the last
     // day an item on it was closed or fixed.
-    const released = on.filter((i) => i.type === "releases" && i.meta["status"] === "released").map((i) => day(i.meta["created"])).filter((d): d is string => !!d).sort().at(-1)
+    const released = on.filter((i) => i.type === "releases" && i.meta["status"] === "released").map((i) => day(i.meta["created"])).filter((d): d is string =>
+      !!d
+    ).sort().at(-1)
     const lastClose = on.map((i) => day(i.meta["closedOn"]) ?? day(i.meta["fixedOn"])).filter((d): d is string => !!d).sort().at(-1)
     const ended = g.finished === true ? released ?? lastClose : undefined
     const steps = (g.steps ?? []).map((s) => {

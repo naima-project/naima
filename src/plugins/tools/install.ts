@@ -5,7 +5,6 @@
 // outside the tools directory, and a failure leaves no tool behind.
 
 import { spawnSyncFed } from "../../core/spawn-fed.ts"
-import { spawnSync } from "node:child_process"
 import { createHash, randomUUID } from "node:crypto"
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync, writeSync } from "node:fs"
 import { dirname, join } from "node:path"

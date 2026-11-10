@@ -154,7 +154,9 @@ export function layPlan(nodes: readonly LayIn[], edges: readonly (readonly [stri
   const runs = nodes.filter((n) => n.kind === "run").map((n) => n.id)
   // Every run waits for every piece of work: the checkpoint.
   const allPreds = (id: string): string[] => (by.get(id)!.kind === "run" ? [...new Set([...preds.get(id)!, ...work])] : [...preds.get(id)!])
-  const allSuccs = (id: string): string[] => (by.get(id)!.kind !== "run" ? [...new Set([...succs.get(id)!, ...runs])] : [...succs.get(id)!].filter((s) => by.get(s)!.kind === "run"))
+  const allSuccs = (
+    id: string,
+  ): string[] => (by.get(id)!.kind !== "run" ? [...new Set([...succs.get(id)!, ...runs])] : [...succs.get(id)!].filter((s) => by.get(s)!.kind === "run"))
   // A topological order (Kahn's), which leaves out the nodes on a cycle or after one.
   const pending = new Map(nodes.map((n) => [n.id, allPreds(n.id).length]))
   const order: string[] = []
@@ -363,7 +365,19 @@ export async function planOf(ctx: Context, deps: PlanDeps, name: string): Promis
     }
   })
   if (g.fullSuite && !g.holds) {
-    nodes.push({ id: FULL_SUITE, ref: "", title: "The full test suite", type: "suite", status: "", kind: "run", run: "test suite", units: 1, wave: -1, critical: false, after: [] })
+    nodes.push({
+      id: FULL_SUITE,
+      ref: "",
+      title: "The full test suite",
+      type: "suite",
+      status: "",
+      kind: "run",
+      run: "test suite",
+      units: 1,
+      wave: -1,
+      critical: false,
+      after: [],
+    })
   }
   // Each meeting with an item of the plan on its agenda is a node of its own, which its agenda waits for.
   for (const [name, m] of meetings) {
@@ -496,11 +510,17 @@ export function summaryOf(p: PlanData): string {
   const meets = p.nodes.filter((n) => n.kind === "meeting")
   if (meets.length) {
     const waiting = meets.filter((m) => !m.meeting?.on).length
-    lines.push(`It stops for the owner at ${count(meets.length, "point")}${waiting ? `, ${waiting} waiting for a meeting with you` : ""}: ${meets.slice(0, 3).map((m) => shortTitle(m.title, 40)).join("; ")}${meets.length > 3 ? "; …" : ""}.`)
+    lines.push(
+      `It stops for the owner at ${count(meets.length, "point")}${waiting ? `, ${waiting} waiting for a meeting with you` : ""}: ${
+        meets.slice(0, 3).map((m) => shortTitle(m.title, 40)).join("; ")
+      }${meets.length > 3 ? "; …" : ""}.`,
+    )
   }
   if (p.critical.nodes.length) {
     const names = p.critical.nodes.map((id) => shortTitle(p.nodes.find((n) => n.id === id)?.title ?? id, 40))
-    lines.push(`Critical path, ${unitsSaid(p.critical.units)}: ${names.length > 4 ? [...names.slice(0, 2), "…", names.at(-1)].join(" → ") : names.join(" → ")}.`)
+    lines.push(
+      `Critical path, ${unitsSaid(p.critical.units)}: ${names.length > 4 ? [...names.slice(0, 2), "…", names.at(-1)].join(" → ") : names.join(" → ")}.`,
+    )
   }
   if (p.stuck.length) lines.push(`${count(p.stuck.length, "item")} wait on each other in a cycle and can never start: naima check names it.`)
   lines.push(approvalSays(p))
@@ -539,7 +559,10 @@ export function planCommand(deps: PlanDeps): Command {
     usage: 'plan [<goal>] [--json] | plan <goal> --propose "<note>" [--by <name>] | plan <goal> --approve [--by <name>]',
     options: [
       { name: "--json", says: "print the plan as JSON, the `plan` view's data" },
-      { name: "--propose", says: "record a note on the plan, what an agent proposes or revises; it clears an approval, since a revised plan needs approving again" },
+      {
+        name: "--propose",
+        says: "record a note on the plan, what an agent proposes or revises; it clears an approval, since a revised plan needs approving again",
+      },
       { name: "--approve", says: "record the owner's approval of the plan as it is now, with its fingerprint; refused to a worker or an agent" },
       { name: "--by", says: "the name to sign with, instead of the one git knows" },
     ],

@@ -111,7 +111,9 @@ export function agentHandlers(bridge: Handlers, reader: Reader, commitTime: (ref
     if (!command) continue
     out[name] = async (args) => {
       // An agent proposes a plan; approving it is the owner's, from the UI.
-      if (name === "action" && args["name"] === "plan-approve") throw new Error("plan-approve is the owner's: an agent proposes with plan-propose, and the owner approves on the Plan view")
+      if (name === "action" && args["name"] === "plan-approve") {
+        throw new Error("plan-approve is the owner's: an agent proposes with plan-propose, and the owner approves on the Plan view")
+      }
       const a = await command(args)
       const says = typeof a === "object" && a !== null && !Array.isArray(a) ? a["says"] : undefined
       return typeof says === "string" ? says : typeof a === "string" ? a : JSON.stringify(a)
@@ -314,9 +316,15 @@ async function storeTool(root: string, name: string, args: { [k: string]: Json }
     if (typeof a === "string") return said(a, true)
     if (a.error) return said(a.error, true)
     const list = a.transitions ?? []
-    const allowed = (t: T) => (t.allowed === null ? "" : Array.isArray(t.allowed) ? ` [allowed: ${t.allowed.join(", ") || "none"}]` : t.allowed ? "" : " [not allowed now]")
+    const allowed = (
+      t: T,
+    ) => (t.allowed === null ? "" : Array.isArray(t.allowed) ? ` [allowed: ${t.allowed.join(", ") || "none"}]` : t.allowed ? "" : " [not allowed now]")
     const arg = (x: T["args"][number]) => `${x.name}${x.optional ? "?" : ""}: ${x.values && x.values.length <= 14 ? x.values.join("|") : x.type}`
-    const lines = list.map((t) => `${t.machine}.${t.name}(${t.args.map(arg).join(", ")})${t.sequence ? " sequence" : ""}${t.person ? " person only" : ""}${allowed(t)}: ${cut(t.description, 140)}`)
+    const lines = list.map((t) =>
+      `${t.machine}.${t.name}(${t.args.map(arg).join(", ")})${t.sequence ? " sequence" : ""}${t.person ? " person only" : ""}${allowed(t)}: ${
+        cut(t.description, 140)
+      }`
+    )
     const machines = new Set(list.map((t) => t.machine)).size
     return said(bounded([`${list.length} transitions on ${machines} machines`, ...lines].join("\n"), "ask for one machine"))
   }
@@ -331,7 +339,10 @@ async function storeTool(root: string, name: string, args: { [k: string]: Json }
   )
   if (typeof a === "string") return said(a, true)
   if (a.error) return said(a.error, true)
-  return said(saidTransition(a, `${machine}.${tname}(${Array.isArray(given) ? given.map((g) => JSON.stringify(g)).join(", ") : JSON.stringify(given)})`), !a.done)
+  return said(
+    saidTransition(a, `${machine}.${tname}(${Array.isArray(given) ? given.map((g) => JSON.stringify(g)).join(", ") : JSON.stringify(given)})`),
+    !a.done,
+  )
 }
 
 /** The look tools' answers: the store, the page as text, or a capture of the window's place on the screen. */
