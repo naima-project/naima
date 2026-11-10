@@ -2130,9 +2130,14 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
       for (const line of moved?.repaired ?? []) io.err(`naima: ${line}`)
       const linked = held ? null : linkedNote(targetOf(place, place.lock, opts))
       if (linked) io.err(`naima: ${linked}`)
-      if (moved?.from && moved.from !== place.lock.commit) io.err(`naima: locked commit moved ${short(moved.from)} → ${short(place.lock.commit)}`)
+      if (moved?.from && moved.from !== place.lock.commit) {
+        // The program follows the lock; the lock itself moves only by naima update.
+        io.err(`naima: the program moved to the locked commit, ${short(moved.from)} → ${short(place.lock.commit)}; naima.json is unchanged`)
+      }
       const target = runtimeOf(place.program)
       if (moved || (target && real(opts.programRoot) !== real(target))) return RELAUNCH
+      // Said by the run that goes on, once: a held program at another commit than the lock runs as it is.
+      if (held?.note && !PROMPTED.has(command ?? "")) io.err(held.note)
       // A fresh clone has the project's git hooks, committed, and not core.hooksPath, which git keeps per clone.
       if (naimaHooks(place.data).length) { for (const line of pointHooksPath(place.root, place.data, { quietWhenSet: true })) io.err(`naima: ${line}`) }
     }

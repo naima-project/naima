@@ -227,7 +227,7 @@ removed.
 
 ## When a teammate updated
 
-Pull their commit and run any `naima` command: it notices the lock moved, says `naima: locked commit moved <a> → <b>` once, and follows it.
+Pull their commit and run any `naima` command: it notices the lock moved, says `naima: the program moved to the locked commit, <a> → <b>; naima.json is unchanged` once, and follows it.
 
 ### On a branch opened before the update
 
