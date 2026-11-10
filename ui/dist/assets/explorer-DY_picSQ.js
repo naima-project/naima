@@ -1,1 +1,0 @@
-import"./app.svelte-UwMi10Tp.js";import{t as e}from"./mount-CxXz_xBV.js";e(document.getElementById(`app`));
