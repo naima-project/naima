@@ -437,6 +437,9 @@ const release: Command = {
   says: "drop this branch's claim on items; the last one removes the file, unless the branch is being prepared (claim --preparing)",
   enforces: "only this branch's own claim is dropped, and only on items it holds; while the branch is being prepared, the emptied file is kept",
   usage: "release <item>... [--of <branch>]",
+  options: [
+    { name: "--of", says: "release the items from this branch's claim instead of the current branch's: a finished worker's claim, dropped from here" },
+  ],
   examples: ["release export-drops", "release export-drops --of worker/export-alpha"],
   run(args, ctx) {
     const p = parse(args, { of: { type: "string" } })

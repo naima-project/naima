@@ -1255,13 +1255,18 @@ Drop this branch's claim on items; the last one removes the file, unless the bra
 **Enforces**: Only this branch's own claim is dropped, and only on items it holds; while the branch is being prepared, the emptied file is kept.
 
 ```sh
-naima release <item>...
+naima release <item>... [--of <branch>]
 ```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--of` |  | release the items from this branch's claim instead of the current branch's: a finished worker's claim, dropped from here |
 
 Examples:
 
 ```sh
 naima release export-drops
+naima release export-drops --of worker/export-alpha
 ```
 
 ### naima claims
@@ -4050,7 +4055,8 @@ naima toolchain [--check]
 | `--to` | `src/lib/ui` | where the widget set and the store go, from the app's folder |
 | `--tauri` |  | also copy the Tauri 2 shell to src-tauri/ |
 | `--server` |  | also copy the Deno bridge server to server/bridge-server.ts |
-| `--mcp` |  | the project's answer to the design-time question whether agents reach the app's bridge as an MCP server: copy it to server/bridge-mcp.ts, and record the answer (--no-mcp records no) |
+| `--mcp` |  | the project's answer to the design-time question whether agents read and act on the app as an MCP server (agent parity): copy the MCP server, the agent endpoint and the generator of the registry of transitions, scaffold the three tools store, transitions and transition, and record the answer |
+| `--no-mcp` |  | record the answer no to that question: none of it is set up |
 | `--force` |  | overwrite files the project changed since they were copied |
 | `--no-scaffold` |  | copy the stance only, without the files a new project needs to build, test and run |
 | `--no-install` |  | do not install the project's npm packages (deno install) after the copy |
@@ -4080,9 +4086,21 @@ naima stance-ui toolchain
 | `ui-svelte-check` | svelte-check passes: types hold, and nothing writes the store around its transitions |
 | `ui-no-raw-drag` | only the widget set's Draggable and Pannable handle dragging, so every drag has the same moves as buttons, keys or scrolling (WCAG 2.2 SC 2.5.7) |
 | `ui-auth-only` | only the widget set's Auth asks for a password or a one-time code, so every sign-in is accessible (WCAG 2.2 SC 3.3.8) |
+| `ui-transitions` | agent parity: the registry of transitions is what the machines generate, each says what it does, and every transition a component calls is in it |
+| `ui-agent-endpoint` | the MCP server's files import no app logic, only the registry and the agent channel, so an agent acts through the page and the store |
 | `ui-a11y` | the app's pages pass axe-core at WCAG 2.2 AA in both themes on desktop and phone, every control is reached with Tab and shows its focus, and the page reflows at 320 CSS px |
 | `ui-target-size` | every pointer target is at least 24 by 24 CSS px, or far enough from the others (WCAG 2.2 SC 2.5.8) |
 | `ui-reduced-motion` | nothing moves when the system asks for reduced motion |
+| `ui-column` | in a wide window the page's main column is at most 1400 CSS px and centred: the layout is progressive, never the window's full width |
+| `ui-reflow` | no sideways scroll, cut-off text or text over text in any window of the matrix, at 400% zoom, with text at 200% and with the text spacing of WCAG 2.2 SC 1.4.12 |
+| `ui-fluid` | components adapt to their container, viewport media queries restyle only the page frame, and directions are logical |
+| `ui-type-scale` | no font size is fixed in pixels, and every text grows with the reader's setting |
+| `ui-input-modes` | targets are 44 by 44 CSS px for a finger, and nothing is shown only on hover |
+| `ui-viewport` | dynamic viewport units, a viewport meta that allows zoom, safe-area insets for fixed bars, and a focused field stays in view with the keyboard up |
+| `ui-nav` | every destination of the top bar is shown on a wide window, none is behind a catch-all, and a narrow bar stays usable |
+| `ui-media` | images and frames keep their box and fit their size, long lists skip off-screen work, and the layout shift is under 0.1 |
+| `ui-budget` | on a mid-range phone's profile each screen paints within 2.5 s, blocks under 300 ms and stays within its bytes |
+| `ui-preferences` | forced colours keep an edge on controls, more contrast reaches 7:1, and translucent surfaces have a reduced-transparency answer |
 
 **Agent hooks**, installed in the agent tool's settings by `naima init`, `naima update` and `naima stance adopt`
 
@@ -4113,18 +4131,30 @@ naima stance-ui toolchain
 | Rule | Title | For | Strength | Enforced by | Verified by | Ack |
 |---|---|---|---|---|---|---|
 | `ui-accessible` | The interface meets EN 301 549 and WCAG 2.2 at level AA | everyone | must | `ui-a11y` | `ui-a11y` |  |
+| `ui-agent-parity` | Agents and the user do the same things: every change of the UI is a transition, and an agent calls those | everyone | must | `ui-transitions` | `ui-transitions` |  |
 | `ui-components-keep-only-local-ui-state` | Components keep only their own UI state, read the store and call transitions | everyone | must | `ui-component-imports` | `ui-component-imports` |  |
 | `ui-compositional-widget-set` | Larger components are built from smaller ones | everyone | should |  | `agent` |  |
 | `ui-consistent-help` | Help, where there is any, is in the same place on every page | agents | must |  | `agent` |  |
 | `ui-design-method-proposed` | Before building a UI, the agent proposes the design method | agents | should |  | `agent` |  |
 | `ui-design-tokens-only` | Every colour, size and duration is a design token | everyone | must | `ui-no-raw-literals` | `ui-no-raw-literals` |  |
 | `ui-drag-only-through-draggable` | Dragging is done only through the Draggable widget, or the Pannable box, each always offering every move without dragging | everyone | must | `ui-no-raw-drag` | `ui-no-raw-drag` |  |
+| `ui-fluid-intrinsic-layout` | Layout is intrinsic: a component adapts to the space it is given, and only the page frame answers the window | everyone | must | `ui-fluid` | `ui-fluid` |  |
+| `ui-fluid-type-and-space` | Type and space scale fluidly from rem tokens, and no font size is fixed in pixels | everyone | must | `ui-type-scale` | `ui-type-scale` |  |
 | `ui-icons-from-chosen-set` | Every icon comes from the one icon set chosen at design time | everyone | must | `ui-icons` | `ui-icons` |  |
+| `ui-input-modes` | The interface works with a mouse, a finger, a pen and a keyboard: nothing only on hover, targets for a finger | everyone | must | `ui-input-modes` | `ui-input-modes` |  |
 | `ui-light-and-dark` | Every mood board has a light and a dark theme, and the user's choice is app state | everyone | must | `ui-contrast` | `ui-contrast` |  |
 | `ui-logic-without-ui` | The app's logic is code with no UI | everyone | must | `ui-component-imports` | `ui-component-imports` |  |
 | `ui-machines-composed-and-modelled-first` | Machines are composed of simpler ones, and modelled first | everyone | should |  | `agent` |  |
+| `ui-media-and-performance` | Media is responsive and keeps its box, long lists skip off-screen work, and each screen keeps a budget on a mid-range phone | everyone | must | `ui-media` | `ui-media` |  |
 | `ui-mood-board-chosen-at-design-time` | The mood board is chosen at design time | everyone | must | `ui-tokens` | `ui-tokens` |  |
+| `ui-navigation-adapts` | The top bar shows every destination on a wide window and stays usable on a phone, with no hidden catch-all | everyone | must | `ui-nav` | `ui-nav` |  |
 | `ui-no-redundant-entry` | Nothing entered is asked for again in the same process | agents | must |  | `agent` |  |
 | `ui-one-code-base-six-platforms` | The app runs on six platforms from one code base, and only the platform bridge differs | everyone | must |  | `agent` |  |
 | `ui-one-store-written-by-transitions` | One central store holds every state machine and is written only through their transitions | everyone | must | `ui-svelte-check` | `ui-svelte-check` |  |
+| `ui-overlay-scrollbars` | Scrollbars show only while scrolling: thin overlay scrollbars that fade | everyone | must |  | `agent` |  |
+| `ui-progressive-layout` | One layout adapts from a phone to a wide window, in a centred column of a readable width | everyone | must | `ui-column` | `ui-column` |  |
+| `ui-reflow-without-loss` | A page reflows at 320 CSS px and at 400% zoom, and loses nothing at 200% text or with a reader's text spacing | everyone | must | `ui-reflow` | `ui-reflow` |  |
 | `ui-sign-in-only-through-auth` | A password or a one-time code is asked for only by the Auth widget | everyone | must | `ui-auth-only` | `ui-auth-only` |  |
+| `ui-testing-matrix` | Every check runs in the same matrix of windows, pointers, themes and text sizes, written in one place | everyone | must | `ui-reflow` | `ui-reflow` |  |
+| `ui-user-preferences` | The interface follows the user's settings: motion, contrast, colour scheme, forced colours and transparency | everyone | must | `ui-preferences` | `ui-preferences` |  |
+| `ui-viewport-and-device` | The page fits the device's real window: dynamic viewport units, safe areas, both orientations, the keyboard | everyone | must | `ui-viewport` | `ui-viewport` |  |
