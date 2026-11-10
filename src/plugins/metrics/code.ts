@@ -17,6 +17,7 @@
 // closures, and counts if, while, for, each match arm after the first, ?,
 // let-else, && and ||. Good enough to see a trend; not a type checker.
 
+import { spawnSyncFed } from "../../core/spawn-fed.ts"
 import { spawnSync } from "node:child_process"
 import { existsSync, readFileSync, statSync } from "node:fs"
 import { join, resolve } from "node:path"
@@ -1098,8 +1099,8 @@ export function commitSource(root: string, commit: string, leaveOut: string[] = 
       if (!es.length) continue
       const args = ["cat-file", "--batch"]
       const r = gitDir === null
-        ? spawnSync("git", args, { cwd: root, input: es.map((e) => e.oid).join("\n") + "\n", maxBuffer: 1024 * 1024 * 1024 })
-        : spawnSync("git", ["--git-dir", gitDir, ...args], { input: es.map((e) => e.oid).join("\n") + "\n", maxBuffer: 1024 * 1024 * 1024 })
+        ? spawnSyncFed("git", args, { cwd: root, input: es.map((e) => e.oid).join("\n") + "\n", maxBuffer: 1024 * 1024 * 1024 })
+        : spawnSyncFed("git", ["--git-dir", gitDir, ...args], { input: es.map((e) => e.oid).join("\n") + "\n", maxBuffer: 1024 * 1024 * 1024 })
       if (r.status !== 0) throw new Error(`git cat-file: ${String(r.stderr ?? "").trim()}`)
       const buf = r.stdout as unknown as Uint8Array
       const byOid = new Map<string, string | null>()

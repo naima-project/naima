@@ -84,6 +84,8 @@ import {
 import { type CoverageConfig, coverageLines, coverageOf, coverageReasons, coverageUiView, COVERS, readCoverage, staleCovers } from "./coverage.ts"
 import { finished, fixedOnLine, goalBefore, goalOrder, goalsLanding, lineNotReady } from "./goals.ts"
 import { dependenciesAcyclic, dependenciesWaitOnWork, orderCommand, readyCommand, standsFor } from "./dependencies.ts"
+import { planCommand, type PlanDeps, planUiView } from "./plan.ts"
+import { checkpointsUiView } from "./checkpoint-view.ts"
 import { CLOSES_STEP, findMethod, methodsPoint, type MethodStep, STEP_NAME, stepRecordsCheck, type StepState, stepsVerdict } from "./methods.ts"
 
 export { type CoverageConfig, coverageOf, type CoverageRow } from "./coverage.ts"
@@ -583,6 +585,19 @@ async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: Gate
       },
     }
   }))
+}
+
+/** What the plan reads of the gates and how it writes a gate's note and approval (plan.ts). */
+const planDeps: PlanDeps = {
+  async gate(ctx, name) {
+    const def = ctx.registry.find<GateDef>("gates", name)?.value
+    if (!def) return null
+    const r = await def.evaluate(ctx)
+    const opts = ctx.config.plugins["gates"]?.options?.["gates"] as Record<string, { fullSuite?: boolean }> | undefined
+    return { title: def.title, ...(def.due ? { due: def.due } : {}), blocking: r.blocking, owed: r.owed, fullSuite: opts?.[name]?.fullSuite === true, holds: r.holds }
+  },
+  names: (ctx) => gatesOf(ctx).map((g) => g.name),
+  update: (ctx, name, changes) => updateGate(ctx, name, changes),
 }
 
 const gatesCommand: Command = {
@@ -1389,7 +1404,7 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
     points: [gatesPoint, methodsPoint],
     // What it reads of the trackers' vocabulary: without it loaded, gates would decide on nothing.
     uses: { fields: [FIXED_ON.name, RUN_BY.name, HUMAN_BECAUSE.name], relations: ["verifies", "verified-by"] },
-    contributes: { gates: defs, "ui-views": [gatesUiView, queueUiView, coverageUiView(lists)], "goal-order": [goalOrder], "landing-reports": [goalsLanding] },
+    contributes: { gates: defs, "ui-views": [gatesUiView, queueUiView, coverageUiView(lists), planUiView(planDeps), checkpointsUiView], "goal-order": [goalOrder], "landing-reports": [goalsLanding] },
     // The gates are a view of naima ui, coverage a tab, when the ui plugin is loaded; without it, still a command. The goal
     // order and the landing check are for the coordination plugin's development lines, when it is loaded.
     optional: ["ui-views", "goal-order", "landing-reports"],
@@ -1409,7 +1424,7 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
         ),
       ),
     ],
-    commands: [gatesCommand, gateCommand, queue, coverageCommand(lists), readyCommand(gatedItems), orderCommand(gatedItems)],
+    commands: [gatesCommand, gateCommand, planCommand(planDeps), queue, coverageCommand(lists), readyCommand(gatedItems), orderCommand(gatedItems)],
     summary: [status],
   }
 }
