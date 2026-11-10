@@ -5,6 +5,11 @@
 // pages (mcp-pages.ts) for what they do not answer. action and run run the UI's actions; show, read_page and
 // screenshot drive and look at the UI the owner has open, instead of a page of the agent's own.
 //
+// The server is only an intelligence on top of the open UI's central store, and adds no UI behaviour of its own: store
+// reads the store's snapshot, transitions lists its registry of transitions (generated from the UI's machines),
+// transition calls one by machine and name through the very function the UI's components call, and show is the
+// transition of one of the UI's named sequences. Which screen, which item, and why a place is refused, the UI decides.
+//
 //   claude mcp add naima -- naima ui --mcp        (run in the project's folder; any MCP client starts it the same way)
 
 import { Buffer } from "node:buffer"
@@ -59,7 +64,7 @@ export function naimaTools(views: readonly string[], tabs: readonly string[]): {
     },
     show: {
       description:
-        "Show the owner a place in the Naima UI open on this project, live: a screen, a plugin's view, an item, a commit (moving the playhead there) or a line. Give exactly one. Prefer it to a page or an artifact of your own. Opens a UI when none is open.",
+        "Show the owner a place in the Naima UI open on this project, live: a screen, a plugin's view, an item, a commit (moving the playhead there) or a line. Give exactly one. It calls the UI's named sequence for it (agent.showScreen, showView, showItem, showCommit, showLine), which transition calls the same way. Prefer it to a page or an artifact of your own. Opens a UI when none is open.",
       inputSchema: obj({
         screen: str("home, metrics, diary, bugs, features, failed_tests, goals, roadmap, map, all_projects or more"),
         view: str(`a plugin's view: ${tabs.join(", ")}`),
@@ -75,6 +80,7 @@ export const INSTRUCTIONS = "Naima's project tracker and UI. Answers are short p
   "Start with overview. items: one item by ref, or a search with counts. gates: why a gate is blocked. lines: the trunk, lines and branches. " +
   "history: a day or a commit. work: claims, queue, stale work. metrics: values and trends. view: a view's raw data, in pages, only when those do not answer. " +
   `No reply passes ${HARD_BOUND} characters; a cut one says how to narrow it. ` +
+  "The open UI is its central store, and these tools only use it as the UI's own components do: read it with store (a summary first, then one machine or a path), list what can be done with transitions, act with transition (machine, name, args), and use show for the common jumps, a named sequence of transitions. " +
   "To show the owner something, call show: it moves the Naima UI the owner has open, and is preferred to a page or an artifact of your own. " +
   "read_page outlines what the owner sees; screenshot only for a rare visual check, since it costs far more. If show says no UI could be opened, tell the owner to run naima ui."
 
@@ -174,8 +180,43 @@ export function outline(text: string, max = 2000): string {
   return all.slice(0, all.lastIndexOf("\n", max - note.length)) + note
 }
 
-/** The tools that look at the open UI itself, beside the bridge's: what its page shows, as text, or as a picture. */
+/**
+ * The tools that look at the open UI itself, beside the bridge's: its central store, read and written through the
+ * functions its components call (store, transitions, transition), and what its page shows, as text or as a picture.
+ */
 export const LOOK_TOOLS = [
+  {
+    name: "store",
+    description:
+      "The open Naima UI's central store, as the UI holds it now: a summary of every machine's fields first (a value in short, a list by its length); with machine, that machine's view; with path, one part of it (lines.0.name). Read what the owner sees here before you act.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        machine: { type: "string", description: "a machine of the store, such as shell, rail or bugs" },
+        path: { type: "string", description: "with machine: a dotted path in its view" },
+      },
+    },
+  },
+  {
+    name: "transitions",
+    description:
+      "The registry of the open UI's transitions, generated from its machines: each machine's transitions with their arguments, what each does, and whether it is allowed now where the machine can say. The sequences of the machine agent are what show calls.",
+    inputSchema: { type: "object", properties: { machine: { type: "string", description: "only this machine's transitions" } } },
+  },
+  {
+    name: "transition",
+    description:
+      "Call one transition of the open UI's store, by machine and name, with its arguments, through the very function the UI's components call: answers in one line whether it was taken and what changed. Moves what the owner sees: call only what the owner would want shown.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        machine: { type: "string", description: "the machine, as transitions lists it" },
+        name: { type: "string", description: "the transition's name" },
+        args: { description: "its arguments: a list in order, or an object by their names", oneOf: [{ type: "array" }, { type: "object" }] },
+      },
+      required: ["machine", "name"],
+    },
+  },
   {
     name: "read_page",
     description:
@@ -201,22 +242,100 @@ export const LOOK_TOOLS = [
 type Content = { type: string; [k: string]: Json }
 const said = (text: string, isError = false): Json => ({ content: [{ type: "text", text }], isError })
 
-/** Asks the UI open on the project a question over the feed show and waits for its answer. */
-async function askUi<T>(root: string, request: { kind: "read" | "rect"; [k: string]: Json }, ms: number): Promise<T | string> {
+/**
+ * Asks the UI open on the project a question over the feed show and waits for its answer. A read is asked twice at
+ * most, since it can reach a page the moment it reloads, which never answers it; a transition is asked once, since the
+ * page may have applied it before it reloaded (the model develop/models/ui/agent-endpoint in the workshop).
+ */
+async function askUi<T>(root: string, request: { kind: string; [k: string]: Json }, ms: number): Promise<T | string> {
   if (!openUis(root).length) return "no Naima UI is open on this project: show something first, which opens one, or ask the owner to run naima ui"
-  // Asked twice at most: a question can reach a page the moment it reloads, which never answers it.
-  for (const wait of [ms / 2, ms / 2]) {
+  const once = request.kind === "transition"
+  for (const wait of once ? [ms] : [ms / 2, ms / 2]) {
     const id = requestId()
     askShow(root, { ...request, id } as never)
     const a = await awaitAnswer<T & { error?: string }>(root, id, wait)
     if (a !== null) return a.error ? a.error : a
   }
-  return "the open UI did not answer in time"
+  return once
+    ? "the open UI did not answer in time: read store to see whether the transition was applied before asking it again"
+    : "the open UI did not answer in time"
 }
 
-/** The look tools' answers: the page as text, or a capture of the window's place on the screen. */
+type Changed = [string, Json, Json][]
+
+/** A transition's answer in one line: taken or refused, and what changed. */
+export function saidTransition(a: { machine?: string; name?: string; done?: boolean; changed?: Changed; says?: string }, call: string): string {
+  const changed = a.changed ?? []
+  const what = changed.length
+    ? changed.slice(0, 8).map(([p, from, to]) => `${p} ${cut(JSON.stringify(from), 40)} → ${cut(JSON.stringify(to), 40)}`).join("; ") +
+      (changed.length > 8 ? `; and ${changed.length - 8} more` : "")
+    : "nothing changed"
+  return `${call}: ${a.done ? "taken" : "refused"}${a.says ? ` (${a.says})` : ""}; ${what}`
+}
+
+/** The store tools' answers: the open UI's store, its registry, a transition called. */
+async function storeTool(root: string, name: string, args: { [k: string]: Json }, ms: number): Promise<Json> {
+  const s = (k: string) => (typeof args[k] === "string" && (args[k] as string).trim() ? (args[k] as string).trim() : undefined)
+  if (name === "store") {
+    const machine = s("machine")
+    const path = s("path")
+    const a = await askUi<{ summary?: { [m: string]: { [k: string]: Json } }; value?: Json; cut?: boolean; error?: string }>(
+      root,
+      { kind: "store", ...(machine ? { machine } : {}), ...(path ? { path } : {}) },
+      ms,
+    )
+    if (typeof a === "string") return said(a, true)
+    if (a.error) return said(a.error, true)
+    if (a.summary) {
+      const lines = Object.entries(a.summary).map(([m, f]) =>
+        `${m}: ${Object.entries(f).map(([k, v]) => `${k}=${typeof v === "string" ? v : JSON.stringify(v)}`).join(" ") || "(no fields)"}`
+      )
+      const head = `${lines.length} machines; read one with machine, a part of it with path`
+      return said(bounded([head, ...lines].join("\n"), "read one machine"))
+    }
+    const where = `${machine}${path ? "." + path : ""}`
+    const more = a.cut ? `\n[cut: ${where} is larger; read a part with path]` : ""
+    return said(bounded(`${where}: ${JSON.stringify(a.value)}${more}`, "read a part with path"))
+  }
+  if (name === "transitions") {
+    const machine = s("machine")
+    type T = {
+      machine: string
+      name: string
+      args: { name: string; type: string; values?: string[]; optional?: boolean }[]
+      description: string
+      sequence?: boolean
+      person?: boolean
+      allowed: boolean | string[] | null
+    }
+    const a = await askUi<{ transitions?: T[]; error?: string }>(root, { kind: "registry", ...(machine ? { machine } : {}) }, ms)
+    if (typeof a === "string") return said(a, true)
+    if (a.error) return said(a.error, true)
+    const list = a.transitions ?? []
+    const allowed = (t: T) => (t.allowed === null ? "" : Array.isArray(t.allowed) ? ` [allowed: ${t.allowed.join(", ") || "none"}]` : t.allowed ? "" : " [not allowed now]")
+    const arg = (x: T["args"][number]) => `${x.name}${x.optional ? "?" : ""}: ${x.values && x.values.length <= 14 ? x.values.join("|") : x.type}`
+    const lines = list.map((t) => `${t.machine}.${t.name}(${t.args.map(arg).join(", ")})${t.sequence ? " sequence" : ""}${t.person ? " person only" : ""}${allowed(t)}: ${cut(t.description, 140)}`)
+    const machines = new Set(list.map((t) => t.machine)).size
+    return said(bounded([`${list.length} transitions on ${machines} machines`, ...lines].join("\n"), "ask for one machine"))
+  }
+  const machine = s("machine")
+  const tname = s("name")
+  if (!machine || !tname) return said("transition takes machine and name, as transitions lists them", true)
+  const given = args["args"] ?? []
+  const a = await askUi<{ done?: boolean; changed?: Changed; says?: string; error?: string }>(
+    root,
+    { kind: "transition", machine, name: tname, args: Array.isArray(given) || (typeof given === "object" && given !== null) ? given : [given] },
+    ms,
+  )
+  if (typeof a === "string") return said(a, true)
+  if (a.error) return said(a.error, true)
+  return said(saidTransition(a, `${machine}.${tname}(${Array.isArray(given) ? given.map((g) => JSON.stringify(g)).join(", ") : JSON.stringify(given)})`), !a.done)
+}
+
+/** The look tools' answers: the store, the page as text, or a capture of the window's place on the screen. */
 export function lookTools(root: string, capture: (rect: Rect) => Uint8Array | string = screenCapture(root), ms = 10_000) {
   return async (name: string, args: { [k: string]: Json }): Promise<Json> => {
+    if (name === "store" || name === "transitions" || name === "transition") return await storeTool(root, name, args, ms)
     if (name === "read_page") {
       const a = await askUi<{ text: string; truncated?: boolean }>(root, {
         kind: "read",

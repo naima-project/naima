@@ -10,7 +10,13 @@
 //   show.json        the last show asked: its id, the project's root, the place and when; written whole, then renamed
 //
 // A UI polls show.json, as live.ts polls the project, and passes on a show of its own project asked after it opened,
-// once. Nothing is queued: the newest show is the one that counts.
+// once. Nothing is queued: the newest show is the one that counts. A request asked before a page reloaded is never
+// passed on to the page that follows, so a transition is applied at most once (the model
+// develop/models/ui/agent-endpoint in the workshop).
+//
+// What travels here holds no UI behaviour: a place, a question about the page, or a request on the open UI's central
+// store (its snapshot, its registry of transitions, a transition by machine and name). The UI decides what each means,
+// through the same functions its components call (the workshop's ui/src/logic/agent.svelte.ts).
 
 import { randomBytes } from "node:crypto"
 import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
@@ -25,13 +31,18 @@ export type Place =
   | { kind: "commit"; hash: string }
   | { kind: "line"; name: string }
 
-/** A question to the open UI, carried as a show is: the page it shows as text (or raw HTML), or where its window is. */
+/**
+ * A request to the open UI, carried as a show is: the page it shows as text (or raw HTML), or where its window is; the
+ * central store's snapshot (in short, or one machine, or a path in it); its registry of transitions; or a transition
+ * called on a machine by its name, as the components call it. A show is the transition of a named sequence of the
+ * UI's machine agent (showScreen, showView, showItem, showCommit, showLine).
+ */
 export type UiRequest =
   | { kind: "read"; id: string; selector?: string; html?: boolean }
   | { kind: "rect"; id: string }
-
-/** The screens a show can name, as the UI's shell names them. */
-export const SCREENS = ["HOME", "METRICS", "DIARY", "BUGS", "FEATURES", "FAILED_TESTS", "GOALS", "ROADMAP", "MAP", "ALL_PROJECTS", "MORE"]
+  | { kind: "store"; id: string; machine?: string; path?: string }
+  | { kind: "registry"; id: string; machine?: string }
+  | { kind: "transition"; id: string; machine: string; name: string; args: unknown[] | { [arg: string]: unknown } }
 
 /** An open UI, as its file says. */
 export interface OpenUi {
