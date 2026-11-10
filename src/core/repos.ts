@@ -367,7 +367,10 @@ export function pairTracker(root: string, trackerGit: string, codeBranch: string
 
 // ── the tracker's own commits ────────────────────────────────────────────────
 
-/** The trailer of every tracker commit Naima makes itself in sibling mode, naming the command: what tells them from commits made by hand. */
+/**
+ * The trailer of every tracker commit Naima makes itself, naming the command: what tells them from commits made by hand. In sibling mode
+ * every write is committed so; with one repository, the writes of TRUNK_COMMITTED made on the trunk (core/cli.ts).
+ */
 export const CLI_TRAILER = "Naima-Command"
 
 /** The files a tracker's working tree has changed, each with its status as git status says it: path → the two status letters. */
@@ -380,10 +383,10 @@ export function trackerChanges(trackerGit: string): Map<string, string> {
 }
 
 /** The message of a tracker commit made by `naima <command>`: the items (or files) it wrote in the subject, the command in the trailer. */
-export function cliCommitMessage(command: string, paths: readonly string[]): string {
+export function cliCommitMessage(command: string, paths: readonly string[], prefix = ""): string {
   const names = [
     ...new Set(paths.map((p) => {
-      const parts = p.split("/")
+      const parts = (prefix && p.startsWith(`${prefix}/`) ? p.slice(prefix.length + 1) : p).split("/")
       return parts.length >= 3 ? `${parts[0]}/${parts[1]}` : p
     })),
   ].sort()
@@ -392,13 +395,13 @@ export function cliCommitMessage(command: string, paths: readonly string[]): str
 }
 
 /** Commit `paths` of a tracker kept as a repository of its own, as `naima <command>` wrote them. Null when done, else why not. */
-export function commitTrackerPaths(trackerGit: string, command: string, paths: readonly string[]): string | null {
+export function commitTrackerPaths(trackerGit: string, command: string, paths: readonly string[], prefix = ""): string | null {
   if (!paths.length) return null
   const input = paths.join("\0") + "\0"
   const spec = ["--pathspec-from-file=-", "--pathspec-file-nul"]
   const added = runGit(trackerGit, ["--literal-pathspecs", "add", "-A", ...spec], { input })
   if (!added.ok) return `git add: ${gitReason(added)}`
-  const made = runGit(trackerGit, ["--literal-pathspecs", "commit", "-q", "-m", cliCommitMessage(command, paths), ...spec], { input })
+  const made = runGit(trackerGit, ["--literal-pathspecs", "commit", "-q", "-m", cliCommitMessage(command, paths, prefix), ...spec], { input })
   return made.ok ? null : `git commit: ${gitReason(made)}`
 }
 

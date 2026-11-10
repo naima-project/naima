@@ -61,6 +61,7 @@ import {
   TRACKER_TRAILER,
   trunk,
   usageError,
+  WAIVERS,
   worktrees,
   writeDelegates,
   writeGitHook,
@@ -571,6 +572,18 @@ function trackerRefusal(repo: string, c: Added, upstream: string | null): string
   return `a commit made by hand, without the ${CLI_TRAILER}: trailer of the commits Naima makes there: tracker files are written through naima commands, which commit them`
 }
 
+/**
+ * Whether every file a commit changed is tracker data a naima command writes: in the data directory, outside rules,
+ * waivers and naima.json, which still land from an item's branch. With the commit's Naima-Command: trailer, the
+ * trunk takes it: naima set, close, note and the like commit their writes on the trunk so (core/cli.ts).
+ */
+function onlyTrackerData(ctx: Context, files: { status: string; path: string }[]): boolean {
+  if (!files.length) return false
+  const data = ctx.trackerPrefix ? `${ctx.trackerPrefix}/` : ""
+  const kept = [ctx.registry.types.get("rules")?.dir ?? "rules", WAIVERS].map((d) => `${data}${d}/`)
+  return files.every(({ path }) => path.startsWith(data) && path !== `${data}${DATA_FILE}` && !kept.some((k) => path.startsWith(k)))
+}
+
 /** Why the trunk may not take `c` directly, after `prev`; null when it may. */
 function refusal(ctx: Context, c: Added, prev: Added | undefined, upstream: string | null): string | null {
   const root = ctx.root
@@ -587,6 +600,7 @@ function refusal(ctx: Context, c: Added, prev: Added | undefined, upstream: stri
     if (files.length && files.every((f) => f.path.startsWith(`${TRACKER_DIR}/`))) return null
     return "a commit made on the trunk by hand"
   }
+  if (c.cli && onlyTrackerData(ctx, files)) return null
   if (
     initsTracker(ctx, files) || onlyAddsTrackerData(ctx, c.sha, files) || onlyClosesItems(ctx, c.sha, files) || switchesGuard(ctx, c.sha, files) ||
     rewritesHooks(ctx, c.sha, files)

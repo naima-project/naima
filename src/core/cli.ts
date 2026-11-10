@@ -44,6 +44,7 @@ import {
 import { moveTrackerOut } from "./move-tracker.ts"
 import { setWriteGuard } from "./item.ts"
 import {
+  commitTrackerPaths,
   commitTrackerWrites,
   HOOKS_DIR,
   installTrailerHooks,
@@ -2050,6 +2051,16 @@ async function stanceCommand(args: string[], opts: CliOptions, place: Place, io:
  * Run a command of the entry point's own that may write the tracker (init, update, rollback, plugin) and, when the
  * tracker is a repository of its own, commit what it wrote there, as every other command's writes are.
  */
+/** The commands whose tracker writes on the trunk Naima commits itself when the tracker shares the code's repository: what changes an item that exists. */
+const TRUNK_COMMITTED = new Set(["set", "close", "note", "describe", "retire", "attach"])
+
+/** Commit, with the command's trailer, the files under the data directory `prefix` whose state differs from `before`; null when done or nothing changed, else why not. */
+function commitTrunkWrites(git: string, prefix: string, command: string, before: ReadonlyMap<string, string>): string | null {
+  const data = prefix ? `${prefix}/` : ""
+  const mine = [...trackerChanges(git)].filter(([p, s]) => before.get(p) !== s && p.startsWith(data)).map(([p]) => p)
+  return commitTrackerPaths(git, command, mine, prefix)
+}
+
 async function committingTracker(data: string, command: string, io: IO, run: () => Promise<number>): Promise<number> {
   const repoOf = (): string | null => {
     try {
@@ -2208,6 +2219,9 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     applyPrivateData(ctx, exposure.state === "private")
     // A tracker kept as a repository of its own is committed by Naima: what this command writes there is one commit.
     const before = ctx.sibling ? trackerChanges(ctx.trackerGit) : null
+    // With one repository, a tracker write these commands make on the trunk is committed by Naima, with its trailer, which the trunk guard takes.
+    const onTrunk = !ctx.sibling && TRUNK_COMMITTED.has(command as string) && currentBranch(ctx.root) === trunk(ctx.root)
+    const trunkBefore = onTrunk ? trackerChanges(ctx.trackerGit) : null
     // The tick: what is due starts now, beside the command, and what it has for the owner is said after it, on standard error.
     const tick = beginTick(opts, place, ctx)
     let code: number
@@ -2216,6 +2230,10 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     } finally {
       for (const n of (await endTick(tick)).shown) io.err(messageLine(n))
       if (before) { for (const line of commitTrackerWrites(ctx.trackerGit, command as string, before)) io.err(`naima: ${line}`) }
+    }
+    if (trunkBefore && code === 0) {
+      const failed = commitTrunkWrites(ctx.trackerGit, ctx.trackerPrefix, command as string, trunkBefore)
+      if (failed) io.err(`naima: what naima ${command} wrote to the tracker is not committed (${failed}): commit it on the trunk`)
     }
     if (code !== RELAUNCH) return code
     // Only the entry point asks for a relaunch; a command's 75 would make the launcher run it again.
