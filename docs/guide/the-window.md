@@ -134,15 +134,23 @@ The window the timeline shows is also the time filter of the screens. Zoom in or
 lists those days alone, and the screen says which ones in words, for example "Showing Mon 3 – Sun 9 Nov", with an All time button beside it. All time, or
 zooming out until the window covers the whole history, shows every day again. Until you zoom or move the window, every day is shown.
 
-### Days, on the left of Home and the Diary
+### Days, on the left of every screen
 
-Home and the Diary have a Days button at the top left. It opens a map of the project's time down the left side of the window, and closes it again; the window
-remembers whether you left it open, and it starts closed. The map is a table of contents, drawn like the metro map: one thick line with a white station for each
-day, newest first. At the top is Now, with Home's sections when you are on Home, and under it each helper at work as a small robot on its own coloured line,
-with what it works on and its state in plain words: working, asking you, idle or done. Under each day are its moments of note. Click a station and the page goes
-there: on the Diary to that day or moment, and on Home the Diary opens at it. "See it then", beside a day, shows the project as it was at the end of that day,
-on every screen, and "Back to now" returns. The map never moves the page's items apart and does not scroll with them; it scrolls on its own. On a narrow window
-it covers the page until you close it. It follows the time filter, so it lists only the days the timeline's window covers.
+Every screen has a Days button at the top left. It opens a time panel down the left side of the window, and closes it again; the window remembers whether you
+left it open, and it starts closed. The panel is a table of contents of the project's time, told for the screen you are on, drawn like the metro map: one thick
+line with a white station for each day, newest first, and under each day its moments of note. On Home and the Diary they are the diary's moments; on Bugs, the
+bugs filed and fixed that day; on Features, what was asked for, started and shipped; on Failed tests, the tests that started failing and passed again; on
+Metrics, the recorded runs; on Goals, the steps of the goals done; the other screens list the diary's days. At the top is Now, with Home's sections when you
+are on Home, and under it each helper at work as a small robot, with what it works on and its state in plain words: working, asking you, idle or done.
+
+Click a station and the page goes there: on a screen with its own moments, to that bug, feature, test, chart or goal (a folded group opens first, and an item
+the screen does not show opens on its own page); on Home and the other screens the Diary opens at that day or moment. "See it then", beside a day, shows the
+project as it was at the end of that day, on every screen, and "Back to now" returns.
+
+Expand turns the panel into the vertical metro map: the same stations on the line, with the lines of work drawn beside it, one colour for each, from their first
+day of changes to their last, each helper as a robot at the top of the line it works on, and a key at the top that names each line. Collapse goes back to the
+list; the window remembers which you chose. The panel never moves the page's items apart and does not scroll with them; it scrolls on its own. On a phone it is
+a sheet over the bottom of the page until you close it. It follows the time filter, so it lists only the days the timeline's window covers.
 
 ### Home
 
