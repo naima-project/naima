@@ -2,14 +2,21 @@
 // here) and the verification of every formal property that is not current (on the option verifyHost), all started through
 // `naima run`, read back through `naima run status`, and settled into the checkpoint record: a pass or a failure per run.
 // A failed run blocks the gate through the record and files, or updates, a bug.
+import { spawnSync } from "node:child_process"
+import { rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import {
   type CheckpointRecord,
   type CheckpointRun,
   type CheckpointRunSpec,
+  cmdEscape,
+  cmdQuote,
   type Context,
   contextIn,
   createItem,
   gitReason,
+  type Host,
   isOpen,
   type Item,
   joinProse,
@@ -125,14 +132,88 @@ export async function startRuns(
   return runs
 }
 
+/** One command run for the sending of a tip: whether it succeeded, and what it said on failure. */
+export type Exec = (cmd: string, args: string[]) => { ok: boolean; err: string }
+
+/** What git and ssh say when the link dropped, as opposed to when the host refused: worth another try. */
+const DROPPED =
+  /could not read from remote repository|connection (closed|reset|timed out|refused)|broken pipe|kex_exchange|ssh: connect to host|operation timed out|lost connection/i
+
+/** How often a command that met a dropped link is run, and the pause before each new try. */
+const TRIES = 3
+const PAUSE_MS = 2000
+
+const sleepSync = (ms: number): void => void Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+
+/** Run `cmd` until it succeeds, or fails for a reason that is not a dropped link, or the tries are used; its last result. */
+function persist(exec: Exec, pause: (ms: number) => void, cmd: string, args: string[]): { ok: boolean; err: string } {
+  let r = exec(cmd, args)
+  for (let n = 1; !r.ok && n < TRIES && DROPPED.test(r.err); n++) {
+    pause(PAUSE_MS * n)
+    r = exec(cmd, args)
+  }
+  return r
+}
+
+/**
+ * Put the tip in the host's checkout under the checkpoint's ref. Towards a POSIX host, a git push over ssh. Towards a
+ * host whose shell is cmd, git's own ssh quoting breaks the path, so the tip travels as a bundle: made here, copied with
+ * scp into the host's git directory, fetched there and removed. A dropped link is tried again, twice. The reason it
+ * could not be sent, or none.
+ */
+export function sendTipWith(root: string, h: Host, tip: string, exec: Exec, pause: (ms: number) => void = sleepSync): string | undefined {
+  const ref = checkpointRef(tip)
+  const fail = (err: string): string => `could not send ${tip.slice(0, 12)} to ${h.name}: ${err}`
+  if (h.shell !== "cmd") {
+    const pushed = persist(exec, pause, "git", ["-C", root, "push", "--no-verify", "--quiet", "--force", `${h.ssh}:${h.dir}`, `${tip}:${ref}`])
+    return pushed.ok ? undefined : fail(pushed.err)
+  }
+  const file = `naima-checkpoint-${tip.slice(0, 12)}.bundle`
+  const local = join(tmpdir(), file)
+  const fwd = h.dir.replace(/\\/g, "/").replace(/\/+$/, "")
+  const winDir = h.dir.replace(/\//g, "\\").replace(/\\+$/, "")
+  try {
+    const made = exec("git", ["-C", root, "update-ref", ref, tip])
+    if (!made.ok) return fail(made.err)
+    const bundled = exec("git", ["-C", root, "bundle", "create", "--quiet", local, ref])
+    if (!bundled.ok) return fail(bundled.err)
+    const copied = persist(exec, pause, "scp", ["-q", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", local, `${h.ssh}:${fwd}/.git/${file}`])
+    if (!copied.ok) return fail(copied.err)
+    const there = cmdQuote(`${winDir}\\.git\\${file}`)
+    const fetched = persist(exec, pause, "ssh", [
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "ConnectTimeout=8",
+      h.ssh,
+      `cd /d ${cmdEscape(/[\s%]/.test(winDir) ? `"${winDir}"` : winDir)} && git fetch -q ${there} +${ref}:${ref} && del /q ${there}`,
+    ])
+    return fetched.ok ? undefined : fail(fetched.err)
+  } finally {
+    exec("git", ["-C", root, "update-ref", "-d", ref])
+    rmSync(local, { force: true })
+  }
+}
+
+/** Run a command for real: git through Naima's own git runner, the rest as itself. */
+function realExec(root: string): Exec {
+  return (cmd, args) => {
+    if (cmd === "git") {
+      const r = runGit(root, args.slice(2))
+      return { ok: r.ok, err: r.ok ? "" : gitReason(r) }
+    }
+    const r = spawnSync(cmd, args, { encoding: "utf8", timeout: 600_000, stdio: ["ignore", "pipe", "pipe"] })
+    return { ok: r.status === 0, err: r.error ? `${cmd}: ${r.error.message}` : String(r.stderr ?? "").trim().split("\n").pop() ?? "" }
+  }
+}
+
 /** Push the tip to the host's checkout as a ref, for its suite to check out; the reason it could not, or none. */
 export function sendTip(ctx: Context, host: string, tip: string): string | undefined {
   try {
     const hosts = projectHosts(ctx.config.plugins["long-work"]?.options ?? {})
     const h = hosts.get(host)
     if (!h) return noHost(host, hosts)
-    const pushed = runGit(ctx.root, ["push", "--no-verify", "--quiet", "--force", `${h.ssh}:${h.dir}`, `${tip}:${checkpointRef(tip)}`])
-    return pushed.ok ? undefined : `could not send ${tip.slice(0, 12)} to ${host}: ${gitReason(pushed)}`
+    return sendTipWith(ctx.root, h, tip, realExec(ctx.root))
   } catch (e) {
     return `could not send ${tip.slice(0, 12)} to ${host}: ${e instanceof Error ? e.message : String(e)}`
   }
