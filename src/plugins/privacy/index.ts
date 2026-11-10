@@ -402,12 +402,16 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
     says:
       "copy a file into an item's attachments with a record of whose it is: the owner's, only with their explicit yes restated in --consent, or your own with --own; a file holding a secret is refused",
     enforces:
-      "an owner's file is attached only with their yes restated in --consent, or the writer's own with --own; a file holding a secret, a hidden or path-like name, or a name already used is refused, and so is a text holding private infrastructure (a machine name, an IP address, a URI with a port, a home-directory path, the user's name, a word of the private list) unless --allow-private \"<reason>\" is given, which the item's notes record",
+      "an owner's file is attached only with their yes restated in --consent, or the writer's own with --own; a file holding a secret, a hidden name, a path leaving attachments/, or a name already used is refused; a file already in attachments/, in a folder, is recorded where it is, and so is a text holding private infrastructure (a machine name, an IP address, a URI with a port, a home-directory path, the user's name, a word of the private list) unless --allow-private \"<reason>\" is given, which the item's notes record",
     usage: 'attach <item> <file> (--consent "<the owner\'s yes, restated>" | --own) [--as <name>] [--by <who>]',
     options: [
       { name: "--consent", says: "the file is the owner's: their explicit yes to storing it, restated; recorded on the item" },
       { name: "--own", says: "the file is the writer's own material: a log, a test's output, a measurement" },
-      { name: "--as", says: "the name it takes in attachments/", default: "the file's own name" },
+      {
+        name: "--as",
+        says: "the name it takes in attachments/, a plain name or a path of plain names inside it",
+        default: "the file's own name, or its path in attachments/ when it is there already",
+      },
       { name: "--by", says: "who attaches it; without it, git's user.name" },
     ],
     examples: [
@@ -427,9 +431,13 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
         )
       }
       const item = ctx.repo.resolve(ref)
-      const name = str(p, "as") ?? basename(file)
-      if (!name || /[/\\]/.test(name) || name.startsWith(".")) throw new Error(`"${name}" is no attachment name: a plain file name, not hidden`)
       const src = resolve(file)
+      // A file already in the item's attachments, in a folder of its own, keeps its place: its name is its path there.
+      const within = relative(resolve(item.dir, ATTACHMENTS), src).split(/[/\\]/)
+      const name = str(p, "as") ?? (within.length > 1 && within[0] !== ".." ? within.join("/") : basename(file))
+      if (!name || name.split("/").some((s) => !s || s.startsWith(".") || /\\/.test(s))) {
+        throw new Error(`"${name}" is no attachment name: a plain file name, or a path of plain names inside attachments/, none hidden`)
+      }
       if (!isRegularFile(src)) throw new Error(unreadable(file, src))
       const text = textOf(src)
       const secret = text === null ? undefined : findSecrets(text)[0]
@@ -451,7 +459,7 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
         ...signature,
       } as Provenance
       if (!inPlace) {
-        mkdirSync(join(item.dir, ATTACHMENTS), { recursive: true })
+        mkdirSync(dirname(dest), { recursive: true })
         copyFileSync(src, dest)
       }
       try {
