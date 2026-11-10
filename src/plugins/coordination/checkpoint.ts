@@ -9,6 +9,7 @@ import {
   contextIn,
   currentBranch,
   gitOrNull,
+  isAncestor,
   lastPass,
   owedSince,
   parse,
@@ -46,6 +47,22 @@ async function waitFor(ctx: Context, id: string): Promise<CheckpointRecord> {
   return record
 }
 
+/**
+ * A gate that has a line is checkpointed in a checkout of that line: the options checkpointRuns and verifyHost, the
+ * properties and their models are the line's own, and the trunk's tip lacks them. Throws when the checkout is not on the line
+ * (nor on a branch that holds its tip).
+ */
+function refuseOffLine(ctx: Context, gate: string): void {
+  const line = `line/${gate}`
+  const tip = gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `refs/heads/${line}^{commit}`)
+  if (!tip) return
+  if (currentBranch(ctx.root) === line || isAncestor(ctx.root, tip, "HEAD")) return
+  throw new Error(
+    `${gate} has a line, ${line}, and a checkpoint checks the checkout it runs in, which is not on it: run naima checkpoint ${gate} in a checkout of the line ` +
+      `(git worktree add <folder> ${line}), where its options and properties are`,
+  )
+}
+
 export const checkpointCommand: Command = {
   name: "checkpoint",
   says:
@@ -74,6 +91,7 @@ export const checkpointCommand: Command = {
       return now.pending || now.passed ? 0 : 1
     }
     if (gate && !ctx.registry.find("gates", gate)) throw new Error(`no gate "${gate}"`)
+    if (gate) refuseOffLine(ctx, gate)
     const before = readCheckpoints(ctx).at(-1)
     if (before?.pending) {
       const now = await settle(ctx, before)
