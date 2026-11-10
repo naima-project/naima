@@ -1,0 +1,1 @@
+import{At as e,Jt as t,Mt as n,Q as r,Wt as i,bt as a,ft as o,on as s}from"./app.svelte-BWMM04Bi.js";var c=n(`<div><!></div>`);function l(n,l){let u=r(l,`gap`,3,`md`),d=r(l,`align`,3,`stretch`);var f=c(),p=t(f);a(p,()=>l.children),s(f),i(()=>o(f,1,`stack gap-${u()??``} align-${d()??``}`,`svelte-1382wtz`)),e(n,f)}export{l as t};
