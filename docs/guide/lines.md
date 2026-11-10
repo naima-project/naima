@@ -146,3 +146,7 @@ it. `naima hello` lists the open lines, each with its gate and latest update, an
 line. Two chats in one checkout share one session record unless `NAIMA_SESSION` is set, so such chats name their line with `--line`.
 
 Lines need the tracker committed with the code: a project that keeps its tracker in a repository of its own cannot use them yet.
+
+## Checks at checkpoints
+
+By default every landing runs every landing check (the coordination option `checks` is `continuous`). A project in rapid development can set `checks` to `checkpoint`: `naima land` then runs only the checks the option `fastChecks` names, and records the others in the landing marker as owed, in a `Checks-owed:` trailer. Workers run a build and their own new test, nothing wider. `naima gates` lists what is owed since the last checkpoint. `naima checkpoint [<gate>]` runs it all, with the heavy suites and model checks, on the current tip and records a pass, or a failure that blocks the gate until a later checkpoint passes. A gate step closing and a line landing on the trunk run it by themselves.

@@ -17,6 +17,7 @@ import {
   bool,
   type BranchFile,
   type Check,
+  CHECKPOINTS,
   cloneIntoNewWorktree,
   CODE_TRAILER,
   type Command,
@@ -85,6 +86,7 @@ import { claimsUiView, notesUiView } from "./ui.ts"
 import { readStaleAfter, staleCommand, type StaleData, staleData, staleSection } from "./stale.ts"
 import { applyPlan, planSweep, type SweepInputs, type SweepItem, sweepLines, type SweepResult } from "./sweep.ts"
 import { changeNotesCheck, changesCommand } from "./changes.ts"
+import { checkpointCommand } from "./checkpoint.ts"
 import { land, landingCheckCommand, landingReportsPoint, landingsAreMarkers, landingsPaired } from "./land.ts"
 import { claimsReports, claimsReportsPoint } from "./claims-reports.ts"
 import { pushCheckCommand } from "./messages.ts"
@@ -1435,13 +1437,29 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
         default: "none: this machine",
       },
       {
+        name: "checks",
+        says:
+          "when the landing checks, suites and model checks run: `continuous` runs every landing check on every landing; `checkpoint` has naima land run only the checks fastChecks names and write the others into the landing marker as owed (a `Checks-owed:` trailer), and has workers run only a build and their own new test; naima checkpoint, a gate step closing and a goal reached run what is owed, and a failed checkpoint blocks the gate",
+        default: "continuous",
+      },
+      {
+        name: "fastChecks",
+        says: "in checkpoint mode, the landing checks (by name, as naima docs lists them) that still run on every landing: a list of names",
+        default: "[]",
+      },
+      {
+        name: "checkpointChecks",
+        says: "the landing checks a checkpoint runs whether or not a landing owed them: a list of names; empty means every heavy one",
+        default: "[]",
+      },
+      {
         name: "staleAfter",
         says:
           "hours without a sign of life (a commit, a step, a session note, a file changed and not committed) after which naima stale and naima summary list a branch as stale work: a positive whole number",
         default: "24",
       },
     ],
-    dirs: [CLAIMS, PASSES, EVENTS],
+    dirs: [CLAIMS, PASSES, EVENTS, CHECKPOINTS],
     checks: [
       claimsResolve,
       staleClaims,
@@ -1465,6 +1483,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       recoverCommand((ctx, branch) => claimsData(ctx, branch, silentAfter)),
       landing,
       landingCheckCommand,
+      checkpointCommand,
       fixCommand(policy, openWork),
       guardCommand(guarded),
       guardCheckCommand,
