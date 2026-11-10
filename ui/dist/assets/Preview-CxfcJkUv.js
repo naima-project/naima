@@ -1,0 +1,1 @@
+import{Y as e,an as t,in as n}from"./app.svelte-DQJihKRY.js";import{t as r}from"./App-r6S0saq8.js";function i(i,a){t(a,!0),e(a.store),r(i,{}),n()}export{i as default};
