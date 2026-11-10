@@ -1,1 +1,0 @@
-import{X as e,cn as t,sn as n}from"./app.svelte-CEdosJEi.js";import{t as r}from"./App-OwBb8-ih.js";function i(i,a){t(a,!0),e(a.store),r(i,{}),n()}export{i as default};
