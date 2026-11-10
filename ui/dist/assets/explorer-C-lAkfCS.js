@@ -1,0 +1,1 @@
+import"./app.svelte-DQJihKRY.js";import{t as e}from"./mount-BJXVB24Q.js";e(document.getElementById(`app`));
