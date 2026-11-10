@@ -130,6 +130,20 @@ Choosing a commit, on the strip or on the map, shows every screen as the project
 Home, with its status as it is now. The left and right arrow keys step from one commit to the next on the rail, and on into the marks ahead. Escape, or the one
 "Back to live" button, beside the moment at the top of the page, returns to Live. Amber marks only the stop or mark shown and the page's one main action.
 
+The window the timeline shows is also the time filter of the screens. Zoom in or move the window, and the screens show only the days it covers: the Diary
+lists those days alone, and the screen says which ones in words, for example "Showing Mon 3 – Sun 9 Nov", with an All time button beside it. All time, or
+zooming out until the window covers the whole history, shows every day again. Until you zoom or move the window, every day is shown.
+
+### Days, on the left of Home and the Diary
+
+Home and the Diary have a Days button at the top left. It opens a map of the project's time down the left side of the window, and closes it again; the window
+remembers whether you left it open, and it starts closed. The map is a table of contents, drawn like the metro map: one thick line with a white station for each
+day, newest first. At the top is Now, with Home's sections when you are on Home, and under it each helper at work as a small robot on its own coloured line,
+with what it works on and its state in plain words: working, asking you, idle or done. Under each day are its moments of note. Click a station and the page goes
+there: on the Diary to that day or moment, and on Home the Diary opens at it. "See it then", beside a day, shows the project as it was at the end of that day,
+on every screen, and "Back to now" returns. The map never moves the page's items apart and does not scroll with them; it scrolls on its own. On a narrow window
+it covers the page until you close it. It follows the time filter, so it lists only the days the timeline's window covers.
+
 ### Home
 
 Home is one column under the rail. It says first which moment it shows: Live, with the line, or the commit with its date, its line and its message. Then:

@@ -647,11 +647,22 @@ export function isLineMarker(root: string, sha: string): boolean {
   return !!trailers.trim() && isMarker(root, { ...c, closes: ["line"] })
 }
 
+/**
+ * Whether a commit is the sweep's housekeeping on a line: made by a Naima command (its `Naima-Command:` trailer), with
+ * one parent, and only removing claim files, as `naima stale --write` drops a claim whose branch is gone.
+ */
+function removesOnlyClaims(ctx: Context, c: Added): boolean {
+  if (!c.cli || c.parents.length !== 1) return false
+  const files = filesOf(ctx.root, c.sha)
+  const claims = `${ctx.trackerPrefix ? `${ctx.trackerPrefix}/` : ""}claims/`
+  return files.length > 0 && files.every((f) => f.status === "D" && f.path.startsWith(claims))
+}
+
 /** Why the line `branch` may not move from `old` to `next`, in one line; null when it may: a creation, a deletion, a rewind, or only landings. */
 export function lineRefusal(ctx: Context, branch: string, old: string, next: string): string | null {
   if (ZERO.test(old) || ZERO.test(next) || old === next || isAncestor(ctx.root, next, old)) return null
   for (const c of commitsOf(ctx.root, ["--first-parent", "--reverse", next, `^${old}`])) {
-    if (c.reason || isLineMarker(ctx.root, c.sha)) continue
+    if (c.reason || isLineMarker(ctx.root, c.sha) || removesOnlyClaims(ctx, c)) continue
     return `${branch} may not take ${
       c.sha.slice(0, 12)
     } "${c.subject}": a development line takes only landings — open an item from the line (naima open <item>), ` +
