@@ -150,3 +150,11 @@ Lines need the tracker committed with the code: a project that keeps its tracker
 ## Checks at checkpoints
 
 By default every landing runs every landing check (the coordination option `checks` is `continuous`). A project in rapid development can set `checks` to `checkpoint`: `naima land` then runs only the checks the option `fastChecks` names, and records the others in the landing marker as owed, in a `Checks-owed:` trailer. Workers run a build and their own new test, nothing wider. `naima gates` lists what is owed since the last checkpoint. `naima checkpoint [<gate>]` runs it all, with the heavy suites and model checks, on the current tip and records a pass, or a failure that blocks the gate until a later checkpoint passes. A gate step closing and a line landing on the trunk run it by themselves.
+
+A checkpoint also runs the project's test suites and its model checks, in the background through `naima run`. The coordination option `checkpointRuns` lists the commands, each a plain command or an object with a `command`, a `host` and a `budget`:
+
+```json
+"checkpointRuns": ["deno task verify", { "command": "deno task verify", "host": "<host>", "name": "suite" }]
+```
+
+A command with a host runs in that host's checkout, which `naima checkpoint` first moves to the checkpoint's tip. The checkpoint also runs `naima verify` on every property that is not current (the ones the `properties` gate blocks on), on the host the option `verifyHost` names, or on this machine when it names none. `naima checkpoint` returns once the runs have started; `naima checkpoint --status` reads each of them and, when all are over, settles the record as a pass or a failure. `naima checkpoint --wait` waits for them instead. A run that fails fails the checkpoint, blocks the gate, and files a bug titled "Checkpoint run <name> fails", or adds a note to the one already open. While the runs go, the gate is blocked as running. `naima gates` shows the last checkpoint's result, each run's, and what is still owed.

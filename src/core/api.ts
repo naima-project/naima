@@ -19,7 +19,11 @@ export {
   checkpointAfter,
   checkpointBlock,
   checkpointChecks,
+  checkpointLines,
   type CheckpointRecord,
+  type CheckpointRun,
+  checkpointRuns,
+  type CheckpointRunSpec,
   CHECKPOINTS,
   CHECKS_OWED,
   fastChecks,
@@ -29,6 +33,8 @@ export {
   owedSince,
   owedTrailer,
   readCheckpoints,
+  updateCheckpoint,
+  verifyHost,
   writeCheckpoint,
 } from "./checkpoints.ts"
 

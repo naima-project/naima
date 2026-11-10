@@ -42,6 +42,7 @@ import {
   type Check,
   checkpointAfter,
   checkpointBlock,
+  checkpointLines,
   code,
   type Command,
   type Context,
@@ -604,6 +605,7 @@ const gatesCommand: Command = {
     if (bool(p, "json")) ctx.out(JSON.stringify(gates.map((g) => g.row), null, 2))
     else {
       for (const g of gates) printGate(ctx, g.def, g.result)
+      for (const l of checkpointLines(ctx)) ctx.out(l)
       const owed = owedLine(ctx)
       if (owed) ctx.out(owed)
     }

@@ -1456,6 +1456,18 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
         default: "[]",
       },
       {
+        name: "checkpointRuns",
+        says:
+          'the commands a checkpoint runs in the background through naima run, such as the project\'s suite: a list of commands, or of { "command": "...", "host": "<declared host>", "name": "...", "budget": "2h" } (a command with a host runs in that host\'s checkout, moved to the checkpoint\'s tip first); naima checkpoint --status reads them, and a failing one blocks the gate and files or updates a bug',
+        default: "[]",
+      },
+      {
+        name: "verifyHost",
+        says:
+          "the host a checkpoint's naima verify of every property that is not current runs on (naima verify --host): a host declared in the long-work plugin's hosts option; none, or `here`, verifies on this machine",
+        default: "none: this machine",
+      },
+      {
         name: "staleAfter",
         says:
           "hours without a sign of life (a commit, a step, a session note, a file changed and not committed) after which naima stale and naima summary list a branch as stale work: a positive whole number",
