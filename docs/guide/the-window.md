@@ -1,12 +1,28 @@
 # The Naima window
 
-`naima ui` opens a window onto the project in your default browser. To show it, `naima ui` starts a small web server on your own machine, on a free port it
-picks each time, and the window is a page of that server. Ctrl-C in the terminal stops the server, and the window with it.
+`naima ui` opens a window onto the project. When the desktop app is installed (on macOS, Naima.app in an Applications folder), it opens the app on the project,
+and if the app already has a window open on it, it brings that window to the front instead of opening a second one. Otherwise it opens the window in your
+default browser: `naima ui` starts a small web server on your own machine, on a free port it picks each time, and the window is a page of that server. Ctrl-C in
+the terminal stops the server, and the window with it.
 
 ```sh
-naima ui              # serve it and open it in the default browser
-naima ui --no-open    # print the address, with its token, and serve until Ctrl-C
+naima ui                     # the desktop app on the project when it is installed, otherwise the browser
+naima ui --browser           # the browser, even with the desktop app installed
+naima ui --no-open           # print the address, with its token, and serve until Ctrl-C
+naima ui --install-desktop   # build the desktop app and install it, on macOS
 ```
+
+`naima ui` goes to the browser by itself when the app is not installed, and on macOS it then says that `naima ui --install-desktop` would install it. It goes
+there too when the app cannot start, and says why.
+
+### Installing the desktop app
+
+On macOS, `naima ui --install-desktop` builds the desktop app on your machine and installs it as `Naima.app` in the Applications folder of your home folder,
+which needs no administrator. It needs Rust (from [rustup.rs](https://rustup.rs)); Tauri's build tool is fetched as it runs. The first build takes some minutes,
+since it compiles a couple of hundred Rust crates, and it says where it is as it goes: copying, then the crates compiled of the count the last build ended on,
+then installing. It builds in Naima's folder of your caches (`~/Library/Caches/naima/desktop`), which it keeps, so a later build, after an update of Naima,
+compiles only what changed; the build's output is in `build.log` there. Run it again after updating Naima to install the app that goes with it. The app takes
+the project it shows from its first argument too, so `open -a Naima --args <project folder>` opens it on a project from the Finder's side.
 
 You rarely need to type it. When an agent session starts, `naima hello` opens the window on the project by itself, in the background, and its one-line greeting
 says so, with the address: the desktop app when it is installed (on macOS, Naima.app in an Applications folder), otherwise `naima ui` in the browser. If a
@@ -122,17 +138,17 @@ stand on the map too, each under their own name: whoever is checked out here (gi
 commits the map draws on the route of their newest commit. A small pin marks where the main checkout and each worktree stand, on the commit each has checked
 out, with its name and branch; the main checkout's label and the one the window is served from are always shown, the others when you point at them. A commit you
 have named with `naima name-stop <commit> "<name>"` shows that name under its station, and says it when you reach it with Tab, on the open map and on the closed
-rail alike. You can also name it from the window: with a commit chosen and the map open, a field under the map holds that commit's name; type one and
-press Name, or empty the field and press Remove name. The window runs `naima name-stop` for you, says when the name is kept, and reads the map again. The names
-are kept in the tracker's `stops/` folder, one file per commit, written on the trunk like any other addition to the tracker.
+rail alike. You can also name it from the window: with a commit chosen and the map open, a field under the map holds that commit's name; type one and press
+Name, or empty the field and press Remove name. The window runs `naima name-stop` for you, says when the name is kept, and reads the map again. The names are
+kept in the tracker's `stops/` folder, one file per commit, written on the trunk like any other addition to the tracker.
 
 Choosing a commit, on the strip or on the map, shows every screen as the project was at that commit; choosing a mark ahead shows that goal, step or landing on
 Home, with its status as it is now. The left and right arrow keys step from one commit to the next on the rail, and on into the marks ahead. Escape, or the one
 "Back to live" button, beside the moment at the top of the page, returns to Live. Amber marks only the stop or mark shown and the page's one main action.
 
-The window the timeline shows is also the time filter of the screens. Zoom in or move the window, and the screens show only the days it covers: the Diary
-lists those days alone, and the screen says which ones in words, for example "Showing Mon 3 – Sun 9 Nov", with an All time button beside it. All time, or
-zooming out until the window covers the whole history, shows every day again. Until you zoom or move the window, every day is shown.
+The window the timeline shows is also the time filter of the screens. Zoom in or move the window, and the screens show only the days it covers: the Diary lists
+those days alone, and the screen says which ones in words, for example "Showing Mon 3 – Sun 9 Nov", with an All time button beside it. All time, or zooming out
+until the window covers the whole history, shows every day again. Until you zoom or move the window, every day is shown.
 
 ### Days, on the left of every screen
 
@@ -140,8 +156,8 @@ Every screen has a Days button at the top left. It opens a time panel down the l
 left it open, and it starts closed. The panel is a table of contents of the project's time, told for the screen you are on, drawn like the metro map: one thick
 line with a white station for each day, newest first, and under each day its moments of note. On Home and the Diary they are the diary's moments; on Bugs, the
 bugs filed and fixed that day; on Features, what was asked for, started and shipped; on Failed tests, the tests that started failing and passed again; on
-Metrics, the recorded runs; on Goals, the steps of the goals done; the other screens list the diary's days. At the top is Now, with Home's sections when you
-are on Home, and under it each helper at work as a small robot, with what it works on and its state in plain words: working, asking you, idle or done.
+Metrics, the recorded runs; on Goals, the steps of the goals done; the other screens list the diary's days. At the top is Now, with Home's sections when you are
+on Home, and under it each helper at work as a small robot, with what it works on and its state in plain words: working, asking you, idle or done.
 
 Click a station and the page goes there: on a screen with its own moments, to that bug, feature, test, chart or goal (a folded group opens first, and an item
 the screen does not show opens on its own page); on Home and the other screens the Diary opens at that day or moment. "See it then", beside a day, shows the
