@@ -465,6 +465,8 @@ export interface ClaimsData {
   contested: { id: string; ref: string; branches: string[] }[]
   /** Minutes without a sign of life after which a claim with a step is flagged silent: the coordination option `silentAfter`. */
   silentAfter: number
+  /** How many workers may work at once, the coordination option `maxWorkers`: the work-in-progress limit Home shows; absent when the caller does not know it. */
+  maxWorkers?: number
 }
 
 const SILENT_AFTER = 15
@@ -526,7 +528,7 @@ export function staleReason(
 }
 
 /** Every claim, recombined from every branch now — only `only`'s when given — and the items more than one holds. */
-export function claimsData(ctx: Context, only?: string, silentAfter: number = SILENT_AFTER): ClaimsData {
+export function claimsData(ctx: Context, only?: string, silentAfter: number = SILENT_AFTER, maxWorkers?: number): ClaimsData {
   const here = currentBranch(ctx.root)
   const main = trunk(ctx.trackerGit)
   const alive = allRefNames(ctx.trackerGit)
@@ -555,6 +557,7 @@ export function claimsData(ctx: Context, only?: string, silentAfter: number = SI
       return { id, ref: item ? label(item) : id, branches: [...b] }
     }),
     silentAfter,
+    ...(maxWorkers !== undefined ? { maxWorkers } : {}),
   }
 }
 
@@ -586,7 +589,7 @@ const claimsCommand = (silentAfter: number, policy: Policy, sweeping: (ctx: Cont
       if (bool(p, "json")) sweeping(Object.create(ctx, { out: { value: () => {} } }) as Context)
       else sweeping(ctx)
     }
-    const all = claimsData(ctx, str(p, "branch"), silentAfter)
+    const all = claimsData(ctx, str(p, "branch"), silentAfter, policy.maxWorkers)
     // Claims follow the line this chat works on, once one is chosen: those of the branches of that line, or of the trunk.
     const follow = str(p, "line") !== undefined || bool(p, "trunk") || (sessionLine(ctx.root) !== undefined && !str(p, "branch"))
     const lines = follow ? openLines(ctx.root) : []
@@ -1501,7 +1504,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
     home: import.meta.url,
     contributes: {
       "ui-views": [
-        claimsUiView((ctx) => claimsData(ctx, undefined, silentAfter)),
+        claimsUiView((ctx) => claimsData(ctx, undefined, silentAfter, policy.maxWorkers)),
         timelineUiView(readPasses),
         diaryUiView(readPasses),
         notesUiView(readPasses),
