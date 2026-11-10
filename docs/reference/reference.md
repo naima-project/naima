@@ -99,6 +99,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`triage`](#naima-triage) | triage | coverage of the four fields; set them; list what needs a human; derive what the page proves | the four fields take only their declared values, through the write hooks; derive writes only with --write |
 | [`gates`](#naima-gates) | gates | every gate, whoever declared it, and whether it holds; --check exits 1 if one does not | with --check, every listed gate holds: exit 1 if one does not |
 | [`gate`](#naima-gate) | gates | declare a gate — a milestone, with a date and a version, or one that follows a stance's method — put items on it or take them off, add steps of its own, close its steps, and show one; writes go to naima.json and to the items, validated, through the write hooks | writes to naima.json and to the items are validated and pass the write hooks |
+| [`plan`](#naima-plan) | gates | the plan of a goal: its open items and what they wait for as a graph, in waves that run at once within maxWorkers, with the critical path and the heavy runs at the checkpoint; an agent proposes a note on it, the owner approves it |  |
 | [`queue`](#naima-queue) | gates | open items on a gate, split by whose hands the proof needs; at its foot, the summary sections that stand beside the work, such as the metrics. With --role, one role's queue instead | nothing: it prints derived state, never stored |
 | [`coverage`](#naima-coverage) | gates | each normative list the project declares — read from its source now, never copied — every entry with the test that proves it, or NO TEST | nothing: it reads each list from its source every time, never a copy, and marks an entry no test proves NO TEST |
 | [`ready`](#naima-ready) | gates | the open items that wait on nothing still open -- every `blocked-by` target settled -- most urgent first: what can start now; on a gate, only its items | nothing: it prints derived state, never stored |
@@ -130,7 +131,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`run`](#naima-run) | long-work | start a long command detached — locally, or on a declared host through its own Naima — with a log, a progress file, a time budget and, on what it declares it creates, a disk budget, ending itself when one runs out; list the runs against their budgets, show one, stop one, or remove what one created | every run has a time budget, and is ended, its whole process group with it, when it runs out or its declared paths outgrow the disk budget; a declared path is never the root, the home directory, the repository or above it, nor holds a tracked file; a run is never cleaned while it runs; a remote run is always guarded, failing when it changes a tracked file; nothing starts on its own: a due long run is reported and filed, and starts only when a person or an agent runs it |
 | [`wait`](#naima-wait) | long-work | block until a run started by naima run ends, or the timeout passes, saying how it goes meanwhile, then print its state, exit status, budgets, last progress line and the log's tail: found by its record, never by a process pattern | a wait is always bounded: it ends at its --timeout (default 10m) and says the run is still running, exiting 1, so waiting again is a decision; it exits 0 only for a run that succeeded |
 | [`hooks`](#naima-hooks) | commit-hooks | the pre-commit hook and the companion rules it holds: list them, install the hook — tracked in the data directory, named by core.hooksPath once per clone — or uninstall it | the installed pre-commit hook runs the staged checks and the companion rules before every commit; install refuses to take over a core.hooksPath that is not Naima's unless --force |
-| [`attach`](#naima-attach) | privacy | copy a file into an item's attachments with a record of whose it is: the owner's, only with their explicit yes restated in --consent, or your own with --own; a file holding a secret is refused | an owner's file is attached only with their yes restated in --consent, or the writer's own with --own; a file holding a secret, a hidden or path-like name, or a name already used is refused, and so is a text holding private infrastructure (a machine name, an IP address, a URI with a port, a home-directory path, the user's name, a word of the private list) unless --allow-private "<reason>" is given, which the item's notes record |
+| [`attach`](#naima-attach) | privacy | copy a file into an item's attachments with a record of whose it is: the owner's, only with their explicit yes restated in --consent, or your own with --own; a file holding a secret is refused | an owner's file is attached only with their yes restated in --consent, or the writer's own with --own; a file holding a secret, a hidden name, a path leaving attachments/, or a name already used is refused; a file already in attachments/, in a folder, is recorded where it is, and so is a text holding private infrastructure (a machine name, an IP address, a URI with a port, a home-directory path, the user's name, a word of the private list) unless --allow-private "<reason>" is given, which the item's notes record |
 | [`privacy`](#naima-privacy) | privacy | show or set what the project does with private data (machine names, addresses, home paths, user names) in its tracker (privacy option privateData): scrub, the default, refuses it; keep lets it through while the tracker is private; what leaves the project is scrubbed either way | the choice is the owner's, asked once the first time private data is refused: an agent sets it only after the owner said which; keep is refused on a tracker that is or may be public unless --despite-public restates why |
 | [`adopt`](#naima-adopt) | adopt | adopt a board the project already keeps (a TODO.md, an issue list in markdown) as items, without losing a line: propose markers, split, audit, links — each a dry run until --write; the source is never deleted | no line of the source is lost and the source is never deleted; nothing is written without --write, and the only edit to the source is adding marker lines |
 | [`docs`](#naima-docs) | docs | print the reference generated from the loaded manifests; write it, or check that a file matches it | with --check, the file is what the manifests generate and every loaded contribution is documented, this field included: exit 1 otherwise |
@@ -1932,6 +1933,32 @@ naima gate step add beta screens "The screens" --exit "the owner accepted every 
 naima gate step remove beta screens
 ```
 
+### naima plan
+
+The plan of a goal: its open items and what they wait for as a graph, in waves that run at once within maxWorkers, with the critical path and the heavy runs at the checkpoint; an agent proposes a note on it, the owner approves it.
+
+```sh
+naima plan [<goal>] [--json]
+naima plan <goal> --propose "<note>" [--by <name>]
+naima plan <goal> --approve [--by <name>]
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--json` |  | print the plan as JSON, the `plan` view's data |
+| `--propose` |  | record a note on the plan, what an agent proposes or revises; it clears an approval, since a revised plan needs approving again |
+| `--approve` |  | record the owner's approval of the plan as it is now, with its fingerprint; refused to a worker or an agent |
+| `--by` |  | the name to sign with, instead of the one git knows |
+
+Examples:
+
+```sh
+naima plan
+naima plan paper-ready
+naima plan paper-ready --propose "run the 369-case run first: it finds the bugs"
+naima plan paper-ready --approve
+```
+
 ### naima queue
 
 Open items on a gate, split by whose hands the proof needs; at its foot, the summary sections that stand beside the work, such as the metrics. With --role, one role's queue instead.
@@ -2067,6 +2094,8 @@ naima order first-public
 | `gates` | Gates | every gate and whether it holds, with the items blocking it and those owing only proof, as `naima gates` reports them; its data is `naima gates --json` |
 | `queue` | Queue | the open items on the gates, how many have no code yet and how many owe only proof, and by whose hands, every gate's together and each gate's; its data is `naima queue --json` |
 | `coverage` | Coverage | each normative list the project declares, read from its source now, every entry with the test that proves it or NO TEST |
+| `plan` | Plan | the plan of a goal (query gate=<goal>): its open items as a graph of what waits for what, in waves within maxWorkers, the critical path, the heavy runs at the checkpoint, the note an agent proposed and the owner's approval, and a short summary; without a gate, one line for each goal with open work |
+| `checkpoints` | Checkpoints | every checkpoint run (naima checkpoint): its day, the gate it was for, what it ran and what failed; and what the landings since the last passing one owe, with the project's check mode |
 
 ## epics
 
@@ -3820,7 +3849,7 @@ Options, each with the default it takes when nothing sets it:
 
 Copy a file into an item's attachments with a record of whose it is: the owner's, only with their explicit yes restated in --consent, or your own with --own; a file holding a secret is refused.
 
-**Enforces**: An owner's file is attached only with their yes restated in --consent, or the writer's own with --own; a file holding a secret, a hidden or path-like name, or a name already used is refused, and so is a text holding private infrastructure (a machine name, an IP address, a URI with a port, a home-directory path, the user's name, a word of the private list) unless --allow-private "<reason>" is given, which the item's notes record.
+**Enforces**: An owner's file is attached only with their yes restated in --consent, or the writer's own with --own; a file holding a secret, a hidden name, a path leaving attachments/, or a name already used is refused; a file already in attachments/, in a folder, is recorded where it is, and so is a text holding private infrastructure (a machine name, an IP address, a URI with a port, a home-directory path, the user's name, a word of the private list) unless --allow-private "<reason>" is given, which the item's notes record.
 
 ```sh
 naima attach <item> <file> (--consent "<the owner's yes, restated>"
@@ -3831,7 +3860,7 @@ naima --own) [--as <name>] [--by <who>]
 |---|---|---|
 | `--consent` |  | the file is the owner's: their explicit yes to storing it, restated; recorded on the item |
 | `--own` |  | the file is the writer's own material: a log, a test's output, a measurement |
-| `--as` | `the file's own name` | the name it takes in attachments/ |
+| `--as` | `the file's own name, or its path in attachments/ when it is there already` | the name it takes in attachments/, a plain name or a path of plain names inside it |
 | `--by` |  | who attaches it; without it, git's user.name |
 
 Examples:
