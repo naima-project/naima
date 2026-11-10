@@ -10,6 +10,7 @@
 import { mkdirSync, rmSync, statSync, unlinkSync } from "node:fs"
 import { join } from "node:path"
 import {
+  CLI_TRAILER,
   type Context,
   currentBranch,
   gitOrNull,
@@ -289,7 +290,7 @@ export function planSweep(ctx: Context, inputs: SweepInputs, entries: StaleEntry
         next: `committed its removal on ${here}`,
         run: () => {
           mustGit(ctx.trackerGit, "rm", "-q", "--", file)
-          mustGit(ctx.trackerGit, "commit", "-q", "-m", `Drop the claim of ${c.branch}: ${why}`, "--", file)
+          mustGit(ctx.trackerGit, "commit", "-q", "-m", `Drop the claim of ${c.branch}: ${why}\n\n${CLI_TRAILER}: stale\n`, "--", file)
         },
       })
     } else if (c.local) {
@@ -309,7 +310,7 @@ export function planSweep(ctx: Context, inputs: SweepInputs, entries: StaleEntry
             ctx.trackerGit,
             c.ref,
             `${inputs.claimsPath}/${c.file}`,
-            `Drop the claim of ${c.branch}: ${why}\n\nA claim whose branch nothing holds any more.\n`,
+            `Drop the claim of ${c.branch}: ${why}\n\nA claim whose branch nothing holds any more.\n\n${CLI_TRAILER}: stale\n`,
           )
         },
       })

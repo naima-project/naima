@@ -132,6 +132,9 @@ export { GUARD_HOOK, guardHook, installGuard, TRUNK_REASON, trunkRefusal } from 
 
 export const CLAIMS = "claims"
 
+/** The first segment of a branch `open` makes when neither `--as` nor the option `who` says: worker/<what>. */
+const DEFAULT_WHO = "worker"
+
 export const PASSES = "passes"
 
 export interface ClaimEntry {
@@ -217,9 +220,28 @@ function claimBranch(f: BranchFile): string | undefined {
 }
 
 export function readClaims(ctx: Context): Claim[] {
-  return readAcrossBranches(ctx.trackerGit, inGit(ctx, CLAIMS), ".json", { owner: claimBranch })
+  const all = readAcrossBranches(ctx.trackerGit, inGit(ctx, CLAIMS), ".json", { owner: claimBranch })
     .map(parseClaim)
     .filter((c): c is Claim => c !== null)
+  return followRenames(ctx, all)
+}
+
+/**
+ * A claim follows a branch renamed by hand (git branch -m): the file a worker branch carries names a branch that no ref
+ * holds any more, and no other claim speaks for the branch it stands on, so the claim is that branch's. A claim on the
+ * trunk or on a line, whose branch is gone, is an orphan and stays one.
+ */
+function followRenames(ctx: Context, claims: Claim[]): Claim[] {
+  if (!claims.length) return claims
+  const alive = allRefNames(ctx.trackerGit)
+  const main = trunk(ctx.trackerGit)
+  const named = new Set(claims.map((c) => c.branch))
+  return claims.map((c) => {
+    if (c.ref === c.branch || alive.has(c.branch) || named.has(c.ref) || c.ref === main || onTrunk(ctx, c.ref)) return c
+    if (!alive.has(c.ref)) return c
+    named.add(c.ref)
+    return { ...c, branch: c.ref }
+  })
 }
 
 const FRONT = /^---\n([\s\S]*?)\n---\n/
@@ -822,7 +844,7 @@ function openCommand(policy: Policy): Command {
       "work happens on its own branch and worktree from the trunk, and its claim on the items is recorded in the same step; a branch that already exists is never reused, and the refusal says whether it is merged into the trunk; no worker worktree is opened beyond the option maxWorkers, and the refusal names the open ones and how to raise the bound",
     usage: 'open <item>... [--as <who>] [--name <what>] [--note "why"] [--line <gate> | --trunk]',
     options: [
-      { name: "--as", says: "who works: the branch's first segment", ...(policy.who ? { default: policy.who } : {}) },
+      { name: "--as", says: "who works: the branch's first segment", default: policy.who ?? DEFAULT_WHO },
       { name: "--name", says: "what the work is: the branch's last segment and the worktree's folder", default: "the first item's slug" },
       { name: "--note", says: "why the branch holds the items, written in the claim" },
       {
@@ -846,8 +868,7 @@ function openCommand(policy: Policy): Command {
         trunk: { type: "boolean" },
       })
       if (!p.positionals.length) throw usageError(this)
-      const who = str(p, "as") ?? policy.who
-      if (!who) throw new Error("open needs --as <who>, the branch's first segment, or the coordination plugin's who option")
+      const who = str(p, "as") ?? policy.who ?? DEFAULT_WHO
       const items = p.positionals.map((r) => ctx.repo.resolve(r))
       // A public code repository learns nothing of the tracker from a branch name: in sibling mode the default is opaque.
       const what = str(p, "name") ?? (ctx.sibling ? randomBytes(3).toString("hex") : items[0]?.slug ?? "")
