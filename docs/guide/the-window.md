@@ -185,7 +185,9 @@ a sheet over the bottom of the page until you close it. It follows the time filt
 
 ### Home
 
-Home is one column under the rail. It says first which moment it shows: Live, with the line, or the commit with its date, its line and its message. Then:
+Home is one column under the rail. It says first which moment it shows: Live, with the line, or the commit with its date, its line and its message. Each
+section is drawn as soon as what it needs has been read, and until all of it has, a quiet line says what is being read and how much, such as "Reading the
+schedule… 7 of 9". Then:
 
 - **Waiting for you**: the items the owner's gate holds and the tests that wait for your proof. Each says in plain words what it is (a discussion to settle, a
   decision, a bug, a feature, a test to run), what it asks of you (for example "Waiting for your decision: answer it so the work on it can go on"), and has one
