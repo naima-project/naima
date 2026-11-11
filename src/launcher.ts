@@ -538,16 +538,26 @@ export function mayRun(data: string | null): boolean {
 }
 
 /**
+ * The probe's command line: the run's own read and write (the tracker's folders), git alone to run, no network. A plugin
+ * pinned to a source of its own is cloned into the tracker the first time it loads, so a fresh clone's probe must be
+ * able to write there, or it fails and the run is granted no program (a first `naima verify` then cannot start the
+ * model checker: bugs/github-issue-11-naima-verify-fails-first).
+ */
+export function probeArgs(entry: string, read: string, write: string): string[] {
+  return ["run", "--no-prompt", "--no-config", "--no-lock", read, write, "--allow-run=git", "--allow-env", join(entry, "src", "cli.ts"), "runs", "--json"]
+}
+
+/**
  * The programs the loaded contributions declare they start, asked of the program
- * that is about to run (`naima runs --json`), under the same read permission
- * and nothing else: no write, no network, and git alone to run. Asked only
+ * that is about to run (`naima runs --json`), under the run's own read and write
+ * permission and nothing else: no network, and git alone to run. Asked only
  * when the project loads third-party plugins; an answer that is not a list of
  * names is no programs.
  */
-function declaredRuns(entry: string, cwd: string, read: string, env: Record<string, string>): string[] {
+function declaredRuns(entry: string, cwd: string, read: string, write: string, env: Record<string, string>): string[] {
   const { NAIMA_LAUNCHED: _launched, ...probeEnv } = env
   const r = new Deno.Command(Deno.execPath(), {
-    args: ["run", "--no-prompt", "--no-config", "--no-lock", read, "--allow-run=git", "--allow-env", join(entry, "src", "cli.ts"), "runs", "--json"],
+    args: probeArgs(entry, read, write),
     cwd,
     clearEnv: true,
     env: probeEnv,
@@ -732,8 +742,8 @@ export async function launch(args: string[], cwd: string, resume?: Omit<UiSwitch
           ...[apiHost(releasesApi(Deno.env.toObject())), apiHost(Deno.env.get(RELEASES_ENV) ?? "")].filter((h): h is string => !!h),
         ],
       }
-      const read = permissions(fence)[0] ?? ""
-      flags = permissions({ ...fence, runs: mayRun(data) ? declaredRuns(entry, cwd, read, env) : [], ui })
+      const [read = "", write = ""] = permissions(fence)
+      flags = permissions({ ...fence, runs: mayRun(data) ? declaredRuns(entry, cwd, read, write, env) : [], ui })
     } catch (e) {
       console.error(`naima: ${message(e)}`)
       return 2

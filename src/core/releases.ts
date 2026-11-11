@@ -22,6 +22,7 @@
 // plain address. Nothing here retries or waits long: a host that does not
 // answer is said, and the caller keeps what it has.
 
+import { Buffer } from "node:buffer"
 import { createHash } from "node:crypto"
 import { spawnSync } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
@@ -29,6 +30,7 @@ import nodePath, { join } from "node:path"
 import { gunzipSync } from "node:zlib"
 import { NaimaError } from "./errors.ts"
 import { gitReason, runGit, runGitAsync } from "./git.ts"
+import type { Progress } from "./progress.ts"
 import { githubRepo } from "./visibility.ts"
 
 /** The variable that names another server answering like GitHub's releases API. */
@@ -278,7 +280,7 @@ export const checksumName = (name: string, version: string): string => `${archiv
 /** The SHA-256 of a file, in hex. */
 export const sha256Of = (path: string): string => createHash("sha256").update(readFileSync(path)).digest("hex")
 
-async function download(url: string, to: string, timeoutMs: number): Promise<void> {
+async function download(url: string, to: string, timeoutMs: number, progress?: Progress): Promise<void> {
   let res: Response
   try {
     res = await fetch(url, { headers: { "user-agent": "naima-releases", accept: "application/octet-stream" }, signal: AbortSignal.timeout(timeoutMs) })
@@ -289,7 +291,25 @@ async function download(url: string, to: string, timeoutMs: number): Promise<voi
     await res.body?.cancel()
     throw unreachable(`download ${url}`, `it answered ${res.status}`)
   }
-  writeFileSync(to, new Uint8Array(await res.arrayBuffer()))
+  if (!progress || !res.body) {
+    writeFileSync(to, new Uint8Array(await res.arrayBuffer()))
+    return
+  }
+  // Streamed, so that the bytes received so far are said while the archive comes.
+  const length = Number(res.headers.get("content-length"))
+  progress.stage(`download ${to.split(/[\\/]/).pop()}`, Number.isFinite(length) && length > 0 ? length : undefined, "bytes")
+  const chunks: Uint8Array[] = []
+  let got = 0
+  try {
+    for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
+      chunks.push(chunk)
+      got += chunk.length
+      progress.at(got)
+    }
+  } catch (e) {
+    throw unreachable(`download ${url}`, why(e))
+  }
+  writeFileSync(to, Buffer.concat(chunks))
 }
 
 /** A downloaded, verified archive: where it is, its checksum, and the commit it was made from. */
@@ -311,7 +331,7 @@ export async function fetchRelease(
   release: Release,
   name: string,
   dir: string,
-  opts: { expected?: string | undefined; timeoutMs?: number } = {},
+  opts: { expected?: string | undefined; timeoutMs?: number; progress?: Progress } = {},
 ): Promise<Fetched> {
   const file = archiveName(name, release.version)
   const sums = checksumName(name, release.version)
@@ -326,8 +346,9 @@ export async function fetchRelease(
   mkdirSync(dir, { recursive: true })
   const archive = join(dir, file)
   const sumFile = join(dir, sums)
-  await download(archiveUrl, archive, opts.timeoutMs ?? 120_000)
+  await download(archiveUrl, archive, opts.timeoutMs ?? 120_000, opts.progress)
   await download(sumUrl, sumFile, opts.timeoutMs ?? 30_000)
+  opts.progress?.stage("checksum")
   const said = readFileSync(sumFile, "utf8").trim().split(/\s+/)[0]?.toLowerCase() ?? ""
   rmSync(sumFile, { force: true })
   const sha256 = sha256Of(archive)

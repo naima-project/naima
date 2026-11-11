@@ -20,7 +20,9 @@ import {
   writeRaw,
   writeValidatedRaw,
 } from "./config.ts"
+import { spawnSync } from "node:child_process"
 import { consoleIO, type IO, type Place } from "./context.ts"
+import { type Progress, progressFor } from "./progress.ts"
 import { cliCommands } from "./entry.ts"
 import { AGENT_ID, markRules, SUBAGENT_PREAMBLE } from "./subagents.ts"
 import { FORMAT, formatRefusal, isFormat, migrate, MIGRATIONS, type Step } from "./format.ts"
@@ -123,6 +125,7 @@ import {
   FOLLOW_UP,
   INTRODUCTION,
   INTRODUCTION_BOLD,
+  lastRehearsal,
   newly,
   NOTHING_WAITS,
   OFFERS,
@@ -742,14 +745,49 @@ function migrated(steps: readonly Step[], from: unknown, plugins: readonly { plu
 }
 
 /**
- * What updating to `to` changes, said — the commits, their change notes, what is computed — and the rehearsal:
- * `to`'s own naima check run on the project, writing nothing. Nothing when the program's origin is not the lock's
- * source, whose commits it may not hold.
+ * What updating to `to` changes, said — the commits, their change notes, what is computed. The rehearsal (`to`'s own
+ * naima check run on the project, writing nothing) is not run unless asked, `how.rehearse`: it takes minutes on a large
+ * project, and is said from the last one recorded for `to` when there is one. Nothing when the program's origin is not
+ * the lock's source, whose commits it may not hold.
  */
-async function said(opts: CliOptions, place: Place, t: Target, raw: Record<string, unknown>, to: string): Promise<string[]> {
+async function said(
+  opts: CliOptions,
+  place: Place,
+  t: Target,
+  raw: Record<string, unknown>,
+  to: string,
+  how: { rehearse?: boolean; progress?: Progress } = {},
+): Promise<string[]> {
   if (withoutCredentials(runGit(t.program, ["remote", "get-url", "origin"]).out) !== t.source) return []
+  how.progress?.stage("what it changes")
   verifySigned(t.program, { ...t, commit: to })
-  return [...describe(await changeOf(t.program, raw, t.commit, to)), ...await rehearse(t.program, to, opts.programRoot, place)]
+  const change = describe(await changeOf(t.program, raw, t.commit, to))
+  if (how.rehearse) return [...change, ...await rehearse(t.program, to, opts.programRoot, place, how.progress ? { progress: how.progress } : {})]
+  const last = lastRehearsal(t.program)
+  if (last && last.to === to) return [...change, `Rehearsal recorded ${last.at.slice(0, 16).replace("T", " ")} UTC:`, ...last.lines.slice(1)]
+  return [...change, "Rehearsal: not run — naima update --check --rehearse runs it now, --rehearse-in-background starts it as a run and records the result"]
+}
+
+/**
+ * Start the rehearsal as a run of its own (`naima run`), which the caller does not wait for: the run is naima update --check
+ * --rehearse, whose progress is the run's, and whose result is recorded in the program's git folder, where every later
+ * naima update --check and naima hello read it. Says the run's name and how to follow it.
+ */
+function startRehearsal(opts: CliOptions, place: Place, io: IO): string[] {
+  const entry = join(opts.programRoot, "naima.ts")
+  const name = "update-rehearsal"
+  const naima = [process.execPath, "run", "-A", entry, "--data", place.data]
+  const r = spawnSync(
+    naima[0] as string,
+    [...naima.slice(1), "run", name, "--budget-time", "30m", "--", ...naima, "update", "--check", "--rehearse"],
+    { cwd: place.root, encoding: "utf8" },
+  )
+  if (r.status !== 0) {
+    return [
+      `Rehearsal not started: ${(r.stderr || r.stdout || `naima run exited ${r.status}`).trim().split("\n")[0]} — naima update --check --rehearse runs it here`,
+    ]
+  }
+  return [`Rehearsal started as the run ${name}: naima wait ${name} follows it; its result is recorded, and the next naima update --check says it`]
 }
 
 /** The lock naima.json holds in the project's last commit; null when it holds none. */
@@ -801,11 +839,11 @@ async function fileLeft(opts: CliOptions, place: Place, io: IO, commit: string, 
  * locked commit of the project's last commit, whose own check runs from a temporary copy. A finding in `pending` is
  * what the next run of the update writes, and is not filed.
  */
-async function finish(opts: CliOptions, place: Place, lock: Lock, io: IO, pending: readonly string[] = []): Promise<void> {
+async function finish(opts: CliOptions, place: Place, lock: Lock, io: IO, pending: readonly string[] = [], compare = true): Promise<void> {
+  const progress = progressFor((l) => io.err(l))
   const program = place.program
   const was = committedLock(place)
   const moved = was !== null && was !== lock.commit && runGit(program, ["merge-base", "--is-ancestor", was, lock.commit]).ok
-  let baseline: Findings | null = null
   if (moved) {
     const rules = [...new Set([...pageRules(program, was, lock.commit), ...changedRules(notesBetween(program, was, lock.commit).notes)])]
     if (rules.length) {
@@ -813,14 +851,23 @@ async function finish(opts: CliOptions, place: Place, lock: Lock, io: IO, pendin
         `Rules changed: ${rules.join("; ")} — agents read them again (naima rules --audience agents) and give their acknowledgement in the next session note`,
       )
     }
-    try {
-      baseline = await withCommit(program, was, (dir) => checkFrom(dir, place))
-    } catch {
-      baseline = null // the older Naima cannot read the data any more: every problem is the update's to look at
-    }
   }
-  const now = await checkFrom(opts.programRoot, place)
-  if (moved) {
+  // The older Naima's check on a temporary copy, then the new one's; --no-rehearse leaves the older one out.
+  progress.stage("naima check", compare && moved ? 2 : 1, "checks")
+  let done = 0
+  const checked = (what: string) => <T>(found: T): T => {
+    progress.at(++done)
+    progress.note(`${what} is done`)
+    return found
+  }
+  // null: the older Naima cannot read the data any more, and every problem is the update's to look at.
+  const baseline = moved && compare
+    ? await withCommit(program, was as string, (dir) => checkFrom(dir, place)).catch(() => null).then(checked(`the check of ${short(was as string)}`))
+    : null
+  const now = checked(`the check of ${short(lock.commit)}`)(await checkFrom(opts.programRoot, place))
+  progress.end()
+  if (moved && !compare) io.out("the older Naima's check was not rehearsed (--no-rehearse): what the update left is not filed as items")
+  if (moved && compare) {
     const left = baseline ? newly(baseline, now) : { problems: now.problems, notes: [] }
     await fileLeft(opts, place, io, lock.commit, [...left.problems, ...left.notes], pending)
   }
@@ -967,6 +1014,7 @@ async function toRelease(
   raw: Record<string, unknown>,
   io: IO,
   ask: { version?: string | undefined; pre: boolean },
+  progress: Progress,
 ): Promise<ReleaseStep> {
   const t = targetOf(place, lock, opts)
   const stays = (why: string): ReleaseStep => {
@@ -1012,7 +1060,7 @@ async function toRelease(
   const dir = releaseDir(t.tracker)
   let got
   try {
-    got = await fetchRelease(plan.release, found.repo.repo, dir)
+    got = await fetchRelease(plan.release, found.repo.repo, dir, { progress })
   } catch (e) {
     clearDownloads(dir)
     if (e instanceof NaimaError && e.code === RELEASES_UNREACHABLE) return stays(message(e))
@@ -1026,9 +1074,13 @@ async function toRelease(
         CHECKSUM_MISMATCH,
       )
     }
+    progress.stage("verify the archive")
     const archive = verifiedArchive(t.program, got.archive, commit, dir)
+    progress.stage("fetch the commit")
     fetchCommit(t, commit)
+    progress.stage("compare the archive with the commit's files")
     archive.check()
+    progress.end()
   } catch (e) {
     if (e instanceof NaimaError && e.code === COMMIT_UNAVAILABLE) return stays(message(e))
     throw e
@@ -1070,8 +1122,14 @@ async function update(args: string[], opts: CliOptions, place: Place, given: Loc
     mode: { type: "string" },
     main: { type: "boolean" },
     pre: { type: "boolean" },
+    rehearse: { type: "boolean" },
+    "no-rehearse": { type: "boolean" },
+    "rehearse-in-background": { type: "boolean" },
   })
   const check = bool(p, "check")
+  const rehearsing = bool(p, "rehearse")
+  const skipRehearsal = bool(p, "no-rehearse")
+  const inBackground = bool(p, "rehearse-in-background")
   const to = str(p, "to")
   const mode = str(p, "mode")
   const main = bool(p, "main")
@@ -1082,8 +1140,17 @@ async function update(args: string[], opts: CliOptions, place: Place, given: Loc
   const mainWith = main && (accept || to !== undefined || mode !== undefined)
   const preWith = pre && (main || accept || mode !== undefined)
   const branchWith = followBranch !== undefined && (main || check || accept || pre || mode !== undefined)
-  if (exclusive || mainWith || preWith || branchWith || p.positionals.length) {
+  const rehearsalWith = (rehearsing && (!check || skipRehearsal || inBackground)) || (inBackground && !check) || (skipRehearsal && check)
+  if (exclusive || mainWith || preWith || branchWith || rehearsalWith || p.positionals.length) {
     throw new Error(usage("update"))
+  }
+  const progress = progressFor((l) => io.err(l))
+  /** What a check says of a change: the rehearsal only when asked, now or as a run of its own. */
+  const sayChange = async (t: Target, to: string): Promise<string[]> => {
+    if (inBackground) return [...await said(opts, place, t, raw, to), ...startRehearsal(opts, place, io)]
+    const lines = await said(opts, place, t, raw, to, { rehearse: rehearsing, progress })
+    progress.end()
+    return lines
   }
   // --branch: the lock follows that branch of the source, a development line say, instead of its main and its releases;
   // --main: back to the main. Recorded in naima.json's branch, which a later naima update follows.
@@ -1134,7 +1201,7 @@ async function update(args: string[], opts: CliOptions, place: Place, given: Loc
         if (!news.current && news.commit) {
           try {
             fetchHead(t)
-            for (const line of await said(opts, place, t, raw, news.commit)) io.out(line)
+            for (const line of await sayChange(t, news.commit)) io.out(line)
           } catch (e) {
             io.out(`what it changes is not known: ${message(e)}`)
           }
@@ -1149,7 +1216,7 @@ async function update(args: string[], opts: CliOptions, place: Place, given: Loc
       io.out(`the source's ${head.branch} moved: ${short(lock.commit)} → ${short(head.commit)} — naima update${main ? " --main" : ""}`)
       try {
         fetchHead(t)
-        for (const line of await said(opts, place, t, raw, head.commit)) io.out(line)
+        for (const line of await sayChange(t, head.commit)) io.out(line)
       } catch (e) {
         io.out(`what it changes is not known: ${message(e)}`)
       }
@@ -1162,7 +1229,7 @@ async function update(args: string[], opts: CliOptions, place: Place, given: Loc
   let failed = false
   let followMain = byCommit
   if (!byCommit) {
-    const step = await toRelease(opts, place, lock, raw, io, { version: named, pre })
+    const step = await toRelease(opts, place, lock, raw, io, { version: named, pre }, progress)
     if (step.kind === "moved") return step.code
     if (step.kind === "stay") failed = step.failed
     followMain = step.kind === "main"
@@ -1190,7 +1257,7 @@ async function update(args: string[], opts: CliOptions, place: Place, given: Loc
   // this Naima's own launcher, does. What its check notes about them is that run's to fix, not an item to file.
   const unfinished = left.length ? unfinishedUpdate(place.root, place.data, target, config) : null
   const pending = left.length ? [...(unfinished ? [unfinished] : []), ...sessionStartGaps(place.root, trackerOf(place.data), config)] : []
-  await finish(opts, place, lock, io, pending)
+  await finish(opts, place, lock, io, pending, !skipRehearsal)
   if (left.length) {
     io.out(`Naima ${unfinished ? "moved to" : "is at"} ${short(target)}; run naima update once more to finish: ${left.join(" and ")}`)
     return 0

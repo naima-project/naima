@@ -45,7 +45,7 @@
 
 import { spawnSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 import {
@@ -61,6 +61,7 @@ import {
   type FieldDef,
   fieldValue,
   type Finding,
+  headCommit,
   type Item,
   label,
   message,
@@ -70,6 +71,7 @@ import {
   positiveInt,
   type Progress,
   progressFor,
+  readScope,
   rendered,
   str,
   type SummarySection,
@@ -596,16 +598,41 @@ const recordsDir = (ctx: Context): string => join(ctx.trackerRoot, DIR)
 /** Every record in the data directory, with its file's name. */
 export function recordFiles(ctx: Context): { file: string; record: MetricRecord }[] {
   const dir = recordsDir(ctx)
+  // Within one read scope (a summary, a view) the records are listed once, however many metrics ask.
+  const scope = readScope()
+  const listed = scope === null ? undefined : scopedRecords.get(dir)
+  if (listed && listed.scope === scope) return listed.files.slice()
+  const files = listRecords(dir)
+  if (scope !== null) scopedRecords.set(dir, { scope, files })
+  return files
+}
+
+/** The records listed in the read scope under way, by folder. */
+const scopedRecords = new Map<string, { scope: number; files: { file: string; record: MetricRecord }[] }>()
+
+function listRecords(dir: string): { file: string; record: MetricRecord }[] {
   if (!existsSync(dir)) return []
+  // Each file is parsed again only when its size or time changed: a view asks for the records once per metric, and a
+  // large tracker has hundreds of them (bugs/large-tracker-ui-shows-only-reading-where).
   return readdirSync(dir).filter((f) => f.endsWith(".json")).flatMap((f) => {
+    const path = join(dir, f)
     try {
-      const r = JSON.parse(readFileSync(join(dir, f), "utf8")) as MetricRecord
-      return typeof r.commit === "string" && isObject(r.values) ? [{ file: f, record: r }] : []
+      const st = statSync(path)
+      const stamp = `${st.size} ${st.mtimeMs}`
+      const kept = parsedRecords.get(path)
+      if (kept && kept.stamp === stamp) return kept.record ? [{ file: f, record: kept.record }] : []
+      const r = JSON.parse(readFileSync(path, "utf8")) as MetricRecord
+      const record = typeof r.commit === "string" && isObject(r.values) ? r : null
+      parsedRecords.set(path, { stamp, record })
+      return record ? [{ file: f, record }] : []
     } catch {
       return []
     }
   })
 }
+
+/** The records parsed, by path, with the size and time they were read at. */
+const parsedRecords = new Map<string, { stamp: string; record: MetricRecord | null }>()
 
 /** Every record in the data directory. */
 export const readRecords = (ctx: Context): MetricRecord[] => recordFiles(ctx).map((r) => r.record)
@@ -630,11 +657,20 @@ function unchangedSince(ctx: Context): { file: string; record: MetricRecord } | 
 
 /** The line of history up to HEAD, oldest first, with each commit's date. */
 function line(ctx: Context): { commit: string; date: string }[] {
-  return (git(ctx, "log", "--reverse", "--format=%H %cI", "HEAD") ?? "").split("\n").filter(Boolean).map((l) => {
+  // Read once per HEAD: every metric's trend walks the same line, and on thousands of commits each walk is a second.
+  const head = headCommit(ctx.root) ?? ""
+  const kept = lineKept.get(ctx.root)
+  if (head && kept?.head === head) return kept.line
+  const out = (git(ctx, "log", "--reverse", "--format=%H %cI", "HEAD") ?? "").split("\n").filter(Boolean).map((l) => {
     const [commit = "", date = ""] = l.split(" ")
     return { commit, date }
   })
+  if (head) lineKept.set(ctx.root, { head, line: out })
+  return out
 }
+
+/** The line of history last read, by project root, with the HEAD it was read at. */
+const lineKept = new Map<string, { head: string; line: { commit: string; date: string }[] }>()
 
 /** Each commit's latest record of the line of history, oldest commit first: a commit off this line (another branch's) is not on it. */
 function latestOnLine(ctx: Context): { commit: string; date: string; record: MetricRecord }[] {

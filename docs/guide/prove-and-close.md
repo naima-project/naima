@@ -315,7 +315,7 @@ naima set <property> 'verifierOptions={"route":"lts","threads":8,"maxStates":500
 - `threads` speeds up generating the state space. On macOS, more than one thread can crash on some models, as mCRL2 itself warns.
 
 `verifierOptions` takes only the options listed here, and each of them leaves the answer as it is. Any other key is an error that names the accepted ones, so a
-flag that could change a verdict never reaches the tools. Two of them decide how fast the tools go on large generated models:
+flag that could change a verdict never reaches the tools. Three of them decide how fast the tools go on large generated models:
 
 - `linearise` says how `mcrl22lps` turns the model into a linear process, on every route. `"rewrite"`, the default, is `mcrl22lps` as it is. `"no-rewrite"` runs
   `mcrl22lps --no-rewrite`: rewriting while linearising can blow up the conditions of some models, and without it the tools that read the result can be about
@@ -324,12 +324,18 @@ flag that could change a verdict never reaches the tools. Two of them decide how
   produce different linear processes, so the choice is part of the key the state space is kept under, and part of what identifies a run: a run made one way is
   never reused for the other. The earlier boolean `noRewrite` is still read, `true` as `"no-rewrite"` and `false` as `"rewrite"`.
 - `cached` (true unless set to false) generates the state space with `lps2lts --cached`, which remembers what it has already enumerated.
+- `rewriter` names the rewriter mCRL2 evaluates data with, passed as `--rewriter` to every tool that takes one (`mcrl22lps`, `lps2lts` and `pbessolve`): `"jitty"`,
+  mCRL2's default, `"jittyc"`, the compiled rewriter, which explores a large state space many times faster, or another that `lps2lts --help` lists. It changes how fast
+  the tools run and never the state space or the verdict, so it is no part of the key the state space is kept under nor of what identifies a run. It is chosen at
+  three levels, the first that is given winning: the property's `verifierOptions.rewriter`; the machine's, the environment variable `NAIMA_MCRL2_REWRITER`
+  (for a host reached with `--host`, set it in the host's `naima` command, as in `"naima": "NAIMA_MCRL2_REWRITER=jittyc deno run -A naima-tracker/naima/naima.ts"`); and the
+  project's, the plugin option `rewriter` of `verifier-mcrl2`: `naima plugin set verifier-mcrl2 rewriter=jittyc`. A name mCRL2 does not know is the tool's own error.
 
-The state space is generated with `jitty`, mCRL2's default rewriter. On macOS and Linux, `lps2lts` and `pbessolve` are started with the stack limit raised
+The tools rewrite with `jitty`, mCRL2's default rewriter, unless a `rewriter` is chosen. On macOS and Linux, `lps2lts` and `pbessolve` are started with the stack limit raised
 (unlimited, or the system's hard limit where unlimited is refused), since rewriting deep terms recurses deeply; on Windows a program's stack is fixed when it is
 built, so they start as they are. A tool killed by a signal makes the run an error whose output says `<tool> crashed (signal N, NAME) on <model>`.
 
-The run record keeps the options that were used and the speed. Every run gives `details.linearise`. On the LTS route, `details.lts.exploration` gives the
+The run record keeps the options that were used and the speed. Every run gives `details.linearise` and `details.rewriter` (null when no rewriter was chosen). On the LTS route, `details.lts.exploration` gives the
 arguments of `mcrl22lps` and `lps2lts`, and `details.rate` gives the states generated per second. On the standard route, `details.rate` gives the equations
 `pbessolve` generated per second. A rate that stays very low tells a slow model apart from one that hangs.
 

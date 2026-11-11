@@ -75,7 +75,7 @@ There are three settings:
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `off`     | It doesn't contact the source at all.                                                                                                            |
 | `check`   | It tells you when a newer release exists, and which version it is. This is the default.                                                          |
-| `update`  | It also tells you what the newer Naima would change, with its change notes and a rehearsal of its check, and the agent asks whether you want it. |
+| `update`  | It also tells you what the newer Naima would change, with its change notes, and the agent asks whether you want it. |
 
 The default is `check` because it only reads, and changes nothing. Even with `update`, nothing is applied until you say yes.
 
@@ -104,12 +104,19 @@ Then comes what Naima works out by comparing the two versions itself:
   update` will
   do about them.
 
-Last comes a rehearsal. Naima runs the newer version's own `naima check` on your project and tells you what would newly fail and what would newly be noted. A
-line such as `newly failing: …` is something to fix after the update, or before it.
+Last, when you ask for it, comes a rehearsal. `naima update --check` says what changes in seconds and does not rehearse. `naima update --check --rehearse` runs the newer
+version's own `naima check` on your project, after the running one's, and tells you what would newly fail and what would newly be noted; it says its
+progress as it goes, and reuses what a check found on a commit and a project that have not changed since the last rehearsal. `--rehearse-in-background` starts it
+as a run named `update-rehearsal` (`naima wait update-rehearsal` follows it) and returns at once; its result is recorded, and every later `naima update --check`
+says it. A line such as `newly failing: …` is something to fix after the update, or before it.
 
 To find all this out, Naima reads the newer version's code straight from its own git copy, into a temporary folder that it deletes afterwards, and runs its
 check from there. Your project is not touched. If the newer Naima changes the data format, the rehearsal can't run on data that hasn't been migrated yet. It
 says so, and the check at the end of the update takes its place.
+
+While it downloads, verifies and finishes, `naima update` says each stage with its count (the bytes of the archive, the checks done) on standard error, or in
+the run's progress file under `naima run`. `naima update --no-rehearse` leaves out, at its end, the older version's check on a temporary copy; the new version's own
+`naima check` still runs, and what it finds is not filed as items.
 
 ## Updating
 
