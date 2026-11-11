@@ -57,12 +57,12 @@ const WINDOWS_EXECUTABLES = [".exe", ".com"]
  * name.exe (a console-script entry point) is found as well as the bare name, the checkout's extensionless Python script
  * (GitHub issue #7): the executable first, or the script first with `script`, which the version reads its commit from.
  */
-export function programOnPath(name: string, opts: { script?: boolean; os?: string } = {}): string | null {
+export function programOnPath(name: string, opts: { script?: boolean; os?: string; path?: string } = {}): string | null {
   const windows = (opts.os ?? process.platform) === "win32"
   const exes = windows && !WINDOWS_EXECUTABLES.some((e) => name.toLowerCase().endsWith(e)) ? WINDOWS_EXECUTABLES.map((e) => name + e) : []
   const names = opts.script ? [name, ...exes] : [...exes, name]
   for (const n of names) {
-    for (const dir of (process.env["PATH"] ?? "").split(delimiter)) {
+    for (const dir of (opts.path ?? process.env["PATH"] ?? "").split(delimiter)) {
       if (!dir) continue
       try {
         const file = join(dir, n)
@@ -80,9 +80,9 @@ export const WINDOWS_PYTHON = "python"
  * How `program` is started: as itself, or on Windows, when PATH finds only the extensionless script of a naima-codegen
  * checkout, through Python with the script's path first (GitHub issue #7).
  */
-export function commandOf(program: string, args: string[], os: string = process.platform): [string, string[]] {
+export function commandOf(program: string, args: string[], os: string = process.platform, path?: string): [string, string[]] {
   if (os !== "win32" || isAbsolute(program)) return [program, args]
-  const found = programOnPath(program, { os })
+  const found = programOnPath(program, { os, ...(path !== undefined ? { path } : {}) })
   if (!found) return [program, args]
   return WINDOWS_EXECUTABLES.some((e) => found.toLowerCase().endsWith(e)) ? [program, args] : [WINDOWS_PYTHON, [found, ...args]]
 }
