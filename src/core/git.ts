@@ -110,8 +110,45 @@ function spawnGit(cwd: string, args: string[], opts: GitOptions, encoding: "utf8
   })
 }
 
+/** The git runs a read scope has answered, by directory and arguments; null outside every read scope. */
+let readMemo: Map<string, GitRun> | null = null
+let readScopes = 0
+let readScopeCount = 0
+
+/** Which read scope is under way, a number new with each outermost one; null outside every one. What else a scope
+ * reads once (the metrics' records) is kept by it. */
+export const readScope = (): number | null => (readScopes > 0 ? readScopeCount : null)
+
+/**
+ * Run `read`, which only reads, with each git question it asks answered once: the same command in the same directory
+ * asked again (the trunk, the worktrees, the branches, which every cross-branch read asks) is given the first answer.
+ * What a read sees is the project as it was when the scope began, which is what one screen or one summary shows.
+ * Scopes may overlap (the bridge renders views concurrently): the answers are kept until the last one ends.
+ */
+export async function gitReadScope<T>(read: () => T | Promise<T>): Promise<T> {
+  if (readScopes++ === 0) {
+    readMemo = new Map()
+    readScopeCount++
+  }
+  try {
+    return await read()
+  } finally {
+    if (--readScopes === 0) readMemo = null
+  }
+}
+
 /** The one way the program runs git. Never throws: the result says what happened. */
 export function runGit(cwd: string, args: string[], opts: GitOptions = {}): GitRun {
+  const memo = readMemo && opts.input === undefined && opts.env === undefined ? readMemo : null
+  const key = memo ? `${cwd}\0${args.join("\0")}` : ""
+  const kept = memo?.get(key)
+  if (kept) return kept
+  const run = runGitNow(cwd, args, opts)
+  memo?.set(key, run)
+  return run
+}
+
+function runGitNow(cwd: string, args: string[], opts: GitOptions): GitRun {
   const r = spawnGit(cwd, args, opts, "utf8")
   const notInstalled = (r.error as { code?: string } | undefined)?.code === "ENOENT"
   return { ok: r.status === 0, out: String(r.stdout ?? "").replace(/\r?\n$/, ""), err: String(r.stderr ?? "").trim(), notInstalled, status: r.status }

@@ -33,7 +33,7 @@
 
 import { join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { askHostsInBackground, type Command, type Context, type KnownProject, knownProjects } from "../../core/api.ts"
+import { askHostsInBackground, type Command, type Context, gitReadScope, type KnownProject, knownProjects } from "../../core/api.ts"
 import { AtCache, commitOf } from "./at.ts"
 import { knownAt, recentProjects } from "./switch.ts"
 import type { Feeds, Handlers, Json } from "./bridge-handler.ts"
@@ -275,7 +275,8 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
   const kept = (key: string, compute: () => Promise<unknown>): Promise<unknown> => {
     const read = async (): Promise<unknown> => {
       const stamp = cache ? stampNow() : ""
-      const data = json(await compute())
+      // One view, or the rail's map, asks each git question once (gitReadScope).
+      const data = json(await gitReadScope(compute))
       if (cache) cache.put(key, stamp, data)
       return data
     }

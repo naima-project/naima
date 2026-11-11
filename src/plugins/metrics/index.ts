@@ -71,6 +71,7 @@ import {
   positiveInt,
   type Progress,
   progressFor,
+  readScope,
   rendered,
   str,
   type SummarySection,
@@ -597,6 +598,19 @@ const recordsDir = (ctx: Context): string => join(ctx.trackerRoot, DIR)
 /** Every record in the data directory, with its file's name. */
 export function recordFiles(ctx: Context): { file: string; record: MetricRecord }[] {
   const dir = recordsDir(ctx)
+  // Within one read scope (a summary, a view) the records are listed once, however many metrics ask.
+  const scope = readScope()
+  const listed = scope === null ? undefined : scopedRecords.get(dir)
+  if (listed && listed.scope === scope) return listed.files.slice()
+  const files = listRecords(dir)
+  if (scope !== null) scopedRecords.set(dir, { scope, files })
+  return files
+}
+
+/** The records listed in the read scope under way, by folder. */
+const scopedRecords = new Map<string, { scope: number; files: { file: string; record: MetricRecord }[] }>()
+
+function listRecords(dir: string): { file: string; record: MetricRecord }[] {
   if (!existsSync(dir)) return []
   // Each file is parsed again only when its size or time changed: a view asks for the records once per metric, and a
   // large tracker has hundreds of them (bugs/large-tracker-ui-shows-only-reading-where).
