@@ -10,6 +10,7 @@
 // private; what leaves the project is scrubbed either way
 // (docs/guide/rules.md#no-machine-names-or-private-infrastructure-in-a-repository).
 
+import { spawnSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import { isIPv6 } from "node:net"
 import { homedir, hostname } from "node:os"
@@ -90,6 +91,31 @@ function readWords(file: string): string[] {
   }
 }
 
+let authorName: string | null | undefined
+
+/** The name git records as this user's (user.name), asked once: null when there is none or git cannot be run. */
+function gitAuthorName(): string | null {
+  if (authorName === undefined) {
+    try {
+      const r = spawnSync("git", ["config", "--get", "user.name"], { encoding: "utf8" })
+      authorName = r.status === 0 ? r.stdout.trim() || null : null
+    } catch {
+      authorName = null
+    }
+  }
+  return authorName
+}
+
+/**
+ * The account's name, a private word: none ("") when it is the name git records as the user's, which every commit and
+ * every item's filedBy already carry. On Windows the account is often named after its person ("Ada Lovelace"), the
+ * same as user.name, and taking it as private refused every item filed there.
+ */
+function accountName(env: Record<string, string | undefined>): string | undefined {
+  const user = env["USER"] ?? env["USERNAME"] ?? env["LOGNAME"]
+  return user !== undefined && user === gitAuthorName() ? "" : user
+}
+
 /**
  * What the launcher adds to the program's environment: the machine's name, the private list and the private hosts, read with the
  * launcher's permissions. A value the caller already set is kept.
@@ -98,8 +124,8 @@ export function privateEnv(env: Record<string, string | undefined>, os: string):
   const out: Record<string, string> = {}
   const host = env[PRIVATE_ENV.host] ?? safe(hostname)
   if (host) out[PRIVATE_ENV.host] = host
-  const user = env[PRIVATE_ENV.user] ?? env["USER"] ?? env["USERNAME"] ?? env["LOGNAME"]
-  if (user) out[PRIVATE_ENV.user] = user
+  const user = env[PRIVATE_ENV.user] ?? accountName(env)
+  if (user !== undefined) out[PRIVATE_ENV.user] = user
   out[PRIVATE_ENV.words] = env[PRIVATE_ENV.words] ?? readWords(privateWordsFile(env, os)).join("\n")
   const hosts = env[PRIVATE_ENV.hosts] ?? readText(privateHostsFile(env, os))
   if (hosts !== null) out[PRIVATE_ENV.hosts] = hosts
@@ -109,7 +135,7 @@ export function privateEnv(env: Record<string, string | undefined>, os: string):
 /** This process's private context: from the launcher's variables, else asked directly (a test, a run with every permission). */
 export function privateContext(env: Record<string, string | undefined> = processEnv(), os: string = platform()): PrivateContext {
   const host = env[PRIVATE_ENV.host] ?? safe(hostname)
-  const user = env[PRIVATE_ENV.user] ?? env["USER"] ?? env["USERNAME"] ?? env["LOGNAME"]
+  const user = env[PRIVATE_ENV.user] ?? accountName(env)
   const given = env[PRIVATE_ENV.words]
   const words = given !== undefined ? wordsOf(given) : readWords(privateWordsFile(env, os))
   return { host, user, words: [...words, ...privateHostWords(env[PRIVATE_ENV.hosts] ?? readText(privateHostsFile(env, os)))] }
