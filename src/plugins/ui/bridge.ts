@@ -33,11 +33,12 @@
 
 import { join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { askHostsInBackground, type Command, type Context, type KnownProject, knownProjects } from "../../core/api.ts"
+import { askHostsInBackground, type Command, type Context, gitReadScope, type KnownProject, knownProjects } from "../../core/api.ts"
 import { AtCache, commitOf } from "./at.ts"
 import { knownAt, recentProjects } from "./switch.ts"
 import type { Feeds, Handlers, Json } from "./bridge-handler.ts"
-import { watchProject } from "./live.ts"
+import { type Change, snapshot, watchProject } from "./live.ts"
+import { stampOf, type ViewCache } from "./view-cache.ts"
 import { askShow, awaitAnswer, listenShows, openUis, requestId, taken, writeAnswer } from "./show.ts"
 import { commandJson, type JsonOf, metroData } from "./metro.ts"
 import { contentProblem, framePage, tabList, type UiTab, type UiTabContent, type UiView } from "./tabs.ts"
@@ -136,6 +137,13 @@ export interface BridgeOptions {
   fileUrl(tab: string, rel: string): string
   /** How often the project is looked at for the changes feed, and how long a change settles, in ms. */
   watch?: { interval?: number; debounce?: number }
+  /**
+   * Where the live views computed are kept between runs (view-cache.ts), so that a UI opened again draws at once: none
+   * by default. A view answered from it is read again `recheck` ms later (2 s by default), and a change is said on the
+   * feed when its answer moved.
+   */
+  cache?: ViewCache | null
+  recheck?: number
   /** How an action's command line is started under `naima run`: this program, as a person types it, by default. */
   entry?: readonly string[]
   /** What carries the UI that listens to the feed show, as an open UI says: browser or desktop. */
@@ -215,9 +223,70 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
     })
     return answer
   }
+  // The views' cache on disk: each answer kept with the project's stamp, the one the change feed watches. The stamp is
+  // read once, then again only after SHARE_MS or once the feed saw a change.
+  const cache = opts.cache ?? null
+  let stamped: { at: number; stamp: string } | null = null
+  const stampNow = (): string => {
+    const now = performance.now()
+    if (!stamped || now - stamped.at >= SHARE_MS) {
+      const s = snapshot(ctx)
+      stamped = { at: now, stamp: stampOf({ head: s.head, refs: s.refs, items: s.items }) }
+    }
+    return stamped.stamp
+  }
+  // Who listens to the changes feed, and the views answered from the cache, read again once the first screen is drawn.
+  const listeners = new Set<(c: Change) => void>()
+  const rechecks = new Map<string, () => Promise<unknown>>()
+  let recheckTimer: ReturnType<typeof setTimeout> | null = null
+  const recheckSoon = (key: string, read: () => Promise<unknown>): void => {
+    rechecks.set(key, read)
+    if (recheckTimer) clearTimeout(recheckTimer)
+    recheckTimer = setTimeout(() => void recheck(), opts.recheck ?? 2000)
+    const t = recheckTimer as unknown
+    if (typeof t === "number") (globalThis as { Deno?: { unrefTimer(id: number): void } }).Deno?.unrefTimer(t)
+    else (t as { unref?: () => void }).unref?.()
+  }
+  const recheck = async (): Promise<void> => {
+    recheckTimer = null
+    const kept = [...rechecks]
+    rechecks.clear()
+    let moved = false
+    for (const [key, read] of kept) {
+      try {
+        const was = shared.get(key)
+        const fresh = await read()
+        if (JSON.stringify(await was?.answer.catch(() => null)) !== JSON.stringify(fresh)) moved = true
+        shared.set(key, { at: performance.now(), answer: Promise.resolve(fresh) })
+      } catch {
+        // A view that fails now is read again, and fails as it does, when next asked.
+        shared.delete(key)
+      }
+    }
+    if (moved) {
+      const c: Change = { kinds: ["items"], head: snapshot(ctx).head || null, at: ctx.now().toISOString() }
+      for (const l of listeners) l(c)
+    }
+  }
   /** A view's data, live, shared with the same read asked again; `from` is the live context, read again when absent. */
   const live = (view: UiView, params: Record<string, string[]>, from?: Context): Promise<unknown> =>
-    share(`view ${view.name} ${JSON.stringify(params)}`, async () => (await view.render(params, from ?? momentOf(null))).data)
+    kept(`view ${view.name} ${JSON.stringify(params)}`, async () => (await view.render(params, from ?? momentOf(null))).data)
+  /** A live read shared as `share` does, and answered from the views' cache while the project's stamp holds. */
+  const kept = (key: string, compute: () => Promise<unknown>): Promise<unknown> => {
+    const read = async (): Promise<unknown> => {
+      const stamp = cache ? stampNow() : ""
+      // One view, or the rail's map, asks each git question once (gitReadScope).
+      const data = json(await gitReadScope(compute))
+      if (cache) cache.put(key, stamp, data)
+      return data
+    }
+    return share(key, () => {
+      const hit = cache ? cache.get(key, stampNow()) : undefined
+      if (hit === undefined) return read()
+      recheckSoon(key, read)
+      return Promise.resolve(hit)
+    })
+  }
   /** What a command prints with --json, through the view whose data it is when there is one: what the metro reads. */
   const viaViews: JsonOf = async <T>(c: Context, words: string[]) => {
     const view = opts.views.find((v) => v.name === VIEW_OF_COMMAND[words.join(" ")])
@@ -294,9 +363,10 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       if (problem) throw new Error(`the ${tab.name} tab's content ${problem}`)
       return shown(tab, sub, content)
     },
-    metro: async () => json(await share("metro", () => metroData(momentOf(null), viaViews))),
+    metro: async () => json(await kept("metro", () => metroData(momentOf(null), viaViews))),
     action: async (args) => {
       shared.clear()
+      stamped = null
       const argv = actionArgv(String(args["name"]), args["args"] ?? [])
       if (typeof argv === "string") throw new Error(argv)
       const action = actionOf(String(args["name"]))!
@@ -370,11 +440,17 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
   }
   const feeds: Feeds = {
     changes: (emit) => {
+      const said = (c: Change) => emit(json(c))
+      listeners.add(said)
       const watch = watchProject(ctx, (c) => {
         shared.clear()
+        stamped = null
         emit(json(c))
       }, opts.watch ?? {})
-      return () => watch.stop()
+      return () => {
+        listeners.delete(said)
+        watch.stop()
+      }
     },
     show: (emit) => {
       const carrier = opts.carrier ?? "browser"
@@ -387,6 +463,8 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
     handlers,
     feeds,
     close: () => {
+      if (recheckTimer) clearTimeout(recheckTimer)
+      rechecks.clear()
       atCache.clear()
       shared.clear()
     },

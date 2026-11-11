@@ -12,7 +12,7 @@
 
 import { readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
-import { type Context, gitOrNull } from "../../core/api.ts"
+import { type Context, gitOrNull, headCommit } from "../../core/api.ts"
 
 /** What changed: HEAD moved (a new commit, a checkout), a branch or tag moved, the tracker's files changed. */
 export type ChangeKind = "commit" | "branch" | "items"
@@ -25,7 +25,7 @@ export interface Change {
   at: string
 }
 
-interface Snapshot {
+export interface Snapshot {
   head: string
   refs: string
   items: string
@@ -58,9 +58,11 @@ function filesSignature(dir: string): string {
   return out.sort().join("\n")
 }
 
-function snapshot(ctx: Context): Snapshot {
+/** What the watch compares: HEAD, the branches and tags, the tracker's files by size and time. The views' cache keeps
+ * each answer with it (view-cache.ts). */
+export function snapshot(ctx: Context): Snapshot {
   return {
-    head: gitOrNull(ctx.root, "rev-parse", "HEAD") ?? "",
+    head: headCommit(ctx.root) ?? "",
     refs: gitOrNull(ctx.root, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads", "refs/tags") ?? "",
     items: filesSignature(ctx.trackerRoot),
   }

@@ -8,7 +8,7 @@ import { bool, pairs, parse, str, strs, usageError } from "./args.ts"
 import { coreChecks, runChecks } from "./check.ts"
 import { groupBy } from "./collections.ts"
 import { appliesTo, fieldValue, isOpenList, parseFieldValue } from "./fields.ts"
-import { currentBranch, gitOrNull, isGitRepo } from "./git.ts"
+import { currentBranch, gitOrNull, gitReadScope, isGitRepo } from "./git.ts"
 import {
   ATTACHMENTS,
   createItem,
@@ -714,11 +714,14 @@ const view: Command = {
 
 /** Every plugin's summary section, rendered now, under the name `naima summary` prints it with: what the command and the window both show. */
 export function summarySections(ctx: Context): Promise<{ name: string; rendering: Rendered }[]> {
-  return Promise.all(
-    ctx.registry.contributions("summary").map(async (c) => ({
-      name: shortOrId(ctx, "summary", c),
-      rendering: asRendered(await (c.value as SummarySection).render(ctx), `summary section "${c.name}"`),
-    })),
+  // The sections read the same branches, worktrees and trunk: each git question is asked once for all of them.
+  return gitReadScope(() =>
+    Promise.all(
+      ctx.registry.contributions("summary").map(async (c) => ({
+        name: shortOrId(ctx, "summary", c),
+        rendering: asRendered(await (c.value as SummarySection).render(ctx), `summary section "${c.name}"`),
+      })),
+    )
   )
 }
 

@@ -110,8 +110,45 @@ function spawnGit(cwd: string, args: string[], opts: GitOptions, encoding: "utf8
   })
 }
 
+/** The git runs a read scope has answered, by directory and arguments; null outside every read scope. */
+let readMemo: Map<string, GitRun> | null = null
+let readScopes = 0
+let readScopeCount = 0
+
+/** Which read scope is under way, a number new with each outermost one; null outside every one. What else a scope
+ * reads once (the metrics' records) is kept by it. */
+export const readScope = (): number | null => (readScopes > 0 ? readScopeCount : null)
+
+/**
+ * Run `read`, which only reads, with each git question it asks answered once: the same command in the same directory
+ * asked again (the trunk, the worktrees, the branches, which every cross-branch read asks) is given the first answer.
+ * What a read sees is the project as it was when the scope began, which is what one screen or one summary shows.
+ * Scopes may overlap (the bridge renders views concurrently): the answers are kept until the last one ends.
+ */
+export async function gitReadScope<T>(read: () => T | Promise<T>): Promise<T> {
+  if (readScopes++ === 0) {
+    readMemo = new Map()
+    readScopeCount++
+  }
+  try {
+    return await read()
+  } finally {
+    if (--readScopes === 0) readMemo = null
+  }
+}
+
 /** The one way the program runs git. Never throws: the result says what happened. */
 export function runGit(cwd: string, args: string[], opts: GitOptions = {}): GitRun {
+  const memo = readMemo && opts.input === undefined && opts.env === undefined ? readMemo : null
+  const key = memo ? `${cwd}\0${args.join("\0")}` : ""
+  const kept = memo?.get(key)
+  if (kept) return kept
+  const run = runGitNow(cwd, args, opts)
+  memo?.set(key, run)
+  return run
+}
+
+function runGitNow(cwd: string, args: string[], opts: GitOptions): GitRun {
   const r = spawnGit(cwd, args, opts, "utf8")
   const notInstalled = (r.error as { code?: string } | undefined)?.code === "ENOENT"
   return { ok: r.status === 0, out: String(r.stdout ?? "").replace(/\r?\n$/, ""), err: String(r.stderr ?? "").trim(), notInstalled, status: r.status }
@@ -209,6 +246,46 @@ export const gitPath = (path: string, separator: string = sep): string => path.s
  * compared against one built by `node:path` or `node:fs` (which use the native separator there).
  */
 export const nativePath = (path: string, separator: string = sep): string => path.split("/").join(separator)
+
+/**
+ * The commit HEAD names at `root`, read from git's own files without starting git: what a cache asks again and again
+ * to know whether what it kept still holds. A symbolic HEAD is followed through its loose ref, then packed-refs; a
+ * worktree's .git file is followed to its git directory. Anything else (a reftable, a ref only the common directory
+ * has in a layout this does not know) is asked of git, as is a root that is no repository: null then.
+ */
+export function headCommit(root: string): string | null {
+  try {
+    let gitDir = join(root, ".git")
+    if (isRegularFile(gitDir)) {
+      const m = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(gitDir, "utf8"))
+      if (!m) throw new Error("no gitdir")
+      gitDir = resolve(root, m[1]!)
+    }
+    const head = readFileSync(join(gitDir, "HEAD"), "utf8").trim()
+    if (/^[0-9a-f]{40,64}$/.test(head)) return head
+    const ref = /^ref:\s*(\S+)$/.exec(head)?.[1]
+    if (!ref) throw new Error("odd HEAD")
+    const commonFile = join(gitDir, "commondir")
+    const common = existsSync(commonFile) ? resolve(gitDir, readFileSync(commonFile, "utf8").trim()) : gitDir
+    for (const dir of [gitDir, common]) {
+      const loose = join(dir, ref)
+      if (isRegularFile(loose)) {
+        const sha = readFileSync(loose, "utf8").trim()
+        if (/^[0-9a-f]{40,64}$/.test(sha)) return sha
+      }
+    }
+    const packed = join(common, "packed-refs")
+    if (existsSync(packed)) {
+      for (const line of readFileSync(packed, "utf8").split("\n")) {
+        const [sha, name] = line.split(" ")
+        if (name === ref && sha && /^[0-9a-f]{40,64}$/.test(sha)) return sha
+      }
+    }
+    throw new Error("ref not found")
+  } catch {
+    return gitOrNull(root, "rev-parse", "--verify", "--quiet", "HEAD")
+  }
+}
 
 export function isGitRepo(root: string): boolean {
   return gitOrNull(root, "rev-parse", "--is-inside-work-tree") === "true"
