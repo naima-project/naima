@@ -107,14 +107,17 @@ function gitAuthorName(): string | null {
 }
 
 /**
- * The account's name, a private word: none ("") when it is the name git records as the user's, which every commit and
+ * The account's name, a private word: none (NO_ACCOUNT) when it is the name git records as the user's, which every commit and
  * every item's filedBy already carry. On Windows the account is often named after its person ("Ada Lovelace"), the
  * same as user.name, and taking it as private refused every item filed there.
  */
 function accountName(env: Record<string, string | undefined>): string | undefined {
   const user = env["USER"] ?? env["USERNAME"] ?? env["LOGNAME"]
-  return user !== undefined && user === gitAuthorName() ? "" : user
+  return user !== undefined && user === gitAuthorName() ? NO_ACCOUNT : user
 }
+
+/** The launcher's word for "no account name to look for": too short to be one (Windows drops a variable set to ""). */
+const NO_ACCOUNT = "-"
 
 /**
  * What the launcher adds to the program's environment: the machine's name, the private list and the private hosts, read with the
