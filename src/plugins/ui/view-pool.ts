@@ -5,7 +5,6 @@
 // computes those in its own thread, as it did before the pool.
 
 import { Worker } from "node:worker_threads"
-import { cpus } from "node:os"
 
 /** The pool, not the view, failed: no worker could be started or one stopped; the caller computes the view itself. */
 export class PoolDown extends Error {}
@@ -32,8 +31,9 @@ interface Slot {
   dead: boolean
 }
 
-/** The workers a pool starts at most: one fewer than the machine's cores, between 2 and 4. */
-export const poolSize = (): number => Math.max(2, Math.min(4, cpus().length - 1))
+/** The workers a pool starts at most: one fewer than the machine's cores (read without a permission: the launcher grants no system information), between 2 and 4. */
+export const poolSize = (): number =>
+  Math.max(2, Math.min(4, ((globalThis as { navigator?: { hardwareConcurrency?: number } }).navigator?.hardwareConcurrency ?? 4) - 1))
 
 /** A pool of workers for the project at `place`; the worker's module is the entry point's (src/view-worker.ts). */
 export function viewPool(place: { root: string; data: string; program: string }, size: number = poolSize(), module?: URL): ViewPool {
