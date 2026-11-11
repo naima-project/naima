@@ -3,6 +3,7 @@
 
 import { existsSync, readdirSync } from "node:fs"
 import { join } from "node:path"
+import process from "node:process"
 import { groupBy } from "./collections.ts"
 import { message } from "./errors.ts"
 import { formatCheck } from "./format.ts"
@@ -233,6 +234,24 @@ export const coreChecks: Check[] = [
   formatCheck(),
 ]
 
+/**
+ * Set by the update's rehearsal around the check of the new Naima: the checks of a plugin the project pins to a source
+ * of its own (a stance, say, which builds the project's pages and takes most of a large project's check) are left out,
+ * since the commit of Naima does not change what they find; the running Naima's check, which is complete, still holds
+ * what they found, so nothing they find is reported as new.
+ */
+export const REHEARSAL_SKIPS_PINNED = "NAIMA_REHEARSAL_SKIPS_PINNED"
+
+/** The names of the checks that plugins pinned to a source of their own contribute. */
+function pinnedChecks(ctx: Context): Set<string> {
+  const plugins = ctx.config.plugins as Record<string, { source?: unknown } | undefined>
+  const out = new Set<string>()
+  for (const c of ctx.registry.contributions("checks")) {
+    if (plugins[c.plugin]?.source !== undefined) out.add((c.value as Check).name)
+  }
+  return out
+}
+
 export interface CheckReport {
   problems: Finding[]
   notes: Finding[]
@@ -245,8 +264,10 @@ export interface CheckReport {
  */
 export async function runChecks(ctx: Context, options: CheckOptions = {}): Promise<CheckReport> {
   const found: { check: string; findings: Finding[] }[] = []
+  const pinned = process.env[REHEARSAL_SKIPS_PINNED] === "1" ? pinnedChecks(ctx) : new Set<string>()
   for (const check of ctx.registry.checks) {
     if (options.staged && check.staged !== true) continue
+    if (pinned.has(check.name)) continue
     try {
       found.push({ check: check.name, findings: await check.run(ctx, options) })
     } catch (e) {

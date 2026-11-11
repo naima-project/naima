@@ -14,6 +14,7 @@
 import { createHash } from "node:crypto"
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
+import process from "node:process"
 import { changedRules, type ChangeNote, noteLines, notesBetween, type OptionMove, optionMoves, rewriteOptions } from "./changes.ts"
 import { message } from "./errors.ts"
 import { FORMAT } from "./format.ts"
@@ -364,13 +365,22 @@ interface Where {
  * process, as its development build does: it aligns nothing and writes nothing. Read from what the command
  * prints, the one interface every version shares; an error when it refuses to run.
  */
-export async function checkFrom(programRoot: string, where: Where): Promise<Findings> {
+export async function checkFrom(programRoot: string, where: Where, opts: { skipPinned?: boolean } = {}): Promise<Findings> {
   // deno-lint-ignore no-explicit-any
   const [internal, builtins] = (await Promise.all(["src/core/internal.ts", "src/builtins.ts"].map((f) => importFile(join(programRoot, f))))) as any[]
   const lines: string[] = []
   const errors: string[] = []
   const io = { out: (l = "") => lines.push(l), err: (l: string) => errors.push(l), now: () => new Date() }
-  const code = await internal.runCli(["check"], { cwd: where.root, programRoot, data: where.data, launched: false, io, firstParty: builtins.firstParty })
+  // The checks of plugins pinned to a source of their own are left out when asked (core/check.ts's REHEARSAL_SKIPS_PINNED).
+  const was = process.env["NAIMA_REHEARSAL_SKIPS_PINNED"]
+  if (opts.skipPinned) process.env["NAIMA_REHEARSAL_SKIPS_PINNED"] = "1"
+  let code: number
+  try {
+    code = await internal.runCli(["check"], { cwd: where.root, programRoot, data: where.data, launched: false, io, firstParty: builtins.firstParty })
+  } finally {
+    if (was === undefined) delete process.env["NAIMA_REHEARSAL_SKIPS_PINNED"]
+    else process.env["NAIMA_REHEARSAL_SKIPS_PINNED"] = was
+  }
   if (code !== 0 && code !== 1) throw new Error(errors.map((e) => e.replace(/^naima: /, "")).join("; ") || `naima check exited ${code}`)
   return {
     problems: lines.filter((l) => l.startsWith("  ✗ ")).map((l) => l.slice(4)),
@@ -444,7 +454,7 @@ export const lastRehearsal = (program: string): RehearsalRecord | null => memory
 /**
  * The rehearsal: `to`'s own naima check, run on the project from a temporary copy of `to`, against the one the
  * running Naima (`running`) makes now; said as what would newly fail or be noted. Nothing is written in the project.
- * The two checks run one after the other, and what a check found on a commit and a project state that have not changed
+ * The new Naima's check leaves out the checks of plugins pinned to a source of their own (the running Naima's holds what they find). The two checks run one after the other, and what a check found on a commit and a project state that have not changed
  * since an earlier rehearsal is read from it instead of computed again.
  */
 export async function rehearse(program: string, to: string, running: string, where: Where, opts: RehearseOptions = {}): Promise<string[]> {
@@ -471,7 +481,7 @@ export async function rehearse(program: string, to: string, running: string, whe
       : step("the running Naima's check", await checkFrom(running, where), false)
     const after = cachedAfter
       ? step(`${short(to)}'s check`, cachedAfter, true)
-      : step(`${short(to)}'s check`, await withCommit(program, to, (dir) => checkFrom(dir, where)), false)
+      : step(`${short(to)}'s check`, await withCommit(program, to, (dir) => checkFrom(dir, where, { skipPinned: true })), false)
     if (state) {
       remember(program, (m) => {
         m.findings = { ...(m.findings ?? {}) }
