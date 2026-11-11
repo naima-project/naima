@@ -11,13 +11,15 @@
 // check run from there, in this process, writing nothing — and the folder
 // removed. Nothing in the project, nor the program's checkout, changes.
 
-import { mkdirSync, rmSync } from "node:fs"
+import { createHash } from "node:crypto"
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { changedRules, type ChangeNote, noteLines, notesBetween, type OptionMove, optionMoves, rewriteOptions } from "./changes.ts"
 import { message } from "./errors.ts"
 import { FORMAT } from "./format.ts"
 import { importFile } from "./plugins.ts"
 import { runGit } from "./git.ts"
+import { NO_PROGRESS, type Progress } from "./progress.ts"
 import { short } from "./program.ts"
 import type { FirstParty, Plugin } from "./types.ts"
 
@@ -178,9 +180,15 @@ interface Read {
   parse: (raw: unknown) => unknown
 }
 
+/** The program's git folder: its .git, or where a .git file (a worktree, a submodule) points. */
+const gitDirOf = (program: string): string => {
+  const r = runGit(program, ["rev-parse", "--absolute-git-dir"])
+  return r.ok && r.out.trim() ? r.out.trim() : join(program, ".git")
+}
+
 /** Check `commit` out of `program`'s git into a folder of its .git, and run `use` on that folder; the folder is removed after. */
 export async function withCommit<T>(program: string, commit: string, use: (dir: string) => Promise<T>): Promise<T> {
-  const base = join(program, ".git", "naima-preview")
+  const base = join(gitDirOf(program), "naima-preview")
   const dir = join(base, commit)
   const env = { GIT_INDEX_FILE: join(base, `${commit}.index`) }
   rmSync(dir, { recursive: true, force: true })
@@ -386,19 +394,100 @@ export const newly = (before: Findings, after: Findings): Findings => {
   }
 }
 
+/** What the rehearsal reports through, and where it remembers what it found. */
+export interface RehearseOptions {
+  progress?: Progress
+  /** Say, instead of running, what the last rehearsal of this pair found; false: always run. */
+  reuse?: boolean
+}
+
+/** Where the findings of earlier rehearsals are kept: in the program's own git folder, which no checkout reads. */
+const rehearsalFile = (program: string): string => join(gitDirOf(program), "naima-rehearsals.json")
+
+/** A rehearsal's record: when it ended, for which pair of commits, and what it said. */
+export interface RehearsalRecord {
+  at: string
+  from: string
+  to: string
+  lines: string[]
+}
+
+/** The project's state as git knows it, as a key: its head and what is changed in its working tree. Null when it is not a git repository. */
+function projectKey(root: string): string | null {
+  const head = runGit(root, ["rev-parse", "HEAD"])
+  if (!head.ok) return null
+  const status = runGit(root, ["status", "--porcelain", "--untracked-files=normal"])
+  return `${head.out.trim()}:${createHash("sha256").update(status.ok ? status.out : "?").digest("hex").slice(0, 16)}`
+}
+
+type Memory = { findings?: Record<string, Findings>; last?: RehearsalRecord }
+
+function memoryOf(program: string): Memory {
+  try {
+    return JSON.parse(readFileSync(rehearsalFile(program), "utf8")) as Memory
+  } catch {
+    return {}
+  }
+}
+
+function remember(program: string, change: (m: Memory) => void): void {
+  try {
+    const m = memoryOf(program)
+    change(m)
+    writeFileSync(rehearsalFile(program), JSON.stringify(m))
+  } catch { /* a memory that cannot be written only costs the next run its speed */ }
+}
+
+/** The last rehearsal recorded in `program`'s git folder, for any pair of commits; null when none. */
+export const lastRehearsal = (program: string): RehearsalRecord | null => memoryOf(program).last ?? null
+
 /**
  * The rehearsal: `to`'s own naima check, run on the project from a temporary copy of `to`, against the one the
- * running Naima (`running`) makes now; said as what would newly fail or be noted. Nothing is written.
+ * running Naima (`running`) makes now; said as what would newly fail or be noted. Nothing is written in the project.
+ * The two checks run side by side, and what a check found on a commit and a project state that have not changed
+ * since an earlier rehearsal is read from it instead of computed again.
  */
-export async function rehearse(program: string, to: string, running: string, where: Where): Promise<string[]> {
+export async function rehearse(program: string, to: string, running: string, where: Where, opts: RehearseOptions = {}): Promise<string[]> {
+  const progress = opts.progress ?? NO_PROGRESS
   try {
-    const before = await checkFrom(running, where)
-    const after = await withCommit(program, to, (dir) => checkFrom(dir, where))
+    const state = opts.reuse === false ? null : projectKey(where.root)
+    const keyOf = (commit: string) => `${commit}:${state}`
+    const kept = state ? memoryOf(program).findings ?? {} : {}
+    const mine = runGit(running, ["rev-parse", "HEAD"])
+    const runningKey = mine.ok ? keyOf(mine.out.trim()) : null
+    let done = 0
+    progress.stage("rehearsal", 2, "checks")
+    const step = (what: string, found: Findings, cached: boolean) => {
+      progress.at(++done)
+      progress.note(`${what} ${cached ? "taken from the last rehearsal" : "done"}`)
+      return found
+    }
+    const cachedBefore = runningKey ? kept[runningKey] : undefined
+    const cachedAfter = kept[keyOf(to)]
+    progress.note(`running the check of the running Naima and of ${short(to)} in a temporary copy, side by side`)
+    const [before, after] = await Promise.all([
+      cachedBefore ? step("the running Naima's check", cachedBefore, true) : checkFrom(running, where).then((f) => step("the running Naima's check", f, false)),
+      cachedAfter
+        ? step(`${short(to)}'s check`, cachedAfter, true)
+        : withCommit(program, to, (dir) => checkFrom(dir, where)).then((f) => step(`${short(to)}'s check`, f, false)),
+    ])
+    if (state) {
+      remember(program, (m) => {
+        m.findings = { ...(m.findings ?? {}) }
+        if (runningKey) m.findings[runningKey] = before
+        m.findings[keyOf(to)] = after
+        // A memory of findings is not kept for ever: the newest few.
+        for (const k of Object.keys(m.findings).slice(0, -8)) delete m.findings[k]
+      })
+    }
     const fresh = newly(before, after)
     const out = [`Rehearsal: ${short(to)}'s naima check on this repository, from a temporary copy, nothing written:`]
     for (const p of fresh.problems) out.push(`  newly failing: ${p}`)
     for (const n of fresh.notes) out.push(`  newly noted: ${n}`)
     if (!fresh.problems.length && !fresh.notes.length) out.push("  nothing newly fails or is noted")
+    remember(program, (m) => {
+      m.last = { at: new Date().toISOString(), from: runningKey ? runningKey.split(":")[0]! : running, to, lines: out }
+    })
     return out
   } catch (e) {
     return [`Rehearsal not run: ${message(e)} — naima update ends with the new Naima's own naima check`]

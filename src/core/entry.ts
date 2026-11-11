@@ -61,12 +61,28 @@ export const cliCommands: Omit<Command, "run">[] = [
       `move the lock to the newest release of the source, or to the version or commit --to names: download the release's archive, check it against its SHA-256 and against the commit its tag names, and record the version and checksum with the commit (a source that publishes no releases, or --main, follows the head of its main instead; a lock that still names a commit of main moves to the newest release once, and says so; a commit of main past the newest release stays until a newer release; with no network the lock stays where it is, and says why); say what changes (the commits, the change notes they add — breaking first, then those that ask an action —, the data formats, the rules added or removed, the options it no longer reads), fetch it into the program, check it out, rename and remove options in naima.json as the change notes say and remove those it reads nowhere, each said with its value, and record the new commit; moving forward, the new Naima finishes: it migrates the data if its format moved, names the rules agents acknowledge again, runs naima check, and files an item in the type with the trait follow-up for each problem or note that is new since the commit before; writes, and says, what makes agents run naima hello at every session start where it is missing — the pointer line, rewritten when it does not say so, and each session-start hook as naima init installs them; all as one change to commit; the only command, with rollback, that moves the lock; with --mode, set what a session start does about a newer Naima`,
     enforces:
       "the lock moves only to a release whose archive matches its checksum and its tag's commit, or, for a source without releases or with --main, to a commit of the source's main, with the data migrated forward in the same change; never back past a migration, which runs forward only; a source naima.json names other than the program's origin is refused, by every command, until --accept-source; with the tracker in a repository of its own, an update that moves the lock is refused on the code's trunk while the trunk guard runs there, before anything moves, and is made in an item's worktree, the tracker moved first to the branch that pairs with the code's, so that its two halves land together with naima land",
-    usage: "update [--check | --to <version|commit> | --main | --branch <name> [--to <commit>] | --pre | --mode off|check|update | --accept-source]",
+    usage:
+      "update [--check [--rehearse | --rehearse-in-background] | --no-rehearse | --to <version|commit> | --main | --branch <name> [--to <commit>] | --pre | --mode off|check|update | --accept-source]",
     options: [
       {
         name: "--check",
         says:
-          "only say whether a newer release exists (for a source without releases, whether its main has moved past the locked commit), and what it changes — and rehearse it: its own naima check, run on the project from a temporary copy of it, writing nothing, says what would newly fail or be noted; exit 1 when it has moved",
+          "only say whether a newer release exists (for a source without releases, whether its main has moved past the locked commit), and what it changes, in seconds; the rehearsal (its own naima check, run on the project from a temporary copy of it, writing nothing) only when asked, with --rehearse or --rehearse-in-background, and the last one recorded for that version is said, says what would newly fail or be noted; exit 1 when it has moved",
+      },
+      {
+        name: "--rehearse",
+        says:
+          "with --check: run the rehearsal now, reporting its progress; the new version's own naima check on the project from a temporary copy, side by side with the running one's, what it found on an unchanged commit and project taken from the last rehearsal; says what would newly fail or be noted, and records it",
+      },
+      {
+        name: "--rehearse-in-background",
+        says:
+          "with --check: start the rehearsal as a run of its own (naima run, named update-rehearsal) and return at once; naima wait update-rehearsal follows it, and its result is recorded, said by every later naima update --check",
+      },
+      {
+        name: "--no-rehearse",
+        says:
+          "do not compare the older Naima's check, run on a temporary copy, with the new one's when the update ends: the new Naima's own naima check still runs, and what it finds is not filed as items",
       },
       {
         name: "--to",
@@ -99,7 +115,17 @@ export const cliCommands: Omit<Command, "run">[] = [
           "trust the source naima.json now names, after reviewing why it changed: every other command refuses to run a program from a source other than its origin; points the program's origin at the new source, checks out the locked commit, and moves nothing else",
       },
     ],
-    examples: ["update --check", "update", "update --to 1.2.0", "update --to 0123456789ab", "update --main", "update --mode update", "update --accept-source"],
+    examples: [
+      "update --check",
+      "update --check --rehearse-in-background",
+      "update --no-rehearse",
+      "update",
+      "update --to 1.2.0",
+      "update --to 0123456789ab",
+      "update --main",
+      "update --mode update",
+      "update --accept-source",
+    ],
   },
   {
     name: "rollback",
@@ -113,7 +139,7 @@ export const cliCommands: Omit<Command, "run">[] = [
   {
     name: "hello",
     says:
-      `what an agent says first in a session: the banner (I'm Naima, the No-guesswork Artificial Intelligence Meta-Agent, active in this repository, with its version and commit); then, as naima.json's updates says, whether a newer Naima exists and, under update, what it changes and its rehearsal, as update --check says them; then, one line each, an adopted stance with a newer version, and those that could not be reached; then what the plugins do by themselves at the start, one line each, such as the stale work dropped because nothing needs it (a merged branch with its clean worktree, an orphan claim) and the stale work that needs you; then where the project is going, as the plugins say it, such as the nearest gate with a due date and the next release, each with its verdict as naima gates gives it; then, one line each, what waits on the owner's decision, such as a long run that is due, never started, or that nothing does; then what it offers on request: what the plugins offer, such as generating code from a model the project has, then what Naima is and its documentation, an update check, an update after the owner's yes; last, the offer to explain what Naima can do from the basics (docs/guide/the-basics.md). Under --hook, the owner is shown one line, the banner and whether anything waits on their decision, and the agent is given the rest, with every command written as the project's launcher runs it (sh <tracker>/naima.sh <command>), told to answer the owner's message without repeating the greeting, to introduce itself with its name in bold only when that message is a greeting alone, and how to explain the basics`,
+      `what an agent says first in a session: the banner (I'm Naima, the No-guesswork Artificial Intelligence Meta-Agent, active in this repository, with its version and commit); then, as naima.json's updates says, whether a newer Naima exists and, under update, what it changes and the last rehearsal recorded, as update --check says them; then, one line each, an adopted stance with a newer version, and those that could not be reached; then what the plugins do by themselves at the start, one line each, such as the stale work dropped because nothing needs it (a merged branch with its clean worktree, an orphan claim) and the stale work that needs you; then where the project is going, as the plugins say it, such as the nearest gate with a due date and the next release, each with its verdict as naima gates gives it; then, one line each, what waits on the owner's decision, such as a long run that is due, never started, or that nothing does; then what it offers on request: what the plugins offer, such as generating code from a model the project has, then what Naima is and its documentation, an update check, an update after the owner's yes; last, the offer to explain what Naima can do from the basics (docs/guide/the-basics.md). Under --hook, the owner is shown one line, the banner and whether anything waits on their decision, and the agent is given the rest, with every command written as the project's launcher runs it (sh <tracker>/naima.sh <command>), told to answer the owner's message without repeating the greeting, to introduce itself with its name in bold only when that message is a greeting alone, and how to explain the basics`,
     enforces:
       "it never moves the lock nor starts a run; it asks the source only when updates is check or update, and records that check as the day's, and the session it starts (naima origin), in the tick's state outside the repository; the only thing it may write in the project is an urgent message the tick raises",
     usage: "hello [--hook <tool>] [--session <id>]",
