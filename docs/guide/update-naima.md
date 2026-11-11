@@ -105,7 +105,7 @@ Then comes what Naima works out by comparing the two versions itself:
   do about them.
 
 Last, when you ask for it, comes a rehearsal. `naima update --check` says what changes in seconds and does not rehearse. `naima update --check --rehearse` runs the newer
-version's own `naima check` on your project, side by side with the running one's, and tells you what would newly fail and what would newly be noted; it says its
+version's own `naima check` on your project, after the running one's, and tells you what would newly fail and what would newly be noted; it says its
 progress as it goes, and reuses what a check found on a commit and a project that have not changed since the last rehearsal. `--rehearse-in-background` starts it
 as a run named `update-rehearsal` (`naima wait update-rehearsal` follows it) and returns at once; its result is recorded, and every later `naima update --check`
 says it. A line such as `newly failing: …` is something to fix after the update, or before it.

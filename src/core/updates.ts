@@ -444,7 +444,7 @@ export const lastRehearsal = (program: string): RehearsalRecord | null => memory
 /**
  * The rehearsal: `to`'s own naima check, run on the project from a temporary copy of `to`, against the one the
  * running Naima (`running`) makes now; said as what would newly fail or be noted. Nothing is written in the project.
- * The two checks run side by side, and what a check found on a commit and a project state that have not changed
+ * The two checks run one after the other, and what a check found on a commit and a project state that have not changed
  * since an earlier rehearsal is read from it instead of computed again.
  */
 export async function rehearse(program: string, to: string, running: string, where: Where, opts: RehearseOptions = {}): Promise<string[]> {
@@ -464,13 +464,14 @@ export async function rehearse(program: string, to: string, running: string, whe
     }
     const cachedBefore = runningKey ? kept[runningKey] : undefined
     const cachedAfter = kept[keyOf(to)]
-    progress.note(`running the check of the running Naima and of ${short(to)} in a temporary copy, side by side`)
-    const [before, after] = await Promise.all([
-      cachedBefore ? step("the running Naima's check", cachedBefore, true) : checkFrom(running, where).then((f) => step("the running Naima's check", f, false)),
-      cachedAfter
-        ? step(`${short(to)}'s check`, cachedAfter, true)
-        : withCommit(program, to, (dir) => checkFrom(dir, where)).then((f) => step(`${short(to)}'s check`, f, false)),
-    ])
+    // One after the other: side by side they contend for the same disk and processor, and took longer on a large project.
+    progress.note(`the check of the running Naima, then of ${short(to)} in a temporary copy`)
+    const before = cachedBefore
+      ? step("the running Naima's check", cachedBefore, true)
+      : step("the running Naima's check", await checkFrom(running, where), false)
+    const after = cachedAfter
+      ? step(`${short(to)}'s check`, cachedAfter, true)
+      : step(`${short(to)}'s check`, await withCommit(program, to, (dir) => checkFrom(dir, where)), false)
     if (state) {
       remember(program, (m) => {
         m.findings = { ...(m.findings ?? {}) }

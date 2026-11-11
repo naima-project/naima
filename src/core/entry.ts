@@ -72,7 +72,7 @@ export const cliCommands: Omit<Command, "run">[] = [
       {
         name: "--rehearse",
         says:
-          "with --check: run the rehearsal now, reporting its progress; the new version's own naima check on the project from a temporary copy, side by side with the running one's, what it found on an unchanged commit and project taken from the last rehearsal; says what would newly fail or be noted, and records it",
+          "with --check: run the rehearsal now, reporting its progress; the new version's own naima check on the project from a temporary copy, after the running one's, what it found on an unchanged commit and project taken from the last rehearsal; says what would newly fail or be noted, and records it",
       },
       {
         name: "--rehearse-in-background",

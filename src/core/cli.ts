@@ -852,7 +852,7 @@ async function finish(opts: CliOptions, place: Place, lock: Lock, io: IO, pendin
       )
     }
   }
-  // The older Naima's check on a temporary copy and the new one's run side by side; --no-rehearse leaves the older one out.
+  // The older Naima's check on a temporary copy, then the new one's; --no-rehearse leaves the older one out.
   progress.stage("naima check", compare && moved ? 2 : 1, "checks")
   let done = 0
   const checked = (what: string) => <T>(found: T): T => {
@@ -860,13 +860,11 @@ async function finish(opts: CliOptions, place: Place, lock: Lock, io: IO, pendin
     progress.note(`${what} is done`)
     return found
   }
-  const [baseline, now] = await Promise.all([
-    moved && compare
-      // null: the older Naima cannot read the data any more, and every problem is the update's to look at.
-      ? withCommit(program, was as string, (dir) => checkFrom(dir, place)).catch(() => null).then(checked(`the check of ${short(was as string)}`))
-      : Promise.resolve(null),
-    checkFrom(opts.programRoot, place).then(checked(`the check of ${short(lock.commit)}`)),
-  ])
+  // null: the older Naima cannot read the data any more, and every problem is the update's to look at.
+  const baseline = moved && compare
+    ? await withCommit(program, was as string, (dir) => checkFrom(dir, place)).catch(() => null).then(checked(`the check of ${short(was as string)}`))
+    : null
+  const now = checked(`the check of ${short(lock.commit)}`)(await checkFrom(opts.programRoot, place))
   progress.end()
   if (moved && !compare) io.out("the older Naima's check was not rehearsed (--no-rehearse): what the update left is not filed as items")
   if (moved && compare) {
