@@ -45,6 +45,7 @@ import { runSidecar } from "./sidecar.ts"
 import { buildDir, desktopFirst, findCargo, installDesktop, installedApp, PRODUCT } from "./desktop-app.ts"
 import { desktopApp, desktopAppDirs, naimaCommand, offReason, openAtStart, register, registryDir, unregister, userAtStart } from "./at-start.ts"
 import { nameStopCommand } from "./stops.ts"
+import { viewPool } from "./view-pool.ts"
 import { allTabs, tabsPoint, type UiTab, type UiView } from "./tabs.ts"
 
 export { actionArgv, ACTIONS, naimaBridge } from "./bridge.ts"
@@ -287,6 +288,8 @@ export async function runUi(ctx: Context, flags: { open: boolean; port?: number;
     fileUrl: (tab, rel) => filesUrl(key, tab, rel),
     // A UI opened again on a large project draws from the views kept on disk, then reads them again.
     cache: viewCache(ctx),
+    // The views are rendered off the serving thread, a few at a time, so that a slow one holds no other request.
+    pool: viewPool({ root: ctx.root, data: ctx.trackerRoot, program: ctx.program }),
     switcher: {
       can: file !== null,
       to: (project) => {

@@ -39,6 +39,7 @@ import { knownAt, recentProjects } from "./switch.ts"
 import type { Feeds, Handlers, Json } from "./bridge-handler.ts"
 import { type Change, snapshot, watchProject } from "./live.ts"
 import { stampOf, type ViewCache } from "./view-cache.ts"
+import { PoolDown, type ViewPool } from "./view-pool.ts"
 import { askShow, awaitAnswer, listenShows, openUis, requestId, taken, writeAnswer } from "./show.ts"
 import { commandJson, type JsonOf, metroData } from "./metro.ts"
 import { contentProblem, framePage, tabList, type UiTab, type UiTabContent, type UiView } from "./tabs.ts"
@@ -144,6 +145,11 @@ export interface BridgeOptions {
    */
   cache?: ViewCache | null
   recheck?: number
+  /**
+   * Where the live views are rendered when given: off the serving thread, a few at a time (view-pool.ts), so that a slow
+   * view holds no other request. A view the pool cannot render (no worker) is rendered in this thread, as without it.
+   */
+  pool?: ViewPool | null
   /** How an action's command line is started under `naima run`: this program, as a person types it, by default. */
   entry?: readonly string[]
   /** What carries the UI that listens to the feed show, as an open UI says: browser or desktop. */
@@ -270,7 +276,16 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
   }
   /** A view's data, live, shared with the same read asked again; `from` is the live context, read again when absent. */
   const live = (view: UiView, params: Record<string, string[]>, from?: Context): Promise<unknown> =>
-    kept(`view ${view.name} ${JSON.stringify(params)}`, async () => (await view.render(params, from ?? momentOf(null))).data)
+    kept(`view ${view.name} ${JSON.stringify(params)}`, async () => {
+      const here = async () => (await view.render(params, from ?? momentOf(null))).data
+      if (!opts.pool || (from !== undefined && from !== ctx)) return await here()
+      try {
+        return await opts.pool.render(view.name, params)
+      } catch (e) {
+        if (e instanceof PoolDown) return await here()
+        throw e
+      }
+    })
   /** A live read shared as `share` does, and answered from the views' cache while the project's stamp holds. */
   const kept = (key: string, compute: () => Promise<unknown>): Promise<unknown> => {
     const read = async (): Promise<unknown> => {
@@ -467,6 +482,7 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       rechecks.clear()
       atCache.clear()
       shared.clear()
+      opts.pool?.close()
     },
   }
 }
