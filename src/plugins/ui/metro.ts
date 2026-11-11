@@ -24,7 +24,7 @@
 //            each line's landing
 
 import { basename } from "node:path"
-import { type Command, type Context, gitOrNull, isAncestor, isOpen, runGit, runGitAsync, trunk, worktrees } from "../../core/api.ts"
+import { type Command, type Context, gitOrNull, isOpen, runGit, runGitAsync, trunk, worktrees } from "../../core/api.ts"
 import { type Event as StatusEvent, initial, type State, type Status, step as statusStep } from "./generated/worker-status.ts"
 import { stopNames } from "./stops.ts"
 
@@ -375,23 +375,43 @@ export async function metroData(ctx: Context, read: JsonOf = commandJson): Promi
   const standing = new Set(worktrees(ctx.root).filter((w) => !w.self).flatMap((w) => (w.branch ? [w.branch] : [])))
   const workers: Worker[] = []
   const refs = git(ctx, "for-each-ref", "--format=%(refname:short)%09%(objectname)", "refs/heads").split("\n").filter(Boolean)
-  // Whether a commit is on the trunk, asked of git once per commit: the branches cut from a line share their merge base with it.
-  const known = new Map<string, boolean>()
-  const onTrunk = (c: string): boolean => known.get(c) ?? known.set(c, !!main && isAncestor(ctx.root, c, main)).get(c)!
-  for (const r of refs) {
+  // Each branch's base, rejoin and fork, asked of git for every branch at once: on Windows a git process costs some
+  // 35 ms to start, and asked one after another the branches of a busy repository took seconds
+  // (bugs/windows-failed-tests-screen-s-cold-load). Whether a commit is on the trunk is asked once per commit: the
+  // branches cut from a line share their merge base with it.
+  const ask = async (...args: string[]): Promise<string | null> => {
+    const r = await runGitAsync(ctx.root, args, GIT_MS)
+    return r.ok ? r.out.trim() : null
+  }
+  const ancestor = async (a: string, b: string): Promise<boolean> => (await runGitAsync(ctx.root, ["merge-base", "--is-ancestor", a, b], GIT_MS)).ok
+  const known = new Map<string, Promise<boolean>>()
+  const onTrunk = (c: string): Promise<boolean> => {
+    if (!known.has(c)) known.set(c, main ? ancestor(c, main) : Promise.resolve(false))
+    return known.get(c)!
+  }
+  const facts = await Promise.all(refs.map(async (r) => {
     const [name = "", tip = ""] = r.split("\t")
-    if (!main || name === main || lineNames.has(name) || name.startsWith("line/")) continue
+    if (!main || name === main || lineNames.has(name) || name.startsWith("line/")) return null
     // Its base: the open line whose own commits it carries, else the trunk.
-    const base = lines.find((l) => {
-      const mb = gitOrNull(ctx.root, "merge-base", name, l.branch)
-      return !!mb && !onTrunk(mb)
-    })?.branch ?? main
+    let base = main
+    for (const l of lines) {
+      const mb = await ask("merge-base", name, l.branch)
+      if (mb && !(await onTrunk(mb))) {
+        base = l.branch
+        break
+      }
+    }
     // Rejoined: the oldest commit of the base's first-parent history that carries it; none for a branch with no work yet.
-    const land = isAncestor(ctx.root, tip, base)
-      ? git(ctx, "rev-list", "--first-parent", "--ancestry-path", "--reverse", `${tip}..${base}`).split("\n")[0] || null
+    const land = (await ancestor(tip, base))
+      ? (await ask("rev-list", "--first-parent", "--ancestry-path", "--reverse", `${tip}..${base}`) ?? "").split("\n")[0] || null
       : null
+    const fork = land && !window.has(land) ? null : (land ? await ask("merge-base", `${land}^1`, tip) : await ask("merge-base", base, tip)) || null
+    return { name, tip, base, land, fork }
+  }))
+  for (const f of facts) {
+    if (!f) continue
+    const { name, tip, base, land, fork } = f
     if (land && !window.has(land)) continue
-    const fork = (land ? git(ctx, "merge-base", `${land}^1`, tip) : git(ctx, "merge-base", base, tip)) || null
     const list = fork ? firstParent(ctx, `${fork}..${tip}`, WINDOW, commits, authors) : []
     const kind: RouteKind = name.startsWith("sync/") ? "sync" : claimed.has(name) || standing.has(name) || name.startsWith("worker/") ? "worker" : "branch"
     // A branch that left and never rejoined within no window: shown only when it is a worker's.
@@ -545,6 +565,9 @@ async function checkoutsOf(ctx: Context): Promise<Checkout[]> {
     ...dirty[i],
   }))
 }
+
+/** How long one of the map's git questions about a branch may take, in ms: none should come near it. */
+const GIT_MS = 30_000
 
 /** How long a checkout's look for work not committed may take before the map goes without it, in ms. */
 const DIRTY_MS = 2000
