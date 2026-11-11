@@ -25,7 +25,7 @@ import { dirname, join, relative, resolve } from "node:path"
 import { ADAPTERS } from "./adapters/index.ts"
 import { bool, parse, str, usageError } from "./args.ts"
 import { writeFileAtomic } from "./files.ts"
-import { currentBranch, gitOrNull, isGitRepo, runGit } from "./git.ts"
+import { currentBranch, gitDirsOf, gitOrNull, isGitRepo, runGit } from "./git.ts"
 import { META, saveMeta } from "./item.ts"
 import { label } from "./lifecycle.ts"
 import { tickDir } from "./tick.ts"
@@ -89,8 +89,9 @@ const keyOf = (gitDir: string): string => createHash("sha256").update(resolve(gi
 
 /** This worktree's git directory and the clone's common one, absolute; null outside git. */
 function gitDirs(root: string): { own: string; common: string } | null {
-  const own = gitOrNull(root, "rev-parse", "--git-dir")
-  const common = gitOrNull(root, "rev-parse", "--git-common-dir")
+  const known = gitDirsOf(root)
+  const own = known?.own ?? gitOrNull(root, "rev-parse", "--git-dir")
+  const common = known?.common ?? gitOrNull(root, "rev-parse", "--git-common-dir")
   const abs = (p: string): string => {
     try {
       return realpathSync(resolve(root, p))

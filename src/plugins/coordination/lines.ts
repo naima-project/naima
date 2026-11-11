@@ -38,7 +38,7 @@ import {
   type View,
   worktrees,
 } from "../../core/api.ts"
-import { ahead, exists, home, plural, type Policy, SEGMENT, SEGMENT_SAYS, worktreesDir } from "./worktrees.ts"
+import { aheadBehind, exists, home, plural, type Policy, SEGMENT, SEGMENT_SAYS, worktreesDir } from "./worktrees.ts"
 import { archiveTag } from "./index.ts"
 import { landOnLine, unfixOnLine } from "./land.ts"
 
@@ -106,7 +106,7 @@ export function openLines(root: string): Line[] {
   return out.split("\n").filter(Boolean).flatMap((l) => {
     const [branch = "", tip = "", updated = ""] = l.split("\t")
     const gate = gateOfLine(branch)
-    return gate ? [{ gate, branch, tip, updated, ahead: ahead(root, main, branch), behind: ahead(root, branch, main) }] : []
+    return gate ? [{ gate, branch, tip, updated, ...aheadBehind(root, main, branch) }] : []
   })
 }
 

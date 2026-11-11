@@ -509,11 +509,28 @@ export function readSilentAfter(options: Record<string, unknown>): number {
   return v
 }
 
+/** The local branches whose tip is `main` or one of its ancestors, in one git call. */
+function branchesMergedInto(repo: string, main: string): Set<string> {
+  return new Set(
+    (gitOrNull(repo, "for-each-ref", "--format=%(refname:short)", "--merged", main, "refs/heads") ?? "").split("\n").map((l) => l.trim()).filter(Boolean),
+  )
+}
+
+/** The committer date of each local branch's tip, ISO 8601, in one git call. */
+function branchCommitDates(repo: string): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const line of (gitOrNull(repo, "for-each-ref", "--format=%(refname:short)%09%(committerdate:iso-strict)", "refs/heads") ?? "").split("\n")) {
+    const [name, date] = line.split("\t")
+    if (name && date) out.set(name.trim(), date.trim())
+  }
+  return out
+}
+
 /** Whole minutes since a claim's last sign of life — the later of its step and its branch's last commit — or undefined without a step. */
-function quietFor(ctx: Context, c: Claim): number | undefined {
+function quietFor(ctx: Context, c: Claim, commitDates?: Map<string, string>): number | undefined {
   if (!c.step) return undefined
   const stepAt = Date.parse(c.step.since)
-  const commit = gitOrNull(ctx.root, "log", "-1", "--format=%cI", `refs/heads/${c.branch}`)
+  const commit = commitDates ? commitDates.get(c.branch) : gitOrNull(ctx.root, "log", "-1", "--format=%cI", `refs/heads/${c.branch}`)
   const commitAt = commit ? Date.parse(commit) : NaN
   const last = Math.max(...[stepAt, commitAt].filter((t) => !Number.isNaN(t)))
   if (!Number.isFinite(last)) return undefined
@@ -541,11 +558,12 @@ export function staleReason(
   c: Claim,
   main: string | null = trunk(ctx.trackerGit),
   alive: Set<string> = allRefNames(ctx.trackerGit),
+  merged?: Set<string>,
 ): string | undefined {
   if (!alive.has(c.branch)) return "its branch is gone"
   if (main && c.branch === main) return `it names ${main}, the trunk, where no claim belongs`
   if (
-    main && c.branch !== main && isAncestor(ctx.trackerGit, `refs/heads/${c.branch}`, main) &&
+    main && c.branch !== main && (merged ? merged.has(c.branch) : isAncestor(ctx.trackerGit, `refs/heads/${c.branch}`, main)) &&
     filesAt(ctx.trackerGit, main, inGit(ctx, CLAIMS), ".json").some((f) => f.name === c.file)
   ) return `its branch is merged into ${main}`
   if (c.items.length && c.items.every((e) => closed(ctx, e.id))) return "every item it claims is done or closed"
@@ -557,12 +575,17 @@ export function claimsData(ctx: Context, only?: string, silentAfter: number = SI
   const here = currentBranch(ctx.root)
   const main = trunk(ctx.trackerGit)
   const alive = allRefNames(ctx.trackerGit)
-  const list = readClaims(ctx).filter((c) => !only || c.branch === only).map((c) => ({ c, stale: staleReason(ctx, c, main, alive) }))
+  const claimsRead = readClaims(ctx).filter((c) => !only || c.branch === only)
+  // Whether each claim's branch is merged and when its last commit was, asked of git once for all the branches: a
+  // question for each claim is a process each, some 35 ms on Windows (bugs/windows-failed-tests-screen-s-cold-load).
+  const merged = main && claimsRead.length > 1 ? branchesMergedInto(ctx.trackerGit, main) : undefined
+  const commitDates = claimsRead.length > 1 ? branchCommitDates(ctx.trackerGit) : undefined
+  const list = claimsRead.map((c) => ({ c, stale: staleReason(ctx, c, main, alive, merged) }))
   const holders = new Map<string, Set<string>>()
   for (const { c, stale } of list) if (!stale) { for (const e of c.items) holders.set(e.id, (holders.get(e.id) ?? new Set()).add(c.branch)) }
   return {
     claims: list.map(({ c, stale }) => {
-      const quiet = stale ? undefined : quietFor(ctx, c)
+      const quiet = stale ? undefined : quietFor(ctx, c, commitDates)
       return {
         ...(stale ? { stale } : {}),
         branch: c.branch,

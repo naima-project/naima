@@ -149,6 +149,12 @@ export const plural = (n: number, what: string): string => `${n} ${what}${n === 
 /** How many commits `ref` has that `base` has not. */
 export const ahead = (root: string, base: string, ref: string): number => Number(gitOrNull(root, "rev-list", "--count", `${base}..${ref}`) ?? 0)
 
+/** How many commits `ref` has that `base` has not, and how many `base` has that `ref` has not: one git call, not two. */
+export function aheadBehind(root: string, base: string, ref: string): { ahead: number; behind: number } {
+  const [behind = 0, ahead = 0] = (gitOrNull(root, "rev-list", "--left-right", "--count", `${base}...${ref}`) ?? "").split(/\s+/).map(Number)
+  return { ahead: ahead || 0, behind: behind || 0 }
+}
+
 /**
  * Who holds a worktree's branch: a claim with items; or, once released at
  * closing, a claim file its unmerged commits added, or a session note

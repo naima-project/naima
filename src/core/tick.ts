@@ -29,7 +29,7 @@ import { createHash, randomUUID } from "node:crypto"
 import { linkSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { message } from "./errors.ts"
-import { runGit } from "./git.ts"
+import { gitDirsOf, runGit } from "./git.ts"
 
 export const MINUTE = 60_000
 export const HOUR = 60 * MINUTE
@@ -108,6 +108,8 @@ const NAME = /^[a-z0-9][a-z0-9.-]*$/
 export function tickDir(root: string): string | null {
   const given = process.env["NAIMA_TICK_DIR"]
   if (given) return given
+  const known = gitDirsOf(root)
+  if (known) return join(known.common, "naima", "tick")
   const r = runGit(root, ["rev-parse", "--git-common-dir"])
   return r.ok && r.out.trim() ? join(resolve(root, r.out.trim()), "naima", "tick") : null
 }

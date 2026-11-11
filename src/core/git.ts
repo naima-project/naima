@@ -7,8 +7,8 @@
 
 import { spawn, spawnSync } from "node:child_process"
 import { homedir } from "node:os"
-import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs"
-import { join, relative, resolve, sep } from "node:path"
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs"
+import { dirname, join, relative, resolve, sep } from "node:path"
 import { isRegularFile, walkFiles } from "./files.ts"
 import { spawnSyncFed } from "./spawn-fed.ts"
 
@@ -287,8 +287,59 @@ export function headCommit(root: string): string | null {
   }
 }
 
+/**
+ * The git directory of the working tree holding `root` and the clone's common one, absolute, read from the `.git`
+ * entry the tree has (a directory, or the file of a linked worktree that names its git directory) without starting
+ * git: a process costs some 35 ms on Windows, and every command asks. Null when this does not know the layout (no
+ * `.git` above `root`, a bare repository, git's directory given by the environment): ask git then.
+ */
+export function gitDirsOf(root: string, env: Record<string, string | undefined> = process.env): { own: string; common: string } | null {
+  if (env["GIT_DIR"] || env["GIT_COMMON_DIR"] || env["GIT_WORK_TREE"]) return null
+  try {
+    let dir = resolve(root)
+    for (;;) {
+      const dot = join(dir, ".git")
+      let st
+      try {
+        st = statSync(dot)
+      } catch (e) {
+        if ((e as { code?: string }).code !== "ENOENT" && (e as { code?: string }).code !== "ENOTDIR") return null
+        const up = dirname(dir)
+        if (up === dir) return null
+        dir = up
+        continue
+      }
+      if (st.isDirectory()) return { own: dot, common: dot }
+      const m = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dot, "utf8"))
+      if (!m) return null
+      const own = resolve(dir, m[1]!)
+      const file = join(own, "commondir")
+      return { own, common: existsSync(file) ? resolve(own, readFileSync(file, "utf8").trim()) : own }
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The branch HEAD names at `root`, read from git's own files: undefined when HEAD is detached, null when this does
+ * not know the layout (asked of git then, by the caller).
+ */
+export function headBranch(root: string): string | undefined | null {
+  const dirs = gitDirsOf(root)
+  if (!dirs) return null
+  try {
+    const m = /^ref:\s*refs\/heads\/(\S+)\s*$/m.exec(readFileSync(join(dirs.own, "HEAD"), "utf8"))
+    if (m) return m[1]!
+    return /^[0-9a-f]{40,64}\s*$/.test(readFileSync(join(dirs.own, "HEAD"), "utf8")) ? undefined : null
+  } catch {
+    return null
+  }
+}
+
 export function isGitRepo(root: string): boolean {
-  return gitOrNull(root, "rev-parse", "--is-inside-work-tree") === "true"
+  // A `.git` above the root answers yes without a process; anything else is asked of git.
+  return gitDirsOf(root) !== null || gitOrNull(root, "rev-parse", "--is-inside-work-tree") === "true"
 }
 
 /** Whether `commit` names an object git has, and that object is a commit. */
@@ -327,6 +378,8 @@ export function projectFiles(root: string, program?: string): string[] {
 }
 
 export function currentBranch(root: string): string {
+  const read = headBranch(root)
+  if (read !== null) return read ?? "HEAD"
   return gitOrNull(root, "rev-parse", "--abbrev-ref", "HEAD") ?? "HEAD"
 }
 
@@ -391,7 +444,8 @@ export function trunk(root: string): string | null {
     if (name) refs.set(name, target)
   }
   const origin = refs.get("refs/remotes/origin/HEAD")?.replace(/^refs\/remotes\/origin\//, "")
-  if (origin && gitOrNull(root, "rev-parse", "--verify", "--quiet", `refs/heads/${origin}`) !== null) return origin
+  // The branch origin's HEAD names, when it is one of the two asked for above, is known to exist without another process.
+  if (origin && (refs.has(`refs/heads/${origin}`) || gitOrNull(root, "rev-parse", "--verify", "--quiet", `refs/heads/${origin}`) !== null)) return origin
   return refs.has("refs/heads/main") ? "main" : refs.has("refs/heads/master") ? "master" : null
 }
 

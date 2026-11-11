@@ -189,11 +189,15 @@ const git = (ctx: Context, ...args: string[]): string => gitOrNull(ctx.root, ...
 /** Who wrote each commit the map draws, by hash: where people stand (never sent). */
 type Authors = Map<string, string>
 
-/** First-parent commits of `range`, newest first, at most `n`, each recorded in `commits` and its author in `authors`. */
-function firstParent(ctx: Context, range: string, n: number, commits: Record<string, MetroCommit>, authors?: Authors): string[] {
-  return git(ctx, "log", "--first-parent", `-n${n}`, "--format=%H%x09%ct%x09%an%x09%s", range, "--").split("\n").filter(Boolean).map((l) => {
-    const [h = "", t = "0", an = "", ...s] = l.split("\t")
-    commits[h] = { t: Number(t), subject: s.join("\t") }
+/**
+ * First-parent commits of `range`, newest first, at most `n`, each recorded in `commits` and its author in `authors`; asked without blocking: the map asks one range for the trunk, one for each line and one for each branch,
+ * and asked one after another each costs a git process start (some 35 ms on Windows), asked together they overlap.
+ */
+async function firstParentAsync(ctx: Context, range: string, n: number, commits: Record<string, MetroCommit>, authors?: Authors): Promise<string[]> {
+  const r = await runGitAsync(ctx.root, ["log", "--first-parent", `-n${n}`, "--format=%H%x09%ct%x09%an%x09%s", range, "--"], GIT_MS)
+  return (r.ok ? r.out.trim() : "").split("\n").filter(Boolean).map((l) => {
+    const [h = "", t = "0", an = "", ...sub] = l.split("\t")
+    commits[h] = { t: Number(t), subject: sub.join("\t") }
     if (authors && an) authors.set(h, an)
     return h
   })
@@ -316,20 +320,105 @@ export function isGoal(g: GateRow, all: readonly GateRow[]): boolean {
 
 const goalState = (g: GateRow): string => (g.holds ? "holds" : `blocked by ${g.blocking.length}`)
 
+/** What the map needs of a branch that is no line: its base, where it rejoined, where it forked and its own commits. */
+interface BranchFacts {
+  name: string
+  tip: string
+  base: string
+  land: string | null
+  fork: string | null
+  list: string[]
+}
+
+/**
+ * The facts of every branch in `refs` (name and tip, tab-separated) that is no line, asked of git for all the branches
+ * at once. Whether a commit is on the trunk is asked once per commit: the branches cut from a line share their merge
+ * base with it.
+ */
+async function factsOf(
+  ctx: Context,
+  main: string | null,
+  lines: readonly LineRow[],
+  lineNames: ReadonlySet<string>,
+  refs: readonly string[],
+  window: ReadonlySet<string>,
+  commits: Record<string, MetroCommit>,
+  authors: Authors,
+): Promise<(BranchFacts | null)[]> {
+  const ask = async (...args: string[]): Promise<string | null> => {
+    const r = await runGitAsync(ctx.root, args, GIT_MS)
+    return r.ok ? r.out.trim() : null
+  }
+  const ancestor = async (a: string, b: string): Promise<boolean> => (await runGitAsync(ctx.root, ["merge-base", "--is-ancestor", a, b], GIT_MS)).ok
+  const known = new Map<string, Promise<boolean>>()
+  const onTrunk = (c: string): Promise<boolean> => {
+    if (!known.has(c)) known.set(c, main ? ancestor(c, main) : Promise.resolve(false))
+    return known.get(c)!
+  }
+  return await Promise.all(refs.map(async (r): Promise<BranchFacts | null> => {
+    const [name = "", tip = ""] = r.split("\t")
+    if (!main || name === main || lineNames.has(name) || name.startsWith("line/")) return null
+    // Its base: the open line whose own commits it carries, else the trunk.
+    let base = main
+    for (const l of lines) {
+      const mb = await ask("merge-base", name, l.branch)
+      if (mb && !(await onTrunk(mb))) {
+        base = l.branch
+        break
+      }
+    }
+    // Rejoined: the oldest commit of the base's first-parent history that carries it; none for a branch with no work yet.
+    const land = (await ancestor(tip, base))
+      ? (await ask("rev-list", "--first-parent", "--ancestry-path", "--reverse", `${tip}..${base}`) ?? "").split("\n")[0] || null
+      : null
+    if (land && !window.has(land)) return null
+    const fork = (land ? await ask("merge-base", `${land}^1`, tip) : await ask("merge-base", base, tip)) || null
+    return { name, tip, base, land, fork, list: fork ? await firstParentAsync(ctx, `${fork}..${tip}`, WINDOW, commits, authors) : [] }
+  }))
+}
+
 /** How the metro reads what a command prints with --json: the bridge reads it through the view whose data it is, shared with the screens. */
 export type JsonOf = <T>(ctx: Context, words: string[]) => Promise<T | null>
 
 export async function metroData(ctx: Context, read: JsonOf = commandJson): Promise<Metro> {
   const commits: Record<string, MetroCommit> = {}
+  const authors0: Authors = new Map()
   const main = trunk(ctx.root)
   const head = gitOrNull(ctx.root, "symbolic-ref", "--quiet", "--short", "HEAD")
+  // The questions that depend on nothing but the repository are started now and read when the map needs them: they
+  // run while the records below are read, instead of one process start each after them (bugs/windows-failed-tests-screen-s-cold-load).
+  const asked = (...args: string[]): Promise<string> => runGitAsync(ctx.root, args, GIT_MS).then((r) => (r.ok ? r.out.trim() : ""))
+  const early = {
+    refs: asked("for-each-ref", "--format=%(refname:short)%09%(objectname)", "refs/heads"),
+    remotes: asked("remote"),
+    local: asked("rev-list", "--branches", "--not", "--remotes"),
+    me: asked("config", "user.name"),
+    tip: main ? asked("rev-parse", main) : Promise.resolve(""),
+    trunkLog: main ? firstParentAsync(ctx, main, HISTORY, commits, authors0) : Promise.resolve([] as string[]),
+  }
+  const checkouts = checkoutsOf(ctx)
   const lines = (await read<{ lines: LineRow[] }>(ctx, ["line", "list"]))?.lines ?? []
+  const lineNames = new Set(lines.map((l) => l.branch))
+  // Each line's own commits and its fork, and each branch's base, rejoin and fork, asked of git for everything at once
+  // and started before the records below are read (those read in turn, and an answer that is ready waits for them):
+  // on Windows a git process costs some 35 ms to start, and asked one after another the branches of a busy repository
+  // took seconds (bugs/windows-failed-tests-screen-s-cold-load).
+  const ofLines = Promise.all(lines.map(async (l) => ({
+    commits: main ? await firstParentAsync(ctx, `${main}..${l.branch}`, HISTORY, commits, authors0) : [],
+    fork: main ? (await runGitAsync(ctx.root, ["merge-base", main, l.branch], GIT_MS).then((r) => (r.ok ? r.out.trim() : ""))) || null : null,
+  })))
+  const branches = (async () => {
+    const [trunkLog, own] = await Promise.all([early.trunkLog, ofLines])
+    const window = new Set(trunkLog.slice(0, WINDOW))
+    for (const o of own) for (const c of o.commits) window.add(c)
+    return { window, facts: await factsOf(ctx, main, lines, lineNames, (await early.refs).split("\n").filter(Boolean), window, commits, authors0) }
+  })()
   const claimsJson = await read<{ claims: ClaimRow[]; silentAfter?: number }>(ctx, ["claims"])
   // A claim every item of which is done still says whose the branch was: it is released now, in the records.
   const claims = (claimsJson?.claims ?? []).filter((c) => !c.stale || /done or closed/.test(c.stale))
   const silentAfter = claimsJson?.silentAfter ?? 15
   const runs = (await read<RunRow[]>(ctx, ["run", "list"])) ?? []
-  const authors: Authors = new Map()
+  const authors = authors0
   const gates = (await read<GateRow[]>(ctx, ["gates"])) ?? []
   const routes: Route[] = []
   if (main) {
@@ -337,8 +426,8 @@ export async function metroData(ctx: Context, read: JsonOf = commandJson): Promi
       name: main,
       kind: "trunk",
       base: null,
-      tip: git(ctx, "rev-parse", main),
-      commits: firstParent(ctx, main, HISTORY, commits, authors),
+      tip: await early.tip,
+      commits: await early.trunkLog,
       fork: null,
       land: null,
     })
@@ -356,63 +445,17 @@ export async function metroData(ctx: Context, read: JsonOf = commandJson): Promi
       older = all - HISTORY - 1
     }
   }
-  const window = new Set(trunkCommits.slice(0, WINDOW))
-  for (const l of lines) {
-    routes.push({
-      name: l.branch,
-      kind: "line",
-      gate: l.gate,
-      base: main,
-      tip: l.tip,
-      commits: main ? firstParent(ctx, `${main}..${l.branch}`, HISTORY, commits, authors) : [],
-      fork: main ? git(ctx, "merge-base", main, l.branch) || null : null,
-      land: null,
-    })
-    for (const c of routes.at(-1)!.commits) window.add(c)
-  }
-  const lineNames = new Set(lines.map((l) => l.branch))
+  const own = await ofLines
+  lines.forEach((l, i) =>
+    routes.push({ name: l.branch, kind: "line", gate: l.gate, base: main, tip: l.tip, commits: own[i]!.commits, fork: own[i]!.fork, land: null })
+  )
+  const { window, facts } = await branches
   const claimed = new Map(claims.map((c) => [c.branch, c]))
   const standing = new Set(worktrees(ctx.root).filter((w) => !w.self).flatMap((w) => (w.branch ? [w.branch] : [])))
   const workers: Worker[] = []
-  const refs = git(ctx, "for-each-ref", "--format=%(refname:short)%09%(objectname)", "refs/heads").split("\n").filter(Boolean)
-  // Each branch's base, rejoin and fork, asked of git for every branch at once: on Windows a git process costs some
-  // 35 ms to start, and asked one after another the branches of a busy repository took seconds
-  // (bugs/windows-failed-tests-screen-s-cold-load). Whether a commit is on the trunk is asked once per commit: the
-  // branches cut from a line share their merge base with it.
-  const ask = async (...args: string[]): Promise<string | null> => {
-    const r = await runGitAsync(ctx.root, args, GIT_MS)
-    return r.ok ? r.out.trim() : null
-  }
-  const ancestor = async (a: string, b: string): Promise<boolean> => (await runGitAsync(ctx.root, ["merge-base", "--is-ancestor", a, b], GIT_MS)).ok
-  const known = new Map<string, Promise<boolean>>()
-  const onTrunk = (c: string): Promise<boolean> => {
-    if (!known.has(c)) known.set(c, main ? ancestor(c, main) : Promise.resolve(false))
-    return known.get(c)!
-  }
-  const facts = await Promise.all(refs.map(async (r) => {
-    const [name = "", tip = ""] = r.split("\t")
-    if (!main || name === main || lineNames.has(name) || name.startsWith("line/")) return null
-    // Its base: the open line whose own commits it carries, else the trunk.
-    let base = main
-    for (const l of lines) {
-      const mb = await ask("merge-base", name, l.branch)
-      if (mb && !(await onTrunk(mb))) {
-        base = l.branch
-        break
-      }
-    }
-    // Rejoined: the oldest commit of the base's first-parent history that carries it; none for a branch with no work yet.
-    const land = (await ancestor(tip, base))
-      ? (await ask("rev-list", "--first-parent", "--ancestry-path", "--reverse", `${tip}..${base}`) ?? "").split("\n")[0] || null
-      : null
-    const fork = land && !window.has(land) ? null : (land ? await ask("merge-base", `${land}^1`, tip) : await ask("merge-base", base, tip)) || null
-    return { name, tip, base, land, fork }
-  }))
   for (const f of facts) {
     if (!f) continue
-    const { name, tip, base, land, fork } = f
-    if (land && !window.has(land)) continue
-    const list = fork ? firstParent(ctx, `${fork}..${tip}`, WINDOW, commits, authors) : []
+    const { name, tip, base, land, fork, list } = f
     const kind: RouteKind = name.startsWith("sync/") ? "sync" : claimed.has(name) || standing.has(name) || name.startsWith("worker/") ? "worker" : "branch"
     // A branch that left and never rejoined within no window: shown only when it is a worker's.
     if (!land && kind === "branch" && !(fork && window.has(fork))) continue
@@ -462,9 +505,10 @@ export async function metroData(ctx: Context, read: JsonOf = commandJson): Promi
       ...(g.version ? { version: g.version } : {}),
     }))
   }
-  const remote = remoteOf(ctx)
+  const all = (await early.remotes).split("\n").filter(Boolean)
+  const remote = all.includes("origin") ? "origin" : all[0] ?? null
   if (remote) {
-    const here = localCommits(ctx)
+    const here = new Set((await early.local).split("\n").filter(Boolean))
     for (const r of routes) {
       const n = r.commits.filter((h) => here.has(h)).length
       if (n) r.local = n
@@ -478,22 +522,11 @@ export async function metroData(ctx: Context, read: JsonOf = commandJson): Promi
     workers,
     goals,
     ...(older ? { older } : {}),
-    people: peopleOf(ctx, routes, authors, head, window),
-    checkouts: await checkoutsOf(ctx),
+    people: peopleOf(ctx, routes, authors, head, window, (await early.me) || null),
+    checkouts: await checkouts,
     names: stopNames(ctx),
     ...(remote ? { remote } : {}),
   }
-}
-
-/** The remote branches are pushed to: origin, or the first there is; null for none. */
-function remoteOf(ctx: Context): string | null {
-  const all = (gitOrNull(ctx.root, "remote") ?? "").split("\n").filter(Boolean)
-  return all.includes("origin") ? "origin" : all[0] ?? null
-}
-
-/** Every commit of a local branch on no remote: reachable from the branches and not from a remote-tracking ref. */
-function localCommits(ctx: Context): Set<string> {
-  return new Set((gitOrNull(ctx.root, "rev-list", "--branches", "--not", "--remotes") ?? "").split("\n").filter(Boolean))
 }
 
 /** When each discussion still open on one of `ids` was filed: a question the work on it waits for. */
@@ -523,10 +556,9 @@ function commitTimes(ctx: Context, hashes: readonly string[]): Map<string, numbe
  * The people on the map: whoever is checked out here, on the branch here; then each author of the commits the map
  * draws (the trunk's window, the lines, the branches), on the route of their newest one. A name is one person.
  */
-function peopleOf(ctx: Context, routes: readonly Route[], authors: Authors, head: string | null, window: ReadonlySet<string>): Person[] {
+function peopleOf(ctx: Context, routes: readonly Route[], authors: Authors, head: string | null, window: ReadonlySet<string>, me: string | null): Person[] {
   const out: Person[] = []
   const seen = new Set<string>()
-  const me = gitOrNull(ctx.root, "config", "user.name")
   const here = head ? routes.find((r) => r.name === head) : undefined
   if (me && here) {
     out.push({ name: me, route: here.name, via: "here", ...(here.commits[0] ? { commit: here.commits[0] } : {}) })
