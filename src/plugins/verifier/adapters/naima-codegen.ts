@@ -49,16 +49,42 @@ const short = (commit: string): string => commit.slice(0, 12)
 const MISSING =
   `tool missing: ${CODEGEN_PROGRAM} is not on PATH — naima tools does not install it: git clone ${CODEGEN_REPOSITORY}, check out the pinned commit ${CODEGEN_PIN.commit} (git -C naima-codegen checkout ${CODEGEN_PIN.commit}) and put its ${CODEGEN_PROGRAM} script on PATH (it needs Python 3.11 or later and the mCRL2 toolset the model pins)`
 
-/** The program `name` as PATH finds it, its links resolved; null when it is not there or cannot be read. */
-export function programOnPath(name: string): string | null {
-  for (const dir of (process.env["PATH"] ?? "").split(delimiter)) {
-    if (!dir) continue
-    try {
-      const file = join(dir, name)
-      if (statSync(file).isFile()) return realpathSync(file)
-    } catch { /* not here, or not readable: the next directory */ }
+/** The executables Windows starts without a shell: what PATH finds besides a script by its bare name. */
+const WINDOWS_EXECUTABLES = [".exe", ".com"]
+
+/**
+ * The program `name` as PATH finds it, its links resolved; null when it is not there or cannot be read. On Windows a
+ * name.exe (a console-script entry point) is found as well as the bare name, the checkout's extensionless Python script
+ * (GitHub issue #7): the executable first, or the script first with `script`, which the version reads its commit from.
+ */
+export function programOnPath(name: string, opts: { script?: boolean; os?: string } = {}): string | null {
+  const windows = (opts.os ?? process.platform) === "win32"
+  const exes = windows && !WINDOWS_EXECUTABLES.some((e) => name.toLowerCase().endsWith(e)) ? WINDOWS_EXECUTABLES.map((e) => name + e) : []
+  const names = opts.script ? [name, ...exes] : [...exes, name]
+  for (const n of names) {
+    for (const dir of (process.env["PATH"] ?? "").split(delimiter)) {
+      if (!dir) continue
+      try {
+        const file = join(dir, n)
+        if (statSync(file).isFile()) return realpathSync(file)
+      } catch { /* not here, or not readable: the next directory */ }
+    }
   }
   return null
+}
+
+/** Python as Windows has it on PATH: what starts naima-codegen's script there, which Windows cannot run by itself. */
+export const WINDOWS_PYTHON = "python"
+
+/**
+ * How `program` is started: as itself, or on Windows, when PATH finds only the extensionless script of a naima-codegen
+ * checkout, through Python with the script's path first (GitHub issue #7).
+ */
+export function commandOf(program: string, args: string[], os: string = process.platform): [string, string[]] {
+  if (os !== "win32" || isAbsolute(program)) return [program, args]
+  const found = programOnPath(program, { os })
+  if (!found) return [program, args]
+  return WINDOWS_EXECUTABLES.some((e) => found.toLowerCase().endsWith(e)) ? [program, args] : [WINDOWS_PYTHON, [found, ...args]]
 }
 
 /** What one run of the program gave. */
@@ -86,7 +112,8 @@ export const realCodegenRun: CodegenRunner = (program, args, cwd, timeoutMs, onL
     }
     let child: ReturnType<typeof spawn>
     try {
-      child = spawn(program, args, { cwd, env: { ...process.env, NO_COLOR: "1" }, stdio: ["ignore", "pipe", "pipe"], windowsHide: true })
+      const [command, argv] = commandOf(program, args)
+      child = spawn(command, argv, { cwd, env: { ...process.env, NO_COLOR: "1" }, stdio: ["ignore", "pipe", "pipe"], windowsHide: true })
     } catch (e) {
       finish({ exit: -1, stdout: "", stderr: "", error: message(e) })
       return
@@ -266,7 +293,7 @@ export function codegenVerifier(config: { run?: CodegenRunner; program?: string 
       // The pinned naima-codegen has no --version: it answers with its usage. Its version is then the commit of the
       // git checkout the program runs from, compared with the pin.
       const pinned = short(CODEGEN_PIN.commit)
-      const found = programOnPath(program)
+      const found = programOnPath(program, { script: true })
       if (found) {
         const at = dirname(found)
         const tracked = await run("git", ["-C", at, "ls-files", "--error-unmatch", basename(found)], ctx.root)

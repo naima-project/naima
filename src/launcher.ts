@@ -209,17 +209,38 @@ export const BROWSER_OPENER: Record<string, string> = { darwin: "open", windows:
 /** The program `naima verify` may start besides the loaded contributions' `runs`: the verifier plugin's naima-codegen adapter's, found on PATH. Kept equal to that adapter's `CODEGEN_PROGRAM` by a test. */
 export const VERIFY_PROGRAM = "naima-codegen"
 
-/** naima-codegen as PATH finds it, and the file it links to, which `naima verify` may read: none when it is not on PATH. */
-function codegenFiles(): string[] {
-  for (const dir of (process.env["PATH"] ?? "").split(delimiter)) {
-    if (!dir) continue
-    const file = join(dir, VERIFY_PROGRAM)
-    try {
-      // A path with a comma cannot be granted (Deno splits on commas): the version then says the commit is unknown.
-      if (statSync(file).isFile()) return [...new Set([file, realpathSync(file)])].filter((f) => !f.includes(","))
-    } catch { /* not here: the next directory */ }
+/**
+ * naima-codegen as PATH finds it, and the file it links to, which `naima verify` may read: none when it is not on PATH.
+ * On Windows naima-codegen.exe and naima-codegen.com are found too, and the bare script after them (GitHub issue #7).
+ */
+function codegenFiles(os: string = Deno.build.os): string[] {
+  const names = os === "windows" ? [`${VERIFY_PROGRAM}.exe`, `${VERIFY_PROGRAM}.com`, VERIFY_PROGRAM] : [VERIFY_PROGRAM]
+  const out: string[] = []
+  for (const name of names) {
+    for (const dir of (process.env["PATH"] ?? "").split(delimiter)) {
+      if (!dir) continue
+      const file = join(dir, name)
+      try {
+        // A path with a comma cannot be granted (Deno splits on commas): the version then says the commit is unknown.
+        if (statSync(file).isFile()) {
+          out.push(...[file, realpathSync(file)].filter((f) => !f.includes(",")))
+          break
+        }
+      } catch { /* not here: the next directory */ }
+    }
   }
-  return []
+  return [...new Set(out)]
+}
+
+/**
+ * The programs `naima verify` may start for naima-codegen: the program by name; on Windows, when PATH holds only the
+ * checkout's extensionless script, which Windows cannot run, Python, which the adapter starts it through (GitHub issue #7).
+ */
+function codegenRuns(os: string = Deno.build.os): string[] {
+  if (os !== "windows") return [VERIFY_PROGRAM]
+  const files = codegenFiles(os)
+  const exe = files.some((f) => /\.(exe|com)$/i.test(f))
+  return exe ? [VERIFY_PROGRAM] : files.length ? ["python"] : [VERIFY_PROGRAM]
 }
 
 /** Whether the project at `root` has an origin on GitHub: what lets the session start read its outside issues with gh. */
@@ -278,7 +299,7 @@ export function uiGrant(
       // The program itself, and the file it links to: the adapter reads where it is to find the commit it runs from.
       read: codegenFiles(),
       runs: [
-        VERIFY_PROGRAM,
+        ...codegenRuns(),
         ...(rest.some((a) => a === "--host" || a.startsWith("--host=")) ? ["ssh"] : []),
       ],
     }
