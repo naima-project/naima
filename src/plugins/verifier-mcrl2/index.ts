@@ -350,6 +350,8 @@ export const VERIFIER_OPTIONS: Record<string, string> = {
     'how mcrl22lps linearises, on every route: "rewrite" (the default, mcrl22lps as it is) or "no-rewrite" (mcrl22lps --no-rewrite, faster on some models, a stack overflow or a stall on others)',
   noRewrite: 'the earlier form of linearise, still read: true is "no-rewrite", false is "rewrite"',
   cached: "lps2lts caches its enumerations (--cached), on the LTS route; default true",
+  rewriter:
+    'the rewriter mCRL2 evaluates data with (--rewriter) in every tool that takes one: "jitty" (mCRL2\'s default), "jittyc" (compiled, faster on large state spaces), "jittyp" and so on; it changes how fast the tools run, never the verdict',
   summandConditionLimit:
     "the size above which a summand's condition is reported by the lint, for this property, in place of the plugin option of the same name; 0 turns the lint off",
 }
@@ -358,6 +360,39 @@ export const VERIFIER_OPTIONS: Record<string, string> = {
 export interface Pipeline {
   linearise: Linearise
   cached: boolean
+  /** The rewriter named for the tools that take one (`REWRITER_TOOLS`); none: each tool's own default. */
+  rewriter?: string | undefined
+}
+
+/** The tools that take `--rewriter`, the others (`lps2pbes`, `lts2pbes`, `ltsconvert`, `ltsinfo`, `ltscompare`, `lpspp`) having no rewriter to choose. */
+export const REWRITER_TOOLS: ReadonlySet<string> = new Set(["mcrl22lps", "lps2lts", "pbessolve"])
+
+/** The environment variable that names the rewriter on one machine, outside every tracked file: a host's own, set in the command that runs its Naima. */
+export const REWRITER_ENV = "NAIMA_MCRL2_REWRITER"
+
+const REWRITER_NAME = /^[a-z][a-z0-9-]*$/
+
+/** A rewriter name as given, or why it is not one: mCRL2 knows the names, so only the shape is checked, and a name it does not know is its error. */
+export function rewriterName(value: unknown, where: string): string | { wrong: string } {
+  return typeof value === "string" && REWRITER_NAME.test(value)
+    ? value
+    : { wrong: `${where} must be the name of an mCRL2 rewriter such as "jitty" or "jittyc", not ${JSON.stringify(value)}` }
+}
+
+/**
+ * The rewriter of a run: the property's `verifierOptions.rewriter`, else this machine's (`NAIMA_MCRL2_REWRITER`), else
+ * the project's plugin option `rewriter`, else none. The machine's comes before the project's: whether a compiled
+ * rewriter works is a fact about the machine.
+ */
+export function rewriterOf(
+  options: Record<string, unknown>,
+  project?: string,
+  env: Record<string, string | undefined> = process.env,
+): string | undefined | { wrong: string } {
+  if (options["rewriter"] !== undefined) return rewriterName(options["rewriter"], "verifierOptions.rewriter")
+  const machine = env[REWRITER_ENV]
+  if (machine !== undefined && machine !== "") return rewriterName(machine, REWRITER_ENV)
+  return project
 }
 
 /** The defaults of a run with no options, also what `naima equivalent` uses. */
@@ -391,6 +426,10 @@ export function pipelineOf(options: Record<string, unknown>): Pipeline | { wrong
   }
   const cached = flag("cached", DEFAULT_PIPELINE.cached)
   if (typeof cached === "object") return cached
+  if (options["rewriter"] !== undefined) {
+    const rewriter = rewriterName(options["rewriter"], "verifierOptions.rewriter")
+    if (typeof rewriter === "object") return rewriter
+  }
   return { linearise, cached }
 }
 
@@ -403,7 +442,7 @@ export function pipelineOf(options: Record<string, unknown>): Pipeline | { wrong
 export function identityOptions(options: Record<string, unknown>): Record<string, unknown> {
   const pipeline = pipelineOf(options)
   if ("wrong" in pipeline) return options
-  const { linearise: _l, noRewrite: _n, ...rest } = options
+  const { linearise: _l, noRewrite: _n, rewriter: _r, ...rest } = options
   return pipeline.linearise === DEFAULT_PIPELINE.linearise ? rest : { ...rest, linearise: pipeline.linearise }
 }
 
@@ -537,7 +576,7 @@ export function toolPath(tool: string, bin?: string): string {
 type Outcome = VerifyResult & { details: Record<string, unknown> }
 
 /** The adapter, its tools from `bin` (a directory), the installed mCRL2 or PATH, started by `run`. */
-export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLimit?: number } = {}): Verifier {
+export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLimit?: number; rewriter?: string } = {}): Verifier {
   const run = config.run ?? realRun
   const conditionLimit = config.conditionLimit ?? CONDITION_LIMIT
   const path = (tool: Tool): string => toolPath(tool, config.bin)
@@ -561,14 +600,17 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
    * Each step is a stage of `progress`; a counting tool is started with `--verbose`, its counting lines read as the
    * stage's count and left out of the log (specs/progress-long-work-says-how-far, §6).
    */
-  function steps(seconds: number | undefined, cwd: string, progress: Progress, extra: readonly string[] = [], model = "the model") {
+  function steps(seconds: number | undefined, cwd: string, progress: Progress, extra: readonly string[] = [], model = "the model", rewriter?: string) {
     const log: string[] = []
     const used = new Set<Tool>()
     /** One step: its output kept in the log; a failure is the result to return. */
     const step = async (tool: Tool, given: string[], at = cwd): Promise<{ out: ToolRun; seconds: number; count?: number } | { stop: VerifyResult }> => {
       const counting = COUNTING[tool]
       // The flags --tool-args gives (TOOL_ARGS) go to every tool; a counting or verbose tool has --verbose already.
-      const args = counting || VERBOSE.has(tool) ? ["--verbose", ...extra.filter((a) => a !== "--verbose"), ...given] : [...extra, ...given]
+      const rewrite = rewriter !== undefined && REWRITER_TOOLS.has(tool) ? [`--rewriter=${rewriter}`] : []
+      const args = counting || VERBOSE.has(tool)
+        ? ["--verbose", ...extra.filter((a) => a !== "--verbose"), ...rewrite, ...given]
+        : [...extra, ...rewrite, ...given]
       progress.stage(tool, undefined, counting?.unit)
       // Every line a tool prints on standard error is the stage's note as it comes; a counting line is its count.
       let pending = ""
@@ -664,8 +706,13 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
     name?: string,
     limit: number = conditionLimit,
   ): Promise<Outcome> {
-    const s = steps(seconds, dir, progress, extra, name)
-    const details: Record<string, unknown> = { route: "lps", linearise: pipeline.linearise, options: { mcrl22lps: lineariseArgs(pipeline) } }
+    const s = steps(seconds, dir, progress, extra, name, pipeline.rewriter)
+    const details: Record<string, unknown> = {
+      route: "lps",
+      linearise: pipeline.linearise,
+      rewriter: pipeline.rewriter ?? null,
+      options: { mcrl22lps: lineariseArgs(pipeline) },
+    }
     const done = async (r: VerifyResult): Promise<Outcome> => ({ ...r, details: { ...details, tools: await s.tools() } })
     const lps = join(dir, "model.lps")
     const pbes = join(dir, "model.pbes")
@@ -801,8 +848,8 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
     extra: readonly string[] = [],
     name?: string,
   ): Promise<Outcome> {
-    const s = steps(seconds, dir, progress, extra, name)
-    const details: Record<string, unknown> = { route: "lts", linearise: explore.pipeline.linearise }
+    const s = steps(seconds, dir, progress, extra, name, explore.pipeline.rewriter)
+    const details: Record<string, unknown> = { route: "lts", linearise: explore.pipeline.linearise, rewriter: explore.pipeline.rewriter ?? null }
     const done = async (r: VerifyResult): Promise<Outcome> => ({ ...r, details: { ...details, tools: await s.tools() } })
 
     let chosen = reductionFor(readFileSync(formula, "utf8"))
@@ -918,8 +965,11 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
           'verifierOptions.maxStates caps the states lps2lts explores, which the "lts" and "cross-check" routes do and the standard route does not: bound it with timeoutSeconds',
       }
     }
-    const pipeline = pipelineOf(options)
-    if ("wrong" in pipeline) return { verdict: "error", output: pipeline.wrong }
+    const shaped = pipelineOf(options)
+    if ("wrong" in shaped) return { verdict: "error", output: shaped.wrong }
+    const rewriter = rewriterOf(options, config.rewriter)
+    if (typeof rewriter === "object") return { verdict: "error", output: rewriter.wrong }
+    const pipeline: Pipeline = { ...shaped, rewriter }
     const ownLimit = conditionLimitOf(options)
     if (typeof ownLimit === "object") return { verdict: "error", output: ownLimit.wrong }
     const limit = ownLimit ?? conditionLimit
@@ -972,6 +1022,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
     if (!Object.hasOwn(EQUIVALENCES, equivalence)) {
       return { verdict: "error", output: `the mcrl2 verifier compares modulo ${Object.keys(EQUIVALENCES).join(", ")}, not ${JSON.stringify(equivalence)}` }
     }
+    const defaultRewriter = rewriterOf({}, config.rewriter)
     const dir = mkdtempSync(join(workBase(ctx.program), "compare-"))
     let phase = "before"
     const s = steps(
@@ -980,6 +1031,7 @@ export function mcrl2Verifier(config: { bin?: string; run?: Runner; conditionLim
       { ...progress, stage: (n, t, u, e) => progress.stage(`${phase}: ${n}`, t, u, e) },
       [],
       relative(ctx.root, after).split(sep).join("/"),
+      typeof defaultRewriter === "string" ? defaultRewriter : undefined,
     )
     const failed = async (r: VerifyResult, details: Record<string, unknown>): Promise<CompareResult> => ({
       verdict: "error",
@@ -1104,6 +1156,8 @@ export function mcrl2Plugin(options: Record<string, unknown> = {}, run: Runner =
   if (bin !== undefined && (typeof bin !== "string" || !isAbsolute(bin))) {
     throw new Error("verifier-mcrl2: bin must be an absolute path to the directory holding the mCRL2 tools")
   }
+  const rewriter = options["rewriter"] === undefined ? undefined : rewriterName(options["rewriter"], "verifier-mcrl2: option rewriter")
+  if (typeof rewriter === "object") throw new Error(rewriter.wrong)
   const limit = options["summandConditionLimit"] ?? CONDITION_LIMIT
   if (typeof limit !== "number" || !Number.isInteger(limit) || limit < 0) {
     throw new Error("verifier-mcrl2: summandConditionLimit must be a whole number of operator and variable occurrences, 0 to turn the lint off")
@@ -1117,7 +1171,7 @@ export function mcrl2Plugin(options: Record<string, unknown> = {}, run: Runner =
       "A property chooses its route in `verifierOptions.route`. `lps`, the default, is the standard route: `mcrl22lps`, `lps2pbes --counter-example`, and `pbessolve` with an evidence file: `true` holds; `false` is violated, and the evidence, printed by `lps2lts` as an `.aut` labelled transition system, is the counterexample; any other answer, or `verifierOptions.timeoutSeconds` reached by a step, is unknown. " +
       "`lts`, the LTS route, is for a model whose state space is small but whose data makes the standard route slow. `mcrl22lps` and `lps2lts` (with `--threads` from `verifierOptions.threads`) make the LTS once per model version, kept in the run work folder under a key over the model's contents, the toolset's version and the recipe, and shared by every property of that model. `verifierOptions.maxStates` caps the states `lps2lts` may explore (`--max`): a state space larger than the cap makes the run unknown, its output beginning `state cap reached:`, and the LTS cut short is not kept; on the standard route the option is an error, since that route explores with `pbessolve`. Each formula is then reduced only by an equivalence that preserves and reflects it, the coarsest of three: `branching-bisim` for a formula of the fragment the branching equivalences preserve — every visible step right after a star over an action formula that includes tau, no single step that includes tau, fixpoints only as the four inevitability patterns — when it has no fixpoint and no deadlock through a star; `dpbranching-bisim` when it has one of those, which see divergence; `bisim`, strong bisimilarity, for every other formula. With a branching equivalence, `ltsconvert` first hides every action the formula does not mention, unless a label joins such an action to another, in which case the formula takes `bisim` and nothing is hidden. The output says which equivalence was used and why; the reduced LTS is kept beside the LTS, one per equivalence and set of hidden actions, for every formula that needs the same. On the reduced LTS, `lts2pbes --counter-example` and one `pbessolve` with an evidence file decide; on false, the evidence, printed by `ltsconvert` as an `.aut` labelled transition system, is the counterexample, over the reduced LTS, where the hidden actions appear as tau. " +
       "`cross-check` runs both routes and gives a verdict only when they agree; a disagreement is an error whose output begins `the routes disagree:`. Each run records in its `details` the route, the version of every tool it started, and for the LTS route the LTS's key, reuse and size, the mentioned and hidden actions, the equivalence it reduced by and why, the reduced size and whether it was reused, and on false that the counterexample comes from the reduced LTS. While a step runs, every line it prints is the run's progress: `lps2lts` its states, level and transitions, `pbessolve` its BES equations, `ltsconvert` and `lts2pbes`, started with `--verbose`, their stages; a counting step's total is estimated from the count it ended on in the previous run of the same property, model and options. " +
-      '`verifierOptions` is an allow-list: `route`, `timeoutSeconds`, `threads`, `maxStates`, `linearise`, `noRewrite`, `cached` and `summandConditionLimit`, every one leaving the verdict as it is; any other key is an error that names the ones it takes. `linearise`, `"rewrite"` by default, is how `mcrl22lps` linearises on every route, so the verdict never depends on the route: `"no-rewrite"` adds `--no-rewrite`, faster on some models and a stack overflow or a stall of `lps2lts` on others, so it is chosen per model. It makes another LPS, so it is part of the LTS\'s cache key, and it is part of a run\'s identity (`identityOptions`): a run made under one choice is never reused for the other. `noRewrite`, the earlier boolean form, is still read: true is `"no-rewrite"`, false `"rewrite"`; given with a `linearise` that says otherwise, it is an error. `cached`, true by default, explores with `lps2lts --cached`; `threads` stays on `lps2lts` alone. `lps2lts` rewrites with `jitty`, mCRL2\'s default rewriter. `--threads` and `--cached` change how fast the LTS is made, never the LTS, so they are no part of the key. On POSIX, `lps2lts` and `pbessolve` are started through `/bin/sh` with the stack limit raised to unlimited, or to the hard limit where unlimited is refused; on Windows a program\'s stack is fixed when it is linked, so they start as they are. Every run records `details.linearise` and the options it used and its rate: on the LTS route `details.lts.exploration` (the `mcrl22lps` and `lps2lts` arguments) and `details.rate`, the states `lps2lts` explored per second (`reused: true` when the LTS came from the cache); on the standard route `details.rate`, the BES equations `pbessolve` generated per second. ' +
+      '`verifierOptions` is an allow-list: `route`, `timeoutSeconds`, `threads`, `maxStates`, `linearise`, `noRewrite`, `cached`, `rewriter` and `summandConditionLimit`, every one leaving the verdict as it is; any other key is an error that names the ones it takes. `linearise`, `"rewrite"` by default, is how `mcrl22lps` linearises on every route, so the verdict never depends on the route: `"no-rewrite"` adds `--no-rewrite`, faster on some models and a stack overflow or a stall of `lps2lts` on others, so it is chosen per model. It makes another LPS, so it is part of the LTS\'s cache key, and it is part of a run\'s identity (`identityOptions`): a run made under one choice is never reused for the other. `noRewrite`, the earlier boolean form, is still read: true is `"no-rewrite"`, false `"rewrite"`; given with a `linearise` that says otherwise, it is an error. `cached`, true by default, explores with `lps2lts --cached`; `threads` stays on `lps2lts` alone. `rewriter`, `"jitty"` (mCRL2\'s default) when not given, is the `--rewriter` of `mcrl22lps`, `lps2lts` and `pbessolve`, the tools of mCRL2 that take one: `"jittyc"`, the compiled rewriter, explores a large state space many times faster. It is chosen for a property in `verifierOptions.rewriter`, for a machine in the environment variable `NAIMA_MCRL2_REWRITER` (a host sets it in the command that runs its Naima), and for the whole project in the plugin option `rewriter`, in that order of precedence, and a run records it in `details.rewriter`. `--threads` and `--cached` change how fast the LTS is made, never the LTS, so they are no part of the key. On POSIX, `lps2lts` and `pbessolve` are started through `/bin/sh` with the stack limit raised to unlimited, or to the hard limit where unlimited is refused; on Windows a program\'s stack is fixed when it is linked, so they start as they are. Every run records `details.linearise` and the options it used and its rate: on the LTS route `details.lts.exploration` (the `mcrl22lps` and `lps2lts` arguments) and `details.rate`, the states `lps2lts` explored per second (`reused: true` when the LTS came from the cache); on the standard route `details.rate`, the BES equations `pbessolve` generated per second. ' +
       "After linearising, `lpspp --format=internal` prints the LPS and each summand's condition is measured in operator and variable occurrences; the summands over the plugin option `summandConditionLimit` (10000 by default, 0 turns it off), or over the property's own `verifierOptions.summandConditionLimit` when it gives one, are named in the run's output, in a line beginning `lint:`, and in `details.lint`, and the check `mcrl2-summand-conditions` notes each model whose last run found some. The print is read as a stream and a condition is counted only up to the limit: one past it is reported as more than the limit (`atLeast` in `details.lint`). The lint never decides a run: when it cannot run, the output says `lint skipped:` with the reason and the verdict stands. " +
       "The tools are taken from `bin` when it is given and exists on this machine, otherwise from the mCRL2 202607.0 that `naima tools install mcrl2` installed on this machine, otherwise from PATH; a `bin` that does not exist on this machine, as when a shared `naima.json` names another machine's path, is said once and passed over. The plugin declares that tool, so `naima tools` reports it. A tool that is not there is an error run whose output begins `tool missing:`; a tool that fails is an error with its output; a tool killed by a signal is an error whose output ends `<tool> crashed (signal <n>, <name>) on <model>`, the model by its path in the project. The version recorded is the first line of `mcrl22lps --version`. " +
       "For `naima equivalent`, it compares two versions of a model modulo `bisim` (strong bisimilarity, the default, which preserves every formula) or `dpbranching-bisim` (divergence-preserving branching bisimilarity, which preserves the formulas the LTS route accepts): `mcrl22lps`, `lps2lts` and `ltsinfo` for each version, the new one through the LTS cache, then `ltscompare --counter-example`; on false, the distinguishing formula it writes is what tells them apart.",
@@ -1129,13 +1183,24 @@ export function mcrl2Plugin(options: Record<string, unknown> = {}, run: Runner =
         default: "installed, then PATH",
       },
       {
+        name: "rewriter",
+        says:
+          `the rewriter every mCRL2 tool that takes one runs with, for the whole project (--rewriter: jitty, jittyc, jittyp ...); a property's verifierOptions.rewriter comes first, then the machine's ${REWRITER_ENV}; not given, mCRL2's own default`,
+        default: "mCRL2's default (jitty)",
+      },
+      {
         name: "summandConditionLimit",
         says:
           "the size above which a summand's condition is reported, in operator and variable occurrences of the linearised model as `lpspp --format=internal` prints it; 0 turns the lint off",
         default: String(CONDITION_LIMIT),
       },
     ],
-    contributes: { verifiers: [mcrl2Verifier({ ...(typeof bin === "string" ? { bin } : {}), run, conditionLimit: limit })], tools: [MCRL2] },
+    contributes: {
+      verifiers: [
+        mcrl2Verifier({ ...(typeof bin === "string" ? { bin } : {}), ...(typeof rewriter === "string" ? { rewriter } : {}), run, conditionLimit: limit }),
+      ],
+      tools: [MCRL2],
+    },
     checks: [summandConditions],
     optional: ["verifiers", "tools"],
   }
