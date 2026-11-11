@@ -19,6 +19,15 @@
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+# Started from PowerShell 7, Windows PowerShell inherits its PSModulePath, finds PowerShell 7's modules first and cannot
+# load them, so Invoke-WebRequest and ConvertFrom-Json are missing (GitHub issue #8): its own module folders instead.
+if ($PSVersionTable.PSEdition -ne 'Core') {
+  $env:PSModulePath = @(
+    ([Environment]::GetFolderPath('MyDocuments') + '\WindowsPowerShell\Modules'),
+    ($env:ProgramFiles + '\WindowsPowerShell\Modules'),
+    ($PSHOME + '\Modules')
+  ) -join ';'
+}
 
 $DenoVersion = '2.9.7'
 $Here = $PSScriptRoot
@@ -39,7 +48,16 @@ function Find-Deno {
   return $null
 }
 
-function Get-Sha256([string]$path) { (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLower() }
+# By .NET, which needs no module; a file that cannot be read fails the run, never a repair said done (GitHub issue #8).
+function Get-Sha256([string]$path) {
+  try {
+    $stream = [System.IO.File]::OpenRead($path)
+    try { $hash = [System.Security.Cryptography.SHA256]::Create().ComputeHash($stream) } finally { $stream.Dispose() }
+    return (($hash | ForEach-Object { $_.ToString('x2') }) -join '')
+  } catch {
+    Fail "cannot compute the SHA-256 of ${path}: $($_.Exception.Message); nothing installed or restored"
+  }
+}
 
 function New-TempDir([string]$prefix) {
   $dir = Join-Path ([System.IO.Path]::GetTempPath()) ($prefix + [guid]::NewGuid())
@@ -101,7 +119,10 @@ function Restore-Program {
         # From the archive's folder, by its bare name, the target with forward slashes: Git Bash's GNU tar reads a
         # C:\ archive name as a remote host, and cannot open a C:\ folder given to -C.
         Push-Location -LiteralPath $tmp
-        try { & tar.exe -xzf $archive -C ($Program -replace '\\', '/') --strip-components=1 } finally { Pop-Location }
+        # Windows' own tar first: Git Bash puts its GNU tar ahead of it on the PATH (GitHub issue #9).
+        $tar = Join-Path $env:SystemRoot 'System32\tar.exe'
+        if (-not (Test-Path -LiteralPath $tar -PathType Leaf)) { $tar = 'tar.exe' }
+        try { & $tar -xzf $archive -C ($Program -replace '\\', '/') --strip-components=1 } finally { Pop-Location }
         if ($LASTEXITCODE -ne 0) { throw "tar could not unpack $archive" }
         Invoke-Git @('-C', $Program, 'init', '-q')
         Invoke-Git @('-C', $Program, 'config', 'core.autocrlf', 'false')
