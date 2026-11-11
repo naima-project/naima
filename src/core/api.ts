@@ -153,6 +153,7 @@ export {
   gitPath,
   gitReason,
   type GitRun,
+  headCommit,
   isAncestor,
   isGitRepo,
   mustGit,

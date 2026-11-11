@@ -210,6 +210,46 @@ export const gitPath = (path: string, separator: string = sep): string => path.s
  */
 export const nativePath = (path: string, separator: string = sep): string => path.split("/").join(separator)
 
+/**
+ * The commit HEAD names at `root`, read from git's own files without starting git: what a cache asks again and again
+ * to know whether what it kept still holds. A symbolic HEAD is followed through its loose ref, then packed-refs; a
+ * worktree's .git file is followed to its git directory. Anything else (a reftable, a ref only the common directory
+ * has in a layout this does not know) is asked of git, as is a root that is no repository: null then.
+ */
+export function headCommit(root: string): string | null {
+  try {
+    let gitDir = join(root, ".git")
+    if (isRegularFile(gitDir)) {
+      const m = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(gitDir, "utf8"))
+      if (!m) throw new Error("no gitdir")
+      gitDir = resolve(root, m[1]!)
+    }
+    const head = readFileSync(join(gitDir, "HEAD"), "utf8").trim()
+    if (/^[0-9a-f]{40,64}$/.test(head)) return head
+    const ref = /^ref:\s*(\S+)$/.exec(head)?.[1]
+    if (!ref) throw new Error("odd HEAD")
+    const commonFile = join(gitDir, "commondir")
+    const common = existsSync(commonFile) ? resolve(gitDir, readFileSync(commonFile, "utf8").trim()) : gitDir
+    for (const dir of [gitDir, common]) {
+      const loose = join(dir, ref)
+      if (isRegularFile(loose)) {
+        const sha = readFileSync(loose, "utf8").trim()
+        if (/^[0-9a-f]{40,64}$/.test(sha)) return sha
+      }
+    }
+    const packed = join(common, "packed-refs")
+    if (existsSync(packed)) {
+      for (const line of readFileSync(packed, "utf8").split("\n")) {
+        const [sha, name] = line.split(" ")
+        if (name === ref && sha && /^[0-9a-f]{40,64}$/.test(sha)) return sha
+      }
+    }
+    throw new Error("ref not found")
+  } catch {
+    return gitOrNull(root, "rev-parse", "--verify", "--quiet", "HEAD")
+  }
+}
+
 export function isGitRepo(root: string): boolean {
   return gitOrNull(root, "rev-parse", "--is-inside-work-tree") === "true"
 }
