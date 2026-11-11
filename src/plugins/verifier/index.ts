@@ -451,6 +451,23 @@ function refusedToolArgs(verifier: Verifier, toolArgs: readonly string[]): strin
   }`
 }
 
+/** What the runtime says, in the user's terms (core/errors.ts), when the launcher did not grant a program the verifier started. */
+const LAUNCHER_REFUSAL = /running \S.* is not allowed: the launcher lets Naima run only/
+
+/**
+ * A program the launcher refused is no verdict of the property: nothing was run, so no run is recorded, which would
+ * stand as an `error` of the property until it is run again. The command stops, saying so.
+ */
+function refusedByLauncher(item: Item, said: string): Error | null {
+  const m = LAUNCHER_REFUSAL.exec(said)
+  if (!m) return null
+  const line = said.split("\n").find((l) => LAUNCHER_REFUSAL.test(l)) ?? m[0]
+  return new Error(
+    `${label(item)}: ${line.trim()}\nnothing was recorded: the launcher did not grant a program the verifier starts, which says nothing of the property. ` +
+      "Run the command again; if it is refused again, the plugin that starts the program does not declare it in its `runs`.",
+  )
+}
+
 /** The property's verifier, model and property, checked: what a run needs before it starts. */
 function prepared(ctx: Context, item: Item): { id: string; verifier: Verifier; model: string; property: string; path: string } {
   const { verifier: id, model, property } = item.meta
@@ -497,6 +514,10 @@ export async function decideItem(ctx: Context, item: Item, progress: Progress = 
   } catch (e) {
     unversioned = e instanceof Error ? e.message : String(e)
   }
+  if (unversioned !== undefined) {
+    const refusal = refusedByLauncher(item, unversioned)
+    if (refusal) throw refusal
+  }
   const identity: Identity = { verifier: id, model, property, optionsSha256: identityHash(verifier, options), inputsSha256: digestOf(inputs, toolVersion) }
   if (opts.force === undefined && unversioned === undefined) {
     const known = runsOf(item).filter((k) => conclusive(k.run.verdict) && madeOn(k.run, identity)).pop()
@@ -509,6 +530,10 @@ export async function decideItem(ctx: Context, item: Item, progress: Progress = 
     result = unversioned !== undefined ? { verdict: "error", output: unversioned } : inContract(id, await verifier.verify(request, ctx))
   } catch (e) {
     result = { verdict: "error", output: e instanceof Error ? e.message : String(e) }
+  }
+  if (result.verdict === "error") {
+    const refusal = refusedByLauncher(item, result.output)
+    if (refusal) throw refusal
   }
   const seconds = Math.round((performance.now() - started) / 10) / 100
   const commit = gitOrNull(ctx.root, "rev-parse", "HEAD")
