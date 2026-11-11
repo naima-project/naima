@@ -33,6 +33,7 @@ import {
   UI_SWITCH,
   usageError,
 } from "../../core/api.ts"
+import { viewCache } from "./view-cache.ts"
 import { naimaBridge } from "./bridge.ts"
 import { mapView } from "./graphs.ts"
 import { projectsView } from "./projects.ts"
@@ -284,6 +285,8 @@ export async function runUi(ctx: Context, flags: { open: boolean; port?: number;
     views: viewsOf(ctx),
     tabs,
     fileUrl: (tab, rel) => filesUrl(key, tab, rel),
+    // A UI opened again on a large project draws from the views kept on disk, then reads them again.
+    cache: viewCache(ctx),
     switcher: {
       can: file !== null,
       to: (project) => {

@@ -17,6 +17,7 @@ import { extname } from "node:path"
 import { createInterface } from "node:readline"
 import type { Readable } from "node:stream"
 import type { Context } from "../../core/api.ts"
+import { viewCache } from "./view-cache.ts"
 import { naimaBridge } from "./bridge.ts"
 import * as Model from "./generated/sidecar.ts"
 import type { Handlers, Json } from "./bridge-handler.ts"
@@ -110,6 +111,8 @@ export async function runSidecar(ctx: Context, opts: SidecarOptions): Promise<nu
     views: opts.views,
     tabs: opts.tabs,
     fileUrl: (tab, rel) => desktopFileUrl(opts.os, tab, rel),
+    // A UI opened again on a large project draws from the views kept on disk, then reads them again.
+    cache: viewCache(ctx),
     carrier: "desktop",
     // The shell switches project itself, restarting the sidecar in the one chosen: the sidecar only lists them.
     switcher: { can: true },

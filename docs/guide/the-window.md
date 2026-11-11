@@ -185,7 +185,9 @@ a sheet over the bottom of the page until you close it. It follows the time filt
 
 ### Home
 
-Home is one column under the rail. It says first which moment it shows: Live, with the line, or the commit with its date, its line and its message. Then:
+Home is one column under the rail. It says first which moment it shows: Live, with the line, or the commit with its date, its line and its message. Each
+section is drawn as soon as what it needs has been read, and until all of it has, a quiet line says what is being read and how much, such as "Reading the
+schedule… 7 of 9". Then:
 
 - **Waiting for you**: the items the owner's gate holds and the tests that wait for your proof. Each says in plain words what it is (a discussion to settle, a
   decision, a bug, a feature, a test to run), what it asks of you (for example "Waiting for your decision: answer it so the work on it can go on"), and has one
@@ -250,6 +252,11 @@ run an action, and it can load nothing from outside. How a plugin adds a tab is 
 The window follows the project as it changes. Naima looks at it every second: a new commit, a branch or tag that moved, a file of the tracker written (an item,
 a note, a claim). When something changed and has settled, it sends one event, naming what kinds of change it saw. While the window shows Live, the screens read
 their data again; while it shows a commit of the past, nothing moves until you go back to Live. That rule is part of the interface's model and is checked there.
+
+What the window last read is kept on disk, in Naima's folder inside the project's git directory (or the folder `NAIMA_VIEW_CACHE` names), with what Naima
+watches: HEAD, the branches and tags, and the tracker's files by size and time. The window opened again on a project where none of these moved draws from it at
+once, then reads everything again a moment later, and shows what changed meanwhile as a live change. On a large project this is what keeps the first screen
+from waiting for every view to be computed.
 
 What a live change brings is shown as it arrives. New cards, rows, items and stations fade in with a slight rise, what went away fades out, and what changed
 place slides to its new one. In the Days panel a new day or moment grows into its space, so the line of days lengthens as the project fills. Only what is new
