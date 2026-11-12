@@ -209,7 +209,12 @@ function realExec(root: string): Exec {
       return { ok: r.ok, err: r.ok ? "" : gitReason(r) }
     }
     const r = spawnSync(cmd, args, { encoding: "utf8", timeout: 600_000, stdio: ["ignore", "pipe", "pipe"] })
-    return { ok: r.status === 0, err: r.error ? `${cmd}: ${r.error.message}` : String(r.stderr ?? "").trim().split("\n").pop() ?? "" }
+    // No status, no signal and no error: the program was never started, as when the launcher does not let this command run it.
+    const never = !r.error && r.status == null && !r.signal
+    return {
+      ok: r.status === 0,
+      err: r.error ? `${cmd}: ${r.error.message}` : never ? `${cmd} could not be started: this command may not run it` : String(r.stderr ?? "").trim().split("\n").pop() ?? "",
+    }
   }
 }
 

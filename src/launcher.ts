@@ -311,6 +311,11 @@ export function uiGrant(
   if (command === "backup" && rest[0] === "create") return { net: [], read: [], runs: [], write: tools ? [tools] : [], netAll: true, runAll: true }
   // naima stance adopt runs the adoption a stance declares, which starts the programs it names (the UI stance's, Deno): the stance is not loaded yet when the grant is made.
   if (command === "stance" && rest[0] === "adopt") return { net: [], read: [], runs: [], runAll: true }
+  // naima checkpoint sends the tip to a host (git push over ssh, or a bundle copied with scp towards a cmd host) and starts the
+  // suites there through naima run --host, in process: ssh and scp, Deno to start a run here, PowerShell for it on Windows.
+  if (command === "checkpoint") {
+    return { net: [], read: [deno], runs: [deno, "ssh", "scp", ...(os === "windows" ? ["powershell.exe"] : [])], wholeEnv: true }
+  }
   // On Windows `naima run` starts its supervisor through WMI, by PowerShell (src/plugins/long-work/launch.ts).
   if (command === "run" || command === "wait") {
     return { net: [], read: [deno], runs: [deno, "ssh", ...(command === "run" && os === "windows" ? ["powershell.exe"] : [])], wholeEnv: true }

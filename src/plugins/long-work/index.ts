@@ -138,9 +138,9 @@ function onHost(host: Host, args: string[], timeoutMs = 120_000): { ok: boolean;
   const said = String(r.stderr ?? "").trim()
   const err = r.error
     ? `ssh: ${r.error.message}`
-    : r.status === null && !r.signal
+    : r.status == null && !r.signal
     ? "ssh: could not be started — this command may not run ssh"
-    : r.status === null
+    : r.status == null
     ? `${said ? `${said}\n` : ""}ssh: no answer from ${host.ssh} within ${Math.round(timeoutMs / 1000)} s (killed by ${r.signal})`
     : r.status !== 0 && !said && !String(r.stdout ?? "").trim()
     ? `ssh: ${host.ssh} ended with exit ${r.status} and said nothing`
