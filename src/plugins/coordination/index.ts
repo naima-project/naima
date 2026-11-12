@@ -83,6 +83,7 @@ import {
   writeThroughGit,
 } from "./worktrees.ts"
 import { claimsUiView, notesUiView } from "./ui.ts"
+import { readyUiView, workerDiffUiView } from "./workers-ui.ts"
 import { readStaleAfter, staleCommand, type StaleData, staleData, staleSection } from "./stale.ts"
 import { applyPlan, planSweep, type SweepInputs, type SweepItem, sweepLines, type SweepResult } from "./sweep.ts"
 import { changeNotesCheck, changesCommand } from "./changes.ts"
@@ -1572,6 +1573,8 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
         diaryUiView(readPasses),
         notesUiView(readPasses),
         linesUiView,
+        readyUiView(policy),
+        workerDiffUiView,
       ],
       rules: { folder: "rules/", settings: { trunkGuard: String(guarded) } },
     },

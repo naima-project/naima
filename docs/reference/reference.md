@@ -1744,6 +1744,8 @@ naima event 2026-10-05 "The plan was entered" --kind diary --about features/the-
 | `diary` | Diary | the diary's entries, each with the items it is about, with the version tags and the items filed and closed on each day |
 | `notes` | Session notes | the newest session notes, across every branch, newest first; `?n=` says how many (5); its data is `naima pass --list [n] --json` |
 | `lines` | Lines | the open development lines: each one's gate, branch, tip, how far it is ahead of and behind the trunk, its latest update and the items fixed on it; its data is `naima line list --json` |
+| `ready` | Ready queue | the approved work no branch holds yet, in the order it starts, and the worker places free; the list naima queue --ready prints |
+| `worker-diff` | Worker's diff | a branch's files changed since it left the branch it lands on, with lines added and removed, and its last commit; with patch=1 the patch, of one file with file=<path> |
 
 **Shipped rules**, active in every project that loads the plugin, listed by `naima rules`
 
