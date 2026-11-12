@@ -174,7 +174,9 @@ export const verificationRunsView = (type: string) => ({
   render(_params: Record<string, string[]>, ctx: Context) {
     const rows = verificationRuns(ctx, type)
     const html = rows.length
-      ? `<table><tbody>${rows.map((r) => `<tr><td><code>${esc(r.ref)}</code></td><td>${esc(r.at)}</td><td>${esc(r.verdict)}</td></tr>`).join("")}</tbody></table>`
+      ? `<table><tbody>${
+        rows.map((r) => `<tr><td><code>${esc(r.ref)}</code></td><td>${esc(r.at)}</td><td>${esc(r.verdict)}</td></tr>`).join("")
+      }</tbody></table>`
       : "<p>No property has a recorded run.</p>"
     return { data: { rows }, html }
   },

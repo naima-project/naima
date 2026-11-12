@@ -127,12 +127,15 @@ const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;"
 export const specsRequirementsView = {
   name: "specs-requirements",
   title: "Requirements and their checks",
-  says: "every requirement that is not dropped, with the tests, properties and metrics linked to check it, what satisfies it and the specifications it relates to; the new UI's Specs place reads it",
+  says:
+    "every requirement that is not dropped, with the tests, properties and metrics linked to check it, what satisfies it and the specifications it relates to; the new UI's Specs place reads it",
   screen: true,
   render(_params: Record<string, string[]>, ctx: Context) {
     const rows = specsRequirements(ctx)
     const html = `<table><tbody>${
-      rows.map((r) => `<tr><td><code>${esc(r.ref)}</code> ${esc(r.title)}</td><td>${r.checks.map((c) => esc(c.ref)).join(", ") || "no check"}</td></tr>`).join("")
+      rows.map((r) => `<tr><td><code>${esc(r.ref)}</code> ${esc(r.title)}</td><td>${r.checks.map((c) => esc(c.ref)).join(", ") || "no check"}</td></tr>`).join(
+        "",
+      )
     }</tbody></table>`
     return { data: { rows }, html }
   },
@@ -141,7 +144,8 @@ export const specsRequirementsView = {
 export const specificationsView = {
   name: "specs-specifications",
   title: "Specifications and their versions",
-  says: "every specification by name with each version's page, which is current and which are drafts, and the items that follow it; the new UI's Specs place reads it",
+  says:
+    "every specification by name with each version's page, which is current and which are drafts, and the items that follow it; the new UI's Specs place reads it",
   screen: true,
   render(_params: Record<string, string[]>, ctx: Context) {
     const rows = specifications(ctx)
