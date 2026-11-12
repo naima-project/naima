@@ -1,0 +1,1 @@
+import{Sa as e,oi as t,xa as n}from"./switcher-7GDfwLYL.js";import{t as r}from"./App-DAUspVCc.js";function i(i,a){e(a,!0),t(a.store),r(i,{}),n()}export{i as default};
