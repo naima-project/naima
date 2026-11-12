@@ -1,0 +1,1 @@
+import{Sa as e,li as t,xa as n}from"./switcher-7GDfwLYL.js";import r from"./Roadmap-Bye2GC0_.js";function i(i,a){e(a,!0);let{roadmap:o}=t();r(i,{get screen(){return o},get onopen(){return a.onitem}}),n()}export{i as default};

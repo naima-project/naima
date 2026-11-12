@@ -1,1 +1,0 @@
-import{Ei as e,Ki as t,Pi as n,Sa as r,Wi as i,aa as a,la as o,ui as s}from"./switcher-Dbq4-4CX.js";var c=t(`<div><!></div>`);function l(t,l){let u=s(l,`gap`,3,`sm`),d=s(l,`justify`,3,`start`),f=s(l,`align`,3,`center`);var p=c(),m=o(p);n(m,()=>l.children),r(p),a(()=>e(p,1,`cluster gap-${u()??``} justify-${d()??``} align-${f()??``}`,`svelte-2y2hj5`)),i(t,p)}export{l as t};

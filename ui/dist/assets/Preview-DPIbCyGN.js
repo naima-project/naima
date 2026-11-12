@@ -1,1 +1,0 @@
-import{ba as e,ii as t,ya as n}from"./switcher-Dbq4-4CX.js";import{t as r}from"./App-QBzuElNu.js";function i(i,a){e(a,!0),t(a.store),r(i,{}),n()}export{i as default};

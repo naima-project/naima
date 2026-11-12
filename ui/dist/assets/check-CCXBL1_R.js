@@ -1,0 +1,1 @@
+import{mi as e,pi as t,ur as n}from"./switcher-7GDfwLYL.js";var r={name:`check`,size:24,node:[[`path`,{d:`M20 6 9 17l-5-5`}]]};r.node;var i=new Set([`$$slots`,`$$events`,`$$legacy`]);function a(a,o){let s=t(o,i);n(a,e(()=>s,{get icon(){return r}}))}export{a as t};

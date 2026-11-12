@@ -1,0 +1,1 @@
+import{Ii as e,Ji as t,Ki as n,Oi as r,da as i,fi as a,sa as o,wa as s}from"./switcher-7GDfwLYL.js";var c=t(`<div><!></div>`);function l(t,l){let u=a(l,`gap`,3,`sm`),d=a(l,`justify`,3,`start`),f=a(l,`align`,3,`center`);var p=c(),m=i(p);e(m,()=>l.children),s(p),o(()=>r(p,1,`cluster gap-${u()??``} justify-${d()??``} align-${f()??``}`,`svelte-2y2hj5`)),n(t,p)}export{l as t};
