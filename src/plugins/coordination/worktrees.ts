@@ -144,6 +144,49 @@ export function writeThroughGit(worktree: string, file: string, text: string): v
   }
 }
 
+/**
+ * Before a worktree is removed: copy every commit its submodules hold that exists nowhere else — not in the main
+ * checkout's clone of the same submodule, not on any remote-tracking branch — into the main checkout's clone, under the
+ * branch's own name when the main clone has no branch of that name, else under `kept/<worktree>/<name>`. Removing a
+ * worktree deletes its submodules' git folders, and a pointer landed from it would otherwise name a commit that no longer
+ * exists. Throws, copying nothing more, when the main checkout has no clone of that submodule to copy into. Returns one
+ * line per copied ref.
+ */
+export function keepSubmoduleCommits(repo: string, tree: string, trees: Worktree[] = worktrees(repo)): string[] {
+  const main = trees[0]?.path
+  if (!main || samePath(main, tree)) return []
+  const out: string[] = []
+  const paths = (gitOrNull(tree, "ls-files", "--stage") ?? "").split("\n").filter((l) => l.startsWith("160000 ")).map((l) => l.split("\t")[1]!)
+  for (const path of paths) {
+    const sub = resolve(tree, path)
+    if (!exists(resolve(sub, ".git"))) continue
+    const refs = (gitOrNull(sub, "for-each-ref", "--format=%(objectname) %(refname)", "refs/heads") ?? "").split("\n").filter(Boolean)
+      .map((l) => l.split(" ") as [string, string])
+    const head = gitOrNull(sub, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+    if (head && !refs.some(([sha]) => sha === head)) refs.push([head, "HEAD"])
+    const into = resolve(main, path)
+    const target = exists(resolve(into, ".git")) ? into : null
+    for (const [sha, ref] of refs) {
+      if (target && gitOrNull(target, "cat-file", "-e", `${sha}^{commit}`) !== null) continue
+      if ((gitOrNull(sub, "branch", "-r", "--contains", sha) ?? "").trim() !== "") continue
+      if (!target) {
+        throw new Error(
+          `the submodule ${path} in ${tree} holds ${sha.slice(0, 12)} (${
+            ref.replace(/^refs\/heads\//, "")
+          }), which no remote and no clone in the main checkout has: removing the worktree would lose it — push it, or run git submodule update --init ${path} in ${main}, first`,
+        )
+      }
+      const name = ref === "HEAD" ? "HEAD" : ref.replace(/^refs\/heads\//, "")
+      const own = name !== "HEAD" && gitOrNull(target, "rev-parse", "--verify", "--quiet", `refs/heads/${name}`) === null
+      const dest = own ? name : `kept/${basename(tree)}/${name}`
+      const r = runGit(target, ["fetch", "-q", "--no-tags", sub, `+${ref}:refs/heads/${dest}`])
+      if (!r.ok) throw new Error(`copying ${path}'s ${name} from ${tree} into ${into} failed, so the worktree stays: ${gitReason(r)}`)
+      out.push(`kept ${path}'s ${name} (${sha.slice(0, 12)}) in ${into} as ${dest}: the worktree held its only copy`)
+    }
+  }
+  return out
+}
+
 export const plural = (n: number, what: string): string => `${n} ${what}${n === 1 ? "" : "s"}`
 
 /** How many commits `ref` has that `base` has not. */

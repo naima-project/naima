@@ -75,7 +75,7 @@ import {
 import { changeNoteTrailers, NO_CHANGE_NOTE } from "./changes.ts"
 import { guardLandingMessages } from "./messages.ts"
 import { CLAIMS } from "./index.ts"
-import { plural } from "./worktrees.ts"
+import { keepSubmoduleCommits, plural } from "./worktrees.ts"
 import { abandonedLineOf, fixedOnLine, FIXES, gateOfLine, lineBranch, lineOf, lineWorkIn, openLines, SYNC, SYNC_PREFIX, UNFIXES, unlanded } from "./lines.ts"
 
 /** A landing: the branch, the trunk before it, and every file it changed, from the project root. */
@@ -1066,9 +1066,19 @@ function removeSync(ctx: Context, branch: string, line: string): number {
   const tree = worktrees(ctx.root).find((w) => w.branch === branch)
   if (tree) {
     const dirty = gitOrNull(tree.path, "status", "--porcelain", "--untracked-files=all")
-    const removed = dirty === "" ? runGit(ctx.root, ["worktree", "remove", "--force", tree.path]) : null
+    let unsaved: string | null = null
+    try {
+      if (dirty === "") { for (const l of keepSubmoduleCommits(ctx.root, tree.path)) ctx.out(l) }
+    } catch (e) {
+      unsaved = e instanceof Error ? e.message : String(e)
+    }
+    const removed = dirty === "" && !unsaved ? runGit(ctx.root, ["worktree", "remove", "--force", tree.path]) : null
     if (!removed?.ok) {
-      ctx.out(`kept ${tree.path}: ${removed ? gitReason(removed) : "it holds files not committed"} — naima prune --branch ${branch} --write once it is clean`)
+      ctx.out(
+        `kept ${tree.path}: ${
+          unsaved ?? (removed ? gitReason(removed) : "it holds files not committed")
+        } — naima prune --branch ${branch} --write once it is clean`,
+      )
       return 0
     }
   }
