@@ -11,5 +11,5 @@ such a clone updates with no manual `git fetch --force --tags`. Releases are sti
 files, never by a tag in the clone. Whenever a git command Naima runs fails, the error carries git's own reason: the lines git marked as failures, else its last
 lines, with the home folder written `~`, else its exit status.
 
-`naima open` no longer fails when the clone it copies a worktree's program from already holds the lock's ref, `refs/remotes/origin/naima-locked`: the seed's refs
-and the locked commit are fetched in two steps, since git refuses one fetch that writes the same ref twice.
+`naima open` no longer fails when the clone it copies a worktree's program from already holds the lock's ref, `refs/remotes/origin/naima-locked`: the seed's
+refs and the locked commit are fetched in two steps, since git refuses one fetch that writes the same ref twice.

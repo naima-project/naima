@@ -138,8 +138,8 @@ export function modelGaps(text: string, leavesOut = true): string[] {
   const opening = openingComment(text)
   if (/GENERATED (FILE|by)/.test(opening)) return out
   if (!opening) out.push("it opens with no comment saying what it models and what it leaves out")
-  else if (leavesOut && !/(^|\n)\s*leaves out\b/i.test(opening)) {
-    out.push('its opening comment has no paragraph beginning "Leaves out" saying what the model leaves out')
+  else if (leavesOut && !/(^|\n)\s*(leaves|left) out\b/i.test(opening)) {
+    out.push('its opening comment has no paragraph beginning "Leaves out" or "Left out" saying what the model leaves out')
   }
   const bare = declarationsOf(text).filter((d) => !d.commented)
   if (bare.length) {
@@ -256,7 +256,7 @@ export function explainedCheck(level: "note" | "problem"): Check {
   return {
     name: "explained-formal-work",
     says:
-      `every mCRL2 property has its says sentence (at most ${SAYS_WORDS} words) and a gloss for every modality and fixpoint of its formula; every hand-written model file opens with a comment saying what it models and, in a paragraph beginning "Leaves out", what it leaves out (a codegen project's initial state, observers and instances only with the first), and each process and action declaration has its comment; every pair of models a codegen MANIFEST.json relates by refinement has its refinements item (naima refine). Notes, unless the plugin's option explained is problem`,
+      `every mCRL2 property has its says sentence (at most ${SAYS_WORDS} words) and a gloss for every modality and fixpoint of its formula; every hand-written model file opens with a comment saying what it models and, in a paragraph beginning "Leaves out" or "Left out", what it leaves out (a codegen project's initial state, observers and instances only with the first), and each process and action declaration has its comment; every pair of models a codegen MANIFEST.json relates by refinement has its refinements item (naima refine). Notes, unless the plugin's option explained is problem`,
     run(ctx) {
       const out: Finding[] = []
       const props = ctx.repo.items.filter((i) => i.type === "properties" && i.meta["verifier"] === "mcrl2")
