@@ -75,7 +75,7 @@ import {
 import { changeNoteTrailers, NO_CHANGE_NOTE } from "./changes.ts"
 import { guardLandingMessages } from "./messages.ts"
 import { CLAIMS } from "./index.ts"
-import { plural } from "./worktrees.ts"
+import { keepSubmoduleCommits, plural } from "./worktrees.ts"
 import { abandonedLineOf, fixedOnLine, FIXES, gateOfLine, lineBranch, lineOf, lineWorkIn, openLines, SYNC, SYNC_PREFIX, UNFIXES, unlanded } from "./lines.ts"
 
 /** A landing: the branch, the trunk before it, and every file it changed, from the project root. */
@@ -255,10 +255,12 @@ const HEAVY_STALE = "15m"
 export const LANDING_HERE = "here"
 
 /** The program that runs this Naima, as a command's words: what a heavy landing check run on this machine starts. */
-export function naimaHere(): string[] {
+export function naimaHere(data?: string): string[] {
   const program = fileURLToPath(new URL("../../../", import.meta.url))
   const deno = (globalThis as { Deno?: { execPath(): string } }).Deno
-  return deno ? [deno.execPath(), "run", "-A", join(program, "naima.ts")] : [process.execPath, join(program, "src", "cli.ts")]
+  const words = deno ? [deno.execPath(), "run", "-A", join(program, "naima.ts")] : [process.execPath, join(program, "src", "cli.ts")]
+  // A run started from another folder (a checkout) does not find the tracker's data by itself when it is not <root>/naima-data.
+  return data ? [...words, "--data", data] : words
 }
 
 /**
@@ -299,7 +301,7 @@ async function heavyCheck(ctx: Context, name: string, landing: Landing, at: Cont
   // On a host, one command line for its shell; here, the program and its arguments, with no shell between them.
   const command = host
     ? [[host.naima, ...checkArgs(landingRef(runName)).map(host.shell === "cmd" ? (w: string) => windowsArg(w) : shellQuote)].join(" ")]
-    : [...naimaHere(), ...checkArgs(landing.to)]
+    : [...naimaHere(ctx.trackerRoot), ...checkArgs(landing.to)]
   const clean = async (): Promise<void> => {
     try {
       await run.run(["clean", runName], quiet)
@@ -481,6 +483,58 @@ interface Landed {
 
 /** The claims directory, as git names it in the tracker's repository. */
 const claimsDir = (ctx: Context): string => trackerPath(ctx.trackerPrefix, "claims")
+
+/**
+ * Release a finished branch's own claim before it lands, so that no separate naima release and commit is needed: when
+ * the branch tip still holds claim files naming the branch and every item they name is fixed or done there, one commit
+ * on the branch deletes them — made in the branch's worktree when one stands on it (refused when those files have
+ * changes not committed there), else on the ref alone through a throwaway index, moved compare-and-swap. A claim on an
+ * item still open is left, and the landing refuses it as before. Returns what it did, one line.
+ */
+export function releaseOwnClaim(ctx: Context, branch: string): string | null {
+  const repo = ctx.trackerGit
+  const tip = gitOrNull(repo, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}^{commit}`)
+  if (!tip) return null
+  const dir = claimsDir(ctx)
+  const held = filesAt(repo, tip, dir, ".json").map((f) => ({ f, c: claimOf(f.text) })).filter((x) => x.c?.branch === branch)
+  if (!held.length) return null
+  const open = held.flatMap((x) => x.c!.items).filter((e) => !itemAt(ctx, tip, e.id)?.closable)
+  if (open.length) return null
+  const paths = held.map((x) => `${dir}/${x.f.name}`)
+  const message = `Release ${branch}'s claim: it lands\n\n${CLI_TRAILER}: land\n`
+  const tree = worktrees(repo).find((w) => w.branch === branch && !w.self)
+  if (tree) {
+    // Git names the claim files from the top of the repository, and the worktree has the same layout.
+    const top = mustGit(tree.path, "rev-parse", "--show-toplevel")
+    if (gitOrNull(top, "status", "--porcelain", "--", ...paths)) {
+      throw new Error(`${branch} still holds its claim, with changes not committed in ${tree.path}: commit them or release it there (naima release)`)
+    }
+    for (const args of [["rm", "-q", "--", ...paths], ["commit", "-q", "-F", "-", "--", ...paths]]) {
+      const r = runGit(top, args, args[0] === "commit" ? { input: message } : {})
+      if (!r.ok) throw new Error(`releasing ${branch}'s claim in ${tree.path}: git ${args[0]}: ${gitReason(r)}`)
+    }
+  } else {
+    const state = stateDir(repo)
+    if (!state) throw new Error("this is not a git repository")
+    mkdirSync(state, { recursive: true })
+    const env = { GIT_INDEX_FILE: join(state, `release-${randomUUID()}.index`) }
+    try {
+      for (const args of [["read-tree", tip], ["update-index", "--force-remove", "--", ...paths]]) {
+        const r = runGit(repo, args, { env })
+        if (!r.ok) throw new Error(`releasing ${branch}'s claim: git ${args[0]}: ${gitReason(r)}`)
+      }
+      const written = runGit(repo, ["write-tree"], { env })
+      if (!written.ok) throw new Error(`releasing ${branch}'s claim: git write-tree: ${gitReason(written)}`)
+      const made = runGit(repo, ["commit-tree", written.out.trim(), "-p", tip, "-F", "-"], { input: message })
+      if (!made.ok) throw new Error(`releasing ${branch}'s claim: git commit-tree: ${gitReason(made)}`)
+      const moved = runGit(repo, ["update-ref", "-m", "land: release the branch's claim", `refs/heads/${branch}`, made.out.trim(), tip])
+      if (!moved.ok) throw new Error(`${branch} moved meanwhile: ${gitReason(moved)}`)
+    } finally {
+      rmSync(env.GIT_INDEX_FILE, { force: true })
+    }
+  }
+  return `released ${branch}'s claim (${held.map((x) => x.f.name).join(", ")}) on the branch: every item it names is fixed there`
+}
 
 /** The branch a claim file's text records, and its items' ids and refs; null for one that does not parse. */
 function claimOf(text: string): { branch?: string; items: { id: string; ref?: string }[] } | null {
@@ -693,7 +747,16 @@ function landedItems(
   }
   const items = [...new Set(ids)].map((id) => {
     const it = itemAt(ctx, tip, id)
-    if (!it) throw new Error(`${id} is not an item on ${branch}: a landing closes an item that exists`)
+    if (!it) {
+      const main = trunk(ctx.trackerGit)
+      const there = main && main !== branch ? itemAt(ctx, `refs/heads/${main}`, id) : null
+      if (there) {
+        throw new Error(
+          `${there.ref} is not on ${branch}: it was filed on ${main} after the branch was cut — bring it into the branch (git checkout ${main} -- <its folder>, and commit), or merge ${main} into a branch of the trunk, then mark it fixed there`,
+        )
+      }
+      throw new Error(`${id} is not an item on ${branch}: a landing closes an item that exists`)
+    }
     return it
   })
   // A tracker-only landing changes nothing but tracker data, so an item it claimed and did not fix is one whose prose
@@ -1066,9 +1129,19 @@ function removeSync(ctx: Context, branch: string, line: string): number {
   const tree = worktrees(ctx.root).find((w) => w.branch === branch)
   if (tree) {
     const dirty = gitOrNull(tree.path, "status", "--porcelain", "--untracked-files=all")
-    const removed = dirty === "" ? runGit(ctx.root, ["worktree", "remove", "--force", tree.path]) : null
+    let unsaved: string | null = null
+    try {
+      if (dirty === "") { for (const l of keepSubmoduleCommits(ctx.root, tree.path)) ctx.out(l) }
+    } catch (e) {
+      unsaved = e instanceof Error ? e.message : String(e)
+    }
+    const removed = dirty === "" && !unsaved ? runGit(ctx.root, ["worktree", "remove", "--force", tree.path]) : null
     if (!removed?.ok) {
-      ctx.out(`kept ${tree.path}: ${removed ? gitReason(removed) : "it holds files not committed"} — naima prune --branch ${branch} --write once it is clean`)
+      ctx.out(
+        `kept ${tree.path}: ${
+          unsaved ?? (removed ? gitReason(removed) : "it holds files not committed")
+        } — naima prune --branch ${branch} --write once it is clean`,
+      )
       return 0
     }
   }
@@ -1430,7 +1503,7 @@ export const land: Command = {
   says:
     "land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor",
   enforces:
-    "runs from the main checkout on the trunk, clean in tracked files; refuses a branch the trunk is not an ancestor of, one still holding a claim, one whose commits carry private infrastructure in their messages — a home-directory path, a machine or user name — in the project or in a submodule whose pointer it moves (commits no remote-tracking branch holds), unless --allow-private gives the reason; one that names no item (unless --tracker-only gives the reason and the branch changes only tracker data, or --meets names a requirement it meets) or an item open and not fixed (under --tracker-only, an item the branch claimed and did not fix stays open instead); refuses --meets for an item that is not a requirement, one with no item that verifies it and passed on the branch tip, one whose proofs all passed on the trunk already, and one an item refutes, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch a landing check finds failing, whatever flag is given, and one that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, adds the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right after the marker, so that naima close finds a commit reachable from the trunk; then closes, through naima close and every check it makes, each item it names, or whose proof it changed, that is fixed and whose proof has passed, in one commit on the trunk that only closes items, and says each item it names that is fixed and still waits for its proof, which the landing of that proof closes; then prints what every landing report says of the files the landing changed, never undoing it",
+    "runs from the main checkout on the trunk, clean in tracked files; first releases the branch's own claim, by one commit on the branch (in its worktree when one stands on it), when every item it names is fixed or done there; refuses a branch the trunk is not an ancestor of, one still holding a claim, one whose commits carry private infrastructure in their messages — a home-directory path, a machine or user name — in the project or in a submodule whose pointer it moves (commits no remote-tracking branch holds), unless --allow-private gives the reason; one that names no item (unless --tracker-only gives the reason and the branch changes only tracker data, or --meets names a requirement it meets) or an item open and not fixed (under --tracker-only, an item the branch claimed and did not fix stays open instead); refuses --meets for an item that is not a requirement, one with no item that verifies it and passed on the branch tip, one whose proofs all passed on the trunk already, and one an item refutes, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch a landing check finds failing, whatever flag is given, and one that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, adds the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right after the marker, so that naima close finds a commit reachable from the trunk; then closes, through naima close and every check it makes, each item it names, or whose proof it changed, that is fixed and whose proof has passed, in one commit on the trunk that only closes items, and says each item it names that is fixed and still waits for its proof, which the landing of that proof closes; then prints what every landing report says of the files the landing changed, never undoing it",
   usage:
     'land <branch> [--closes <item>]... [--no-change-note "<reason>"] [--stale-proofs "<reason>"] [--tracker-only "<reason>"] [--meets <requirement>]... | land <branch> --repair',
   options: [
@@ -1492,6 +1565,9 @@ export const land: Command = {
       return repairLanding(ctx, branch)
     }
     const meets = strs(p, "meets")
+    // A finished branch's own claim is released by its landing: one commit on the branch, before anything is checked.
+    const released = releaseOwnClaim(ctx, branch)
+    if (released) ctx.out(released)
     if (!ctx.sibling) {
       // A branch of a line lands on its line; a line itself, and a branch of the trunk, on the trunk.
       const lines = openLines(ctx.root)

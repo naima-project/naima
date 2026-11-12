@@ -70,6 +70,7 @@ import {
   ahead,
   exists,
   home,
+  keepSubmoduleCommits,
   MAX_WORKERS,
   plural,
   type Policy,
@@ -735,6 +736,7 @@ function pruneSide(ctx: Context, repo: string, branch: string, write: boolean, a
     keptOn: n > 0 ? (unkept ? (archive ? tag : null) : holder) : null,
     run() {
       if (unkept && archive) mustGit(repo, "tag", tag, branch)
+      if (tree) { for (const l of keepSubmoduleCommits(repo, tree.path)) ctx.out(l) }
       if (tree) mustGit(repo, "worktree", "remove", ...(status === "" ? ["--force"] : []), tree.path)
       mustGit(repo, "branch", "-D", branch)
     },

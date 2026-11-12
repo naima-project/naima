@@ -26,7 +26,7 @@ import {
 import type { Claim } from "./index.ts"
 import { changes, type StaleEntry, type StaleInputs } from "./stale.ts"
 import { gateOfLine, openLines } from "./lines.ts"
-import { plural, samePath } from "./worktrees.ts"
+import { keepSubmoduleCommits, plural, samePath } from "./worktrees.ts"
 
 /** What a drop or a named piece of work is, said in a few words: the unit of the one line `hello` prints. */
 export type SweepKind =
@@ -111,8 +111,12 @@ function listed(repo: string): { path: string; branch: string | null; head: stri
   return out
 }
 
-/** Remove a worktree and delete its branch: the steps of `prune --branch --write`, the worktree forced only once known clean. */
+/**
+ * Remove a worktree and delete its branch: the steps of `prune --branch --write`, the worktree forced only once known
+ * clean, and its submodules' commits that exist nowhere else first copied to the main checkout's clones.
+ */
 function dropBranchAndTree(repo: string, path: string | undefined, branch: string): void {
+  if (path) keepSubmoduleCommits(repo, path)
   if (path) mustGit(repo, "worktree", "remove", "--force", path)
   mustGit(repo, "branch", "-D", branch)
 }

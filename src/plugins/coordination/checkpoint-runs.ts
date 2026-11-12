@@ -131,7 +131,7 @@ export async function startRuns(
     const slugs = stale.map((i) => i.slug)
     runs.push(
       await start(ctx, tip, "verify", "verify", `naima verify ${slugs.join(" ")}`, undefined, [
-        ...naimaHere(),
+        ...naimaHere(ctx.trackerRoot),
         "verify",
         ...slugs,
         ...(verifyOn ? ["--host", verifyOn] : []),
