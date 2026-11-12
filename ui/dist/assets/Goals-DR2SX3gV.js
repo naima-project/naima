@@ -1,0 +1,1 @@
+import{Zn as e,di as t,ui as n}from"./plan-chart-Du047pVj.js";import r from"./Roadmap-DvuKeeVx.js";function i(i,a){t(a,!0);let{roadmap:o}=e();r(i,{get screen(){return o},get onopen(){return a.onitem}}),n()}export{i as default};

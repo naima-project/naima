@@ -1,0 +1,1 @@
+import{$n as e,Fr as t,Lr as n,Tr as r,Xr as i,_r as a,ei as o,mi as s}from"./plan-chart-Du047pVj.js";var c=n(`<div><!></div>`);function l(n,l){let u=e(l,`gap`,3,`sm`),d=e(l,`justify`,3,`start`),f=e(l,`align`,3,`center`);var p=c(),m=o(p);r(m,()=>l.children),s(p),i(()=>a(p,1,`cluster gap-${u()??``} justify-${d()??``} align-${f()??``}`,`svelte-2y2hj5`)),t(n,p)}export{l as t};
