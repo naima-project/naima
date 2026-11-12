@@ -169,7 +169,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `roles` | roles | a role of the company of agents: `title`, what it `owns`, what it `refuses` (never empty), the `kinds` and `types` on its queue, and `queue(ctx)`, its open items most urgent first | roles |
 | `verifiers` | verifier | an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest; `toolArgs`, the flags `naima verify --tool-args` may pass, which never change the verdict; and `equivalences` with `compare({ before, after, equivalence }, ctx) → { verdict, output, counterexample?, details? }` and `preserves({ property, options, equivalence }, ctx)`, for `naima equivalent`; `identityOptions(options)`, the options as they identify a run, so a run made with other effective options is never reused; `propertyFile(property, root)`, the file a property names when it is not inline, so a missing one is said as missing | verifier, verifier-mcrl2 |
 | `tools` | tools | a tool a plugin needs, which `naima tools install` installs into Naima's own directory: name, exact version, licence, homepage, source and authors (its attribution, which `naima credits` prints), programs, how an install is verified, and per platform a source (url, size, sha256, format) or the answer saying why there is none | backup, verifier-mcrl2 |
-| `ui-views` | ui | a view the new UI shows as a tab, and whose data the bridge's `data` command answers: `name`, `title`, `says`, `order` (lower first, 0 when absent), `moments` (true: at a commit it is rendered from the files as they are, `params.at` the commit's hash), `screen` (true: the new interface has a screen of its own for it, so it is not also one of its tabs), `render(params, ctx) → { data, html, css? }`, rendered at each request | trackers, coordination, triage, gates, discussions, verifier, ui, metrics, schedule |
+| `ui-views` | ui | a view the new UI shows as a tab, and whose data the bridge's `data` command answers: `name`, `title`, `says`, `order` (lower first, 0 when absent), `moments` (true: at a commit it is rendered from the files as they are, `params.at` the commit's hash), `screen` (true: the new interface has a screen of its own for it, so it is not also one of its tabs), `render(params, ctx) → { data, html, css? }`, rendered at each request | trackers, coordination, triage, gates, discussions, planning, verifier, ui, metrics, schedule |
 | `ui-tabs` | ui | a tab of the new UI, with optional subtabs: `name`, `title`, `says`, `order` (lower first, 0 when absent), `subtabs` ([{ name, title, says? }]), `files(ctx)` (the folder its pages and frames show, or null) and `render({ sub, query }, ctx)`, which gives `{ component, data, lead? }` (component one of list, table, chart, gallery, markdown, drawn by the app), `{ page }` (a file of `files`) or `{ html, css? }`; pages are served sandboxed, and no code of the plugin runs in the app | stance-ui |
 | `metric-kinds` | metrics | how a metric's number is read from its run: `read({ exit, stdout, stderr, seconds }, metric) → number \| { error }`, `readsExit` | metrics |
 | `metrics` | metrics | a named measurement: `run` (a program and its arguments) and `kind`, a code `measure`, a test `suite`'s number or a `file`'s; a bound — `atMost`, `atLeast` or `equals` — and `better` |  |
@@ -2576,6 +2576,13 @@ Audits: an independent check of what was built against what was decided: what it
 |---|---|
 | `model-first-setting` | at init, when the project has not chosen how strictly it applies model first and has no items yet: write init's proposal (strict for a new project, advisory when the repository already holds substantial code) and say the question to put to the owner, who may keep it, change it or defer it |
 
+**UI views**, shown as tabs of the new UI
+
+| View | Title | What it shows |
+|---|---|---|
+| `specs-requirements` | Requirements and their checks | every requirement that is not dropped, with the tests, properties and metrics linked to check it, what satisfies it and the specifications it relates to; the new UI's Specs place reads it |
+| `specs-specifications` | Specifications and their versions | every specification by name with each version's page, which is current and which are drafts, and the items that follow it; the new UI's Specs place reads it |
+
 **Shipped rules**, active in every project that loads the plugin, listed by `naima rules`
 
 | Rule | Title | For | Strength | Enforced by | Verified by | Ack |
@@ -3083,6 +3090,9 @@ Models: a model, or another artifact properties are verified on, named by its pa
 |---|---|---|
 | `property-runs` | Property runs | every property with the runs recorded on it, oldest first: when, and its verdict (holds, violated, error); the new UI's failed-tests matrix reads it |
 | `property-history` | Property history | a property's verdict, the states explored and the time taken at every run kept, on the trunk's commit axis, each point naming its run: `?item=<id>` gives the history, `&run=<file>` also the record of that run — verdict, model, tool, states, time, the end of its output, or the earlier version's run it was carried over from |
+| `verification-runs` | Verification runs | every run recorded on a property, newest first: the model and property file, when, on which commit and how long when recorded, the states, the verdict, and whether its inputs changed since; the new UI's Specs place reads it |
+| `specs-models` | Models | the models the properties are checked on: their files, what each is for, the sizes their runs recorded, and the refinements the generator sets up; with file=<path>, one file's text |
+| `specs-properties` | Properties | every property with its formula, its model and its last run: the verdict, the state space's size, and the counterexample when one was recorded |
 
 ## tools
 
