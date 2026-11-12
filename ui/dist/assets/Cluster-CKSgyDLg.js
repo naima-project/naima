@@ -1,1 +1,0 @@
-import{Ir as e,Jr as t,Kr as n,Or as r,di as i,si as a,ur as o,wi as s}from"./workers-BMGoxYRa.js";var c=t(`<div><!></div>`);function l(t,l){let u=o(l,`gap`,3,`sm`),d=o(l,`justify`,3,`start`),f=o(l,`align`,3,`center`);var p=c(),m=i(p);e(m,()=>l.children),s(p),a(()=>r(p,1,`cluster gap-${u()??``} justify-${d()??``} align-${f()??``}`,`svelte-2y2hj5`)),n(t,p)}export{l as t};
