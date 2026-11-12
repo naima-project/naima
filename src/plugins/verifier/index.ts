@@ -760,6 +760,21 @@ export function missingFiles(ctx: Context, item: Item): string[] {
   return out
 }
 
+/**
+ * The development line whose tip holds every file `item` is missing here, or none: tracker data is written on the trunk
+ * and code on a line, so a property filed ahead of its model waits there until the line lands.
+ */
+function heldOnLine(ctx: Context, item: Item): string | undefined {
+  const { model, property, verifier: id } = item.meta
+  const adapter = typeof id === "string" ? verifierOf(ctx, id) : undefined
+  const named = [typeof model === "string" ? modelPath(ctx.root, model) : null]
+  named.push(adapter?.propertyFile && typeof property === "string" ? adapter.propertyFile(property, ctx.root) : null)
+  const gone = named.filter((f): f is string => !!f && !existsSync(f)).map((f) => gitPath(relative(ctx.root, f)))
+  if (!gone.length) return undefined
+  const lines = (gitOrNull(ctx.root, "for-each-ref", "--format=%(refname:short)", "refs/heads/line/") ?? "").split("\n").filter(Boolean)
+  return lines.find((l) => gone.every((f) => gitOrNull(ctx.root, "cat-file", "-e", `${l}:${f}`) !== null))
+}
+
 /** What to do about a property whose files are gone: retire it, if it no longer applies, on the owner's word. */
 export const retireHint = (item: Item): string =>
   `if it no longer applies: naima retire ${label(item)} --reason "<why>" --consent "<the owner's yes, restated>"`
@@ -1134,7 +1149,9 @@ const evidence: Check = {
       const missing = missingFiles(ctx, item)
       if (missing.length) {
         // A run on a file that is gone says nothing either way: missing, never stale.
-        problem(item, `${missing.join("; ")} — it cannot be verified; ${retireHint(item)}`)
+        const line = heldOnLine(ctx, item)
+        if (line) out.push({ level: "note", item, message: `${label(item)}: ${missing.join("; ")} — waiting on ${line}, which holds them: verified there, until it lands` })
+        else problem(item, `${missing.join("; ")} — it cannot be verified; ${retireHint(item)}`)
         continue
       }
       const loaded = loadRun(item)
