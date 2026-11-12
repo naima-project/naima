@@ -487,6 +487,12 @@ export function runByOf(ctx: Context, item: Item): string {
   return ""
 }
 
+/** The item that proves `item`, such as the test whose run is due: the first one verifying it that is not itself, or null. */
+export function proofOf(ctx: Context, item: Item): { ref: string; title: string } | null {
+  const v = linked(ctx, item, "verified-by").find((x) => x !== item)
+  return v ? { ref: label(v), title: v.meta.title } : null
+}
+
 function printGate(ctx: Context, gate: GateDef, r: GateResult, hands = false): void {
   const when = timing(ctx, gate)
   ctx.out(
@@ -514,6 +520,8 @@ interface GateItemRow {
   title: string
   /** Whose hands its proof needs: its `runBy`, or "" when unclassified. */
   runBy: string
+  /** The item that proves it, such as the test whose run is due; absent when none verifies it. */
+  proof?: { ref: string; title: string }
 }
 
 /** A gate and whether it holds, as `naima gates --json` prints it and the gates view of naima ui shows it. */
@@ -558,7 +566,10 @@ async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: Gate
     const def = ctx.registry.find<GateDef>("gates", name)?.value
     if (!def) throw new Error(`no gate "${name}" — gates: ${all.join(", ") || "none configured"}`)
     const result = await def.evaluate(ctx)
-    const item = (i: Item): GateItemRow => ({ ref: label(i), title: i.meta.title, runBy: runByOf(ctx, i) })
+    const item = (i: Item): GateItemRow => {
+      const proof = proofOf(ctx, i)
+      return { ref: label(i), title: i.meta.title, runBy: runByOf(ctx, i), ...(proof ? { proof } : {}) }
+    }
     return {
       def,
       result,
