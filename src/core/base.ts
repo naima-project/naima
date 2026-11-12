@@ -508,7 +508,8 @@ const check: Command = {
     { name: "--all-worktrees", says: "the coordinator's view: every worktree's missing claim is a problem, not only the one being checked" },
     {
       name: "--heavy",
-      says: "also run the checks that take minutes (a stance's browser checks, for one); without it they are left out, and named in the last lines. Each check running is told on standard error as it starts and, when it took a second or more, as it ends",
+      says:
+        "also run the checks that take minutes (a stance's browser checks, for one); without it they are left out, and named in the last lines. Each check running is told on standard error as it starts and, when it took a second or more, as it ends",
     },
   ],
   examples: ["check", "check --staged", "check --all-worktrees", "check --heavy"],

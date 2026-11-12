@@ -15,6 +15,7 @@ import {
   type Context,
   contextIn,
   createItem,
+  gitOrNull,
   gitReason,
   type Host,
   isOpen,
@@ -171,6 +172,20 @@ function persist(exec: Exec, pause: (ms: number) => void, cmd: string, args: str
  * could not be sent, or none.
  */
 export function sendTipWith(root: string, h: Host, tip: string, exec: Exec, pause: (ms: number) => void = sleepSync): string | undefined {
+  const sent = sendCommit(root, h, tip, exec, pause)
+  if (sent) return sent
+  // The product the tip's submodule pointer names may be on no remote yet (a development line's, before it lands): it goes
+  // to the product's own checkout on the host, so that the host's `git submodule update` finds it there.
+  const sub = gitOrNull(root, "ls-tree", tip, "naima")?.match(/^160000 commit ([0-9a-f]{40})\tnaima$/m)?.[1]
+  if (!sub) return undefined
+  const repo = join(root, "naima")
+  if (!exec("git", ["-C", repo, "cat-file", "-e", `${sub}^{commit}`]).ok) return undefined
+  const there = h.shell === "cmd" ? `${h.dir.replace(/[\\/]+$/, "")}\\naima` : `${h.dir.replace(/\/+$/, "")}/naima`
+  return sendCommit(repo, { ...h, dir: there }, sub, exec, pause)
+}
+
+/** Put one commit of the repository at `root` in the checkout at `h.dir` on the host, under the checkpoint's ref. */
+function sendCommit(root: string, h: Host, tip: string, exec: Exec, pause: (ms: number) => void): string | undefined {
   const ref = checkpointRef(tip)
   const fail = (err: string): string => `could not send ${tip.slice(0, 12)} to ${h.name}: ${err}`
   if (h.shell !== "cmd") {

@@ -333,7 +333,9 @@ async function heavyCheck(ctx: Context, name: string, landing: Landing, at: Cont
     }
     if (!verdict) {
       return refusal(
-        `ran on ${place} and gave no findings (run ${view.state ?? "unknown"}): ${(view.tail ?? []).filter(Boolean).pop() ?? "nothing in its log"}`,
+        `ran on ${place} and its run succeeded, but its log holds no ${LANDING_CHECK_LINE.trim()} line, so what the check found is not known (not "no findings"; last line of its log: ${
+          (view.tail ?? []).filter(Boolean).pop() ?? "none, the log is empty"
+        })`,
       )
     }
     const found = JSON.parse(verdict.slice(LANDING_CHECK_LINE.length)) as Partial<Found>
