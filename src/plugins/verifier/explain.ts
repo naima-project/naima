@@ -10,7 +10,21 @@
 
 import { existsSync, readFileSync, statSync } from "node:fs"
 import { resolve } from "node:path"
-import { bool, type Command, type Context, createItem, type Item, label, parse, saveMeta, str, strs, typeOrThrow, usageError } from "../../core/api.ts"
+import {
+  bool,
+  type Command,
+  type Context,
+  createItem,
+  type Item,
+  label,
+  parse,
+  readText,
+  saveMeta,
+  str,
+  strs,
+  typeOrThrow,
+  usageError,
+} from "../../core/api.ts"
 
 export const REFINEMENTS = "refinements"
 
@@ -76,40 +90,105 @@ export const explain: Command = {
     "record what a property means for a person: its says sentence and a gloss for each part of its formula, which the UI's Properties screen shows in place of the text it generates",
   enforces:
     "a gloss names a part that is in the property's formula, by its exact text (white space aside); a gloss for a part already glossed replaces its phrase in place, a new one is added after the others; --replace drops the glosses kept before",
-  usage: 'explain <property> [--says "<sentence>"] [--gloss "<part>=<phrase>"]... [--replace]',
+  usage: 'explain <property> [--says "<sentence>"] [--gloss "<part>=<phrase>"]... [--replace] | explain --file <explanations.json>',
   options: [
     { name: "--says", says: "one sentence in plain words: what must hold, and of what" },
     { name: "--gloss", says: "a part of the formula, by its exact text, =, then a plain phrase; repeat it for each part, in reading order" },
     { name: "--replace", says: "drop the glosses recorded before, keeping only the ones given now" },
+    {
+      name: "--file",
+      says:
+        "explain many properties at once from a JSON file: property → { says, glosses: [[part, phrase], ...], note }, the glosses replacing those recorded, the note added to the property's notes; every entry is checked before any is written",
+    },
   ],
   examples: [
     'explain no-deadlock --says "After any sequence of steps the machine can still take one." --gloss "[true*]=after any sequence of steps" --gloss "<true>true=some step is possible"',
   ],
   run(args, ctx) {
-    const p = parse(args, { says: { type: "string" }, gloss: { type: "string", multiple: true }, replace: { type: "boolean" } })
+    const p = parse(args, { says: { type: "string" }, gloss: { type: "string", multiple: true }, replace: { type: "boolean" }, file: { type: "string" } })
+    const file = str(p, "file")
+    if (file !== undefined) {
+      if (p.positionals.length || str(p, "says") !== undefined || strs(p, "gloss").length) throw usageError(this)
+      const plan = explanationsFile(ctx, readText(file))
+      for (const e of plan) applyExplanation(ctx, e)
+      ctx.out(`${plan.length} propert${plan.length === 1 ? "y" : "ies"} explained`)
+      return 0
+    }
     const [ref, ...extra] = p.positionals
     const says = str(p, "says")?.trim()
     const added = strs(p, "gloss").map(parseGloss)
     if (!ref || extra.length || (says === undefined && !added.length && !bool(p, "replace"))) throw usageError(this)
-    const item = ctx.repo.resolve(ref)
-    if (item.type !== "properties") throw new Error(`${label(item)} is not a property`)
-    const formula = partKey(formulaText(ctx, item))
-    const absent = added.filter((g) => !formula.includes(partKey(g.part)))
-    if (absent.length) {
-      throw new Error(`${label(item)}: not in its formula: ${absent.map((g) => JSON.stringify(g.part)).join(", ")} — a gloss names a part by its exact text`)
-    }
-    const meta: Record<string, unknown> = { ...item.meta }
-    if (says !== undefined) {
-      if (says) meta["says"] = says
-      else delete meta["says"]
-    }
-    const glosses = mergeGlosses(bool(p, "replace") ? [] : glossesOf(item), added)
-    if (Object.keys(glosses).length) meta["glosses"] = glosses
-    else delete meta["glosses"]
-    saveMeta(ctx, { ...item, meta: meta as Item["meta"] }, { authored: true })
-    ctx.out(`${label(item)}: ${says !== undefined ? "says set; " : ""}${Object.keys(glosses).length} gloss${Object.keys(glosses).length === 1 ? "" : "es"}`)
+    const e = checkedExplanation(ctx, ctx.repo.resolve(ref), says, added, bool(p, "replace"))
+    applyExplanation(ctx, e)
     return 0
   },
+}
+
+/** One property's explanation, checked and ready to write. */
+interface Explanation {
+  item: Item
+  says: string | undefined
+  glosses: Record<string, string>
+  note?: string
+}
+
+/** The explanation of `item`, its parts checked against its formula; throws naming the parts that are not in it. */
+function checkedExplanation(ctx: Context, item: Item, says: string | undefined, added: { part: string; phrase: string }[], replace: boolean): Explanation {
+  if (item.type !== "properties") throw new Error(`${label(item)} is not a property`)
+  const formula = partKey(formulaText(ctx, item))
+  const absent = added.filter((g) => !formula.includes(partKey(g.part)))
+  if (absent.length) {
+    throw new Error(`${label(item)}: not in its formula: ${absent.map((g) => JSON.stringify(g.part)).join(", ")} — a gloss names a part by its exact text`)
+  }
+  return { item, says, glosses: mergeGlosses(replace ? [] : glossesOf(item), added) }
+}
+
+function applyExplanation(ctx: Context, e: Explanation): void {
+  const meta: Record<string, unknown> = { ...e.item.meta }
+  if (e.says !== undefined) {
+    if (e.says) meta["says"] = e.says
+    else delete meta["says"]
+  }
+  if (Object.keys(e.glosses).length) meta["glosses"] = e.glosses
+  else delete meta["glosses"]
+  saveMeta(ctx, { ...e.item, meta: meta as Item["meta"] }, { authored: true })
+  e.item.meta = meta as Item["meta"]
+  const n = Object.keys(e.glosses).length
+  ctx.out(`${label(e.item)}: ${e.says !== undefined ? "says set; " : ""}${n} gloss${n === 1 ? "" : "es"}`)
+  if (e.note) {
+    const note = ctx.registry.commands.get("note")
+    if (!note) throw new Error("naima note is not loaded: the note was not written")
+    note.run([e.item.slug, e.note], ctx)
+  }
+}
+
+/**
+ * A file of explanations: a JSON object whose keys are properties and whose values give `says`, `glosses` as a list of
+ * [part, phrase] pairs in reading order (they replace the glosses recorded before), and optionally `note`, added to the
+ * property's notes. Every entry is checked before any is written.
+ */
+export function explanationsFile(ctx: Context, text: string): Explanation[] {
+  let data: unknown
+  try {
+    data = JSON.parse(text)
+  } catch (e) {
+    throw new Error(`the explanations file is not JSON: ${(e as Error).message}`)
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("the explanations file is a JSON object: property → { says, glosses, note }")
+  return Object.entries(data as Record<string, unknown>).map(([ref, v]) => {
+    const o = (v ?? {}) as Record<string, unknown>
+    const pairs = Array.isArray(o["glosses"]) ? o["glosses"] : []
+    const added = pairs.map((x) => {
+      if (!Array.isArray(x) || x.length !== 2 || x.some((y) => typeof y !== "string" || !y.trim())) {
+        throw new Error(`${ref}: a gloss in the file is a pair [part, phrase], not ${JSON.stringify(x)}`)
+      }
+      return { part: (x[0] as string).trim(), phrase: (x[1] as string).trim() }
+    })
+    const says = typeof o["says"] === "string" ? o["says"].trim() : undefined
+    const e = checkedExplanation(ctx, ctx.repo.resolve(ref), says, added, true)
+    if (typeof o["note"] === "string" && o["note"].trim()) e.note = o["note"].trim()
+    return e
+  })
 }
 
 /** A model's path as refinements store it: from the project root, forward slashes, no leading ./ */
@@ -148,7 +227,8 @@ export const refine: Command = {
     "record that one model refines another: the relation it is checked by, the actions hidden or renamed before comparing, and one sentence saying what the lower model guarantees with respect to the upper",
   enforces:
     "both models are files in the project; one record per pair of models, updated in place when recorded again; a refinement has its relation and its sentence",
-  usage: 'refine <lower model> <upper model> --relation "<relation>" --says "<sentence>" [--hide a,b] [--rename from=to,...]',
+  usage:
+    'refine <lower model> <upper model> --relation "<relation>" --says "<sentence>" [--hide a,b] [--rename from=to,...] | refine --file <refinements.json>',
   options: [
     {
       name: "--relation",
@@ -157,37 +237,80 @@ export const refine: Command = {
     { name: "--says", says: "one sentence for a reader who knows state machines: what the lower model guarantees with respect to the upper" },
     { name: "--hide", says: "the actions hidden before comparing, comma-separated" },
     { name: "--rename", says: "the actions renamed before comparing, from=to comma-separated, or a JSON object" },
+    {
+      name: "--file",
+      says:
+        "record many refinements at once from a JSON list of { lower, upper, relation, hidden, renamed, says }; every entry is checked before any is written",
+    },
   ],
   examples: [
     'refine models/shell-refined.mcrl2 models/shell.mcrl2 --relation "trace inclusion" --hide read_cache,tick --says "Every run of the refined shell is a run of the small shell once its internal steps are hidden."',
   ],
   run(args, ctx) {
-    const p = parse(args, { relation: { type: "string" }, says: { type: "string" }, hide: { type: "string" }, rename: { type: "string" } })
-    const [lowerArg, upperArg, ...extra] = p.positionals
-    if (!lowerArg || !upperArg || extra.length) throw usageError(this)
-    const lower = modelRel(lowerArg), upper = modelRel(upperArg)
-    if (lower === upper) throw new Error("a model does not refine itself: name two models")
-    for (const m of [lower, upper]) {
-      if (!existsSync(resolve(ctx.root, m))) throw new Error(`model ${m} does not exist — a model is a path from the project root`)
+    const p = parse(args, {
+      relation: { type: "string" },
+      says: { type: "string" },
+      hide: { type: "string" },
+      rename: { type: "string" },
+      file: { type: "string" },
+    })
+    const file = str(p, "file")
+    if (file !== undefined) {
+      if (p.positionals.length) throw usageError(this)
+      let list: unknown
+      try {
+        list = JSON.parse(readText(file))
+      } catch (e) {
+        throw new Error(`the refinements file is not JSON: ${(e as Error).message}`)
+      }
+      if (!Array.isArray(list)) throw new Error("the refinements file is a JSON list of { lower, upper, relation, hidden, renamed, says }")
+      const plan = list.map((r) => checkedRefinement(ctx, (r ?? {}) as Record<string, unknown>))
+      for (const r of plan) writeRefinement(ctx, r)
+      return 0
     }
-    const was = refinementsOf(ctx).find((r) => r.lower === lower && r.upper === upper)?.item
-    const fields: Record<string, unknown> = { lower, upper }
-    const relation = str(p, "relation")?.trim(), says = str(p, "says")?.trim()
-    if (relation) fields["relation"] = relation
-    if (says) fields["says"] = says
+    const [lower, upper, ...extra] = p.positionals
+    if (!lower || !upper || extra.length) throw usageError(this)
+    const rec: Record<string, unknown> = { lower, upper, relation: str(p, "relation"), says: str(p, "says") }
     const hide = str(p, "hide")
-    if (hide !== undefined) fields["hidden"] = hide.split(",").map((s) => s.trim()).filter(Boolean)
+    if (hide !== undefined) rec["hidden"] = hide.split(",").map((s) => s.trim()).filter(Boolean)
     const rename = str(p, "rename")
-    if (rename !== undefined) fields["renamed"] = parseRenamed(rename)
-    if (!was && (!relation || !says)) throw new Error("a new refinement needs --relation and --says")
-    if (was) {
-      saveMeta(ctx, { ...was, meta: { ...was.meta, ...fields } as Item["meta"] }, { authored: true })
-      ctx.out(`${label(was)}: updated`)
-    } else {
-      const short = (m: string) => m.split("/").slice(-3).join("/")
-      const made = createItem(ctx, typeOrThrow(ctx, REFINEMENTS), `${short(lower)} refines ${short(upper)}`, fields, { authored: true })
-      ctx.out(`${label(made)}: recorded`)
-    }
+    if (rename !== undefined) rec["renamed"] = parseRenamed(rename)
+    writeRefinement(ctx, checkedRefinement(ctx, rec))
     return 0
   },
+}
+
+/** A refinement to record: the fields to write, and the item that records the pair already, if one does. */
+function checkedRefinement(ctx: Context, r: Record<string, unknown>): { fields: Record<string, unknown>; was?: Item } {
+  const lower = modelRel(String(r["lower"] ?? "")), upper = modelRel(String(r["upper"] ?? ""))
+  if (!lower || !upper) throw new Error("a refinement names its lower and its upper model")
+  if (lower === upper) throw new Error("a model does not refine itself: name two models")
+  for (const m of [lower, upper]) {
+    if (!existsSync(resolve(ctx.root, m))) throw new Error(`model ${m} does not exist — a model is a path from the project root`)
+  }
+  const was = refinementsOf(ctx).find((x) => x.lower === lower && x.upper === upper)?.item
+  const fields: Record<string, unknown> = { lower, upper }
+  const text = (k: string) => (typeof r[k] === "string" ? (r[k] as string).trim() : "")
+  if (text("relation")) fields["relation"] = text("relation")
+  if (text("says")) fields["says"] = text("says")
+  if (r["hidden"] !== undefined) {
+    if (!Array.isArray(r["hidden"]) || r["hidden"].some((x) => typeof x !== "string")) throw new Error(`${lower}: hidden is a list of action names`)
+    fields["hidden"] = r["hidden"]
+  }
+  if (r["renamed"] !== undefined) fields["renamed"] = parseRenamed(JSON.stringify(r["renamed"]))
+  if (!was && (!fields["relation"] || !fields["says"])) throw new Error(`${lower}: a new refinement needs its relation and its sentence (--relation, --says)`)
+  return was ? { fields, was } : { fields }
+}
+
+function writeRefinement(ctx: Context, r: { fields: Record<string, unknown>; was?: Item }): void {
+  if (r.was) {
+    saveMeta(ctx, { ...r.was, meta: { ...r.was.meta, ...r.fields } as Item["meta"] }, { authored: true })
+    ctx.out(`${label(r.was)}: updated`)
+    return
+  }
+  const short = (m: string) => m.split("/").slice(-3).join("/")
+  const made = createItem(ctx, typeOrThrow(ctx, REFINEMENTS), `${short(String(r.fields["lower"]))} refines ${short(String(r.fields["upper"]))}`, r.fields, {
+    authored: true,
+  })
+  ctx.out(`${label(made)}: recorded`)
 }

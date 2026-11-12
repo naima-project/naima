@@ -158,7 +158,9 @@ naima explain properties/job-retried-at-most-twice \
   --gloss "false=this never happens"
 ```
 
-A gloss for a part already glossed replaces its phrase, `--replace` starts the list again, and a part that is not in the formula is refused. The sentence
+A gloss for a part already glossed replaces its phrase, `--replace` starts the list again, and a part that is not in the formula is refused. Many
+properties are explained at once with `naima explain --file <file>`, a JSON object from each property to its `says`, its `glosses` as a list of
+`[part, phrase]` pairs, and an optional `note`; every entry is checked before any is written. `naima refine --file` does the same for a list of refinements. The sentence
 states what the formula requires, including over which histories: "after any sequence of steps", "as long as the job has not been reset", "it is always
 possible to". Where the property's title claims more or less than the formula, the sentence says what the formula says, and a note on the item says so.
 

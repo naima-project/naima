@@ -3007,6 +3007,7 @@ Record what a property means for a person: its says sentence and a gloss for eac
 
 ```sh
 naima explain <property> [--says "<sentence>"] [--gloss "<part>=<phrase>"]... [--replace]
+naima explain --file <explanations.json>
 ```
 
 | Option | Default | What it does |
@@ -3014,6 +3015,7 @@ naima explain <property> [--says "<sentence>"] [--gloss "<part>=<phrase>"]... [-
 | `--says` |  | one sentence in plain words: what must hold, and of what |
 | `--gloss` |  | a part of the formula, by its exact text, =, then a plain phrase; repeat it for each part, in reading order |
 | `--replace` |  | drop the glosses recorded before, keeping only the ones given now |
+| `--file` |  | explain many properties at once from a JSON file: property → { says, glosses: [[part, phrase], ...], note }, the glosses replacing those recorded, the note added to the property's notes; every entry is checked before any is written |
 
 Examples:
 
@@ -3029,6 +3031,7 @@ Record that one model refines another: the relation it is checked by, the action
 
 ```sh
 naima refine <lower model> <upper model> --relation "<relation>" --says "<sentence>" [--hide a,b] [--rename from=to,...]
+naima refine --file <refinements.json>
 ```
 
 | Option | Default | What it does |
@@ -3037,6 +3040,7 @@ naima refine <lower model> <upper model> --relation "<relation>" --says "<senten
 | `--says` |  | one sentence for a reader who knows state machines: what the lower model guarantees with respect to the upper |
 | `--hide` |  | the actions hidden before comparing, comma-separated |
 | `--rename` |  | the actions renamed before comparing, from=to comma-separated, or a JSON object |
+| `--file` |  | record many refinements at once from a JSON list of { lower, upper, relation, hidden, renamed, says }; every entry is checked before any is written |
 
 Examples:
 
