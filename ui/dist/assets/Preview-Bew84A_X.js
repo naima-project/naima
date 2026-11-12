@@ -1,1 +1,0 @@
-import{Vi as e,ao as t,io as n}from"./switcher-BKmd_oZe.js";import{t as r}from"./App--6f_pjAI.js";function i(i,a){t(a,!0),e(a.store),r(i,{}),n()}export{i as default};

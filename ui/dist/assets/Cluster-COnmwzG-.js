@@ -1,1 +1,0 @@
-import{Ja as e,Wa as t,da as n,ja as r,ka as i,qi as a,so as o,ya as s}from"./switcher-BKmd_oZe.js";var c=r(`<div><!></div>`);function l(r,l){let u=a(l,`gap`,3,`sm`),d=a(l,`justify`,3,`start`),f=a(l,`align`,3,`center`);var p=c(),m=e(p);s(m,()=>l.children),o(p),t(()=>n(p,1,`cluster gap-${u()??``} justify-${d()??``} align-${f()??``}`,`svelte-2y2hj5`)),i(r,p)}export{l as t};

@@ -1,0 +1,1 @@
+import{ba as e,ri as t,xa as n}from"./switcher-hmUcrp9I.js";import{t as r}from"./App-DHtIM3JR.js";function i(i,a){n(a,!0),t(a.store),r(i,{}),e()}export{i as default};
