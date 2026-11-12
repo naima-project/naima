@@ -30,10 +30,10 @@ import {
   runGit,
   saveProse,
   splitProse,
+  tickDir,
   today,
   updateCheckpoint,
 } from "../../core/api.ts"
-import { tickDir } from "../../core/tick.ts"
 import { naimaHere } from "./land.ts"
 
 /** How long a suite may run and stay silent, and the same for the verification of the properties. */
