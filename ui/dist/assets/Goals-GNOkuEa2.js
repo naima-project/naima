@@ -1,1 +1,0 @@
-import{ba as e,oi as t,xa as n}from"./switcher-hmUcrp9I.js";import r from"./Roadmap-CF3d-03C.js";function i(i,a){n(a,!0);let{roadmap:o}=t();r(i,{get screen(){return o},get onopen(){return a.onitem}}),e()}export{i as default};

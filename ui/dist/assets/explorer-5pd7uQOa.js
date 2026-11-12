@@ -1,1 +1,0 @@
-import"./switcher-hmUcrp9I.js";import{t as e}from"./mount-lHBJ3smR.js";e(document.getElementById(`app`));

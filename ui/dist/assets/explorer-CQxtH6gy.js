@@ -1,0 +1,1 @@
+import"./switcher-Dbq4-4CX.js";import{t as e}from"./mount-B8IEWUTq.js";e(document.getElementById(`app`));
