@@ -666,7 +666,7 @@ export async function verifyOnHost(ctx: Context, host: Host, item: Item, progres
     adopt(ctx, item, here)
     return { verdict: here.run.verdict, reused: here.name }
   }
-  keepRun(ctx, item, { ...run, host: run.host ?? host.name })
+  keepRun(ctx, item, { ...run, host: run.host ?? host.name }, host)
   return { verdict: run.verdict }
 }
 
@@ -680,15 +680,31 @@ function redactDeep<T>(value: T, clean: (s: string) => string): T {
   return value
 }
 
+/** What a host's configuration names that its output must not carry: its checkout folder in each spelling, and its machine and account names. */
+function remoteWords(h: Host): { dirs: string[]; words: string[] } {
+  const dir = h.dir.replace(/[\\/]+$/, "")
+  const dirs = dir ? [...new Set([dir, dir.replace(/\\/g, "/"), dir.replace(/\//g, "\\")])].sort((a, b) => b.length - a.length) : []
+  const at = h.ssh.lastIndexOf("@")
+  const words = [h.ssh.slice(at + 1), at > 0 ? h.ssh.slice(0, at) : ""].filter((w) => w.length >= 3)
+  return { dirs, words }
+}
+
 /**
  * The run as it may be committed: what the tool printed — its output, counterexample and details, and those of an
  * equivalence the verdict was carried over by — with the project's root as `<root>` and every private thing the
  * tracker's writes refuse (a home path, a machine or user name, an address) as its placeholder. What keys the run
  * (the inputs, their digests, the tool's version, the options) is left as it is.
  */
-export function redactRun(record: RunRecord, root: string): RunRecord {
-  const pc = privateContext()
-  const clean = (s: string): string => redactPrivate(root ? s.split(root).join("<root>") : s, pc)
+export function redactRun(record: RunRecord, root: string, remote?: Host): RunRecord {
+  const base = privateContext()
+  // A run made on another host printed that host's folder, machine and account, which this machine's private context does not know.
+  const there = remote ? remoteWords(remote) : { dirs: [], words: [] }
+  const pc = { ...base, words: [...base.words, ...there.words] }
+  const clean = (s: string): string => {
+    let t = s
+    for (const d of there.dirs) t = t.split(d).join("<root>")
+    return redactPrivate(root ? t.split(root).join("<root>") : t, pc)
+  }
   const out: RunRecord = { ...record, output: clean(record.output) }
   if (record.counterexample !== undefined) out.counterexample = clean(record.counterexample)
   if (record.details !== undefined) out.details = redactDeep(record.details, clean)
@@ -703,8 +719,8 @@ export function redactRun(record: RunRecord, root: string): RunRecord {
  * Attach a run to the property — its record, and its counterexample as a file of its own — and make it the last run, its status from the verdict.
  * What the tool printed is redacted first (`redactRun`): an attachment is committed, and a log carries the paths of the machine it ran on.
  */
-function keepRun(ctx: Context, item: Item, run: RunRecord): string {
-  const record = redactRun(run, ctx.root)
+function keepRun(ctx: Context, item: Item, run: RunRecord, remote?: Host): string {
+  const record = redactRun(run, ctx.root, remote)
   const stamp = freshStamp(join(item.dir, ATTACHMENTS), record.at.replace(/[:.]/g, "-"))
   const name = `run-${stamp}.json`
   writeJson(join(item.dir, ATTACHMENTS, name), record)
