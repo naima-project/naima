@@ -47,6 +47,7 @@ import { desktopApp, desktopAppDirs, naimaCommand, offReason, openAtStart, regis
 import { nameStopCommand } from "./stops.ts"
 import { viewPool } from "./view-pool.ts"
 import { allTabs, tabsPoint, type UiTab, type UiView } from "./tabs.ts"
+import { withDecisionRecords } from "./design-record.ts"
 
 export { actionArgv, ACTIONS, naimaBridge } from "./bridge.ts"
 export { HOST, serve } from "./serve.ts"
@@ -223,6 +224,7 @@ export const uiTabsPoint: ExtensionPoint<UiTab> = {
 export function tabsOf(ctx: Context): UiTab[] {
   return ctx.registry.contributions("ui-tabs")
     .map((c) => ({ ...(c.value as UiTab), name: shortOrId(ctx, "ui-tabs", c).replace("/", "-") }))
+    .map((t) => (t.name === "design" ? withDecisionRecords(t) : t))
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
 }
 
