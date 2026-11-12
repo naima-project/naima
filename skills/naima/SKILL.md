@@ -45,7 +45,10 @@ finding an investigation reaches, and a lesson a mistake teaches are each a `kno
 applies it as advice (`naima model-first`), `statefulKind`. Once the model holds its properties, offer to generate the state machine's code from it with
 naima-codegen, in Rust, Python or TypeScript with Svelte, checked against the model
 ([generate the code](../../docs/guide/design-with-a-model.md#generate-the-code-from-the-model)); check it with `naima verify` on a property whose verifier is
-`naima-codegen`, early and after every change, never with `naima-codegen check-refinement` alone, so the run is recorded. A decision taken with the owner, a
+`naima-codegen`, early and after every change, never with `naima-codegen check-refinement` alone, so the run is recorded. Explain every property in words
+read from its formula (`naima explain <property> --says "..." --gloss "<part>=<phrase>"`), open every model file with what it models and what it leaves out,
+comment each declaration, and record each refinement with `naima refine`
+([explain the formal work](../../docs/guide/design-with-a-model.md#explain-the-formal-work)). A decision taken with the owner, a
 change of direction or a notable event outside the tracker gets one diary entry, never routine work
 ([the rule](../../docs/guide/rules.md#agents-keep-the-diary)). How to work with the owner (quiet, simple, fast, capture, loops closed) is the shipped working
 rules, printed by `naima rules --audience agents` ([working with the owner](../../docs/guide/rules.md#working-with-the-owner)).

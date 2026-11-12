@@ -55,6 +55,7 @@ import {
   type Plugin,
   type Progress,
 } from "../../core/api.ts"
+import { explainedCheck } from "./explained.ts"
 import { checkFragment, labelActions } from "./formula.ts"
 import {
   cacheKey,
@@ -1162,6 +1163,10 @@ export function mcrl2Plugin(options: Record<string, unknown> = {}, run: Runner =
   if (typeof limit !== "number" || !Number.isInteger(limit) || limit < 0) {
     throw new Error("verifier-mcrl2: summandConditionLimit must be a whole number of operator and variable occurrences, 0 to turn the lint off")
   }
+  const explained = options["explained"] ?? "note"
+  if (explained !== "note" && explained !== "problem") {
+    throw new Error("verifier-mcrl2: explained must be note or problem, how the findings of explained-formal-work are reported")
+  }
   return {
     name: "verifier-mcrl2",
     contract: CONTRACT,
@@ -1173,6 +1178,7 @@ export function mcrl2Plugin(options: Record<string, unknown> = {}, run: Runner =
       "`cross-check` runs both routes and gives a verdict only when they agree; a disagreement is an error whose output begins `the routes disagree:`. Each run records in its `details` the route, the version of every tool it started, and for the LTS route the LTS's key, reuse and size, the mentioned and hidden actions, the equivalence it reduced by and why, the reduced size and whether it was reused, and on false that the counterexample comes from the reduced LTS. While a step runs, every line it prints is the run's progress: `lps2lts` its states, level and transitions, `pbessolve` its BES equations, `ltsconvert` and `lts2pbes`, started with `--verbose`, their stages; a counting step's total is estimated from the count it ended on in the previous run of the same property, model and options. " +
       '`verifierOptions` is an allow-list: `route`, `timeoutSeconds`, `threads`, `maxStates`, `linearise`, `noRewrite`, `cached`, `rewriter` and `summandConditionLimit`, every one leaving the verdict as it is; any other key is an error that names the ones it takes. `linearise`, `"rewrite"` by default, is how `mcrl22lps` linearises on every route, so the verdict never depends on the route: `"no-rewrite"` adds `--no-rewrite`, faster on some models and a stack overflow or a stall of `lps2lts` on others, so it is chosen per model. It makes another LPS, so it is part of the LTS\'s cache key, and it is part of a run\'s identity (`identityOptions`): a run made under one choice is never reused for the other. `noRewrite`, the earlier boolean form, is still read: true is `"no-rewrite"`, false `"rewrite"`; given with a `linearise` that says otherwise, it is an error. `cached`, true by default, explores with `lps2lts --cached`; `threads` stays on `lps2lts` alone. `rewriter`, `"jitty"` (mCRL2\'s default) when not given, is the `--rewriter` of `mcrl22lps`, `lps2lts` and `pbessolve`, the tools of mCRL2 that take one: `"jittyc"`, the compiled rewriter, explores a large state space many times faster. It is chosen for a property in `verifierOptions.rewriter`, for a machine in the environment variable `NAIMA_MCRL2_REWRITER` (a host sets it in the command that runs its Naima), and for the whole project in the plugin option `rewriter`, in that order of precedence, and a run records it in `details.rewriter`. `--threads` and `--cached` change how fast the LTS is made, never the LTS, so they are no part of the key. On POSIX, `lps2lts` and `pbessolve` are started through `/bin/sh` with the stack limit raised to unlimited, or to the hard limit where unlimited is refused; on Windows a program\'s stack is fixed when it is linked, so they start as they are. Every run records `details.linearise` and the options it used and its rate: on the LTS route `details.lts.exploration` (the `mcrl22lps` and `lps2lts` arguments) and `details.rate`, the states `lps2lts` explored per second (`reused: true` when the LTS came from the cache); on the standard route `details.rate`, the BES equations `pbessolve` generated per second. ' +
       "After linearising, `lpspp --format=internal` prints the LPS and each summand's condition is measured in operator and variable occurrences; the summands over the plugin option `summandConditionLimit` (10000 by default, 0 turns it off), or over the property's own `verifierOptions.summandConditionLimit` when it gives one, are named in the run's output, in a line beginning `lint:`, and in `details.lint`, and the check `mcrl2-summand-conditions` notes each model whose last run found some. The print is read as a stream and a condition is counted only up to the limit: one past it is reported as more than the limit (`atLeast` in `details.lint`). The lint never decides a run: when it cannot run, the output says `lint skipped:` with the reason and the verdict stands. " +
+      "The check `explained-formal-work` asks that formal work can be read by a person: every mcrl2 property has its `says` sentence, at most 35 words, and a gloss (`naima explain`) for every modality and fixpoint of its formula, by the head's text (`[true*.expand]`, `<a>`, `nu X.`) or the whole part's; every hand-written `.mcrl2` file of its models (a naima-codegen project's sources, else the files beside the model) opens with a comment saying what it models, with a paragraph beginning `Leaves out` saying what it leaves out (a codegen project's `codegen-init.mcrl2`, `observers.mcrl2` and instances need only the opening comment), and each declaration of its `act` and `proc` sections has a comment, on the line directly above it or at the end of its first line; and every pair of systems a codegen project's `MANIFEST.json` relates by refinement, a group's `<group>-refined.mcrl2` below its `<group>-model.mcrl2`, has its `refinements` item (`naima refine`). Its findings are notes, or problems when the plugin's option `explained` is `problem`. " +
       "The tools are taken from `bin` when it is given and exists on this machine, otherwise from the mCRL2 202607.0 that `naima tools install mcrl2` installed on this machine, otherwise from PATH; a `bin` that does not exist on this machine, as when a shared `naima.json` names another machine's path, is said once and passed over. The plugin declares that tool, so `naima tools` reports it. A tool that is not there is an error run whose output begins `tool missing:`; a tool that fails is an error with its output; a tool killed by a signal is an error whose output ends `<tool> crashed (signal <n>, <name>) on <model>`, the model by its path in the project. The version recorded is the first line of `mcrl22lps --version`. " +
       "For `naima equivalent`, it compares two versions of a model modulo `bisim` (strong bisimilarity, the default, which preserves every formula) or `dpbranching-bisim` (divergence-preserving branching bisimilarity, which preserves the formulas the LTS route accepts): `mcrl22lps`, `lps2lts` and `ltsinfo` for each version, the new one through the LTS cache, then `ltscompare --counter-example`; on false, the distinguishing formula it writes is what tells them apart.",
     options: [
@@ -1194,6 +1200,12 @@ export function mcrl2Plugin(options: Record<string, unknown> = {}, run: Runner =
           "the size above which a summand's condition is reported, in operator and variable occurrences of the linearised model as `lpspp --format=internal` prints it; 0 turns the lint off",
         default: String(CONDITION_LIMIT),
       },
+      {
+        name: "explained",
+        says:
+          "how the check explained-formal-work reports a property without its says sentence or glosses, a model file without its comments, or a refinement a MANIFEST.json relates without its record: note, or problem once the project's material is up to the rule",
+        default: "note",
+      },
     ],
     contributes: {
       verifiers: [
@@ -1201,7 +1213,7 @@ export function mcrl2Plugin(options: Record<string, unknown> = {}, run: Runner =
       ],
       tools: [MCRL2],
     },
-    checks: [summandConditions],
+    checks: [summandConditions, explainedCheck(explained)],
     optional: ["verifiers", "tools"],
   }
 }

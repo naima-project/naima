@@ -94,7 +94,39 @@ export interface ModelArea {
     refined: string
     observers?: string
     checks: RefinementCheck[]
+    /** What the refinement item recorded for this pair, when one is: its sentence, relation and what it hides or renames. */
+    says?: string
+    relation?: string
+    hidden?: string[]
+    renamed?: Record<string, string>
+    recorded?: string
   }
+  /** Every refinement recorded with naima refine whose lower or upper model is in this area. */
+  refinements: RecordedRefinement[]
+}
+
+/** A refinement item, as the Models screen reads it. */
+export interface RecordedRefinement {
+  ref: string
+  lower: string
+  upper: string
+  relation?: string
+  hidden?: string[]
+  renamed?: Record<string, string>
+  says?: string
+}
+
+/** Every refinement item. */
+export function recordedRefinements(ctx: Context): RecordedRefinement[] {
+  return ctx.repo.items.filter((i) => i.type === "refinements").map((i) => {
+    const r: RecordedRefinement = { ref: label(i), lower: modelPath(i.meta["lower"]), upper: modelPath(i.meta["upper"]) }
+    if (typeof i.meta["relation"] === "string") r.relation = i.meta["relation"]
+    if (Array.isArray(i.meta["hidden"])) r.hidden = (i.meta["hidden"] as unknown[]).map(String)
+    const ren = i.meta["renamed"]
+    if (ren && typeof ren === "object" && !Array.isArray(ren)) r.renamed = ren as Record<string, string>
+    if (typeof i.meta["says"] === "string") r.says = i.meta["says"]
+    return r
+  })
 }
 
 const RUN_FILE = /^run-.+\.json$/
@@ -292,6 +324,7 @@ export function modelsData(ctx: Context, type: string): { root: string; areas: M
   if (top && named.every((a) => a === top) && top.includes("/")) top = top.slice(0, top.lastIndexOf("/"))
   const found = top && existsSync(join(ctx.root, top)) ? areasUnder(ctx.root, top) : []
   const all = [...new Set([...found, ...named])].filter((a) => existsSync(join(ctx.root, a))).sort()
+  const recorded = recordedRefinements(ctx)
   const areas = all.map((area): ModelArea => {
     const codegen = isCodegen(ctx.root, area)
     const files = filesOf(ctx.root, area, codegen)
@@ -332,6 +365,7 @@ export function modelsData(ctx: Context, type: string): { root: string; areas: M
       files,
       sizes: [...latest.values()],
       properties: mine.length,
+      refinements: recorded.filter((r) => [r.lower, r.upper].some((m) => m === area || m.startsWith(area + "/"))),
     }
     if (main) out.main = main
     if (codegen) {
@@ -361,6 +395,11 @@ export function modelsData(ctx: Context, type: string): { root: string; areas: M
           return c
         })
         out.refinement = { abstract, refined, checks }
+        const rec = recorded.find((r) => r.lower === refined && r.upper === abstract)
+        if (rec) {
+          out.refinement.recorded = rec.ref
+          for (const k of ["says", "relation", "hidden", "renamed"] as const) if (rec[k] !== undefined) Object.assign(out.refinement, { [k]: rec[k] })
+        }
         const obs = `${area}/model/observers.mcrl2`
         if (files.some((f) => f.path === obs)) out.refinement.observers = obs
       }
@@ -413,6 +452,7 @@ export function propertiesData(ctx: Context, type: string): { properties: Proper
     if (typeof p.meta["says"] === "string" && p.meta["says"].trim()) row.says = p.meta["says"]
     const g = p.meta["glosses"]
     if (g && typeof g === "object" && !Array.isArray(g)) {
+      // In the order they were written: a JSON object keeps its keys' order.
       row.glosses = Object.fromEntries(Object.entries(g as Record<string, unknown>).filter(([, v]) => typeof v === "string")) as Record<string, string>
     }
     if (property.endsWith(".mcf")) {

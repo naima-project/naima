@@ -81,9 +81,13 @@ given-up job can be reset to start again. The comment at the top is the state ma
 %   Failed    give_up   GivenUp
 %   Done      reset     Queued
 %   GivenUp   reset     Queued
+%
+% Leaves out what the job computes and how long it takes: only the order of its steps is modelled.
 
+% The states of the table.
 sort State = struct Queued | Running | Done | Failed | GivenUp;
 
+% The moves of the table, one action each.
 act start, finish, fail, retry, give_up, reset;
 
 % One summand per row of the table: (guard) -> action . Machine(next state).
@@ -140,6 +144,40 @@ naima verify properties/job-retried-at-most-twice
 
 The mCRL2 verifier is switched on in `naima.json`, and its tools are installed once per machine ([tools](tools.md)). How a property becomes `holds`, and what
 happens when it doesn't, is in [prove and close](prove-and-close.md#properties-proven-by-a-tool).
+
+## Explain the formal work
+
+A formula and a model are read by people who know what a state machine is but not the notation, so each one carries plain words. A property records
+`says`, one sentence of at most 35 words stating what must hold and of what, and `glosses`, the parts of its formula each paired with a short phrase, in
+reading order. A part is named by its exact text: a whole sub-formula, or only the head of a modality or a fixpoint, such as `[true* . give_up]` or `nu X.`.
+
+```sh
+naima explain properties/job-retried-at-most-twice \
+  --says "However the job runs, it is never retried a third time before it is reset." \
+  --gloss "[true* . retry . (!reset)* . retry . (!reset)* . retry]=after a run with three retries and no reset between them" \
+  --gloss "false=this never happens"
+```
+
+A gloss for a part already glossed replaces its phrase, `--replace` starts the list again, and a part that is not in the formula is refused. The sentence
+states what the formula requires, including over which histories: "after any sequence of steps", "as long as the job has not been reset", "it is always
+possible to". Where the property's title claims more or less than the formula, the sentence says what the formula says, and a note on the item says so.
+
+A model file opens with a comment saying what it models and, in a paragraph beginning "Leaves out", what it leaves out, as the template above does. Each
+declaration in its `act` and `proc` sections has a comment of one line, directly above it or at the end of its first line.
+
+When one model refines another, the link is recorded, with the relation it is checked by, the actions hidden or renamed before comparing, and one sentence
+saying what the lower model guarantees with respect to the upper:
+
+```sh
+naima refine models/job-detailed.mcrl2 models/job.mcrl2 --relation "trace inclusion" --hide log,tick \
+  --says "Every run of the detailed job is a run of the job, once its logging and its clock are hidden."
+```
+
+The Specs place of the UI shows these words: the sentence above the formula, each gloss beside its part, and each refinement as a rung of the models'
+ladder. Text the UI makes up from the formula's structure, where nothing is recorded, is marked as generated. With the mCRL2 verifier on, the check
+`explained-formal-work` of `naima check` names every property, model file and refinement that lacks its words, including each pair of systems a
+naima-codegen `MANIFEST.json` relates by refinement. Its findings are notes; a project raises them to problems, once its material is up to the rule, with
+the option `explained` of the `verifier-mcrl2` plugin set to `problem`.
 
 ## Keep the model in step with the code
 
