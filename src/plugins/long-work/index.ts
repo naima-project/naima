@@ -134,11 +134,17 @@ function hostOf(hosts: Map<string, Host>, name: string): Host {
 function onHost(host: Host, args: string[], timeoutMs = 120_000): { ok: boolean; out: string; err: string; code: number } {
   const r = spawnSync("ssh", sshArgs(host, args), { encoding: "utf8", timeout: timeoutMs, stdio: ["ignore", "pipe", "pipe"] })
   // No status, no signal and no error: ssh was never started, as when the program may not run it (src/launcher.ts).
+  // A signal with no output is the timeout: ssh was killed while the host was still working or not answering.
+  const said = String(r.stderr ?? "").trim()
   const err = r.error
     ? `ssh: ${r.error.message}`
     : r.status === null && !r.signal
     ? "ssh: could not be started — this command may not run ssh"
-    : String(r.stderr ?? "").trim()
+    : r.status === null
+    ? `${said ? `${said}\n` : ""}ssh: no answer from ${host.ssh} within ${Math.round(timeoutMs / 1000)} s (killed by ${r.signal})`
+    : r.status !== 0 && !said && !String(r.stdout ?? "").trim()
+    ? `ssh: ${host.ssh} ended with exit ${r.status} and said nothing`
+    : said
   return { ok: r.status === 0, out: String(r.stdout ?? ""), err, code: r.status ?? 1 }
 }
 
@@ -397,8 +403,9 @@ export async function confirmStart(
  * (such as "could not start: spawn echo ENOENT"), else its error output's last line, else its output's.
  */
 export function remoteCause(out: string, err: string): string {
-  const errs = err.split("\n").map((l) => l.trim()).filter(Boolean)
-  const outs = out.split("\n").map((l) => l.trim()).filter(Boolean)
+  const said = (t: string) => t.split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("NAIMA-MESSAGE"))
+  const errs = said(err)
+  const outs = said(out)
   if ([...errs, ...outs].some((l) => /unknown command "run"/.test(l))) {
     return `) — its own Naima has no run command: it needs the long-work plugin`
   }
@@ -427,7 +434,8 @@ function startRemote(
     else forwarded.push(a)
   }
   if (!forwarded.includes("--guard-tracked")) forwarded.push("--guard-tracked")
-  const r = onHost(host, ["run", ...forwarded, "--", ...command])
+  // The host's own Naima checks the tracked files before it starts the run, which on a cold checkout takes a while.
+  const r = onHost(host, ["run", ...forwarded, "--", ...command], 300_000)
   for (const l of r.out.split("\n").filter(Boolean)) ctx.out(`${host.name}: ${l}`)
   if (!r.ok) {
     for (const l of r.err.split("\n").filter(Boolean)) ctx.err(`${host.name}: ${l}`)

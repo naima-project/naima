@@ -3,9 +3,9 @@
 // `naima run`, read back through `naima run status`, and settled into the checkpoint record: a pass or a failure per run.
 // A failed run blocks the gate through the record and files, or updates, a bug.
 import { spawnSync } from "node:child_process"
-import { rmSync } from "node:fs"
+import { mkdirSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import {
   type CheckpointRecord,
   type CheckpointRun,
@@ -33,6 +33,7 @@ import {
   today,
   updateCheckpoint,
 } from "../../core/api.ts"
+import { tickDir } from "../../core/tick.ts"
 import { naimaHere } from "./land.ts"
 
 /** How long a suite may run and stay silent, and the same for the verification of the properties. */
@@ -169,10 +170,15 @@ export function sendTipWith(root: string, h: Host, tip: string, exec: Exec, paus
     return pushed.ok ? undefined : fail(pushed.err)
   }
   const file = `naima-checkpoint-${tip.slice(0, 12)}.bundle`
-  const local = join(tmpdir(), file)
+  // The bundle is made in Naima's state folder in the clone's git directory, the one place outside the tracker the
+  // launcher lets the command read and write (the system's temporary folder it may not), else in the temporary folder.
+  const state = tickDir(root)
+  const folder = state ? dirname(state) : tmpdir()
+  const local = join(folder, file)
   const fwd = h.dir.replace(/\\/g, "/").replace(/\/+$/, "")
   const winDir = h.dir.replace(/\//g, "\\").replace(/\\+$/, "")
   try {
+    mkdirSync(folder, { recursive: true })
     const made = exec("git", ["-C", root, "update-ref", ref, tip])
     if (!made.ok) return fail(made.err)
     const bundled = exec("git", ["-C", root, "bundle", "create", "--quiet", local, ref])
