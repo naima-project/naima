@@ -1,0 +1,1 @@
+import{Si as e,sr as t,xi as n}from"./workers-BMGoxYRa.js";import r from"./Roadmap-Dp4aTV4O.js";function i(i,a){e(a,!0);let{roadmap:o}=t();r(i,{get screen(){return o},get onopen(){return a.onitem}}),n()}export{i as default};

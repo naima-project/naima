@@ -1,0 +1,1 @@
+import{Si as e,ir as t,xi as n}from"./workers-BMGoxYRa.js";import{t as r}from"./App-BLHbqqxf.js";function i(i,a){e(a,!0),t(a.store),r(i,{}),n()}export{i as default};
