@@ -316,7 +316,9 @@ export function modelsData(ctx: Context, type: string): { root: string; areas: M
     let says = ""
     if (codegen) {
       main = files.find((f) => f.path === `${area}/model/core.mcrl2`)?.path
-      says = openingComment(readFileSync(join(ctx.root, area, "codegen.toml"), "utf8"))
+      // The Core's opening comment says what the machine does; the project's codegen.toml, how it is declared.
+      says = (main ? openingComment(readFileSync(join(ctx.root, main), "utf8")) : "").replace(/^\S+\.mcrl2\s+--\s+/, "")
+      if (!says) says = openingComment(readFileSync(join(ctx.root, area, "codegen.toml"), "utf8"))
     } else {
       const own = files.filter((f) => f.role === "source" && dirname(f.path) === area)
       main = (own.find((f) => f.path.endsWith(`/${area.split("/").pop()}.mcrl2`)) ?? own[0])?.path
