@@ -213,7 +213,11 @@ function realExec(root: string): Exec {
     const never = !r.error && r.status == null && !r.signal
     return {
       ok: r.status === 0,
-      err: r.error ? `${cmd}: ${r.error.message}` : never ? `${cmd} could not be started: this command may not run it` : String(r.stderr ?? "").trim().split("\n").pop() ?? "",
+      err: r.error
+        ? `${cmd}: ${r.error.message}`
+        : never
+        ? `${cmd} could not be started: this command may not run it`
+        : String(r.stderr ?? "").trim().split("\n").pop() ?? "",
     }
   }
 }

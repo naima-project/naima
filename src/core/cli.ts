@@ -121,7 +121,6 @@ import {
   checkFrom,
   counted,
   describe,
-  type Findings,
   FOLLOW_UP,
   INTRODUCTION,
   INTRODUCTION_BOLD,
@@ -773,7 +772,7 @@ async function said(
  * --rehearse, whose progress is the run's, and whose result is recorded in the program's git folder, where every later
  * naima update --check and naima hello read it. Says the run's name and how to follow it.
  */
-function startRehearsal(opts: CliOptions, place: Place, io: IO): string[] {
+function startRehearsal(opts: CliOptions, place: Place): string[] {
   const entry = join(opts.programRoot, "naima.ts")
   const name = "update-rehearsal"
   const naima = [process.execPath, "run", "-A", entry, "--data", place.data]
@@ -1147,7 +1146,7 @@ async function update(args: string[], opts: CliOptions, place: Place, given: Loc
   const progress = progressFor((l) => io.err(l))
   /** What a check says of a change: the rehearsal only when asked, now or as a run of its own. */
   const sayChange = async (t: Target, to: string): Promise<string[]> => {
-    if (inBackground) return [...await said(opts, place, t, raw, to), ...startRehearsal(opts, place, io)]
+    if (inBackground) return [...await said(opts, place, t, raw, to), ...startRehearsal(opts, place)]
     const lines = await said(opts, place, t, raw, to, { rehearse: rehearsing, progress })
     progress.end()
     return lines
