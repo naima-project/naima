@@ -60,6 +60,7 @@ import {
 } from "../../core/api.ts"
 import { exampleRegex } from "./adapters/example-regex.ts"
 import { propertyRunsView } from "./history.ts"
+import { specsModelsView, specsPropertiesView } from "./specs.ts"
 import { CODEGEN_PIN, CODEGEN_REPOSITORY, naimaCodegen } from "./adapters/naima-codegen.ts"
 import { type CompareResult, type Verdict, type Verifier, verifiersPoint, type VerifyRequest, type VerifyResult } from "./contract.ts"
 
@@ -1721,7 +1722,7 @@ export default function verifier(): Plugin {
       gates: [allHold],
       "landing-reports": [propertiesCurrent],
       summary: [codegenSection, missingSection],
-      "ui-views": [propertyRunsView(TYPE), propertyHistoryView],
+      "ui-views": [propertyRunsView(TYPE), propertyHistoryView, specsModelsView(TYPE), specsPropertiesView(TYPE)],
     },
     // Its gate is there when a gates plugin is, its landing report when the coordination plugin is, its views when the ui plugin is:
     // without them, nothing lists either.
