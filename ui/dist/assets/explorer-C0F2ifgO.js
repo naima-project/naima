@@ -1,0 +1,1 @@
+import"./switcher-BKmd_oZe.js";import{t as e}from"./mount-DCEcOr3P.js";e(document.getElementById(`app`));

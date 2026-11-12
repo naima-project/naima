@@ -1,0 +1,1 @@
+import{Wi as e,ao as t,io as n}from"./switcher-BKmd_oZe.js";import r from"./Roadmap-e7sFpogh.js";function i(i,a){t(a,!0);let{roadmap:o}=e();r(i,{get screen(){return o},get onopen(){return a.onitem}}),n()}export{i as default};

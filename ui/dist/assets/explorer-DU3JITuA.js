@@ -1,1 +1,0 @@
-import"./workers-C77ds2Rl.js";import{t as e}from"./mount-DzcLt_Uy.js";e(document.getElementById(`app`));

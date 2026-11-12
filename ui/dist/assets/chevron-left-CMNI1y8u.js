@@ -1,0 +1,1 @@
+import{Ji as e,Xr as t,Yi as n}from"./switcher-BKmd_oZe.js";var r={name:`chevron-left`,size:24,node:[[`path`,{d:`m15 18-6-6 6-6`}]]};r.node;var i=new Set([`$$slots`,`$$events`,`$$legacy`]);function a(a,o){let s=e(o,i);t(a,n(()=>s,{get icon(){return r}}))}export{a as t};
