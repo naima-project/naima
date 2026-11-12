@@ -255,10 +255,12 @@ const HEAVY_STALE = "15m"
 export const LANDING_HERE = "here"
 
 /** The program that runs this Naima, as a command's words: what a heavy landing check run on this machine starts. */
-export function naimaHere(): string[] {
+export function naimaHere(data?: string): string[] {
   const program = fileURLToPath(new URL("../../../", import.meta.url))
   const deno = (globalThis as { Deno?: { execPath(): string } }).Deno
-  return deno ? [deno.execPath(), "run", "-A", join(program, "naima.ts")] : [process.execPath, join(program, "src", "cli.ts")]
+  const words = deno ? [deno.execPath(), "run", "-A", join(program, "naima.ts")] : [process.execPath, join(program, "src", "cli.ts")]
+  // A run started from another folder (a checkout) does not find the tracker's data by itself when it is not <root>/naima-data.
+  return data ? [...words, "--data", data] : words
 }
 
 /**
@@ -299,7 +301,7 @@ async function heavyCheck(ctx: Context, name: string, landing: Landing, at: Cont
   // On a host, one command line for its shell; here, the program and its arguments, with no shell between them.
   const command = host
     ? [[host.naima, ...checkArgs(landingRef(runName)).map(host.shell === "cmd" ? (w: string) => windowsArg(w) : shellQuote)].join(" ")]
-    : [...naimaHere(), ...checkArgs(landing.to)]
+    : [...naimaHere(ctx.trackerRoot), ...checkArgs(landing.to)]
   const clean = async (): Promise<void> => {
     try {
       await run.run(["clean", runName], quiet)
