@@ -63,6 +63,7 @@ import {
   type WriteHook,
 } from "../../core/api.ts"
 import { ARTIFACT_FIELDS, ARTIFACT_RELATIONS, artifactsCheck, artifactsType, deliveryHook } from "./artifacts.ts"
+import { specificationsView, specsRequirementsView } from "./specs-views.ts"
 import { AUDIT_FIELDS, AUDIT_RELATIONS, auditHook, auditsCheck, auditsType } from "./audits.ts"
 import {
   modelFirstCheck,
@@ -804,8 +805,8 @@ export default function planning(options: Record<string, unknown> = {}): Plugin 
     summary: [modelFirstSection(modelFirst)],
     hooks: [stamp, proposedRequirements, releasesHook, deliveryHook, auditHook],
     home: import.meta.url,
-    contributes: { rules: { folder: "rules/", settings: modelFirstSettings(modelFirst) } },
-    // The rules are listed by naima rules when the rules plugin is loaded; without it, planning works the same.
-    optional: ["rules"],
+    contributes: { rules: { folder: "rules/", settings: modelFirstSettings(modelFirst) }, "ui-views": [specsRequirementsView, specificationsView] },
+    // The rules are listed by naima rules when the rules plugin is loaded, its views shown when the ui plugin is; without them, planning works the same.
+    optional: ["rules", "ui-views"],
   }
 }

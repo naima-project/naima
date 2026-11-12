@@ -436,6 +436,8 @@ export const specsModelsView = (type: string) => ({
   name: "specs-models",
   title: "Models",
   order: 40,
+  // The Specs place draws it as its Models screen: it is not also one of the UI's tabs.
+  screen: true,
   says:
     "the models the properties are checked on: their files, what each is for, the sizes their runs recorded, and the refinements the generator sets up; with file=<path>, one file's text",
   render(params: Record<string, string[]>, ctx: Context) {
@@ -457,6 +459,7 @@ export const specsPropertiesView = (type: string) => ({
   name: "specs-properties",
   title: "Properties",
   order: 41,
+  screen: true,
   says: "every property with its formula, its model and its last run: the verdict, the state space's size, and the counterexample when one was recorded",
   render(_params: Record<string, string[]>, ctx: Context) {
     const d = propertiesData(ctx, type)

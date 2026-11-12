@@ -1,0 +1,1 @@
+import{Gr as e,Lr as t,Ni as n,bi as r,gi as i,ri as a,ti as o,yr as s}from"./workers-C77ds2Rl.js";var c=a(`<div><!></div>`);function l(a,l){let u=s(l,`gap`,3,`sm`),d=s(l,`justify`,3,`start`),f=s(l,`align`,3,`center`);var p=c(),m=r(p);e(m,()=>l.children),n(p),i(()=>t(p,1,`cluster gap-${u()??``} justify-${d()??``} align-${f()??``}`,`svelte-2y2hj5`)),o(a,p)}export{l as t};

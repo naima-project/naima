@@ -1,1 +1,0 @@
-import"./workers-BMGoxYRa.js";import{t as e}from"./mount-BOFhA8NO.js";e(document.getElementById(`app`));
