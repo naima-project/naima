@@ -660,13 +660,14 @@ Run every invariant; exit 1 on any problem.
 **Enforces**: Every invariant the loaded plugins declare (their checks): exit 1 on any problem; with --staged, the ones the pre-commit hook runs.
 
 ```sh
-naima check [--staged] [--all-worktrees]
+naima check [--staged] [--all-worktrees] [--heavy]
 ```
 
 | Option | Default | What it does |
 |---|---|---|
 | `--staged` |  | run only the checks that read the change staged for the next commit: what the pre-commit hook runs |
 | `--all-worktrees` |  | the coordinator's view: every worktree's missing claim is a problem, not only the one being checked |
+| `--heavy` |  | also run the checks that take minutes (a stance's browser checks, for one); without it they are left out, and named in the last lines. Each check running is told on standard error as it starts and, when it took a second or more, as it ends |
 
 Examples:
 
@@ -674,6 +675,7 @@ Examples:
 naima check
 naima check --staged
 naima check --all-worktrees
+naima check --heavy
 ```
 
 ### naima waive

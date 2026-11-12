@@ -502,19 +502,29 @@ const check: Command = {
   name: "check",
   says: "run every invariant; exit 1 on any problem",
   enforces: "every invariant the loaded plugins declare (their checks): exit 1 on any problem; with --staged, the ones the pre-commit hook runs",
-  usage: "check [--staged] [--all-worktrees]",
+  usage: "check [--staged] [--all-worktrees] [--heavy]",
   options: [
     { name: "--staged", says: "run only the checks that read the change staged for the next commit: what the pre-commit hook runs" },
     { name: "--all-worktrees", says: "the coordinator's view: every worktree's missing claim is a problem, not only the one being checked" },
+    {
+      name: "--heavy",
+      says: "also run the checks that take minutes (a stance's browser checks, for one); without it they are left out, and named in the last lines. Each check running is told on standard error as it starts and, when it took a second or more, as it ends",
+    },
   ],
-  examples: ["check", "check --staged", "check --all-worktrees"],
+  examples: ["check", "check --staged", "check --all-worktrees", "check --heavy"],
   async run(args, ctx) {
-    const p = parse(args, { staged: { type: "boolean" }, "all-worktrees": { type: "boolean" } })
+    const p = parse(args, { staged: { type: "boolean" }, "all-worktrees": { type: "boolean" }, heavy: { type: "boolean" } })
     if (p.positionals.length) throw usageError(this)
     const staged = bool(p, "staged")
-    const { problems, notes } = await runChecks(ctx, { staged, allWorktrees: bool(p, "all-worktrees") })
-    const count = staged ? ctx.registry.checks.filter((c) => c.staged === true).length : ctx.registry.checks.length
+    const { problems, notes, skipped } = await runChecks(ctx, {
+      staged,
+      allWorktrees: bool(p, "all-worktrees"),
+      heavy: bool(p, "heavy"),
+      progress: (line) => ctx.err(line),
+    })
+    const count = (staged ? ctx.registry.checks.filter((c) => c.staged === true).length : ctx.registry.checks.length) - skipped.length
     ctx.out(`${ctx.repo.items.length} items, ${count} ${staged ? "staged-change " : ""}checks`)
+    if (skipped.length) ctx.out(`left out, heavy (naima check --heavy runs them): ${skipped.join(", ")}`)
     if (notes.length) {
       ctx.out("\nnotes (not failures):")
       for (const n of notes) ctx.out(`  · ${n.message}`)

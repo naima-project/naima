@@ -144,6 +144,10 @@ export interface CheckOptions {
   allWorktrees?: boolean
   /** Only checks that read the change staged for the next commit (`check.staged === true`): what a pre-commit hook runs. */
   staged?: boolean
+  /** Also run the heavy checks (those that open a browser, build pages or run a suite): `naima check --heavy`. */
+  heavy?: boolean
+  /** Told as each check starts and ends, so that a long check is seen to be running: `naima check` prints it. */
+  progress?: (line: string) => void
 }
 
 export interface Check {
@@ -155,6 +159,12 @@ export interface Check {
   staged?: boolean
   /** The external programs the check starts besides git, which the launcher grants (`naima runs` lists them). */
   runs?: string[]
+  /**
+   * True for a check that takes minutes (a browser, a build, a suite): `naima check` leaves it out unless given --heavy, and
+   * says which it left out. A check of a plugin pinned to a source of its own that starts an external program (`runs`) is
+   * heavy without saying so: such a plugin, a stance, is not Naima's to time.
+   */
+  heavy?: boolean
 }
 
 /** One documented option: a command's `--flag`, or a plugin's configuration key. */

@@ -255,6 +255,13 @@ function pinnedChecks(ctx: Context): Set<string> {
 export interface CheckReport {
   problems: Finding[]
   notes: Finding[]
+  /** The heavy checks left out, by name: `naima check --heavy` runs them. */
+  skipped: string[]
+}
+
+/** Whether `check` is heavy: it says so, or its plugin is pinned to a source of its own and the check starts an external program. */
+function isHeavy(check: Check, pinned: Set<string>): boolean {
+  return check.heavy === true || (pinned.has(check.name) && (check.runs?.length ?? 0) > 0)
 }
 
 /**
@@ -264,16 +271,25 @@ export interface CheckReport {
  */
 export async function runChecks(ctx: Context, options: CheckOptions = {}): Promise<CheckReport> {
   const found: { check: string; findings: Finding[] }[] = []
-  const pinned = process.env[REHEARSAL_SKIPS_PINNED] === "1" ? pinnedChecks(ctx) : new Set<string>()
+  const pinned = pinnedChecks(ctx)
+  const skipped: string[] = []
   for (const check of ctx.registry.checks) {
     if (options.staged && check.staged !== true) continue
-    if (pinned.has(check.name)) continue
+    if (process.env[REHEARSAL_SKIPS_PINNED] === "1" && pinned.has(check.name)) continue
+    if (!options.heavy && isHeavy(check, pinned)) {
+      skipped.push(check.name)
+      continue
+    }
+    const began = Date.now()
+    options.progress?.(`check ${check.name} …`)
     try {
       found.push({ check: check.name, findings: await check.run(ctx, options) })
     } catch (e) {
       found.push({ check: check.name, findings: [problem(`check "${check.name}" failed to run: ${message(e)}`)] })
     }
+    const seconds = (Date.now() - began) / 1000
+    if (seconds >= 1) options.progress?.(`check ${check.name} took ${seconds.toFixed(1)}s`)
   }
   const findings = applyWaivers(ctx, found)
-  return { problems: findings.filter((f) => f.level === "problem"), notes: findings.filter((f) => f.level === "note") }
+  return { problems: findings.filter((f) => f.level === "problem"), notes: findings.filter((f) => f.level === "note"), skipped }
 }
