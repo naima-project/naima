@@ -30,9 +30,9 @@ export function windowsLaunchScript(program: string, args: string[], cwd: string
     "$e = [Environment]::GetEnvironmentVariables('Process')",
     "$v = [string[]]@($e.Keys | Where-Object { $_ -and -not $_.StartsWith('=') } | ForEach-Object { \"$_=$($e[$_])\" })",
     "$si = New-CimInstance -CimClass (Get-CimClass -ClassName Win32_ProcessStartup) -ClientOnly -Property @{ ShowWindow = [uint16]0; EnvironmentVariables = $v }",
-    `$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ${
-      psString(windowsCommandLine([program, ...args]))
-    }; CurrentDirectory = ${psString(cwd)}; ProcessStartupInformation = $si }`,
+    `$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ($env:ComSpec + ${
+      psString(` /d /s /c "${windowsCommandLine([program, ...args])}"`)
+    }); CurrentDirectory = ${psString(cwd)}; ProcessStartupInformation = $si }`,
     'if ($r.ReturnValue -ne 0) { [Console]::Error.WriteLine("Win32_Process.Create returned $($r.ReturnValue)"); exit 1 }',
     "[Console]::Out.WriteLine($r.ProcessId)",
   ].join("\n")
