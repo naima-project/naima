@@ -88,7 +88,7 @@ async function start(
   const base: CheckpointRun = { run, name, kind, what, ...(host ? { host } : {}), state: "running" }
   await ask(ctx, "run", ["clean", run])
   const r = await ask(ctx, "run", [run, ...(host ? ["--host", host] : []), "--budget-time", limits.budget, "--stale", limits.stale, "--", ...command])
-  return r.code === 0 ? base : { ...base, state: "failed", why: `could not start: ${lastLine(r.lines)}` }
+  return r.code === 0 ? base : { ...base, state: "failed", why: clean(ctx, `could not start: ${lastLine(r.lines)}`) }
 }
 
 /**
@@ -107,7 +107,15 @@ export async function startRuns(
     if (s.host) {
       const sent = send(ctx, s.host, tip)
       if (sent) {
-        runs.push({ run: `checkpoint-${tip.slice(0, 12)}-${s.name}`, name: s.name, kind: "suite", what: s.command, host: s.host, state: "failed", why: sent })
+        runs.push({
+          run: `checkpoint-${tip.slice(0, 12)}-${s.name}`,
+          name: s.name,
+          kind: "suite",
+          what: s.command,
+          host: s.host,
+          state: "failed",
+          why: clean(ctx, sent),
+        })
         continue
       }
     }
