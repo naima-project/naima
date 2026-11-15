@@ -62,7 +62,8 @@ export {
   type WriteOptions,
 } from "./item.ts"
 export { storedLinks } from "./repo.ts"
-export { filerRole, sessionLine, setSessionLine } from "./origin.ts"
+export { currentSession, filerRole, sessionLine, setSessionLine } from "./origin.ts"
+export { adapter, ADAPTERS, type AgentAdapter } from "./adapters/index.ts"
 export { checkoutAt, contextAt, contextIn, contextOfProject, type IO } from "./context.ts"
 export { type KnownProject, knownProjects, UI_SWITCH, UI_SWITCH_ENV, type UiSwitch } from "./projects.ts"
 export { READY, readyQueue, type ReadyRecord, readyRecord } from "./ready.ts"
@@ -149,6 +150,7 @@ export {
   currentBranch,
   filesAt,
   firstCommit,
+  gitDirsOf,
   gitOrNull,
   gitPath,
   gitReadScope,
@@ -254,6 +256,6 @@ export {
   showRate,
   stageTotal,
 } from "./progress.ts"
-export { type JobOutcome, type Level, messageId, type Notice, stateDir, tickDir } from "./tick.ts"
+export { type JobOutcome, type Level, MESSAGE_PREFIX, messageId, messageLine, type Notice, stateDir, tickDir } from "./tick.ts"
 export { developmentLine, LINE_BRANCH_PREFIX, type OnLine, refuseConfigOnLine, trunkOnlyRefusal, whereOnLine } from "./trunk-only.ts"
 export { spawnSyncFed } from "./spawn-fed.ts"

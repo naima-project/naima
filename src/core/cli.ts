@@ -1613,7 +1613,9 @@ async function hello(args: string[], opts: CliOptions, place: Located, io: IO): 
   const now = opts.tick?.clock ?? (() => new Date())
   // The session it starts: given, else the tool's own from its hook's input, read only when launched as a hook.
   const hookInput = tool?.sessionOf ? (opts.hookInput ?? (opts.launched ? readHookInput : () => ""))() : ""
-  startSession(place.root, now(), given ?? (hookInput ? tool?.sessionOf?.(hookInput) : undefined))
+  const session = startSession(place.root, now(), given ?? (hookInput ? tool?.sessionOf?.(hookInput) : undefined))
+  // Every later command of this session runs under it where the tool lets a hook say so: a successor's hello in the same checkout then cannot be taken for this session.
+  if (session && tool?.pinSession && opts.launched) tool.pinSession(process.env, session)
   // The project, and what waits on the owner, read while the update check runs: a section that runs git, such as the
   // work at risk, runs beside it. Said after it, in their place.
   const early = openProject(place, opts, { ...io, err: () => {} }).then((ctx) => ({ ctx, waiting: atSessionStart(ctx) }))

@@ -94,6 +94,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`line`](#naima-line) | coordination | parallel development lines, one long-lived branch line/<gate> per goal of the trunk: new starts one from the trunk; list shows the open ones, each with its gate, latest update, how far it lags and the items fixed on it; use sets the line this chat works on (kept outside the repository), which open, claims, queue --ready and land follow; sync merges the trunk into a line through a short branch; unfix withdraws an item's fixed mark on a line, so that the line's landing leaves it open; abandon keeps its commits under archive/line/<gate> and deletes it | a line starts only from the trunk, tied to a gate the project declares, never from another line; the trunk reaches a line only by a sync, never the reverse, and a line reaches the trunk only by landing; unfix runs from the main checkout, only for an item fixed on the open line, and moves the line by one marker of its own, a merge whose tree is the line's with the item's fixedOn removed, with an Unfixes: trailer naming the item and the reason in its message, refused when the reason holds private infrastructure; the item's work stays on the line; abandon keeps every commit under its archive tag and writes nothing on the trunk, so the items fixed on the line are open there again; nothing is supported with the tracker in a repository of its own |
 | [`stale`](#naima-stale) | coordination | the work left behind: every branch, worktree and claim with no sign of life for staleAfter hours, or whose branch is gone or merged, with what it holds and the next step | without --write it only reads, and says what it would drop; with it, only what nothing needs goes — a branch the trunk or a line holds all of, with its clean worktree, or one landed whose worktree holds only a leftover claim file; the same in the product clone once idle staleAfter hours; a worktree git reports prunable; a claim whose branch is gone or merged, by a commit on the line that carries it, from the main checkout only — never uncommitted work, a branch with commits no line holds, or a detached worktree, which are only named; a branch counts as stale when its claim is stale (branch gone or merged into the trunk, or every item closed) or nothing happened on it for staleAfter hours (24 here) — no commit, step, session note or file changed; the next step is resume when anything is not committed, land when it is ahead of the trunk, up to date with it and holds open items, resume when it is behind, archive when no open item is claimed, drop when the trunk has all of it or the branch is gone |
 | [`pass`](#naima-pass) | coordination | write this session's note (one new file), or list the newest | a session note is one new file: earlier ones are never rewritten; a note is refused without --ack when the project's active rules ask for an acknowledgement, and --ack is refused unless it carries every phrase they ask for |
+| [`handover`](#naima-handover) | coordination | hand the coordinator role over to a fresh session: write the session note with what is in flight, give the role up, print what starts the successor; --status says how deep the context is, --watch is what the turn end runs | only the session that holds the coordinator role hands over (naima hello in the main checkout takes it); the handover writes the session note first, with every claim, the branches waiting to land, the runs and the open meeting, and gives the role up only once it is written; the session that gave it up is refused by land and by the push check, whatever it is told, and a worker's session is not affected |
 | [`event`](#naima-event) | coordination | record an event the timeline cannot derive — a decision taken elsewhere, a build handed out, a policy, an outside fact — as one new file; everything else on `naima view timeline` is derived | an event has a YYYY-MM-DD date and a one-word kind, and is one new file; what the timeline derives is never recorded |
 | [`diary`](#naima-diary) | coordination | the project's story, day by day and in order: events recorded with --kind diary, every decision with its reason, every artifact delivered, every item retired with its reason, every session note; nothing stored but those files | nothing: it reads the records, the decisions, the artifacts, the retired items and the session notes, and writes nothing |
 | [`triage`](#naima-triage) | triage | coverage of the four fields; set them; list what needs a human; derive what the page proves | the four fields take only their declared values, through the write hooks; derive writes only with --write |
@@ -164,7 +165,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `migrations` | core | a plugin's own data migrations, in order from its format 1, run by `naima update` after the core's | gates |
 | `credits` | core | what a plugin runs or builds on without installing it (a program found on PATH, say), credited by `naima credits`: name, homepage, source, authors, license, version (provisional) | verifier |
 | `landing-reports` | coordination | what `naima land` checks before a branch lands, on the trunk or on a line, and reports once it has: `name`, `says`, and `refuses(ctx, { branch, from, to, changed }) → lines`, what fails on the branch, any line refusing the landing with no flag to let it through; `blocks(ctx, landing) → lines`, what the landing changed whose proofs are not current, any line refusing a landing on the trunk unless --stale-proofs gives the reason; or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root, and `ctx.root` holds the branch tip's files; `heavy: true` says the check runs heavy work (browsers, a full suite): naima land runs it detached and waits on it, in a checkout of the tip: on the host the coordination option landingHost names, through naima run --host, or on this machine through naima run when none is named or it is `here`; a heavy check may give `covers(ctx, landing) → files`, the files of `changed` it reads, computed where naima land runs without heavy work: when it covers none, the check is not needed and needs no landing host; the landing host is the one the branch tip's configuration names, else the trunk's | gates, verifier, rules, stance-ui |
-| `claims-reports` | coordination | a section `naima claims` prints after the claims, and gives under `reports` with --json: `name`, `says`, and `lines(ctx) → lines`, none when there is nothing to report | long-work |
+| `claims-reports` | coordination | a section `naima claims` prints after the claims, and gives under `reports` with --json: `name`, `says`, and `lines(ctx) → lines`, none when there is nothing to report | discussions, long-work |
 | `goal-order` | coordination | the order of the goals development lines are tied to: `name`, `says`, `before(ctx, a, b) → boolean`, whether goal a comes before goal b; naima open refuses an item on the line of a goal that comes after the item's own | gates |
 | `gates` | gates | a named release or merge condition, backed by items: `title`, `says`, `decides`, `evaluate(ctx) → { holds, blocking, owed }`; `inFullSuite` makes it part of the full suite a release gate (`fullSuite`) requires | verifier |
 | `methods` | gates | an ordered list of steps, each with an exit criterion, that a gate may follow (`naima gate set <gate> --method <plugin>/<method>`): `name`, `title`, `says`, `steps: [{ name, title, exit }]`; the gate holds only once every step is closed, in order | stance-ui |
@@ -1192,6 +1193,8 @@ Options, each with the default it takes when nothing sets it:
 | `who` |  | who works, when `naima open` is given no `--as`: the branch's first segment |
 | `worktrees` | `../<main worktree's folder>-worktrees` | the directory every worktree is a folder of, relative to the main worktree |
 | `exempt` | `[]` | branches the naming scheme does not apply to: names, or patterns with * |
+| `contextWindow` | `200000` | the context window of the model the coordinator runs on, in tokens: what naima handover measures the context against; a positive whole number. The default awaits the owner's choice |
+| `handoverAt` | `0.6` | the share of the context window past which the coordinator is told at the turn end to hand over to a fresh session (naima handover): above 0 and at most 1. The default awaits the owner's choice |
 | `maxWorkers` | `3` | how many worker worktrees (folders of the worktrees directory, on a branch the scheme applies to) may be open at once: naima open refuses another, naming the open ones, and naima hello states it in one line, saying the owner can ask to change it; a positive whole number |
 | `trunkGuard` | `true` | false turns the trunk guard off: the git hook that refuses a commit, merge or fast-forward of the trunk made by hand is removed and not put back by naima update, the landing rule is not shipped, and landings-are-markers asks only from the first marker; written by naima guard off and naima guard on |
 | `diaryPerDay` | `5` | how many diary entries a day may hold before the check diary-entries notes it: a positive whole number |
@@ -1638,6 +1641,43 @@ naima pass --list 3
 naima pass --list 3 --json
 ```
 
+### naima handover
+
+Hand the coordinator role over to a fresh session: write the session note with what is in flight, give the role up, print what starts the successor; --status says how deep the context is, --watch is what the turn end runs.
+
+**Enforces**: Only the session that holds the coordinator role hands over (naima hello in the main checkout takes it); the handover writes the session note first, with every claim, the branches waiting to land, the runs and the open meeting, and gives the role up only once it is written; the session that gave it up is refused by land and by the push check, whatever it is told, and a worker's session is not affected.
+
+**Progress**: Nothing: it is a short command.
+
+```sh
+naima handover [--ack "<line>"] [--note "<what else is in hand>"]
+naima handover --status
+naima handover --watch [--hook <tool>] [--tokens <n>] [--session <id>]
+naima handover --check [<what>]
+naima handover --take
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--ack` |  | the acknowledgement line the project's rules ask a session note to carry, as naima pass --ack |
+| `--note` |  | more for the successor, written in the session note after what is in flight: what the open conversation stands on |
+| `--status` |  | say who holds the role, how deep the context is and the limit, or that the host gives no measure |
+| `--watch` |  | what the turn-end hook runs: when this session holds the role and its context is past the limit, print the message that tells it to hand over (as the tool's turn-end decision with --hook, as a NAIMA-MESSAGE line otherwise); nothing in every other case |
+| `--hook` | `claude-code` | with --watch: the tool whose hook runs it, read from standard input |
+| `--tokens` |  | with --watch: the context size, instead of the one the hook input gives |
+| `--session` |  | with --watch: the session, instead of the hook input's or the current one |
+| `--check` |  | exit 1 when this session gave the role up: for a script that publishes, as scripts/publish-site.sh does |
+| `--take` |  | take the role for the current session, as naima hello does in the main checkout |
+
+Examples:
+
+```sh
+naima handover --ack "Acknowledge: Quiet mode on"
+naima handover --status
+naima handover --watch --hook claude-code
+naima handover --check publishing the site
+```
+
 ### naima event
 
 Record an event the timeline cannot derive — a decision taken elsewhere, a build handed out, a policy, an outside fact — as one new file; everything else on `naima view timeline` is derived.
@@ -1718,7 +1758,7 @@ naima event 2026-10-05 "The plan was entered" --kind diary --about features/the-
 
 **Directories** it owns under the tracker root: `claims/`, `passes/`, `events/`, `checkpoints/`.
 
-**Summary sections**: `where we were`, `lines`, `at-risk`, `in hand`, `worker limit`, `ready queue`, `stale work`, `stale sweep`, `trunk-guard`.
+**Summary sections**: `where we were`, `lines`, `at-risk`, `in hand`, `worker limit`, `ready queue`, `stale work`, `stale sweep`, `trunk-guard`, `handover`.
 
 **Item facts**, printed by `naima show`
 
@@ -2311,6 +2351,12 @@ Discussions: a question that needs time with a person, not a quick answer: the t
 | Hook | What it does |
 |---|---|
 | `discussion-decided` | a discussion is decided only with its decision recorded |
+
+**Claims reports**, printed by `naima claims` after the claims
+
+| Report | What it says |
+|---|---|
+| `meetings` | every meeting taken and not closed, since when, with how many open discussions are on its agenda |
 
 **UI views**, shown as tabs of the new UI
 

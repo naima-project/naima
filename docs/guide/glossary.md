@@ -487,6 +487,11 @@ is true.
 A note of what a session changed, what it proved and what it left to do, written by `naima pass` as a file of its own in `passes/`. `naima summary` shows the
 newest one.
 
+### Handover
+
+The coordinator giving its role to a fresh session when its context gets deep: `naima handover` writes the [session note](#session-note), gives the role up and prints
+what starts the successor. See [when the coordinator's session gets long](handover.md).
+
 ## Running Naima
 
 ### Naima

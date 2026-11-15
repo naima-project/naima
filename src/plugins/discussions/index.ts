@@ -915,6 +915,17 @@ function helloSection(base: Record<string, MeetingConfig>): SummarySection {
   }
 }
 
+/** What `naima claims` and the handover note say of a meeting under way: each meeting taken and not yet closed, with what is left on its agenda. */
+const meetingReport = (base: Record<string, MeetingConfig>) => ({
+  name: "meetings",
+  says: "every meeting taken and not closed, since when, with how many open discussions are on its agenda",
+  lines(ctx: Context): string[] {
+    return Object.entries(liveMeetings(ctx, base)).filter(([, m]) => m.taken).map(([name, m]) =>
+      `meeting ${name}: taken ${m.taken}, ${openAgenda(ctx, name).length} open on its agenda (naima meeting ${name})`
+    )
+  },
+})
+
 export default function discussions(options: Record<string, unknown> = {}): Plugin {
   const meetings = readMeetings(options)
   return {
@@ -975,8 +986,12 @@ export default function discussions(options: Record<string, unknown> = {}): Plug
       { name: CONCERNED_BY, inverse: CONCERNS, says: "is discussed in" },
     ],
     uses: { fields: [GATE.name, DUE.name] },
-    contributes: { gates: Object.entries(meetings).map(([name, m]) => meetingGate(name, m)), "ui-views": [meetingsUiView(meetings)] },
-    optional: ["ui-views"],
+    contributes: {
+      gates: Object.entries(meetings).map(([name, m]) => meetingGate(name, m)),
+      "ui-views": [meetingsUiView(meetings)],
+      "claims-reports": [meetingReport(meetings)],
+    },
+    optional: ["ui-views", "claims-reports"],
     commands: [meetingCommand(meetings), decideCommand(meetings)],
     hooks: [hook],
     checks: [checks(meetings)],
