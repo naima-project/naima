@@ -9,6 +9,8 @@ import {
   contextIn,
   currentBranch,
   gitOrNull,
+  heavyAnswer,
+  heavyQuestion,
   isAncestor,
   lastPass,
   owedSince,
@@ -104,15 +106,21 @@ export const checkpointCommand: Command = {
     const tip = gitOrNull(ctx.root, "rev-parse", "HEAD")
     const tracker = gitOrNull(ctx.trackerGit, "rev-parse", "HEAD")
     if (!tip || !tracker) throw new Error("no commit to run a checkpoint on")
+    const answer = heavyAnswer(ctx)
+    if (!answer) {
+      ctx.out(`checkpoint not run: the project has not agreed when heavy checks run. ${heavyQuestion()}`)
+      return 1
+    }
     const names = checkpointNames(ctx)
-    const suites = checkpointRuns(ctx)
+    // With heavy checks off, a checkpoint runs the landing checks that are not heavy and starts no suite or verification.
+    const suites = answer.when === "off" ? [] : checkpointRuns(ctx)
     const last = lastPass(ctx)
     const from = last && gitOrNull(ctx.root, "cat-file", "-e", `${last.tip}^{commit}`) !== null ? last.tip : EMPTY_TREE
     const changed = (gitOrNull(ctx.root, "diff", "--name-only", "--no-renames", "-z", from, tip) ?? "").split("\0").filter(Boolean)
     ctx.out(`checkpoint on ${tip.slice(0, 12)}: ${names.length ? names.join(", ") : "no landing check owed or declared"}`)
     const { refused, notCurrent } = await landingChecks(ctx, { branch: currentBranch(ctx.root) ?? "HEAD", from, to: tip, changed }, ctx, names)
     const failed = [...refused, ...notCurrent.map((l) => `${l} — not current`)]
-    const runs = await startRuns(ctx, tip, suites, verifyHost(ctx))
+    const runs = answer.when === "off" ? [] : await startRuns(ctx, tip, suites, verifyHost(ctx))
     const id = writeCheckpoint(ctx, {
       on: ctx.now().toISOString(),
       tip,

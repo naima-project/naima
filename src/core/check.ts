@@ -264,6 +264,12 @@ function isHeavy(check: Check, pinned: Set<string>): boolean {
   return check.heavy === true || (pinned.has(check.name) && (check.runs?.length ?? 0) > 0)
 }
 
+/** The names of the checks that are heavy in this project: what `naima check --heavy` would run. */
+export function heavyCheckNames(ctx: Context): string[] {
+  const pinned = pinnedChecks(ctx)
+  return ctx.registry.checks.filter((c) => isHeavy(c, pinned)).map((c) => c.name)
+}
+
 /**
  * Run every check, in load order, awaiting the ones that are async — with `staged`, only those that read the
  * change staged for the next commit. A check that throws or rejects is itself a problem, never a crash. A finding a waiver

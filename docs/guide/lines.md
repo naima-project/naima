@@ -147,6 +147,20 @@ line. Two chats in one checkout share one session record unless `NAIMA_SESSION` 
 
 Lines need the tracker committed with the code: a project that keeps its tracker in a repository of its own cannot use them yet.
 
+## Heavy checks are agreed with you
+
+A heavy check opens a browser, runs a test suite or model-checks, so it costs your machines and time, and where and how often it runs is your choice. A project that has a heavy check and has not answered gets the question, and no heavy check runs until it is answered: a landing leaves the check owed, `naima checkpoint` and `naima check --heavy` say the question and stop. The answer is one command:
+
+```sh
+naima heavy-checks checkpoint --host here    # at a checkpoint, on this machine
+naima heavy-checks landing --host <host>     # at every landing, on a declared host
+naima heavy-checks demand --host here        # only when asked: naima checkpoint, naima check --heavy
+naima heavy-checks off                       # never; every start of a heavy check honours it
+naima heavy-checks                           # show the answer, or the question
+```
+
+It records the coordination option `heavyChecks` and sets `checks`, `landingHost` and `verifyHost` with it. A project that already set `checks`, a landing host, a verify host, fast checks or checkpoint runs has answered by those, and keeps what it chose. With `demand`, a gate step closing and a goal reached start no checkpoint by themselves. With `off`, a checkpoint runs only the landing checks that are not heavy and starts no suite or verification.
+
 ## Checks at checkpoints
 
 By default every landing runs every landing check (the coordination option `checks` is `continuous`). A project in rapid development can set `checks` to `checkpoint`: `naima land` then runs only the checks the option `fastChecks` names, and records the others in the landing marker as owed, in a `Checks-owed:` trailer. Workers run a build and their own new test, nothing wider. `naima gates` lists what is owed since the last checkpoint. `naima checkpoint [<gate>]` runs it all, with the heavy suites and model checks, on the current tip and records a pass, or a failure that blocks the gate until a later checkpoint passes. A gate step closing and a line landing on the trunk run it by themselves.

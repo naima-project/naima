@@ -89,6 +89,7 @@ import { readStaleAfter, staleCommand, type StaleData, staleData, staleSection }
 import { applyPlan, planSweep, type SweepInputs, type SweepItem, sweepLines, type SweepResult } from "./sweep.ts"
 import { changeNotesCheck, changesCommand } from "./changes.ts"
 import { checkpointCommand } from "./checkpoint.ts"
+import { heavyChecksCommand, heavyChecksSection } from "./heavy-checks.ts"
 import { idOf, land, landingCheckCommand, landingReportsPoint, landingsAreMarkers, landingsPaired } from "./land.ts"
 import { claimsReports, claimsReportsPoint } from "./claims-reports.ts"
 import { pushCheckCommand } from "./messages.ts"
@@ -1505,6 +1506,12 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
         default: "[]",
       },
       {
+        name: "heavyChecks",
+        says:
+          "the project's answer to how often heavy checks (a browser, a suite, model checking) run: `landing` at every landing, `checkpoint` at a checkpoint, `demand` only when asked (naima checkpoint, naima check --heavy), `off` never; written by naima heavy-checks together with checks, landingHost and verifyHost; unset, a project that already set checks, a host or checkpoint runs has answered by those, and one that set none has not answered, so naima asks the owner and runs no heavy check",
+        default: "unset: the owner is asked",
+      },
+      {
         name: "checkpointChecks",
         says: "the landing checks a checkpoint runs whether or not a landing owed them: a list of names; empty means every heavy one",
         default: "[]",
@@ -1553,6 +1560,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       landing,
       landingCheckCommand,
       checkpointCommand,
+      heavyChecksCommand,
       fixCommand(policy, openWork),
       guardCommand(guarded),
       guardCheckCommand,
@@ -1594,6 +1602,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       staleSection(stale),
       sweepSection,
       guardOffSection(guarded),
+      heavyChecksSection,
     ],
     setup: [guardSetup(guarded)],
     hooks: [noClosingOwnWork, trunkOnlyTracker],

@@ -38,6 +38,18 @@ export {
   writeCheckpoint,
 } from "./checkpoints.ts"
 
+export {
+  HEAVY_OPTION,
+  HEAVY_WHEN,
+  type HeavyAnswer,
+  heavyAnswer,
+  heavyQuestion,
+  type HeavyUse,
+  type HeavyVerdict,
+  heavyVerdict,
+  type HeavyWhen,
+} from "./heavy.ts"
+
 export { bool, type Flags, pairs, parse, type Parsed, positiveInt, str, strs, usageError } from "./args.ts"
 export { appliesTo, enumRank, fieldError, type FieldRef, fieldsOf, fieldValue, fieldValues, parseFieldValue, setFieldValue, type ValueOf } from "./fields.ts"
 export {

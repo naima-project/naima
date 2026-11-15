@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from "node:path"
 import { DATA_FILE } from "./layout.ts"
 import { gitOrNull } from "./git.ts"
+import { heavyAnswer } from "./heavy.ts"
 import type { Context } from "./types.ts"
 
 /** The trailer a landing marker names the checks it did not run in. */
@@ -16,7 +17,7 @@ export const CHECKPOINTS = "checkpoints"
 export type CheckMode = "continuous" | "checkpoint"
 
 /** A coordination option: the branch tip's own configuration first when `at` holds it, else the one `ctx` runs with. */
-function option(ctx: Context, name: string, at?: Context): unknown {
+export function option(ctx: Context, name: string, at?: Context): unknown {
   if (at) {
     try {
       const tip = (JSON.parse(readFileSync(join(at.trackerRoot, DATA_FILE), "utf8")) as { plugins?: Record<string, { options?: Record<string, unknown> }> })
@@ -202,6 +203,9 @@ export function checkpointBlock(ctx: Context, gate: string): string | undefined 
  */
 export async function checkpointAfter(ctx: Context, gate: string): Promise<number> {
   if (checkMode(ctx) !== "checkpoint") return 0
+  // A project that runs heavy checks only on demand, or not at all, has no checkpoint start by itself.
+  const answer = heavyAnswer(ctx)
+  if (answer && (answer.when === "demand" || answer.when === "off")) return 0
   const cmd = ctx.registry.commands.get("checkpoint")
   return cmd ? await cmd.run([gate], ctx) : 0
 }
