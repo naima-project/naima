@@ -489,7 +489,7 @@ newest one.
 
 ### Handover
 
-The coordinator giving its role to a fresh session when its context gets deep: `naima handover` writes the [session note](#session-note), gives the role up and prints
+The coordinator giving its role to a fresh session when its context gets deep: the coordinator checks the owner's decisions are recorded and proposes it to the owner; after the owner agrees, `naima handover --agreed` writes the [session note](#session-note), keeps the conversation's text for the successor, gives the role up and prints
 what starts the successor. See [when the coordinator's session gets long](handover.md).
 
 ## Running Naima

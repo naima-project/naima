@@ -1588,7 +1588,12 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       lineCommand(policy),
       staleCommand(staleAfter, sweep),
       pass,
-      handoverCommand({ options: handover, claimsData: (ctx) => claimsData(ctx, undefined, silentAfter, policy.maxWorkers), writeNote: writeSessionNote }),
+      handoverCommand({
+        options: handover,
+        claimsData: (ctx) => claimsData(ctx, undefined, silentAfter, policy.maxWorkers),
+        writeNote: writeSessionNote,
+        lastNoteAt: (ctx) => readPasses(ctx)[0]?.at,
+      }),
       eventCommand,
       diaryCommand(readPasses),
     ],
