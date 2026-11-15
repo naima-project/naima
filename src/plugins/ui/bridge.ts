@@ -22,12 +22,19 @@
 //                                  and, when the UI refused it, why
 //   answer {id, ...}               the open UI's answer to an agent's question the feed show carried (the page as
 //                                  text, where its window is), kept for the agent (show.ts)
+//   agent-answer {id, ok, answer | error}  the open UI's answer to a request the feed agent carried, in the UI
+//                                  stance's shape: the answer of the store, the registry or the transition, or why not;
+//                                  kept for the agent (show.ts)
 //
-// and two feeds:
+// and three feeds:
 //
 //   changes                        one event each time the project changes: a commit, a branch moved, the tracker's
 //                                  files (live.ts); a hint to read again, never the data
-//   show                           each place an agent asked to show, while the UI listening is open (show.ts)
+//   show                           each question about the page an agent asked (its text, where its window is) and
+//                                  the desktop window's raise, while the UI listening is open (show.ts)
+//   agent                          each request on the open UI's store an agent asked, as { id, tool, args } (the UI
+//                                  stance's agent feed): the store, the transitions, a transition by machine and name,
+//                                  among them the show of a place, which is the transition of a named sequence (show.ts)
 //
 // Every command reads the files when it is called, so the UI is live.
 
@@ -40,7 +47,7 @@ import type { Feeds, Handlers, Json } from "./bridge-handler.ts"
 import { type Change, snapshot, watchProject } from "./live.ts"
 import { stampOf, type ViewCache } from "./view-cache.ts"
 import { PoolDown, type ViewPool } from "./view-pool.ts"
-import { askShow, awaitAnswer, listenShows, openUis, requestId, taken, writeAnswer } from "./show.ts"
+import { type AgentRequest, askAgent, awaitAnswer, listenShows, openUis, type Place, requestId, taken, type UiRequest, writeAnswer } from "./show.ts"
 import { commandJson, type JsonOf, metroData } from "./metro.ts"
 import { contentProblem, framePage, tabList, type UiTab, type UiTabContent, type UiView } from "./tabs.ts"
 
@@ -421,10 +428,10 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       }
       // The show is the transition of the agent's sequence, which the UI carries out and answers.
       const id = requestId()
-      const asked = askShow(ctx.root, { kind: "transition", id, machine: "agent", name: show.name, args: [show.arg] })
+      const asked = askAgent(ctx.root, { id, tool: "transition", args: { machine: "agent", name: show.name, args: [show.arg] } })
       const wait = opts.showWait ?? 8000
       const answer = await awaitAnswer<{ done?: boolean; says?: string; error?: string }>(ctx.root, id, wait)
-      const { open, took } = await taken(ctx.root, asked, 1000)
+      const { open, took } = await taken(ctx.root, asked, 1000, "agent")
       const shown = answer?.done === true
       return json({
         shown,
@@ -445,6 +452,22 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       writeAnswer(ctx.root, id, args)
       return true
     },
+    "agent-answer": (args) => {
+      const id = text(args["id"])
+      if (id === null) throw new Error("agent-answer names the request it answers: id")
+      if (JSON.stringify(args).length > 1_000_000) throw new Error("the answer is too large")
+      // The stance's shape is { id, ok: true, answer } or { id, ok: false, error }; what the agent reads is the answer's
+      // own fields, or the error.
+      const answer = args["answer"]
+      writeAnswer(
+        ctx.root,
+        id,
+        args["ok"] === true
+          ? typeof answer === "object" && answer !== null && !Array.isArray(answer) ? answer : { value: answer ?? null }
+          : { error: String(args["error"] ?? "the page refused") },
+      )
+      return true
+    },
     run: async (args) => {
       const name = text(args["name"])
       if (name === null || !name.startsWith("ui-")) throw new Error("run names a run an action started")
@@ -453,6 +476,39 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       return JSON.parse(r.out) as Json
     },
   }
+  // One UI hears the feeds show and agent, and is open once: they share the listener on the files (show.ts), which runs
+  // while either is listened to.
+  const heard = (() => {
+    const emitters = { show: new Set<(e: Json) => void>(), agent: new Set<(e: Json) => void>() }
+    let listening: { stop(): void } | null = null
+    const carrier = opts.carrier ?? "browser"
+    const start = () =>
+      listenShows(
+        ctx.root,
+        carrier,
+        (place: Place | UiRequest) => {
+          // A raise is the desktop app's window coming forward, which its shell takes: a page in a browser has nothing to do.
+          if (place.kind === "raise" && carrier !== "desktop") return
+          for (const emit of emitters.show) emit(json(place))
+        },
+        (request: AgentRequest) => {
+          for (const emit of emitters.agent) emit(json(request))
+        },
+      )
+    return {
+      add(feed: "show" | "agent", emit: (e: Json) => void): () => void {
+        emitters[feed].add(emit)
+        listening ??= start()
+        return () => {
+          emitters[feed].delete(emit)
+          if (!emitters.show.size && !emitters.agent.size) {
+            listening?.stop()
+            listening = null
+          }
+        }
+      },
+    }
+  })()
   const feeds: Feeds = {
     changes: (emit) => {
       const said = (c: Change) => emit(json(c))
@@ -467,12 +523,8 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
         watch.stop()
       }
     },
-    show: (emit) => {
-      const carrier = opts.carrier ?? "browser"
-      // A raise is the desktop app's window coming forward, which its shell takes: a page in a browser has nothing to do.
-      const listening = listenShows(ctx.root, carrier, (place) => place.kind === "raise" && carrier !== "desktop" ? undefined : emit(json(place)))
-      return () => listening.stop()
-    },
+    show: (emit) => heard.add("show", emit),
+    agent: (emit) => heard.add("agent", emit),
   }
   return {
     handlers,

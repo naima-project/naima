@@ -24,7 +24,7 @@ import { bridgeMcp, type McpServer, type McpTool, serveMcpLines } from "./bridge
 import type { Handlers, Json } from "./bridge-handler.ts"
 import { PAGE_PROPERTIES, paged, splitArgs } from "./mcp-pages.ts"
 import { agentTools, bounded, cut, HARD_BOUND, type Reader, TOOL_SPECS } from "./mcp-tools.ts"
-import { askShow, awaitAnswer, openUis, requestId } from "./show.ts"
+import { type AgentRequest, askAgent, askShow, awaitAnswer, openUis, requestId } from "./show.ts"
 import type { UiTab, UiView } from "./tabs.ts"
 
 const obj = (properties: Record<string, unknown>, required: string[] = []) =>
@@ -247,16 +247,22 @@ type Content = { type: string; [k: string]: Json }
 const said = (text: string, isError = false): Json => ({ content: [{ type: "text", text }], isError })
 
 /**
- * Asks the UI open on the project a question over the feed show and waits for its answer. A read is asked twice at
- * most, since it can reach a page the moment it reloads, which never answers it; a transition is asked once, since the
- * page may have applied it before it reloaded (the model develop/models/ui/agent-endpoint in the workshop).
+ * Asks the UI open on the project a question and waits for its answer: a question about the page over the feed show,
+ * a request on its store (`tool`, `args`) over the feed agent. A read is asked twice at most, since it can reach a page
+ * the moment it reloads, which never answers it; a transition is asked once, since the page may have applied it before
+ * it reloaded (the model develop/models/ui/agent-endpoint in the workshop).
  */
-async function askUi<T>(root: string, request: { kind: string; [k: string]: Json }, ms: number): Promise<T | string> {
+async function askUi<T>(
+  root: string,
+  request: Omit<AgentRequest, "id"> | { kind: "read" | "rect"; selector?: string; html?: boolean },
+  ms: number,
+): Promise<T | string> {
   if (!openUis(root).length) return "no Naima UI is open on this project: show something first, which opens one, or ask the owner to run naima ui"
-  const once = request.kind === "transition"
+  const once = "tool" in request && request.tool === "transition"
   for (const wait of once ? [ms] : [ms / 2, ms / 2]) {
     const id = requestId()
-    askShow(root, { ...request, id } as never)
+    if ("tool" in request) askAgent(root, { ...request, id })
+    else askShow(root, { ...request, id })
     const a = await awaitAnswer<T & { error?: string }>(root, id, wait)
     if (a !== null) return a.error ? a.error : a
   }
@@ -285,7 +291,7 @@ async function storeTool(root: string, name: string, args: { [k: string]: Json }
     const path = s("path")
     const a = await askUi<{ summary?: { [m: string]: { [k: string]: Json } }; value?: Json; cut?: boolean; error?: string }>(
       root,
-      { kind: "store", ...(machine ? { machine } : {}), ...(path ? { path } : {}) },
+      { tool: "store", args: { ...(machine ? { machine } : {}), ...(path ? { path } : {}) } },
       ms,
     )
     if (typeof a === "string") return said(a, true)
@@ -312,7 +318,7 @@ async function storeTool(root: string, name: string, args: { [k: string]: Json }
       person?: boolean
       allowed: boolean | string[] | null
     }
-    const a = await askUi<{ transitions?: T[]; error?: string }>(root, { kind: "registry", ...(machine ? { machine } : {}) }, ms)
+    const a = await askUi<{ transitions?: T[]; error?: string }>(root, { tool: "transitions", args: machine ? { machine } : {} }, ms)
     if (typeof a === "string") return said(a, true)
     if (a.error) return said(a.error, true)
     const list = a.transitions ?? []
@@ -334,7 +340,7 @@ async function storeTool(root: string, name: string, args: { [k: string]: Json }
   const given = args["args"] ?? []
   const a = await askUi<{ done?: boolean; changed?: Changed; says?: string; error?: string }>(
     root,
-    { kind: "transition", machine, name: tname, args: Array.isArray(given) || (typeof given === "object" && given !== null) ? given : [given] },
+    { tool: "transition", args: { machine, name: tname, args: Array.isArray(given) || (typeof given === "object" && given !== null) ? given : [given] } },
     ms,
   )
   if (typeof a === "string") return said(a, true)
