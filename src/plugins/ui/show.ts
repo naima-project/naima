@@ -8,9 +8,13 @@
 //                    and the last show it took; rewritten every BEAT_MS, removed when it stops listening, and taken
 //                    as closed once it is STALE_MS old (a page or a process that ended without saying so)
 //   show.json        the last show asked: its id, the project's root, the place and when; written whole, then renamed
+//   agent.json       the last agent request asked, in the shape of the UI stance's agent feed ({ id, tool, args }: the
+//                    store, the registry of transitions, a transition by machine and name, the show of a place as the
+//                    transition of a named sequence); written the same way, heard on the feed `agent`
 //
-// A UI polls show.json, as live.ts polls the project, and passes on a show of its own project asked after it opened,
-// once. Nothing is queued: the newest show is the one that counts. A request asked before a page reloaded is never
+// A UI polls the two files, as live.ts polls the project, and passes on what was asked of its own project after it
+// opened, once, on the feed of each. Nothing is queued: the newest of each is the one that counts, and a show never
+// takes the place of a request on the store. A request asked before a page reloaded is never
 // passed on to the page that follows, so a transition is applied at most once (the model
 // develop/models/ui/agent-endpoint in the workshop).
 //
@@ -32,19 +36,30 @@ export type Place =
   | { kind: "line"; name: string }
 
 /**
- * A request to the open UI, carried as a show is: the page it shows as text (or raw HTML), or where its window is; the
- * central store's snapshot (in short, or one machine, or a path in it); its registry of transitions; a transition
- * called on a machine by its name, as the components call it; or, for the desktop app, its window brought forward. A show is the transition of a named sequence of the
- * UI's machine agent (showScreen, showView, showItem, showCommit, showLine).
+ * A question about the page, carried on the feed show: the page it shows as text (or raw HTML), or where its window
+ * is; or, for the desktop app, its window brought forward.
  */
 export type UiRequest =
   | { kind: "read"; id: string; selector?: string; html?: boolean }
   | { kind: "rect"; id: string }
-  | { kind: "store"; id: string; machine?: string; path?: string }
-  | { kind: "registry"; id: string; machine?: string }
-  | { kind: "transition"; id: string; machine: string; name: string; args: unknown[] | { [arg: string]: unknown } }
   /** The desktop app's window, brought to the front: taken by the app's shell, which the page never sees (desktop-app.ts). */
   | { kind: "raise" }
+
+/**
+ * A request on the open UI's central store, carried on the feed agent in the shape of the UI stance's agent protocol:
+ * `store` (the snapshot in short, or one machine, or a path in it: args machine, path), `transitions` (the registry,
+ * with what each transition allows now: args machine) and `transition` (one transition called on a machine by its
+ * name, as the components call it: args machine, name and args, by name or in order). A show is the transition of a
+ * named sequence of the UI's machine agent (showScreen, showView, showItem, showCommit, showLine).
+ */
+export interface AgentRequest {
+  id: string
+  tool: "store" | "transitions" | "transition"
+  args: { [key: string]: unknown }
+}
+
+/** The channel a request travels: the feed, and the file that carries it. */
+export type Channel = "show" | "agent"
 
 /** An open UI, as its file says. */
 export interface OpenUi {
@@ -52,13 +67,16 @@ export interface OpenUi {
   root: string
   carrier: string
   beat: number
+  /** The last request taken on the feed show. */
   took: string | null
+  /** The last request taken on the feed agent. */
+  tookAgent?: string | null
 }
 
 interface Show {
   id: string
   root: string
-  place: Place | UiRequest
+  place: Place | UiRequest | AgentRequest
   at: number
 }
 
@@ -102,61 +120,80 @@ export function openUis(root: string, now = Date.now()): OpenUi[] {
 
 /** Asks every UI open on the project at `root` to show `place`; returns the show's id. */
 export function askShow(root: string, place: Place | UiRequest, now = Date.now()): string {
+  return ask(root, "show", place, now)
+}
+
+/** Asks every UI open on the project at `root` a request on its store, on the feed agent; returns its id. */
+export function askAgent(root: string, request: AgentRequest, now = Date.now()): string {
+  return ask(root, "agent", request, now, request.id)
+}
+
+function ask(root: string, channel: Channel, place: Place | UiRequest | AgentRequest, now: number, given?: string): string {
   const dir = dirOf(root)
   if (!dir) throw new Error("not a git repository: Naima's UI shows only a project in git")
   mkdirSync(dir, { recursive: true })
-  const id = randomBytes(8).toString("hex")
-  writeWhole(join(dir, "show.json"), { id, root, place, at: now } satisfies Show)
+  const id = given ?? randomBytes(8).toString("hex")
+  writeWhole(join(dir, `${channel}.json`), { id, root, place, at: now } satisfies Show)
   return id
 }
 
-/** How many open UIs took the show `id`, waiting up to `ms` for every one open to take it. */
-export async function taken(root: string, id: string, ms: number): Promise<{ open: number; took: number }> {
+/** How many open UIs took the show `id` (of the feed `channel`), waiting up to `ms` for every one open to take it. */
+export async function taken(root: string, id: string, ms: number, channel: Channel = "show"): Promise<{ open: number; took: number }> {
   const end = Date.now() + ms
   for (;;) {
     const open = openUis(root)
-    const took = open.filter((u) => u.took === id).length
+    const took = open.filter((u) => (channel === "agent" ? u.tookAgent : u.took) === id).length
     if (took === open.length || Date.now() >= end) return { open: open.length, took }
     await new Promise((r) => setTimeout(r, 100))
   }
 }
 
 /**
- * A UI open on the project at `root`, through `carrier`, listening for shows: says it is open until `stop`, and
- * calls `show` with each place asked for its project after it opened.
+ * A UI open on the project at `root`, through `carrier`, listening for shows and for requests on its store: says it is
+ * open until `stop` (once, however many feeds it hears), and calls `show` with each place, and `agent` with each
+ * request, asked for its project after it opened.
  */
-export function listenShows(root: string, carrier: string, show: (place: Place | UiRequest) => void): { stop(): void } {
+export function listenShows(
+  root: string,
+  carrier: string,
+  show: (place: Place | UiRequest) => void,
+  agent: (request: AgentRequest) => void = () => {},
+): { stop(): void } {
   const dir = dirOf(root)
   if (!dir) return { stop() {} }
   const id = randomBytes(8).toString("hex")
   const mine = join(dir, "open", `${id}.json`)
   const opened = Date.now()
-  let seen: string | null = null
-  let took: string | null = null
+  const seen: { [c in Channel]: string | null } = { show: null, agent: null }
+  const took: { [c in Channel]: string | null } = { show: null, agent: null }
   let lastBeat = 0
   let stopped = false
   const beat = (): void => {
     mkdirSync(join(dir, "open"), { recursive: true })
-    writeWhole(mine, { id, root, carrier, beat: Date.now(), took } satisfies OpenUi)
+    writeWhole(mine, { id, root, carrier, beat: Date.now(), took: took.show, tookAgent: took.agent } satisfies OpenUi)
     lastBeat = Date.now()
+  }
+  const hear = (channel: Channel): void => {
+    let changed = 0
+    try {
+      changed = statSync(join(dir, `${channel}.json`)).mtimeMs
+    } catch {
+      // nothing asked yet
+    }
+    if (!changed) return
+    const s = readJson<Show>(join(dir, `${channel}.json`))
+    if (s && s.id !== seen[channel] && s.root === root && s.at >= opened) {
+      seen[channel] = s.id
+      took[channel] = s.id
+      if (channel === "agent") agent(s.place as AgentRequest)
+      else show(s.place as Place | UiRequest)
+      lastBeat = 0
+    }
   }
   const tick = (): void => {
     if (stopped) return
-    let changed = 0
-    try {
-      changed = statSync(join(dir, "show.json")).mtimeMs
-    } catch {
-      // no show asked yet
-    }
-    if (changed) {
-      const s = readJson<Show>(join(dir, "show.json"))
-      if (s && s.id !== seen && s.root === root && s.at >= opened) {
-        seen = s.id
-        took = s.id
-        show(s.place)
-        lastBeat = 0
-      }
-    }
+    hear("show")
+    hear("agent")
     if (Date.now() - lastBeat >= BEAT_MS) beat()
   }
   beat()
