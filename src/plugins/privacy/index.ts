@@ -445,7 +445,7 @@ export default function privacy(options: { [key: string]: unknown } = {}, api?: 
         throw new Error(`${file}:${secret.line} holds ${article(secret.shape)}: redact it before attaching — an attachment is permanent once committed`)
       }
       const allowance = text === null ? undefined : guardPrivate(`attachment ${name}`, findPrivate(text, privateContext()), ctx.allowPrivate)
-      const signature = beforeTextWrite(ctx, `attachment ${name}`)
+      const signature = beforeTextWrite(ctx, `attachment ${name}`, item)
       const dest = join(item.dir, ATTACHMENTS, name)
       const records = recordsOf(item)
       const inPlace = src === resolve(dest)

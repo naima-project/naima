@@ -31,8 +31,10 @@ branch that doesn't follow this scheme ([the rule](../guide/rules.md#worktrees-a
 When the work belongs to a [development line](../guide/lines.md), the branch starts from the line instead: `open` takes it from `--line <gate>`, else from the
 open line of a gate the item stands on, else from the line the chat works on (`naima line use <gate>`), unless the item's goal comes before that line's, when it
 starts from the trunk; `--trunk` keeps it on the trunk. It says first where it starts, `on line line/<gate>`, and refuses an item on a line named with `--line`
-whose goal comes after the item's own. The bound `maxWorkers` counts per line. In a line's worktree, Naima writes only the item's own work: its fixed mark, its
-test runs and its session note. Items, notes, links and `naima.json` are written in the trunk's checkout; Naima refuses them on the line.
+whose goal comes after the item's own. The bound `maxWorkers` counts per line. In a line's worktree, Naima writes the tracker data of the work the
+branch holds: the items its claim names, the items linked to them (the properties `naima explain` and `naima refine` record), the items filed on the line, the
+filing of new items, the fixed mark, the test runs and the session note, all of which reach the trunk when the line lands. A change to any other item the trunk
+holds, an event and `naima.json` are made in the trunk's checkout; Naima refuses them on the line, naming the item and saying where to run them.
 
 A fresh checkout has no dependencies installed, so install them before you run anything.
 
