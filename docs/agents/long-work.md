@@ -35,6 +35,10 @@ model's verification, without the owner's yes. When `naima hello` or `naima summ
 a todo (one per run; it marks the todo done once the run is current), and ask the owner. With their yes, start it by its name, `naima run <name>`, and follow
 the steps above ([when a long run is due](../guide/long-work.md#when-a-long-run-is-due)).
 
+A shell call is never given a tool timeout over 60 seconds, except `naima run` and `naima wait`. A hook Naima installs for Claude Code refuses it, saying to use
+`naima run` (`naima update` installs the hook), and the check `foreground-timeouts` fails on any such call found in the agents' transcripts since the last
+session note. Wait in short turns: `naima wait <name> --timeout 50s`, again as often as needed.
+
 Don't wait with a `while`/`until` loop around `sleep`, with `pgrep -f`/`pkill -f`, with a bare `nohup ... &`, or by polling a remote file over ssh by hand.
 `naima check` flags waits like these in committed scripts (check `wait-loops`), and a script that really does need a retry loop marks the line
 `naima: allow-wait-loop <reason>`. `naima check` also flags a `naima run` in a committed script whose command neither writes progress nor is declared

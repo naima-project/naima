@@ -195,6 +195,8 @@ export {
   type ConversationMessage,
   conversationOf,
   locateSessionTranscript,
+  type LongTimeoutCall,
+  longTimeoutCalls,
   setupPaths,
   type TranscriptEntry,
   transcriptRoots,

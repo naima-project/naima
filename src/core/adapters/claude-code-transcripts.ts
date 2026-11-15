@@ -15,7 +15,7 @@
 
 import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs"
 import { join } from "node:path"
-import type { ConversationMessage, TranscriptEntry, TranscriptReader, TranscriptTail, WorkerPlace } from "./index.ts"
+import type { ConversationMessage, LongTimeoutCall, TranscriptEntry, TranscriptReader, TranscriptTail, WorkerPlace } from "./index.ts"
 
 /** The longest an entry's text is kept, in characters. */
 const CUT = 240
@@ -33,6 +33,14 @@ export const projectFolder = (cwd: string): string => cwd.replace(/[^A-Za-z0-9]/
 
 type Json = Record<string, unknown>
 const isObject = (v: unknown): v is Json => typeof v === "object" && v !== null && !Array.isArray(v)
+
+const readdirSyncSafe = (dir: string): string[] => {
+  try {
+    return readdirSync(dir)
+  } catch {
+    return []
+  }
+}
 
 const files = (dir: string, suffix: string): string[] => {
   try {
@@ -118,6 +126,43 @@ export function lastEntries(text: string, count: number): TranscriptEntry[] {
   return out.slice(-count)
 }
 
+// ── foreground commands with a long timeout ──────────────────────────────────
+// A command an agent expects to last more than a minute goes through naima run; a shell call given a tool timeout over
+// a minute is the sign it did not. The PreToolUse hook (claude-code-timeout.sh) refuses such a call as it is made, and
+// the check reads what the transcripts hold of the calls made without it.
+
+/** The longest tool timeout a foreground command may carry, in milliseconds: a command expected to outlast it goes through naima run. */
+export const FOREGROUND_TIMEOUT_MS = 60_000
+
+/** How a naima command starts: the program, as the launcher, the task, or a bare name. */
+const NAIMA_PROGRAM = String.raw`(?:naima|deno task naima|(?:sh |bash )?\S*naima\.(?:sh|cmd)|deno run \S+ \S*naima\.ts|\S*naima\.ts)`
+
+/** Whether a shell command is `naima run` or `naima wait`, the two that may carry a long timeout: they return at once or by their own, shorter timeout. */
+export const isNaimaRunOrWait = (command: string): boolean => new RegExp(`^\\s*${NAIMA_PROGRAM}\\s+(?:run|wait)(?:\\s|$)`).test(command)
+
+/** The tool calls in a transcript's text that run a shell command with a timeout over the limit and that are not naima run or naima wait. */
+export function longTimeoutCalls(text: string): { at?: string; timeoutMs: number; command: string }[] {
+  const out: { at?: string; timeoutMs: number; command: string }[] = []
+  for (const line of text.split("\n")) {
+    if (!line.includes('"timeout"')) continue
+    let v: unknown
+    try {
+      v = JSON.parse(line)
+    } catch {
+      continue
+    }
+    if (!isObject(v) || v["type"] !== "assistant" || !isObject(v["message"]) || !Array.isArray(v["message"]["content"])) continue
+    for (const block of v["message"]["content"]) {
+      if (!isObject(block) || block["type"] !== "tool_use" || block["name"] !== "Bash" || !isObject(block["input"])) continue
+      const timeout = block["input"]["timeout"]
+      const command = block["input"]["command"]
+      if (typeof timeout !== "number" || timeout <= FOREGROUND_TIMEOUT_MS || typeof command !== "string" || isNaimaRunOrWait(command)) continue
+      out.push({ ...(typeof v["timestamp"] === "string" ? { at: v["timestamp"] } : {}), timeoutMs: timeout, command: short(command) })
+    }
+  }
+  return out
+}
+
 /**
  * What was said in a session, in order: the owner's messages and the agent's replies, in full. Only text counts: a tool
  * call, a tool result, a sub-agent's turn, and the notices a hook or the tool itself puts in the owner's place (they
@@ -168,6 +213,30 @@ export function locateTranscript(env: Record<string, string | undefined>, sessio
 export const claudeCodeTranscripts: TranscriptReader = {
   messages: messagesOf,
   locate: locateTranscript,
+  longTimeouts(env, root, since): LongTimeoutCall[] {
+    const dir = configDir(env)
+    if (!dir) return []
+    const projects = join(dir, "projects")
+    const own = projectFolder(root)
+    // The project's own sessions, and those of its worktrees and subfolders: folders named from the root's.
+    const folders = readdirSyncSafe(projects).filter((f) => f === own || f.startsWith(`${own}-`))
+    const out: LongTimeoutCall[] = []
+    for (const folder of folders) {
+      for (const file of transcriptsIn(join(projects, folder)).filter((f) => mtime(f) >= since)) {
+        let text: string
+        try {
+          text = readFileSync(file, "utf8")
+        } catch {
+          continue
+        }
+        for (const c of longTimeoutCalls(text)) {
+          if (c.at !== undefined && Date.parse(c.at) < since) continue
+          out.push({ ...c, file: file.slice(projects.length + 1).split("\\").join("/") })
+        }
+      }
+    }
+    return out.sort((a, b) => (a.at ?? "").localeCompare(b.at ?? ""))
+  },
   roots(env) {
     const dir = configDir(env)
     return dir ? [join(dir, "projects")] : []

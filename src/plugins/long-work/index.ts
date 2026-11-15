@@ -26,6 +26,7 @@ import {
   type Finding,
   gitOrNull,
   gitPath,
+  longTimeoutCalls,
   NaimaError,
   parse,
   type Plugin,
@@ -963,6 +964,43 @@ const waitLoops: Check = {
   },
 }
 
+/** The instant of the newest session note in the tracker's folder, in milliseconds; null when there is none. */
+export function lastSessionNote(trackerRoot: string): number | null {
+  const dir = join(trackerRoot, "passes")
+  if (!existsSync(dir)) return null
+  let latest: number | null = null
+  for (const f of readdirSync(dir).filter((n) => n.endsWith(".md"))) {
+    const head = readFileSync(join(dir, f), "utf8").slice(0, 600)
+    const at = Date.parse(/^at:\s*(\S+)/m.exec(head)?.[1] ?? /^date:\s*(\S+)/m.exec(head)?.[1] ?? "")
+    if (!Number.isNaN(at) && (latest === null || at > latest)) latest = at
+  }
+  return latest
+}
+
+/** How far back the transcripts are read when no session note says where to start. */
+const NO_NOTE_DAYS = 7
+
+const foregroundTimeouts: Check = {
+  name: "foreground-timeouts",
+  says:
+    "no agent's transcript, since the last session note, holds a shell command run in the foreground with a tool timeout over 60 seconds that is not naima run or naima wait: a command expected to last more than a minute goes through naima run (the transcripts of the agent tools Naima reads, this project's and its worktrees')",
+  run(ctx) {
+    const since = lastSessionNote(ctx.trackerRoot) ?? Date.now() - NO_NOTE_DAYS * 86_400_000
+    const out: Finding[] = []
+    for (const c of longTimeoutCalls(callerEnv(process.env), ctx.root, since)) {
+      out.push({
+        level: "problem",
+        message: `${c.tool} transcript ${c.file}${c.at ? ` at ${c.at}` : ""}: a command run with a tool timeout of ${
+          Math.round(c.timeoutMs / 1000)
+        } s, over 60 s: ${
+          JSON.stringify(c.command)
+        } — a command expected to last more than a minute goes through naima run and naima wait (rule long-work/long-work-through-naima-run)`,
+      })
+    }
+    return out
+  },
+}
+
 export default function longWork(options: Record<string, unknown> = {}): Plugin {
   const hosts = projectHosts(options)
   const declared = readLongRuns(options, hosts)
@@ -982,7 +1020,7 @@ export default function longWork(options: Record<string, unknown> = {}): Plugin 
       "A host declared in the `hosts` option is reached over ssh, and a run there is a run of the host's own Naima, always `--guard-tracked`: a tracked file it changes fails it. " +
       "A run's progress is the last line of its progress file: a JSON object — `stage`, `done`, `total`, `unit`, `note`, `overall` — or free text. The supervisor keeps the first sample of each stage, and every reader shows the count with its rate and, when the total is known, its ETA. A command that cannot report says so with `--no-progress \"<reason>\"`, given with `--stale`, how long silence is normal for it, and is shown with its elapsed time, the log's last line and the reason; it is judged stuck on its log alone, and never not advancing. " +
       "Nothing runs unattended: no run starts on a schedule, since a run nobody watches competes with the work on the same machine. A long run is declared in the `longRuns` option — `command` and `budgetTime`, optionally `budgetDisk` with `creates`, `host`, `stale` and `noProgress` (which needs `stale`) as `naima run` takes them — with what makes it due: `within`, a threshold its last success must be younger than; `fullSuite`, every gate of the full suite; `gates`, by name; `model`, every property verified on that model; `items`, by reference. The full suite is a long run named `full-suite` even when nothing declares it, whenever some gate is part of it. A long run is due when an item it covers is not current (a gate of the full suite names it, or it is open; one whose last verdict refutes it waits on a fix instead), when a gate it covers does not hold, or when it has not succeeded here within its threshold; a run of it in progress is not due. `naima summary` and `naima hello` say each due run in one line; `naima run due` files each as one todo, marked by the field `dueRun` and linked to the items it covers, leaves one already open as it is, marks it done once the run is current, and drops it when the run is no longer declared. `naima run <long run>` starts a declared one with its budgets, its finished record cleaned first; the agent asks the owner before running it. A run's success is remembered when its record is cleaned. " +
-      "The plugin ships the rule that makes these mandatory for agents, enforced by the check `wait-loops`, and the rule that long work reports its progress, enforced by the check `progress-declared`.",
+      "The plugin ships the rule that makes these mandatory for agents, enforced by the check `wait-loops`, and the rule that long work reports its progress, enforced by the check `progress-declared`. A foreground command is never given a tool timeout over a minute: the agent tool's hook refuses it, and the check `foreground-timeouts` fails on any found in the agents' transcripts since the last session note.",
     options: [
       {
         name: "hosts",
@@ -998,7 +1036,7 @@ export default function longWork(options: Record<string, unknown> = {}): Plugin 
       },
     ],
     commands: [runCommand(hosts, declared), waitCommand(hosts)],
-    checks: [waitLoops, progressDeclared],
+    checks: [waitLoops, progressDeclared, foregroundTimeouts],
     fields: [DUE_FIELD],
     home: import.meta.url,
     contributes: { rules: "rules/", summary: [dueSection(declared, tracker)], jobs: [dueJob(declared, tracker)], "claims-reports": [runsReport(hosts)] },

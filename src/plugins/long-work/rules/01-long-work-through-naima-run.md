@@ -11,9 +11,11 @@ verifiedBy: wait-loops
 A command expected to outlast a few minutes, or one run on another machine, is started with `naima run <name> --budget-time <duration> -- <command>` — with
 `--budget-disk` and `--creates` when it writes stores or temporary data, `--host` when it runs elsewhere — waited on with
 `naima wait <name> --timeout <duration>`, watched with `naima run list`, and cleaned with `naima run clean <name>`. A hand-written wait loop (`while` or `until`
-with `sleep`) and any process lookup by pattern (`pgrep -f`, `pkill -f`) are forbidden, in a session and in a committed script. Such a command is never run
-directly under a long tool timeout: `naima run` returns once it has seen the command alive, and `naima wait` runs with a timeout shorter than the tool's, again
-as often as needed, so that a run that never started or shows no progress is seen within seconds.
+with `sleep`) and any process lookup by pattern (`pgrep -f`, `pkill -f`) are forbidden, in a session and in a committed script. A command expected to
+last more than a minute is never run in the foreground: a long foreground timeout is forbidden. A shell call is never given a tool timeout over 60 seconds
+unless the command is `naima run` or `naima wait`; `naima run` returns once it has seen the command alive, and `naima wait` runs with a timeout shorter than a
+minute, again as often as needed, so that a run that never started or shows no progress is seen within seconds. The agent tool's hook refuses such a call, and
+the check `foreground-timeouts` fails on any found in the agents' transcripts since the last session note.
 
 ## Why
 

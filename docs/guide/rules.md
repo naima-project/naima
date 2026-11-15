@@ -447,13 +447,16 @@ reason and an item, and the list of exceptions only shrinks. `naima attach` also
 
 A command that is expected to take more than a few minutes, or that runs on another machine, is started with `naima run` and a time budget, waited on with
 `naima wait`, and cleaned up with `naima run clean`. When it writes stores or temporary data, it also gets a disk budget on what it declares it creates.
-Hand-written wait loops (`while` or `until` with `sleep`) and any process lookup by pattern (`pgrep -f`, `pkill -f`) are forbidden.
+Hand-written wait loops (`while` or `until` with `sleep`) and any process lookup by pattern (`pgrep -f`, `pkill -f`) are forbidden. So is a long foreground
+command: a shell call is never given a tool timeout over 60 seconds unless the command is `naima run` or `naima wait`.
 
 Why: wait loops that matched their own command line ran for up to 10.5 hours while being shown as work in progress, and a remote disk filled up with stores that
 nobody removed. A run with a budget ends by itself, and a wait by record ends when the run does.
 
 This rule ships with Naima, is active for agents in every project, and is acknowledged as "Long work mode on". **Enforced by** the check `wait-loops` on every
-tracked shell script, and a session note that records such a wait gets a note. The rest is **convention** ([long work](../agents/long-work.md),
+tracked shell script, and a session note that records such a wait gets a note. The long foreground timeout is refused by a hook Naima installs for Claude Code
+(`naima update` adds it), and the check `foreground-timeouts` fails on any found in the agents' transcripts since the last session note. The rest is
+**convention** ([long work](../agents/long-work.md),
 [for people](long-work.md)).
 
 ### Long work reports its progress, or says why it cannot and what it reports instead

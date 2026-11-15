@@ -184,7 +184,7 @@ Before asking the owner anything, run `naima decisions <words>`: a settled decis
 
 A command that will outlast a few minutes, or run on another machine, goes through `naima run <name> --budget-time <d> -- <command>` and
 `naima wait
-<name> --timeout <d>`, never a hand-written wait loop and never the command itself under a long tool timeout: `naima run` returns once the command
+<name> --timeout <d>`, never a hand-written wait loop and never the command itself in the foreground under a tool timeout over 60 seconds (the hook refuses it, and `naima check` fails on it): `naima run` returns once the command
 is alive, and a short `naima wait`, repeated, says within seconds that a run has not started or shows no progress ([long work](../../docs/agents/long-work.md)).
 
 Nothing runs unattended: never schedule a run, and never start a long run on your own. When `naima hello` or `naima summary` says a long run is due, pass the

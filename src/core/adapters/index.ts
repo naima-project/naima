@@ -80,6 +80,8 @@ export interface AgentAdapter {
   subagentStart?: AgentHook
   subagentTool?: AgentHook
   subagentStop?: AgentHook
+  /** Its hook on shell calls that refuses one given a tool timeout over a minute, unless it is naima run or naima wait. */
+  timeoutGuard?: AgentHook
   /** Where the hooks plugins contribute go, when the tool has hooks (core/plugin-hooks.ts). */
   pluginHooks?: PluginHookSettings
   /** What naima subagent --hook prints for the tool: `context`, put in the starting sub-agent's context. */
@@ -154,9 +156,28 @@ export interface TranscriptReader {
   locate?(env: Record<string, string | undefined>, session: string): string | undefined
   /** The folders the reader reads: the launcher lets naima recover read them, and no other command. */
   roots(env: Record<string, string | undefined>): string[]
+  /**
+   * The shell calls made since the instant `since` (milliseconds) in the project at `root`, its worktrees included, with a
+   * tool timeout over a minute that are not naima run or naima wait: what the check foreground-timeouts reports.
+   */
+  longTimeouts?(env: Record<string, string | undefined>, root: string, since: number): LongTimeoutCall[]
   /** The last `count` entries of the latest transcript of the worker that ran at `place`, or undefined when there is none. */
   tail(env: Record<string, string | undefined>, place: WorkerPlace, count: number): TranscriptTail | undefined
 }
+
+/** A shell call an agent made with a tool timeout over a minute, other than naima run and naima wait. */
+export interface LongTimeoutCall {
+  /** The transcript, from the tool's transcripts folder. */
+  file: string
+  at?: string
+  timeoutMs: number
+  /** The command, cut short. */
+  command: string
+}
+
+/** The long-timeout shell calls of every tool whose transcripts Naima reads, since `since`, with the tool's name. */
+export const longTimeoutCalls = (env: Record<string, string | undefined>, root: string, since: number): (LongTimeoutCall & { tool: string })[] =>
+  ADAPTERS.flatMap((a) => (a.transcripts?.longTimeouts?.(env, root, since) ?? []).map((c) => ({ ...c, tool: a.name })))
 
 /** The folders every tool's transcripts are in, for the environment `env`. */
 export const transcriptRoots = (env: Record<string, string | undefined>): string[] => ADAPTERS.flatMap((a) => a.transcripts?.roots(env) ?? [])
@@ -201,7 +222,7 @@ export function setupPaths(): Set<string> {
   const paths = new Set<string>(["AGENTS.md"])
   for (const a of ADAPTERS) {
     paths.add(a.entryFile)
-    for (const hook of [a.sessionStart, a.turnEnd, a.subagentStart, a.subagentTool, a.subagentStop]) if (hook) paths.add(hook.file)
+    for (const hook of [a.sessionStart, a.turnEnd, a.subagentStart, a.subagentTool, a.subagentStop, a.timeoutGuard]) if (hook) paths.add(hook.file)
     if (a.pluginHooks) paths.add(a.pluginHooks.file)
   }
   return paths
