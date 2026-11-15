@@ -60,7 +60,7 @@ It is then shown with its elapsed time, the last line of its log and the reason.
 ## Wait for it, see it, stop it
 
 ```sh
-naima wait bench --timeout 9m     # blocks until it ends, or 9 minutes pass
+naima wait bench --timeout 50s    # blocks until it ends, or 50 seconds pass; asked again until it ends
 naima run list                    # every run: state, time and disk against the budgets, progress
 naima run status bench --tail 50  # one run, with the end of its log
 naima run stop bench              # end it now
@@ -75,6 +75,10 @@ a run whose command has still not been seen alive after 10 seconds ends the wait
 for the timeout. A run that should report progress and has written no progress line after 10 seconds is said to show no progress. When the run ends, it prints
 how it ended (succeeded, failed with its exit code, killed by a budget, or stopped) together with the end of its log, and it exits 0 only if the run succeeded.
 If the run is still going when the timeout passes, it says so and exits 1, so waiting again has to be a deliberate choice.
+
+A foreground command is never given a tool timeout over 60 seconds: a command that may last longer goes through `naima run`, and is waited on with `naima wait`
+in turns of less than a minute. For Claude Code, `naima update` installs a hook that refuses such a shell call, with the reason, unless the command is
+`naima run` or `naima wait`; and `naima check` fails (check `foreground-timeouts`) on any found in the agents' transcripts since the last session note.
 
 Naima watches every run itself, and `naima wait`, `naima run list` and `naima claims` all show what it finds:
 

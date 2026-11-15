@@ -28,6 +28,10 @@
 //                 until it has the rules: given as it started, or read by a
 //                 naima rules command, which the script marks as it passes.
 //                 A call of the main session passes at once, with no Deno.
+//   PreToolUse    on Bash too, claude-code-timeout.sh refuses a call given a tool
+//                 timeout over 60 seconds unless the command is naima run or
+//                 naima wait, and tells the agent to use naima run. It holds
+//                 for the main session and every sub-agent, and starts no Deno.
 //   SubagentStop  the same script (stop) sends a sub-agent that never had
 //                 the rules back once, to read them, check its work against
 //                 them and say so in its report, and logs it.
@@ -49,6 +53,8 @@ const ID = "claude-code"
 export const STOP_SCRIPT = "src/core/adapters/claude-code-stop.sh"
 /** The sub-agent script, from the program's root. */
 export const SUBAGENT_SCRIPT = "src/core/adapters/claude-code-subagent.sh"
+/** The long-timeout guard's script, from the program's root. */
+export const TIMEOUT_SCRIPT = "src/core/adapters/claude-code-timeout.sh"
 /** The tools a sub-agent's call is held on until it has the rules: the shell, and every tool that writes a file. */
 export const HELD_TOOLS = "Bash|Write|Edit|MultiEdit|NotebookEdit"
 
@@ -75,6 +81,8 @@ const stopCommand = (program: string): string => `f="$CLAUDE_PROJECT_DIR/${progr
 const subagentCommand = (program: string): string => `${runNaima(program)} subagent --hook ${ID}`
 const subagentScript = (mode: string) => (program: string): string =>
   `f="$CLAUDE_PROJECT_DIR/${programDir(program)}/${SUBAGENT_SCRIPT}"; [ ! -f "$f" ] || sh "$f" ${mode}`
+
+const timeoutCommand = (program: string): string => `f="$CLAUDE_PROJECT_DIR/${programDir(program)}/${TIMEOUT_SCRIPT}"; [ ! -f "$f" ] || sh "$f"`
 
 /** The commands of an event's entries. */
 const commandsOf = (entry: unknown): string[] =>
@@ -168,6 +176,16 @@ const subagentTool = hook(
   (c) => c.includes("claude-code-subagent.sh") && /\stool\s*$/.test(c),
   (c) => c.includes(SUBAGENT_SCRIPT) && c.trimEnd().endsWith(" tool"),
   HELD_TOOLS,
+)
+
+const timeoutGuard = hook(
+  "PreToolUse",
+  "long-timeout guard",
+  "a shell call given a tool timeout over a minute is refused, unless it is naima run or naima wait: a command expected to last that long goes through naima run, and is waited on in short turns",
+  timeoutCommand,
+  (c) => c.includes("claude-code-timeout.sh"),
+  (c) => c.includes(TIMEOUT_SCRIPT),
+  "Bash",
 )
 
 const subagentStop = hook(
@@ -297,6 +315,7 @@ export const claudeCode: AgentAdapter = {
   subagentStart,
   subagentTool,
   subagentStop,
+  timeoutGuard,
   pluginHooks,
   sessionOf: (input) => {
     const v = parsed(input)?.["session_id"]

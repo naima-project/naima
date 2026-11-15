@@ -733,7 +733,7 @@ export async function launch(args: string[], cwd: string, resume?: Omit<UiSwitch
         entry,
         hostFiles: hostFiles(parsed.rest, root, data),
         uiFiles: switchFile && !switchFile.includes(",") ? [switchFile] : [],
-        hostReads: parsed.rest[0] === "recover" ? transcriptRoots(Deno.env.toObject()) : [],
+        hostReads: parsed.rest[0] === "recover" || parsed.rest[0] === "check" ? transcriptRoots(Deno.env.toObject()) : [],
         tempReads: TEMP_READERS.includes(parsed.rest[0] ?? "") ? tempRoots() : [],
         worktrees: others,
         worktreesFolder: configuredWorktrees(root, data),

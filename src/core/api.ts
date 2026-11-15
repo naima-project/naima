@@ -191,7 +191,16 @@ export {
   worktrees,
 } from "./git.ts"
 export { DATA_FILE, DEFAULT_DATA, TRACKER_DIR, trackerOf } from "./layout.ts"
-export { setupPaths, type TranscriptEntry, transcriptRoots, type TranscriptTail, type WorkerPlace, workerTranscript } from "./adapters/index.ts"
+export {
+  type LongTimeoutCall,
+  longTimeoutCalls,
+  setupPaths,
+  type TranscriptEntry,
+  transcriptRoots,
+  type TranscriptTail,
+  type WorkerPlace,
+  workerTranscript,
+} from "./adapters/index.ts"
 export {
   CLI_TRAILER,
   cliCommitMessage,
