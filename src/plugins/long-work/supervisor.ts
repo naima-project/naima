@@ -38,6 +38,8 @@ export interface Platform {
   groups: boolean
   /** The program and arguments that end the tree under `pid`, forcibly or not: null when a signal to the group does it. */
   endTree(pid: number, force: boolean): [string, string[]] | null
+  /** Whether a gentle ending comes first: not on Windows, where taskkill without /F cannot end a console program and may end only its cmd. */
+  graceful: boolean
 }
 
 export function platformOf(platform: string, env: Record<string, string | undefined>): Platform {
@@ -45,10 +47,11 @@ export function platformOf(platform: string, env: Record<string, string | undefi
     return {
       shell: [env["COMSPEC"] ?? "cmd.exe", ["/d", "/s", "/c"]],
       groups: false,
+      graceful: false,
       endTree: (pid, force) => ["taskkill", ["/pid", String(pid), "/T", ...(force ? ["/F"] : [])]],
     }
   }
-  return { shell: ["sh", ["-c"]], groups: true, endTree: () => null }
+  return { shell: ["sh", ["-c"]], groups: true, graceful: true, endTree: () => null }
 }
 
 /** The size on disk of `path`, every file under it counted once: allocated blocks where the platform says, else the length. */
@@ -79,6 +82,9 @@ export function trackedChanges(cwd: string): string[] | null {
   return r.stdout.split("\0").filter(Boolean).map((l) => l.slice(3)).sort()
 }
 
+/** How often a run's descendants are listed on a platform without process groups (a listing costs about a second). */
+const SEEN_EVERY_MS = 15_000
+
 const alive = (pid: number, groups: boolean): boolean => {
   try {
     process.kill(groups ? -pid : pid, 0)
@@ -105,17 +111,110 @@ export function outputClosed(child: { once(event: "close", listener: () => void)
   }
 }
 
-/** End the command's tree: SIGTERM (taskkill /T), then SIGKILL (/F) after the grace if anything of it is left. */
-export async function endTree(pid: number, p: Platform, graceMs: number): Promise<void> {
+/** A process as the platform lists it: its id, its parent's, and when it was created (told apart from a later process that reuses the id). */
+export interface ProcRow {
+  pid: number
+  ppid: number
+  created: string
+}
+
+/** The rows of a process table printed by `processTable`'s script: one per line, `pid<TAB>ppid<TAB>created`; any other line is skipped. */
+export function parseProcessTable(text: string): ProcRow[] {
+  const rows: ProcRow[] = []
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^(\d+)\t(\d+)\t(\S+)$/.exec(line.trim())
+    if (m) rows.push({ pid: Number(m[1]), ppid: Number(m[2]), created: m[3]! })
+  }
+  return rows
+}
+
+/**
+ * The processes below `root` in `rows`, at any depth, root excluded. A row counts as a child only when it was created
+ * no earlier than its parent: a process whose parent id was since reused by another is not that one's child.
+ */
+export function descendants(rows: ProcRow[], root: number): ProcRow[] {
+  const byParent = new Map<number, ProcRow[]>()
+  for (const r of rows) byParent.set(r.ppid, [...(byParent.get(r.ppid) ?? []), r])
+  const created = new Map(rows.map((r) => [r.pid, r.created]))
+  const found: ProcRow[] = []
+  const seen = new Set<number>([root])
+  const queue = [root]
+  while (queue.length) {
+    const parent = queue.shift()!
+    for (const c of byParent.get(parent) ?? []) {
+      const at = created.get(parent)
+      if (seen.has(c.pid) || (at !== undefined && c.created < at)) continue
+      seen.add(c.pid)
+      found.push(c)
+      queue.push(c.pid)
+    }
+  }
+  return found
+}
+
+/** What lists the processes on Windows: id, parent id and creation instant (UTC, sortable), one per line. */
+const PROCESS_TABLE_SCRIPT =
+  "Get-CimInstance Win32_Process | ForEach-Object { if ($_.CreationDate) { \"$($_.ProcessId)`t$($_.ParentProcessId)`t$($_.CreationDate.ToUniversalTime().ToString('o'))\" } }"
+
+/** The process table of this Windows machine; empty when it cannot be listed. */
+export function processTable(): ProcRow[] {
+  const r = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", PROCESS_TABLE_SCRIPT], {
+    encoding: "utf8",
+    windowsHide: true,
+    timeout: 20_000,
+  })
+  return r.status === 0 ? parseProcessTable(String(r.stdout ?? "")) : []
+}
+
+const keyOf = (r: ProcRow): string => `${r.pid}@${r.created}`
+
+/**
+ * Where a run's descendants are remembered on a platform without process groups: a command's tree is ended through its
+ * root, so a process whose parent has already gone (a browser a hung test left) is out of reach unless it was seen
+ * while the tree was whole.
+ */
+export class Descendants {
+  private known = new Map<string, ProcRow>()
+  private root: number
+  private table: () => ProcRow[]
+  constructor(root: number, table: () => ProcRow[] = processTable) {
+    this.root = root
+    this.table = table
+  }
+  /** Remember what is below the root now. */
+  see(): void {
+    for (const r of descendants(this.table(), this.root)) this.known.set(keyOf(r), r)
+  }
+  /** The remembered processes still alive (same id, same creation instant), ended through `end`; how many there were. */
+  sweep(end: (pid: number) => void): number {
+    const alive = new Set(this.table().map(keyOf))
+    const left = [...this.known].filter(([k]) => alive.has(k)).map(([, r]) => r)
+    for (const r of left) end(r.pid)
+    this.known.clear()
+    return left.length
+  }
+}
+
+/**
+ * End the command's tree: SIGTERM, then SIGKILL after the grace if anything of it is left. On a platform with no gentle
+ * ending (Windows) the tree is ended forcibly at once, root dead or alive: its children may outlive a root that went first.
+ */
+export async function endTree(
+  pid: number,
+  p: Platform,
+  graceMs: number,
+  run: (program: string, args: string[]) => void = (program, args) => void spawnSync(program, args, { stdio: "ignore", windowsHide: true }),
+): Promise<void> {
   const send = (force: boolean): void => {
     const program = p.endTree(pid, force)
-    if (program) spawnSync(program[0], program[1], { stdio: "ignore", windowsHide: true })
+    if (program) run(program[0], program[1])
     else {
       try {
         process.kill(-pid, force ? "SIGKILL" : "SIGTERM")
       } catch { /* nothing of it is left */ }
     }
   }
+  if (!p.graceful) return send(true)
   if (!alive(pid, p.groups)) return
   send(false)
   const until = Date.now() + graceMs
@@ -191,10 +290,14 @@ export async function supervise(dir: string, graceMs: number = DEFAULTS.graceMs)
   })
   const spawned = Date.now()
   if (child.pid !== undefined) write({ state: "running", pid: child.pid })
+  const below = !p.groups && child.pid !== undefined ? new Descendants(child.pid) : null
+  let seenAt = Date.now()
+  let ending: Promise<void> = Promise.resolve()
   const end = (why: Reason): void => {
     if (reason || child.pid === undefined) return
     reason = why
-    void endTree(child.pid, p, graceMs)
+    below?.see()
+    ending = endTree(child.pid, p, graceMs)
   }
   const tick = (): void => {
     const patch: Partial<RunStatus> = {}
@@ -209,6 +312,10 @@ export async function supervise(dir: string, graceMs: number = DEFAULTS.graceMs)
       patch.peakBytes = Math.max(status.peakBytes ?? 0, size)
     }
     write(patch)
+    if (below && !reason && Date.now() - seenAt >= SEEN_EVERY_MS) {
+      below.see()
+      seenAt = Date.now()
+    }
     if (existsSync(join(dir, STOP_FILE))) end("stopped")
     else if (Date.now() - started > spec.budgetTimeMs) end("budget-time")
     else if (spec.budgetDiskBytes !== undefined && (patch.sizeBytes ?? 0) > spec.budgetDiskBytes) end("budget-disk")
@@ -219,6 +326,12 @@ export async function supervise(dir: string, graceMs: number = DEFAULTS.graceMs)
   clearInterval(timer)
   // A run leaves nothing running: what the command left in its group is ended too.
   if (child.pid !== undefined && p.groups) await endTree(child.pid, p, graceMs)
+  // Without process groups: the end asked for is awaited, then what was seen below the command and still lives is ended.
+  await ending
+  below?.sweep((pid) => {
+    const [program, args] = p.endTree(pid, true) ?? ["taskkill", ["/pid", String(pid), "/T", "/F"]]
+    spawnSync(program, args, { stdio: "ignore", windowsHide: true })
+  })
   // The run's end is recorded only once its whole output is in the log: a reader that sees "ended" reads the last line too.
   await drained(2_000)
   await Promise.race([new Promise((done) => log.end(done)), delay(2_000)])
