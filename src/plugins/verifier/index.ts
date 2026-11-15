@@ -19,9 +19,11 @@ import {
   ATTACHMENTS,
   bool,
   type Check,
+  checkoutAt,
   type Command,
   type Context,
   CONTRACT,
+  dropRef,
   fieldValue,
   type Finding,
   findPrivate,
@@ -43,9 +45,11 @@ import {
   type Progress,
   progressFor,
   projectHosts,
+  realExec,
   redactPrivate,
   rendered,
   saveMeta,
+  sendTipWith,
   setFieldValue,
   sshArgs,
   storedLinks,
@@ -54,6 +58,7 @@ import {
   textsAt,
   toplevel,
   usageError,
+  verifyRef,
   writeFileAtomic,
   type WriteHook,
   writeJson,
@@ -629,10 +634,28 @@ export async function verifyOnHost(ctx: Context, host: Host, item: Item, progres
   const refused = refusedToolArgs(verifier, opts.toolArgs ?? [])
   if (refused) throw new Error(`${label(item)}: ${refused}`)
   progress.stage(`${label(item)} on ${host.name}`)
+  // The commit this checkout is at goes to the host under a ref of its own and is verified there in a checkout made for
+  // it, so the host's own branch does not matter: a property filed on a branch is verified without the host holding it.
+  const tip = gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+  if (!tip) throw new Error(`${label(item)}: this checkout has no commit to send to ${host.name}; nothing was written`)
+  const exec = realExec(ctx.root)
+  const sent = sendTipWith(ctx.root, host, tip, exec, undefined, verifyRef)
+  if (sent) throw new Error(`${label(item)}: ${sent}; nothing was written`)
+  try {
+    return await verifyThere(ctx, host, item, progress, opts, verifyRef(tip))
+  } finally {
+    const left = dropRef(host, verifyRef(tip), exec)
+    if (left) ctx.err(left)
+  }
+}
+
+async function verifyThere(ctx: Context, host: Host, item: Item, progress: Progress, opts: VerifyOptions, ref: string): Promise<VerifyOutcome> {
   const args = [
     "verify",
     label(item),
     "--emit",
+    "--at",
+    ref,
     ...(opts.force !== undefined ? ["--force", opts.force] : []),
     ...(opts.toolArgs?.length ? [`--tool-args=${opts.toolArgs.join(" ")}`] : []),
   ]
@@ -804,8 +827,8 @@ const verify: Command = {
   name: "verify",
   says: "run the verifier of properties and attach each run as evidence, here or in a declared host's checkout",
   enforces:
-    "a property holds only with a run of its verifier on exactly what it has now, attached as evidence; every input is hashed by its committed content, a text file's CRLF line endings read as LF, so every checkout hashes alike; a model or input outside the project is refused; a conclusive run (holds or violated) already recorded on the same identity — every input's digest with the tool's version, and the options — is reused, not repeated, unless --force gives the reason to run it again; --tool-args passes only flags the verifier declares as leaving the verdict alone, recorded with the run; with --host, the run is made in the host's checkout, which writes nothing there, and kept here only when it was made on exactly what this checkout has",
-  usage: 'verify <property>... | verify --all [--force "<reason>"] [--tool-args="<flags>"] [--host <host>] [--emit]',
+    "a property holds only with a run of its verifier on exactly what it has now, attached as evidence; every input is hashed by its committed content, a text file's CRLF line endings read as LF, so every checkout hashes alike; a model or input outside the project is refused; a conclusive run (holds or violated) already recorded on the same identity — every input's digest with the tool's version, and the options — is reused, not repeated, unless --force gives the reason to run it again; --tool-args passes only flags the verifier declares as leaving the verdict alone, recorded with the run; with --host, this checkout's commit is sent to the host under a ref that is removed after, the run is made in a checkout of it made there for the run, which writes nothing in the host's own checkout, and kept here only when it was made on exactly what this checkout has",
+  usage: 'verify <property>... | verify --all [--force "<reason>"] [--tool-args="<flags>"] [--host <host>] [--emit [--at <commit>]]',
   long: {
     reports:
       "the properties done of those asked, with a rate and an ETA; within a property, each stage of its verifier with the count its tool exposes — for mCRL2 each tool, with the states lps2lts explores and the BES equations pbessolve generates; with --host, the host's own progress lines, as notes",
@@ -821,9 +844,14 @@ const verify: Command = {
     {
       name: "--host",
       says:
-        "run the verifier in the checkout of this host, declared in the long-work plugin's hosts option, through the host's own Naima over ssh; the run comes back and is attached here, refused when the host's checkout differs from this one",
+        "run the verifier in the checkout of this host, declared in the long-work plugin's hosts option, through the host's own Naima over ssh, on a checkout of this checkout's commit sent there for the run; the run comes back and is attached here, refused when this checkout has uncommitted changes to what it read",
     },
     { name: "--emit", says: "print each run as one JSON line and write nothing: what --host asks the host's Naima" },
+    {
+      name: "--at",
+      says:
+        "with --emit, verify on the files of this commit (or ref) in a checkout of it made for the run, without the project's submodules, and removed after: what --host asks the host's Naima, after sending its commit",
+    },
   ],
   examples: [
     "verify no-deadlock",
@@ -838,7 +866,18 @@ const verify: Command = {
       "tool-args": { type: "string" },
       host: { type: "string" },
       emit: { type: "boolean" },
+      at: { type: "string" },
     })
+    const at = str(p, "at")
+    if (at !== undefined && !bool(p, "emit")) throw new Error("--at goes with --emit: it is what a host is asked, to verify the commit it was sent")
+    if (at !== undefined) {
+      const made = checkoutAt(ctx, at)
+      try {
+        return await this.run(args.filter((a, i) => a !== "--at" && !a.startsWith("--at=") && args[i - 1] !== "--at"), made.ctx)
+      } finally {
+        made.dispose()
+      }
+    }
     const items = bool(p, "all") ? properties(ctx) : p.positionals.map((r) => ctx.repo.resolve(r))
     const emit = bool(p, "emit")
     if (!items.length && bool(p, "all")) {
@@ -1710,7 +1749,7 @@ export default function verifier(): Plugin {
       "A `properties` item names a `verifier` (an adapter any plugin can contribute), a `model` file (a path from the project root) and a `property` in the verifier's own language. " +
       "`naima verify` runs the adapter and attaches the run — verdict, output, the adapter's `details` of how it reached the verdict when it gives them, the model's sha256, and one digest over every file the run read (the model and what the adapter's `inputs` says it includes) and the tool's version (the adapter's `version`) — and the counterexample as its own file, then sets the status from the verdict. What the tool printed (the output, the counterexample, the details) is attached redacted: the project's root as `<root>`, a home-directory path, a machine or user name and an address as their placeholders. Every file is hashed by the content git commits: a text file's CRLF line endings are read as LF, so a run made on a Windows checkout with core.autocrlf is current on any other. " +
       "Each run also keeps the seconds the verifier took and the commit checked out; the new UI's `property-history` view draws a property's verdict, states and time at every run kept, on the trunk's commit axis, each point opening its run's record. " +
-      "`--tool-args=<flags>` passes the tool flags the adapter declares in `toolArgs` as changing what it prints, never the verdict, and keeps them with the run, outside its identity. `--host <host>` runs the verifier in the checkout of a host the long-work plugin declares, through that host's Naima (`naima verify --emit`, which prints the run and writes nothing), and attaches the run here, marked with the host, only when it was made on exactly what this checkout has. " +
+      "`--tool-args=<flags>` passes the tool flags the adapter declares in `toolArgs` as changing what it prints, never the verdict, and keeps them with the run, outside its identity. `--host <host>` runs the verifier in the checkout of a host the long-work plugin declares, through that host's Naima (`naima verify --emit --at <commit>`, which prints the run and writes nothing) on a checkout of this checkout's commit, sent there for the run, and attaches the run here, marked with the host, only when it was made on exactly what this checkout has. " +
       'A conclusive run (holds or violated) already recorded on the property with the same identity — verifier, model, property, `verifierOptions`, and the one digest over every input and the tool\'s version — is reused instead of repeated: `naima verify` says `reused` and names the run, and `--force "<reason>"` runs it again, keeping the reason with the new run. An error is never reused. Every run is kept, two made in the same instant included. A run records in `counts` the count each step that finished ended on (the states explored, the BES equations generated); the next run of the same property, model and `verifierOptions`, whatever the inputs now hold, reports that count as the estimated total of the step (`estimate: true` in its progress line, `~` in its text), which grows as the step passes it. ' +
       "A property that holds is evidence exactly as a passed test is: it can `verify` a bug and close it. A verdict is only as good as what it was reached on, so `naima check` fails when a property claims to hold and its property, verifier, model path, `verifierOptions`, model contents, any file it includes, the set of files it reads, or the tool's version have changed since the run. " +
       "A property that holds and proves a change — it verifies or satisfies a bug, a todo or a feature — is expected to carry a violated run of the same property, with its counterexample, on other inputs (`property-failed-first`), and to be backed by a witness property that holds, linked by `witnesses` (`property-witnessed`); both are notes that name the property, so either can be waived with its reason. " +

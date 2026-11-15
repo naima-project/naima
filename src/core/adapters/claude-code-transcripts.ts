@@ -13,7 +13,7 @@
 // last entries are returned, each cut short: the resuming worker's context
 // stays small, and nothing here writes a file.
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs"
 import { join } from "node:path"
 import type { TranscriptEntry, TranscriptReader, TranscriptTail, WorkerPlace } from "./index.ts"
 
@@ -147,4 +147,63 @@ export const claudeCodeTranscripts: TranscriptReader = {
     if (!latest) return undefined
     return { file: latest, entries: lastEntries(readFileSync(latest, "utf8"), count) }
   },
+}
+
+// ── how full the context is ──────────────────────────────────────────────────
+// The last assistant message of a transcript carries the usage of the request that produced it: what that request
+// read is the context now (input tokens plus those written to and read from the cache). Only the end of the file is
+// read: the last megabyte holds many messages.
+
+/** How much of the end of a transcript is read to find its last assistant message. */
+const TAIL_BYTES = 1 << 20
+
+/** The context size in tokens from the last assistant message of a transcript's text; undefined when it has none. */
+export function contextTokensOf(text: string): number | undefined {
+  const lines = text.split("\n")
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i]!.trim()
+    if (!line.includes('"usage"')) continue
+    let v: unknown
+    try {
+      v = JSON.parse(line)
+    } catch {
+      continue
+    }
+    if (!isObject(v) || v["type"] !== "assistant" || v["isSidechain"] === true || !isObject(v["message"])) continue
+    const message = v["message"]
+    const usage = message["usage"]
+    if (message["model"] === "<synthetic>" || !isObject(usage) || typeof usage["input_tokens"] !== "number") continue
+    const n = (k: string): number => (typeof usage[k] === "number" ? usage[k] : 0)
+    return n("input_tokens") + n("cache_creation_input_tokens") + n("cache_read_input_tokens")
+  }
+  return undefined
+}
+
+/** The transcript's path from what a Claude Code hook is given on standard input. */
+export function transcriptPathOf(input: string): string | undefined {
+  try {
+    const v: unknown = JSON.parse(input)
+    return isObject(v) && typeof v["transcript_path"] === "string" && v["transcript_path"] ? v["transcript_path"] : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** The context size in tokens, from a hook's input: its transcript's end read. Undefined when the input names no readable transcript. */
+export function contextTokensFromInput(input: string): number | undefined {
+  const path = transcriptPathOf(input)
+  if (!path) return undefined
+  let fd: number | undefined
+  try {
+    fd = openSync(path, "r")
+    const size = statSync(path).size
+    const start = Math.max(0, size - TAIL_BYTES)
+    const buffer = Buffer.alloc(size - start)
+    readSync(fd, buffer, 0, buffer.length, start)
+    return contextTokensOf(buffer.toString("utf8"))
+  } catch {
+    return undefined
+  } finally {
+    if (fd !== undefined) closeSync(fd)
+  }
 }

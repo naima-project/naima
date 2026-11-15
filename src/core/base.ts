@@ -5,7 +5,8 @@
 import { existsSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { bool, pairs, parse, str, strs, usageError } from "./args.ts"
-import { coreChecks, runChecks } from "./check.ts"
+import { coreChecks, heavyCheckNames, runChecks } from "./check.ts"
+import { heavyVerdict } from "./heavy.ts"
 import { groupBy } from "./collections.ts"
 import { appliesTo, fieldValue, isOpenList, parseFieldValue } from "./fields.ts"
 import { currentBranch, gitOrNull, gitReadScope, isGitRepo } from "./git.ts"
@@ -517,10 +518,20 @@ const check: Command = {
     const p = parse(args, { staged: { type: "boolean" }, "all-worktrees": { type: "boolean" }, heavy: { type: "boolean" } })
     if (p.positionals.length) throw usageError(this)
     const staged = bool(p, "staged")
+    // Heavy checks run as the project agreed: with no answer the question is asked and nothing runs; turned off, they are left out.
+    let heavy = bool(p, "heavy")
+    if (heavy && heavyCheckNames(ctx).length) {
+      const v = heavyVerdict(ctx, "explicit")
+      if (!v.run) {
+        ctx.out(`heavy checks ${v.why}`)
+        if (v.owe) return 1
+        heavy = false
+      }
+    }
     const { problems, notes, skipped } = await runChecks(ctx, {
       staged,
       allWorktrees: bool(p, "all-worktrees"),
-      heavy: bool(p, "heavy"),
+      heavy,
       progress: (line) => ctx.err(line),
     })
     const count = (staged ? ctx.registry.checks.filter((c) => c.staged === true).length : ctx.registry.checks.length) - skipped.length

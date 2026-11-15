@@ -2,21 +2,14 @@
 // here) and the verification of every formal property that is not current (on the option verifyHost), all started through
 // `naima run`, read back through `naima run status`, and settled into the checkpoint record: a pass or a failure per run.
 // A failed run blocks the gate through the record and files, or updates, a bug.
-import { spawnSync } from "node:child_process"
-import { mkdirSync, rmSync } from "node:fs"
-import { tmpdir } from "node:os"
-import { dirname, join } from "node:path"
 import {
   type CheckpointRecord,
+  checkpointRef,
   type CheckpointRun,
   type CheckpointRunSpec,
-  cmdEscape,
-  cmdQuote,
   type Context,
   contextIn,
   createItem,
-  gitOrNull,
-  gitReason,
   type Host,
   isOpen,
   type Item,
@@ -27,22 +20,21 @@ import {
   privateContext,
   projectHosts,
   readReadme,
+  realExec,
   redactPrivate,
-  runGit,
   saveProse,
+  sendTipWith,
   splitProse,
-  tickDir,
   today,
   updateCheckpoint,
 } from "../../core/api.ts"
 import { naimaHere } from "./land.ts"
 
+export { type Exec, sendTipWith } from "../../core/api.ts"
+
 /** How long a suite may run and stay silent, and the same for the verification of the properties. */
 const SUITE = { budget: "2h", stale: "30m" }
 const VERIFY = { budget: "6h", stale: "1h" }
-
-/** The ref a checkpoint's tip is pushed to on a host, for the time of the run. */
-const checkpointRef = (tip: string): string => `refs/naima/checkpoint/${tip.slice(0, 12)}`
 
 /** The properties not current: the ones the properties gate blocks on, less those whose files are gone, which no run brings current. */
 export async function notCurrentProperties(ctx: Context): Promise<Item[]> {
@@ -140,109 +132,6 @@ export async function startRuns(
     )
   }
   return runs
-}
-
-/** One command run for the sending of a tip: whether it succeeded, and what it said on failure. */
-export type Exec = (cmd: string, args: string[]) => { ok: boolean; err: string }
-
-/** What git and ssh say when the link dropped, as opposed to when the host refused: worth another try. */
-const DROPPED =
-  /could not read from remote repository|connection (closed|reset|timed out|refused)|broken pipe|kex_exchange|ssh: connect to host|operation timed out|lost connection/i
-
-/** How often a command that met a dropped link is run, and the pause before each new try. */
-const TRIES = 3
-const PAUSE_MS = 2000
-
-const sleepSync = (ms: number): void => void Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
-
-/** Run `cmd` until it succeeds, or fails for a reason that is not a dropped link, or the tries are used; its last result. */
-function persist(exec: Exec, pause: (ms: number) => void, cmd: string, args: string[]): { ok: boolean; err: string } {
-  let r = exec(cmd, args)
-  for (let n = 1; !r.ok && n < TRIES && DROPPED.test(r.err); n++) {
-    pause(PAUSE_MS * n)
-    r = exec(cmd, args)
-  }
-  return r
-}
-
-/**
- * Put the tip in the host's checkout under the checkpoint's ref. Towards a POSIX host, a git push over ssh. Towards a
- * host whose shell is cmd, git's own ssh quoting breaks the path, so the tip travels as a bundle: made here, copied with
- * scp into the host's git directory, fetched there and removed. A dropped link is tried again, twice. The reason it
- * could not be sent, or none.
- */
-export function sendTipWith(root: string, h: Host, tip: string, exec: Exec, pause: (ms: number) => void = sleepSync): string | undefined {
-  const sent = sendCommit(root, h, tip, exec, pause)
-  if (sent) return sent
-  // The product the tip's submodule pointer names may be on no remote yet (a development line's, before it lands): it goes
-  // to the product's own checkout on the host, so that the host's `git submodule update` finds it there.
-  const sub = gitOrNull(root, "ls-tree", tip, "naima")?.match(/^160000 commit ([0-9a-f]{40})\tnaima$/m)?.[1]
-  if (!sub) return undefined
-  const repo = join(root, "naima")
-  if (!exec("git", ["-C", repo, "cat-file", "-e", `${sub}^{commit}`]).ok) return undefined
-  const there = h.shell === "cmd" ? `${h.dir.replace(/[\\/]+$/, "")}\\naima` : `${h.dir.replace(/\/+$/, "")}/naima`
-  return sendCommit(repo, { ...h, dir: there }, sub, exec, pause)
-}
-
-/** Put one commit of the repository at `root` in the checkout at `h.dir` on the host, under the checkpoint's ref. */
-function sendCommit(root: string, h: Host, tip: string, exec: Exec, pause: (ms: number) => void): string | undefined {
-  const ref = checkpointRef(tip)
-  const fail = (err: string): string => `could not send ${tip.slice(0, 12)} to ${h.name}: ${err}`
-  if (h.shell !== "cmd") {
-    const pushed = persist(exec, pause, "git", ["-C", root, "push", "--no-verify", "--quiet", "--force", `${h.ssh}:${h.dir}`, `${tip}:${ref}`])
-    return pushed.ok ? undefined : fail(pushed.err)
-  }
-  const file = `naima-checkpoint-${tip.slice(0, 12)}.bundle`
-  // The bundle is made in Naima's state folder in the clone's git directory, the one place outside the tracker the
-  // launcher lets the command read and write (the system's temporary folder it may not), else in the temporary folder.
-  const state = tickDir(root)
-  const folder = state ? dirname(state) : tmpdir()
-  const local = join(folder, file)
-  const fwd = h.dir.replace(/\\/g, "/").replace(/\/+$/, "")
-  const winDir = h.dir.replace(/\//g, "\\").replace(/\\+$/, "")
-  try {
-    mkdirSync(folder, { recursive: true })
-    const made = exec("git", ["-C", root, "update-ref", ref, tip])
-    if (!made.ok) return fail(made.err)
-    const bundled = exec("git", ["-C", root, "bundle", "create", "--quiet", local, ref])
-    if (!bundled.ok) return fail(bundled.err)
-    const copied = persist(exec, pause, "scp", ["-q", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", local, `${h.ssh}:${fwd}/.git/${file}`])
-    if (!copied.ok) return fail(copied.err)
-    const there = cmdQuote(`${winDir}\\.git\\${file}`)
-    const fetched = persist(exec, pause, "ssh", [
-      "-o",
-      "BatchMode=yes",
-      "-o",
-      "ConnectTimeout=8",
-      h.ssh,
-      `cd /d ${cmdEscape(/[\s%]/.test(winDir) ? `"${winDir}"` : winDir)} && git fetch -q ${there} +${ref}:${ref} && del /q ${there}`,
-    ])
-    return fetched.ok ? undefined : fail(fetched.err)
-  } finally {
-    exec("git", ["-C", root, "update-ref", "-d", ref])
-    rmSync(local, { force: true })
-  }
-}
-
-/** Run a command for real: git through Naima's own git runner, the rest as itself. */
-function realExec(root: string): Exec {
-  return (cmd, args) => {
-    if (cmd === "git") {
-      const r = runGit(root, args.slice(2))
-      return { ok: r.ok, err: r.ok ? "" : gitReason(r) }
-    }
-    const r = spawnSync(cmd, args, { encoding: "utf8", timeout: 600_000, stdio: ["ignore", "pipe", "pipe"] })
-    // No status, no signal and no error: the program was never started, as when the launcher does not let this command run it.
-    const never = !r.error && r.status == null && !r.signal
-    return {
-      ok: r.status === 0,
-      err: r.error
-        ? `${cmd}: ${r.error.message}`
-        : never
-        ? `${cmd} could not be started: this command may not run it`
-        : String(r.stderr ?? "").trim().split("\n").pop() ?? "",
-    }
-  }
 }
 
 /** Push the tip to the host's checkout as a ref, for its suite to check out; the reason it could not, or none. */

@@ -26,6 +26,33 @@ case $common in
   *) common="$root/$common" ;;
 esac
 
+# Handover: the coordination plugin leaves the context limit, in tokens, in handover-at while a coordinator holds the
+# role (naima handover). The last assistant message of the transcript carries the context size (its input, cache-creation
+# and cache-read tokens), found here with grep alone; past the limit, naima handover --watch says whether this session
+# is the coordinator and tells it to hand over, which blocks the stop. No limit file, no transcript, no usage: nothing.
+limit=$(cat "$common/naima/tick/handover-at" 2>/dev/null)
+transcript=$(printf '%s' "$input" | sed -n 's/.*"transcript_path": *"\([^"]*\)".*/\1/p' | head -n 1)
+if [ -n "$limit" ] && [ -n "$transcript" ] && [ -f "$transcript" ] && { [ -f "$committed" ] || command -v deno >/dev/null 2>&1; }; then
+  line=$(tail -n 80 "$transcript" | grep '"type":"assistant"' | grep '"usage"' | tail -n 1)
+  used=0
+  for key in input_tokens cache_creation_input_tokens cache_read_input_tokens; do
+    n=$(printf '%s' "$line" | grep -o "\"$key\":[0-9]*" | head -n 1 | cut -d: -f2)
+    used=$((used + ${n:-0}))
+  done
+  if [ -n "$line" ] && [ "$used" -ge "$limit" ] 2>/dev/null; then
+    cd "$root" || exit 0
+    if [ -f "$committed" ]; then
+      said=$(printf '%s' "$input" | sh "$committed" handover --watch --hook claude-code 2>/dev/null)
+    else
+      said=$(printf '%s' "$input" | deno run -A "$launcher" handover --watch --hook claude-code 2>/dev/null)
+    fi
+    if [ -n "$said" ]; then
+      printf '%s\n' "$said"
+      exit 0
+    fi
+  fi
+fi
+
 # Capture: a turn that changed the project's files while nothing in the
 # tracker changed is stopped once, for the agent to judge whether the owner
 # asked, decided or reported something to file. Git alone, no Deno: each stop

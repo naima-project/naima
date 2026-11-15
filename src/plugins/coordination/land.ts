@@ -6,6 +6,7 @@
 // command is a shortcut for `git merge --no-ff` after `git merge-base
 // --is-ancestor`: the check, not the command, is the authority.
 
+import { requireWriter } from "./handover.ts"
 import { join, relative } from "node:path"
 import { isDeepStrictEqual, stripVTControlCharacters } from "node:util"
 import { randomUUID } from "node:crypto"
@@ -37,6 +38,7 @@ import {
   gitOrNull,
   gitReason,
   type GitRun,
+  heavyVerdict,
   type Host,
   isAncestor,
   isUuid,
@@ -384,12 +386,26 @@ export async function landingChecks(
     const check = c.value as LandingReport
     if (!check.refuses && !check.blocks) continue
     if (only && !only.includes(c.name)) continue
+    // A heavy check runs as the project agreed (naima heavy-checks): a landing runs it only when the project said at every landing, or named it fast.
+    if (check.heavy && !only && !fast.includes(c.name)) {
+      const v = heavyVerdict(ctx, "landing", at)
+      if (!v.run) {
+        if (v.owe) owed.push(c.name)
+        ctx.out(`${c.name}: ${v.why}`)
+        continue
+      }
+    }
     if (checkpointing && !fast.includes(c.name)) {
       owed.push(c.name)
       ctx.out(`${c.name}: owed at the next checkpoint, not run on this landing`)
       continue
     }
     if (only && check.heavy) {
+      const v = heavyVerdict(ctx, "explicit", at)
+      if (!v.run) {
+        ctx.out(`${c.name}: ${v.why}`)
+        continue
+      }
       const found = { ...(await heavyCheck(ctx, c.name, landing, at)) }
       for (const line of found.said) ctx.out(`${c.name}: ${line}`)
       refused.push(...found.refused.map((l) => `${c.name}: ${l}`))
@@ -1555,6 +1571,7 @@ export const land: Command = {
     })
     const branch = p.positionals[0]
     if (!branch || p.positionals.length > 1) throw usageError(this)
+    requireWriter(ctx, `land ${branch}`)
     const stale = str(p, "stale-proofs")
     if (stale !== undefined && (!stale.trim() || stale.includes("\n"))) throw new Error("--stale-proofs takes the reason, on one line")
     const trackerOnly = str(p, "tracker-only")?.trim()

@@ -172,7 +172,7 @@ asks the host by the run's record there. If the host does not know the run, `wai
 from here with `--host` is found without it.
 
 That is why a property is not verified with `naima run --host`, since `naima verify` writes the property's item. `naima verify <property> --host lab` is used
-instead: the verifier runs in the host's checkout, which stays untouched, and the run is attached here
+instead: the commit this checkout is at is sent to the host, the verifier runs in a checkout of it made there for the run, and the run is attached here
 ([proving a property on another machine](prove-and-close.md#properties-proven-by-a-tool)).
 
 Naima quotes what it sends for the shell the machine's ssh server runs commands through. That is a POSIX shell unless you say otherwise. The ssh server that

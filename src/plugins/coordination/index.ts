@@ -89,8 +89,10 @@ import { readStaleAfter, staleCommand, type StaleData, staleData, staleSection }
 import { applyPlan, planSweep, type SweepInputs, type SweepItem, sweepLines, type SweepResult } from "./sweep.ts"
 import { changeNotesCheck, changesCommand } from "./changes.ts"
 import { checkpointCommand } from "./checkpoint.ts"
+import { heavyChecksCommand, heavyChecksSection } from "./heavy-checks.ts"
 import { idOf, land, landingCheckCommand, landingReportsPoint, landingsAreMarkers, landingsPaired } from "./land.ts"
 import { claimsReports, claimsReportsPoint } from "./claims-reports.ts"
+import { handoverCommand, handoverSection, readHandoverOptions } from "./handover.ts"
 import { pushCheckCommand } from "./messages.ts"
 import { fixCommand } from "./fix.ts"
 import { guardCheckCommand, guardCommand, guardedFrom, guardOffSection, guardSetup, readTrunkGuard, takenByGuard } from "./guard.ts"
@@ -819,6 +821,41 @@ const prune: Command = {
   },
 }
 
+/** Write one new session note, the acknowledgement line first when the project's rules ask for one; the path of the file, as `pass` says it. */
+export function writeSessionNote(ctx: Context, text: string, ack: string | undefined): string {
+  const asked = expectedAcks(ctx)
+  // Refused now rather than flagged by naima check later: a note written without it cannot be rewritten.
+  if (ack === undefined && asked.length) {
+    throw new Error(
+      `pass needs --ack "<line>": the project's rules ask a session note to acknowledge ${
+        asked.join(" · ")
+      } — naima rules --audience agents prints the line to give back`,
+    )
+  }
+  if (ack !== undefined) {
+    const missing = asked.filter((phrase) => !ack.includes(phrase))
+    if (missing.length) {
+      throw new Error(
+        `pass --ack is missing: ${missing.join(" · ")} — naima rules --audience agents prints the line to give back`,
+      )
+    }
+  }
+  const now = ctx.now()
+  const date = now.toISOString().slice(0, 10)
+  const branch = currentBranch(ctx.root)
+  const dir = join(ctx.trackerRoot, PASSES)
+  mkdirSync(dir, { recursive: true })
+  const name = `${date}-${randomUUID()}.md`
+  const allowance = guardPrivate("the session note", findPrivate(text, privateContext()), ctx.allowPrivate)
+  const record = frontLines(beforeTextWrite(ctx, "the session note"))
+  const body = [ack, text, allowance].filter(Boolean).join("\n\n")
+  writeFileAtomic(
+    join(dir, name),
+    `---\ndate: ${date}\nat: ${now.toISOString()}\nbranch: ${branch}${ack ? `\nack: ${ack}` : ""}\n${record}---\n\n${body}\n`,
+  )
+  return join(rel(ctx, PASSES), name)
+}
+
 const pass: Command = {
   name: "pass",
   says: "write this session's note (one new file), or list the newest",
@@ -858,38 +895,7 @@ const pass: Command = {
     const file = str(p, "file")
     const text = (file ? readText(file) : p.positionals.join(" ")).trim()
     if (!text) throw usageError(this)
-    const ack = str(p, "ack")
-    const asked = expectedAcks(ctx)
-    // Refused now rather than flagged by naima check later: a note written without it cannot be rewritten.
-    if (ack === undefined && asked.length) {
-      throw new Error(
-        `pass needs --ack "<line>": the project's rules ask a session note to acknowledge ${
-          asked.join(" · ")
-        } — naima rules --audience agents prints the line to give back`,
-      )
-    }
-    if (ack !== undefined) {
-      const missing = asked.filter((phrase) => !ack.includes(phrase))
-      if (missing.length) {
-        throw new Error(
-          `pass --ack is missing: ${missing.join(" · ")} — naima rules --audience agents prints the line to give back`,
-        )
-      }
-    }
-    const now = ctx.now()
-    const date = now.toISOString().slice(0, 10)
-    const branch = currentBranch(ctx.root)
-    const dir = join(ctx.trackerRoot, PASSES)
-    mkdirSync(dir, { recursive: true })
-    const name = `${date}-${randomUUID()}.md`
-    const allowance = guardPrivate("the session note", findPrivate(text, privateContext()), ctx.allowPrivate)
-    const record = frontLines(beforeTextWrite(ctx, "the session note"))
-    const body = [ack, text, allowance].filter(Boolean).join("\n\n")
-    writeFileAtomic(
-      join(dir, name),
-      `---\ndate: ${date}\nat: ${now.toISOString()}\nbranch: ${branch}${ack ? `\nack: ${ack}` : ""}\n${record}---\n\n${body}\n`,
-    )
-    ctx.out(`wrote ${join(rel(ctx, PASSES), name)} — commit it ${commitOn(ctx.root)} with the work it describes`)
+    ctx.out(`wrote ${writeSessionNote(ctx, text, str(p, "ack"))} — commit it ${commitOn(ctx.root)} with the work it describes`)
     return 0
   },
 }
@@ -1351,6 +1357,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
   const policy = readPolicy(options)
   const diaryPerDay = readDiaryPerDay(options)
   const silentAfter = readSilentAfter(options)
+  const handover = readHandoverOptions(options)
   const staleAfter = readStaleAfter(options)
   const guarded = readTrunkGuard(options)
   const stale = (ctx: Context): StaleData =>
@@ -1469,6 +1476,18 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       },
       { name: "exempt", says: "branches the naming scheme does not apply to: names, or patterns with *", default: "[]" },
       {
+        name: "contextWindow",
+        says:
+          "the context window of the model the coordinator runs on, in tokens: what naima handover measures the context against; a positive whole number. The default awaits the owner's choice",
+        default: "200000",
+      },
+      {
+        name: "handoverAt",
+        says:
+          "the share of the context window past which the coordinator is told at the turn end to hand over to a fresh session (naima handover): above 0 and at most 1. The default awaits the owner's choice",
+        default: "0.6",
+      },
+      {
         name: "maxWorkers",
         says:
           "how many worker worktrees (folders of the worktrees directory, on a branch the scheme applies to) may be open at once: naima open refuses another, naming the open ones, and naima hello states it in one line, saying the owner can ask to change it; a positive whole number",
@@ -1503,6 +1522,12 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
         name: "fastChecks",
         says: "in checkpoint mode, the landing checks (by name, as naima docs lists them) that still run on every landing: a list of names",
         default: "[]",
+      },
+      {
+        name: "heavyChecks",
+        says:
+          "the project's answer to how often heavy checks (a browser, a suite, model checking) run: `landing` at every landing, `checkpoint` at a checkpoint, `demand` only when asked (naima checkpoint, naima check --heavy), `off` never; written by naima heavy-checks together with checks, landingHost and verifyHost; unset, a project that already set checks, a host or checkpoint runs has answered by those, and one that set none has not answered, so naima asks the owner and runs no heavy check",
+        default: "unset: the owner is asked",
       },
       {
         name: "checkpointChecks",
@@ -1553,6 +1578,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       landing,
       landingCheckCommand,
       checkpointCommand,
+      heavyChecksCommand,
       fixCommand(policy, openWork),
       guardCommand(guarded),
       guardCheckCommand,
@@ -1562,6 +1588,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       lineCommand(policy),
       staleCommand(staleAfter, sweep),
       pass,
+      handoverCommand({ options: handover, claimsData: (ctx) => claimsData(ctx, undefined, silentAfter, policy.maxWorkers), writeNote: writeSessionNote }),
       eventCommand,
       diaryCommand(readPasses),
     ],
@@ -1594,6 +1621,8 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       staleSection(stale),
       sweepSection,
       guardOffSection(guarded),
+      heavyChecksSection,
+      handoverSection(handover),
     ],
     setup: [guardSetup(guarded)],
     hooks: [noClosingOwnWork, trunkOnlyTracker],
