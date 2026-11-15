@@ -14,6 +14,12 @@
 //                 claude-code, which blocks the stop with what the agent must
 //                 tell or ask the owner. It never blocks twice in a row: a
 //                 stop the hook already continued (stop_hook_active) passes.
+//                 When the project's coordination plugin measures the
+//                 coordinator's context (naima handover), the script also
+//                 reads the transcript's last usage, and past the limit the
+//                 plugin left in the tick's folder (handover-at) it asks
+//                 naima handover --watch, which tells the coordinator to
+//                 hand over.
 //   SubagentStart runs naima subagent --hook claude-code, which puts the
 //                 project's rules for agents in the sub-agent's context and
 //                 leaves a mark, by the sub-agent's id, that it has them.
@@ -32,10 +38,10 @@
 //   { "hooks": { "<Event>": [ { "matcher"?, "hooks": [ { "type": "command", "command": "…" } ] } ] } }
 // With no matcher, the hook runs on every occasion of its event.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import type { AgentAdapter, AgentHook, HookInstall, PluginHookSettings, PluginHookSync } from "./index.ts"
-import { claudeCodeTranscripts } from "./claude-code-transcripts.ts"
+import { claudeCodeTranscripts, contextTokensFromInput } from "./claude-code-transcripts.ts"
 
 const SETTINGS = ".claude/settings.json"
 const ID = "claude-code"
@@ -303,4 +309,16 @@ export const claudeCode: AgentAdapter = {
   subagentContext: (context) => JSON.stringify({ hookSpecificOutput: { hookEventName: "SubagentStart", additionalContext: context } }),
   greeting: (shown, context) => JSON.stringify({ systemMessage: shown, hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: context } }),
   stopFor: (reason) => JSON.stringify({ decision: "block", reason }),
+  contextTokens: contextTokensFromInput,
+  // A session-start hook may write shell lines to the file CLAUDE_ENV_FILE names: every later command of the session runs with them.
+  pinSession: (env, session) => {
+    const file = env["CLAUDE_ENV_FILE"]
+    if (!file) return false
+    try {
+      appendFileSync(file, `export NAIMA_SESSION=${session}\n`)
+      return true
+    } catch {
+      return false
+    }
+  },
 }

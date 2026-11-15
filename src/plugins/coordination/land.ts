@@ -6,6 +6,7 @@
 // command is a shortcut for `git merge --no-ff` after `git merge-base
 // --is-ancestor`: the check, not the command, is the authority.
 
+import { requireWriter } from "./handover.ts"
 import { join, relative } from "node:path"
 import { isDeepStrictEqual, stripVTControlCharacters } from "node:util"
 import { randomUUID } from "node:crypto"
@@ -1555,6 +1556,7 @@ export const land: Command = {
     })
     const branch = p.positionals[0]
     if (!branch || p.positionals.length > 1) throw usageError(this)
+    requireWriter(ctx, `land ${branch}`)
     const stale = str(p, "stale-proofs")
     if (stale !== undefined && (!stale.trim() || stale.includes("\n"))) throw new Error("--stale-proofs takes the reason, on one line")
     const trackerOnly = str(p, "tracker-only")?.trim()
