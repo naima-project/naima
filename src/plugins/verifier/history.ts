@@ -16,6 +16,13 @@ export interface HistoryRun {
   verdict: string
   /** "status" for the failure its status says, set after its last recorded run. */
   from?: "status"
+  /** The states the model had and the seconds the run took, when the adapter said so in its details. */
+  states?: number
+  seconds?: number
+  /** The verdict came over from a run on an earlier version of the model, not from a run of the tool: a reused result. */
+  reused?: boolean
+  /** The run's record, the attachment's name, which the history's point links to. */
+  record?: string
 }
 
 export interface HistoryRow {
@@ -35,9 +42,23 @@ export function propertyRuns(item: Item): HistoryRun[] {
   if (!existsSync(dir)) return []
   return readdirSync(dir).filter((f) => RUN_FILE.test(f)).flatMap((f) => {
     try {
-      const r = JSON.parse(readFileSync(join(dir, f), "utf8")) as { at?: unknown; verdict?: unknown }
+      const r = JSON.parse(readFileSync(join(dir, f), "utf8")) as { at?: unknown; verdict?: unknown; details?: Record<string, unknown>; carried?: unknown }
       if (typeof r.at !== "string" || typeof r.verdict !== "string") return []
-      return [{ at: r.at, ok: r.verdict === "holds", verdict: r.verdict }]
+      const num = (k: string): number | undefined => {
+        const v = r.details?.[k]
+        return typeof v === "number" && Number.isFinite(v) ? v : undefined
+      }
+      const states = num("states")
+      const seconds = num("seconds")
+      return [{
+        at: r.at,
+        ok: r.verdict === "holds",
+        verdict: r.verdict,
+        ...(states !== undefined ? { states } : {}),
+        ...(seconds !== undefined ? { seconds } : {}),
+        ...(r.carried ? { reused: true } : {}),
+        record: f,
+      }]
     } catch {
       return []
     }
@@ -68,7 +89,7 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
 export const propertyRunsView = (type: string) => ({
   name: "property-runs",
   title: "Property runs",
-  says: "every property with the runs recorded on it, oldest first: when, and its verdict (holds, violated, error); the new UI's failed-tests matrix reads it",
+  says: "every property with the runs recorded on it, oldest first: when, its verdict (holds, violated, error), and when the adapter said so the states, the seconds and whether the result was carried over from an earlier model, with the name of the run's record; the new UI's failed-tests matrix and history graphs read it",
   screen: true,
   render(_params: Record<string, string[]>, ctx: Context) {
     const rows = propertyHistory(ctx, type)

@@ -16,6 +16,10 @@ export interface HistoryRun {
   ok: boolean
   /** "status" for the failure its status says, set after its last recorded run. */
   from?: "status"
+  /** How long the tests it covers took in the run, in seconds, when the runner said; absent otherwise. */
+  seconds?: number
+  /** The run's record, the attachment's name, which the history's point links to. */
+  record?: string
 }
 
 /** A test item and its recorded runs, oldest first. */
@@ -37,9 +41,16 @@ export function itemHistory(item: Item): HistoryRun[] {
   if (!existsSync(dir)) return []
   return readdirSync(dir).filter((f) => RUN_FILE.test(f)).flatMap((f) => {
     try {
-      const r = JSON.parse(readFileSync(join(dir, f), "utf8")) as { at?: unknown; commit?: unknown; result?: unknown }
+      const r = JSON.parse(readFileSync(join(dir, f), "utf8")) as { at?: unknown; commit?: unknown; result?: unknown; tests?: { seconds?: unknown }[] }
       if (typeof r.at !== "string" || (r.result !== "passed" && r.result !== "failed")) return []
-      return [{ at: r.at, commit: typeof r.commit === "string" ? r.commit : "", ok: r.result === "passed" }]
+      const times = (Array.isArray(r.tests) ? r.tests : []).map((t) => t?.seconds).filter((x): x is number => typeof x === "number" && Number.isFinite(x))
+      return [{
+        at: r.at,
+        commit: typeof r.commit === "string" ? r.commit : "",
+        ok: r.result === "passed",
+        ...(times.length ? { seconds: Math.round(times.reduce((a, b) => a + b, 0) * 1000) / 1000 } : {}),
+        record: f,
+      }]
     } catch {
       return []
     }
@@ -73,7 +84,7 @@ export const testRunsView = {
   name: "test-runs",
   title: "Test runs",
   says:
-    "every test item with the runs recorded on it by suites' runs, oldest first: when, the commit, passed or failed, and a status that says it failed, set after its last run, as a failed run at that time; the new UI's failed-tests matrix reads it",
+    "every test item with the runs recorded on it by suites' runs, oldest first: when, the commit, passed or failed, and a status that says it failed, set after its last run, as a failed run at that time; each run also names its record and, when the runner said, the seconds the tests took; the new UI's failed-tests matrix and history graphs read it",
   screen: true,
   render(_params: Record<string, string[]>, ctx: Context) {
     const rows = testHistory(ctx)

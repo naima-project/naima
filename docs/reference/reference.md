@@ -3156,7 +3156,7 @@ Refinements: a link between two models: the lower one refines the upper by a rel
 
 | View | Title | What it shows |
 |---|---|---|
-| `property-runs` | Property runs | every property with the runs recorded on it, oldest first: when, and its verdict (holds, violated, error); the new UI's failed-tests matrix reads it |
+| `property-runs` | Property runs | every property with the runs recorded on it, oldest first: when, its verdict (holds, violated, error), and when the adapter said so the states, the seconds and whether the result was carried over from an earlier model, with the name of the run's record; the new UI's failed-tests matrix and history graphs read it |
 | `property-history` | Property history | a property's verdict, the states explored and the time taken at every run kept, on the trunk's commit axis, each point naming its run: `?item=<id>` gives the history, `&run=<file>` also the record of that run — verdict, model, tool, states, time, the end of its output, or the earlier version's run it was carried over from |
 | `verification-runs` | Verification runs | every run recorded on a property, newest first: the model and property file, when, on which commit and how long when recorded, the states, the verdict, and whether its inputs changed since; the new UI's Specs place reads it |
 | `specs-models` | Models | the models the properties are checked on: their files, what each is for, the sizes their runs recorded, and the refinements the generator sets up; with file=<path>, one file's text |
@@ -3505,7 +3505,7 @@ naima metrics presets
 |---|---|---|
 | `metrics` | Metrics | the project's metrics along the commit timeline: a chart and a table of each, for the metrics and the commits picked; its data's `timeline` places every record on the trunk's commit axis for the new UI, and with `?at=<commit>` each metric's record at that commit; with `?part=timeline`, the timeline alone |
 | `metric-run` | Metric run | the record of the run that measured a metric at a commit, for a point of the new UI's value-against-time graph: `?metric=<name>&commit=<hash>` gives the value, whether it held its bound, when it was recorded and how it was taken — a test suite's run with its counts, its time and the end of its log, or the earlier run it reused; a command; a code measure |
-| `test-runs` | Test runs | every test item with the runs recorded on it by suites' runs, oldest first: when, the commit, passed or failed, and a status that says it failed, set after its last run, as a failed run at that time; the new UI's failed-tests matrix reads it |
+| `test-runs` | Test runs | every test item with the runs recorded on it by suites' runs, oldest first: when, the commit, passed or failed, and a status that says it failed, set after its last run, as a failed run at that time; each run also names its record and, when the runner said, the seconds the tests took; the new UI's failed-tests matrix and history graphs read it |
 | `test-history` | Test history | a test item's result and duration at every run of its tests, on the trunk's commit axis, each point naming its run: `?item=<id>` gives the history, `&run=<id>` also the record of that run — its tests, its time, its suite's command and counts, the end of its log, or the earlier run it reused |
 
 **Metric kinds**, how `naima metrics` reads a number
