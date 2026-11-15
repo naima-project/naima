@@ -300,7 +300,7 @@ export function uiGrant(
       read: codegenFiles(),
       runs: [
         ...codegenRuns(),
-        ...(rest.some((a) => a === "--host" || a.startsWith("--host=")) ? ["ssh"] : []),
+        ...(rest.some((a) => a === "--host" || a.startsWith("--host=")) ? ["ssh", "scp"] : []),
       ],
     }
   }

@@ -203,6 +203,7 @@ export {
   writeDelegates,
   writeGitHook,
 } from "./repos.ts"
+export { checkpointRef, dropRef, dropRefCommand, type Exec, realExec, sendTipWith, verifyRef } from "./send.ts"
 export { githubRepo } from "./visibility.ts"
 export { WAIVERS } from "./waivers.ts"
 export {

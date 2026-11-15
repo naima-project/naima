@@ -251,10 +251,12 @@ add `--force` with a reason to make a new one with the flags. The flags start wi
 naima verify <property> --tool-args="--verbose --timings" --force "to see how long each tool takes"
 ```
 
-A heavy check can run on another machine declared as a [host](long-work.md#on-another-machine). `naima verify <property> --host lab` asks the copy of Naima in
-that machine's checkout to run the verifier and print the run, which writes nothing there, and attaches the run here with `host` set to the machine's name. The
-run is kept only when it was made on exactly what this checkout has: the same property, verifier and options, and every file it read with the same content. When
-the two checkouts differ, it is refused and nothing is written, so bring them to the same commit first. The tool's version is the host's; if this machine has a
+A heavy check can run on another machine declared as a [host](long-work.md#on-another-machine). `naima verify <property> --host lab` sends the commit this checkout is at to the machine, under a ref of its own that is removed afterwards, and asks the copy of
+Naima there to run the verifier on a checkout of that commit, made for the run and removed after, and print the run, which writes nothing in the machine's own
+checkout. The property need not be on the branch the machine's checkout is on. The checkout made for the run has no submodules, so a model that lives in one is
+not found there. The run is attached here with `host` set to the machine's name, and kept only when it was made on exactly what this checkout has: the same
+property, verifier and options, and every file it read with the same content. When this checkout has uncommitted changes to what the verification reads, it is
+refused and nothing is written, so commit them first. The tool's version is the host's; if this machine has a
 different version of the tool, `naima check` says the property holds by another version. A verification that takes hours can be started with
 `naima run verify-lab --budget-time 8h -- naima verify --all --host lab`, which runs here and keeps its ssh connection to the host for as long as the check
 takes.
