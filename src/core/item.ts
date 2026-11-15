@@ -162,9 +162,9 @@ function afterWrite(ctx: Context, write: Write): void {
  * an attachment — before anything is on disk. The first refusal stops it; the record the hooks filled is returned,
  * for the writer to store with the text.
  */
-export function beforeTextWrite(ctx: Context, what: string): Record<string, unknown> {
+export function beforeTextWrite(ctx: Context, what: string, item?: Item): Record<string, unknown> {
   guard?.(ctx.trackerRoot)
-  const text: TextWrite = { what, record: {} }
+  const text: TextWrite = { what, record: {}, ...(item ? { item } : {}) }
   for (const hook of ctx.registry.hooks) {
     const refusal = hook.beforeText?.(text, ctx)
     if (refusal === undefined) continue

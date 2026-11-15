@@ -396,6 +396,8 @@ export interface TextWrite {
   /** What is written, as a refusal names it: "the session note", "attachment proof.out". */
   what: string
   record: Record<string, unknown>
+  /** The item the text is written about, when there is one (an attachment): a hook that lets a write through by its item reads it here. */
+  item?: Item
 }
 
 /**

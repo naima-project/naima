@@ -8,6 +8,7 @@
 // check; a commit already on a remote is never read again, since it cannot be
 // reworded without rewriting what was published.
 
+import { requireWriter } from "./handover.ts"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
 import {
@@ -128,6 +129,7 @@ export const pushCheckCommand: Command = {
     const p = parse(args, { repo: { type: "string" } })
     const pairs = p.positionals
     if (pairs.length % 2) throw usageError(this)
+    requireWriter(ctx, "push")
     const repo = str(p, "repo") ?? ctx.root
     const leaks: MessageLeak[] = []
     for (let i = 0; i < pairs.length; i += 2) {

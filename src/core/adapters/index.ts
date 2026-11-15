@@ -92,6 +92,17 @@ export interface AgentAdapter {
   sessionOf?(hookInput: string): string | undefined
   /** What naima tick --hook prints for the tool when the owner has to be told something: `reason`, for the agent. */
   stopFor?(reason: string): string
+  /**
+   * How full the agent's context is now, in tokens, from what the tool's turn-end hook is given on standard input (the
+   * last assistant message's input, cache-creation and cache-read tokens in its transcript); undefined when the input
+   * does not say. A tool without this has no measure, and naima handover says so rather than guess.
+   */
+  contextTokens?(hookInput: string): number | undefined
+  /**
+   * Make `session` the one every later command of this session runs under (NAIMA_SESSION), by the means the tool gives a
+   * session-start hook; true when it did. Without it a command cannot tell this session from a later one in the same checkout.
+   */
+  pinSession?(env: Record<string, string | undefined>, session: string): boolean
   /** How the tool keeps its agents' transcripts, when Naima can read them: naima recover reads a worker's last entries. */
   transcripts?: TranscriptReader
 }
