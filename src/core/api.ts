@@ -192,6 +192,9 @@ export {
 } from "./git.ts"
 export { DATA_FILE, DEFAULT_DATA, TRACKER_DIR, trackerOf } from "./layout.ts"
 export {
+  type ConversationMessage,
+  conversationOf,
+  locateSessionTranscript,
   type LongTimeoutCall,
   longTimeoutCalls,
   setupPaths,

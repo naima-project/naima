@@ -27,7 +27,7 @@
 // run naima-codegen, the program of the first-party naima-codegen verifier
 // (VERIFY_PROGRAM), and with --host ssh too, to run the verifier in the host's
 // checkout. `naima land` may run ssh, and read and run that Deno, to start a
-// heavy landing check through naima run, on the landing host or here, and wait on it. `naima recover`, and no other command, may read the folders the
+// heavy landing check through naima run, on the landing host or here, and wait on it. `naima recover`, `naima check` and `naima handover`, and no other command, may read the folders the
 // agent tools keep their transcripts in (core/adapters, TranscriptReader), to
 // brief the worker that resumes a dead or stuck one. `naima describe`, `naima note`,
 // `naima attach` and `naima pass`, and no other command, may read the system's temporary folder (TEMP_READERS),
@@ -411,7 +411,7 @@ export function permissions(
     hostFiles?: string[]
     /** The files `naima ui` may write besides: the one where it names the project to switch to, as given and as resolved. */
     uiFiles?: string[]
-    /** The folders outside the project the command may read besides: naima recover's agent transcripts. */
+    /** The folders outside the project the command may read besides: the agent transcripts naima recover, naima check and naima handover read. */
     hostReads?: string[]
     /** The temporary folders the command may read besides, each as given and as resolved: describe's, note's, attach's and pass's input files. */
     tempReads?: string[]
@@ -735,7 +735,7 @@ export async function launch(args: string[], cwd: string, resume?: Omit<UiSwitch
         entry,
         hostFiles: hostFiles(parsed.rest, root, data),
         uiFiles: switchFile && !switchFile.includes(",") ? [switchFile] : [],
-        hostReads: parsed.rest[0] === "recover" || parsed.rest[0] === "check" ? transcriptRoots(Deno.env.toObject()) : [],
+        hostReads: ["recover", "check", "handover"].includes(parsed.rest[0] ?? "") ? transcriptRoots(Deno.env.toObject()) : [],
         tempReads: TEMP_READERS.includes(parsed.rest[0] ?? "") ? tempRoots() : [],
         worktrees: others,
         worktreesFolder: configuredWorktrees(root, data),

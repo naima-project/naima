@@ -15,7 +15,7 @@
 
 import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs"
 import { join } from "node:path"
-import type { LongTimeoutCall, TranscriptEntry, TranscriptReader, TranscriptTail, WorkerPlace } from "./index.ts"
+import type { ConversationMessage, LongTimeoutCall, TranscriptEntry, TranscriptReader, TranscriptTail, WorkerPlace } from "./index.ts"
 
 /** The longest an entry's text is kept, in characters. */
 const CUT = 240
@@ -163,7 +163,56 @@ export function longTimeoutCalls(text: string): { at?: string; timeoutMs: number
   return out
 }
 
+/**
+ * What was said in a session, in order: the owner's messages and the agent's replies, in full. Only text counts: a tool
+ * call, a tool result, a sub-agent's turn, and the notices a hook or the tool itself puts in the owner's place (they
+ * start with "<", or are the "[Request interrupted" line) are left out. `n` counts the messages from 1.
+ */
+export function messagesOf(text: string): ConversationMessage[] {
+  const out: ConversationMessage[] = []
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue
+    let v: unknown
+    try {
+      v = JSON.parse(line)
+    } catch {
+      continue
+    }
+    if (!isObject(v) || (v["type"] !== "user" && v["type"] !== "assistant") || v["isSidechain"] === true || v["isMeta"] === true || !isObject(v["message"])) {
+      continue
+    }
+    const who = v["type"] === "user" ? "owner" : "agent"
+    const content = v["message"]["content"]
+    const parts = typeof content === "string"
+      ? [content]
+      : Array.isArray(content)
+      ? content.flatMap((b) => (isObject(b) && b["type"] === "text" && typeof b["text"] === "string" ? [b["text"]] : []))
+      : []
+    const said = parts.join("\n").trim()
+    if (!said) continue
+    if (who === "owner" && (said.startsWith("<") || said.startsWith("[Request interrupted"))) continue
+    out.push({ n: out.length + 1, who, text: said, ...(typeof v["timestamp"] === "string" ? { at: v["timestamp"] } : {}) })
+  }
+  return out
+}
+
+/** The file of the session `session`: projects/<cwd>/<session>.jsonl under the configuration folder, the most recent when several folders hold one. */
+export function locateTranscript(env: Record<string, string | undefined>, session: string): string | undefined {
+  const dir = configDir(env)
+  if (!dir || !/^[A-Za-z0-9_-]+$/.test(session)) return undefined
+  const projects = join(dir, "projects")
+  let folders: string[]
+  try {
+    folders = readdirSync(projects)
+  } catch {
+    return undefined
+  }
+  return folders.map((f) => join(projects, f, `${session}.jsonl`)).filter((f) => existsSync(f)).sort((a, b) => mtime(b) - mtime(a))[0]
+}
+
 export const claudeCodeTranscripts: TranscriptReader = {
+  messages: messagesOf,
+  locate: locateTranscript,
   longTimeouts(env, root, since): LongTimeoutCall[] {
     const dir = configDir(env)
     if (!dir) return []

@@ -100,6 +100,8 @@ export interface AgentAdapter {
    * does not say. A tool without this has no measure, and naima handover says so rather than guess.
    */
   contextTokens?(hookInput: string): number | undefined
+  /** The path of the session's transcript, from what the tool's turn-end hook is given on standard input; undefined when the input does not say. */
+  transcriptPath?(hookInput: string): string | undefined
   /**
    * Make `session` the one every later command of this session runs under (NAIMA_SESSION), by the means the tool gives a
    * session-start hook; true when it did. Without it a command cannot tell this session from a later one in the same checkout.
@@ -133,11 +135,25 @@ export interface TranscriptTail {
   entries: TranscriptEntry[]
 }
 
+/** One message of a session, in full: what the owner said or what the agent replied. */
+export interface ConversationMessage {
+  /** Its place in the session's messages, from 1. */
+  n: number
+  who: "owner" | "agent"
+  at?: string
+  text: string
+}
+
 /**
- * A tool's transcripts, read only to brief the worker that resumes a dead or stuck one: never copied anywhere, since the
- * owner's chat stays private. One reader per tool, so another tool is added beside the first.
+ * A tool's transcripts, read to brief the worker that resumes a dead or stuck one, and by a coordinator's handover, which
+ * copies its own session's transcript into the project's private state folder (never committed) for its successor to
+ * read: the owner's chat stays private. One reader per tool, so another tool is added beside the first.
  */
 export interface TranscriptReader {
+  /** The messages of a transcript's text, in order, in full. */
+  messages?(text: string): ConversationMessage[]
+  /** The transcript file of the session `session`, or undefined when the tool keeps none. */
+  locate?(env: Record<string, string | undefined>, session: string): string | undefined
   /** The folders the reader reads: the launcher lets naima recover read them, and no other command. */
   roots(env: Record<string, string | undefined>): string[]
   /**
@@ -178,6 +194,13 @@ export function workerTranscript(
   })
   return found.sort((a, b) => (b.entries.at(-1)?.at ?? "").localeCompare(a.entries.at(-1)?.at ?? ""))[0]
 }
+
+/** The transcript file of `session`, across the tools whose transcripts Naima reads. */
+export const locateSessionTranscript = (env: Record<string, string | undefined>, session: string): string | undefined =>
+  ADAPTERS.map((a) => a.transcripts?.locate?.(env, session)).find((f): f is string => !!f)
+
+/** The messages of a transcript file's text, from the first tool that reads transcripts. */
+export const conversationOf = (text: string): ConversationMessage[] => ADAPTERS.find((a) => a.transcripts?.messages)?.transcripts?.messages?.(text) ?? []
 
 /** The tools, in the order their entry files are checked after AGENTS.md. */
 export const ADAPTERS: readonly AgentAdapter[] = [
