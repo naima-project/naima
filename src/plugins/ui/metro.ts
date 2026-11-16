@@ -380,6 +380,9 @@ async function factsOf(
 /** How the metro reads what a command prints with --json: the bridge reads it through the view whose data it is, shared with the screens. */
 export type JsonOf = <T>(ctx: Context, words: string[]) => Promise<T | null>
 
+/** The views whose data is what a command prints with --json, by the command's words: the metro reads them through the view. */
+export const VIEW_OF_COMMAND: Record<string, string> = { gates: "gates", claims: "claims", "line list": "lines" }
+
 export async function metroData(ctx: Context, read: JsonOf = commandJson): Promise<Metro> {
   const commits: Record<string, MetroCommit> = {}
   const authors0: Authors = new Map()

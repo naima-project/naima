@@ -1,20 +1,22 @@
-// Where an agent's show meets the UIs open on a project: the bridge's command `show` (an MCP client's tool, through
-// `naima ui --mcp`) asks for a place, and every open UI of the project hears it on the bridge's feed `show` and goes
-// there, through its shell's agent transitions (develop/models/ui/shell in the workshop). The agent's process and the
+// Where an agent's requests meet the UIs open on a project: the UI's MCP server (`naima ui --mcp`, through the agent
+// channel, agent-endpoint.ts) asks, and every open UI of the project hears it on the bridge's feed `agent` and answers
+// (a show of a place is the transition of its shell's agent sequences, develop/models/ui/shell in the workshop). The agent's process and the
 // UIs' (a browser's `naima ui` server, the desktop app's sidecar) are separate, so they meet in files, in Naima's state
 // folder for the clone (stateDir), under ui/:
 //
 //   open/<id>.json   one per UI listening to the feed: its project's root, its carrier, when it last said it is open
 //                    and the last show it took; rewritten every BEAT_MS, removed when it stops listening, and taken
 //                    as closed once it is STALE_MS old (a page or a process that ended without saying so)
-//   show.json        the last show asked: its id, the project's root, the place and when; written whole, then renamed
+//   show.json        the last show asked: its id, the project's root and the request (the desktop window's raise);
+//                    written whole, then renamed
 //   agent.json       the last agent request asked, in the shape of the UI stance's agent feed ({ id, tool, args }: the
 //                    store, the registry of transitions, a transition by machine and name, the show of a place as the
-//                    transition of a named sequence); written the same way, heard on the feed `agent`
+//                    transition of a named sequence, the page as text, the window's place); written the same way, heard
+//                    on the feed `agent`
 //
 // A UI polls the two files, as live.ts polls the project, and passes on what was asked of its own project after it
-// opened, once, on the feed of each. Nothing is queued: the newest of each is the one that counts, and a show never
-// takes the place of a request on the store. A request asked before a page reloaded is never
+// opened, once, on the feed of each. Nothing is queued: the newest of each is the one that counts, so the agent
+// channel asks one request at a time (agent-endpoint.ts). A request asked before a page reloaded is never
 // passed on to the page that follows, so a transition is applied at most once (the model
 // develop/models/ui/agent-endpoint in the workshop).
 //
@@ -36,25 +38,24 @@ export type Place =
   | { kind: "line"; name: string }
 
 /**
- * A question about the page, carried on the feed show: the page it shows as text (or raw HTML), or where its window
- * is; or, for the desktop app, its window brought forward.
+ * What the feed show carries besides a place: the desktop app's window brought to the front, which the app's shell takes
+ * and the page never sees (desktop-app.ts). A question about the page (its text, where its window is) travels on the
+ * feed agent, as the tools `read_page` and `screenshot` (agent-endpoint.ts).
  */
-export type UiRequest =
-  | { kind: "read"; id: string; selector?: string; html?: boolean }
-  | { kind: "rect"; id: string }
-  /** The desktop app's window, brought to the front: taken by the app's shell, which the page never sees (desktop-app.ts). */
-  | { kind: "raise" }
+export type UiRequest = { kind: "raise" }
 
 /**
  * A request on the open UI's central store, carried on the feed agent in the shape of the UI stance's agent protocol:
  * `store` (the snapshot in short, or one machine, or a path in it: args machine, path), `transitions` (the registry,
  * with what each transition allows now: args machine) and `transition` (one transition called on a machine by its
- * name, as the components call it: args machine, name and args, by name or in order). A show is the transition of a
- * named sequence of the UI's machine agent (showScreen, showView, showItem, showCommit, showLine).
+ * name, as the components call it: args machine, name and args, by name or in order); and the page's own: `read_page`
+ * (the page as text or raw HTML: args selector, html) and `screenshot` (where the window is on the screen, for the
+ * server's capture). A show is the transition of a named sequence of the UI's machine agent (showScreen, showView,
+ * showItem, showCommit, showLine).
  */
 export interface AgentRequest {
   id: string
-  tool: "store" | "transitions" | "transition"
+  tool: "store" | "transitions" | "transition" | "read_page" | "screenshot"
   args: { [key: string]: unknown }
 }
 

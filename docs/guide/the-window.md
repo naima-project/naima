@@ -31,6 +31,14 @@ worktree other than the clone's main checkout, so agents working in their own wo
 `naima plugin set ui atStart=false`; to turn it off for yourself everywhere, put `{"atStart": false}` in `ui.json` in your Naima config folder
 (`~/.config/naima/` on macOS and Linux).
 
+### What agents use
+
+An agent reaches Naima through two MCP servers, which keep the screen and the tracker apart. `naima ui --mcp` (named `naima-ui` in an agent's client) is
+the window seen as a person uses it: the agent shows you a place, reads what the window shows, takes its picture and moves its store through the same
+transitions your clicks call, all by asking the window you have open. `naima ui --mcp-tracker` (named `naima-tracker`) never touches the window: it reads
+the items, gates, lines, history, work and metrics straight from the project, and runs the window's short list of actions. The agents' page on
+[showing the owner](../agents/showing-the-owner.md) lists which tool is on which server and how to add them.
+
 ## The token in the address
 
 The address `naima ui` opens looks like `http://127.0.0.1:53817/?token=9f3c…`, with a long string of letters and digits at the end. That string is the token.
@@ -162,7 +170,7 @@ moments and the folded routine of each day alike.
 
 Each screen keeps its own choice, and the window remembers it for your next visit. The address carries it too, after the screen's name, as in
 `#bugs?goal=release-2&q=slow`, so a link opens the screen filtered the same way; changing the choice replaces the address rather than adding a step to Back.
-An agent can set the same choice through the UI's MCP server, with the store's `filters` transitions: `pick`, `drop`, `search`, `clear`, `within`, `show`
+An agent can set the same choice through the UI's MCP server (`naima-ui`), with the store's `filters` transitions: `pick`, `drop`, `search`, `clear`, `within`, `show`
 and `hide`.
 
 ### Days, on the left of every screen
