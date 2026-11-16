@@ -1,8 +1,9 @@
 // The coordinator's handover to a fresh session: a coordinator session degrades
 // as its context fills, so it measures how full the context is and, past a
 // threshold, hands over, in steps the owner is part of: it finishes the work in
-// progress, checks that every request and decision of the owner is recorded
-// (handover-decisions.ts), proposes the handover to the owner in a reassuring
+// progress, reviews that every request and decision of the owner is recorded (the
+// coordinator itself goes through the conversation it holds; nothing here guesses
+// what counts as a request), proposes the handover to the owner in a reassuring
 // message and, once the owner agrees, records where its transcript is kept,
 // writes the session note, gives the coordinator role up and prints what starts
 // its successor (features/coordinator-hands-over-fresh-session-when-context).
@@ -26,8 +27,10 @@
 // assistant message's usage is the context size (core/adapters). A host without
 // one has no measure, and nothing here guesses it.
 
+import { createHash } from "node:crypto"
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
+import { fileURLToPath } from "node:url"
 import {
   adapter,
   type AgentAdapter,
@@ -52,7 +55,6 @@ import {
 } from "../../core/api.ts"
 import type { ClaimsData } from "./index.ts"
 import { claimsReports } from "./claims-reports.ts"
-import { missingDecisions, type Owed, recordsSince } from "./handover-decisions.ts"
 import { aheadBehind } from "./worktrees.ts"
 
 // ── the options ──────────────────────────────────────────────────────────────
@@ -125,10 +127,19 @@ export interface Handing {
   transcript?: string
   /** The context size when it was last seen: a postponement reminds again once it has grown. */
   tokens?: number
-  /** The decisions check has passed since the owner last said something that needed a record. */
-  checked?: boolean
-  /** The ids of owner messages the coordinator judged to need no record. */
-  waived: string[]
+  /**
+   * The review of the owner's requests the coordinator recorded, signed against the no-leaks checklist: each request since the
+   * last session note with where it is recorded. Current only when recorded after the owner's last message.
+   */
+  reviewed?: Review
+  /** When the handover was proposed to the owner: what the owner says after it is the reply. */
+  proposedAt?: string
+}
+
+/** The coordinator's review of the owner's requests. */
+export interface Review {
+  at: string
+  list: string
 }
 
 export interface Role {
@@ -180,8 +191,10 @@ export function readRole(root: string): Role | null {
         since: h["since"],
         ...(typeof h["transcript"] === "string" ? { transcript: h["transcript"] } : {}),
         ...(typeof h["tokens"] === "number" ? { tokens: h["tokens"] } : {}),
-        ...(h["checked"] === true ? { checked: true } : {}),
-        waived: Array.isArray(h["waived"]) ? h["waived"].filter((x): x is string => typeof x === "string") : [],
+        ...(isObject(h["reviewed"]) && typeof h["reviewed"]["at"] === "string" && typeof h["reviewed"]["list"] === "string"
+          ? { reviewed: { at: h["reviewed"]["at"], list: h["reviewed"]["list"] } }
+          : {}),
+        ...(typeof h["proposedAt"] === "string" ? { proposedAt: h["proposedAt"] } : {}),
       }
       : undefined
     const d = v["predecessor"]
@@ -329,7 +342,7 @@ export interface HandoverDeps {
   options: HandoverOptions
   claimsData(ctx: Context): ClaimsData
   writeNote(ctx: Context, text: string, ack: string | undefined): string
-  /** The instant of the newest session note, ISO 8601: the decisions check reads what the owner said since. */
+  /** The instant of the newest session note, ISO 8601: the decisions review concerns what the owner said since. */
   lastNoteAt(ctx: Context): string | undefined
 }
 
@@ -350,9 +363,10 @@ function stdin(): string {
 /** What the coordinator is told when its context is past the threshold: the text of the message. It does not hand over at once. */
 export const handoverMessage = (d: Depth): string =>
   `Your context is ${d.tokens} tokens, ${percent(d.share)} of the ${d.window}-token window, past the ${d.limit}-token limit for handing over. ` +
-  `Do not hand over yet, and start nothing new. Finish the work in progress. Then run naima handover --decisions: it lists the owner's requests and decisions of this ` +
-  `session that have no record in the tracker; file each one (naima new, naima event --kind diary, a decision record) or waive it with --waive <id> when nothing ` +
-  `needs recording, and run it again until it passes. Then run naima handover --propose, and give the owner the message it prints, saying what is saved, that ` +
+  `Do not hand over yet, and start nothing new. Finish the work in progress. Then run naima handover --decisions: you, who hold the whole conversation, go through ` +
+  `every request and decision the owner made since the last session note, list each with where it was recorded (item, decision, diary entry or note) or "missing", ` +
+  `and file what is missing (naima new, naima event --kind diary, a decision record). Record the review with naima handover --decisions --reviewed "<list>" ` +
+  `--revised <the no-leaks checklist> (or --reviewed-file <file>). Then run naima handover --propose (refused until a review is recorded after the owner's last message), and give the owner the message it prints, saying what is saved, that ` +
   `nothing is lost and how the new chat continues. Hand over (naima handover --agreed) only after the owner agrees; if the owner postpones, run naima handover --postpone and go on.`
 
 /**
@@ -383,7 +397,7 @@ export function watch(
     phase: "finishing",
     since: now,
     tokens: depth.tokens,
-    waived: h?.waived ?? [],
+    ...(h?.reviewed ? { reviewed: h.reviewed } : {}),
     ...((transcript ?? h?.transcript) ? { transcript: (transcript ?? h?.transcript)! } : {}),
   }
   writeRole(ctx.root, { ...role, handing: next })
@@ -404,52 +418,104 @@ function transcriptOf(role: Role, session: string): { file: string; text: string
   }
 }
 
-/** The result of the decisions check. */
-interface Checked {
-  owed: Owed[]
+/** What the owner said in this session since the last session note, as far as the transcript shows. */
+interface Said {
   since: string
-  said: number
+  /** The instants of the owner's messages since then; empty when the transcript gives none. */
+  times: string[]
 }
 
+/** The no-leaks checklist this Naima ships, which a review is signed against (the same file as the privacy plugin's). */
+const CHECKLIST = fileURLToPath(new URL("../../../docs/agents/NOLEAKS.md", import.meta.url))
+
+const hashOf = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex")
+
 /**
- * Compare what the owner said in this session since the last session note with what the tracker recorded since. Without a
- * transcript to read the check cannot run, and it refuses, unless `blind` says the coordinator judged by hand.
+ * When the owner spoke, since the last session note. Without a transcript to read the time of the owner's last message is
+ * unknown, and the commands refuse, unless `blind` says the coordinator judged by hand.
  */
-function checkDecisions(ctx: Context, deps: HandoverDeps, role: Role, session: string, blind: boolean): Checked {
+function ownerSaid(ctx: Context, deps: HandoverDeps, role: Role, session: string, blind: boolean): Said {
   const since = deps.lastNoteAt(ctx) ?? role.since
   const t = transcriptOf(role, session)
   if (!t) {
-    if (blind) return { owed: [], since, said: 0 }
+    if (blind) return { since, times: [] }
     throw new NaimaError(
-      "the decisions check cannot read this session's transcript (the host gives none, or it is not where the host says): " +
+      "this session's transcript cannot be read (the host gives none, or it is not where the host says), so when the owner last spoke is unknown: " +
         "go through the owner's requests since the last session note by hand, then repeat the command with --no-transcript",
     )
   }
-  const messages = conversationOf(t.text)
-  const owed = missingDecisions(messages, recordsSince(ctx, since), since, session, role.handing?.waived ?? [], ctx.now().toISOString())
-  return { owed, since, said: messages.filter((m) => m.who === "owner" && (m.at ?? "") >= since).length }
+  const times = conversationOf(t.text)
+    .filter((m) => m.who === "owner" && m.at !== undefined && m.at >= since)
+    .map((m) => m.at!)
+    .sort()
+  return { since, times }
 }
 
-function reportOwed(ctx: Context, c: Checked): void {
-  if (!c.owed.length) {
-    ctx.out(`decisions check passed: every request and decision the owner gave since ${c.since} has a record (or was waived)`)
-    return
+/** Is the recorded review made after the owner's last message (before the proposal, once there is one)? */
+function reviewCurrent(role: Role, said: Said): boolean {
+  const r = role.handing?.reviewed
+  if (!r) return false
+  const p = role.handing?.proposedAt
+  const spoken = p ? said.times.filter((t) => t <= p) : said.times
+  return !spoken.some((t) => t > r.at)
+}
+
+/** What the coordinator is asked to do: the review itself, which only it, holding the conversation, can make. */
+function reviewTask(since: string, said: Said): string[] {
+  return [
+    `decisions review: go through every request and decision the owner made since the last session note (${since}), in the conversation you hold` +
+    `${said.times.length ? ` (the transcript shows ${said.times.length} owner message${said.times.length === 1 ? "" : "s"} since)` : ""}.`,
+    'For each, write one line: what the owner asked or decided, and where it was recorded (the item, decision, diary entry or note), or "missing".',
+    'File what is missing (naima new, naima event <today> "<what, why>" --kind diary, a decision record), then record the review, every line naming where it is recorded:',
+    '  naima handover --decisions --reviewed "<the list>" --revised <the no-leaks checklist>      (or --reviewed-file <file>)',
+    "Nothing is judged for you: a review is the only way past this step, and the proposal waits for one made after the owner's last message.",
+  ]
+}
+
+/** A review's text: refused when it is empty or still lists a request as missing. */
+function checkedReview(text: string): string {
+  const list = text.trim()
+  if (!list) {
+    throw new NaimaError(
+      "the review is empty: list each request the owner made since the last session note with where it is recorded (or write `none` and why)",
+    )
   }
-  ctx.out(`decisions check: ${c.owed.length} owner message${c.owed.length === 1 ? "" : "s"} since ${c.since} with no record in the tracker:`)
-  for (const o of c.owed) ctx.out(`- ${o.id} ${o.at ?? ""} ${cut(o.text, 200)}`)
-  ctx.out(
-    'File each one (naima new, a diary entry with naima event <today> "<what, why>" --kind diary, a decision record), or when nothing needs recording ' +
-      "(thinking aloud, a thanks) waive it with naima handover --waive <id>; then run naima handover --decisions again.",
-  )
+  const missing = list.split("\n").filter((l) => /\bmissing\s*[.)\]]?\s*$/i.test(l.trim()))
+  if (missing.length) {
+    throw new NaimaError(
+      `the review still lists ${missing.length} request${missing.length === 1 ? "" : "s"} as missing: file ${
+        missing.length === 1 ? "it" : "them"
+      } first (naima new, ` +
+        `naima event --kind diary, a decision record), then write where ${missing.length === 1 ? "it is" : "each is"} recorded: ${
+          cut(missing[0]!.trim(), 120)
+        }`,
+    )
+  }
+  return list
+}
+
+/** The review is signed: --revised names the no-leaks checklist this Naima ships, which the writer read, since the list may hold private text. */
+function requireSigned(ctx: Context): void {
+  const how = "read docs/agents/NOLEAKS.md of the program, check the review against it, and run the command again with --revised <its path>"
+  if (ctx.revised === undefined) throw new NaimaError(`the review is not recorded: it is free text, signed against the no-leaks checklist — ${how}`)
+  let given: Uint8Array
+  try {
+    given = readFileSync(ctx.revised)
+  } catch {
+    throw new NaimaError(`the review is not recorded: --revised names ${ctx.revised}, which cannot be read — ${how}`)
+  }
+  if (hashOf(given) !== hashOf(readFileSync(CHECKLIST))) {
+    throw new NaimaError(`the review is not recorded: --revised names a file that is not the no-leaks checklist this Naima ships — ${how}`)
+  }
 }
 
 /** What the owner is told, to relay: what is saved, that nothing is lost, how the new chat continues. */
-function proposalText(c: Checked, lines: number, depth: string | undefined): string[] {
+function proposalText(lines: number, depth: string | undefined): string[] {
   return [
     "Give the owner this message, then wait for the answer. Hand over only after the owner agrees (naima handover --agreed); if the owner wants to go on, naima handover --postpone.",
     "",
     `> ${depth ? `This conversation is ${depth} full, and a fresh chat keeps me sharp. ` : "A fresh chat keeps me sharp. "}` +
-    `Everything is saved: your requests and decisions of this session are in the tracker (the check found none missing), ` +
+    `Everything is saved: your requests and decisions of this session are in the tracker (I went through each and every one has a record), ` +
     `${lines} piece${
       lines === 1 ? "" : "s"
     } of work in flight will be written in a session note, and the full text of this conversation is kept privately in the project, never committed. ` +
@@ -478,22 +544,27 @@ const positive = (v: string | undefined, what: string, fallback: number): number
 export const handoverCommand = (deps: HandoverDeps): Command => ({
   name: "handover",
   says:
-    "hand the coordinator role over to a fresh session, in steps the owner is part of: --decisions checks that every request and decision of the owner is recorded, --propose gives the message for the owner, --agreed (after the owner agrees) writes the session note, keeps the conversation's text for the successor and gives the role up; --postpone when the owner wants to go on; --read reads the predecessor's conversation; --status says how deep the context is, --watch is what the turn end runs",
+    "hand the coordinator role over to a fresh session, in steps the owner is part of: --decisions asks the coordinator to review every request and decision of the owner against the tracker and records the review (--reviewed), --propose (refused until a review is recorded after the owner's last message) gives the message for the owner, --agreed (after the owner agrees) writes the session note, keeps the conversation's text for the successor and gives the role up; --postpone when the owner wants to go on; --read reads the predecessor's conversation; --status says how deep the context is, --watch is what the turn end runs",
   enforces:
-    "only the session that holds the coordinator role hands over (naima hello in the main checkout takes it); the proposal comes only after the decisions check has passed since the owner last said something, and the handover only after the owner has agreed to it (--agreed) and the transcript's private copy is made; the handover writes the session note first, with every claim, the branches waiting to land, the runs and the open meeting, and gives the role up only once it is written; the session that gave it up is refused by land and by the push check, whatever it is told, and a worker's session is not affected",
+    "only the session that holds the coordinator role hands over (naima hello in the main checkout takes it); the proposal comes only after a signed review of the owner's requests, recorded after the owner's last message, and the handover only after the owner has agreed to it (--agreed) and the transcript's private copy is made; the handover writes the session note first, with every claim, the branches waiting to land, the runs and the open meeting, and gives the role up only once it is written; the session that gave it up is refused by land and by the push check, whatever it is told, and a worker's session is not affected",
   usage:
-    'handover --decisions [--waive <id>[,<id>]] [--no-transcript] | handover --propose [--no-transcript] | handover --postpone [--tokens <n>] | handover --agreed [--ack "<line>"] [--note "<what else is in hand>"] [--no-transcript] | handover --read [--find <words> | --from <n>] [--last <n>] [--width <n>] | handover --status | handover --watch [--hook <tool>] [--tokens <n>] [--session <id>] | handover --check [<what>] | handover --take',
+    'handover --decisions [--reviewed "<list>" | --reviewed-file <file>] [--no-transcript] | handover --propose [--no-transcript] | handover --postpone [--tokens <n>] | handover --agreed [--ack "<line>"] [--note "<what else is in hand>"] [--no-transcript] | handover --read [--find <words> | --from <n>] [--last <n>] [--width <n>] | handover --status | handover --watch [--hook <tool>] [--tokens <n>] [--session <id>] | handover --check [<what>] | handover --take',
   options: [
     {
       name: "--decisions",
       says:
-        "check that every request and decision the owner gave this session since the last session note has a record in the tracker; list the ones with none and exit 1, or pass",
+        'ask the coordinator, which holds the whole conversation, to go through every request and decision the owner made since the last session note, list each with where it was recorded or "missing", file what is missing and record the review with --reviewed; alone, it prints that task',
     },
-    { name: "--waive", says: "with --decisions: owner messages (by the ids the check printed, comma separated) that need no record" },
+    {
+      name: "--reviewed",
+      says:
+        "with --decisions: the review, one line per request with where it is recorded (an item, decision, diary entry or note); refused when a line says missing, and unless signed: --revised <path of docs/agents/NOLEAKS.md> says the writer checked the text against the no-leaks checklist",
+    },
+    { name: "--reviewed-file", says: "with --decisions: the file that holds the review, instead of --reviewed" },
     {
       name: "--propose",
       says:
-        "after the check passes (it is run again): print the message for the owner that proposes the handover, saying what is saved and how the new chat continues",
+        "after a review is recorded since the owner last spoke: print the message for the owner that proposes the handover, saying what is saved and how the new chat continues",
     },
     { name: "--postpone", says: "the owner wants to go on: leave the handing over, to be reminded once the context has grown by 5% of the window" },
     {
@@ -548,7 +619,8 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
       check: { type: "boolean" },
       take: { type: "boolean" },
       decisions: { type: "boolean" },
-      waive: { type: "string" },
+      reviewed: { type: "string" },
+      "reviewed-file": { type: "string" },
       propose: { type: "boolean" },
       postpone: { type: "boolean" },
       agreed: { type: "boolean" },
@@ -559,7 +631,7 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
       last: { type: "string" },
       width: { type: "string" },
     })
-    const decisions = bool(p, "decisions") || str(p, "waive") !== undefined
+    const decisions = bool(p, "decisions") || str(p, "reviewed") !== undefined || str(p, "reviewed-file") !== undefined
     const modes = [
       ...["status", "watch", "check", "take", "propose", "postpone", "agreed", "read"].filter((m) => bool(p, m)),
       ...(decisions ? ["decisions"] : []),
@@ -628,7 +700,11 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
       )
       for (const r of role?.retired.slice(-3) ?? []) ctx.out(`handed over: ${r.session} at ${r.at}`)
       if (role?.handing) {
-        ctx.out(`handing over: ${role.handing.phase} since ${role.handing.since}${role.handing.checked ? ", decisions checked" : ""}`)
+        ctx.out(
+          `handing over: ${role.handing.phase} since ${role.handing.since}${
+            role.handing.reviewed ? `, decisions reviewed ${role.handing.reviewed.at}` : ", decisions not reviewed"
+          }`,
+        )
       }
       if (role?.predecessor?.transcript) ctx.out(`predecessor ${role.predecessor.session}: naima handover --read reads its conversation`)
       ctx.out(`limit: ${limitOf(o)} tokens, ${percent(o.handoverAt)} of a ${o.contextWindow}-token window (coordination options contextWindow, handoverAt)`)
@@ -655,37 +731,58 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
     const now = ctx.now().toISOString()
     const handing = (h: Partial<Handing> & { phase: Phase }): Handing => ({
       since: role.handing?.since ?? now,
-      waived: role.handing?.waived ?? [],
+      ...(role.handing?.reviewed ? { reviewed: role.handing.reviewed } : {}),
       ...(role.handing?.transcript ? { transcript: role.handing.transcript } : {}),
       ...(role.handing?.tokens !== undefined ? { tokens: role.handing.tokens } : {}),
       ...h,
     })
     if (decisions) {
-      const ids = (str(p, "waive") ?? "").split(",").map((x) => x.trim()).filter(Boolean)
-      const base: Role = ids.length
-        ? { ...role, handing: handing({ phase: role.handing?.phase ?? "checking", waived: [...new Set([...(role.handing?.waived ?? []), ...ids])] }) }
-        : role
-      const c = checkDecisions(ctx, deps, base, session, blind)
-      writeRole(ctx.root, {
-        ...base,
-        handing: { ...handing({ phase: "checking", waived: base.handing?.waived ?? [] }), ...(c.owed.length ? {} : { checked: true }) },
-      })
-      reportOwed(ctx, c)
-      if (!c.owed.length) ctx.out("Next: finish what is in progress, then naima handover --propose.")
-      return c.owed.length ? 1 : 0
+      const text = str(p, "reviewed")
+      const file = str(p, "reviewed-file")
+      if (text !== undefined && file !== undefined) throw usageError(this)
+      if (text === undefined && file === undefined) {
+        const said = ownerSaid(ctx, deps, role, session, true)
+        writeRole(ctx.root, { ...role, handing: handing({ phase: "checking" }) })
+        for (const l of reviewTask(said.since, said)) ctx.out(l)
+        const r = role.handing?.reviewed
+        if (r && reviewCurrent(role, said)) ctx.out(`A review recorded ${r.at} is current: the owner has not spoken since; naima handover --propose is next.`)
+        return 0
+      }
+      let body: string
+      if (file !== undefined) {
+        try {
+          body = readFileSync(file, "utf8")
+        } catch {
+          throw new NaimaError(`the review file ${file} cannot be read`)
+        }
+      } else body = text!
+      const list = checkedReview(body)
+      requireSigned(ctx)
+      writeRole(ctx.root, { ...role, handing: { ...handing({ phase: "checking" }), reviewed: { at: now, list } } })
+      ctx.out(
+        `decisions review recorded (${list.split("\n").filter((l) => l.trim()).length} line${
+          list.split("\n").filter((l) => l.trim()).length === 1 ? "" : "s"
+        }, signed against the no-leaks checklist)`,
+      )
+      ctx.out("Next: finish what is in progress, then naima handover --propose. If the owner says more first, review again.")
+      return 0
     }
     if (bool(p, "propose")) {
-      const c = checkDecisions(ctx, deps, role, session, blind)
-      if (c.owed.length) {
+      const said = ownerSaid(ctx, deps, role, session, blind)
+      if (!reviewCurrent(role, said)) {
         writeRole(ctx.root, { ...role, handing: handing({ phase: "checking" }) })
-        reportOwed(ctx, c)
-        ctx.out("Not proposed: the decisions check has to pass first.")
+        ctx.out(
+          role.handing?.reviewed
+            ? `Not proposed: the owner spoke after the review recorded ${role.handing.reviewed.at}; review again.`
+            : "Not proposed: no review of the owner's requests is recorded.",
+        )
+        for (const l of reviewTask(said.since, said)) ctx.out(l)
         return 1
       }
       const lines = inFlight(ctx, deps.claimsData(ctx)).length
-      writeRole(ctx.root, { ...role, handing: { ...handing({ phase: "proposed" }), checked: true } })
+      writeRole(ctx.root, { ...role, handing: handing({ phase: "proposed", proposedAt: now }) })
       const tokens = role.handing?.tokens
-      for (const l of proposalText(c, lines, tokens !== undefined ? percent(tokens / o.contextWindow) : undefined)) ctx.out(l)
+      for (const l of proposalText(lines, tokens !== undefined ? percent(tokens / o.contextWindow) : undefined)) ctx.out(l)
       return 0
     }
     if (bool(p, "postpone")) {
@@ -698,7 +795,7 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
     }
     if (!bool(p, "agreed")) {
       throw new NaimaError(
-        "a handover needs the owner's agreement first: finish the work in progress, naima handover --decisions until it passes, naima handover --propose, " +
+        "a handover needs the owner's agreement first: finish the work in progress, naima handover --decisions and record the review, naima handover --propose, " +
           "give the owner its message, and run naima handover --agreed once the owner agrees (naima handover --postpone if the owner wants to go on)",
       )
     }
@@ -706,15 +803,17 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
       throw new NaimaError(
         `the handover was not proposed to the owner yet (${
           role.handing ? `it is at ${role.handing.phase}` : "it has not begun"
-        }): naima handover --propose first, after naima handover --decisions passes`,
+        }): naima handover --propose first, after the review is recorded with naima handover --decisions --reviewed`,
       )
     }
-    // The owner may have said more since the proposal: the check passes again, as the model requires after a decision.
-    const c = checkDecisions(ctx, deps, role, session, blind)
-    if (c.owed.length) {
+    // The owner's reply is the first message after the proposal; any more is something new, and needs a new review and proposal.
+    const said = ownerSaid(ctx, deps, role, session, blind)
+    const after = role.handing.proposedAt ? said.times.filter((t) => t > role.handing!.proposedAt!).length : 0
+    if (!reviewCurrent(role, said) || after > 1) {
       writeRole(ctx.root, { ...role, handing: handing({ phase: "checking" }) })
-      reportOwed(ctx, c)
-      ctx.out("Not handed over: the owner said more since the proposal. Record it, run naima handover --propose again and have the owner agree again.")
+      ctx.out(
+        "Not handed over: the owner said more since the proposal. Review the new requests (naima handover --decisions), run naima handover --propose again and have the owner agree again.",
+      )
       return 1
     }
     // The transcript's private copy, before anything else passes: the successor reads the predecessor's whole conversation.
