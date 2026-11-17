@@ -9,7 +9,7 @@
 // published for that id (below), the project's one number for any other model (contextWindow), and else the default,
 // assumed and said to be.
 
-import { ADAPTERS } from "../../core/adapters/index.ts"
+import { ADAPTERS } from "../../core/api.ts"
 
 /** The window assumed when nothing names one, the owner's choice: the window of the current models, said as assumed wherever it is used. */
 export const DEFAULT_WINDOW = 1_000_000
