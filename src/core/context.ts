@@ -1,7 +1,7 @@
 // The object every command, check and view receives.
 
 import { randomUUID } from "node:crypto"
-import { mkdirSync, rmSync } from "node:fs"
+import { existsSync, mkdirSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { parseConfig, posixRelative, readRaw } from "./config.ts"
 import { gitReason, runGit } from "./git.ts"
@@ -114,10 +114,13 @@ export function contextAt(ctx: Context, ref: string): { ctx: Context; dispose():
 }
 
 /**
- * The project as the commit `rev` has it, files and tracker alike: a detached worktree of it, without its submodules, in
- * a folder of Naima's state in the git directory, and a context there with this one's configuration and plugins, writing
- * through `io` (this context's own by default). What a landing check reads of a branch no checkout stands on is read
- * there. `dispose` removes the worktree.
+ * The project as the commit `rev` has it, files and tracker alike: a detached worktree of it in a folder of Naima's state in
+ * the git directory, and a context there with this one's configuration and plugins, writing through `io` (this context's
+ * own by default). What a landing check reads of a branch no checkout stands on is read there. Each submodule the commit
+ * pins is there too, as a detached worktree of the submodule's own repository in this checkout, at the pinned commit
+ * (nothing is fetched or cloned: one this checkout does not hold at that commit stays empty), so that a check reading
+ * files across the submodule's path, the stance's agent-endpoint check reading the product's MCP server, finds them.
+ * `dispose` removes every worktree.
  */
 export function checkoutAt(ctx: Context, rev: string, io: IO = { out: ctx.out, err: ctx.err, now: ctx.now }): { ctx: Context; dispose(): void } {
   const state = stateDir(ctx.root)
@@ -126,9 +129,21 @@ export function checkoutAt(ctx: Context, rev: string, io: IO = { out: ctx.out, e
   mkdirSync(join(state, "checkouts"), { recursive: true })
   const made = runGit(ctx.root, ["worktree", "add", "--detach", "--quiet", dir, rev])
   if (!made.ok) throw new Error(`no checkout of ${rev}: ${gitReason(made)}`)
+  const subs: string[] = []
+  const pinned = runGit(ctx.root, ["ls-tree", "-r", rev])
+  for (const line of pinned.ok ? pinned.out.split("\n") : []) {
+    const m = /^160000 commit ([0-9a-f]+)\t(.+)$/.exec(line)
+    if (!m) continue
+    const [, commit, path] = m
+    const own = join(ctx.root, path!)
+    if (!existsSync(join(own, ".git"))) continue
+    mkdirSync(join(dir, path!), { recursive: true })
+    if (runGit(own, ["worktree", "add", "--detach", "--quiet", "--force", join(dir, path!), commit!]).ok) subs.push(own)
+  }
   const dispose = (): void => {
     if (!runGit(ctx.root, ["worktree", "remove", "--force", dir]).ok) rmSync(dir, { recursive: true, force: true })
     runGit(ctx.root, ["worktree", "prune"])
+    for (const own of subs) runGit(own, ["worktree", "prune"])
   }
   return { ctx: contextIn(ctx, dir, io), dispose }
 }

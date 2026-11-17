@@ -1252,7 +1252,7 @@ export const landingCheckCommand: Command = {
   says:
     "run one landing check on a commit's files, in a checkout of that commit made for the check and removed after, and print what it found on one line: what naima land runs on the landing host, through naima run --host, for a heavy check",
   enforces:
-    "reads only: the checkout is a detached worktree in Naima's state folder in the git directory, without submodules, removed when the check ends; the findings are printed as JSON on the line that starts with NAIMA-LANDING-CHECK — what fails, what is not current, what could not be asked — and the exit is 0 whatever they are, other than 0 only when the check could not be run at all",
+    "reads only: the checkout is a detached worktree in Naima's state folder in the git directory, with each submodule it pins as a worktree of the submodule's own repository in this checkout at the pinned commit (nothing fetched), removed when the check ends; the findings are printed as JSON on the line that starts with NAIMA-LANDING-CHECK — what fails, what is not current, what could not be asked — and the exit is 0 whatever they are, other than 0 only when the check could not be run at all",
   usage: "landing-check <commit> --from <commit> --check <name>",
   long: { reports: "a line to $NAIMA_RUN_PROGRESS at each stage: the checkout of the commit, then the check" },
   options: [
