@@ -275,8 +275,15 @@ export const claudeCodeTranscripts: TranscriptReader = {
 /** How much of the end of a transcript is read to find its last assistant message. */
 const TAIL_BYTES = 1 << 20
 
-/** The context size in tokens from the last assistant message of a transcript's text; undefined when it has none. */
-export function contextTokensOf(text: string): number | undefined {
+/** The context's size and the model it ran on, from the last assistant message of a transcript. */
+export interface ContextMeasure {
+  tokens: number
+  /** The model id the request ran on, as the API names it; absent when the message names none. */
+  model?: string
+}
+
+/** The context's measure from the last assistant message of a transcript's text; undefined when it has none. */
+export function contextOf(text: string): ContextMeasure | undefined {
   const lines = text.split("\n")
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i]!.trim()
@@ -292,10 +299,14 @@ export function contextTokensOf(text: string): number | undefined {
     const usage = message["usage"]
     if (message["model"] === "<synthetic>" || !isObject(usage) || typeof usage["input_tokens"] !== "number") continue
     const n = (k: string): number => (typeof usage[k] === "number" ? usage[k] : 0)
-    return n("input_tokens") + n("cache_creation_input_tokens") + n("cache_read_input_tokens")
+    const tokens = n("input_tokens") + n("cache_creation_input_tokens") + n("cache_read_input_tokens")
+    return typeof message["model"] === "string" && message["model"] ? { tokens, model: message["model"] } : { tokens }
   }
   return undefined
 }
+
+/** The context size in tokens from the last assistant message of a transcript's text; undefined when it has none. */
+export const contextTokensOf = (text: string): number | undefined => contextOf(text)?.tokens
 
 /** The transcript's path from what a Claude Code hook is given on standard input. */
 export function transcriptPathOf(input: string): string | undefined {
@@ -307,8 +318,8 @@ export function transcriptPathOf(input: string): string | undefined {
   }
 }
 
-/** The context size in tokens, from a hook's input: its transcript's end read. Undefined when the input names no readable transcript. */
-export function contextTokensFromInput(input: string): number | undefined {
+/** The context's measure, from a hook's input: its transcript's end read. Undefined when the input names no readable transcript. */
+export function contextFromInput(input: string): ContextMeasure | undefined {
   const path = transcriptPathOf(input)
   if (!path) return undefined
   let fd: number | undefined
@@ -318,10 +329,16 @@ export function contextTokensFromInput(input: string): number | undefined {
     const start = Math.max(0, size - TAIL_BYTES)
     const buffer = Buffer.alloc(size - start)
     readSync(fd, buffer, 0, buffer.length, start)
-    return contextTokensOf(buffer.toString("utf8"))
+    return contextOf(buffer.toString("utf8"))
   } catch {
     return undefined
   } finally {
     if (fd !== undefined) closeSync(fd)
   }
 }
+
+/** The context size in tokens, from a hook's input: its transcript's end read. Undefined when the input names no readable transcript. */
+export const contextTokensFromInput = (input: string): number | undefined => contextFromInput(input)?.tokens
+
+/** The model id the session's last request ran on, from a hook's input; undefined when the transcript names none. */
+export const contextModelFromInput = (input: string): string | undefined => contextFromInput(input)?.model

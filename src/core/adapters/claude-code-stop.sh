@@ -26,10 +26,13 @@ case $common in
   *) common="$root/$common" ;;
 esac
 
-# Handover: the coordination plugin leaves the context limit, in tokens, in handover-at while a coordinator holds the
-# role (naima handover). The last assistant message of the transcript carries the context size (its input, cache-creation
-# and cache-read tokens), found here with grep alone; past the limit, naima handover --watch says whether this session
-# is the coordinator and tells it to hand over, which blocks the stop. No limit file, no transcript, no usage: nothing.
+# Context: the coordination plugin leaves the limits, in tokens, in the tick's folder while a coordinator holds the role
+# (naima handover): handover-at for any model, and handover-at-models, one "<model id> <tokens>" line per model whose
+# window it knows, each the lower of the coordinator's handover point and a worker's bound. The last assistant message of
+# the transcript carries the context size (its input, cache-creation and cache-read tokens) and the model id, found here
+# with grep alone; past that model's limit, naima handover --watch says whether this session is the coordinator (told to
+# suggest a handover to the owner) or another session (told about its own bound), which blocks the stop. No limit file, no
+# transcript, no usage: nothing.
 limit=$(cat "$common/naima/tick/handover-at" 2>/dev/null)
 transcript=$(printf '%s' "$input" | sed -n 's/.*"transcript_path": *"\([^"]*\)".*/\1/p' | head -n 1)
 if [ -n "$limit" ] && [ -n "$transcript" ] && [ -f "$transcript" ] && { [ -f "$committed" ] || command -v deno >/dev/null 2>&1; }; then
@@ -39,6 +42,13 @@ if [ -n "$limit" ] && [ -n "$transcript" ] && [ -f "$transcript" ] && { [ -f "$c
     n=$(printf '%s' "$line" | grep -o "\"$key\":[0-9]*" | head -n 1 | cut -d: -f2)
     used=$((used + ${n:-0}))
   done
+  model=$(printf '%s' "$line" | grep -o '"model":"[^"]*"' | head -n 1 | cut -d'"' -f4)
+  if [ -n "$model" ]; then
+    # A dated snapshot (claude-haiku-4-5-20251001) has the window of its model id.
+    bare=$(printf '%s' "$model" | sed 's/-[0-9]\{8\}$//')
+    own=$(awk -v m="$model" -v b="$bare" '$1 == m || $1 == b { print $2; exit }' "$common/naima/tick/handover-at-models" 2>/dev/null)
+    [ -n "$own" ] && limit=$own
+  fi
   if [ -n "$line" ] && [ "$used" -ge "$limit" ] 2>/dev/null; then
     cd "$root" || exit 0
     if [ -f "$committed" ]; then

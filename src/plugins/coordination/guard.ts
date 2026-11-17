@@ -502,9 +502,57 @@ export function rewritesHooks(ctx: Context, sha: string, files: { status: string
   })
 }
 
-/** What landings-are-markers takes directly on a guarded trunk: a commit that only switches the guard, or only rewrites Naima's hooks. */
+/** What landings-are-markers takes directly on a guarded trunk: a commit that only switches the guard, only rewrites Naima's hooks, or only sets plugin options with naima plugin set. */
 export const takenByGuard = (ctx: Context, sha: string, files: { status: string; path: string }[]): boolean =>
-  switchesGuard(ctx, sha, files) || rewritesHooks(ctx, sha, files, false)
+  switchesGuard(ctx, sha, files) || rewritesHooks(ctx, sha, files, false) || setsOptions(ctx, sha, files)
+
+/**
+ * Whether a commit is one naima plugin set made on the trunk (its Naima-Command: plugin trailer): naima.json alone changed,
+ * and in it only the options of plugins. Setting one option is one command (core/cli.ts); turning a plugin on or off, its
+ * source, the lock and everything else in the file still land from an item's branch.
+ */
+export function setsOptions(ctx: Context, sha: string, files: { status: string; path: string }[]): boolean {
+  const data = ctx.trackerPrefix ? `${ctx.trackerPrefix}/` : ""
+  const config = `${data}${DATA_FILE}`
+  if (files.length !== 1 || files[0]!.path !== config || files[0]!.status !== "M") return false
+  const cli = (gitOrNull(ctx.trackerGit, "log", "-1", `--format=%(trailers:key=${CLI_TRAILER},valueonly)`, sha) ?? "").trim()
+  if (cli !== "plugin") return false
+  const read = (rev: string): Record<string, unknown> | null => {
+    const r = runGit(ctx.trackerGit, ["show", `${rev}:${config}`])
+    try {
+      const v: unknown = r.ok ? JSON.parse(r.out) : null
+      return typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null
+    } catch {
+      return null
+    }
+  }
+  const before = read(`${sha}^`), after = read(sha)
+  if (!before || !after) return false
+  const table = (raw: Record<string, unknown>): Record<string, unknown> => (raw["plugins"] as Record<string, unknown> | undefined) ?? {}
+  // An entry added or removed holds options alone, and some (plugin set refuses an opt-in plugin that is off, whose mere
+  // presence would turn it on): never an empty one, nor one that names a source or switches a plugin.
+  const onlyOptions = (entry: unknown): boolean => {
+    const e = (entry ?? {}) as Record<string, unknown>
+    const o = e["options"]
+    return Object.keys(e).length === 1 && typeof o === "object" && o !== null && Object.keys(o).length > 0
+  }
+  const [was, now] = [table(before), table(after)]
+  for (const name of new Set([...Object.keys(was), ...Object.keys(now)])) {
+    if (name in was && name in now) continue
+    if (!onlyOptions(was[name] ?? now[name])) return false
+  }
+  // The file with every plugin's options taken out, and the entries that held options alone dropped: what must not change.
+  const strip = (raw: Record<string, unknown>): unknown => {
+    const plugins: Record<string, unknown> = {}
+    for (const [name, entry] of Object.entries(table(raw))) {
+      const { options: _o, ...rest } = (entry ?? {}) as Record<string, unknown>
+      if (name in was && name in now) plugins[name] = rest
+    }
+    const { plugins: _p, ...others } = raw
+    return { ...others, plugins }
+  }
+  return isDeepStrictEqual(strip(before), strip(after))
+}
 
 /** Whether a commit only switches the guard: naima.json changed in `trunkGuard` alone, and the hook added or removed. */
 export function switchesGuard(ctx: Context, sha: string, files: { status: string; path: string }[]): boolean {
@@ -603,7 +651,7 @@ function refusal(ctx: Context, c: Added, prev: Added | undefined, upstream: stri
   if (c.cli && onlyTrackerData(ctx, files)) return null
   if (
     initsTracker(ctx, files) || onlyAddsTrackerData(ctx, c.sha, files) || onlyClosesItems(ctx, c.sha, files) || switchesGuard(ctx, c.sha, files) ||
-    rewritesHooks(ctx, c.sha, files)
+    rewritesHooks(ctx, c.sha, files) || setsOptions(ctx, c.sha, files)
   ) return null
   if (prev && prev.parents.length === 2 && prev.closes.length && recordsMarker(ctx, c.sha, files, { sha: prev.sha, closes: prev.closes })) return null
   return "a commit made on the trunk that does more than add to the tracker data"

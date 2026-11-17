@@ -189,11 +189,12 @@ export const cliCommands: Omit<Command, "run">[] = [
     says:
       "turn a plugin on or off, or set one of its options, in naima.json's plugins table — validated the way the project is validated on every load, instead of a hand-edit of the file",
     enforces:
-      "a name must be a first-party plugin (loaded or opt-in) or one the table already names with its own source; an option set on one whose options are known here must be one it declares; the whole file is re-validated before it is written, so nothing a later load would refuse ever reaches disk",
-    usage: "plugin enable <name> | plugin disable <name> | plugin set <name> <option>=<value>... | plugin show [<name>]",
+      "a name must be a first-party plugin (loaded or opt-in) or one the table already names with its own source; an option set on one whose options are known here must be one it declares, and set never turns an opt-in plugin on; option.key=value sets one key of an option that is an object; every other key of the file keeps its place; the whole file is re-validated before it is written, so nothing a later load would refuse ever reaches disk; on the trunk, set commits naima.json itself with its Naima-Command: plugin trailer, which the trunk guard takes for a change of plugin options alone",
+    usage: "plugin enable <name> | plugin disable <name> | plugin set <name> <option>[.<key>]=<value>... | plugin show [<name>]",
     examples: [
       "plugin enable verifier-mcrl2",
       "plugin set verifier-mcrl2 bin=/usr/local/bin",
+      "plugin set coordination contextWindows.claude-opus-5-5=1000000",
       "plugin disable rule-templates",
       "plugin show verifier-mcrl2",
       "plugin show",

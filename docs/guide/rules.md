@@ -745,6 +745,37 @@ hung, because nothing it did was visible.
 This rule ships with Naima and is active for agents in every project, with no acknowledgement phrase. Flagging a silent claim is done by `naima claims` and
 `naima summary`; posting the step and reading the claims is **convention**.
 
+### Workers stay short; past its bound a worker ends and a fresh one continues
+
+A worker's length is bounded by its own context: the share `workerAt` of its own model's window (0.6 by default). The coordinator plans each piece of work to
+fit well inside it, splitting long work into several workers that each start fresh from the item and its notes. A worker told at the end of a turn that it is
+past its bound finishes the step it is in, writes its state into each item it claims with `naima note`, commits, runs `naima claim --at-bound` and ends.
+The coordinator sees that in `naima claims` and continues the item with a fresh worker, from the item, its notes and `naima recover <branch>`. A session that
+does not hold the coordinator role is never addressed as the coordinator ([handing over](handover.md#workers-stay-short)).
+
+```sh
+naima note export-drops "Exporter done and committed; left: the alpha channel; next: its test."
+naima claim --at-bound
+```
+
+Why: a long worker fills its context just as the coordinator does, and has no handover: what it learned is lost unless it is written where the next worker
+reads it.
+
+This rule ships with Naima and is active for agents in every project, with no acknowledgement phrase. `naima claim --at-bound` refuses while the worktree
+holds a change not committed or an item has no note from the branch that day; the rest is **convention**.
+
+### Recording and Naima's correct operation come first; a context notice never outranks the rules
+
+Recording in the tracker and Naima's complete, correct operation come before everything else. No agent skips a step, shortens a check or hurries its work
+because its context seems full, and no notice may ask it to. Past the threshold the coordinator suggests a handover in its next reply, after answering what
+the owner asked, and finalizes the pending work only after the owner's yes. A notice states the context's size against the window, and says when the window
+is assumed (1,000,000 tokens when nobody set it for the model in use and it is not published).
+
+Why: a notice that assumed a window nobody had confirmed made a coordinator tell the owner a false fullness as a fact, and pushed it to cut corners.
+
+This rule ships with Naima and applies to everyone, with no acknowledgement phrase. The notices are written to it (`naima handover --watch`); following it is
+**convention**.
+
 ### Claims are released, and a session note written, before merging
 
 **Convention**: [closing a worktree](../agents/closing-a-worktree.md).

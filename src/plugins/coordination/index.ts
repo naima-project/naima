@@ -47,8 +47,10 @@ import {
   posixRelative,
   privateContext,
   readAcrossBranches,
+  readReadme,
   readText,
   rendered,
+  runGit,
   sessionLine,
   setupPaths,
   short,
@@ -163,6 +165,8 @@ export interface Claim {
   step?: Step
   /** The branch is being prepared to enter the trunk: it is told when the trunk moves under it. */
   preparing?: true
+  /** Its worker ended at its context bound (claim --at-bound), its state in the items' notes: a fresh worker continues. */
+  atBound?: string
   items: ClaimEntry[]
   file: string
   /** The ref it was read from; this worktree's branch when `local`. */
@@ -205,6 +209,7 @@ function parseClaim(f: BranchFile): Claim | null {
       ...(c.note ? { note: c.note } : {}),
       ...(typeof c.step?.what === "string" && typeof c.step.since === "string" ? { step: { what: c.step.what, since: c.step.since } } : {}),
       ...(c.preparing === true ? { preparing: true as const } : {}),
+      ...(typeof c.atBound === "string" ? { atBound: c.atBound } : {}),
       items,
       file: f.name,
       ref: f.ref,
@@ -341,7 +346,7 @@ const claimCommand: Command = {
   says: "record that this branch is working on items (writes one file on this branch)",
   enforces:
     "a claim belongs to a branch, never to a detached HEAD nor to the trunk, and is one file on that branch; it never locks anything: several branches may claim one item",
-  usage: 'claim <item>... [--note "why"] [--step "what I am doing now"] [--preparing | --not-preparing]',
+  usage: 'claim <item>... [--note "why"] [--step "what I am doing now"] [--preparing | --not-preparing] | claim --at-bound',
   options: [
     { name: "--note", says: "why this branch holds the items; replaces the previous note" },
     {
@@ -355,6 +360,11 @@ const claimCommand: Command = {
         "mark the branch as being prepared to enter the trunk: from then on naima check notes every commit the trunk takes that the branch lacks, and every one committed on the trunk directly; items are optional",
     },
     { name: "--not-preparing", says: "drop the mark" },
+    {
+      name: "--at-bound",
+      says:
+        "the worker ends at its context bound (the turn-end hook said so): refused while the worktree holds work not committed or an item it claims has no note from this branch today; records the end on the claim, which naima claims shows the coordinator, to continue with a fresh worker from the items' notes; a later claim --step clears it",
+    },
   ],
   examples: [
     'claim export-drops export-keeps --note "alpha channel in the exporter"',
@@ -367,7 +377,12 @@ const claimCommand: Command = {
       step: { type: "string" },
       preparing: { type: "boolean" },
       "not-preparing": { type: "boolean" },
+      "at-bound": { type: "boolean" },
     })
+    if (bool(p, "at-bound")) {
+      if (p.positionals.length || str(p, "step") !== undefined || bool(p, "preparing") || bool(p, "not-preparing")) throw usageError(this)
+      return endAtBound(ctx)
+    }
     const preparing = bool(p, "preparing") ? true : bool(p, "not-preparing") ? false : undefined
     if (bool(p, "preparing") && bool(p, "not-preparing")) throw usageError(this)
     const step = str(p, "step")?.trim()
@@ -391,6 +406,7 @@ const claimCommand: Command = {
     if (note) mine.note = note
     if (step) {
       mine.step = { what: step, since: ctx.now().toISOString() }
+      delete mine.atBound
       ctx.out(`${branch} is now: ${step}`)
     }
     if (preparing === true) mine.preparing = true
@@ -414,6 +430,45 @@ const claimCommand: Command = {
     ctx.out(`wrote ${writeClaim(ctx, mine)} — commit it ${commitOn(ctx.root)} with your work`)
     return 0
   },
+}
+
+/**
+ * The worker ends at its context bound, with nothing in flight lost (develop/models/worker-bound/): every change is
+ * committed, and each item it claims has a note from this branch today, its state for the fresh worker that continues.
+ * Then the claim records the end, which the coordinator reads in naima claims.
+ */
+function endAtBound(ctx: Context): number {
+  const branch = currentBranch(ctx.root)
+  if (branch === "HEAD" || onTrunk(ctx, branch)) throw new Error(`claim --at-bound is a worker's, on its item's branch: ${branch} is not one`)
+  const mine = myClaim(ctx, branch)
+  if (!mine || !mine.local || empty(mine)) throw new Error(`${branch} holds no claim here: claim --at-bound marks the claim of the worker that ends`)
+  const claims = `${rel(ctx, CLAIMS)}/`
+  const pending = runGit(ctx.root, ["status", "--porcelain", "--untracked-files=all"]).out.split("\n").filter(Boolean)
+    .map((l) => l.slice(3)).filter((f) => !f.startsWith(claims))
+  if (pending.length) {
+    throw new Error(
+      `not ended: ${pending.length} change${pending.length === 1 ? " is" : "s are"} not committed (${pending.slice(0, 3).join(", ")}${
+        pending.length > 3 ? ", …" : ""
+      }). Finish the step in full and commit it, so that nothing in flight is lost, then run naima claim --at-bound again`,
+    )
+  }
+  const heading = `### ${today(ctx)} — `
+  const missing = mine.items.filter((e) => {
+    const item = ctx.repo.byId.get(e.id)
+    if (!item) return false // filed on the trunk after the branch was cut: its notes are not in this checkout
+    return !readReadme(item).split("\n").some((l) => l.startsWith(heading) && l.endsWith(`, on ${branch}`))
+  })
+  if (missing.length) {
+    throw new Error(
+      `not ended: ${missing.map((e) => e.ref).join(", ")} ${missing.length === 1 ? "has" : "have"} no note from ${branch} today. ` +
+        `Write your state into each: naima note <item> "<what is done and committed where, what is left, the next step>", commit it, then run naima claim --at-bound again`,
+    )
+  }
+  mine.atBound = ctx.now().toISOString()
+  mine.step = { what: "ended at its context bound: a fresh worker continues from the items' notes", since: mine.atBound }
+  ctx.out(`${branch}: ended at its context bound; the coordinator continues ${mine.items.map((e) => e.ref).join(", ")} with a fresh worker`)
+  ctx.out(`wrote ${writeClaim(ctx, mine)} — commit it ${commitOn(ctx.root)}, then end`)
+  return 0
 }
 
 /**
@@ -485,6 +540,8 @@ export interface ClaimsData {
     /** The last sign of life is more than `silentAfter` minutes old: the worker is possibly stuck. */
     silent?: true
     preparing?: true
+    /** When its worker ended at its context bound: the coordinator continues the items with a fresh worker, from their notes. */
+    atBound?: string
     /** Why the claim no longer stands for work in progress — its branch gone or merged into the trunk, or every item it claims closed — released by `naima prune --write`. */
     stale?: string
     /** The items it claims; `status` is the item's own, and `done` says it is no longer open (fixed, proven or closed), so a worker holding only done items is finished, not stuck. */
@@ -543,7 +600,11 @@ function quietFor(ctx: Context, c: Claim, commitDates?: Map<string, string>): nu
 
 /** A claim's step and its age, said in a line: what `claims` and the summary print. */
 const stepLine = (c: ClaimsData["claims"][number], posted: string): string =>
-  c.step ? `now: ${c.step.what} (${posted}${c.quietFor ?? 0} min ago)${c.silent ? ` — silent for ${c.quietFor} min — possibly stuck` : ""}` : ""
+  c.atBound
+    ? `its worker ended at its context bound (${c.atBound}): continue with a fresh worker from the items' notes and naima recover ${c.branch}`
+    : c.step
+    ? `now: ${c.step.what} (${posted}${c.quietFor ?? 0} min ago)${c.silent ? ` — silent for ${c.quietFor} min — possibly stuck` : ""}`
+    : ""
 
 /** An item no longer worked on: its status is a done one, or it sits in an archive type, where naima close moves it. */
 const closed = (ctx: Context, id: string): boolean => {
@@ -599,8 +660,9 @@ export function claimsData(ctx: Context, only?: string, silentAfter: number = SI
         ...(c.note ? { note: c.note } : {}),
         ...(c.step ? { step: c.step } : {}),
         ...(quiet !== undefined ? { quietFor: quiet } : {}),
-        ...(quiet !== undefined && quiet > silentAfter ? { silent: true as const } : {}),
+        ...(quiet !== undefined && quiet > silentAfter && !c.atBound ? { silent: true as const } : {}),
         ...(c.preparing ? { preparing: true as const } : {}),
+        ...(c.atBound ? { atBound: c.atBound } : {}),
         items: c.items.map((e) => {
           const item = ctx.repo.byId.get(e.id)
           return { ...e, ...(item ? { status: String(item.meta["status"]) } : {}), ...(closed(ctx, e.id) ? { done: true } : {}) }
@@ -1460,7 +1522,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       "Work left behind is listed by `stale` and in the summary: every branch, worktree and claim whose claim is stale, or with no sign of life (commit, step, session note, file not committed) for `staleAfter` hours, with its facts — last commit, files not committed, commits ahead of the trunk, whether it is up to date with it, items held and their status — and the next step: resume, land, archive or drop. " +
       "Landings are semi-linear: a branch the trunk is an ancestor of enters it as one marker commit, a merge whose tree is the branch tip's and whose message names the items it closes in `Closes:` trailers; `land` makes it from the main checkout, the shortcut for `git merge --no-ff`, and moves the trunk only from the commit it read. " +
       "From the first marker on the trunk's first-parent line every first-parent commit is a marker, or `landings-are-markers` notes it, one note per commit, which `naima waive landings-are-markers <commit>` accepts with a reason; before it nothing is asked, so a history of fast-forwards keeps working. " +
-      "The trunk guard holds the same line before anything lands: a git `reference-transaction` hook (git 2.28 or later), written by `naima init` and by `naima update` into the data directory's `hooks/` and named by core.hooksPath, refuses a commit, merge or fast-forward of the trunk made by hand, in one line that says to open an item and land it. It lets through what the check accepts (a marker, the record land makes after it, a commit that only adds to the tracker data or only closes items, naima init's commit), a commit that only switches the guard, one that only rewrites Naima's hooks to the text the running program writes, a tip origin's branch of the trunk already holds (a pull), a rewind, and a commit with a `Trunk-reason:` trailer, the owner's way through, which the check then notes with its reason. Other refs cost the shell script alone; for the trunk it starts `naima guard-check`. A checkout whose copy of the hook differs from the main checkout's runs the main checkout's, so every branch, a development line among them, is guarded by the program's hook; `naima hello` in the main checkout rewrites a hook the program no longer writes, and says how to commit it. While the guard is on the check asks from the commit that added the hook to the trunk, so a project is not noted for its past; the plugin ships the rule that every change goes through an item and lands, acknowledged as \"Landing mode on\". `naima guard off` turns it off for the project (the option `trunkGuard`, the hook removed), `naima guard on` back on, and `naima hello` says when it is off. " +
+      "The trunk guard holds the same line before anything lands: a git `reference-transaction` hook (git 2.28 or later), written by `naima init` and by `naima update` into the data directory's `hooks/` and named by core.hooksPath, refuses a commit, merge or fast-forward of the trunk made by hand, in one line that says to open an item and land it. It lets through what the check accepts (a marker, the record land makes after it, a commit that only adds to the tracker data or only closes items, naima init's commit), a commit that only switches the guard, one that only rewrites Naima's hooks to the text the running program writes, one `naima plugin set` made that changes only plugin options in `naima.json` (its `Naima-Command: plugin` trailer; `plugin set` on the trunk commits its own change, so setting one option is one command), a tip origin's branch of the trunk already holds (a pull), a rewind, and a commit with a `Trunk-reason:` trailer, the owner's way through, which the check then notes with its reason. Other refs cost the shell script alone; for the trunk it starts `naima guard-check`. A checkout whose copy of the hook differs from the main checkout's runs the main checkout's, so every branch, a development line among them, is guarded by the program's hook; `naima hello` in the main checkout rewrites a hook the program no longer writes, and says how to commit it. While the guard is on the check asks from the commit that added the hook to the trunk, so a project is not noted for its past; the plugin ships the rule that every change goes through an item and lands, acknowledged as \"Landing mode on\". `naima guard off` turns it off for the project (the option `trunkGuard`, the hook removed), `naima guard on` back on, and `naima hello` says when it is off. " +
       "A commit made on the trunk that only adds to the tracker data is accepted without a note: new files in the data directory outside `rules/`, `waivers/` and `naima.json`, lines added to an item's README.md with its meta.json untouched, and any change to a claim in `claims/` (added, rewritten by `claim --step` or removed by `release` and `prune --write`), so the coordinator files an item, appends a note, writes a diary entry or a session note, and keeps the claims without a branch; a status, a rule, a waiver, the lock or a release record still lands, from the worktree of an item of its own. naima init's commit, the one that adds `naima.json`, and the close after a landing are accepted too. " +
       "A repository of the project with `changes/config.json` — the project itself, or a product it holds as a submodule — names there the paths whose change is a change of behaviour; a branch that changes one adds a change note, `changes/<date>-<slug>.md`, in the same repository. `land` refuses a branch that does not, unless `--no-change-note` gives the reason, which the marker records as a `No-change-note:` trailer; `change-notes` notes it on the branch beforehand, and is a problem for a file of `changes/` that is not a change note. `changes` prints the release notes the change notes of a range make. " +
       "`naima view timeline` derives every event, with nothing stored: a gate opened is its first item reported (`created`), a gate passed its last item resolved (`closedOn`, else `fixedOn`) once none is open; an epic the same, from the items it groups; a release is a version tag, dated by its commit; a session is its note. " +
@@ -1476,15 +1538,26 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       },
       { name: "exempt", says: "branches the naming scheme does not apply to: names, or patterns with *", default: "[]" },
       {
+        name: "contextWindows",
+        says:
+          "the context window of each model the project's sessions run on, in tokens, by model id as the transcript names it (such as claude-opus-5-5): what naima handover measures a session's context against, the coordinator's and each worker's by its own model; set one with naima plugin set coordination contextWindows.<model id>=<tokens>. A model not named here whose window is published (the 1M-token and 200000-token Claude models) needs no entry",
+        default: "{}",
+      },
+      {
         name: "contextWindow",
         says:
-          "the context window of the model the coordinator runs on, in tokens: what naima handover measures the context against; a positive whole number. The default awaits the owner's choice",
-        default: "200000",
+          "the window, in tokens, of a model neither named in contextWindows nor published: a positive whole number, set by the owner. Unset, 1000000 is assumed, and every notice says the window is assumed",
       },
       {
         name: "handoverAt",
         says:
           "the share of the context window past which the coordinator is told at the turn end to hand over to a fresh session (naima handover): above 0 and at most 1. The default awaits the owner's choice",
+        default: "0.6",
+      },
+      {
+        name: "workerAt",
+        says:
+          "the share of its own model's window past which a worker, or any session that does not hold the coordinator role, is told at the turn end to finish its step in full, write its state into its items' notes, run naima claim --at-bound and end, for a fresh worker to continue: above 0 and at most 1. The default awaits the owner's choice",
         default: "0.6",
       },
       {

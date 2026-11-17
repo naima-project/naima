@@ -1782,8 +1782,14 @@ function withPluginEntry(raw: Record<string, unknown>, name: string, entry: Reco
   const table = { ...((raw["plugins"] as PluginTable | undefined) ?? {}) }
   if (Object.keys(entry).length === 0 && !keepPresence) delete table[name]
   else table[name] = entry
-  const { plugins: _was, ...rest } = raw
-  return Object.keys(table).length ? { ...rest, plugins: table } : rest
+  // Every other key keeps its place in the file: the table is put back where it was, and added last only when new.
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (key !== "plugins") out[key] = value
+    else if (Object.keys(table).length) out[key] = table
+  }
+  if (!("plugins" in raw) && Object.keys(table).length) out["plugins"] = table
+  return out
 }
 
 const isOptIn = (name: string, opts: CliOptions): boolean => opts.firstParty.find((p) => p.name === name)?.optIn === true
@@ -1857,28 +1863,50 @@ function pluginCommand(args: string[], opts: CliOptions, place: Place, raw: Reco
   if (name === "core") throw new Error(CORE_OPTIONS_REFUSAL)
   const refusal = pluginRefusal(name, opts, raw)
   if (refusal) throw new Error(refusal)
+  // Setting an option never turns a plugin on: the entry alone loads an opt-in plugin.
+  if (isOptIn(name, opts) && !((raw["plugins"] as PluginTable | undefined) ?? {})[name]) {
+    throw new Error(`${name} is off (opt-in): turn it on first with naima plugin enable ${name}, then set its options`)
+  }
   const assigns = pairs(rest)
   guardPrivate(`the options of ${name}`, findPrivate(assigns.map(([, v]) => v).join("\n"), privateContext()), reason)
   const known = declaredOptions(name, opts)
+  // option.key=value sets one key of an option that is an object, such as a window by model id; the option is the part before the first dot.
+  const split = (key: string): [string, string | undefined] => {
+    const dot = key.indexOf(".")
+    return dot > 0 && dot < key.length - 1 ? [key.slice(0, dot), key.slice(dot + 1)] : [key, undefined]
+  }
   for (const [key, value] of assigns) {
     // Removing one is allowed: an option no plugin reads is what naima check notes, to be removed.
-    if (known && !known.includes(key) && value !== "") {
-      throw new Error(`plugins.${name} declares no option "${key}" — its options: ${known.join(", ") || "none"}`)
+    const [option] = split(key)
+    if (known && !known.includes(option) && value !== "") {
+      throw new Error(`plugins.${name} declares no option "${option}" — its options: ${known.join(", ") || "none"}`)
     }
   }
   const entry = pluginEntry(raw, name)
   const options = { ...((entry["options"] as Record<string, unknown> | undefined) ?? {}) }
-  for (const [key, value] of assigns) {
-    if (value === "") delete options[key]
-    else {
-      let parsed: unknown = value
-      try {
-        parsed = JSON.parse(value)
-      } catch {
-        // not JSON: kept as the plain string it was typed as
-      }
-      options[key] = parsed
+  const parsed = (value: string): unknown => {
+    try {
+      return JSON.parse(value)
+    } catch {
+      return value // not JSON: kept as the plain string it was typed as
     }
+  }
+  for (const [key, value] of assigns) {
+    const [option, sub] = split(key)
+    if (sub === undefined) {
+      if (value === "") delete options[option]
+      else options[option] = parsed(value)
+      continue
+    }
+    const held = options[option]
+    if (held !== undefined && (typeof held !== "object" || held === null || Array.isArray(held))) {
+      throw new Error(`plugins.${name}.options.${option} is not an object of keys, so ${key} cannot be set: set ${option} whole`)
+    }
+    const inner = { ...((held as Record<string, unknown> | undefined) ?? {}) }
+    if (value === "") delete inner[sub]
+    else inner[sub] = parsed(value)
+    if (Object.keys(inner).length) options[option] = inner
+    else delete options[option]
   }
   if (Object.keys(options).length) entry["options"] = options
   else delete entry["options"]
@@ -2116,6 +2144,26 @@ async function stanceCommand(args: string[], opts: CliOptions, place: Place, io:
 }
 
 /**
+ * `naima plugin set` on the trunk, when the tracker shares the code's repository: one option is one command, so it commits
+ * naima.json itself, with its Naima-Command: trailer, which the trunk guard takes for a commit that changes plugin options
+ * alone (coordination/guard.ts). Elsewhere (an item's branch, a line) the change is committed with the work, as before.
+ */
+function commitOptionsOnTrunk(place: Place, args: string[], io: IO): void {
+  if (args.find((a) => !a.startsWith("-")) !== "set") return
+  const git = trackerGitOf(place.root, place.data)
+  if (git !== place.root) return // a tracker of its own: committingTracker committed it
+  const main = trunk(place.root)
+  if (!main || currentBranch(place.root) !== main) return
+  const prefix = posixRelative(place.root, place.data)
+  const file = prefix ? `${prefix}/${DATA_FILE}` : DATA_FILE
+  // Only a naima.json the trunk already holds, now changed: a project not committed yet commits it with its setup.
+  if (!/^(M.|.M) /.test(runGit(place.root, ["status", "--porcelain", "--", file]).out)) return
+  const failed = commitTrackerPaths(place.root, "plugin", [file], prefix)
+  if (failed) io.err(`naima: the option is set but not committed (${failed}): commit ${file} on ${main}`)
+  else io.out(`committed ${file} on ${main}`)
+}
+
+/**
  * Run a command of the entry point's own that may write the tracker (init, update, rollback, plugin) and, when the
  * tracker is a repository of its own, commit what it wrote there, as every other command's writes are.
  */
@@ -2241,7 +2289,9 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     if (command === "subagent") return await subagentCommand(args, opts, place, io)
     if (command === "plugin") {
       const at = place
-      return await committingTracker(data, "plugin", io, () => Promise.resolve(pluginCommand(args, opts, at, at.raw, io)))
+      const code = await committingTracker(data, "plugin", io, () => Promise.resolve(pluginCommand(args, opts, at, at.raw, io)))
+      if (code === 0) commitOptionsOnTrunk(at, args, io)
+      return code
     }
     if (command === "stances") return await stancesCommand(args, opts, place, io)
     if (command === "stance") {
