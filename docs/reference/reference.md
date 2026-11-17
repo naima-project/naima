@@ -369,7 +369,7 @@ Examples:
 ```sh
 naima plugin enable verifier-mcrl2
 naima plugin set verifier-mcrl2 bin=/usr/local/bin
-naima plugin set coordination contextWindows.claude-opus-5-5=1000000
+naima plugin set coordination contextWindows.my-model=1000000
 naima plugin disable rule-templates
 naima plugin show verifier-mcrl2
 naima plugin show
@@ -1195,7 +1195,7 @@ Options, each with the default it takes when nothing sets it:
 | `who` |  | who works, when `naima open` is given no `--as`: the branch's first segment |
 | `worktrees` | `../<main worktree's folder>-worktrees` | the directory every worktree is a folder of, relative to the main worktree |
 | `exempt` | `[]` | branches the naming scheme does not apply to: names, or patterns with * |
-| `contextWindows` | `{}` | the context window of each model the project's sessions run on, in tokens, by model id as the transcript names it (such as claude-opus-5-5): what naima handover measures a session's context against, the coordinator's and each worker's by its own model; set one with naima plugin set coordination contextWindows.<model id>=<tokens>. A model not named here whose window is published (the 1M-token and 200000-token Claude models) needs no entry |
+| `contextWindows` | `{}` | the context window of each model the project's sessions run on, in tokens, by model id as the transcript names it (such as the model id in the transcript): what naima handover measures a session's context against, the coordinator's and each worker's by its own model; set one with naima plugin set coordination contextWindows.<model id>=<tokens>. A model not named here whose window is published (the models of the tools Naima knows) needs no entry |
 | `contextWindow` |  | the window, in tokens, of a model neither named in contextWindows nor published: a positive whole number, set by the owner. Unset, 1000000 is assumed, and every notice says the window is assumed |
 | `handoverAt` | `0.6` | the share of the context window past which the coordinator is told at the turn end to hand over to a fresh session (naima handover): above 0 and at most 1. The default awaits the owner's choice |
 | `workerAt` | `0.6` | the share of its own model's window past which a worker, or any session that does not hold the coordinator role, is told at the turn end to finish its step in full, write its state into its items' notes, run naima claim --at-bound and end, for a fresh worker to continue: above 0 and at most 1. The default awaits the owner's choice |
@@ -1717,7 +1717,7 @@ naima handover --take
 | `--note` |  | more for the successor, written in the session note after what is in flight: what the open conversation stands on |
 | `--status` |  | say who holds the role, where it is in handing over, the windows and the shares, and whether the host gives a measure |
 | `--watch` |  | what the turn-end hook runs: when this session holds the role and its context is past the handover point, the first time, print the message that tells it to suggest a handover to the owner in its next reply; when it is another session (a worker, a side session) past its own bound (workerAt), once, the message that tells it to finish its step in full, write its state into its items' notes and end (as the tool's turn-end decision with --hook, as a NAIMA-MESSAGE line otherwise); each states the context's size against the window, said to be assumed when nobody set it for the model and it is not published, and says the rules come first; nothing in every other case |
-| `--hook` | `claude-code` | with --watch: the tool whose hook runs it, read from standard input |
+| `--hook` | `the first tool Naima knows` | with --watch: the tool whose hook runs it, read from standard input |
 | `--tokens` |  | with --watch: the context size, instead of the one the hook input gives; with --postpone: the size to remind from |
 | `--session` |  | with --watch: the session, instead of the hook input's or the current one |
 | `--model` |  | with --watch: the model id whose window the context is measured against, instead of the one the hook input's transcript names |
