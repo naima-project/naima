@@ -1,1 +1,0 @@
-import{Ca as e,Sa as t,si as n}from"./switcher-B7V_wskl.js";import{t as r}from"./App-DbciHaAm.js";function i(i,a){e(a,!0),n(a.store),r(i,{}),t()}export{i as default};

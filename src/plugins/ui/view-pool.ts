@@ -1,6 +1,6 @@
-// The views the UI's server computes, rendered off its serving thread: a small pool of worker threads, each opening the
-// project once (src/view-worker.ts) and rendering one view at a time, so that independent views run side by side and a
-// slow one never holds another view, nor a file of the page. A worker is started when a view is asked and no worker is
+// The views the UI's server computes, and the tabs it frames, rendered off its serving thread: a small pool of worker
+// threads, each opening the project once (src/view-worker.ts) and rendering one view or tab at a time, so that
+// independent views run side by side and a slow one never holds another view, nor a file of the page. A worker is started when a view is asked and no worker is
 // free, up to `size`; the asks beyond wait in order. A worker that cannot start or dies fails its asks: the caller
 // computes those in its own thread, as it did before the pool.
 
@@ -9,9 +9,19 @@ import { Worker } from "node:worker_threads"
 /** The pool, not the view, failed: no worker could be started or one stopped; the caller computes the view itself. */
 export class PoolDown extends Error {}
 
+/** What a tab is rendered for: its subtab and its query, as the bridge's tab command takes them. */
+export interface TabParams {
+  sub: string | null
+  query: Record<string, string[]>
+}
+
 export interface ViewPool {
   /** A view's data for these parameters, rendered in a worker; rejects when no worker could answer. */
   render(view: string, params: Record<string, string[]>): Promise<unknown>
+  /** A tab's content (UiTabContent) for a subtab and a query, rendered in a worker; rejects when no worker could answer. */
+  renderTab(tab: string, params: TabParams): Promise<unknown>
+  /** Start every worker now, each opening the project, so that the first views asked do not wait for a worker to start. */
+  warm(): void
   /** Stop every worker. */
   close(): void
   /** How many workers have been started. */
@@ -19,8 +29,11 @@ export interface ViewPool {
 }
 
 interface Pending {
+  /** A view's name, or a tab's. */
   view: string
   params: Record<string, string[]>
+  /** Set when a tab is asked for, not a view. */
+  tab?: TabParams
   resolve(data: unknown): void
   reject(e: Error): void
 }
@@ -50,7 +63,7 @@ export function viewPool(place: { root: string; data: string; program: string },
       const pending = waiting.shift()!
       const id = ++ids
       slot.busy = { id, pending }
-      slot.worker.postMessage({ id, view: pending.view, params: pending.params })
+      slot.worker.postMessage(pending.tab ? { id, tab: pending.view, params: pending.tab } : { id, view: pending.view, params: pending.params })
     }
   }
   const start = (): Slot => {
@@ -79,18 +92,27 @@ export function viewPool(place: { root: string; data: string; program: string },
     worker.unref()
     return slot
   }
+  const ask = (view: string, params: Record<string, string[]>, tab?: TabParams): Promise<unknown> =>
+    new Promise((resolve, reject) => {
+      if (closed || slots.filter((s) => s.dead).length >= 3) return reject(new PoolDown("the view pool is closed or its workers keep failing"))
+      waiting.push({ view, params, ...(tab ? { tab } : {}), resolve, reject })
+      try {
+        dispatch()
+      } catch (e) {
+        waiting.pop()
+        reject(new PoolDown(e instanceof Error ? e.message : String(e)))
+      }
+    })
   return {
-    render: (view, params) =>
-      new Promise((resolve, reject) => {
-        if (closed || slots.filter((s) => s.dead).length >= 3) return reject(new PoolDown("the view pool is closed or its workers keep failing"))
-        waiting.push({ view, params, resolve, reject })
-        try {
-          dispatch()
-        } catch (e) {
-          waiting.pop()
-          reject(new PoolDown(e instanceof Error ? e.message : String(e)))
-        }
-      }),
+    render: (view, params) => ask(view, params),
+    renderTab: (tab, params) => ask(tab, {}, params),
+    warm: () => {
+      try {
+        while (!closed && slots.filter((s) => !s.dead).length < size) start()
+      } catch {
+        // A worker that cannot start is started, or found down, when a view is asked.
+      }
+    },
     close: () => {
       closed = true
       for (const s of slots) void s.worker.terminate()
