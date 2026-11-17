@@ -32,6 +32,12 @@ export const ACTIONS: readonly { name: string; words: string[]; says: string; bu
     words: ["meeting", "take"],
     says: "take a meeting now: record that it started and wake the agent waiting with naima meeting wait (naima meeting take <meeting>)",
   },
+  {
+    name: "meeting-raise",
+    words: ["meeting", "raise"],
+    says:
+      'raise one thing that waits for the owner in the chat now: leave it for the agent waiting with naima meeting wait, with its context (naima meeting raise <item|helper:<branch>> [--about "<why it waits>"])',
+  },
   { name: "meeting-new", words: ["meeting", "new"], says: 'declare a meeting, with a date or none (naima meeting new <name> "<title>" [--on YYYY-MM-DD])' },
   { name: "meeting-add", words: ["meeting", "add"], says: "put items that need the owner on a meeting's agenda (naima meeting add <meeting> <item>...)" },
   { name: "meeting-move", words: ["meeting", "move"], says: "move items to another meeting, noted on each (naima meeting move <meeting> <item>...)" },

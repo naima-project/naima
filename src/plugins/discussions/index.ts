@@ -130,7 +130,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/
 const isDate = (v: unknown): v is string => typeof v === "string" && DATE.test(v) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v
 const NAME = /^[a-z0-9][a-z0-9._-]*$/
 /** The words of `naima meeting` that no meeting may be called. */
-const RESERVED = ["new", "add", "move", "off", "date", "take", "wait", "none"]
+const RESERVED = ["new", "add", "move", "off", "date", "take", "raise", "wait", "none"]
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v)
 
 function readMeetings(options: Record<string, unknown>): Record<string, MeetingConfig> {
@@ -357,41 +357,150 @@ function takeMeeting(ctx: Context, name: string, m: MeetingConfig): TakenEvent {
   const at = ctx.now().toISOString()
   changeMeeting(ctx, name, (c) => ({ ...c, taken: at }))
   const event: TakenEvent = { id: `${at.replace(/\D/g, "")}-${name}`, meeting: name, title: m.title, at }
+  leaveEvent(ctx, event)
+  return event
+}
+
+// Raising a topic now: the owner, on the UI's Waiting for you, sends one thing that waits for them to the chat
+// (naima meeting raise <ref>). The event is left in the same folder as a meeting taken, and the agent waiting with
+// naima meeting wait wakes with the topic and its context, and raises it with the owner at once. A topic is an item
+// that waits for the owner, or an agent gone quiet (helper:<its branch>). A raise is refused for an item that is
+// closed, and for a topic whose event still waits for the agent; a waiter that finds the item closed since drops the
+// event into meetings/dropped/ and keeps waiting. The model: develop/models/meeting/raise/raise.mcrl2 in the workshop.
+
+/** A topic the owner sent to the chat, as the event file holds it. */
+export interface TopicEvent {
+  id: string
+  kind: "topic"
+  /** The item's reference, or helper:<branch> for an agent gone quiet. */
+  ref: string
+  title: string
+  /** Why it waits for the owner, as the UI said it; empty when not given. */
+  about: string
+  at: string
+}
+
+/** An event of the meetings' folder: a meeting taken (written with no kind) or a topic raised. */
+type MeetingEvent = TakenEvent | TopicEvent
+
+const isTopic = (e: MeetingEvent): e is TopicEvent => (e as TopicEvent).kind === "topic"
+
+/** The ref a stalled agent's topic carries, the UI's: what follows is its branch. */
+const HELPER = "helper:"
+
+/** How long a topic taken by the agent is said to be in the chat, in days: older ones are waiting again. */
+export const IN_CHAT_DAYS = 14
+
+/** The events of one of the folder's subfolders, oldest first, each with its file name; none when there is no folder. */
+function eventsIn(ctx: Context, sub: "pending" | "seen"): { file: string; e: MeetingEvent }[] {
+  const dir = join(eventsDir(ctx), sub)
+  let files: string[]
+  try {
+    files = readdirSync(dir).filter((f) => f.endsWith(".json")).sort()
+  } catch {
+    return []
+  }
+  const out: { file: string; e: MeetingEvent }[] = []
+  for (const file of files) {
+    try {
+      out.push({ file, e: JSON.parse(readFileSync(join(dir, file), "utf8")) as MeetingEvent })
+    } catch {
+      continue
+    }
+  }
+  return out
+}
+
+/** Leave the event for a waiting agent, atomically: written aside, then renamed into pending/. */
+function leaveEvent(ctx: Context, event: MeetingEvent): void {
   const dir = join(eventsDir(ctx), "pending")
   mkdirSync(dir, { recursive: true })
   const tmp = join(dir, `.${event.id}.tmp`)
   writeFileSync(tmp, JSON.stringify(event) + "\n")
   renameSync(tmp, join(dir, `${event.id}.json`))
+}
+
+/** Send a topic to the chat: refused for a closed item, or while its last raise still waits for the agent. */
+function raiseTopic(ctx: Context, ref: string, about: string): TopicEvent {
+  const helper = ref.startsWith(HELPER) && ref.length > HELPER.length
+  const item = helper ? null : ctx.repo.resolve(ref)
+  if (item && !isOpen(ctx, item)) throw new Error(`${label(item)} is ${item.meta.status}: it no longer waits for the owner`)
+  const key = item ? label(item) : ref
+  const waiting = eventsIn(ctx, "pending").find(({ e }) => isTopic(e) && e.ref === key)
+  if (waiting) throw new Error(`${key} was sent to the chat at ${waiting.e.at}, and the agent has not taken it yet`)
+  const at = ctx.now().toISOString()
+  const slug = key.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase()
+  const event: TopicEvent = {
+    id: `${at.replace(/\D/g, "")}-topic-${slug}`,
+    kind: "topic",
+    ref: key,
+    title: item ? item.meta.title : `the agent on ${ref.slice(HELPER.length)}`,
+    about,
+    at,
+  }
+  leaveEvent(ctx, event)
   return event
 }
 
-/** Take the oldest pending event of `name` (any meeting when absent): null when none waits, or another waiter took it. */
-function takeEvent(ctx: Context, name: string | undefined): TakenEvent | null {
+/** Where each topic sent to the chat stands, by its ref: sent (its event waits for the agent) or in the chat (the agent
+ * took it, within IN_CHAT_DAYS), with when it was sent. What the UI's Waiting for you marks its entries with. */
+export function raisedTopics(ctx: Context): Record<string, { at: string; state: "sent" | "in-chat" }> {
+  const out: Record<string, { at: string; state: "sent" | "in-chat" }> = {}
+  if (!stateDir(ctx.root)) return out
+  const since = ctx.now().getTime() - IN_CHAT_DAYS * 86_400_000
+  for (const { e } of eventsIn(ctx, "seen")) if (isTopic(e) && Date.parse(e.at) >= since) out[e.ref] = { at: e.at, state: "in-chat" }
+  for (const { e } of eventsIn(ctx, "pending")) if (isTopic(e)) out[e.ref] = { at: e.at, state: "sent" }
+  return out
+}
+
+/** Take the oldest pending event `want` accepts: null when none waits, or another waiter took it. A topic whose item
+ * was closed since it was sent is dropped (moved to dropped/) and the search goes on. */
+function takeEvent(ctx: Context, want: (e: MeetingEvent) => boolean): MeetingEvent | null {
   const dir = eventsDir(ctx)
-  const pending = join(dir, "pending")
-  let files: string[]
-  try {
-    files = readdirSync(pending).filter((f) => f.endsWith(".json")).sort()
-  } catch {
-    return null
-  }
-  for (const f of files) {
-    let e: TakenEvent
+  for (const { file, e } of eventsIn(ctx, "pending")) {
+    if (!want(e)) continue
+    const settled = isTopic(e) && !e.ref.startsWith(HELPER) && (() => {
+      try {
+        return !isOpen(ctx, ctx.repo.resolve(e.ref))
+      } catch {
+        return true // gone
+      }
+    })()
+    const to = settled ? "dropped" : "seen"
+    mkdirSync(join(dir, to), { recursive: true })
     try {
-      e = JSON.parse(readFileSync(join(pending, f), "utf8")) as TakenEvent
-    } catch {
-      continue
-    }
-    if (name !== undefined && e.meeting !== name) continue
-    mkdirSync(join(dir, "seen"), { recursive: true })
-    try {
-      renameSync(join(pending, f), join(dir, "seen", f))
+      renameSync(join(dir, "pending", file), join(dir, to, file))
     } catch {
       continue // another waiter took it first
     }
+    if (settled) continue
     return e
   }
   return null
+}
+
+/** What the chat is told of a topic the owner sent: raise it now, with its context, one line each. */
+function topicLines(ctx: Context, e: TopicEvent, meetings: Record<string, MeetingConfig>): string[] {
+  if (e.ref.startsWith(HELPER)) {
+    return [
+      `The owner sent ${e.title} (${e.ref}) to the chat from Waiting for you at ${e.at}: raise it with them now, before anything else.`,
+      ...(e.about ? [`  what the UI says: ${e.about}`] : []),
+      "  Say what it holds and its last step (naima claims), then ask what to do: release its claim, start it again, or wait.",
+      "When it is settled, or the owner moves on: start naima meeting wait again, in the background.",
+    ]
+  }
+  const item = ctx.repo.resolve(e.ref)
+  const on = fieldValue(item, MEETING) ?? (isDiscussion(item) ? fieldValues(item, GATE).find((g) => g in meetings) : undefined)
+  const blocks = linked(ctx, item, "blocks").filter((i) => isOpen(ctx, i))
+  return [
+    `The owner sent ${e.ref} (${e.title}) to the chat from Waiting for you at ${e.at}: raise it with them now, before anything else, with its context, and settle it with them.`,
+    ...(e.about ? [`  why it waits for them: ${e.about}`] : []),
+    `  where it stands: ${item.meta.status}`,
+    ...(on ? [`  on the meeting: ${on}${meetings[on] ? ` (${meetings[on]!.title})` : ""}`] : []),
+    blocks.length ? `  waiting on it: ${blocks.map((i) => `${label(i)} (${i.meta.title})`).join("; ")}` : "  nothing waits on it",
+    `  its page: naima show ${e.ref}`,
+    "When it is settled, or the owner moves on: start naima meeting wait again, in the background.",
+  ]
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -564,11 +673,11 @@ function meetingCommand(base: Record<string, MeetingConfig>): Command {
   return {
     name: "meeting",
     says:
-      "declare a meeting — who it needs, and a date or whenever they are present — put what needs them on its agenda, move it between meetings, set or clear its date, take it now, wait for it to be taken, and show the agenda",
+      "declare a meeting — who it needs, and a date or whenever they are present — put what needs them on its agenda, move it between meetings, set or clear its date, take it now, raise one thing that waits for the owner in the chat now, wait for either, and show the agenda",
     enforces:
-      "an item other than a discussion is on one meeting at most, a moved item is on that meeting only, and each change is noted on the item; a meeting is written to naima.json validated, as the next load reads it; a meeting is taken once until it closes, and each take wakes one waiting agent",
+      "an item other than a discussion is on one meeting at most, a moved item is on that meeting only, and each change is noted on the item; a meeting is written to naima.json validated, as the next load reads it; a meeting is taken once until it closes, and each take wakes one waiting agent; a topic is raised once until the agent takes it, never once its item is closed, and each raise wakes one waiting agent, who drops it if its item closed since",
     usage:
-      'meeting [<name>] | meeting <name> --close [--consent "<the owner\'s yes>"] [--start <item>,...] [--skip <item>,...] | meeting new <name> "<title>" [--needs <who>,...] [--on YYYY-MM-DD] | meeting add <meeting> <item>... | meeting move <meeting> <item>... | meeting off <item>... | meeting date <meeting> <YYYY-MM-DD|none> | meeting take <meeting> | meeting wait [<meeting>] [--timeout <seconds>]',
+      'meeting [<name>] | meeting <name> --close [--consent "<the owner\'s yes>"] [--start <item>,...] [--skip <item>,...] | meeting new <name> "<title>" [--needs <who>,...] [--on YYYY-MM-DD] | meeting add <meeting> <item>... | meeting move <meeting> <item>... | meeting off <item>... | meeting date <meeting> <YYYY-MM-DD|none> | meeting take <meeting> | meeting raise <item|helper:<branch>> [--about "<why it waits>"] | meeting wait [<meeting>] [--timeout <seconds>]',
     options: [
       {
         name: "--close",
@@ -580,7 +689,8 @@ function meetingCommand(base: Record<string, MeetingConfig>): Command {
       { name: "--skip", says: "--close: the packages the owner said not to queue now; comma-separated or repeated" },
       { name: "--needs", says: "meeting new: who must be present, comma-separated; the owner when not given" },
       { name: "--on", says: "meeting new: a fixed date, YYYY-MM-DD; without one, it takes place whenever the people it needs are present" },
-      { name: "--timeout", says: "meeting wait: give up after this many seconds, exit 1; without it, wait until a meeting is taken" },
+      { name: "--about", says: "meeting raise: why it waits for the owner, in one sentence, which the chat is told with the topic" },
+      { name: "--timeout", says: "meeting wait: give up after this many seconds, exit 1; without it, wait until a meeting is taken or a topic raised" },
     ],
     examples: [
       "meeting",
@@ -592,6 +702,7 @@ function meetingCommand(base: Record<string, MeetingConfig>): Command {
       "meeting date review 2026-11-20",
       "meeting date review none",
       "meeting take owner",
+      'meeting raise discussions/plugin-names --about "Which names the plugins get"',
       "meeting wait",
       "meeting owner",
       "meeting owner --close",
@@ -608,6 +719,7 @@ function meetingCommand(base: Record<string, MeetingConfig>): Command {
         start: { type: "string", multiple: true },
         skip: { type: "string", multiple: true },
         timeout: { type: "string" },
+        about: { type: "string" },
       })
       const [sub, name, ...rest] = p.positionals
       if (sub === "new") {
@@ -652,6 +764,12 @@ function meetingCommand(base: Record<string, MeetingConfig>): Command {
         for (const l of agendaLines(ctx, meeting, { ...m, taken: e.at }, meetings)) ctx.out(l)
         return 0
       }
+      if (sub === "raise") {
+        if (!name || rest.length) throw usageError(this)
+        const e = raiseTopic(ctx, name, str(p, "about")?.trim() ?? "")
+        ctx.out(`${e.ref}: sent to the chat at ${e.at} — the agent waiting with naima meeting wait raises it with the owner now`)
+        return 0
+      }
       if (sub === "wait") {
         if (rest.length) throw usageError(this)
         if (name !== undefined) meetingOrThrow(name)
@@ -659,7 +777,13 @@ function meetingCommand(base: Record<string, MeetingConfig>): Command {
         if (t !== undefined && !/^\d+$/.test(t)) throw new Error(`--timeout is a number of seconds: got ${t}`)
         const until = t === undefined ? Infinity : Date.now() + Number(t) * 1000
         for (;;) {
-          const e = takeEvent(ctx, name)
+          // A wait for one meeting takes only its takes; a wait for any takes the topics raised too.
+          const e = takeEvent(ctx, (x) => (isTopic(x) ? name === undefined : name === undefined || x.meeting === name))
+          if (e && isTopic(e)) {
+            ctx.reload()
+            for (const l of topicLines(ctx, e, liveMeetings(ctx, base))) ctx.out(l)
+            return 0
+          }
           if (e) {
             ctx.reload()
             const now = liveMeetings(ctx, base)
@@ -810,7 +934,17 @@ export interface MeetingRow {
 }
 
 /** Every meeting, the one taken first, then the dated by date, then those waiting; and the meeting of each item on one. */
-export function meetingsData(ctx: Context, meetings: Record<string, MeetingConfig>): { today: string; meetings: MeetingRow[]; on: Record<string, string> } {
+export function meetingsData(
+  ctx: Context,
+  meetings: Record<string, MeetingConfig>,
+): {
+  today: string
+  meetings: MeetingRow[]
+  on: Record<string, string>
+  raised: ReturnType<typeof raisedTopics>
+  since: Record<string, string>
+  blocks: Record<string, { ref: string; title: string }[]>
+} {
   const rows: MeetingRow[] = Object.entries(meetings).map(([name, m]) => ({
     name,
     title: m.title,
@@ -836,7 +970,20 @@ export function meetingsData(ctx: Context, meetings: Record<string, MeetingConfi
   rows.sort((a, b) => rank(a) - rank(b) || (a.on ?? "").localeCompare(b.on ?? "") || a.name.localeCompare(b.name))
   const on: Record<string, string> = {}
   for (const r of rows) for (const a of r.agenda) on[a.ref] ??= r.name
-  return { today: today(ctx), meetings: rows, on }
+  // Since when each open question or decision, and each open item on a meeting, has waited (the day it was filed), for the
+  // ages Waiting for you says; and the topics sent to the chat from it, for the marks on its entries (none outside git).
+  // What waits on each open item that holds open work (its open blocked-by items), for what an entry unblocks.
+  const since: Record<string, string> = {}
+  const blocks: Record<string, { ref: string; title: string }[]> = {}
+  for (const i of ctx.repo.items) {
+    if (!isOpen(ctx, i)) continue
+    const ref = label(i)
+    const created = i.meta["created"]
+    if (typeof created === "string" && (isDiscussion(i) || i.type === "decisions" || ref in on)) since[ref] = created
+    const waiting = linked(ctx, i, "blocks").filter((x) => isOpen(ctx, x))
+    if (waiting.length) blocks[ref] = waiting.map((x) => ({ ref: label(x), title: x.meta.title }))
+  }
+  return { today: today(ctx), meetings: rows, on, raised: raisedTopics(ctx), since, blocks }
 }
 
 const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")

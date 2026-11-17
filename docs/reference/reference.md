@@ -107,7 +107,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`ready`](#naima-ready) | gates | the open items that wait on nothing still open -- every `blocked-by` target settled -- most urgent first: what can start now; on a gate, only its items | nothing: it prints derived state, never stored |
 | [`order`](#naima-order) | gates | every open item in an order that puts it after everything it waits on (`blocked-by`), with its depth -- how many waits stand before it; items stuck on a cycle are listed apart | nothing: it prints derived state, never stored |
 | [`epic`](#naima-epic) | epics | each epic with its progress — n of m closed, what it waits for and whose hands — or put items in an epic and take them out | only an epic groups items and never itself, and its status follows its items: setting it against them is refused |
-| [`meeting`](#naima-meeting) | discussions | declare a meeting — who it needs, and a date or whenever they are present — put what needs them on its agenda, move it between meetings, set or clear its date, take it now, wait for it to be taken, and show the agenda | an item other than a discussion is on one meeting at most, a moved item is on that meeting only, and each change is noted on the item; a meeting is written to naima.json validated, as the next load reads it; a meeting is taken once until it closes, and each take wakes one waiting agent |
+| [`meeting`](#naima-meeting) | discussions | declare a meeting — who it needs, and a date or whenever they are present — put what needs them on its agenda, move it between meetings, set or clear its date, take it now, raise one thing that waits for the owner in the chat now, wait for either, and show the agenda | an item other than a discussion is on one meeting at most, a moved item is on that meeting only, and each change is noted on the item; a meeting is written to naima.json validated, as the next load reads it; a meeting is taken once until it closes, and each take wakes one waiting agent; a topic is raised once until the agent takes it, never once its item is closed, and each raise wakes one waiting agent, who drops it if its item closed since |
 | [`decide`](#naima-decide) | discussions | record the decision a discussion reached and mark it decided — a commit the trunk takes, during a meeting; a follow-up is filed only with the owner's yes | a discussion is decided only with its decision recorded; follow-up work is filed only with --consent, the owner's yes restated, and linked from the discussion |
 | [`spec`](#naima-spec) | planning | each specification: its current version, its drafts, and the open items that follow it; or revise one into its next version | a revision is a new spec item, its next version, that supersedes the old one; the old version is kept as it was |
 | [`decisions`](#naima-decisions) | planning | search the owner's decisions before asking: the settled ones whose title or page hold every word given, newest first | nothing: it only searches, so a settled question is looked up before it is asked again |
@@ -2302,9 +2302,9 @@ Options, each with the default it takes when nothing sets it:
 
 ### naima meeting
 
-Declare a meeting — who it needs, and a date or whenever they are present — put what needs them on its agenda, move it between meetings, set or clear its date, take it now, wait for it to be taken, and show the agenda.
+Declare a meeting — who it needs, and a date or whenever they are present — put what needs them on its agenda, move it between meetings, set or clear its date, take it now, raise one thing that waits for the owner in the chat now, wait for either, and show the agenda.
 
-**Enforces**: An item other than a discussion is on one meeting at most, a moved item is on that meeting only, and each change is noted on the item; a meeting is written to naima.json validated, as the next load reads it; a meeting is taken once until it closes, and each take wakes one waiting agent.
+**Enforces**: An item other than a discussion is on one meeting at most, a moved item is on that meeting only, and each change is noted on the item; a meeting is written to naima.json validated, as the next load reads it; a meeting is taken once until it closes, and each take wakes one waiting agent; a topic is raised once until the agent takes it, never once its item is closed, and each raise wakes one waiting agent, who drops it if its item closed since.
 
 ```sh
 naima meeting [<name>]
@@ -2315,6 +2315,7 @@ naima meeting move <meeting> <item>...
 naima meeting off <item>...
 naima meeting date <meeting> <YYYY-MM-DD|none>
 naima meeting take <meeting>
+naima meeting raise <item|helper:<branch>> [--about "<why it waits>"]
 naima meeting wait [<meeting>] [--timeout <seconds>]
 ```
 
@@ -2326,7 +2327,8 @@ naima meeting wait [<meeting>] [--timeout <seconds>]
 | `--skip` |  | --close: the packages the owner said not to queue now; comma-separated or repeated |
 | `--needs` |  | meeting new: who must be present, comma-separated; the owner when not given |
 | `--on` |  | meeting new: a fixed date, YYYY-MM-DD; without one, it takes place whenever the people it needs are present |
-| `--timeout` |  | meeting wait: give up after this many seconds, exit 1; without it, wait until a meeting is taken |
+| `--about` |  | meeting raise: why it waits for the owner, in one sentence, which the chat is told with the topic |
+| `--timeout` |  | meeting wait: give up after this many seconds, exit 1; without it, wait until a meeting is taken or a topic raised |
 
 Examples:
 
@@ -2340,6 +2342,7 @@ naima meeting off features/export-formats
 naima meeting date review 2026-11-20
 naima meeting date review none
 naima meeting take owner
+naima meeting raise discussions/plugin-names --about "Which names the plugins get"
 naima meeting wait
 naima meeting owner
 naima meeting owner --close
