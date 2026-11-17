@@ -1,1 +1,0 @@
-import{Hr as e,Tn as t,Vr as n}from"./chevron-right-CyI0fqWy.js";import{t as r}from"./App-Dr5fPEsY.js";function i(i,a){e(a,!0),t(a.store),r(i,{}),n()}export{i as default};
