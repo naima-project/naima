@@ -63,6 +63,7 @@ The open UI keeps everything it shows in one central store: a set of machines, s
   whether it was applied before asking again.
 
 A transition moves what the owner sees: call only what the owner would want shown, never one that starts work or changes the project.
+On Home, for example, `board.unfold` unfolds the goal's numbers under its ring and `board.fold` folds them again.
 
 ## Showing a place
 

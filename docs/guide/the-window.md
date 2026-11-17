@@ -211,23 +211,27 @@ a sheet over the bottom of the page until you close it. It follows the time filt
 
 ### Home
 
-Home is one column under the rail. It says first which moment it shows: Live, with the line, or the commit with its date, its line and its message. Each
-section is drawn as soon as what it needs has been read, and until all of it has, a quiet line says what is being read and how much, such as "Reading the
-schedule… 7 of 9". Then:
+Home is one board under the bar, with little text, about what matters now. At the top is the day, or, when the timeline
+shows a commit of the past, "As it was on" that day, with "Back to today". Then the goal nearest its expected date that
+still has work left: a ring with how much of it is done, its title, and one line with its expected date and how sure that
+date is, such as "Expected 2 January · 85% sure by 17 January" (its due date when there is no forecast yet). Beside it is
+a green dot for each agent at work, and how many there are in words. A click on the ring, or Enter on it, unfolds the
+goal's numbers under it: the items left to do, the items of the goal the agents hold, and how many items closed a day
+lately. Another click folds them; the page does not change.
 
-- **Waiting for you**: the items the owner's gate holds and the tests that wait for your proof. Each says in plain words what it is (a discussion to settle, a
-  decision, a bug, a feature, a test to run), what it asks of you (for example "Waiting for your decision: answer it so the work on it can go on"), and has one
-  button, "Open it", that shows the item; the first is the one amber button of the page. At a commit of the past the list is as it was then, with no buttons:
-  you act on the live view.
-- **Goals**: the next goals in goal order, only gates that are goals, each with its due date or version, whether it holds or how many items block it, and how
-  many of its open items are fixed and wait for proof; the goals after them in one line.
-- **Development lines**: which line the view shows, then main and every open line, with its goal, its last update, how far it lags main and what is fixed on it.
-- **Who is working**: each agent holding work, with its status and what it does now.
+Under a hairline, one sentence says what needs you: "Nothing needs you.", or, for example, "Three decisions need you.".
+It is a link: with one thing it opens that item, with several it takes the decisions one at a time, as the key d does.
 
-When a goal is chosen on the rail, Home shows that goal instead of what waits for you, in plain words: what it is (a release goal and its version, a goal and
-its due date, a step of a goal, or where a line lands on main), what blocks it, and what you can do about it; then its steps and the items it waits on, each
-saying what it is and whose hands it waits for, with "Open it". Home is built from the views' data, the same the commands print with `--json`: `naima gates`,
-`naima queue`, `naima claims`, `naima line list` and `naima summary`.
+Last is the river of the week. The commits of the last seven days on main are grey dots on one line, each dot the commits
+of a part of the week, larger when they changed more lines. The agents at work are short green lines arriving at today,
+each as long as the agent has held its work. Today is an orange line, and a dotted orange path leads to the goal's
+milestone, a ring with its short name and its expected day; the later goals are grey rings with their month.
+
+When a goal is chosen on the timeline, Home shows that goal in the ring. Each part is drawn as soon as what it needs has
+been read, and until the goal can be drawn a quiet line says what is being read, such as "Reading the schedule… 7 of 10".
+Home is built from the views' data, the same the commands print with `--json`: `naima gates`, `naima queue`, `naima
+claims`, `naima line list` and the schedule, and from the view `week`, the commits of main in the seven days before the
+moment shown, each with the lines it changed.
 
 ### Plan
 

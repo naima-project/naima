@@ -40,6 +40,7 @@ import { viewCache } from "./view-cache.ts"
 import { naimaBridge } from "./bridge.ts"
 import { mapView } from "./graphs.ts"
 import { projectsView } from "./projects.ts"
+import { weekView } from "./week.ts"
 import { browserCommand, openBrowser, type Opened, osName } from "./open.ts"
 import { filesKey, filesUrl, newToken, serve, type ServeOptions } from "./serve.ts"
 import { resumed, switchFile, writeSwitch } from "./switch.ts"
@@ -505,7 +506,7 @@ export default function ui(options: Record<string, unknown> = {}): Plugin {
       "Two MCP servers serve an agent on standard input and output, split by what they touch. `naima ui --mcp` (the UI stance's bridge-mcp.ts) drives the screen the way a person does, and imports only the UI stance's registry and its agent channel (agent-endpoint.ts): `show` (a screen, a plugin's view, an item, a commit or a line), `store`, `transitions` and `transition`, `read_page` and `screenshot` all ask every UI open on the project on the feed `agent` (the request `{ id, tool, args }` of the UI stance's agent protocol, answered on the command `agent-answer` as `{ id, ok, answer }` or `{ id, ok: false, error }`), one request at a time; a show opens a UI as naima hello opens one when none is, so that an agent shows the owner something in the UI instead of making a page of its own. `naima ui --mcp-tracker` never touches the screen: it reads Naima's core directly (the views, the lines' map, git) for `overview`, `items`, `gates`, `lines`, `history`, `work`, `metrics`, `meetings` and `view`, and runs the UI's actions with `action` and `run`. " +
       "At a session start `naima hello` opens the UI on the project by itself, in the background, and says so on its greeting's line, with the address in a browser: the desktop app when it is installed, else `naima ui` on a port it picks, which opens the browser; a UI already open on the project, named in a registry in the clone's Naima state folder that `naima ui` and the sidecar write too, is reused instead. It is off with the option `atStart` false, for a user with `{\"atStart\": false}` in the ui.json of their Naima config folder, and never on CI, with NAIMA_NO_UI or NAIMA_DATA set, nor in a worktree other than the clone's main checkout.",
     points: [viewsPoint, uiTabsPoint],
-    contributes: { "ui-views": [summaryView, boardView, itemView, mapView, projectsView] },
+    contributes: { "ui-views": [summaryView, boardView, itemView, mapView, projectsView, weekView] },
     commands: [uiCommand, nameStopCommand],
     options: [
       {
