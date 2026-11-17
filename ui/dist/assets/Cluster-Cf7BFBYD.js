@@ -1,5 +1,0 @@
-<<<<<<<< HEAD:ui/dist/assets/Cluster-CGxdmGit.js
-import{Br as e,En as t,Er as n,Hn as r,Sr as i,Zn as a,lr as o,sr as s}from"./chevron-right-CI1ixXBp.js";var c=o(`<div><!></div>`);function l(o,l){let u=t(l,`gap`,3,`sm`),d=t(l,`justify`,3,`start`),f=t(l,`align`,3,`center`);var p=c(),m=n(p);a(m,()=>l.children),e(p),i(()=>r(p,1,`cluster gap-${u()??``} justify-${d()??``} align-${f()??``}`,`svelte-2y2hj5`)),s(o,p)}export{l as t};
-========
-import{Br as e,En as t,Er as n,Hn as r,Sr as i,Zn as a,lr as o,sr as s}from"./chevron-right-CFt_rURx.js";var c=o(`<div><!></div>`);function l(o,l){let u=t(l,`gap`,3,`sm`),d=t(l,`justify`,3,`start`),f=t(l,`align`,3,`center`);var p=c(),m=n(p);a(m,()=>l.children),e(p),i(()=>r(p,1,`cluster gap-${u()??``} justify-${d()??``} align-${f()??``}`,`svelte-2y2hj5`)),s(o,p)}export{l as t};
->>>>>>>> origin/line/release-1.2:ui/dist/assets/Cluster-Cf7BFBYD.js

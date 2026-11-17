@@ -1,1 +1,0 @@
-import{Cn as e,Lr as t,Rr as n}from"./chevron-right-CFt_rURx.js";import r from"./Roadmap-B0TPSl05.js";function i(i,a){n(a,!0);let{roadmap:o}=e();r(i,{get screen(){return o},get onopen(){return a.onitem}}),t()}export{i as default};
