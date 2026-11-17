@@ -204,6 +204,9 @@ function programsIn(dir: string): string[] {
   }
 }
 
+/** The operating system by Deno's names, read from the process so that this file also loads under Node, which has no Deno global. */
+const hostOs = (): string => process.platform === "win32" ? "windows" : process.platform
+
 export const BROWSER_OPENER: Record<string, string> = { darwin: "open", windows: "rundll32", linux: "xdg-open" }
 
 /** The program `naima verify` may start besides the loaded contributions' `runs`: the verifier plugin's naima-codegen adapter's, found on PATH. Kept equal to that adapter's `CODEGEN_PROGRAM` by a test. */
@@ -213,7 +216,7 @@ export const VERIFY_PROGRAM = "naima-codegen"
  * naima-codegen as PATH finds it, and the file it links to, which `naima verify` may read: none when it is not on PATH.
  * On Windows naima-codegen.exe and naima-codegen.com are found too, and the bare script after them (GitHub issue #7).
  */
-function codegenFiles(os: string = Deno.build.os): string[] {
+function codegenFiles(os: string = hostOs()): string[] {
   const names = os === "windows" ? [`${VERIFY_PROGRAM}.exe`, `${VERIFY_PROGRAM}.com`, VERIFY_PROGRAM] : [VERIFY_PROGRAM]
   const out: string[] = []
   for (const name of names) {
@@ -236,7 +239,7 @@ function codegenFiles(os: string = Deno.build.os): string[] {
  * The programs `naima verify` may start for naima-codegen: the program by name; on Windows, when PATH holds only the
  * checkout's extensionless script, which Windows cannot run, Python, which the adapter starts it through (GitHub issue #7).
  */
-function codegenRuns(os: string = Deno.build.os): string[] {
+function codegenRuns(os: string = hostOs()): string[] {
   if (os !== "windows") return [VERIFY_PROGRAM]
   const files = codegenFiles(os)
   const exe = files.some((f) => /\.(exe|com)$/i.test(f))
