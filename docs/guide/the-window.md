@@ -227,6 +227,15 @@ of a part of the week, larger when they changed more lines. The agents at work a
 each as long as the agent has held its work. Today is an orange line, and a dotted orange path leads to the goal's
 milestone, a ring with its short name and its expected day; the later goals are grey rings with their month.
 
+The orange line of today can be dragged along the river, with the mouse, a trackpad or a finger, to see the whole of Home
+as it was at that moment: the ring and its percent, the goal's line and its expected day, the agents at work then and what
+needed you then, all read at the newest commit of main before the moment. The day at the top says "As it was on" that
+day, the ring and the agents' dots lose some of their colour, the line carries the day, and the commits after it fade.
+The arrow keys on the line, or the small ‹ and › beside the day at the top, move it a day back or on. "Back to today", or
+the quiet "now ›" where today stands on the river, brings Home back to now, the line gliding to its place. Each moment
+you drop the line at is a place in the browser's history, written in the address as `t=` and the time in seconds, so
+Back and Forward step through the moments seen and a reload shows the same one.
+
 When a goal is chosen on the timeline, Home shows that goal in the ring. Each part is drawn as soon as what it needs has
 been read, and until the goal can be drawn a quiet line says what is being read, such as "Reading the schedule… 7 of 10".
 Home is built from the views' data, the same the commands print with `--json`: `naima gates`, `naima queue`, `naima
