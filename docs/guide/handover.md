@@ -13,11 +13,12 @@ guessed number would hand over at the wrong time.
 When the context passes the limit, the coordinator does not stop at once. It goes through four steps, and you are part of the last one.
 
 1. **It finishes the work in progress.** Nothing new is started; workers keep running.
-2. **It checks that your decisions are recorded.** `naima handover --decisions` reads what you said in this session since the last
-   [session note](glossary.md#session-note) and lists every request or decision that has no trace in the tracker: no item, diary entry, decision or note
-   that shares its subject. The coordinator files what is missing, or says that a message needs no record (a thanks, thinking aloud), and runs the check again
-   until it passes. The check finds requests with no trace at all. It cannot tell whether a record says the right thing.
-3. **It proposes the handover to you** (`naima handover --propose`, which runs the check once more) in a short message: what is saved, that nothing is lost,
+2. **It reviews that your decisions are recorded.** `naima handover --decisions` asks the coordinator itself, which holds the whole conversation, to go
+   through every request and decision you made since the last [session note](glossary.md#session-note). For each it writes where it was recorded (an item,
+   a decision, a diary entry or a note) or "missing", files what is missing, and then records the review, signed against the checklist that keeps private
+   details out of the tracker. Naima does not guess which of your messages are requests. It only refuses to go on without a review recorded after the last
+   thing you said, so a request made after the review sends the coordinator back to review again.
+3. **It proposes the handover to you** (`naima handover --propose`, which is refused until such a review exists) in a short message: what is saved, that nothing is lost,
    and how the new chat continues. You answer yes, or ask to go on a while. If you go on (`naima handover --postpone`), the coordinator carries on and asks again
    once the context has grown by another 5% of the window.
 4. **After your yes it hands over** (`naima handover --agreed`). That writes a session note with what is in flight (every claim, the branches waiting to be

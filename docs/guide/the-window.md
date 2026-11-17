@@ -173,6 +173,22 @@ Each screen keeps its own choice, and the window remembers it for your next visi
 An agent can set the same choice through the UI's MCP server (`naima-ui`), with the store's `filters` transitions: `pick`, `drop`, `search`, `clear`, `within`, `show`
 and `hide`.
 
+### Lists, links and the item drawer
+
+Bugs, Features and the Requirements of Specs open on their answer: how many bugs are to fix now, how many features are
+being built, how many requirements are proven of how many, then the other states with their counts, and one sentence
+saying what the screen lists. Each count shows only its rows in the table under it, and pressed again shows them all; the
+same choice is the row of chips marked "Show only". Grouping, the columns shown, closer rows and saved views are in the
+Arrange menu beside the search. A feature built and not yet landed on the main line is listed as built and waiting to
+land, as a fixed bug is.
+
+What a screen names is a link. A release or goal in a row, in the item drawer or on All projects opens the Plan with that
+goal's Ready? panel, which says what it still owes; a worker holding an item opens Workers; an item named by its
+reference in a description or a note (bugs/<slug> and the like) opens in the drawer. A row opens its item in the drawer,
+a panel on the right: its kind and where it stands, its release, priority and dates in plain words, why it waits, what
+it is about, its links and its history, with "Open its page" at the top. The drawer closes when another screen is shown.
+Every item's address is `#item/<type>/<slug>`, so a link opened in a new tab shows that item's page.
+
 ### Days, on the left of every screen
 
 Every screen has a Days button at the top left. It opens a time panel down the left side of the window, and closes it again; the window remembers whether you
@@ -214,7 +230,9 @@ saying what it is and whose hands it waits for, with "Open it". Home is built fr
 ### Metrics
 
 Metrics shows the project's [metrics](metrics-and-budgets.md) at the moment the window shows. At the top are the key numbers, one card each: the value, its
-change, the date of its record and a small chart of its history. Live, a card shows the newest record and its change since the record before. At a commit of the
+change, the date of its record and a small chart of its history. Live, a card shows the newest record and its change since the record before, named by
+that record's day ("+23 since 26 Oct"). Above the cards one sentence says whether the project is getting healthier: how many metrics got better, worse or
+stayed steady since the first day the charts show. At a commit of the
 past it shows the value then and its change against live, and says "recorded at this commit" or, when that commit has no record, "no record at this commit,
 nearest:" with the date of the last record at or before it, the one that holds then. Clicking a card shows its metric in the large chart below. Beside that
 chart is the list of every metric with its value, its change and a small chart; picking one shows it in the large chart. Every chart runs along the trunk's
@@ -226,14 +244,14 @@ its log, or the earlier run it reused because nothing the suite reads had change
 metric becomes a card with `"card": true` in its declaration, or with its place among the cards, `"card": 2`, and goes under a heading of the list with
 `"group"`; with no card marked, the first six metrics with records are the cards. The cards with a place come first, in that order, and the others after them in
 the list's order, which is the order of the declarations. The screen names a metric by its `"label"`, such as `"Function size, mean"`, or else by its declared
-name written as words, `function-size` as Function size. Below, the screen says how many of the newest commits have no record, with the main action Record
-metrics, which runs `naima metrics run --record` on the commit checked out, under `naima run` with a budget of two hours, and says how the run goes until it
+name written as words, `function-size` as Function size. Right under how old the numbers are, the screen says how many of the newest commits have no record,
+with the main action Record metrics, which runs `naima metrics run --record` on the commit checked out, under `naima run` with a budget of two hours, and says how the run goes until it
 ends; one recording runs at a time, and when it succeeds the window reads the new records. Its data is the metrics view's, whose `timeline` places every record
 on the trunk; at a commit it gives each metric's record at that commit, read from the records as they are now, since a commit's own tree holds none of the
 records made after it. How the screen reads a moment is a small model of its own, checked like the shell's: an answer that arrives after the moment changed is
 dropped and the new moment read. So is Record metrics: it starts one recording at a time, asks for its run's state one request at a time and only while it runs,
 and reads again when it succeeded. The record of a point is the metrics plugin's metric-run view, which the bridge's `data` command reads with the metric and
-the commit as its query.
+the commit as its query. At the end, one line says how many tests and properties fail and links to Failed tests, which lists them.
 
 The views of the earlier window are tabs: the summary, the gates, what is next, the claims, the boards, the session notes and each item with its evidence. Every
 view's data is the same data the matching command prints with `--json`, and the new interface reads it from there.
