@@ -1,0 +1,1 @@
+import{Mr as e,Nr as t,vn as n}from"./chevron-right-A_5nYqaq.js";import r from"./Roadmap-LKqzMqxe.js";function i(i,a){t(a,!0);let{roadmap:o}=n();r(i,{get screen(){return o},get onopen(){return a.onitem}}),e()}export{i as default};
