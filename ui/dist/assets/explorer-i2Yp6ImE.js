@@ -1,1 +1,0 @@
-import"./switcher-B7V_wskl.js";import{t as e}from"./mount-DuUjSOhE.js";e(document.getElementById(`app`));
