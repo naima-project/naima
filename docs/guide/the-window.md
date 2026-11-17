@@ -182,8 +182,8 @@ same choice is the row of chips marked "Show only". Grouping, the columns shown,
 Arrange menu beside the search. A feature built and not yet landed on the main line is listed as built and waiting to
 land, as a fixed bug is.
 
-What a screen names is a link. A release or goal in a row, in the item drawer or on All projects opens the Plan with that
-goal's Ready? panel, which says what it still owes; a worker holding an item opens Workers; an item named by its
+What a screen names is a link. A release or goal in a row, in the item drawer or on All projects opens the Plan with
+What's left on that goal unfolded; a worker holding an item opens Workers; an item named by its
 reference in a description or a note (bugs/<slug> and the like) opens in the drawer. A row opens its item in the drawer,
 a panel on the right: its kind and where it stands, its release, priority and dates in plain words, why it waits, what
 it is about, its links and its history, with "Open its page" at the top. The drawer closes when another screen is shown.
@@ -197,6 +197,8 @@ line with a white station for each day, newest first, and under each day its mom
 bugs filed and fixed that day; on Features, what was asked for, started and shipped; on Failed tests, the tests that started failing and passed again; on
 Metrics, the recorded runs; on Goals, the steps of the goals done; the other screens list the diary's days. At the top is Now, with Home's sections when you are
 on Home, and under it each helper at work as a small robot, with what it works on and its state in plain words: working, asking you, idle or done.
+Pointing at a helper lights its line, and its items on the Plan's What's left; a click on its robot lists what it holds on the goal open there, or opens its
+lane on Workers.
 
 Click a station and the page goes there: on a screen with its own moments, to that bug, feature, test, chart or goal (a folded group opens first, and an item
 the screen does not show opens on its own page); on Home and the other screens the Diary opens at that day or moment. "See it then", beside a day, shows the
@@ -226,6 +228,22 @@ When a goal is chosen on the rail, Home shows that goal instead of what waits fo
 its due date, a step of a goal, or where a line lands on main), what blocks it, and what you can do about it; then its steps and the items it waits on, each
 saying what it is and whose hands it waits for, with "Open it". Home is built from the views' data, the same the commands print with `--json`: `naima gates`,
 `naima queue`, `naima claims`, `naima line list` and `naima summary`.
+
+### Plan
+
+The Plan draws every goal with a date or a forecast on one time axis, its name and its dates in a column on the left. A goal has one expected date, the same
+on Now, on the Plan and in What's left, with how sure it is beside it: "Expected Sat 2 Jan, 85 % sure by Sun 17 Jan". The date is the day by which half of
+many replays of the last four weeks' pace would have finished what is left; the second day is when most of them would have. "How this date is worked out"
+says so in What's left.
+
+Clicking a goal's name or its bar unfolds What's left on that goal under the chart, and clicking it again folds it; a goal with no date yet, under Now, Next
+and Later, unfolds it there. It opens with a summary: how many items are left, how many are still to do, how many an agent is working on, and how many are
+done but wait for the test or check that proves them, then one row for each kind of item (bugs, to-dos, features, requirements, tests and the rest) with a bar
+split by those states. Every number is a link: it opens the list with exactly the items it counts. Under the summary are the few that matter first, each
+group only when it has items: what only you can do or prove, what was marked fixed but fails its proof, what agents hold now, what is urgent and open, and what
+an agent could do that no agent holds yet; then the chain of items waiting on each other that decides the date. The List button shows every item left, its
+kind first on each row, then its state and who does it. An agent holding an item is named with its robot and the colour of its line in the Days panel:
+pointing at it lights that line, and clicking it lists what it holds on the goal.
 
 ### Metrics
 
