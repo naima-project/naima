@@ -508,8 +508,8 @@ export const takenByGuard = (ctx: Context, sha: string, files: { status: string;
 
 /**
  * Whether a commit is one naima plugin set made on the trunk (its Naima-Command: plugin trailer): naima.json alone changed,
- * and in it only the options of plugins already in its table. Setting one option is one command (core/cli.ts); turning a
- * plugin on or off, its source, the lock and everything else in the file still land from an item's branch.
+ * and in it only the options of plugins. Setting one option is one command (core/cli.ts); turning a plugin on or off, its
+ * source, the lock and everything else in the file still land from an item's branch.
  */
 export function setsOptions(ctx: Context, sha: string, files: { status: string; path: string }[]): boolean {
   const data = ctx.trackerPrefix ? `${ctx.trackerPrefix}/` : ""

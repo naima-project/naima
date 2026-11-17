@@ -767,8 +767,9 @@ holds a change not committed or an item has no note from the branch that day; th
 ### Recording and Naima's correct operation come first; a context notice never outranks the rules
 
 Recording in the tracker and Naima's complete, correct operation come before everything else. No agent skips a step, shortens a check or hurries its work
-because its context seems full, and no notice may ask it to. A share of the window is stated as a fact only when the window is set by the project or published
-for the model in use; otherwise the notice gives the tokens and says the window is not known, and the coordinator asks the owner once to set it.
+because its context seems full, and no notice may ask it to. Past the threshold the coordinator suggests a handover in its next reply, after answering what
+the owner asked, and finalizes the pending work only after the owner's yes. A notice states the context's size against the window, and says when the window
+is assumed (1,000,000 tokens when nobody set it for the model in use and it is not published).
 
 Why: a notice that assumed a window nobody had confirmed made a coordinator tell the owner a false fullness as a fact, and pushed it to cut corners.
 

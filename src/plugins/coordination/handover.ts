@@ -1,12 +1,12 @@
 // The coordinator's handover to a fresh session: a coordinator session degrades
-// as its context fills, so it measures how full the context is and, past a
-// threshold, hands over, in steps the owner is part of: it finishes the work in
-// progress, reviews that every request and decision of the owner is recorded (the
-// coordinator itself goes through the conversation it holds; nothing here guesses
-// what counts as a request), proposes the handover to the owner in a reassuring
-// message and, once the owner agrees, records where its transcript is kept,
-// writes the session note, gives the coordinator role up and prints what starts
-// its successor (features/coordinator-hands-over-fresh-session-when-context).
+// as its context fills, so it measures how large the context is and, past a
+// threshold, suggests a handover to the owner, in its next reply, after answering
+// what the owner asked. On the owner's yes it finalizes the pending work (lands or
+// hands off what is in flight, goes through the conversation it holds and records
+// every request and decision of the owner, nothing here guesses what counts as
+// one), then records where its transcript is kept, writes the session note, gives
+// the coordinator role up and prints what starts its successor. On a no it carries
+// on and suggests it again later (features/coordinator-hands-over-fresh-session-when-context).
 //
 // The role is a record in the clone's state folder, shared by its worktrees and
 // never committed:
@@ -143,8 +143,14 @@ export interface Retired {
   at: string
 }
 
-/** Where the old coordinator is in handing over, once past the threshold (or asked to): the states of the model after reach_threshold. */
-export type Phase = "finishing" | "checking" | "proposed" | "postponed"
+/**
+ * Where the old coordinator is in handing over, once past the threshold (or asked to), the states of the model after
+ * reach_threshold: due to suggest it in its next reply, proposed to the owner, agreed by the owner (finalizing), postponed.
+ */
+export type Phase = "due" | "proposed" | "agreed" | "postponed"
+const PHASES: readonly string[] = ["due", "proposed", "agreed", "postponed"]
+/** A record written before the owner-first order: its phases before the proposal are a suggestion still due. */
+const OLD_PHASES: Readonly<Record<string, Phase>> = { finishing: "due", checking: "due" }
 
 export interface Handing {
   phase: Phase
@@ -163,6 +169,8 @@ export interface Handing {
   reviewed?: Review
   /** When the handover was proposed to the owner: what the owner says after it is the reply. */
   proposedAt?: string
+  /** When the owner said yes: the finalizing began. */
+  agreedAt?: string
 }
 
 /** The coordinator's review of the owner's requests. */
@@ -182,8 +190,6 @@ export interface Role {
   handing?: Handing
   /** On the successor: the session it took the role from, its note and the private copy of its transcript. */
   predecessor?: { session: string; at: string; note: string; transcript?: string }
-  /** The models whose window the coordinator was told to ask the owner for, once each ("?" when the transcript named none). */
-  asked?: string[]
 }
 
 /** The role record's file; null outside git. */
@@ -227,10 +233,10 @@ export function readRole(root: string): Role | null {
       ? { from: p["from"], at: p["at"], note: p["note"], ...(typeof p["transcript"] === "string" ? { transcript: p["transcript"] } : {}) }
       : undefined
     const h = v["handing"]
-    const handing: Handing | undefined = isObject(h) && ["finishing", "checking", "proposed", "postponed"].includes(String(h["phase"])) &&
-        typeof h["since"] === "string"
+    const phase = isObject(h) ? (PHASES.includes(String(h["phase"])) ? h["phase"] as Phase : OLD_PHASES[String(h["phase"])]) : undefined
+    const handing: Handing | undefined = isObject(h) && phase && typeof h["since"] === "string"
       ? {
-        phase: h["phase"] as Phase,
+        phase,
         since: h["since"],
         ...(typeof h["transcript"] === "string" ? { transcript: h["transcript"] } : {}),
         ...(typeof h["tokens"] === "number" ? { tokens: h["tokens"] } : {}),
@@ -240,13 +246,13 @@ export function readRole(root: string): Role | null {
           ? { reviewed: { at: h["reviewed"]["at"], list: h["reviewed"]["list"] } }
           : {}),
         ...(typeof h["proposedAt"] === "string" ? { proposedAt: h["proposedAt"] } : {}),
+        ...(typeof h["agreedAt"] === "string" ? { agreedAt: h["agreedAt"] } : {}),
       }
       : undefined
     const d = v["predecessor"]
     const predecessor = isObject(d) && typeof d["session"] === "string" && typeof d["at"] === "string" && typeof d["note"] === "string"
       ? { session: d["session"], at: d["at"], note: d["note"], ...(typeof d["transcript"] === "string" ? { transcript: d["transcript"] } : {}) }
       : undefined
-    const asked = Array.isArray(v["asked"]) ? v["asked"].filter((m): m is string => typeof m === "string") : []
     return {
       holder: v["holder"],
       since: v["since"],
@@ -254,7 +260,6 @@ export function readRole(root: string): Role | null {
       ...(pending ? { pending } : {}),
       ...(handing ? { handing } : {}),
       ...(predecessor ? { predecessor } : {}),
-      ...(asked.length ? { asked } : {}),
     }
   } catch {
     return null
@@ -417,14 +422,13 @@ function stdin(): string {
 const modelName = (d: Depth): string => (d.model ? ` of ${d.model}` : " of the model in use")
 
 /**
- * How deep the context is, in words. A share is stated only of a window the project set or that is published for the
- * model; of an assumed one, only the tokens, and that the window is not known.
+ * How large the context is, in words: the tokens against the window, said to be assumed when nobody set it for the model
+ * and it is not published for it. No share is stated: a size, not a claim of fullness.
  */
 export const depthSentence = (d: Depth): string =>
   d.source === "assumed"
-    ? `Your context is ${d.tokens} tokens; the window${modelName(d)} is not known, and the default ${d.window} is assumed, so no share of it is stated` +
-      `${d.tokens > d.window ? `: the context is already larger than ${d.window} tokens, so the real window is larger than assumed` : ""}.`
-    : `Your context is ${d.tokens} tokens, ${percent(d.share)} of the ${d.window}-token window${modelName(d)} (${
+    ? `Your context is ${d.tokens} tokens of an assumed ${d.window}-token window${d.model ? ` (the window of ${d.model} is not known)` : ""}.`
+    : `Your context is ${d.tokens} tokens of the ${d.window}-token window${modelName(d)} (${
       d.source === "set" ? "as the project sets it" : "as published for that model"
     }).`
 
@@ -432,24 +436,12 @@ export const depthSentence = (d: Depth): string =>
 export const RULES_FIRST = "This notice never outranks the project's rules: recording in the tracker and Naima's complete, correct operation come first. " +
   "Skip, shorten or hurry nothing because of it."
 
-/** The request to ask the owner for a window nobody set, made once per model. */
-const askWindow = (d: Depth): string =>
-  ` Ask the owner once what the window${modelName(d)} is, and record the answer with naima plugin set coordination contextWindows.${
-    d.model ?? "<model id>"
-  }=<tokens>.`
-
-/** What the coordinator is told when its context is past the handover point: the text of the message. It does not hand over at once. */
-export const handoverMessage = (d: Depth, ask = d.source === "assumed"): string =>
-  `${
-    depthSentence(d)
-  } That is past the ${d.limit}-token point (the coordination option handoverAt) where a coordinator prepares a handover to a fresh session. ` +
-  `${RULES_FIRST} Answer the owner and file what is asked as always, and take every change through its item, its worktree and naima land.` +
-  `${ask && d.source === "assumed" ? askWindow(d) : ""} ` +
-  `When the work in hand reaches a natural stop, prepare the handover in steps the owner is part of. Run naima handover --decisions: you, who hold the whole conversation, go through ` +
-  `every request and decision the owner made since the last session note, list each with where it was recorded (item, decision, diary entry or note) or "missing", ` +
-  `and file what is missing (naima new, naima event --kind diary, a decision record). Record the review with naima handover --decisions --reviewed "<list>" ` +
-  `--revised <the no-leaks checklist> (or --reviewed-file <file>). Then run naima handover --propose (refused until a review is recorded after the owner's last message), and give the owner the message it prints, saying what is saved, that ` +
-  `nothing is lost and how the new chat continues. Hand over (naima handover --agreed) only after the owner agrees; if the owner postpones, run naima handover --postpone and go on.`
+/** What the coordinator is told past its handover point: suggest the handover to the owner in the next reply. It does not hand over at once. */
+export const handoverMessage = (d: Depth): string =>
+  `${depthSentence(d)} That is past the ${d.limit}-token point (the coordination option handoverAt) where a coordinator suggests a handover to a fresh chat. ` +
+  `${RULES_FIRST} In your next reply to the owner, after answering what the owner asked, suggest the handover: naima handover --propose prints the ` +
+  `suggestion to give. If the owner says yes, run naima handover --agreed: it lists what to finalize first, and you hand over only once all of it is done. ` +
+  `If the owner says no, run naima handover --postpone and carry on; you are told again once the context has grown.`
 
 /** What a worker, or any session that does not hold the coordinator role, is told past its own bound: finish in full, write its state, end. */
 export const workerMessage = (d: Depth): string =>
@@ -458,7 +450,7 @@ export const workerMessage = (d: Depth): string =>
   `Finish the step in progress in full, with its test, its record in the tracker and its commit. Then write your state into each item you claim, ` +
   `naima note <item> "<what is done and committed where, what is left, the next step>", commit it, and run naima claim --at-bound. ` +
   `Then end, and report to whoever started you that you stopped at your bound${
-    d.source === "assumed" ? ", and that the window of your model is not known, for the owner to be asked" : ""
+    d.source === "assumed" ? ", and that the window of your model is assumed" : ""
   }. The coordinator continues the item with a fresh worker; you are not the coordinator, and nothing here is about handing its role over.`
 
 /** Whom a context notice addresses: the session that holds the coordinator role, or any other. */
@@ -506,11 +498,8 @@ export function watch(
     return null
   }
   if (h && depth.tokens < (h.tokens ?? 0) + Math.floor((h.window ?? depth.window) * REMIND_SHARE)) return null
-  const key = depth.model ?? "?"
-  const asked = role.asked ?? []
-  const ask = depth.source === "assumed" && !asked.includes(key)
   const next: Handing = {
-    phase: "finishing",
+    phase: "due",
     since: now,
     tokens: depth.tokens,
     window: depth.window,
@@ -518,8 +507,8 @@ export function watch(
     ...(h?.reviewed ? { reviewed: h.reviewed } : {}),
     ...((transcript ?? h?.transcript) ? { transcript: (transcript ?? h?.transcript)! } : {}),
   }
-  writeRole(ctx.root, { ...role, handing: next, ...(ask ? { asked: [...asked, key] } : {}) })
-  return { depth, text: handoverMessage(depth, ask), to: "coordinator" }
+  writeRole(ctx.root, { ...role, handing: next })
+  return { depth, text: handoverMessage(depth), to: "coordinator" }
 }
 
 const cut = (text: string, width: number): string => (text.length > width ? `${text.slice(0, width - 1)}…` : text)
@@ -569,13 +558,10 @@ function ownerSaid(ctx: Context, deps: HandoverDeps, role: Role, session: string
   return { since, times }
 }
 
-/** Is the recorded review made after the owner's last message (before the proposal, once there is one)? */
+/** Is the recorded review made after the owner's last message? */
 function reviewCurrent(role: Role, said: Said): boolean {
   const r = role.handing?.reviewed
-  if (!r) return false
-  const p = role.handing?.proposedAt
-  const spoken = p ? said.times.filter((t) => t <= p) : said.times
-  return !spoken.some((t) => t > r.at)
+  return !!r && !said.times.some((t) => t > r.at)
 }
 
 /** What the coordinator is asked to do: the review itself, which only it, holding the conversation, can make. */
@@ -627,18 +613,27 @@ function requireSigned(ctx: Context): void {
   }
 }
 
-/** What the owner is told, to relay: what is saved, that nothing is lost, how the new chat continues. */
-function proposalText(lines: number, depth: string | undefined): string[] {
+/** The suggestion the owner is given in the coordinator's next reply: what a handover does, and the owner's choice. */
+function proposalText(lines: number, size: string | undefined): string[] {
   return [
-    "Give the owner this message, then wait for the answer. Hand over only after the owner agrees (naima handover --agreed); if the owner wants to go on, naima handover --postpone.",
+    "Give the owner this suggestion in your reply, after answering what the owner asked, and go on with the conversation. If the owner says yes, run naima handover --agreed; if no, naima handover --postpone.",
     "",
-    `> ${depth ? `This conversation is ${depth} full, and a fresh chat keeps me sharp. ` : "A fresh chat keeps me sharp. "}` +
-    `Everything is saved: your requests and decisions of this session are in the tracker (I went through each and every one has a record), ` +
-    `${lines} piece${
-      lines === 1 ? "" : "s"
-    } of work in flight will be written in a session note, and the full text of this conversation is kept privately in the project, never committed. ` +
-    `Nothing is lost. To continue, you open a new chat in the project's main checkout and paste the message I give you; the new coordinator reads the note and ` +
-    `this conversation and carries on where I stopped. Shall we do it now, or do you want to go on a while?`,
+    `> ${size ? `This conversation has reached ${size}. ` : ""}A fresh chat keeps me sharp, so I suggest we continue in a new one. ` +
+    `If you agree, I first finish what is pending: I make sure each of your requests and decisions of this session is recorded in the tracker, ` +
+    `land or hand off the ${lines} piece${lines === 1 ? "" : "s"} of work in flight, and write a session note; the full text of this conversation is kept ` +
+    `privately in the project, never committed. Then you open a new chat in the project's main checkout and paste the message I give you, and the new ` +
+    `coordinator carries on where I stopped. Nothing is lost. Shall we, or do you want to go on for now?`,
+  ]
+}
+
+/** What finalizing takes, after the owner's yes: the steps before the role passes. */
+function finalizeText(): string[] {
+  return [
+    "The owner said yes: finalize the pending work, each step in full, then hand over. Skip, shorten or hurry nothing.",
+    "1. Bring the work in flight to a stop: land what is ready (naima land), and for what is not, have its worker write its state into the item's notes and end (naima claim --at-bound), or hand it off as a queued item.",
+    '2. Go through the conversation you hold: every request and decision of the owner since the last session note is filed (naima new, naima event --kind diary, a decision record), then record the review with naima handover --decisions --reviewed "<list>" --revised <the no-leaks checklist>.',
+    "3. Hand over with naima handover --done: it keeps a private copy of this conversation, writes the session note with what is still in flight and gives the role up. It is refused until a review is recorded after the owner's last message.",
+    "If the owner says more meanwhile, answer and record it, and review again; if the owner changes their mind, naima handover --postpone.",
   ]
 }
 
@@ -662,11 +657,11 @@ const positive = (v: string | undefined, what: string, fallback: number): number
 export const handoverCommand = (deps: HandoverDeps): Command => ({
   name: "handover",
   says:
-    "hand the coordinator role over to a fresh session, in steps the owner is part of: --decisions asks the coordinator to review every request and decision of the owner against the tracker and records the review (--reviewed), --propose (refused until a review is recorded after the owner's last message) gives the message for the owner, --agreed (after the owner agrees) writes the session note, keeps the conversation's text for the successor and gives the role up; --postpone when the owner wants to go on; --read reads the predecessor's conversation; --status says how deep the context is, --watch is what the turn end runs",
+    "hand the coordinator role over to a fresh session, in steps the owner is part of: past the threshold the coordinator's next reply suggests it (--propose prints the suggestion); on the owner's yes (--agreed) it finalizes the pending work: lands or hands off what is in flight, and --decisions asks it to review every request and decision of the owner against the tracker and records the review (--reviewed); then --done keeps the conversation's text for the successor, writes the session note and gives the role up; --postpone on the owner's no; --read reads the predecessor's conversation; --status says how large the context is, --watch is what the turn end runs",
   enforces:
-    "only the session that holds the coordinator role hands over (naima hello in the main checkout takes it); the proposal comes only after a signed review of the owner's requests, recorded after the owner's last message, and the handover only after the owner has agreed to it (--agreed) and the transcript's private copy is made; the handover writes the session note first, with every claim, the branches waiting to land, the runs and the open meeting, and gives the role up only once it is written; the session that gave it up is refused by land and by the push check, whatever it is told, and a worker's session is not affected; no context notice states a share of a window nobody set or published, asks anyone to skip, shorten or hurry anything, or addresses a session that does not hold the role as the coordinator",
+    "only the session that holds the coordinator role hands over (naima hello in the main checkout takes it); the suggestion comes first, and the finalizing only after the owner's yes (--agreed); the handover (--done) only after that yes and a signed review of the owner's requests recorded after the owner's last message, and once the transcript's private copy is made; the handover writes the session note first, with every claim, the branches waiting to land, the runs and the open meeting, and gives the role up only once it is written; the session that gave it up is refused by land and by the push check, whatever it is told, and a worker's session is not affected; no context notice states a share of a window nobody set or published, asks anyone to skip, shorten or hurry anything, or addresses a session that does not hold the role as the coordinator",
   usage:
-    'handover --decisions [--reviewed "<list>" | --reviewed-file <file>] [--no-transcript] | handover --propose [--no-transcript] | handover --postpone [--tokens <n>] | handover --agreed [--ack "<line>"] [--note "<what else is in hand>"] [--no-transcript] | handover --read [--find <words> | --from <n>] [--last <n>] [--width <n>] | handover --status | handover --watch [--hook <tool>] [--tokens <n>] [--session <id>] [--model <id>] | handover --check [<what>] | handover --take',
+    'handover --propose | handover --agreed | handover --postpone [--tokens <n>] | handover --decisions [--reviewed "<list>" | --reviewed-file <file>] [--no-transcript] | handover --done [--ack "<line>"] [--note "<what else is in hand>"] [--no-transcript] | handover --read [--find <words> | --from <n>] [--last <n>] [--width <n>] | handover --status | handover --watch [--hook <tool>] [--tokens <n>] [--session <id>] [--model <id>] | handover --check [<what>] | handover --take',
   options: [
     {
       name: "--decisions",
@@ -682,13 +677,20 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
     {
       name: "--propose",
       says:
-        "after a review is recorded since the owner last spoke: print the message for the owner that proposes the handover, saying what is saved and how the new chat continues",
+        "print the suggestion the coordinator gives the owner in its next reply, after answering what the owner asked: what a handover does, that the pending work is finished first and nothing is lost, and the owner's choice",
     },
-    { name: "--postpone", says: "the owner wants to go on: leave the handing over, to be reminded once the context has grown by 5% of the window" },
     {
       name: "--agreed",
+      says: "the owner said yes to the suggestion: record it and print what finalizing takes before the handover (--done)",
+    },
+    {
+      name: "--postpone",
+      says: "the owner said no, or not now: carry on, to be suggested again once the context has grown by 5% of the window",
+    },
+    {
+      name: "--done",
       says:
-        "the owner agreed to the proposal: write the session note, keep a private copy of this session's transcript, give the role up and print the successor's start",
+        "after the owner's yes and a review recorded since the owner last spoke: keep a private copy of this session's transcript, write the session note with what is still in flight, give the role up and print the successor's start",
     },
     {
       name: "--no-transcript",
@@ -704,11 +706,11 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
     { name: "--width", says: "with --read: the characters of each message shown", default: "600" },
     { name: "--ack", says: "the acknowledgement line the project's rules ask a session note to carry, as naima pass --ack" },
     { name: "--note", says: "more for the successor, written in the session note after what is in flight: what the open conversation stands on" },
-    { name: "--status", says: "say who holds the role, where it is in handing over, how deep the context is and the limit, or that the host gives no measure" },
+    { name: "--status", says: "say who holds the role, where it is in handing over, the windows and the shares, and whether the host gives a measure" },
     {
       name: "--watch",
       says:
-        "what the turn-end hook runs: when this session holds the role and its context is past the handover point, the first time, print the message that tells it how to prepare a handover; when it is another session (a worker, a side session) past its own bound (workerAt), once, the message that tells it to finish its step in full, write its state into its items' notes and end (as the tool's turn-end decision with --hook, as a NAIMA-MESSAGE line otherwise); each states a share of the window only when the window is set or published for the model, and says the rules come first; nothing in every other case",
+        "what the turn-end hook runs: when this session holds the role and its context is past the handover point, the first time, print the message that tells it to suggest a handover to the owner in its next reply; when it is another session (a worker, a side session) past its own bound (workerAt), once, the message that tells it to finish its step in full, write its state into its items' notes and end (as the tool's turn-end decision with --hook, as a NAIMA-MESSAGE line otherwise); each states the context's size against the window, said to be assumed when nobody set it for the model and it is not published, and says the rules come first; nothing in every other case",
     },
     { name: "--hook", says: "with --watch: the tool whose hook runs it, read from standard input", default: "claude-code" },
     { name: "--tokens", says: "with --watch: the context size, instead of the one the hook input gives; with --postpone: the size to remind from" },
@@ -718,9 +720,10 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
     { name: "--take", says: "take the role for the current session, as naima hello does in the main checkout" },
   ],
   examples: [
-    "handover --decisions",
     "handover --propose",
-    'handover --agreed --ack "Acknowledge: Quiet mode on"',
+    "handover --agreed",
+    "handover --decisions",
+    'handover --done --ack "Acknowledge: Quiet mode on"',
     'handover --read --find "threshold"',
     "handover --status",
     "handover --check publishing the site",
@@ -744,6 +747,7 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
       propose: { type: "boolean" },
       postpone: { type: "boolean" },
       agreed: { type: "boolean" },
+      done: { type: "boolean" },
       "no-transcript": { type: "boolean" },
       read: { type: "boolean" },
       find: { type: "string" },
@@ -753,7 +757,7 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
     })
     const decisions = bool(p, "decisions") || str(p, "reviewed") !== undefined || str(p, "reviewed-file") !== undefined
     const modes = [
-      ...["status", "watch", "check", "take", "propose", "postpone", "agreed", "read"].filter((m) => bool(p, m)),
+      ...["status", "watch", "check", "take", "propose", "postpone", "agreed", "done", "read"].filter((m) => bool(p, m)),
       ...(decisions ? ["decisions"] : []),
     ]
     if (modes.length > 1) throw usageError(this)
@@ -848,7 +852,7 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
       )
       return 0
     }
-    // Everything else is the old coordinator's, in order: check, propose, then (the owner agreeing) hand over.
+    // Everything else is the old coordinator's, in order: the suggestion, the owner's yes or no, the finalizing, the handover.
     if (!session) throw new NaimaError("no session here: naima hello starts one, and only the session that holds the coordinator role hands over")
     if (!role || role.holder !== session) {
       throw new NaimaError(
@@ -866,18 +870,21 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
       ...(role.handing?.reviewed ? { reviewed: role.handing.reviewed } : {}),
       ...(role.handing?.transcript ? { transcript: role.handing.transcript } : {}),
       ...(role.handing?.tokens !== undefined ? { tokens: role.handing.tokens } : {}),
+      ...(role.handing?.window !== undefined ? { window: role.handing.window } : {}),
+      ...(role.handing?.proposedAt ? { proposedAt: role.handing.proposedAt } : {}),
+      ...(role.handing?.agreedAt ? { agreedAt: role.handing.agreedAt } : {}),
       ...h,
     })
     if (decisions) {
       const text = str(p, "reviewed")
       const file = str(p, "reviewed-file")
       if (text !== undefined && file !== undefined) throw usageError(this)
+      const phase = role.handing?.phase ?? "due"
       if (text === undefined && file === undefined) {
         const said = ownerSaid(ctx, deps, role, session, true)
-        writeRole(ctx.root, { ...role, handing: handing({ phase: "checking" }) })
         for (const l of reviewTask(said.since, said)) ctx.out(l)
         const r = role.handing?.reviewed
-        if (r && reviewCurrent(role, said)) ctx.out(`A review recorded ${r.at} is current: the owner has not spoken since; naima handover --propose is next.`)
+        if (r && reviewCurrent(role, said)) ctx.out(`A review recorded ${r.at} is current: the owner has not spoken since.`)
         return 0
       }
       let body: string
@@ -890,32 +897,27 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
       } else body = text!
       const list = checkedReview(body)
       requireSigned(ctx)
-      writeRole(ctx.root, { ...role, handing: { ...handing({ phase: "checking" }), reviewed: { at: now, list } } })
+      writeRole(ctx.root, { ...role, handing: { ...handing({ phase }), reviewed: { at: now, list } } })
       ctx.out(
         `decisions review recorded (${list.split("\n").filter((l) => l.trim()).length} line${
           list.split("\n").filter((l) => l.trim()).length === 1 ? "" : "s"
         }, signed against the no-leaks checklist)`,
       )
-      ctx.out("Next: finish what is in progress, then naima handover --propose. If the owner says more first, review again.")
+      ctx.out(
+        phase === "agreed"
+          ? "Next: once the work in flight is landed or handed off, naima handover --done. If the owner says more first, record it and review again."
+          : "The handover is suggested to the owner first (naima handover --propose); this review counts once the owner says yes and says nothing more.",
+      )
       return 0
     }
     if (bool(p, "propose")) {
-      const said = ownerSaid(ctx, deps, role, session, blind)
-      if (!reviewCurrent(role, said)) {
-        writeRole(ctx.root, { ...role, handing: handing({ phase: "checking" }) })
-        ctx.out(
-          role.handing?.reviewed
-            ? `Not proposed: the owner spoke after the review recorded ${role.handing.reviewed.at}; review again.`
-            : "Not proposed: no review of the owner's requests is recorded.",
-        )
-        for (const l of reviewTask(said.since, said)) ctx.out(l)
-        return 1
-      }
       const lines = inFlight(ctx, deps.claimsData(ctx)).length
       writeRole(ctx.root, { ...role, handing: handing({ phase: "proposed", proposedAt: now }) })
-      // A share is said to the owner only of a window the project set or that is published: never of an assumed one.
-      const known = role.handing?.share
-      for (const l of proposalText(lines, known !== undefined ? percent(known) : undefined)) ctx.out(l)
+      const h = role.handing
+      const size = h?.tokens !== undefined && h.window !== undefined
+        ? `${h.tokens} tokens of ${h.share === undefined ? "an assumed" : "its"} ${h.window}-token window`
+        : undefined
+      for (const l of proposalText(lines, size)) ctx.out(l)
       return 0
     }
     if (bool(p, "postpone")) {
@@ -923,30 +925,42 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
       if (given !== undefined && !/^\d+$/.test(given)) throw new NaimaError(`--tokens takes a whole number, got ${JSON.stringify(given)}`)
       const tokens = given !== undefined ? Number(given) : role.handing?.tokens
       writeRole(ctx.root, { ...role, handing: { ...handing({ phase: "postponed" }), ...(tokens !== undefined ? { tokens } : {}) } })
-      ctx.out(`handover postponed: carry on with the owner; you are reminded once the context has grown by ${percent(REMIND_SHARE)} of the window`)
+      ctx.out(`handover postponed: carry on with the owner; it is suggested again once the context has grown by ${percent(REMIND_SHARE)} of the window`)
       return 0
     }
-    if (!bool(p, "agreed")) {
+    if (bool(p, "agreed")) {
+      if (role.handing?.phase !== "proposed" && role.handing?.phase !== "agreed") {
+        throw new NaimaError(
+          `the handover was not suggested to the owner yet (${
+            role.handing ? `it is ${role.handing.phase}` : "it has not begun"
+          }): give the owner the suggestion naima handover --propose prints, and record the yes with --agreed only after it`,
+        )
+      }
+      writeRole(ctx.root, { ...role, handing: handing({ phase: "agreed", agreedAt: role.handing.agreedAt ?? now }) })
+      for (const l of finalizeText()) ctx.out(l)
+      return 0
+    }
+    if (!bool(p, "done")) {
       throw new NaimaError(
-        "a handover needs the owner's agreement first: finish the work in progress, naima handover --decisions and record the review, naima handover --propose, " +
-          "give the owner its message, and run naima handover --agreed once the owner agrees (naima handover --postpone if the owner wants to go on)",
+        "a handover is suggested to the owner first: naima handover --propose prints the suggestion; on the owner's yes, naima handover --agreed lists what " +
+          "to finalize, and naima handover --done hands over once it is done (naima handover --postpone on a no)",
       )
     }
-    if (role.handing?.phase !== "proposed") {
+    if (role.handing?.phase !== "agreed") {
       throw new NaimaError(
-        `the handover was not proposed to the owner yet (${
-          role.handing ? `it is at ${role.handing.phase}` : "it has not begun"
-        }): naima handover --propose first, after the review is recorded with naima handover --decisions --reviewed`,
+        `the owner has not said yes to a handover (${
+          role.handing ? `it is ${role.handing.phase}` : "it has not begun"
+        }): suggest it with naima handover --propose, record the yes with naima handover --agreed, finalize, then naima handover --done`,
       )
     }
-    // The owner's reply is the first message after the proposal; any more is something new, and needs a new review and proposal.
     const said = ownerSaid(ctx, deps, role, session, blind)
-    const after = role.handing.proposedAt ? said.times.filter((t) => t > role.handing!.proposedAt!).length : 0
-    if (!reviewCurrent(role, said) || after > 1) {
-      writeRole(ctx.root, { ...role, handing: handing({ phase: "checking" }) })
+    if (!reviewCurrent(role, said)) {
       ctx.out(
-        "Not handed over: the owner said more since the proposal. Review the new requests (naima handover --decisions), run naima handover --propose again and have the owner agree again.",
+        role.handing.reviewed
+          ? `Not handed over: the owner spoke after the review recorded ${role.handing.reviewed.at}; record what the owner said and review again.`
+          : "Not handed over: no review of the owner's requests is recorded.",
       )
+      for (const l of reviewTask(said.since, said)) ctx.out(l)
       return 1
     }
     // The transcript's private copy, before anything else passes: the successor reads the predecessor's whole conversation.

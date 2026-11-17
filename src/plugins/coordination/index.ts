@@ -1546,7 +1546,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       {
         name: "contextWindow",
         says:
-          "the window, in tokens, of a model neither named in contextWindows nor published: a positive whole number, set by the owner. Unset, 200000 is assumed, and every notice says the window is not known and states no share of it",
+          "the window, in tokens, of a model neither named in contextWindows nor published: a positive whole number, set by the owner. Unset, 1000000 is assumed, and every notice says the window is assumed",
       },
       {
         name: "handoverAt",

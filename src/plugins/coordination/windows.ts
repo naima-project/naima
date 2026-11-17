@@ -1,6 +1,6 @@
-// The context window of the model a session runs on, and where that number comes from. A fullness share is stated as a
-// fact only when the window is: set by the project for that model, or published for the model id the transcript names.
-// Otherwise the default is assumed, and every text that uses it says so.
+// The context window of the model a session runs on, and where that number comes from. A share of the window is stated
+// as a fact only when the window is: set by the project for that model, or published for the model id the transcript
+// names. Otherwise the window is assumed, and every text that uses it says so.
 //
 // Where the window can be read. The turn-end hook's input names the session's transcript and nothing about the model; the
 // transcript's assistant messages carry the model id the request ran on (the API's id, never a context variant), and their
@@ -9,8 +9,8 @@
 // published for that id (below), the project's one number for any other model (contextWindow), and else the default,
 // assumed and said to be.
 
-/** The window assumed when nothing names one: said as assumed wherever it is used. */
-export const DEFAULT_WINDOW = 200_000
+/** The window assumed when nothing names one, the owner's choice: the window of the current models, said as assumed wherever it is used. */
+export const DEFAULT_WINDOW = 1_000_000
 
 /**
  * The windows published for model ids, in tokens. Only ids whose window is one number are listed: an id offered with a

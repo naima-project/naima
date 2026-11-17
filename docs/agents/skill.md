@@ -24,9 +24,10 @@ Naima ships an agent skill, [`skills/naima/SKILL.md`](../../skills/naima/SKILL.m
   update is applied only after the owner says yes, followed by the checks and one commit ([update Naima](../guide/update-naima.md)).
 - **Relay Naima's messages.** When a naima command prints a `NAIMA-MESSAGE` line, or a turn-end hook stops the agent with what to say, the agent tells the owner
   at once, says when it is urgent, and never acknowledges a message itself ([messages to the owner](messages.md)).
-- **Hand over when told, with the owner.** A coordinator whose context is past the limit finishes its work, goes through every request of the owner and records a signed review of where each is recorded
-  (`naima handover --decisions --reviewed`), proposes the handover to the owner (`--propose`) and, once the owner agrees (`--agreed`), passes the successor's first message to
-  the owner and does no more writing ([handing over](handover.md)).
+- **Suggest a handover when told, and finalize only on the owner's yes.** A coordinator whose context is past the threshold suggests the handover in its next
+  reply, after answering what the owner asked (`naima handover --propose`). On a yes (`--agreed`) it lands or hands off what is in flight, records a signed
+  review of where each request of the owner is recorded (`naima handover --decisions --reviewed`), hands over (`--done`), passes the successor's first message
+  to the owner and does no more writing; on a no (`--postpone`) it carries on ([handing over](handover.md)).
 - **Read the project's rules.** `naima rules --audience agents`, before anything else: the project's own rules, kept as [items](../guide/glossary.md#item) of
   its tracker ([read the project's rules](read-the-project-rules.md)).
 - **Work by the rules and the flows.** Read [the rules](../guide/rules.md), then the [flow](README.md#the-flows) that applies.

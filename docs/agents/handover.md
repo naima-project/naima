@@ -1,40 +1,37 @@
 # Handing over the coordinator role
 
-The coordinator's context degrades as it fills. When Naima tells you at the end of a turn that your context is past the point where a handover is prepared
-(a message that starts "Your context is N tokens" and names the option `handoverAt`), you are the coordinator and you prepare the handover, in the steps
-below. A message that names your bound and the option `workerAt` is for a worker: see [a worker's bound](#a-workers-bound).
+The coordinator's context degrades as it fills. When Naima tells you at the end of a turn that your context is past the point where a handover is suggested
+(a message that starts "Your context is N tokens" and names the option `handoverAt`), you are the coordinator and you suggest a handover to the owner, in the
+steps below. A message that names your bound and the option `workerAt` is for a worker: see [a worker's bound](#a-workers-bound).
 
 The notice never outranks the project's rules. Recording in the tracker and Naima's complete, correct operation come first: skip, shorten or hurry nothing
 because of it, answer the owner and file what is asked as always, and take every change through its item, its worktree and `naima land`.
 
-The notice states a share of the window only when the window is known: set by the project for the model in use, or published for that model. Otherwise it
-says the tokens and that the window is not known, with the default assumed, and asks you once to ask the owner for it; record the answer with
-`naima plugin set coordination contextWindows.<model id>=<tokens>`, which on the trunk commits its own change. Never tell the owner a fullness the notice
-did not state.
+The notice states the context's size against the window of the model in use: the window the project sets for it (`contextWindows.<model id>`), the window
+published for it, or else 1,000,000 tokens, said to be assumed. It states no share of fullness, and you tell the owner none either.
 
 ## What you do
 
-You do not hand over at once. Past that point:
+1. **Suggest it in your next reply.** Answer what the owner asked first. Then run `naima handover --propose` and give the owner the suggestion it prints:
+   what a handover does, that the pending work is finished first and nothing is lost, and the choice. Go on with the conversation meanwhile.
+2. **On a no**, run `naima handover --postpone` and carry on. You are told again once the context has grown by 5% of the window.
+3. **On a yes**, run `naima handover --agreed`. It records the yes and lists what finalizing takes, which you then do, each step in full:
+   - bring the work in flight to a stop: land what is ready (`naima land`); for what is not, have its worker write its state into the item's notes and end
+     (`naima claim --at-bound`), or leave it as a queued item;
+   - go through the conversation you hold: every request and decision the owner made since the last session note, one line each naming where it was
+     recorded (item, decision, diary entry or note) or `missing`. File what is missing (`naima new`, a diary entry with
+     `naima event <today> "<what, why>" --kind diary`, a decision record). Then record the review, signed against the no-leaks checklist
+     (`docs/agents/NOLEAKS.md`; check the text against it first): `naima handover --decisions --reviewed "<list>" --revised <path of the checklist>`, or
+     `--reviewed-file <file>` for a long one. A review with a line still `missing`, an empty one or an unsigned one is refused.
+4. **Hand over** with `naima handover --done`, with `--ack "<line>"` when the project's rules ask a session note for one, and `--note "<text>"` for what the
+   open conversation stands on. It is refused until a review is recorded after the owner's last message: if the owner said more, record it and review again.
+   It keeps a private copy of this session's transcript, writes the session note with what is still in flight (claims, branches waiting to land, runs, the
+   open meeting), gives the role up and prints the first message for the successor. Give the owner that message, and say the new session starts in the main
+   checkout. Then land nothing, push nothing and publish nothing.
 
-1. Carry on with the work in hand, each step in full, until it reaches a natural stop. Workers keep running.
-2. Run `naima handover --decisions`. It prints the task and judges nothing: you hold the whole conversation, so you go through every request and decision
-   the owner made since the last session note and write one line for each, naming where it was recorded (item, decision, diary entry or note) or `missing`.
-   File what is missing (`naima new`, a diary entry with `naima event <today> "<what, why>" --kind diary`, a decision record). Then record the review, one
-   line per request each naming its record, signed against the no-leaks checklist (`docs/agents/NOLEAKS.md`; check the text against it first):
-   `naima handover --decisions --reviewed "<list>" --revised <path of the checklist>`, or `--reviewed-file <file>` for a long one. A review with a line still
-   `missing`, an empty one or an unsigned one is refused. Without a readable transcript the time of the owner's last message is unknown: repeat with
-   `--no-transcript`, having gone through the conversation as above.
-3. Run `naima handover --propose`. It is refused (exit 1) until a review is recorded after the owner's last message; if the owner spoke since, review again.
-   Then it prints a short reassuring message for the owner: what is saved, that nothing is lost, how the
-   new chat continues. Give the owner that message and wait for the answer.
-4. If the owner agrees, run `naima handover --agreed`, with `--ack "<line>"` when the project's rules ask a session note for one, and `--note "<text>"` for what the
-   open conversation stands on. It needs the review still to hold (the owner's reply to the proposal is the only message after it; anything more means a new review and a new proposal), writes the session note with every claim, the branches
-   waiting to land, the runs and the open meeting, keeps a private copy of this session's transcript, gives the role up and prints the first message for the
-   successor. Give the owner that message, and say the new session starts in the main checkout. Then land nothing, push nothing and publish nothing.
-5. If the owner wants to go on, run `naima handover --postpone`. You are told again once the context has grown by 5% of the window.
-
-`naima handover` without `--agreed` refuses, and so does `--agreed` before a proposal, and after more from the owner than a reply since the proposal: the review
-and the proposal come again. The owner may also ask for a handover before that point; the same steps apply.
+Without a readable transcript the time of the owner's last message is unknown: repeat `--done` with `--no-transcript`, having gone through the conversation as
+above. The owner may also ask for a handover before the threshold; the same steps apply, from the suggestion on. If the owner changes their mind while you
+finalize, `naima handover --postpone`.
 
 ## When you are the successor
 
@@ -62,5 +59,5 @@ well inside a worker's bound, so that this is rare.
 - Only the session that holds the role hands over. Other sessions are told about their own bound, and `naima handover` refuses them.
 - The turn-end hook measures the context only for hosts that report it. Without a measure nothing is said, and nothing is guessed.
 - The window is read per model: the option `contextWindows` (by model id), then the window published for the model id the transcript names, then the option
-  `contextWindow` for any other model, else 200000 assumed and said to be. The shares are `handoverAt` and `workerAt`; the default of each is 0.6.
+  `contextWindow` for any other model, else 1,000,000 assumed and said to be. The shares are `handoverAt` and `workerAt`; the default of each is 0.6.
 - `naima handover --check` exits 1 for a session that has handed over: a script that publishes calls it first.

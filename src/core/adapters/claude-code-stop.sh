@@ -30,8 +30,8 @@ esac
 # (naima handover): handover-at for any model, and handover-at-models, one "<model id> <tokens>" line per model whose
 # window it knows, each the lower of the coordinator's handover point and a worker's bound. The last assistant message of
 # the transcript carries the context size (its input, cache-creation and cache-read tokens) and the model id, found here
-# with grep alone; past that model's limit, naima handover --watch says whether this session is the coordinator (told how
-# to prepare a handover) or another session (told about its own bound), which blocks the stop. No limit file, no
+# with grep alone; past that model's limit, naima handover --watch says whether this session is the coordinator (told to
+# suggest a handover to the owner) or another session (told about its own bound), which blocks the stop. No limit file, no
 # transcript, no usage: nothing.
 limit=$(cat "$common/naima/tick/handover-at" 2>/dev/null)
 transcript=$(printf '%s' "$input" | sed -n 's/.*"transcript_path": *"\([^"]*\)".*/\1/p' | head -n 1)
