@@ -284,6 +284,12 @@ watches: HEAD, the branches and tags, and the tracker's files by size and time. 
 once, then reads everything again a moment later, and shows what changed meanwhile as a live change. On a large project this is what keeps the first screen
 from waiting for every view to be computed.
 
+A tab shows its content within a second of the click the first time, and within a fifth of a second when you open it again. The server computes each view
+and each plugin's tab in a few worker threads started with it, never on the thread that answers the page, so a slow one holds nothing else. A moment after
+the first screen is drawn, while you look at it, the window reads ahead what you have not opened yet among the screens whose code it holds (All projects,
+the slowest to compute, among them) and the plugins' tabs the navigation offers. A screen or tab opened again draws at once from what it showed last, its own
+and never another tab's, and reads again only when the project has changed.
+
 What a live change brings is shown as it arrives. New cards, rows, items and stations fade in with a slight rise, what went away fades out, and what changed
 place slides to its new one. In the Days panel a new day or moment grows into its space, so the line of days lengthens as the project fills. Only what is new
 since the last reading moves: opening the window, changing screen or choosing a filter shows the page at once. When your system asks for reduced motion, every

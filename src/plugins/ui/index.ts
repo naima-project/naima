@@ -286,6 +286,10 @@ export async function runUi(ctx: Context, flags: { open: boolean; port?: number;
   const token = back?.token ?? flags.token ?? newToken()
   const key = filesKey(token)
   const tabs = allTabs(tabsOf(ctx), viewsOf(ctx))
+  // The views are rendered off the serving thread, a few at a time, so that a slow one holds no other request; its
+  // workers start now, each opening the project, while the browser opens the page.
+  const pool = viewPool({ root: ctx.root, data: ctx.trackerRoot, program: ctx.program })
+  pool.warm()
   let port = 0
   let switched = () => {}
   const switching = new Promise<number>((done) => (switched = () => done(UI_SWITCH)))
@@ -295,8 +299,7 @@ export async function runUi(ctx: Context, flags: { open: boolean; port?: number;
     fileUrl: (tab, rel) => filesUrl(key, tab, rel),
     // A UI opened again on a large project draws from the views kept on disk, then reads them again.
     cache: viewCache(ctx),
-    // The views are rendered off the serving thread, a few at a time, so that a slow one holds no other request.
-    pool: viewPool({ root: ctx.root, data: ctx.trackerRoot, program: ctx.program }),
+    pool,
     switcher: {
       can: file !== null,
       to: (project) => {

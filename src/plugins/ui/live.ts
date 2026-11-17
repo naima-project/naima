@@ -11,8 +11,9 @@
 // model develop/models/ui/shell/model/core.mcrl2 in the workshop.
 
 import { readdirSync, statSync } from "node:fs"
+import { readdir, stat } from "node:fs/promises"
 import { join } from "node:path"
-import { type Context, gitOrNull, headCommit } from "../../core/api.ts"
+import { type Context, gitOrNull, headCommit, runGitAsync } from "../../core/api.ts"
 
 /** What changed: HEAD moved (a new commit, a checkout), a branch or tag moved, the tracker's files changed. */
 export type ChangeKind = "commit" | "branch" | "items"
@@ -58,6 +59,33 @@ function filesSignature(dir: string): string {
   return out.sort().join("\n")
 }
 
+/** filesSignature, read without holding the thread: each folder's entries stated together, the server answering
+ * requests meanwhile. On the workshop's tracker (some 7 000 files) the walk takes 100 to 500 ms. */
+async function filesSignatureAsync(dir: string): Promise<string> {
+  const out: string[] = []
+  const walk = async (d: string): Promise<void> => {
+    let entries
+    try {
+      entries = await readdir(d, { withFileTypes: true })
+    } catch {
+      return
+    }
+    const files: Promise<void>[] = []
+    const dirs: string[] = []
+    for (const e of entries) {
+      const p = join(d, e.name)
+      if (e.isDirectory()) dirs.push(p)
+      else if (e.isFile()) {
+        files.push(stat(p).then((s) => void out.push(`${p}\t${s.size}\t${s.mtimeMs}`), () => {}))
+      }
+    }
+    await Promise.all(files)
+    for (const sub of dirs) await walk(sub)
+  }
+  await walk(dir)
+  return out.sort().join("\n")
+}
+
 /** What the watch compares: HEAD, the branches and tags, the tracker's files by size and time. The views' cache keeps
  * each answer with it (view-cache.ts). */
 export function snapshot(ctx: Context): Snapshot {
@@ -66,6 +94,16 @@ export function snapshot(ctx: Context): Snapshot {
     refs: gitOrNull(ctx.root, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads", "refs/tags") ?? "",
     items: filesSignature(ctx.trackerRoot),
   }
+}
+
+/** The snapshot, read without holding the thread: what the UI's server uses, so that a request is never kept waiting
+ * by a walk of the tracker's files. */
+export async function snapshotAsync(ctx: Context): Promise<Snapshot> {
+  const [refs, items] = await Promise.all([
+    runGitAsync(ctx.root, ["for-each-ref", "--format=%(refname) %(objectname)", "refs/heads", "refs/tags"], 30_000).then((r) => (r.ok ? r.out.trim() : "")),
+    filesSignatureAsync(ctx.trackerRoot),
+  ])
+  return { head: headCommit(ctx.root) ?? "", refs, items }
 }
 
 const kindsBetween = (a: Snapshot, b: Snapshot): ChangeKind[] => [
@@ -78,7 +116,8 @@ export interface Watch {
   stop(): void
 }
 
-/** Watch the project, every `interval` ms; call `changed` once per settled change. */
+/** Watch the project, every `interval` ms; call `changed` once per settled change. Each look is read without holding
+ * the thread (snapshotAsync), one at a time: the next is timed from the end of the one before. */
 export function watchProject(
   ctx: Context,
   changed: (c: Change) => void,
@@ -86,27 +125,31 @@ export function watchProject(
 ): Watch {
   const interval = opts.interval ?? 1000
   const debounce = opts.debounce ?? 300
-  let last = snapshot(ctx)
+  // The first look, taken as the watch starts: a change made from then on is said.
+  let last: Promise<Snapshot> | Snapshot = snapshotAsync(ctx)
   let timer: ReturnType<typeof setTimeout> | null = null
   let stopped = false
-  const tick = (): void => {
+  const later = (f: () => Promise<void>, ms: number): void => {
     if (stopped) return
-    const now = snapshot(ctx)
-    if (!kindsBetween(last, now).length) {
-      timer = setTimeout(tick, interval)
-      return
-    }
+    timer = setTimeout(() => void f().catch(() => later(tick, interval)), ms)
+  }
+  const tick = async (): Promise<void> => {
+    if (stopped) return
+    const before = await last
+    const now = await snapshotAsync(ctx)
+    if (stopped) return
+    if (!kindsBetween(before, now).length) return later(tick, interval)
     // Something moved: wait for it to settle, then say every kind that changed since the last event.
-    timer = setTimeout(() => {
+    later(async () => {
+      const settled = await snapshotAsync(ctx)
       if (stopped) return
-      const settled = snapshot(ctx)
-      const kinds = kindsBetween(last, settled)
+      const kinds = kindsBetween(before, settled)
       last = settled
       if (kinds.length) changed({ kinds, head: settled.head || null, at: ctx.now().toISOString() })
-      timer = setTimeout(tick, interval)
+      later(tick, interval)
     }, debounce)
   }
-  timer = setTimeout(tick, interval)
+  later(tick, interval)
   return {
     stop() {
       stopped = true

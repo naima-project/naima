@@ -39,13 +39,13 @@
 // Every command reads the files when it is called, so the UI is live.
 
 import { resolve } from "node:path"
-import { askHostsInBackground, type Context, gitReadScope, type KnownProject, knownProjects } from "../../core/api.ts"
+import { askHostsInBackground, type Context, gitReadScope, headCommit, type KnownProject, knownProjects } from "../../core/api.ts"
 import { ACTIONS, actionArgv, actionOf, naimaEntry, runCommand } from "./actions.ts"
 import { showCall } from "./agent-endpoint.ts"
 import { AtCache, commitOf } from "./at.ts"
 import { knownAt, recentProjects } from "./switch.ts"
 import type { Feeds, Handlers, Json } from "./bridge-handler.ts"
-import { type Change, snapshot, watchProject } from "./live.ts"
+import { type Change, snapshotAsync, watchProject } from "./live.ts"
 import { stampOf, type ViewCache } from "./view-cache.ts"
 import { PoolDown, type ViewPool } from "./view-pool.ts"
 import { type AgentRequest, askAgent, awaitAnswer, listenShows, openUis, type Place, requestId, taken, type UiRequest, writeAnswer } from "./show.ts"
@@ -138,13 +138,14 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
   }
   // The views' cache on disk: each answer kept with the project's stamp, the one the change feed watches. The stamp is
   // read once, then again only after SHARE_MS or once the feed saw a change.
+  // The stamp is read without holding the serving thread (a walk of the tracker's files takes 100 to 500 ms on a large
+  // one), and every read asked meanwhile waits for the same walk.
   const cache = opts.cache ?? null
-  let stamped: { at: number; stamp: string } | null = null
-  const stampNow = (): string => {
+  let stamped: { at: number; stamp: Promise<string> } | null = null
+  const stampNow = (): Promise<string> => {
     const now = performance.now()
     if (!stamped || now - stamped.at >= SHARE_MS) {
-      const s = snapshot(ctx)
-      stamped = { at: now, stamp: stampOf({ head: s.head, refs: s.refs, items: s.items }) }
+      stamped = { at: now, stamp: snapshotAsync(ctx).then((s) => stampOf({ head: s.head, refs: s.refs, items: s.items })) }
     }
     return stamped.stamp
   }
@@ -177,15 +178,16 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       }
     }
     if (moved) {
-      const c: Change = { kinds: ["items"], head: snapshot(ctx).head || null, at: ctx.now().toISOString() }
+      const c: Change = { kinds: ["items"], head: headCommit(ctx.root) || null, at: ctx.now().toISOString() }
       for (const l of listeners) l(c)
     }
   }
   /** A view's data, live, shared with the same read asked again; `from` is the live context, read again when absent. */
   const live = (view: UiView, params: Record<string, string[]>, from?: Context): Promise<unknown> =>
     kept(`view ${view.name} ${JSON.stringify(params)}`, async () => {
-      const here = async () => (await view.render(params, from ?? momentOf(null))).data
+      const here = async () => json((await view.render(params, from ?? momentOf(null))).data)
       if (!opts.pool || (from !== undefined && from !== ctx)) return await here()
+      // A worker's answer is plain JSON data already: it is not copied again here.
       try {
         return await opts.pool.render(view.name, params)
       } catch (e) {
@@ -196,17 +198,17 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
   /** A live read shared as `share` does, and answered from the views' cache while the project's stamp holds. */
   const kept = (key: string, compute: () => Promise<unknown>): Promise<unknown> => {
     const read = async (): Promise<unknown> => {
-      const stamp = cache ? stampNow() : ""
-      // One view, or the rail's map, asks each git question once (gitReadScope).
-      const data = json(await gitReadScope(compute))
+      const stamp = cache ? await stampNow() : ""
+      // One view, or the rail's map, asks each git question once (gitReadScope). What compute answers is plain JSON data.
+      const data = await gitReadScope(compute)
       if (cache) cache.put(key, stamp, data)
       return data
     }
-    return share(key, () => {
-      const hit = cache ? cache.get(key, stampNow()) : undefined
+    return share(key, async () => {
+      const hit = cache ? cache.get(key, await stampNow()) : undefined
       if (hit === undefined) return read()
       recheckSoon(key, read)
-      return Promise.resolve(hit)
+      return hit
     })
   }
   /** What a command prints with --json, through the view whose data it is when there is one: what the metro reads. */
@@ -263,7 +265,8 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       }
       // A view that places a commit itself is read from the files as they are, with the commit as its parameter.
       if (sha !== null && view.moments) params["at"] = [sha]
-      if (sha === null) return json(await live(view, params))
+      // A live read is plain JSON data already (live), shared by every ask: it is not copied for each.
+      if (sha === null) return (await live(view, params)) as Json
       const from = view.moments ? momentOf(null) : atCache.get(ctx, sha)
       return json((await view.render(params, from)).data)
     },
@@ -280,12 +283,25 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       if (q && typeof q === "object" && !Array.isArray(q)) {
         for (const [k, v] of Object.entries(q)) if (typeof v === "string") query[k] = [v]
       }
-      const content = await tab.render({ sub, query }, momentOf(text(args["at"])))
+      const at = text(args["at"])
+      // Live, a tab is read as a view is: shared with the same read asked again, answered from the views' cache while the
+      // project's stamp holds, and rendered off the serving thread, so that a slow tab (the summary takes seconds on a
+      // large tracker) holds no other request and no file of the page.
+      const content = (at !== null ? await tab.render({ sub, query }, momentOf(at)) : await kept(`tab ${tab.name} ${JSON.stringify({ sub, query })}`, async () => {
+        if (opts.pool) {
+          try {
+            return await opts.pool.renderTab(tab.name, { sub, query })
+          } catch (e) {
+            if (!(e instanceof PoolDown)) throw e
+          }
+        }
+        return json(await tab.render({ sub, query }, momentOf(null)))
+      })) as UiTabContent
       const problem = contentProblem(content)
       if (problem) throw new Error(`the ${tab.name} tab's content ${problem}`)
       return shown(tab, sub, content)
     },
-    metro: async () => json(await kept("metro", () => metroData(momentOf(null), viaViews))),
+    metro: async () => (await kept("metro", async () => json(await metroData(momentOf(null), viaViews)))) as Json,
     action: async (args) => {
       shared.clear()
       stamped = null
