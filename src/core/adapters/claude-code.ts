@@ -45,7 +45,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import type { AgentAdapter, AgentHook, HookInstall, PluginHookSettings, PluginHookSync } from "./index.ts"
-import { claudeCodeTranscripts, contextTokensFromInput, transcriptPathOf } from "./claude-code-transcripts.ts"
+import { claudeCodeTranscripts, contextModelFromInput, contextTokensFromInput, transcriptPathOf } from "./claude-code-transcripts.ts"
 
 const SETTINGS = ".claude/settings.json"
 const ID = "claude-code"
@@ -329,6 +329,7 @@ export const claudeCode: AgentAdapter = {
   greeting: (shown, context) => JSON.stringify({ systemMessage: shown, hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: context } }),
   stopFor: (reason) => JSON.stringify({ decision: "block", reason }),
   contextTokens: contextTokensFromInput,
+  contextModel: contextModelFromInput,
   transcriptPath: transcriptPathOf,
   // A session-start hook may write shell lines to the file CLAUDE_ENV_FILE names: every later command of the session runs with them.
   pinSession: (env, session) => {

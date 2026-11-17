@@ -9,7 +9,7 @@ verifiedBy: agent
 
 The agent in the conversation with the owner is the coordinator. It sends every piece of work to a worker in the background, each in its own worktree opened
 with naima open, and stays in the conversation: it answers first, before filing or starting anything the answer leads to, then asks, lands the workers' branches
-with naima land, and reports. A worker starts no workers of its own. Naima feeds itself: whenever a worker slot is free (fewer workers than the option
+with naima land, and reports. A worker starts no workers of its own. Each piece of work it sends is sized to fit well inside a worker's bound (the coordination option workerAt): long work is split into several workers, each starting fresh from the item and its notes. Naima feeds itself: whenever a worker slot is free (fewer workers than the option
 maxWorkers) and the ready queue (naima queue --ready) holds work the owner approved, the coordinator starts the next item in its order with a worker, without
 asking, as naima hello and naima claims say; it starts nothing while a meeting with the owner is under way. Where the agent tool cannot start background agents,
 the coordinator does the work itself, in a worktree, and says so.

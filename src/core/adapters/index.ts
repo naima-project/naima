@@ -100,6 +100,12 @@ export interface AgentAdapter {
    * does not say. A tool without this has no measure, and naima handover says so rather than guess.
    */
   contextTokens?(hookInput: string): number | undefined
+  /**
+   * The model id the agent's last request ran on, from the same input (the transcript's last assistant message names it);
+   * undefined when it does not say. Naima reads the window of that model from the project's options and the windows it
+   * knows, and says when it only assumes one.
+   */
+  contextModel?(hookInput: string): string | undefined
   /** The path of the session's transcript, from what the tool's turn-end hook is given on standard input; undefined when the input does not say. */
   transcriptPath?(hookInput: string): string | undefined
   /**

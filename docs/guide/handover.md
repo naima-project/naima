@@ -6,13 +6,20 @@ anything. The only thing you do is open the new session when the coordinator ask
 
 ## How it works
 
-At the end of each turn Naima checks how full the coordinator's context is, in tokens, against the size of the model's window. This works where the tool that
-runs the agent reports the usage of its last answer, as Claude Code does. For a tool that doesn't, Naima says it has no measure and does nothing, because a
-guessed number would hand over at the wrong time.
+At the end of each turn Naima checks how full the coordinator's context is, in tokens, against the window of the model it runs on. This works where the tool
+that runs the agent reports the usage of its last answer, as Claude Code does, whose transcript also names the model. For a tool that doesn't, Naima says it
+has no measure and does nothing, because a guessed number would hand over at the wrong time.
 
-When the context passes the limit, the coordinator does not stop at once. It goes through four steps, and you are part of the last one.
+The window comes from the project when you set it for that model, or from the window published for the model (the current Claude models have a
+1,000,000-token window). When neither says, Naima assumes 200,000 tokens and says so: the notice gives the tokens and that the window is not known, never a
+percentage, and the coordinator asks you once what the window is.
 
-1. **It finishes the work in progress.** Nothing new is started; workers keep running.
+The notice never outranks the project's rules. Recording everything in the tracker and Naima working completely and correctly come first, so the coordinator
+skips, shortens and hurries nothing because its context is getting full.
+
+When the context passes the handover point, the coordinator does not stop at once. It goes through four steps, and you are part of the last one.
+
+1. **It carries on with the work in hand** until it reaches a natural stop, each step done in full; workers keep running.
 2. **It reviews that your decisions are recorded.** `naima handover --decisions` asks the coordinator itself, which holds the whole conversation, to go
    through every request and decision you made since the last [session note](glossary.md#session-note). For each it writes where it was recorded (an item,
    a decision, a diary entry or a note) or "missing", files what is missing, and then records the review, signed against the checklist that keeps private
@@ -31,22 +38,33 @@ coordinator can look up what the note leaves open before asking you to repeat an
 publishes, because only one session at a time is the [single writer](rules.md#no-locks-the-coordinator-is-the-single-writer). Workers keep running and are not
 affected, since they never held the role.
 
+## Workers stay short
+
+A worker fills its context too, and it has no handover of its own. So the coordinator gives each worker a piece of work that fits well inside its bound, a
+share of the window of the worker's own model. A worker that still goes past it is told so at the end of a turn: it finishes the step it is in, writes what
+it did and what is left into the item's notes, and ends. The coordinator then continues the item with a fresh worker that starts from the item and its notes,
+so nothing is lost. Other sessions, such as a side session doing one task, are told about their own bound in the same way and are never addressed as the
+coordinator.
+
 The conversation's copy is in the project's private state folder inside the git directory. It is never committed, and no tracker text names its path. It holds
 everything you and the coordinator wrote, so delete it from there when you no longer want it kept.
 
-## Changing the limit
+## Changing the windows and the limits
 
-Two options of the `coordination` plugin in `naima.json` set it.
+Options of the `coordination` plugin in `naima.json` set them, each with one command, `naima plugin set coordination <option>=<value>`. On the main branch that
+command commits its own change, so setting an option needs no item.
 
-| Option          | Meaning                                                                | Default |
-| --------------- | ---------------------------------------------------------------------- | ------- |
-| `contextWindow` | the context window of the coordinator's model, in tokens               | 200000  |
-| `handoverAt`    | the share of the window past which the coordinator hands over (0 to 1) | 0.6     |
+| Option           | Meaning                                                                                            | Default        |
+| ---------------- | -------------------------------------------------------------------------------------------------- | -------------- |
+| `contextWindows` | the window of each model, in tokens, by model id: `contextWindows.claude-opus-5-5=1000000`           | none           |
+| `contextWindow`  | the window of any model neither named there nor published                                          | 200000 assumed |
+| `handoverAt`     | the share of the window past which the coordinator prepares a handover (0 to 1)                    | 0.6            |
+| `workerAt`       | the share of its own model's window past which a worker ends and a fresh one continues (0 to 1)    | 0.6            |
 
-The default share, 0.6 of the window, is the usual choice. With the defaults the handing over starts at 120000 tokens. A coordinator running on a
-model with a larger window needs a larger `contextWindow`, otherwise it hands over too early.
+The coordinator and the workers may run on different models: each is measured against its own model's window.
 
-`naima handover --status` shows who holds the role, where it is in handing over, the limit and whether the tool gives a measure.
+`naima handover --status` shows who holds the role, where it is in handing over, the windows and where each comes from, the two shares and whether the tool
+gives a measure.
 
 ## Where the single writer is held
 

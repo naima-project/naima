@@ -24,8 +24,19 @@
 // no tracker text names its path. The successor's hello points to it and `naima handover --read` prints excerpts.
 //
 // The measure is the host's: the hook input carries the transcript, whose last
-// assistant message's usage is the context size (core/adapters). A host without
-// one has no measure, and nothing here guesses it.
+// assistant message's usage is the context size and whose model id names the
+// window (core/adapters, windows.ts). A host without one has no measure, and
+// nothing here guesses it; a window nobody set and nobody published is assumed,
+// and every text that uses it says so, stating no share of it.
+//
+// A context notice never outranks the project's rules: recording in the tracker
+// and Naima's complete, correct operation come first, and no notice asks an
+// agent to skip, shorten or hurry anything. The session that holds the role is
+// told about handing over; any other session (a worker, a side session) is told
+// about its own bound (workerAt): past it, it finishes its step in full, writes
+// its state into its items' notes, marks its claim (naima claim --at-bound) and
+// ends, and the coordinator continues with a fresh worker. The worker's bound
+// is modelled first: develop/models/worker-bound/.
 
 import { createHash } from "node:crypto"
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs"
@@ -56,55 +67,70 @@ import {
 import type { ClaimsData } from "./index.ts"
 import { claimsReports } from "./claims-reports.ts"
 import { aheadBehind } from "./worktrees.ts"
+import { publishedModels, readWindows, windowOf, type WindowOptions, type WindowSource } from "./windows.ts"
 
 // ── the options ──────────────────────────────────────────────────────────────
 
-/** The context window, in tokens, when the project names none. */
-export const DEFAULT_WINDOW = 200_000
+export { DEFAULT_WINDOW } from "./windows.ts"
 /** The share of the window past which the coordinator starts handing over, when the project names none: the owner's choice, the usual one. */
 export const DEFAULT_HANDOVER_AT = 0.6
+/** The share of its own model's window past which a worker ends and a fresh one continues its work, when the project names none: the owner's choice, as handoverAt is. */
+export const DEFAULT_WORKER_AT = 0.6
 /** After the owner postpones, the coordinator is reminded once its context has grown by this share of the window. */
 export const REMIND_SHARE = 0.05
 
-export interface HandoverOptions {
-  /** The window of the model the coordinator runs on, in tokens. */
-  contextWindow: number
-  /** The share of the window past which it hands over, above 0 and at most 1. */
+export interface HandoverOptions extends WindowOptions {
+  /** The share of the window past which the coordinator hands over, above 0 and at most 1. */
   handoverAt: number
+  /** The share of its own model's window past which a worker ends, above 0 and at most 1. */
+  workerAt: number
+}
+
+const share = (o: Record<string, unknown>, name: string, fallback: number): number => {
+  const at = o[name] ?? fallback
+  if (typeof at !== "number" || !(at > 0) || at > 1) {
+    throw new Error(`coordination: options.${name} is not a share of the window above 0 and at most 1, got ${JSON.stringify(at)}`)
+  }
+  return at
 }
 
 /** The options as the project gives them, validated: a malformed one fails loading, naming it. */
 export function readHandoverOptions(o: Record<string, unknown>): HandoverOptions {
-  const window = o["contextWindow"] ?? DEFAULT_WINDOW
-  if (typeof window !== "number" || !Number.isInteger(window) || window < 1) {
+  const window = o["contextWindow"]
+  if (window !== undefined && (typeof window !== "number" || !Number.isInteger(window) || window < 1)) {
     throw new Error(`coordination: options.contextWindow is not a positive whole number of tokens, got ${JSON.stringify(window)}`)
   }
-  const at = o["handoverAt"] ?? DEFAULT_HANDOVER_AT
-  if (typeof at !== "number" || !(at > 0) || at > 1) {
-    throw new Error(`coordination: options.handoverAt is not a share of the window above 0 and at most 1, got ${JSON.stringify(at)}`)
+  return {
+    contextWindows: readWindows(o["contextWindows"]),
+    ...(window !== undefined ? { contextWindow: window as number } : {}),
+    handoverAt: share(o, "handoverAt", DEFAULT_HANDOVER_AT),
+    workerAt: share(o, "workerAt", DEFAULT_WORKER_AT),
   }
-  return { contextWindow: window, handoverAt: at }
 }
 
-/** The depth of the context against the threshold. */
+/** The depth of the context against a bound: the coordinator's handover point, or a worker's bound. */
 export interface Depth {
   tokens: number
+  /** The window, and whether it is set by the project, published for the model, or the default assumed. */
   window: number
-  /** The share of the window the context fills. */
+  source: WindowSource
+  model?: string
+  /** The share of the window the context fills: a fact only when the window is not assumed. */
   share: number
-  /** The tokens past which the coordinator starts handing over. */
+  /** The tokens past which the bound is passed. */
   limit: number
   past: boolean
 }
 
-/** The limit in tokens: the window times the share, rounded down. */
-export const limitOf = (o: HandoverOptions): number => Math.floor(o.contextWindow * o.handoverAt)
+/** The limit in tokens: the window of `model` times the share, rounded down. */
+export const limitOf = (o: HandoverOptions, model?: string, at: number = o.handoverAt): number => Math.floor(windowOf(model, o).tokens * at)
 
-/** How deep the context is, against the threshold. Undefined with no measure: the host gives none, and a number is never guessed. */
-export function depthOf(tokens: number | undefined, o: HandoverOptions): Depth | undefined {
+/** How deep the context is, against the bound `at`. Undefined with no measure: the host gives none, and a number is never guessed. */
+export function depthOf(tokens: number | undefined, o: HandoverOptions, model?: string, at: number = o.handoverAt): Depth | undefined {
   if (tokens === undefined || !Number.isFinite(tokens) || tokens < 0) return undefined
-  const limit = limitOf(o)
-  return { tokens, window: o.contextWindow, share: tokens / o.contextWindow, limit, past: tokens >= limit }
+  const w = windowOf(model, o)
+  const limit = Math.floor(w.tokens * at)
+  return { tokens, window: w.tokens, source: w.source, ...(w.model ? { model: w.model } : {}), share: tokens / w.tokens, limit, past: tokens >= limit }
 }
 
 const percent = (share: number): string => `${Math.round(share * 100)}%`
@@ -127,6 +153,9 @@ export interface Handing {
   transcript?: string
   /** The context size when it was last seen: a postponement reminds again once it has grown. */
   tokens?: number
+  /** The window it was measured against, and the share it filled when that window is set or published (never of an assumed one). */
+  window?: number
+  share?: number
   /**
    * The review of the owner's requests the coordinator recorded, signed against the no-leaks checklist: each request since the
    * last session note with where it is recorded. Current only when recorded after the owner's last message.
@@ -153,6 +182,8 @@ export interface Role {
   handing?: Handing
   /** On the successor: the session it took the role from, its note and the private copy of its transcript. */
   predecessor?: { session: string; at: string; note: string; transcript?: string }
+  /** The models whose window the coordinator was told to ask the owner for, once each ("?" when the transcript named none). */
+  asked?: string[]
 }
 
 /** The role record's file; null outside git. */
@@ -161,11 +192,23 @@ const roleFile = (root: string): string | null => {
   return dir ? join(dir, "coordinator.json") : null
 }
 
-/** The limit the turn-end script compares the context with, left in the tick's folder, so it needs no Deno; present only while a coordinator holds the role. */
+/**
+ * The limits the turn-end script compares the context with, left in the tick's folder, so it needs no Deno; present only
+ * while a coordinator holds the role. `handover-at` holds the limit for a model with no line of its own, and
+ * `handover-at-models` one line per model id, `<model> <tokens>`: each the lower of the coordinator's handover point and a
+ * worker's bound, since the script does not know which the session is, and naima handover --watch then decides.
+ */
 const limitFile = (root: string): string | null => {
   const dir = stateDir(root)
   return dir ? join(dir, "tick", "handover-at") : null
 }
+const modelLimitsFile = (root: string): string | null => {
+  const dir = stateDir(root)
+  return dir ? join(dir, "tick", "handover-at-models") : null
+}
+
+/** The lower of the two bounds for `model`: what the turn-end script compares with. */
+const scriptLimit = (o: HandoverOptions, model?: string): number => Math.min(limitOf(o, model, o.handoverAt), limitOf(o, model, o.workerAt))
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v)
 
@@ -191,6 +234,8 @@ export function readRole(root: string): Role | null {
         since: h["since"],
         ...(typeof h["transcript"] === "string" ? { transcript: h["transcript"] } : {}),
         ...(typeof h["tokens"] === "number" ? { tokens: h["tokens"] } : {}),
+        ...(typeof h["window"] === "number" ? { window: h["window"] } : {}),
+        ...(typeof h["share"] === "number" ? { share: h["share"] } : {}),
         ...(isObject(h["reviewed"]) && typeof h["reviewed"]["at"] === "string" && typeof h["reviewed"]["list"] === "string"
           ? { reviewed: { at: h["reviewed"]["at"], list: h["reviewed"]["list"] } }
           : {}),
@@ -201,6 +246,7 @@ export function readRole(root: string): Role | null {
     const predecessor = isObject(d) && typeof d["session"] === "string" && typeof d["at"] === "string" && typeof d["note"] === "string"
       ? { session: d["session"], at: d["at"], note: d["note"], ...(typeof d["transcript"] === "string" ? { transcript: d["transcript"] } : {}) }
       : undefined
+    const asked = Array.isArray(v["asked"]) ? v["asked"].filter((m): m is string => typeof m === "string") : []
     return {
       holder: v["holder"],
       since: v["since"],
@@ -208,6 +254,7 @@ export function readRole(root: string): Role | null {
       ...(pending ? { pending } : {}),
       ...(handing ? { handing } : {}),
       ...(predecessor ? { predecessor } : {}),
+      ...(asked.length ? { asked } : {}),
     }
   } catch {
     return null
@@ -221,15 +268,20 @@ function writeRole(root: string, role: Role): void {
   writeFileAtomic(file, JSON.stringify(role, null, 2) + "\n")
 }
 
-/** Leave the limit for the turn-end script, or remove it when no coordinator holds the role. */
-function setLimit(root: string, tokens: number | null): void {
+/** Leave the limits for the turn-end script, or remove them when no coordinator holds the role. */
+function setLimit(root: string, o: HandoverOptions | null): void {
   const file = limitFile(root)
-  if (!file) return
+  const models = modelLimitsFile(root)
+  if (!file || !models) return
   try {
-    if (tokens === null) rmSync(file, { force: true })
-    else {
+    if (o === null) {
+      rmSync(file, { force: true })
+      rmSync(models, { force: true })
+    } else {
       mkdirSync(join(file, ".."), { recursive: true })
-      writeFileAtomic(file, `${tokens}\n`)
+      writeFileAtomic(file, `${scriptLimit(o)}\n`)
+      const ids = [...new Set([...publishedModels(), ...Object.keys(o.contextWindows)])].filter((m) => /^[A-Za-z0-9._:@\[\]\/-]+$/.test(m)).sort()
+      writeFileAtomic(models, ids.map((m) => `${m} ${scriptLimit(o, m)}\n`).join(""))
     }
   } catch {
     // the state folder cannot be written here: the turn-end script then has no limit, and does nothing
@@ -255,7 +307,7 @@ export function takeRole(
   const role = readRole(ctx.root)
   const now = ctx.now().toISOString()
   if (role?.holder === session) {
-    setLimit(ctx.root, limitOf(options))
+    setLimit(ctx.root, options)
     return { took: false }
   }
   const retired = [...(role?.retired ?? [])]
@@ -270,7 +322,7 @@ export function takeRole(
       ? { predecessor: { session: pending.from, at: pending.at, note: pending.note, ...(pending.transcript ? { transcript: pending.transcript } : {}) } }
       : {}),
   })
-  setLimit(ctx.root, limitOf(options))
+  setLimit(ctx.root, options)
   return {
     took: true,
     ...(from ? { from } : {}),
@@ -307,7 +359,9 @@ export function inFlight(ctx: Context, claims: ClaimsData): string[] {
     const items = c.items.map((e) => `${e.ref ?? e.id}${e.status ? ` (${e.status})` : ""}${e.done ? " done" : ""}`).join(", ") || "no items"
     const waiting = main ? aheadBehind(ctx.root, main, c.branch).ahead : 0
     out.push(
-      `Claim ${c.branch}: ${items}${c.step ? `; now: ${c.step.what}` : ""}${c.silent ? "; silent, possibly stuck" : ""}` +
+      `Claim ${c.branch}: ${items}${c.step ? `; now: ${c.step.what}` : ""}${c.silent ? "; silent, possibly stuck" : ""}${
+        c.atBound ? "; its worker ended at its context bound: continue with a fresh worker from the items' notes" : ""
+      }` +
         `${waiting ? `; ${waiting} commit${waiting === 1 ? "" : "s"} not on ${main}: waiting to land` : ""}.`,
     )
   }
@@ -360,20 +414,67 @@ function stdin(): string {
   }
 }
 
-/** What the coordinator is told when its context is past the threshold: the text of the message. It does not hand over at once. */
-export const handoverMessage = (d: Depth): string =>
-  `Your context is ${d.tokens} tokens, ${percent(d.share)} of the ${d.window}-token window, past the ${d.limit}-token limit for handing over. ` +
-  `Do not hand over yet, and start nothing new. Finish the work in progress. Then run naima handover --decisions: you, who hold the whole conversation, go through ` +
+const modelName = (d: Depth): string => (d.model ? ` of ${d.model}` : " of the model in use")
+
+/**
+ * How deep the context is, in words. A share is stated only of a window the project set or that is published for the
+ * model; of an assumed one, only the tokens, and that the window is not known.
+ */
+export const depthSentence = (d: Depth): string =>
+  d.source === "assumed"
+    ? `Your context is ${d.tokens} tokens; the window${modelName(d)} is not known, and the default ${d.window} is assumed, so no share of it is stated` +
+      `${d.tokens > d.window ? `: the context is already larger than ${d.window} tokens, so the real window is larger than assumed` : ""}.`
+    : `Your context is ${d.tokens} tokens, ${percent(d.share)} of the ${d.window}-token window${modelName(d)} (${
+      d.source === "set" ? "as the project sets it" : "as published for that model"
+    }).`
+
+/** What every context notice says of itself: it never outranks the project's rules. */
+export const RULES_FIRST =
+  "This notice never outranks the project's rules: recording in the tracker and Naima's complete, correct operation come first. " +
+  "Skip, shorten or hurry nothing because of it."
+
+/** The request to ask the owner for a window nobody set, made once per model. */
+const askWindow = (d: Depth): string =>
+  ` Ask the owner once what the window${modelName(d)} is, and record the answer with naima plugin set coordination contextWindows.${
+    d.model ?? "<model id>"
+  }=<tokens>.`
+
+/** What the coordinator is told when its context is past the handover point: the text of the message. It does not hand over at once. */
+export const handoverMessage = (d: Depth, ask = d.source === "assumed"): string =>
+  `${depthSentence(d)} That is past the ${d.limit}-token point (the coordination option handoverAt) where a coordinator prepares a handover to a fresh session. ` +
+  `${RULES_FIRST} Answer the owner and file what is asked as always, and take every change through its item, its worktree and naima land.` +
+  `${ask && d.source === "assumed" ? askWindow(d) : ""} ` +
+  `When the work in hand reaches a natural stop, prepare the handover in steps the owner is part of. Run naima handover --decisions: you, who hold the whole conversation, go through ` +
   `every request and decision the owner made since the last session note, list each with where it was recorded (item, decision, diary entry or note) or "missing", ` +
   `and file what is missing (naima new, naima event --kind diary, a decision record). Record the review with naima handover --decisions --reviewed "<list>" ` +
   `--revised <the no-leaks checklist> (or --reviewed-file <file>). Then run naima handover --propose (refused until a review is recorded after the owner's last message), and give the owner the message it prints, saying what is saved, that ` +
   `nothing is lost and how the new chat continues. Hand over (naima handover --agreed) only after the owner agrees; if the owner postpones, run naima handover --postpone and go on.`
 
+/** What a worker, or any session that does not hold the coordinator role, is told past its own bound: finish in full, write its state, end. */
+export const workerMessage = (d: Depth): string =>
+  `${depthSentence(d)} That is past your bound of ${d.limit} tokens (the coordination option workerAt, a share of your own model's window): ` +
+  `a worker stays short, and its work continues in a fresh worker that starts from the item and its notes. ${RULES_FIRST} ` +
+  `Finish the step in progress in full, with its test, its record in the tracker and its commit. Then write your state into each item you claim, ` +
+  `naima note <item> "<what is done and committed where, what is left, the next step>", commit it, and run naima claim --at-bound. ` +
+  `Then end, and report to whoever started you that you stopped at your bound${
+    d.source === "assumed" ? ", and that the window of your model is not known, for the owner to be asked" : ""
+  }. The coordinator continues the item with a fresh worker; you are not the coordinator, and nothing here is about handing its role over.`
+
+/** Whom a context notice addresses: the session that holds the coordinator role, or any other. */
+export type Addressed = "coordinator" | "worker"
+
+/** The file that says a session was told of its bound: it is told once. */
+const boundMark = (root: string, session: string): string | null => {
+  const dir = stateDir(root)
+  return dir && /^[A-Za-z0-9._-]+$/.test(session) ? join(dir, "bound", session) : null
+}
+
 /**
- * What the turn end should say, or null: the coordinator past the threshold, the first time (and again once a postponement
- * has been outgrown). It starts the handing over, which records the transcript the host names. Nothing when the session is
- * not the holder of the role (a worker, or a session that already handed over), when the role has no record, when no
- * measure exists, or while the handing over is in hand: it is told once, not every turn.
+ * What the turn end should say, or null. The session that holds the role, past its handover point, the first time (and
+ * again once a postponement has been outgrown): it starts the handing over, which records the transcript the host names.
+ * Any other session the role record does not list as retired (a worker, a side session), past its own bound, once: it is
+ * told to finish in full and end. Nothing when the role has no record, when no measure exists, or while the handing over
+ * is in hand: a notice is said once, not every turn.
  */
 export function watch(
   ctx: Context,
@@ -381,10 +482,21 @@ export function watch(
   tokens: number | undefined,
   options: HandoverOptions,
   transcript?: string,
-): { depth: Depth; text: string } | null {
+  model?: string,
+): { depth: Depth; text: string; to: Addressed } | null {
   const role = readRole(ctx.root)
-  if (!session || !role || role.holder !== session) return null
-  const depth = depthOf(tokens, options)
+  if (!session || !role) return null
+  if (role.holder !== session) {
+    if (role.retired.some((r) => r.session === session) || role.pending?.from === session) return null
+    const depth = depthOf(tokens, options, model, options.workerAt)
+    if (!depth || !depth.past) return null
+    const mark = boundMark(ctx.root, session)
+    if (!mark || existsSync(mark)) return null
+    mkdirSync(join(mark, ".."), { recursive: true })
+    writeFileAtomic(mark, `${ctx.now().toISOString()} ${depth.tokens}\n`)
+    return { depth, text: workerMessage(depth), to: "worker" }
+  }
+  const depth = depthOf(tokens, options, model)
   if (!depth || !depth.past) return null
   const h = role.handing
   const now = ctx.now().toISOString()
@@ -392,16 +504,21 @@ export function watch(
     if (!h.transcript && transcript) writeRole(ctx.root, { ...role, handing: { ...h, transcript } })
     return null
   }
-  if (h && depth.tokens < (h.tokens ?? 0) + Math.floor(options.contextWindow * REMIND_SHARE)) return null
+  if (h && depth.tokens < (h.tokens ?? 0) + Math.floor((h.window ?? depth.window) * REMIND_SHARE)) return null
+  const key = depth.model ?? "?"
+  const asked = role.asked ?? []
+  const ask = depth.source === "assumed" && !asked.includes(key)
   const next: Handing = {
     phase: "finishing",
     since: now,
     tokens: depth.tokens,
+    window: depth.window,
+    ...(depth.source !== "assumed" ? { share: depth.share } : {}),
     ...(h?.reviewed ? { reviewed: h.reviewed } : {}),
     ...((transcript ?? h?.transcript) ? { transcript: (transcript ?? h?.transcript)! } : {}),
   }
-  writeRole(ctx.root, { ...role, handing: next })
-  return { depth, text: handoverMessage(depth) }
+  writeRole(ctx.root, { ...role, handing: next, ...(ask ? { asked: [...asked, key] } : {}) })
+  return { depth, text: handoverMessage(depth, ask), to: "coordinator" }
 }
 
 const cut = (text: string, width: number): string => (text.length > width ? `${text.slice(0, width - 1)}…` : text)
@@ -546,9 +663,9 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
   says:
     "hand the coordinator role over to a fresh session, in steps the owner is part of: --decisions asks the coordinator to review every request and decision of the owner against the tracker and records the review (--reviewed), --propose (refused until a review is recorded after the owner's last message) gives the message for the owner, --agreed (after the owner agrees) writes the session note, keeps the conversation's text for the successor and gives the role up; --postpone when the owner wants to go on; --read reads the predecessor's conversation; --status says how deep the context is, --watch is what the turn end runs",
   enforces:
-    "only the session that holds the coordinator role hands over (naima hello in the main checkout takes it); the proposal comes only after a signed review of the owner's requests, recorded after the owner's last message, and the handover only after the owner has agreed to it (--agreed) and the transcript's private copy is made; the handover writes the session note first, with every claim, the branches waiting to land, the runs and the open meeting, and gives the role up only once it is written; the session that gave it up is refused by land and by the push check, whatever it is told, and a worker's session is not affected",
+    "only the session that holds the coordinator role hands over (naima hello in the main checkout takes it); the proposal comes only after a signed review of the owner's requests, recorded after the owner's last message, and the handover only after the owner has agreed to it (--agreed) and the transcript's private copy is made; the handover writes the session note first, with every claim, the branches waiting to land, the runs and the open meeting, and gives the role up only once it is written; the session that gave it up is refused by land and by the push check, whatever it is told, and a worker's session is not affected; no context notice states a share of a window nobody set or published, asks anyone to skip, shorten or hurry anything, or addresses a session that does not hold the role as the coordinator",
   usage:
-    'handover --decisions [--reviewed "<list>" | --reviewed-file <file>] [--no-transcript] | handover --propose [--no-transcript] | handover --postpone [--tokens <n>] | handover --agreed [--ack "<line>"] [--note "<what else is in hand>"] [--no-transcript] | handover --read [--find <words> | --from <n>] [--last <n>] [--width <n>] | handover --status | handover --watch [--hook <tool>] [--tokens <n>] [--session <id>] | handover --check [<what>] | handover --take',
+    'handover --decisions [--reviewed "<list>" | --reviewed-file <file>] [--no-transcript] | handover --propose [--no-transcript] | handover --postpone [--tokens <n>] | handover --agreed [--ack "<line>"] [--note "<what else is in hand>"] [--no-transcript] | handover --read [--find <words> | --from <n>] [--last <n>] [--width <n>] | handover --status | handover --watch [--hook <tool>] [--tokens <n>] [--session <id>] [--model <id>] | handover --check [<what>] | handover --take',
   options: [
     {
       name: "--decisions",
@@ -590,11 +707,12 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
     {
       name: "--watch",
       says:
-        "what the turn-end hook runs: when this session holds the role and its context is past the limit, the first time, print the message that tells it how to hand over (as the tool's turn-end decision with --hook, as a NAIMA-MESSAGE line otherwise); nothing in every other case",
+        "what the turn-end hook runs: when this session holds the role and its context is past the handover point, the first time, print the message that tells it how to prepare a handover; when it is another session (a worker, a side session) past its own bound (workerAt), once, the message that tells it to finish its step in full, write its state into its items' notes and end (as the tool's turn-end decision with --hook, as a NAIMA-MESSAGE line otherwise); each states a share of the window only when the window is set or published for the model, and says the rules come first; nothing in every other case",
     },
     { name: "--hook", says: "with --watch: the tool whose hook runs it, read from standard input", default: "claude-code" },
     { name: "--tokens", says: "with --watch: the context size, instead of the one the hook input gives; with --postpone: the size to remind from" },
     { name: "--session", says: "with --watch: the session, instead of the hook input's or the current one" },
+    { name: "--model", says: "with --watch: the model id whose window the context is measured against, instead of the one the hook input's transcript names" },
     { name: "--check", says: "exit 1 when this session gave the role up: for a script that publishes, as scripts/publish-site.sh does" },
     { name: "--take", says: "take the role for the current session, as naima hello does in the main checkout" },
   ],
@@ -616,6 +734,7 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
       hook: { type: "string" },
       tokens: { type: "string" },
       session: { type: "string" },
+      model: { type: "string" },
       check: { type: "boolean" },
       take: { type: "boolean" },
       decisions: { type: "boolean" },
@@ -650,11 +769,12 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
       const given = str(p, "tokens")
       if (given !== undefined && !/^\d+$/.test(given)) throw new NaimaError(`--tokens takes a whole number, got ${JSON.stringify(given)}`)
       const tokens = given !== undefined ? Number(given) : host?.contextTokens?.(input)
+      const model = str(p, "model") ?? (input ? host?.contextModel?.(input) : undefined)
       const session = str(p, "session") ?? (input ? host?.sessionOf?.(input) : undefined) ?? currentSession(ctx.root)
-      const w = watch(ctx, session, tokens, o, input ? host?.transcriptPath?.(input) : undefined)
+      const w = watch(ctx, session, tokens, o, input ? host?.transcriptPath?.(input) : undefined, model)
       if (!w) return 0
       if (str(p, "hook") !== undefined && host?.stopFor) ctx.out(host.stopFor(w.text))
-      else ctx.err(messageLine({ id: "coordinator-handover-due", level: "urgent", text: w.text }))
+      else ctx.err(messageLine({ id: w.to === "coordinator" ? "coordinator-handover-due" : "worker-bound-reached", level: "urgent", text: w.text }))
       return 0
     }
     const session = currentSession(ctx.root)
@@ -707,7 +827,18 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
         )
       }
       if (role?.predecessor?.transcript) ctx.out(`predecessor ${role.predecessor.session}: naima handover --read reads its conversation`)
-      ctx.out(`limit: ${limitOf(o)} tokens, ${percent(o.handoverAt)} of a ${o.contextWindow}-token window (coordination options contextWindow, handoverAt)`)
+      const fallback = windowOf(undefined, o)
+      ctx.out(
+        `window of a model the transcript does not name or nothing knows: ${fallback.tokens} tokens, ${
+          fallback.source === "assumed" ? "the default, assumed (no share of it is stated as a fact)" : "as the project sets it (contextWindow)"
+        }`,
+      )
+      for (const [m, n] of Object.entries(o.contextWindows)) ctx.out(`window of ${m}: ${n} tokens, as the project sets it (contextWindows)`)
+      ctx.out(
+        `the coordinator prepares a handover past ${percent(o.handoverAt)} of its model's window (handoverAt); a worker ends past ${
+          percent(o.workerAt)
+        } of its own (workerAt); a model whose window is published needs no option`,
+      )
       const measured = ADAPTER_MEASURES()
       ctx.out(
         measured.length
@@ -781,8 +912,9 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
       }
       const lines = inFlight(ctx, deps.claimsData(ctx)).length
       writeRole(ctx.root, { ...role, handing: handing({ phase: "proposed", proposedAt: now }) })
-      const tokens = role.handing?.tokens
-      for (const l of proposalText(lines, tokens !== undefined ? percent(tokens / o.contextWindow) : undefined)) ctx.out(l)
+      // A share is said to the owner only of a window the project set or that is published: never of an assumed one.
+      const known = role.handing?.share
+      for (const l of proposalText(lines, known !== undefined ? percent(known) : undefined)) ctx.out(l)
       return 0
     }
     if (bool(p, "postpone")) {
