@@ -89,7 +89,8 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
 export const propertyRunsView = (type: string) => ({
   name: "property-runs",
   title: "Property runs",
-  says: "every property with the runs recorded on it, oldest first: when, its verdict (holds, violated, error), and when the adapter said so the states, the seconds and whether the result was carried over from an earlier model, with the name of the run's record; the new UI's failed-tests matrix and history graphs read it",
+  says:
+    "every property with the runs recorded on it, oldest first: when, its verdict (holds, violated, error), and when the adapter said so the states, the seconds and whether the result was carried over from an earlier model, with the name of the run's record; the new UI's failed-tests matrix and history graphs read it",
   screen: true,
   render(_params: Record<string, string[]>, ctx: Context) {
     const rows = propertyHistory(ctx, type)
