@@ -1,0 +1,5 @@
+<<<<<<<< HEAD:ui/dist/assets/Stack-CGBn9q5i.js
+import{Br as e,En as t,Er as n,Hn as r,Sr as i,Zn as a,lr as o,sr as s}from"./chevron-right-CI1ixXBp.js";var c=o(`<div><!></div>`);function l(o,l){let u=t(l,`gap`,3,`md`),d=t(l,`align`,3,`stretch`);var f=c(),p=n(f);a(p,()=>l.children),e(f),i(()=>r(f,1,`stack gap-${u()??``} align-${d()??``}`,`svelte-1382wtz`)),s(o,f)}export{l as t};
+========
+import{Br as e,En as t,Er as n,Hn as r,Sr as i,Zn as a,lr as o,sr as s}from"./chevron-right-CFt_rURx.js";var c=o(`<div><!></div>`);function l(o,l){let u=t(l,`gap`,3,`md`),d=t(l,`align`,3,`stretch`);var f=c(),p=n(f);a(p,()=>l.children),e(f),i(()=>r(f,1,`stack gap-${u()??``} align-${d()??``}`,`svelte-1382wtz`)),s(o,f)}export{l as t};
+>>>>>>>> origin/line/release-1.2:ui/dist/assets/Stack-C0KtAmmm.js
