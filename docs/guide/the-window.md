@@ -232,7 +232,7 @@ saying what it is and whose hands it waits for, with "Open it". Home is built fr
 ### Plan
 
 The Plan draws every goal with a date or a forecast on one time axis, its name and its dates in a column on the left. A goal has one expected date, the same
-on Now, on the Plan and in What's left, with how sure it is beside it: "Expected Sat 2 Jan, 85 % sure by Sun 17 Jan". The date is the day by which half of
+on Now, on the Plan and in What's left, with how sure it is beside it: "Expected Fri 4 Dec, 85 % sure by Mon 14 Dec". The date is the day by which half of
 many replays of the last four weeks' pace would have finished what is left; the second day is when most of them would have. "How this date is worked out"
 says so in What's left.
 
