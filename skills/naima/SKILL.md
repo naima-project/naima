@@ -134,7 +134,7 @@ its text says at once, in plain words, before going on. An urgent one says so. N
 (`naima messages ack <id>`), and you run it only when the owner tells you to. A turn-end hook may stop you at the end of a turn with the same messages; say
 them, then end the turn. `naima messages` lists what is waiting ([messages](../../docs/agents/messages.md)).
 
-When the coordinator is told that its context is past the limit, it finishes its work, runs `naima handover --decisions` until every decision of the owner is recorded, proposes the handover to the owner with `--propose` and, once the owner agrees, runs `naima handover --agreed` and gives the owner the successor's first message; the session that
+When the coordinator is told that its context is past the limit, it finishes its work, goes through every request of the owner since the last session note, files what is missing and records the signed review with `naima handover --decisions --reviewed`, proposes the handover to the owner with `--propose` and, once the owner agrees, runs `naima handover --agreed` and gives the owner the successor's first message; the session that
 handed over lands, pushes and publishes nothing more ([handing over](../../docs/agents/handover.md)).
 
 How much it checks depends on `updates` in `naima.json`, which is `off`, `check` (the default) or `update`. If the owner asks you to change it, run
