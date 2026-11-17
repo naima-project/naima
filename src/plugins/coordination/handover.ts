@@ -429,8 +429,7 @@ export const depthSentence = (d: Depth): string =>
     }).`
 
 /** What every context notice says of itself: it never outranks the project's rules. */
-export const RULES_FIRST =
-  "This notice never outranks the project's rules: recording in the tracker and Naima's complete, correct operation come first. " +
+export const RULES_FIRST = "This notice never outranks the project's rules: recording in the tracker and Naima's complete, correct operation come first. " +
   "Skip, shorten or hurry nothing because of it."
 
 /** The request to ask the owner for a window nobody set, made once per model. */
@@ -441,7 +440,9 @@ const askWindow = (d: Depth): string =>
 
 /** What the coordinator is told when its context is past the handover point: the text of the message. It does not hand over at once. */
 export const handoverMessage = (d: Depth, ask = d.source === "assumed"): string =>
-  `${depthSentence(d)} That is past the ${d.limit}-token point (the coordination option handoverAt) where a coordinator prepares a handover to a fresh session. ` +
+  `${
+    depthSentence(d)
+  } That is past the ${d.limit}-token point (the coordination option handoverAt) where a coordinator prepares a handover to a fresh session. ` +
   `${RULES_FIRST} Answer the owner and file what is asked as always, and take every change through its item, its worktree and naima land.` +
   `${ask && d.source === "assumed" ? askWindow(d) : ""} ` +
   `When the work in hand reaches a natural stop, prepare the handover in steps the owner is part of. Run naima handover --decisions: you, who hold the whole conversation, go through ` +
