@@ -10,7 +10,6 @@ import {
   type Context,
   contextIn,
   createItem,
-  type Host,
   isOpen,
   type Item,
   joinProse,
