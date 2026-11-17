@@ -1,0 +1,1 @@
+import{An as e,Kr as t,qr as n}from"./chevron-right-BSBI-rZo.js";import{t as r}from"./App-OrP48gfP.js";function i(i,a){n(a,!0),e(a.store),r(i,{}),t()}export{i as default};

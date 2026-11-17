@@ -1,1 +1,0 @@
-import{Hr as e,On as t,Vr as n}from"./chevron-right-DF7cyI33.js";import r from"./Roadmap-DH-Vk1Go.js";function i(i,a){e(a,!0);let{roadmap:o}=t();r(i,{get screen(){return o},get onopen(){return a.onitem}}),n()}export{i as default};
