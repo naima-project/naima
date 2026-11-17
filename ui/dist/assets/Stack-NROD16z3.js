@@ -1,1 +1,0 @@
-import{Fr as e,In as t,Qn as n,Yr as r,gr as i,jr as a,or as o,vr as s}from"./chevron-right-BSBI-rZo.js";var c=s(`<div><!></div>`);function l(s,l){let u=t(l,`gap`,3,`md`),d=t(l,`align`,3,`stretch`);var f=c(),p=e(f);o(p,()=>l.children),r(f),a(()=>n(f,1,`stack gap-${u()??``} align-${d()??``}`,`svelte-1382wtz`)),i(s,f)}export{l as t};
