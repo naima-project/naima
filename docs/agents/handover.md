@@ -8,20 +8,23 @@ context is N tokens"), you are the coordinator and you start handing over, in th
 You do not hand over at once. Past the limit:
 
 1. Finish the work in progress; start nothing new. Workers keep running.
-2. Run `naima handover --decisions`. It reads the owner's messages of this session since the last session note and lists those with no record in the
-   tracker (a message of at least 40 characters that is not a short question, with no record of this session filed in its turn and no record sharing at least
-   three significant words with it). File each one (`naima new`, a diary entry with `naima event <today> "<what, why>" --kind diary`, a decision record), or
-   when nothing needs recording pass its id to `--waive`. Repeat until it passes (exit 0). Without a readable transcript it refuses; judge by hand and add
-   `--no-transcript`.
-3. Run `naima handover --propose`. It runs the check again, and prints a short reassuring message for the owner: what is saved, that nothing is lost, how the
+2. Run `naima handover --decisions`. It prints the task and judges nothing: you hold the whole conversation, so you go through every request and decision
+   the owner made since the last session note and write one line for each, naming where it was recorded (item, decision, diary entry or note) or `missing`.
+   File what is missing (`naima new`, a diary entry with `naima event <today> "<what, why>" --kind diary`, a decision record). Then record the review, one
+   line per request each naming its record, signed against the no-leaks checklist (`docs/agents/NOLEAKS.md`; check the text against it first):
+   `naima handover --decisions --reviewed "<list>" --revised <path of the checklist>`, or `--reviewed-file <file>` for a long one. A review with a line still
+   `missing`, an empty one or an unsigned one is refused. Without a readable transcript the time of the owner's last message is unknown: repeat with
+   `--no-transcript`, having gone through the conversation as above.
+3. Run `naima handover --propose`. It is refused (exit 1) until a review is recorded after the owner's last message; if the owner spoke since, review again.
+   Then it prints a short reassuring message for the owner: what is saved, that nothing is lost, how the
    new chat continues. Give the owner that message and wait for the answer.
 4. If the owner agrees, run `naima handover --agreed`, with `--ack "<line>"` when the project's rules ask a session note for one, and `--note "<text>"` for what the
-   open conversation stands on. It checks once more that nothing the owner said since is unrecorded, writes the session note with every claim, the branches
+   open conversation stands on. It needs the review still to hold (the owner's reply to the proposal is the only message after it; anything more means a new review and a new proposal), writes the session note with every claim, the branches
    waiting to land, the runs and the open meeting, keeps a private copy of this session's transcript, gives the role up and prints the first message for the
    successor. Give the owner that message, and say the new session starts in the main checkout. Then land nothing, push nothing and publish nothing.
 5. If the owner wants to go on, run `naima handover --postpone`. You are told again once the context has grown by 5% of the window.
 
-`naima handover` without `--agreed` refuses, and so does `--agreed` before a proposal, and after a decision of the owner that came since the proposal: the check
+`naima handover` without `--agreed` refuses, and so does `--agreed` before a proposal, and after more from the owner than a reply since the proposal: the review
 and the proposal come again. The owner may also ask for a handover before the limit; the same steps apply.
 
 ## When you are the successor
