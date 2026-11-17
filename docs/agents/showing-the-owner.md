@@ -1,23 +1,30 @@
 # Showing the owner something in Naima's UI
 
-The MCP server is only an intelligence on top of the open UI's central store. It reads the store and calls the store's own transitions, the same functions
-the UI's components call when the owner clicks, and it adds no UI behaviour of its own: which screen a name means, which item, and why a place is refused, the
-UI decides. So read with `store`, act with `transition`, and use `show` for the common jumps.
+Naima serves two MCP servers, split by what they touch. Register both.
+
+- **`naima-ui`** drives the screen the way a person does. It imports only the UI stance's registry and its agent channel, so every call (`show`, `store`,
+  `transitions`, `transition`, `read_page`, `screenshot`) goes through that channel to the UI the owner has open, one request at a time, and the UI answers.
+  It reads and calls the open UI's central store, the same functions the UI's components call when the owner clicks, and adds no UI behaviour of its own:
+  which screen a name means, which item, and why a place is refused, the UI decides.
+- **`naima-tracker`** never touches the screen. It reads Naima's core directly (items, gates, lines, history, work, metrics, the views) and runs the UI's
+  short list of actions. Use it when you need to know the project, not to show anything.
 
 When you want the owner to see something in the project, such as a screen, an item, a commit or a line, show it in the Naima UI they have open rather than
 making a page, a chart or an artifact of your own. The UI already draws the project as the owner knows it, and what you show stays live there.
 
-## Adding the server
+## Adding the servers
 
-Naima serves its UI's bridge, the commands the UI itself reads and acts through, as an MCP server on its standard input and output. An agent's client starts it
-in the project's folder. In Claude Code:
+An agent's client starts each one in the project's folder. In Claude Code:
 
 ```sh
-claude mcp add naima -- naima ui --mcp
+claude mcp add naima-ui -- naima ui --mcp
+claude mcp add naima-tracker -- naima ui --mcp-tracker
 ```
 
-Any other MCP client starts the same command. Its answers are short plain text, like a screen at a glance; ask for one thing by its id
-for more. Which tool for what:
+Any other MCP client starts the same commands. Their answers are short plain text, like a screen at a glance; ask for one thing by its id for more. Which tool
+is on which server:
+
+`naima-tracker`:
 
 - `overview`: the project at a glance. Start here.
 - `items`: one item by its ref (the slug or the id's start will do), or a search by words, type, status, gate or open, with counts.
@@ -26,14 +33,19 @@ for more. Which tool for what:
 - `history`: the last days in a line each, or one `day`, or one `commit`.
 - `work`: claims, the ready queue, stale work and work at risk, or one `worker`.
 - `metrics`: every metric's value and trend, or one metric's recent points.
+- `meetings`: the meetings, and what is on each agenda.
 - `view`: a view's raw data, shortened, in pages (`path`, `offset`, `limit`, `where`, `search`, `since`, `until`, `fields`), only when the tools above do
   not answer.
-- `action` and `run`: the UI's short list of actions, run through `naima run`.
+- `action` and `run`: the UI's short list of actions, run through `naima run`, and the run they start.
+
+`naima-ui`:
+
 - `store`, `transitions` and `transition`: the open UI's central store, read, listed and moved through its own transitions.
 - `show`, `read_page` (an outline of what the owner sees; the text with `mode`) and `screenshot` (rarely).
 
 A bare call answers in about 2 000 characters at most; `detail: "full"` gives an item or a gate whole, as compact JSON. No reply passes 20 000 characters,
-and a reply cut there says how to narrow the call.
+and a reply cut there says how to narrow the call. Each tool kept its name when the single server was split in two; only the server's name in the client's
+tool list changed (`naima-tracker` and `naima-ui`).
 
 ## Reading and moving the open UI's store
 
@@ -70,7 +82,8 @@ so: tell the owner to open the UI with `naima ui`, then show again. Say in one l
 
 ## Seeing what the owner sees
 
-`read_page` answers an outline of the open UI's page: its landmarks, its headings each with the first line under it, and its controls with their state, in
+`read_page` and `screenshot` ask the open UI too, over the same channel as the store: `read_page` for the page's text and `screenshot` for where its window is,
+which the server captures. `read_page` answers an outline of the open UI's page: its landmarks, its headings each with the first line under it, and its controls with their state, in
 about 2 000 characters. `mode: "text"` gives the page's text and `mode: "html"` its raw HTML, in pages, and `selector` reads only the part under a CSS selector. Use it to check what a `show` did and what the owner is looking at. `screenshot` answers a PNG of the UI's window as it is on the screen,
 taken with the system's screen capture on macOS; elsewhere it says it cannot. A picture costs far more than the text: take one only for a rare visual check that
 the text cannot answer, such as a layout or a colour.

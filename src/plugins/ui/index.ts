@@ -25,6 +25,7 @@ import {
   progressFor,
   rendered,
   shortOrId,
+  stateDir,
   str,
   type SummarySection,
   summarySections,
@@ -33,6 +34,8 @@ import {
   UI_SWITCH,
   usageError,
 } from "../../core/api.ts"
+import { join } from "node:path"
+import { commitOf } from "./at.ts"
 import { viewCache } from "./view-cache.ts"
 import { naimaBridge } from "./bridge.ts"
 import { mapView } from "./graphs.ts"
@@ -40,7 +43,9 @@ import { projectsView } from "./projects.ts"
 import { browserCommand, openBrowser, type Opened, osName } from "./open.ts"
 import { filesKey, filesUrl, newToken, serve, type ServeOptions } from "./serve.ts"
 import { resumed, switchFile, writeSwitch } from "./switch.ts"
-import { runMcp } from "./mcp.ts"
+import { agentChannel } from "./agent-endpoint.ts"
+import { runUiMcp } from "./mcp.ts"
+import { runTrackerMcp } from "./mcp-tracker.ts"
 import { runSidecar } from "./sidecar.ts"
 import { buildDir, desktopFirst, findCargo, installDesktop, installedApp, PRODUCT } from "./desktop-app.ts"
 import { desktopApp, desktopAppDirs, naimaCommand, offReason, openAtStart, register, registryDir, unregister, userAtStart } from "./at-start.ts"
@@ -338,7 +343,7 @@ const uiCommand: Command = {
   enforces:
     "the interface is served only on the loopback interface, and every request without this run's token is refused; a bridge command comes only from the server's own page; an action runs only a command of its short list, through naima run",
   hidden: true,
-  usage: "ui [--browser] [--no-open] [--log] [--port <port>] | ui --install-desktop | ui --sidecar | ui --mcp",
+  usage: "ui [--browser] [--no-open] [--log] [--port <port>] | ui --install-desktop | ui --sidecar | ui --mcp | ui --mcp-tracker",
   long: {
     reports:
       "--install-desktop reports its stage (copy, compile, install) and, while Cargo compiles, the crates done of the count the last build ended on, on standard error or into the run's progress file",
@@ -368,10 +373,15 @@ const uiCommand: Command = {
     {
       name: "--mcp",
       says:
-        "serve the bridge commands to an agent as an MCP server on standard input and output, with the tool show, which shows the owner a place in the UI open on the project: what an agent's client starts (claude mcp add naima -- naima ui --mcp)",
+        "serve the UI to an agent as an MCP server on standard input and output, the server that only drives the screen: show (a place to the owner), store, transitions and transition (the open UI's central store), read_page and screenshot, every one through the agent channel to the UI open on the project: what an agent's client starts (claude mcp add naima-ui -- naima ui --mcp)",
+    },
+    {
+      name: "--mcp-tracker",
+      says:
+        "serve the tracker to an agent as an MCP server on standard input and output, the server that never touches the screen: overview, items, gates, lines, history, work, metrics, meetings, view, and the UI's actions with action and run, read from Naima's core directly: what an agent's client starts (claude mcp add naima-tracker -- naima ui --mcp-tracker)",
     },
   ],
-  examples: ["ui", "ui --browser", "ui --install-desktop", "ui --no-open", "ui --sidecar", "ui --mcp"],
+  examples: ["ui", "ui --browser", "ui --install-desktop", "ui --no-open", "ui --sidecar", "ui --mcp", "ui --mcp-tracker"],
   async run(args, ctx) {
     const p = parse(args, {
       browser: { type: "boolean" },
@@ -380,13 +390,16 @@ const uiCommand: Command = {
       log: { type: "boolean" },
       sidecar: { type: "boolean" },
       mcp: { type: "boolean" },
+      "mcp-tracker": { type: "boolean" },
       port: { type: "string" },
     })
     const port = str(p, "port") === undefined ? undefined : Number(str(p, "port"))
     if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) throw usageError(this)
     if (p.positionals.length || (bool(p, "sidecar") && (bool(p, "no-open") || bool(p, "log") || port !== undefined))) throw usageError(this)
-    if (bool(p, "mcp") && (bool(p, "sidecar") || bool(p, "no-open") || bool(p, "log") || port !== undefined)) throw usageError(this)
-    if ((bool(p, "sidecar") || bool(p, "mcp")) && (bool(p, "browser") || bool(p, "install-desktop"))) throw usageError(this)
+    const mcp = bool(p, "mcp") || bool(p, "mcp-tracker")
+    if (bool(p, "mcp") && bool(p, "mcp-tracker")) throw usageError(this)
+    if (mcp && (bool(p, "sidecar") || bool(p, "no-open") || bool(p, "log") || port !== undefined)) throw usageError(this)
+    if ((bool(p, "sidecar") || mcp) && (bool(p, "browser") || bool(p, "install-desktop"))) throw usageError(this)
     if (bool(p, "install-desktop")) {
       if (bool(p, "browser") || bool(p, "no-open") || bool(p, "log") || port !== undefined) throw usageError(this)
       const env = process.env
@@ -401,11 +414,17 @@ const uiCommand: Command = {
         err: (l) => ctx.err(l),
       })
     }
+    if (bool(p, "mcp-tracker")) {
+      return runTrackerMcp(ctx, { views: viewsOf(ctx), version: "1.2", input: process.stdin, write: (line) => void process.stdout.write(line + "\n") })
+    }
     if (bool(p, "mcp")) {
-      return runMcp(ctx, {
-        views: viewsOf(ctx),
-        tabs: allTabs(tabsOf(ctx), viewsOf(ctx)),
+      const state = stateDir(ctx.root)
+      return runUiMcp({
+        tabs: allTabs(tabsOf(ctx), viewsOf(ctx)).map((t) => t.name),
         version: "1.2",
+        channel: agentChannel(ctx.root),
+        commit: (ref) => commitOf(ctx, ref),
+        shotsDir: state ? join(state, "ui", "shots") : null,
         // A show with no UI open opens one as hello does: the desktop app when installed, else naima ui in a browser.
         openUi: async () => {
           const dir = registryDir(ctx.root)
@@ -480,7 +499,7 @@ export default function ui(options: Record<string, unknown> = {}): Plugin {
       "Any plugin, a stance included, adds tabs through `ui-tabs`, each with optional subtabs: for a subtab and the moment shown it gives data the interface draws with one of its own components (a list, a table, a chart, a gallery of framed pages, markdown), a page of its folder, served sandboxed under a key derived from the token, or a page it makes, which the interface frames in the same sandbox, so no code of the plugin runs in the interface; every `ui-views` view is shown as a tab too, but for one the interface has a screen of its own for (`screen`, the metrics). " +
       "`action` runs `decide`, `note`, `gate step`, `claim`, `release` or `name-stop` as a run of `naima run`, and `run` shows that run, its state, exit code and log; a bridge command is refused from any page but the server's own. " +
       "Plain `naima ui` opens the desktop app on the project when it is installed, as hello does, and brings forward its window already open on the project (a show the shell takes for itself) instead of opening a second one; it serves the browser with `--browser`, `--no-open` or `--port`, when the app is not installed (on macOS saying that `naima ui --install-desktop` installs it) and when the app cannot start. `naima ui --install-desktop` builds the app on macOS from the shell the product ships beside the bundle (ui/desktop, the Tauri project) with Rust and Tauri's command-line tool, in Naima's folder of the user's caches, kept between builds, and installs it as Naima.app in the user's Applications folder, reporting its stage and the crates compiled; the app also takes its project from its first argument. The same commands serve the desktop app, the Tauri shell around the same bundle: it starts `naima ui --sidecar` in the project's folder, which answers them on its standard input and output, one JSON object a line, pushes the feeds' events there too, and reads a tab's files for the shell's naima-files: scheme, with no network listener. " +
-      "`naima ui --mcp` serves the same commands to an agent as an MCP server on standard input and output (the UI stance's bridge-mcp.ts), with one more, `show` (a screen, a plugin's view, an item, a commit or a line), which every UI open on the project hears on the feed `agent` (the request `{ id, tool, args }` of the UI stance's agent protocol, a transition of the UI's agent sequences, answered on the command `agent-answer` as `{ id, ok, answer }` or `{ id, ok: false, error }`) and goes to at once; the tools `store`, `transitions` and `transition` use the same feed, and the questions about the page (`read_page`, `screenshot`) the feed `show`, a UI opened as naima hello opens one when none is: an agent shows the owner something in the UI instead of making a page of its own. " +
+      "Two MCP servers serve an agent on standard input and output, split by what they touch. `naima ui --mcp` (the UI stance's bridge-mcp.ts) drives the screen the way a person does, and imports only the UI stance's registry and its agent channel (agent-endpoint.ts): `show` (a screen, a plugin's view, an item, a commit or a line), `store`, `transitions` and `transition`, `read_page` and `screenshot` all ask every UI open on the project on the feed `agent` (the request `{ id, tool, args }` of the UI stance's agent protocol, answered on the command `agent-answer` as `{ id, ok, answer }` or `{ id, ok: false, error }`), one request at a time; a show opens a UI as naima hello opens one when none is, so that an agent shows the owner something in the UI instead of making a page of its own. `naima ui --mcp-tracker` never touches the screen: it reads Naima's core directly (the views, the lines' map, git) for `overview`, `items`, `gates`, `lines`, `history`, `work`, `metrics`, `meetings` and `view`, and runs the UI's actions with `action` and `run`. " +
       "At a session start `naima hello` opens the UI on the project by itself, in the background, and says so on its greeting's line, with the address in a browser: the desktop app when it is installed, else `naima ui` on a port it picks, which opens the browser; a UI already open on the project, named in a registry in the clone's Naima state folder that `naima ui` and the sidecar write too, is reused instead. It is off with the option `atStart` false, for a user with `{\"atStart\": false}` in the ui.json of their Naima config folder, and never on CI, with NAIMA_NO_UI or NAIMA_DATA set, nor in a worktree other than the clone's main checkout.",
     points: [viewsPoint, uiTabsPoint],
     contributes: { "ui-views": [summaryView, boardView, itemView, mapView, projectsView] },

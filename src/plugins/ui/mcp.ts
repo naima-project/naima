@@ -1,67 +1,55 @@
-// Naima's bridge for agents: `naima ui --mcp` serves an MCP server on its standard input and output, through the UI
-// stance's bridge-mcp.ts, copied unchanged like its request handler. Its tools are made for an agent with a budget of
-// tokens: each read tool answers like a screen at a glance, in plain text, and gives one thing's details by its id
-// (mcp-tools.ts), all read through the bridge commands the UI itself uses (bridge.ts); view gives a view's raw data in
-// pages (mcp-pages.ts) for what they do not answer. action and run run the UI's actions; show, read_page and
-// screenshot drive and look at the UI the owner has open, instead of a page of the agent's own.
+// Naima's UI server for agents: `naima ui --mcp` serves an MCP server on its standard input and output, through the UI
+// stance's bridge-mcp.ts, copied unchanged like its request handler. It only drives and reads the screen, the way a
+// person does: every call goes through the agent channel (agent-endpoint.ts, the UI stance's agent protocol) to the UI
+// open on the project, which runs it on its central store or on its page and answers: store reads the store's snapshot,
+// transitions lists its registry of transitions (generated from the UI's machines), transition calls one by machine
+// and name through the very function the UI's components call, show is the transition of one of the UI's named
+// sequences, read_page reads what the page shows and screenshot pictures its window. It adds no UI behaviour of its
+// own: which screen, which item, and why a place is refused, the UI decides.
 //
-// The server is only an intelligence on top of the open UI's central store, and adds no UI behaviour of its own: store
-// reads the store's snapshot, transitions lists its registry of transitions (generated from the UI's machines),
-// transition calls one by machine and name through the very function the UI's components call, and show is the
-// transition of one of the UI's named sequences. Which screen, which item, and why a place is refused, the UI decides.
+// It imports only the standard library, the bridge's own modules and the agent channel (the UI stance's agent-endpoint
+// check holds it to that), so that it has nothing of the tracker in it: the tracker's reads (items, gates, lines,
+// history, work, metrics, views) and its actions are the other server's, mcp-tracker.ts, `naima ui --mcp-tracker`.
 //
-//   claude mcp add naima -- naima ui --mcp        (run in the project's folder; any MCP client starts it the same way)
+//   claude mcp add naima-ui -- naima ui --mcp        (run in the project's folder; any MCP client starts it the same way)
 
 import { Buffer } from "node:buffer"
 import { spawnSync } from "node:child_process"
+import { randomBytes } from "node:crypto"
 import { mkdirSync, readFileSync, rmSync } from "node:fs"
-import { basename, join, resolve } from "node:path"
+import { join } from "node:path"
 import { createInterface } from "node:readline"
 import type { Readable } from "node:stream"
-import { type Context, gitOrNull, stateDir } from "../../core/api.ts"
-import { ACTIONS, naimaBridge } from "./bridge.ts"
-import { bridgeMcp, type McpServer, type McpTool, serveMcpLines } from "./bridge-mcp.ts"
+import { type AgentChannel, showCall } from "./agent-endpoint.ts"
 import type { Handlers, Json } from "./bridge-handler.ts"
-import { PAGE_PROPERTIES, paged, splitArgs } from "./mcp-pages.ts"
-import { agentTools, bounded, cut, HARD_BOUND, type Reader, TOOL_SPECS } from "./mcp-tools.ts"
-import { type AgentRequest, askAgent, askShow, awaitAnswer, openUis, requestId } from "./show.ts"
-import type { UiTab, UiView } from "./tabs.ts"
+import { bridgeMcp, type McpServer, type McpTool, serveMcpLines } from "./bridge-mcp.ts"
+
+/** The most characters any reply takes: a safety net, never the normal case. */
+const HARD_BOUND = 20_000
+
+/** A text cut to `n` characters, with an ellipsis when cut. */
+const cut = (s: string, n: number): string => (s.length <= n ? s : `${s.slice(0, Math.max(0, n - 1)).trimEnd()}…`)
+
+/** A reply held to HARD_BOUND: cut at a line's end, saying how to narrow it. */
+function bounded(text: string, narrow: string): string {
+  const size = (t: string) => JSON.stringify(t).length
+  if (size(text) <= HARD_BOUND) return text
+  const note = `\n[cut: ${text.length} characters is past the bound of ${HARD_BOUND}; ${narrow}]`
+  // The bound holds for the text as the reply carries it, escapes included.
+  let room = HARD_BOUND - note.length - 2
+  while (room > 0 && size(text.slice(0, room) + note) > HARD_BOUND) room = Math.floor(room * 0.9)
+  const end = text.lastIndexOf("\n", room)
+  return text.slice(0, end > room / 2 ? end : room) + note
+}
 
 const obj = (properties: Record<string, unknown>, required: string[] = []) =>
   JSON.parse(JSON.stringify({ type: "object", properties, ...(required.length ? { required } : {}) }))
 
 const str = (description: string) => ({ type: "string", description })
 
-/** The tools, with what each does for an agent: the read tools, view, the actions, and show. */
-export function naimaTools(views: readonly string[], tabs: readonly string[]): { [command: string]: McpTool } {
+/** The tool show, the one bridge-level tool of this server; the others look at the open UI's store and page (LOOK_TOOLS). */
+export function uiTools(tabs: readonly string[]): { [command: string]: McpTool } {
   return {
-    ...TOOL_SPECS,
-    view: {
-      description:
-        `A view's raw data as compact JSON, for what the tools above do not answer; with at, as that commit had it. A bare call comes shortened, naming each cut part's path; read a part with path, page it with offset and limit, narrow it with where, search, since, until and fields. The views: ${
-          views.join(", ")
-        }.`,
-      inputSchema: obj({
-        view: str("the view's name"),
-        at: str("a commit (a hash or a ref a local branch reaches); absent: live"),
-        query: { type: "object", description: "the view's parameters, each a string, such as {type: features}", additionalProperties: { type: "string" } },
-        ...PAGE_PROPERTIES,
-      }, ["view"]),
-    },
-    action: {
-      description: `Run one of the UI's actions as a naima run; answers the run's name, which run reads. The actions: ${
-        ACTIONS.map((a) => `${a.name} (${a.says})`).join("; ")
-      }.`,
-      inputSchema: obj({ name: str("the action"), args: { type: "array", items: { type: "string" }, description: "the arguments after the command" } }, [
-        "name",
-      ]),
-    },
-    run: {
-      description: "A run action started: its state, exit code and the last lines of its log.",
-      inputSchema: obj({ name: str("the run's name, as action answered it"), lines: { type: "integer", minimum: 1, description: "log lines, default 20" } }, [
-        "name",
-      ]),
-    },
     show: {
       description:
         "Show the owner a place in the Naima UI open on this project, live: a screen, a plugin's view, an item, a commit (moving the playhead there) or a line. Give exactly one. It calls the UI's named sequence for it (agent.showScreen, showView, showItem, showCommit, showLine), which transition calls the same way. Prefer it to a page or an artifact of your own. Opens a UI when none is open.",
@@ -76,73 +64,12 @@ export function naimaTools(views: readonly string[], tabs: readonly string[]): {
   }
 }
 
-export const INSTRUCTIONS = "Naima's project tracker and UI. Answers are short plain text; ask for one thing by its id for more. " +
-  "Start with overview. items: one item by ref, or a search with counts. gates: why a gate is blocked. lines: the trunk, lines and branches. " +
-  "history: a day or a commit. work: claims, queue, stale work. metrics: values and trends. view: a view's raw data, in pages, only when those do not answer. " +
-  `No reply passes ${HARD_BOUND} characters; a cut one says how to narrow it. ` +
-  "The open UI is its central store, and these tools only use it as the UI's own components do: read it with store (a summary first, then one machine or a path), list what can be done with transitions, act with transition (machine, name, args), and use show for the common jumps, a named sequence of transitions. " +
+export const INSTRUCTIONS = "Naima's UI, driven the way the owner does. The open UI is its central store, and these tools only use it as the UI's own components do: " +
+  "read it with store (a summary first, then one machine or a path), list what can be done with transitions, act with transition (machine, name, args), " +
+  "and use show for the common jumps, a named sequence of transitions. " +
   "To show the owner something, call show: it moves the Naima UI the owner has open, and is preferred to a page or an artifact of your own. " +
-  "read_page outlines what the owner sees; screenshot only for a rare visual check, since it costs far more. If show says no UI could be opened, tell the owner to run naima ui."
-
-/** What the read tools read, through the bridge's commands: the views, the map, and a commit as git tells it. */
-export function bridgeReader(ctx: Context, bridge: Handlers): Reader {
-  return {
-    name: basename(resolve(ctx.root)),
-    today: () => ctx.now().toISOString().slice(0, 10),
-    view: async (name, query) => await bridge["data"]!({ view: name, ...(query ? { query } : {}) }),
-    metro: async () => await bridge["metro"]!({}),
-    commit: (ref) => {
-      if (!/^[\w./@{}^~-]{1,200}$/.test(ref) || ref.startsWith("-")) return null
-      const s = gitOrNull(ctx.root, "show", "-s", "--format=%H%x1f%cI%x1f%s%x1f%b", "--end-of-options", `${ref}^{commit}`)
-      if (!s) return null
-      const [hash = "", date = "", subject = "", body = ""] = s.split("\x1f")
-      const files = (gitOrNull(ctx.root, "show", "--name-only", "--format=", "--end-of-options", hash) ?? "").split("\n").filter(Boolean)
-      return { hash, date, subject, body, files }
-    },
-  }
-}
-
-/** The server's commands: the read tools, view in pages, run's log cut short, and the bridge's action and show. */
-export function agentHandlers(bridge: Handlers, reader: Reader, commitTime: (ref: string) => number | null): Handlers {
-  const out: Handlers = {}
-  // The bridge's own answers as one line: what show says it did, the run action started.
-  for (const name of ["action", "show"]) {
-    const command = bridge[name]
-    if (!command) continue
-    out[name] = async (args) => {
-      // An agent proposes a plan; approving it is the owner's, from the UI.
-      if (name === "action" && args["name"] === "plan-approve") {
-        throw new Error("plan-approve is the owner's: an agent proposes with plan-propose, and the owner approves on the Plan view")
-      }
-      const a = await command(args)
-      const says = typeof a === "object" && a !== null && !Array.isArray(a) ? a["says"] : undefined
-      return typeof says === "string" ? says : typeof a === "string" ? a : JSON.stringify(a)
-    }
-  }
-  for (const [name, answer] of Object.entries(agentTools(reader))) out[name] = async (args) => bounded(await answer(args), "narrow the call")
-  out["view"] = async (args) => {
-    const { page, rest } = splitArgs(args)
-    return JSON.stringify(paged(await bridge["data"]!(rest), page, commitTime))
-  }
-  if (bridge["run"]) {
-    out["run"] = async (args) => {
-      const r = (await bridge["run"]!({ name: args["name"] ?? null })) as { [k: string]: Json }
-      const lines = typeof args["lines"] === "number" && args["lines"] > 0 ? args["lines"] : 20
-      const log = Object.values(r).find((v) => Array.isArray(v) || (typeof v === "string" && v.includes("\n")))
-      const tail = (Array.isArray(log) ? log.map(String) : typeof log === "string" ? log.split("\n") : []).slice(-lines)
-      const head = Object.entries(r).filter(([, v]) => v !== log && (v === null || typeof v !== "object")).map(([k, v]) => `${k} ${cut(String(v), 120)}`)
-      return bounded([head.join(" · "), ...tail].join("\n"), "ask for fewer lines")
-    }
-  }
-  return out
-}
-
-/** A commit's date in milliseconds, for since and until: null when `ref` names no commit. */
-export const commitTime = (root: string) => (ref: string): number | null => {
-  if (!/^[\w./@{}^~-]{1,200}$/.test(ref) || ref.startsWith("-")) return null
-  const t = gitOrNull(root, "log", "-1", "--format=%ct", "--end-of-options", `${ref}^{commit}`)
-  return t && /^\d+$/.test(t.trim()) ? Number(t.trim()) * 1000 : null
-}
+  "read_page outlines what the owner sees; screenshot only for a rare visual check, since it costs far more. If show says no UI could be opened, tell the owner to run naima ui. " +
+  "The project's items, gates, lines, history, work and metrics are the other server's, naima-tracker; this one never reads them."
 
 /** The landmarks an outline keeps. */
 const LANDMARKS = /^<(main|banner|navigation|region|dialog|form|complementary|contentinfo|status|alert)\b/
@@ -185,7 +112,7 @@ export function outline(text: string, max = 2000): string {
 }
 
 /**
- * The tools that look at the open UI itself, beside the bridge's: its central store, read and written through the
+ * The tools that look at the open UI itself, beside show: its central store, read and written through the
  * functions its components call (store, transitions, transition), and what its page shows, as text or as a picture.
  */
 export const LOOK_TOOLS = [
@@ -247,26 +174,17 @@ type Content = { type: string; [k: string]: Json }
 const said = (text: string, isError = false): Json => ({ content: [{ type: "text", text }], isError })
 
 /**
- * Asks the UI open on the project a question and waits for its answer: a question about the page over the feed show,
- * a request on its store (`tool`, `args`) over the feed agent. A read is asked twice at most, since it can reach a page
- * the moment it reloads, which never answers it; a transition is asked once, since the page may have applied it before
- * it reloaded (the model develop/models/ui/agent-endpoint in the workshop).
+ * Asks the UI open on the project a request through the agent channel and waits for its answer: the store's tools, the
+ * page's (read_page, screenshot) and the transitions, all in the UI stance's agent protocol. The channel asks one request
+ * at a time; a read is asked twice at most, since it can reach a page the moment it reloads, which never answers it; a
+ * transition is asked once, since the page may have applied it before it reloaded (the model
+ * develop/models/ui/agent-endpoint in the workshop).
  */
-async function askUi<T>(
-  root: string,
-  request: Omit<AgentRequest, "id"> | { kind: "read" | "rect"; selector?: string; html?: boolean },
-  ms: number,
-): Promise<T | string> {
-  if (!openUis(root).length) return "no Naima UI is open on this project: show something first, which opens one, or ask the owner to run naima ui"
-  const once = "tool" in request && request.tool === "transition"
-  for (const wait of once ? [ms] : [ms / 2, ms / 2]) {
-    const id = requestId()
-    if ("tool" in request) askAgent(root, { ...request, id })
-    else askShow(root, { ...request, id })
-    const a = await awaitAnswer<T & { error?: string }>(root, id, wait)
-    if (a !== null) return a.error ? a.error : a
-  }
-  return once
+async function askUi<T>(channel: AgentChannel, tool: Parameters<AgentChannel["ask"]>[0], args: { [k: string]: unknown }, ms: number): Promise<T | string> {
+  if (!channel.open()) return "no Naima UI is open on this project: show something first, which opens one, or ask the owner to run naima ui"
+  const { answer } = await channel.ask<T>(tool, args, ms)
+  if (answer !== null) return answer.error ? answer.error : answer
+  return tool === "transition"
     ? "the open UI did not answer in time: read store to see whether the transition was applied before asking it again"
     : "the open UI did not answer in time"
 }
@@ -284,14 +202,15 @@ export function saidTransition(a: { machine?: string; name?: string; done?: bool
 }
 
 /** The store tools' answers: the open UI's store, its registry, a transition called. */
-async function storeTool(root: string, name: string, args: { [k: string]: Json }, ms: number): Promise<Json> {
+async function storeTool(channel: AgentChannel, name: string, args: { [k: string]: Json }, ms: number): Promise<Json> {
   const s = (k: string) => (typeof args[k] === "string" && (args[k] as string).trim() ? (args[k] as string).trim() : undefined)
   if (name === "store") {
     const machine = s("machine")
     const path = s("path")
     const a = await askUi<{ summary?: { [m: string]: { [k: string]: Json } }; value?: Json; cut?: boolean; error?: string }>(
-      root,
-      { tool: "store", args: { ...(machine ? { machine } : {}), ...(path ? { path } : {}) } },
+      channel,
+      "store",
+      { ...(machine ? { machine } : {}), ...(path ? { path } : {}) },
       ms,
     )
     if (typeof a === "string") return said(a, true)
@@ -318,7 +237,7 @@ async function storeTool(root: string, name: string, args: { [k: string]: Json }
       person?: boolean
       allowed: boolean | string[] | null
     }
-    const a = await askUi<{ transitions?: T[]; error?: string }>(root, { tool: "transitions", args: machine ? { machine } : {} }, ms)
+    const a = await askUi<{ transitions?: T[]; error?: string }>(channel, "transitions", machine ? { machine } : {}, ms)
     if (typeof a === "string") return said(a, true)
     if (a.error) return said(a.error, true)
     const list = a.transitions ?? []
@@ -339,8 +258,9 @@ async function storeTool(root: string, name: string, args: { [k: string]: Json }
   if (!machine || !tname) return said("transition takes machine and name, as transitions lists them", true)
   const given = args["args"] ?? []
   const a = await askUi<{ done?: boolean; changed?: Changed; says?: string; error?: string }>(
-    root,
-    { tool: "transition", args: { machine, name: tname, args: Array.isArray(given) || (typeof given === "object" && given !== null) ? given : [given] } },
+    channel,
+    "transition",
+    { machine, name: tname, args: Array.isArray(given) || (typeof given === "object" && given !== null) ? given : [given] },
     ms,
   )
   if (typeof a === "string") return said(a, true)
@@ -352,12 +272,11 @@ async function storeTool(root: string, name: string, args: { [k: string]: Json }
 }
 
 /** The look tools' answers: the store, the page as text, or a capture of the window's place on the screen. */
-export function lookTools(root: string, capture: (rect: Rect) => Uint8Array | string = screenCapture(root), ms = 10_000) {
+export function lookTools(channel: AgentChannel, capture: (rect: Rect) => Uint8Array | string = screenCapture(null), ms = 10_000) {
   return async (name: string, args: { [k: string]: Json }): Promise<Json> => {
-    if (name === "store" || name === "transitions" || name === "transition") return await storeTool(root, name, args, ms)
+    if (name === "store" || name === "transitions" || name === "transition") return await storeTool(channel, name, args, ms)
     if (name === "read_page") {
-      const a = await askUi<{ text: string; truncated?: boolean }>(root, {
-        kind: "read",
+      const a = await askUi<{ text: string; truncated?: boolean }>(channel, "read_page", {
         ...(typeof args["selector"] === "string" ? { selector: args["selector"] } : {}),
         html: args["mode"] === "html",
       }, ms)
@@ -365,13 +284,15 @@ export function lookTools(root: string, capture: (rect: Rect) => Uint8Array | st
       const mode = args["mode"] === "text" || args["mode"] === "html" ? args["mode"] : "outline"
       const more = a.truncated ? "\n[the page is longer than the UI reads at once: read a part of it with selector]" : ""
       if (mode === "outline") return said(outline(a.text) + more)
-      const { page } = splitArgs({ offset: args["offset"] ?? null, limit: args["limit"] ?? 8000 })
-      const p = paged(a.text, page) as { offset: number; next: number | null; total: number; data: string }
+      const offset = typeof args["offset"] === "number" && args["offset"] >= 0 ? Math.floor(args["offset"]) : 0
+      const limit = typeof args["limit"] === "number" && args["limit"] >= 1 ? Math.floor(args["limit"]) : 8000
+      const data = a.text.slice(offset, offset + limit)
+      const next = offset + limit < a.text.length ? offset + limit : null
       return said(
-        `${p.data}\n[characters ${p.offset} to ${p.offset + p.data.length} of ${p.total}${p.next === null ? "" : `; the next page: offset ${p.next}`}]${more}`,
+        `${data}\n[characters ${offset} to ${offset + data.length} of ${a.text.length}${next === null ? "" : `; the next page: offset ${next}`}]${more}`,
       )
     }
-    const r = await askUi<Rect>(root, { kind: "rect" }, ms)
+    const r = await askUi<Rect>(channel, "screenshot", {}, ms)
     if (typeof r === "string") return said(r, true)
     const png = capture(r)
     if (typeof png === "string") return said(png, true)
@@ -389,13 +310,12 @@ export interface Rect {
 }
 
 /** The system's capture of a region of the screen: macOS's screencapture; elsewhere, why it cannot. */
-export function screenCapture(root: string, os: string = process.platform) {
+export function screenCapture(dir: string | null, os: string = process.platform) {
   return (r: Rect): Uint8Array | string => {
     if (os !== "darwin") return `a screenshot needs the system's screen capture, which Naima uses only on macOS; this is ${os}: use read_page`
-    const dir = stateDir(root)
     if (!dir) return "not a git repository"
-    mkdirSync(join(dir, "ui", "shots"), { recursive: true })
-    const file = join(dir, "ui", "shots", `${requestId()}.png`)
+    mkdirSync(dir, { recursive: true })
+    const file = join(dir, `${randomBytes(8).toString("hex")}.png`)
     const region = [r.x, r.y, r.width, r.height].map((n) => Math.round(n)).join(",")
     const run = spawnSync("screencapture", ["-x", "-t", "png", `-R${region}`, file], { encoding: "utf8" })
     try {
@@ -409,7 +329,7 @@ export function screenCapture(root: string, os: string = process.platform) {
   }
 }
 
-/** The bridge's MCP server with the look tools beside its own. */
+/** The server with the look tools beside its own. */
 export function withLookTools(server: McpServer, look: (name: string, args: { [k: string]: Json }) => Promise<Json>): McpServer {
   return async (message) => {
     const m = message as { id?: Json; method?: string; params?: { name?: string; arguments?: { [k: string]: Json } } }
@@ -426,38 +346,56 @@ export function withLookTools(server: McpServer, look: (name: string, args: { [k
 }
 
 export interface McpOptions {
-  views: readonly UiView[]
-  tabs: readonly UiTab[]
+  /** The plugins' views' names, as show's `view` offers them. */
+  tabs: readonly string[]
   version: string
-  /** Opens a UI on the project when a show finds none open: hello's opener by default. */
+  /** The channel to the UI open on the project (agent-endpoint.ts). */
+  channel: AgentChannel
+  /** A commit's full hash for a ref, throwing when the ref names no commit: a show of a commit moves the playhead by its hash. */
+  commit(ref: string): string
+  /** Opens a UI on the project when a show finds none open: hello's opener by default in `naima ui --mcp`. */
   openUi?(): Promise<string | null>
+  /** Where a screenshot's temporary file is written; null when the project is not in git. */
+  shotsDir: string | null
   /** Captures a region of the screen: the system's by default. */
   capture?(rect: Rect): Uint8Array | string
+  /** How long a show waits for the open UI's answer, in ms. */
+  showWait?: number
   input: Readable
   write(line: string): void
 }
 
-/** Serves the bridge as an MCP server until the input ends; returns the exit code. */
-export async function runMcp(ctx: Context, opts: McpOptions): Promise<number> {
-  const bridge = naimaBridge(ctx, {
-    views: opts.views,
-    tabs: opts.tabs,
-    // A tab's file is the UI's to frame: an agent is told its path in the tab's folder.
-    fileUrl: (tab, rel) => `naima-tab-file:${encodeURIComponent(tab)}/${rel}`,
-    ...(opts.openUi ? { openUi: opts.openUi } : {}),
-  })
-  const bridgeServer = bridgeMcp({
-    name: "naima",
-    version: opts.version,
-    instructions: INSTRUCTIONS,
-    handlers: agentHandlers(bridge.handlers, bridgeReader(ctx, bridge.handlers), commitTime(ctx.root)),
-    tools: naimaTools(opts.views.map((v) => v.name), opts.tabs.map((t) => t.name)),
-  })
-  try {
-    const mcp = withLookTools(bridgeServer, lookTools(ctx.root, opts.capture ?? screenCapture(ctx.root)))
-    await serveMcpLines(mcp, createInterface({ input: opts.input, crlfDelay: Infinity }), opts.write)
-    return 0
-  } finally {
-    bridge.close()
+/**
+ * The show tool: the transition of one of the machine agent's sequences, asked of the open UI. When none is open, one
+ * is opened as hello does and waited for a little longer than for a show.
+ */
+async function show(opts: McpOptions, args: { [k: string]: Json }): Promise<string> {
+  const call = showCall(args, opts.commit)
+  if (typeof call === "string") throw new Error(call)
+  const channel = opts.channel
+  const wait = opts.showWait ?? 8000
+  if (!channel.open()) {
+    const opened = opts.openUi ? await opts.openUi() : null
+    // A UI just opened listens once its page has loaded.
+    const until = Date.now() + wait * 3
+    while (opened && !channel.open() && Date.now() < until) await new Promise((r) => setTimeout(r, 250))
+    if (!channel.open()) {
+      return opened
+        ? `no Naima UI was open on this project; one is opening (${opened}) but did not listen in time: show again`
+        : "no Naima UI is open on this project, and none could be opened: the owner opens one with naima ui"
+    }
   }
+  const { id, answer } = await channel.ask<{ done?: boolean; says?: string }>("transition", { machine: "agent", name: call.name, args: [call.arg] }, wait)
+  const { open, took } = await channel.took(id)
+  if (answer === null) return `none of the ${open} open UIs answered within ${Math.round(wait / 1000)} s: one busy reading may still`
+  return answer.done === true ? `shown in ${took} of the ${open} open UIs` : `not shown: ${answer.error ?? answer.says ?? "the UI refused it now"}`
+}
+
+/** Serves the UI as an MCP server until the input ends; returns the exit code. */
+export async function runUiMcp(opts: McpOptions): Promise<number> {
+  const handlers: Handlers = { show: (args) => show(opts, args) }
+  const server = bridgeMcp({ name: "naima-ui", version: opts.version, instructions: INSTRUCTIONS, handlers, tools: uiTools(opts.tabs) })
+  const mcp = withLookTools(server, lookTools(opts.channel, opts.capture ?? screenCapture(opts.shotsDir)))
+  await serveMcpLines(mcp, createInterface({ input: opts.input, crlfDelay: Infinity }), opts.write)
+  return 0
 }

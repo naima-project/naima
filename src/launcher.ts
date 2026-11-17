@@ -16,7 +16,7 @@
 //           otherwise the network is git's, for alignment and update — except for `naima ui` (UI below)
 //
 // `naima ui`, and no other command, may also listen on the loopback interface
-// (not with --sidecar, the desktop app's, nor with --mcp, an agent's, which speak over their standard input and output),
+// (not with --sidecar, the desktop app's, nor with --mcp or --mcp-tracker, an agent's, which speak over their standard input and output),
 // read and run the Deno that runs it — to start the run of an action the UI
 // asks for (src/plugins/ui/bridge.ts) — and run the program that opens the
 // default browser (src/plugins/ui/open.ts). `naima run` and `naima wait`, and no
@@ -254,12 +254,12 @@ export function githubOrigin(root: string): boolean {
 }
 
 /**
- * The signals the launcher passes on to the program: an MCP server's (naima ui --mcp) interrupt and termination, which
+ * The signals the launcher passes on to the program: an MCP server's (naima ui --mcp, naima ui --mcp-tracker) interrupt and termination, which
  * its client sends to the launcher's process alone; none for any other command, whose Ctrl-C reaches the program's
  * process group from the terminal. Windows has no termination signal to listen to.
  */
 export function passedSignals(rest: readonly string[], os: string): Deno.Signal[] {
-  if (rest[0] !== "ui" || !rest.includes("--mcp")) return []
+  if (rest[0] !== "ui" || !(rest.includes("--mcp") || rest.includes("--mcp-tracker"))) return []
   return os === "windows" ? ["SIGINT"] : ["SIGINT", "SIGTERM"]
 }
 
@@ -326,6 +326,8 @@ export function uiGrant(
   // So does the MCP server an agent's client starts: no network, no browser; Deno to start an action's run.
   // Its show opens a UI when none is open, as hello does (src/plugins/ui/at-start.ts): the same grant as hello's, without gh;
   // and its screenshot runs macOS's screencapture on the UI window's place (src/plugins/ui/mcp.ts).
+  // The tracker's server (--mcp-tracker) opens no UI and captures no screen: no network, and Deno to start an action's run.
+  if (rest.includes("--mcp-tracker")) return { net: [], read: [deno], runs: [deno] }
   if (rest.includes("--mcp")) {
     const apps = desktopAppDirs(env, os).filter((d) => existsSync(d))
     return {
