@@ -1,1 +1,0 @@
-import{Hr as e,Tn as t,Vr as n}from"./chevron-right-DF7cyI33.js";import{t as r}from"./App-CherSedh.js";function i(i,a){e(a,!0),t(a.store),r(i,{}),n()}export{i as default};
