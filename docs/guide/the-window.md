@@ -220,7 +220,10 @@ goal's numbers under it: the items left to do, the items of the goal the agents 
 lately. Another click folds them; the page does not change.
 
 Under a hairline, one sentence says what needs you: "Nothing needs you.", or, for example, "Three decisions need you.".
-It is a link: with one thing it opens that item, with several it takes the decisions one at a time, as the key d does.
+It is a link to [Waiting for you](discussions-and-meetings.md#waiting-for-you): the board slides away and Waiting for you
+slides in, the sentence travelling into its caption, and Back slides them the other way. The key d still takes the
+decisions one at a time. When what needs you is an agent gone quiet, its detail on Home links to that agent's entry in
+Waiting for you, where one click brings the case to the chat.
 
 Last is the river of the week. The commits of the last seven days on main are grey dots on one line, each dot the commits
 of a part of the week, larger when they changed more lines. The agents at work are short green lines arriving at today,
