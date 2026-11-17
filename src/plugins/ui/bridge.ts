@@ -40,7 +40,7 @@
 
 import { resolve } from "node:path"
 import { askHostsInBackground, type Context, gitReadScope, headCommit, type KnownProject, knownProjects } from "../../core/api.ts"
-import { ACTIONS, actionArgv, actionOf, naimaEntry, runCommand } from "./actions.ts"
+import { actionArgv, actionOf, ACTIONS, naimaEntry, runCommand } from "./actions.ts"
 import { showCall } from "./agent-endpoint.ts"
 import { AtCache, commitOf } from "./at.ts"
 import { knownAt, recentProjects } from "./switch.ts"
@@ -52,8 +52,7 @@ import { type AgentRequest, askAgent, awaitAnswer, listenShows, openUis, type Pl
 import { commandJson, type JsonOf, metroData, VIEW_OF_COMMAND } from "./metro.ts"
 import { contentProblem, framePage, tabList, type UiTab, type UiTabContent, type UiView } from "./tabs.ts"
 
-export { ACTIONS, actionArgv, actionOf, naimaEntry, runCommand } from "./actions.ts"
-
+export { actionArgv, actionOf, ACTIONS, naimaEntry, runCommand } from "./actions.ts"
 
 export interface BridgeOptions {
   /** The views plugins contribute (`ui-views`), and the tabs (`ui-tabs` and every view not on a screen of its own). */
@@ -95,8 +94,7 @@ export interface BridgeOptions {
 export { SHOW_SEQUENCES } from "./agent-endpoint.ts"
 
 /** The transition a show's arguments name, or why it is refused (agent-endpoint.ts); a commit is made a full hash, which takes git. */
-export const showOf = (ctx: Context, args: { [key: string]: Json }): { name: string; arg: string } | string =>
-  showCall(args, (ref) => commitOf(ctx, ref))
+export const showOf = (ctx: Context, args: { [key: string]: Json }): { name: string; arg: string } | string => showCall(args, (ref) => commitOf(ctx, ref))
 
 /** Naima's bridge: its commands and its feed, for a carrier to serve; `close` drops what the commands keep. */
 export interface NaimaBridge {
@@ -287,16 +285,17 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       // Live, a tab is read as a view is: shared with the same read asked again, answered from the views' cache while the
       // project's stamp holds, and rendered off the serving thread, so that a slow tab (the summary takes seconds on a
       // large tracker) holds no other request and no file of the page.
-      const content = (at !== null ? await tab.render({ sub, query }, momentOf(at)) : await kept(`tab ${tab.name} ${JSON.stringify({ sub, query })}`, async () => {
-        if (opts.pool) {
-          try {
-            return await opts.pool.renderTab(tab.name, { sub, query })
-          } catch (e) {
-            if (!(e instanceof PoolDown)) throw e
+      const content =
+        (at !== null ? await tab.render({ sub, query }, momentOf(at)) : await kept(`tab ${tab.name} ${JSON.stringify({ sub, query })}`, async () => {
+          if (opts.pool) {
+            try {
+              return await opts.pool.renderTab(tab.name, { sub, query })
+            } catch (e) {
+              if (!(e instanceof PoolDown)) throw e
+            }
           }
-        }
-        return json(await tab.render({ sub, query }, momentOf(null)))
-      })) as UiTabContent
+          return json(await tab.render({ sub, query }, momentOf(null)))
+        })) as UiTabContent
       const problem = contentProblem(content)
       if (problem) throw new Error(`the ${tab.name} tab's content ${problem}`)
       return shown(tab, sub, content)

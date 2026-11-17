@@ -1540,7 +1540,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       {
         name: "contextWindows",
         says:
-          "the context window of each model the project's sessions run on, in tokens, by model id as the transcript names it (such as claude-opus-5-5): what naima handover measures a session's context against, the coordinator's and each worker's by its own model; set one with naima plugin set coordination contextWindows.<model id>=<tokens>. A model not named here whose window is published (the 1M-token and 200000-token Claude models) needs no entry",
+          "the context window of each model the project's sessions run on, in tokens, by model id as the transcript names it (such as the model id in the transcript): what naima handover measures a session's context against, the coordinator's and each worker's by its own model; set one with naima plugin set coordination contextWindows.<model id>=<tokens>. A model not named here whose window is published (the models of the tools Naima knows) needs no entry",
         default: "{}",
       },
       {

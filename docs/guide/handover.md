@@ -7,10 +7,10 @@ anything. When the coordinator suggests it, you say yes or not now, and after a 
 ## How it works
 
 At the end of each turn Naima checks how large the coordinator's context is, in tokens, against the window of the model it runs on. This works where the tool
-that runs the agent reports the usage of its last answer, as Claude Code does, whose transcript also names the model. For a tool that doesn't, Naima says it
+that runs the agent reports the usage of its last answer, as a tool whose adapter reads its transcript does, which also names the model. For a tool that doesn't, Naima says it
 has no measure and does nothing, because a guessed number would suggest a handover at the wrong time.
 
-The window comes from the project when you set it for that model, or from the window published for the model (the current Claude models have a
+The window comes from the project when you set it for that model, or from the window published for the model (the models of the tools Naima knows, listed by their adapters, mostly have a
 1,000,000-token window). When neither says, Naima assumes 1,000,000 tokens and says it is assumed. It only states the size, for example "the context is
 420,000 tokens of an assumed 1,000,000-token window", never a share of fullness.
 
@@ -53,7 +53,7 @@ command commits its own change, so setting an option needs no item.
 
 | Option           | Meaning                                                                                         | Default          |
 | ---------------- | ----------------------------------------------------------------------------------------------- | ---------------- |
-| `contextWindows` | the window of each model, in tokens, by model id: `contextWindows.claude-opus-5-5=1000000`        | none             |
+| `contextWindows` | the window of each model, in tokens, by model id: `contextWindows.my-model=1000000`              | none             |
 | `contextWindow`  | the window of any model neither named there nor published                                       | 1000000 assumed  |
 | `handoverAt`     | the share of the window past which the coordinator suggests a handover (0 to 1)                 | 0.6              |
 | `workerAt`       | the share of its own model's window past which a worker ends and a fresh one continues (0 to 1) | 0.6              |
@@ -66,6 +66,6 @@ gives a measure.
 ## Where the single writer is held
 
 The session that handed over is refused by `naima land` and by `naima push-check`, which the push hook runs. A script that publishes can ask
-`naima handover --check`, which fails for that session. In Claude Code, `naima hello` makes the session id part of the environment of every later command of that
+`naima handover --check`, which fails for that session. In a tool that lets its session-start hook set the environment, `naima hello` makes the session id part of the environment of every later command of that
 session, so the old session is not mistaken for its successor, which starts in the same checkout. A tool that cannot do this has no way to tell the two apart
 once the successor has started, and the refusal then rests on the old session ending.

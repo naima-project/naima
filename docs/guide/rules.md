@@ -454,7 +454,7 @@ Why: wait loops that matched their own command line ran for up to 10.5 hours whi
 nobody removed. A run with a budget ends by itself, and a wait by record ends when the run does.
 
 This rule ships with Naima, is active for agents in every project, and is acknowledged as "Long work mode on". **Enforced by** the check `wait-loops` on every
-tracked shell script, and a session note that records such a wait gets a note. The long foreground timeout is refused by a hook Naima installs for Claude Code
+tracked shell script, and a session note that records such a wait gets a note. The long foreground timeout is refused by a hook Naima installs for a tool that has hooks
 (`naima update` adds it), and the check `foreground-timeouts` fails on any found in the agents' transcripts since the last session note. The rest is
 **convention** ([long work](../agents/long-work.md),
 [for people](long-work.md)).

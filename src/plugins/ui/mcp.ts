@@ -64,7 +64,8 @@ export function uiTools(tabs: readonly string[]): { [command: string]: McpTool }
   }
 }
 
-export const INSTRUCTIONS = "Naima's UI, driven the way the owner does. The open UI is its central store, and these tools only use it as the UI's own components do: " +
+export const INSTRUCTIONS =
+  "Naima's UI, driven the way the owner does. The open UI is its central store, and these tools only use it as the UI's own components do: " +
   "read it with store (a summary first, then one machine or a path), list what can be done with transitions, act with transition (machine, name, args), " +
   "and use show for the common jumps, a named sequence of transitions. " +
   "To show the owner something, call show: it moves the Naima UI the owner has open, and is preferred to a page or an artifact of your own. " +

@@ -1,5 +1,5 @@
 ---
-title: Agents get two MCP servers: one drives the screen through the open UI, one reads the tracker
+title: "Agents get two MCP servers: one drives the screen through the open UI, one reads the tracker"
 kind: feature
 affects:
   - usage

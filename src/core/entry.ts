@@ -194,7 +194,7 @@ export const cliCommands: Omit<Command, "run">[] = [
     examples: [
       "plugin enable verifier-mcrl2",
       "plugin set verifier-mcrl2 bin=/usr/local/bin",
-      "plugin set coordination contextWindows.claude-opus-5-5=1000000",
+      "plugin set coordination contextWindows.my-model=1000000",
       "plugin disable rule-templates",
       "plugin show verifier-mcrl2",
       "plugin show",

@@ -77,7 +77,7 @@ how it ended (succeeded, failed with its exit code, killed by a budget, or stopp
 If the run is still going when the timeout passes, it says so and exits 1, so waiting again has to be a deliberate choice.
 
 A foreground command is never given a tool timeout over 60 seconds: a command that may last longer goes through `naima run`, and is waited on with `naima wait`
-in turns of less than a minute. For Claude Code, `naima update` installs a hook that refuses such a shell call, with the reason, unless the command is
+in turns of less than a minute. For a tool that has hooks, `naima update` installs a hook that refuses such a shell call, with the reason, unless the command is
 `naima run` or `naima wait`; and `naima check` fails (check `foreground-timeouts`) on any found in the agents' transcripts since the last session note.
 
 Naima watches every run itself, and `naima wait`, `naima run list` and `naima claims` all show what it finds:

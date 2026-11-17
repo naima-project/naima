@@ -55,6 +55,16 @@ export interface PluginHookSettings {
   sync(root: string, program: string, wanted: readonly PluginHook[]): PluginHookSync
 }
 
+/** The models a tool runs, as the core asks for them: the context windows published for their ids. */
+export interface ModelWindows {
+  /** The windows published for model ids, in tokens; only ids whose window is one number, since a transcript does not say which of two ran. */
+  published: Readonly<Record<string, number>>
+  /** A model id as `published` names it (provider prefix, dated snapshot and suffixes dropped); `id` arrives trimmed and lowercased. */
+  key(id: string): string
+  /** The window a mark in the model id says outright, when it has one. */
+  marked?(model: string): number | undefined
+}
+
 export interface AgentAdapter {
   /** How naima.json's `agents` names the tool. */
   id: string
@@ -106,6 +116,8 @@ export interface AgentAdapter {
    * knows, and says when it only assumes one.
    */
   contextModel?(hookInput: string): string | undefined
+  /** The models the tool runs and the windows published for them: what naima handover measures against when the project sets none. */
+  models?: ModelWindows
   /** The path of the session's transcript, from what the tool's turn-end hook is given on standard input; undefined when the input does not say. */
   transcriptPath?(hookInput: string): string | undefined
   /**

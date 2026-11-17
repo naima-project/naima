@@ -44,6 +44,7 @@ import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
   adapter,
+  ADAPTERS,
   type AgentAdapter,
   bool,
   type Command,
@@ -407,7 +408,7 @@ export interface HandoverDeps {
 
 /** The host's adapter named with --hook, or the one the environment shows. */
 function hostOf(id: string | undefined): AgentAdapter | undefined {
-  return id ? adapter(id) : adapter("claude-code")
+  return id ? adapter(id) : ADAPTERS[0]
 }
 
 /** Standard input as a hook gives it: nothing from a terminal, or when it cannot be read. */
@@ -712,7 +713,7 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
       says:
         "what the turn-end hook runs: when this session holds the role and its context is past the handover point, the first time, print the message that tells it to suggest a handover to the owner in its next reply; when it is another session (a worker, a side session) past its own bound (workerAt), once, the message that tells it to finish its step in full, write its state into its items' notes and end (as the tool's turn-end decision with --hook, as a NAIMA-MESSAGE line otherwise); each states the context's size against the window, said to be assumed when nobody set it for the model and it is not published, and says the rules come first; nothing in every other case",
     },
-    { name: "--hook", says: "with --watch: the tool whose hook runs it, read from standard input", default: "claude-code" },
+    { name: "--hook", says: "with --watch: the tool whose hook runs it, read from standard input", default: "the first tool Naima knows" },
     { name: "--tokens", says: "with --watch: the context size, instead of the one the hook input gives; with --postpone: the size to remind from" },
     { name: "--session", says: "with --watch: the session, instead of the hook input's or the current one" },
     { name: "--model", says: "with --watch: the model id whose window the context is measured against, instead of the one the hook input's transcript names" },
@@ -1009,7 +1010,7 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
 })
 
 /** The hosts Naima knows that give a context measure, by name. */
-const ADAPTER_MEASURES = (): string[] => ["claude-code"].map((id) => adapter(id)).filter((a): a is AgentAdapter => !!a?.contextTokens).map((a) => a.name)
+const ADAPTER_MEASURES = (): string[] => ADAPTERS.filter((a) => !!a.contextTokens).map((a) => a.name)
 
 /** The summary section that takes the coordinator role at `naima hello`, in the main checkout, and says it when it came from a handover. */
 export const handoverSection = (options: HandoverOptions): SummarySection => ({
