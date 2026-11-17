@@ -126,7 +126,7 @@ export const TOOL_SPECS: { [name: string]: { description: string; inputSchema: {
   },
   meetings: {
     description:
-      "The meetings with the owner in a line each (taken now, dated by date, then those waiting, with how many items on each), or one meeting by name with its agenda in order. To schedule, move or take one, use action: meeting-new, meeting-add, meeting-move, meeting-off, meeting-date, meeting-take.",
+      "The meetings with the owner in a line each (taken now, dated by date, then those waiting, with how many items on each), or one meeting by name with its agenda in order. To schedule, move or take one, use action: meeting-new, meeting-add, meeting-move, meeting-off, meeting-date, meeting-take; to raise one thing that waits for the owner in the chat now, meeting-raise.",
     inputSchema: schema({ name: str_("one meeting, such as owner") }) as { [k: string]: Json },
   },
   metrics: {

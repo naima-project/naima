@@ -153,6 +153,13 @@ meeting with `naima meeting <meeting> --close` when the owner stops, and starts 
 while no waiter runs is kept until one starts, so nothing is lost between two waits. Over MCP the same is the tool `meetings` and the store's machine
 `meetings`, whose `taken` is the last meeting taken from the open UI.
 
+The same wait wakes the coordinator when the owner sends one thing that waits for them to the chat: a click on an entry of the UI's Waiting for you, or
+`naima meeting raise <item>` (`helper:<branch>` for an agent gone quiet). It prints the topic with its context (why it waits, where it stands, the meeting it
+is on, what waits on it) and ends. The coordinator raises it with the owner at once, before anything else, settles it with them (`naima decide`, a landing,
+a release of the claim), and starts `naima meeting wait` again. A topic is raised once until the wait takes it, never once its item is closed, and a wait
+that finds its item closed since drops it and goes on waiting. The entry says it was sent, then that it is in the chat, and leaves the list once settled.
+The model of this channel is `develop/models/meeting/raise/` in the workshop; over MCP it is the action `meeting-raise` and the store's machine `waiting`.
+
 Agents schedule the meetings; the owner asks for it in the chat. Each request is one command, or the MCP tool `action` with the same words:
 
 | The owner asks                          | The command                                     | The action     |
@@ -163,6 +170,7 @@ Agents schedule the meetings; the owner asks for it in the chat. Each request is
 | take something off every meeting        | `naima meeting off <item>...`                   | `meeting-off`  |
 | set, change or clear a meeting's date   | `naima meeting date <meeting> <day\|none>`      | `meeting-date` |
 | start a meeting now                     | `naima meeting take <meeting>`                  | `meeting-take` |
+| raise one waiting thing in the chat now | `naima meeting raise <item>`                    | `meeting-raise` |
 
 Any open item that needs the owner can go on a meeting: an open question, a discussion, an approval, a landing waiting for a yes. An item other than a
 discussion is on one meeting at a time, a moved item is on that meeting only, and every add, move or removal is noted on the item, so its history says where it went. A discussion is on the meetings of its gate, any other item on

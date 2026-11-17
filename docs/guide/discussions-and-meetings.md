@@ -91,6 +91,16 @@ When you are ready, press **Take this meeting now**. Naima records that the meet
 The same from a terminal is `naima meeting take <meeting>`. The agent learns of it because it keeps `naima meeting wait` running in the background: the
 command ends when a meeting is taken and prints its agenda.
 
+### Waiting for you
+
+Waiting for you shows everything that waits for you, one per row, each in one sentence with how long it has waited: questions and decisions, work waiting
+for your approval or your test, and agents that have gone quiet. What unblocks the most comes first. When nothing waits, the page says so and stays quiet.
+
+Open an entry to see why it waits and what waits on it; reveal it to see all of that, item by item, and the meeting it is on. **Bring it to the chat**
+hands it to the agent in your chat, which raises it with you at once, with its context. The entry then says it was sent, then that it is in the chat, and
+it leaves the list once it is settled. Each step has its own address, so the browser's Back and Forward move between them and a reload keeps your place.
+The same from a terminal is `naima meeting raise <item>`.
+
 ## At the start of a session
 
 `naima hello` names each meeting that has discussions to take and is due, which means any meeting without a date, and a dated one from its date on:

@@ -1,0 +1,1 @@
+import{In as e,Xr as t,Zr as n}from"./chevron-right-CrNg_dsT.js";import r from"./Roadmap-C3f9ef1d.js";function i(i,a){n(a,!0);let{roadmap:o}=e();r(i,{get screen(){return o},get onopen(){return a.onitem}}),t()}export{i as default};
