@@ -67,6 +67,8 @@ On Home, for example, `board.unfold` unfolds the goal's numbers under its ring a
 `stage.home` goes Home from any screen: the Diary in the stage, nothing open beside it, the header unfolded.
 `stage.bugs` and `stage.features` open the open bugs or the features in Home's stage, grouped by what matters; with a goal's gate as their argument
 (`stage.bugs("release-1.2")`) they hold that goal's own, and `stage.item` then opens one beside the list.
+`stage.item` with a day (`2026-11-17`) opens that day's story beside the Diary narrowed to a column of dates, `stage.inner` with an item's
+reference opens an item the story names in its place, `stage.story` gives the story back and `stage.list` the whole Diary.
 
 ## Showing a place
 

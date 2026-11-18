@@ -1,0 +1,1 @@
+import{Ar as e,Br as t,Hr as n,Sr as r,bi as i,oi as a,or as o,ti as s}from"./chevron-right-CoEcGEpc.js";var c=n(`<div><!></div>`);function l(n,l){let u=o(l,`gap`,3,`sm`),d=o(l,`justify`,3,`start`),f=o(l,`align`,3,`center`);var p=c(),m=a(p);e(m,()=>l.children),i(p),s(()=>r(p,1,`cluster gap-${u()??``} justify-${d()??``} align-${f()??``}`,`svelte-2y2hj5`)),t(n,p)}export{l as t};

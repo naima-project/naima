@@ -251,8 +251,16 @@ The "+" at the end of the hairline opens a gallery in place of the faces. It sho
 picture of its face, grouped by kind: levels as a line (the pace, and the key numbers you recorded with
 [`naima metrics`](metrics-and-budgets.md)), distributions as a line with a pale band (the complexity across functions,
 when the project records two statistics of it, such as the median and the largest), amounts as bars (landings, lines
-changed, commits, items filed, bugs filed, items closed) and events as stars (decisions, releases). A click puts a metric
-on Home or takes it off. Home shows at most four faces, the goal's ring always first, and a metric the project does not
+changed, commits, items filed, bugs filed, items closed) and events as stars (decisions, releases). Two more faces sit
+there. Goals shows the goals with work left, up to four, two by two, each a smaller ring with its name and its day under
+it; the goal Home shows has a short orange mark under its name, and a click on another makes it Home's goal: its ring
+grows into the large one, Home follows that goal's development line when it has one, and the address keeps the choice
+(`?g=` names the goal). Flow shows your tasks, bugs, features and epics by where their work stands, one layer for each
+state over the river's window: done at the bottom in grey, then waiting for proof, in progress and to do in shades of
+orange. An item counts as in progress from its claim, back to do when the claim is released without a landing, waiting
+for proof from its landing, and done when it is closed. The bottom of the drawing is what was done before the window
+starts. Under it, each state's count at the moment shown; a click on a layer or a count lists that state's items in the
+stage. A click puts a metric on Home or takes it off. Home shows at most four faces, the goal's ring always first, and a metric the project does not
 measure says "not measured here". This browser remembers the choice for each project. Escape, the "+" again or Done
 close the gallery.
 
@@ -266,6 +274,19 @@ Last is the river of the week. The commits of the last seven days on main are gr
 of a part of the week, larger when they changed more lines. The agents at work are short green lines arriving at today,
 each as long as the agent has held its work. Today is an orange line, and a dotted orange path leads to the goal's
 milestone, a ring with its short name and its expected day; the later goals are grey rings with their month.
+
+Everything else ahead that has a day stands on the river too, as a small grey ring at that day: the milestones the goals'
+rings leave out, the sub-goals with a due or expected day, and the epics with work left and a planned or expected end. A
+ring is larger when there is more of it: the items a milestone has left, the days of work an epic is expected to take.
+At the week only the heaviest few show; zooming in reveals more of them, each growing into place, and none is drawn over
+another ring. A click on a small ring, or Enter on it, opens Ahead in the stage, the list of everything ahead with a day,
+nearest first, with that one open beside it: what it is, its day, and how its goal stands. The address says so (`s=ahead`
+and the item), so Back, Forward and a reload come back to it; the same ring again gives the stage back to the diary.
+
+A goal that is closed sits on the river as a small grey crown at the day it was released: the day its version was
+tagged, or else the day its release was filed. A click on a crown shows the goal under the river. When a goal closes
+while Home is open, its ring ahead shrinks and travels back to that day, settling there as the crown; with reduced
+motion it is simply there.
 
 When the project has development lines (`naima line`), the river carries them beside main. The line Home follows runs
 under main as a full tributary: it branches off where the line was cut, carries its own commits as dots and its agents
@@ -290,8 +311,11 @@ Back and Forward step through the moments seen and a reload shows the same one.
 A click on a dot of the river opens that part of the week's commits in the stage, each with its hour and its subject,
 and under a landing the items it closed; the same dot again gives the stage back to the diary.
 
-Under the river, in the stage, is the diary, one row a day, newest first: the day on the left, and on the right one sentence, the main
-decision of that day (the one that touched the most items), or else its release, its event or what landed. Today is the
+Under the river, in the stage, is the diary, one row a day, newest first: the day on the left, a dot, and on the right
+the day in one short sentence of about ten words, taken from the day's own words: its main decision (the one that
+touched the most items), or else what happened that day, its release or its finding, cut to its first clause; a day
+when only the agents worked says what they did in numbers ("3 pieces of work landed, 19 items filed"). The dot is orange
+on a day when you decided something or something happened, grey on a day that only landed work. Today is the
 first row and the largest; the rows get smaller and paler the further back they go. The last seven days are named
 (Today, Yesterday, then the weekday with its date under it), the rest of this month by the day's number, and each older
 month is one thin grey layer, thicker when more happened in it, with its decisions as small orange stars along it; a
@@ -301,26 +325,32 @@ fade is the moment Home shows, moving smoothly between one day and the next, and
 stands under the orange line, as when you drag it. Scrolling back to the top brings Home back to now. Each place the
 scroll stops at is a moment in the browser's history, as a drop of the line is, so Back, Forward and a reload return to
 it; and when the moment changes another way (the line dragged, ‹ and ›, "Back to today") the diary scrolls to that day.
-Pointing at a day, or reaching it with Tab, lights that day on the river. A click on a day opens its story under it:
-the decisions taken with you, the other moments of the day, the items that landed, and the counts; each item named
-opens its page. The address keeps the day opened as `d=` and the date. With reduced motion nothing glides.
+Pointing at a day, or reaching it with Tab, lights that day on the river. The diary is a list like the others below:
+a click on a day, or Enter, opens its story beside it, sliding in from the right, while the diary narrows to a column
+of dates on the left (Today, Yesterday, the weekdays, the day numbers and the months' layers) to go from day to day,
+by clicking or with the arrow keys; the column still scrolls through time as the whole diary does. The story says the
+day in short sentences: what you decided, what else happened, what landed, and how many decisions, landings and items
+filed or closed there were. Each item it names is a link by its short name and opens in the story's place, the day
+still marked in the column; the day's date in the stage's title, Back or Escape bring the story back, and a click on
+"Diary", or Escape again, the whole diary. The address keeps the day as `i=` and its date, with the item opened from
+its story after a `~`. With reduced motion nothing glides.
 
 The stage under the river holds the diary by default, or the list a click above opened in it: Waiting for you, What's
 left, a part of the week's commits, the bugs or the features. A quiet title says what it holds, with "‹ Diary" to go
 back; Escape goes back too. The title is also the stage's index: a click on it lists the Diary, Waiting for you, What's
-left, Bugs and Features, so every list is two clicks away. Under the goal's numbers a quiet line says how many bugs are
-to fix now and how many features are being built, and each opens its list; a goal's ring on the river shows how many
-bugs and features that goal has, and each opens that goal's own list. The bugs come in three groups, those blocking the
-goal, those to fix now and the rest, and the features in three, being built, built and waiting for their proof, and
-asked; each row is one line, with its age and who holds it. Every list follows the moment Home shows and the line it
-follows. Every list looks the same: one row each, its age or its hour on the left, a dot for what it is, and its
-sentence. A click on a row, or Enter, opens it beside the list: the
+left, Ahead, Bugs and Features, so every list is two clicks away. Under the goal's numbers a quiet line says how many
+bugs are to fix now and how many features are being built, and each opens its list; a goal's ring on the river shows
+how many bugs and features that goal has, and each opens that goal's own list. The bugs come in three groups, those
+blocking the goal, those to fix now and the rest, and the features in three, being built, built and waiting for their
+proof, and asked; each row is one line, with its age and who holds it. Every list follows the moment Home shows and
+the line it follows. Every list looks the same, the diary's too: one row each, its date, its age or its hour on the
+left, a dot for what it is, and its sentence. A click on a row, or Enter, opens it beside the list: the
 item slides in from the right and the list narrows to a column on the left, so you can go from one item to the next as
 in a mail app, by clicking in the column or with the arrow keys. The item is said in plain words: what it is and where
 it stands, why it waits (with **Bring it to the chat** for an entry of Waiting for you), when and where a commit was
 made and what it closed, what the item is about, what it is linked to and its history; every item it names opens there
 in its place. Back, Escape or a click on the stage's title give the whole list back. On a phone the column hides and the
-item takes the stage. Whatever opens in the stage, a list, an item or a part of What's left, condenses everything above
+item takes the stage. Whatever opens in the stage, a list, an item, a day's story or a part of What's left, condenses everything above
 it at once, in one smooth move, since the full board beside a list is only noise; going back to the diary leaves it
 condensed, and the bar brings Home back. Scrolling down in the stage, with the wheel, a
 trackpad, a finger or the keys, first condenses everything above it, following the scroll as it goes: the top shrinks
