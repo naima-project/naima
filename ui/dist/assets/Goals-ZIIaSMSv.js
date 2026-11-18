@@ -1,0 +1,1 @@
+import{Ii as e,Li as t,Sr as n}from"./chevron-right-DQKLKaZj.js";import r from"./Roadmap-DUOSA3KQ.js";function i(i,a){t(a,!0);let{roadmap:o}=n();r(i,{get screen(){return o},get onopen(){return a.onitem}}),e()}export{i as default};
