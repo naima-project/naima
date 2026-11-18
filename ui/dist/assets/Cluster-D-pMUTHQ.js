@@ -1,0 +1,1 @@
+import{Vr as e,ai as t,ar as n,ei as r,kr as i,xr as a,yi as o,zr as s}from"./chevron-right-IamRWP51.js";var c=e(`<div><!></div>`);function l(e,l){let u=n(l,`gap`,3,`sm`),d=n(l,`justify`,3,`start`),f=n(l,`align`,3,`center`);var p=c(),m=t(p);i(m,()=>l.children),o(p),r(()=>a(p,1,`cluster gap-${u()??``} justify-${d()??``} align-${f()??``}`,`svelte-2y2hj5`)),s(e,p)}export{l as t};

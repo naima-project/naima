@@ -1,1 +1,0 @@
-import{Ci as e,lr as t,wi as n}from"./chevron-right-CUTCHFE-.js";import r from"./Roadmap-DDA-NvFy.js";function i(i,a){n(a,!0);let{roadmap:o}=t();r(i,{get screen(){return o},get onopen(){return a.onitem}}),e()}export{i as default};
