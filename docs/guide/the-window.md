@@ -332,8 +332,11 @@ Back and Forward step through the moments seen and a reload shows the same one.
 A click on a dot of the river opens that part of the week's commits in the stage, each with its hour and its subject,
 and under a landing the items it closed; the same dot again gives the stage back to the diary.
 
-Under the river, in the stage, is the diary, one row a day, newest first: the day on the left, and on the right one sentence, the main
-decision of that day (the one that touched the most items), or else its release, its event or what landed. Today is the
+Under the river, in the stage, is the diary, one row a day, newest first: the day on the left, a dot, and on the right
+the day in one short sentence of about ten words, taken from the day's own words: its main decision (the one that
+touched the most items), or else what happened that day, its release or its finding, cut to its first clause; a day
+when only the agents worked says what they did in numbers ("3 pieces of work landed, 19 items filed"). The dot is orange
+on a day when you decided something or something happened, grey on a day that only landed work. Today is the
 first row and the largest; the rows get smaller and paler the further back they go. The last seven days are named
 (Today, Yesterday, then the weekday with its date under it), the rest of this month by the day's number, and each older
 month is one thin grey layer, thicker when more happened in it, with its decisions as small orange stars along it; a
@@ -343,20 +346,26 @@ fade is the moment Home shows, moving smoothly between one day and the next, and
 stands under the orange line, as when you drag it. Scrolling back to the top brings Home back to now. Each place the
 scroll stops at is a moment in the browser's history, as a drop of the line is, so Back, Forward and a reload return to
 it; and when the moment changes another way (the line dragged, ‹ and ›, "Back to today") the diary scrolls to that day.
-Pointing at a day, or reaching it with Tab, lights that day on the river. A click on a day opens its story under it:
-the decisions taken with you, the other moments of the day, the items that landed, and the counts; each item named
-opens its page. The address keeps the day opened as `d=` and the date. With reduced motion nothing glides.
+Pointing at a day, or reaching it with Tab, lights that day on the river. The diary is a list like the others below:
+a click on a day, or Enter, opens its story beside it, sliding in from the right, while the diary narrows to a column
+of dates on the left (Today, Yesterday, the weekdays, the day numbers and the months' layers) to go from day to day,
+by clicking or with the arrow keys; the column still scrolls through time as the whole diary does. The story says the
+day in short sentences: what you decided, what else happened, what landed, and how many decisions, landings and items
+filed or closed there were. Each item it names is a link by its short name and opens in the story's place, the day
+still marked in the column; the day's date in the stage's title, Back or Escape bring the story back, and a click on
+"Diary", or Escape again, the whole diary. The address keeps the day as `i=` and its date, with the item opened from
+its story after a `~`. With reduced motion nothing glides.
 
 The stage under the river holds the diary by default, or the list a click above opened in it: Waiting for you, What's
 left, or a part of the week's commits. A quiet title says what it holds, with "‹ Diary" to go back; Escape goes back too.
-Every list follows the moment Home shows and the line it follows. Every list looks the same: one row each, its age or
-its hour on the left, a dot for what it is, and its sentence. A click on a row, or Enter, opens it beside the list: the
+Every list follows the moment Home shows and the line it follows. Every list looks the same, the diary's too: one row
+each, its date, its age or its hour on the left, a dot for what it is, and its sentence. A click on a row, or Enter, opens it beside the list: the
 item slides in from the right and the list narrows to a column on the left, so you can go from one item to the next as
 in a mail app, by clicking in the column or with the arrow keys. The item is said in plain words: what it is and where
 it stands, why it waits (with **Bring it to the chat** for an entry of Waiting for you), when and where a commit was
 made and what it closed, what the item is about, what it is linked to and its history; every item it names opens there
 in its place. Back, Escape or a click on the stage's title give the whole list back. On a phone the column hides and the
-item takes the stage. Whatever opens in the stage, a list, an item or a part of What's left, condenses everything above
+item takes the stage. Whatever opens in the stage, a list, an item, a day's story or a part of What's left, condenses everything above
 it at once, in one smooth move, since the full board beside a list is only noise; going back to the diary leaves it
 condensed, and the bar brings Home back. Scrolling down in the stage, with the wheel, a
 trackpad, a finger or the keys, first condenses everything above it, following the scroll as it goes: the top shrinks

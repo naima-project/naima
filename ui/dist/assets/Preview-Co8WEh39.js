@@ -1,1 +1,0 @@
-import{Di as e,Oi as t,ur as n}from"./chevron-right-C0iu_ue8.js";import{t as r}from"./App-B9L3svkV.js";function i(i,a){t(a,!0),n(a.store),r(i,{}),e()}export{i as default};

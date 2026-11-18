@@ -1,1 +1,0 @@
-import{_r as e,n as t,vr as n}from"./chevron-right-C0iu_ue8.js";var r={name:`x`,size:24,node:[[`path`,{d:`M18 6 6 18`}],[`path`,{d:`m6 6 12 12`}]]};r.node;var i=new Set([`$$slots`,`$$events`,`$$legacy`]);function a(a,o){let s=e(o,i);t(a,n(()=>s,{get icon(){return r}}))}export{a as t};
