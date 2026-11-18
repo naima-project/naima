@@ -1,0 +1,1 @@
+import"./chevron-right-B1ozHCOu.js";import{t as e}from"./mount-Du6BMIg9.js";e(document.getElementById(`app`));

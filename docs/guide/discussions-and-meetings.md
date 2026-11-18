@@ -93,7 +93,8 @@ command ends when a meeting is taken and prints its agenda.
 
 ### Waiting for you
 
-Waiting for you shows everything that waits for you, one per row, each in one sentence with how long it has waited: questions and decisions, work waiting
+Waiting for you opens in Home's stage, under the river, from Home's sentence of what needs you, and on a page of its own at
+`#waiting`. It shows everything that waits for you, one per row, each in one sentence with how long it has waited: questions and decisions, work waiting
 for your approval or your test, and agents that have gone quiet. It lists only what concerns the goal Home shows: what belongs to that goal or to one
 before it, and anything that asks you now, such as an item on the owner's gate or on a meeting; a question that only holds a later release waits until
 its turn. The longest waiting comes first. When nothing waits, the page says so and stays quiet.

@@ -211,12 +211,15 @@ a sheet over the bottom of the page until you close it. It follows the time filt
 
 ### Home
 
-Home is one board under the bar, with little text, about what matters now. At the top is the day, or, when the timeline
+Home is one board under the bar, with little text, about what matters now. It fits the window, and the page itself
+never scrolls: the board is a header over a stage, the one place for details, described at the end of this section. At
+the top is the day, or, when the timeline
 shows a commit of the past, "As it was on" that day, with "Back to today". Then the goal nearest its expected date that
 still has work left: a ring with how much of it is done, its title, and one line with its expected date and how sure that
 date is, such as "Expected 2 January · 85% sure by 17 January" (its due date when there is no forecast yet). Beside it is
 a green dot for each agent at work, and how many there are in words. Under them are the goal's three numbers, always
-shown: the items left to do, the items of the goal the agents hold, and how many items closed a day lately.
+shown: the items left to do, the items of the goal the agents hold, and how many items closed a day lately. A click on
+the number left to do opens What's left of the goal in the stage.
 
 A click on the ring, or Enter on it, turns the board over. The ring and its words turn in depth and show, on their back,
 how much of the goal was done over time: an orange line of its percent done, with the count of items closed above it,
@@ -255,8 +258,7 @@ close the gallery.
 
 Under a hairline, one sentence says what needs you: "Nothing needs you.", or, for example, "Three decisions need you.".
 It counts what Waiting for you lists, at the moment Home shows: at a day of the past it says what needed you then. It is a
-link to [Waiting for you](discussions-and-meetings.md#waiting-for-you): the board slides away and Waiting for you
-slides in, the sentence travelling into its caption, and Back slides them the other way. The key d still takes the
+link that opens [Waiting for you](discussions-and-meetings.md#waiting-for-you) in the stage. The key d still takes the
 decisions one at a time. When what needs you is an agent gone quiet, its detail on Home links to that agent's entry in
 Waiting for you, where one click brings the case to the chat.
 
@@ -285,7 +287,10 @@ the quiet "now ›" where today stands on the river, brings Home back to now, th
 you drop the line at is a place in the browser's history, written in the address as `t=` and the time in seconds, so
 Back and Forward step through the moments seen and a reload shows the same one.
 
-Under the river is the diary, one row a day, newest first: the day on the left, and on the right one sentence, the main
+A click on a dot of the river opens that part of the week's commits in the stage, each with its hour and its subject,
+and under a landing the items it closed; the same dot again gives the stage back to the diary.
+
+Under the river, in the stage, is the diary, one row a day, newest first: the day on the left, and on the right one sentence, the main
 decision of that day (the one that touched the most items), or else its release, its event or what landed. Today is the
 first row and the largest; the rows get smaller and paler the further back they go. The last seven days are named
 (Today, Yesterday, then the weekday with its date under it), the rest of this month by the day's number, and each older
@@ -299,6 +304,22 @@ it; and when the moment changes another way (the line dragged, ‹ and ›, "Bac
 Pointing at a day, or reaching it with Tab, lights that day on the river. A click on a day opens its story under it:
 the decisions taken with you, the other moments of the day, the items that landed, and the counts; each item named
 opens its page. The address keeps the day opened as `d=` and the date. With reduced motion nothing glides.
+
+The stage under the river holds the diary by default, or the list a click above opened in it: Waiting for you, What's
+left, or a part of the week's commits. A quiet title says what it holds, with "‹ Diary" to go back; Escape goes back too.
+Every list follows the moment Home shows and the line it follows. Scrolling down in the stage, with the wheel, a
+trackpad, a finger or the keys, first condenses everything above it, following the scroll as it goes: the top shrinks
+into one thin bar of small pictures (a small ring with the goal's name and percent, then each other face chosen as a
+tiny chart, bars for amounts, a line for levels, stars for events), the river thins to a hairline with its dots and the
+orange today line, and the stage takes the room freed. Only then does the stage itself scroll, so scrolling the diary
+never walks Home back in time while the board is open. The hairline river still works: drag it, or use the arrow keys
+on it, to move through time, and click it, or press Enter, to open the nearest commits in the stage. Scrolling back to
+the stage's top unfolds everything again, and a click, a tap or Enter anywhere on the bar brings Home back at once; a
+click on one of its small pictures brings Home back on that face. A scroll that stops half way goes on to the nearer
+end. What the stage holds is a place in the browser's history, written in the address as `s=` (with `w=` for the entry
+of Waiting for you opened in it), and the condensed top as `c=1`, so Back and Forward step through what the stage
+showed and a reload keeps it, condensed or not. With reduced motion nothing shrinks or fades: the bar simply replaces
+the top once it is condensed.
 
 When a goal is chosen on the timeline, Home shows that goal in the ring. Each part is drawn as soon as what it needs has
 been read, and until the goal can be drawn a quiet line says what is being read, such as "Reading the schedule… 7 of 10".
