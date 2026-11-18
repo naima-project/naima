@@ -215,9 +215,18 @@ Home is one board under the bar, with little text, about what matters now. At th
 shows a commit of the past, "As it was on" that day, with "Back to today". Then the goal nearest its expected date that
 still has work left: a ring with how much of it is done, its title, and one line with its expected date and how sure that
 date is, such as "Expected 2 January · 85% sure by 17 January" (its due date when there is no forecast yet). Beside it is
-a green dot for each agent at work, and how many there are in words. A click on the ring, or Enter on it, unfolds the
-goal's numbers under it: the items left to do, the items of the goal the agents hold, and how many items closed a day
-lately. Another click folds them; the page does not change.
+a green dot for each agent at work, and how many there are in words. Under them are the goal's three numbers, always
+shown: the items left to do, the items of the goal the agents hold, and how many items closed a day lately.
+
+A click on the ring, or Enter on it, turns the board over. The ring and its words turn in depth and show, on their back,
+how much of the goal was done over time: an orange line of its percent done, with the count of items closed above it,
+and ahead of today a faint band from the percent now to 100% at the expected date, widening to the date it is 85% sure
+by. Its time is the river's, so each moment stands right above the same moment on the river, and the band ends above
+the goal's milestone; dragging, zooming or moving the river's today line moves the chart with it. The line is worked
+out from the dates the goal's items were planned and closed, so a change in which items belong to the goal shows only
+from when those items first appeared. A click on the chart, Escape or Back turns the board back to the ring. The
+address says which side is up (`#home/chart`), so Back, Forward and a reload keep it. With reduced motion the two sides
+cross-fade instead of turning.
 
 Under a hairline, one sentence says what needs you: "Nothing needs you.", or, for example, "Three decisions need you.".
 It is a link to [Waiting for you](discussions-and-meetings.md#waiting-for-you): the board slides away and Waiting for you

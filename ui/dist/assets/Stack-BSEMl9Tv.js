@@ -1,1 +1,0 @@
-import{$r as e,Pr as t,lr as n,tr as r,xr as i,yr as a,zn as o,zr as s}from"./chevron-right-DPEc_iNA.js";var c=i(`<div><!></div>`);function l(i,l){let u=o(l,`gap`,3,`md`),d=o(l,`align`,3,`stretch`);var f=c(),p=s(f);n(p,()=>l.children),e(f),t(()=>r(f,1,`stack gap-${u()??``} align-${d()??``}`,`svelte-1382wtz`)),a(i,f)}export{l as t};
