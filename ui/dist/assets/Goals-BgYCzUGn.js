@@ -1,1 +1,0 @@
-import{In as e,Xr as t,Zr as n}from"./chevron-right-DopayX1p.js";import r from"./Roadmap-BtpMsR6V.js";function i(i,a){n(a,!0);let{roadmap:o}=e();r(i,{get screen(){return o},get onopen(){return a.onitem}}),t()}export{i as default};

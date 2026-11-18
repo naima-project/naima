@@ -231,6 +231,28 @@ arrives. The band ahead comes from the recent pace, as the expected date does. A
 turns the board back to the ring. The address says which side is up (`#home/chart`), so Back, Forward and a reload
 keep it. With reduced motion one side simply replaces the other.
 
+The top of Home shows one metric at a time, as a watch shows one face, while the river below stays where it is. The goal's
+ring is the first face. By default the others are Activity, the landings on main as soft bars, one for each slice of the
+river; Decisions, the decisions taken with you as orange stars joined by a thin line, larger when a decision touched more
+items; and Pace, the items closed a day over the week before each day, as a line. Each face is drawn over the river's
+window, so a pan, a zoom or the today line moves it as it moves the chart, and the value at the today line stands beside
+it. Under each face are a few numbers for the window, as the goal's three stand under the ring. To change face, swipe the
+top sideways with a finger, the mouse or a trackpad, use the left and right arrow keys while it has the focus, or pick a
+name on the hairline under it. At rest the hairline shows only the current face's name, with a short orange mark where
+that face stands among the others; the other names appear when you point near their place or at the face, or when you
+reach them with Tab, and on a phone when you tap the current name. The first time a browser shows Home, the top slides a
+little towards the next face and back, to show there is more. The address names the face (`#home/metric/activity`), so
+Back, Forward and a reload keep it.
+
+The "+" at the end of the hairline opens a gallery in place of the faces. It shows every metric Home can draw as a small
+picture of its face, grouped by kind: levels as a line (the pace, and the key numbers you recorded with
+[`naima metrics`](metrics-and-budgets.md)), distributions as a line with a pale band (the complexity across functions,
+when the project records two statistics of it, such as the median and the largest), amounts as bars (landings, lines
+changed, commits, items filed, bugs filed, items closed) and events as stars (decisions, releases). A click puts a metric
+on Home or takes it off. Home shows at most four faces, the goal's ring always first, and a metric the project does not
+measure says "not measured here". This browser remembers the choice for each project. Escape, the "+" again or Done
+close the gallery.
+
 Under a hairline, one sentence says what needs you: "Nothing needs you.", or, for example, "Three decisions need you.".
 It is a link to [Waiting for you](discussions-and-meetings.md#waiting-for-you): the board slides away and Waiting for you
 slides in, the sentence travelling into its caption, and Back slides them the other way. The key d still takes the

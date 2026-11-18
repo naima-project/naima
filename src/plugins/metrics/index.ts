@@ -1032,6 +1032,10 @@ export interface TimelineMetric {
   /** A card's place among the cards, when its declaration gives one: the cards are shown in that order, those without one after, in the list's order. */
   cardPlace?: number
   group?: string
+  /** For a code measure: which one (complexity, function-size…) and, per function, which statistic of it: Home's band
+   *  face pairs two statistics of one measure. */
+  measure?: string
+  statistic?: string
   /** Each record with a value, oldest first: [position, value, commit, date]. */
   points: [number, number, string, string][]
   /** Each record whose run failed and took no value: [position, commit, date]. */
@@ -1152,6 +1156,8 @@ function timelineRest(
       card,
       ...(typeof m.card === "number" ? { cardPlace: m.card } : {}),
       ...(m.group ? { group: m.group } : {}),
+      ...(m.measure ? { measure: m.measure } : {}),
+      ...(m.statistic ? { statistic: m.statistic } : {}),
       points,
       fails,
     }
