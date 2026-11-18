@@ -40,7 +40,7 @@
 
 import { resolve } from "node:path"
 import { askHostsInBackground, type Context, gitReadScope, headCommit, type KnownProject, knownProjects } from "../../core/api.ts"
-import { actionArgv, actionOf, ACTIONS, naimaEntry, runCommand } from "./actions.ts"
+import { actionArgv, actionCommand, actionOf, ACTIONS, naimaEntry, runCommand } from "./actions.ts"
 import { showCall } from "./agent-endpoint.ts"
 import { AtCache, commitOf } from "./at.ts"
 import { knownAt, recentProjects } from "./switch.ts"
@@ -52,7 +52,7 @@ import { type AgentRequest, askAgent, awaitAnswer, listenShows, openUis, type Pl
 import { commandJson, type JsonOf, metroData, VIEW_OF_COMMAND } from "./metro.ts"
 import { contentProblem, framePage, tabList, type UiTab, type UiTabContent, type UiView } from "./tabs.ts"
 
-export { actionArgv, actionOf, ACTIONS, naimaEntry, runCommand } from "./actions.ts"
+export { actionArgv, actionCommand, actionOf, ACTIONS, naimaEntry, runCommand } from "./actions.ts"
 
 export interface BridgeOptions {
   /** The views plugins contribute (`ui-views`), and the tabs (`ui-tabs` and every view not on a screen of its own). */
@@ -74,7 +74,7 @@ export interface BridgeOptions {
    * view holds no other request. A view the pool cannot render (no worker) is rendered in this thread, as without it.
    */
   pool?: ViewPool | null
-  /** How an action's command line is started under `naima run`: this program, as a person types it, by default. */
+  /** How an action's command line is started under `naima run`, before `--data` and the data this bridge shows: this program, as a person types it, by default. */
   entry?: readonly string[]
   /** What carries the UI that listens to the feed show, as an open UI says: browser or desktop. */
   carrier?: string
@@ -315,8 +315,7 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
         action.budget ?? "5m",
         ...(action.progress ? ["--stale", "10m"] : ["--stale", "1m", "--no-progress", "a naima command the UI ran, which prints its result when it ends"]),
         "--",
-        ...(opts.entry ?? naimaEntry()),
-        ...argv,
+        ...actionCommand(opts.entry ?? naimaEntry(), ctx.trackerRoot, argv),
       ])
       if (started.code !== 0) throw new Error(started.err.trim() || started.out.trim() || `naima run exited with ${started.code}`)
       return json({ run, command: ["naima", ...argv] })

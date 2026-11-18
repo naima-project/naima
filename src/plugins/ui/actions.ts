@@ -82,6 +82,13 @@ export function naimaEntry(): string[] {
   return deno ? [deno.execPath(), "run", "-A", join(PROGRAM, "naima.ts")] : [process.execPath, join(PROGRAM, "src", "cli.ts")]
 }
 
+/**
+ * The command line of an action started under `naima run`: the entry, then the data the UI shows. The launcher keeps its
+ * marks (NAIMA_DATA among them) from the commands the program starts, so a UI started with `naima ui --data <dir>` from
+ * another folder would otherwise run its actions on the data found from that folder.
+ */
+export const actionCommand = (entry: readonly string[], data: string, argv: readonly string[]): string[] => [...entry, "--data", data, ...argv]
+
 /** Runs a naima command in this process, through the command the registry holds, and keeps what it prints. */
 export async function runCommand(ctx: Context, words: readonly string[]): Promise<{ code: number; out: string; err: string }> {
   const cmd = ctx.registry.find<Command>("commands", words[0]!)?.value

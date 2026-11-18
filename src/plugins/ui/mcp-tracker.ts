@@ -14,7 +14,7 @@ import { createInterface } from "node:readline"
 import type { Readable } from "node:stream"
 import { basename, resolve } from "node:path"
 import { type Context, gitOrNull, gitReadScope } from "../../core/api.ts"
-import { actionArgv, actionOf, ACTIONS, naimaEntry, runCommand } from "./actions.ts"
+import { actionArgv, actionCommand, actionOf, ACTIONS, naimaEntry, runCommand } from "./actions.ts"
 import { AtCache, commitOf } from "./at.ts"
 import { bridgeMcp, type McpTool, serveMcpLines } from "./bridge-mcp.ts"
 import type { Handlers, Json } from "./bridge-handler.ts"
@@ -124,8 +124,7 @@ export function trackerReads(ctx: Context, views: readonly UiView[], entry: read
         action.budget ?? "5m",
         ...(action.progress ? ["--stale", "10m"] : ["--stale", "1m", "--no-progress", "a naima command the UI ran, which prints its result when it ends"]),
         "--",
-        ...entry,
-        ...argv,
+        ...actionCommand(entry, ctx.trackerRoot, argv),
       ])
       if (started.code !== 0) throw new Error(started.err.trim() || started.out.trim() || `naima run exited with ${started.code}`)
       return json({ run, command: ["naima", ...argv] })
