@@ -267,6 +267,19 @@ of a part of the week, larger when they changed more lines. The agents at work a
 each as long as the agent has held its work. Today is an orange line, and a dotted orange path leads to the goal's
 milestone, a ring with its short name and its expected day; the later goals are grey rings with their month.
 
+Everything else ahead that has a day stands on the river too, as a small grey ring at that day: the milestones the goals'
+rings leave out, the sub-goals with a due or expected day, and the epics with work left and a planned or expected end. A
+ring is larger when there is more of it: the items a milestone has left, the days of work an epic is expected to take.
+At the week only the heaviest few show; zooming in reveals more of them, each growing into place, and none is drawn over
+another ring. A click on a small ring, or Enter on it, opens Ahead in the stage, the list of everything ahead with a day,
+nearest first, with that one open beside it: what it is, its day, and how its goal stands. The address says so (`s=ahead`
+and the item), so Back, Forward and a reload come back to it; the same ring again gives the stage back to the diary.
+
+A goal that is closed sits on the river as a small grey crown at the day it was released: the day its version was
+tagged, or else the day its release was filed. A click on a crown shows the goal under the river. When a goal closes
+while Home is open, its ring ahead shrinks and travels back to that day, settling there as the crown; with reduced
+motion it is simply there.
+
 When the project has development lines (`naima line`), the river carries them beside main. The line Home follows runs
 under main as a full tributary: it branches off where the line was cut, carries its own commits as dots and its agents
 as green lines, and its dotted orange path leads from today back up to main at its goal's ring, where the line will
