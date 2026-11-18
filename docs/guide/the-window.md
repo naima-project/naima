@@ -251,8 +251,16 @@ The "+" at the end of the hairline opens a gallery in place of the faces. It sho
 picture of its face, grouped by kind: levels as a line (the pace, and the key numbers you recorded with
 [`naima metrics`](metrics-and-budgets.md)), distributions as a line with a pale band (the complexity across functions,
 when the project records two statistics of it, such as the median and the largest), amounts as bars (landings, lines
-changed, commits, items filed, bugs filed, items closed) and events as stars (decisions, releases). A click puts a metric
-on Home or takes it off. Home shows at most four faces, the goal's ring always first, and a metric the project does not
+changed, commits, items filed, bugs filed, items closed) and events as stars (decisions, releases). Two more faces sit
+there. Goals shows the goals with work left, up to four, two by two, each a smaller ring with its name and its day under
+it; the goal Home shows has a short orange mark under its name, and a click on another makes it Home's goal: its ring
+grows into the large one, Home follows that goal's development line when it has one, and the address keeps the choice
+(`?g=` names the goal). Flow shows your tasks, bugs, features and epics by where their work stands, one layer for each
+state over the river's window: done at the bottom in grey, then waiting for proof, in progress and to do in shades of
+orange. An item counts as in progress from its claim, back to do when the claim is released without a landing, waiting
+for proof from its landing, and done when it is closed. The bottom of the drawing is what was done before the window
+starts. Under it, each state's count at the moment shown; a click on a layer or a count lists that state's items in the
+stage. A click puts a metric on Home or takes it off. Home shows at most four faces, the goal's ring always first, and a metric the project does not
 measure says "not measured here". This browser remembers the choice for each project. Escape, the "+" again or Done
 close the gallery.
 

@@ -1,1 +1,0 @@
-import{Ei as e,Ir as t,Jr as n,Kr as r,Or as i,fi as a,fr as o,si as s}from"./chevron-right-CUTCHFE-.js";var c=n(`<div><!></div>`);function l(n,l){let u=o(l,`gap`,3,`md`),d=o(l,`align`,3,`stretch`);var f=c(),p=a(f);t(p,()=>l.children),e(f),s(()=>i(f,1,`stack gap-${u()??``} align-${d()??``}`,`svelte-1382wtz`)),r(n,f)}export{l as t};
