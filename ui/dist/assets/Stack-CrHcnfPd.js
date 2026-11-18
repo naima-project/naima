@@ -1,1 +1,0 @@
-import{Er as e,Wn as t,Wr as n,ii as r,mr as i,or as a,wr as o,zr as s}from"./chevron-right-CITY6nl4.js";var c=e(`<div><!></div>`);function l(e,l){let u=t(l,`gap`,3,`md`),d=t(l,`align`,3,`stretch`);var f=c(),p=n(f);i(p,()=>l.children),r(f),s(()=>a(f,1,`stack gap-${u()??``} align-${d()??``}`,`svelte-1382wtz`)),o(e,f)}export{l as t};

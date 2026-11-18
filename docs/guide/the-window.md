@@ -273,6 +273,21 @@ the quiet "now ›" where today stands on the river, brings Home back to now, th
 you drop the line at is a place in the browser's history, written in the address as `t=` and the time in seconds, so
 Back and Forward step through the moments seen and a reload shows the same one.
 
+Under the river is the diary, one row a day, newest first: the day on the left, and on the right one sentence, the main
+decision of that day (the one that touched the most items), or else its release, its event or what landed. Today is the
+first row and the largest; the rows get smaller and paler the further back they go. The last seven days are named
+(Today, Yesterday, then the weekday with its date under it), the rest of this month by the day's number, and each older
+month is one thin grey layer, thicker when more happened in it, with its decisions as small orange stars along it; a
+click on a layer opens its days. The diary scrolls smoothly with the wheel, a trackpad, a finger or the keys, its top
+and bottom fading out, and scrolling it walks the whole of Home back in time: the day on the line just under the top
+fade is the moment Home shows, moving smoothly between one day and the next, and the river slides so that this moment
+stands under the orange line, as when you drag it. Scrolling back to the top brings Home back to now. Each place the
+scroll stops at is a moment in the browser's history, as a drop of the line is, so Back, Forward and a reload return to
+it; and when the moment changes another way (the line dragged, ‹ and ›, "Back to today") the diary scrolls to that day.
+Pointing at a day, or reaching it with Tab, lights that day on the river. A click on a day opens its story under it:
+the decisions taken with you, the other moments of the day, the items that landed, and the counts; each item named
+opens its page. The address keeps the day opened as `d=` and the date. With reduced motion nothing glides.
+
 When a goal is chosen on the timeline, Home shows that goal in the ring. Each part is drawn as soon as what it needs has
 been read, and until the goal can be drawn a quiet line says what is being read, such as "Reading the schedule… 7 of 10".
 Home is built from the views' data, the same the commands print with `--json`: `naima gates`, `naima queue`, `naima

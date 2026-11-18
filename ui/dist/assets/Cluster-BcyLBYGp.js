@@ -1,1 +1,0 @@
-import{Er as e,Wn as t,Wr as n,ii as r,mr as i,or as a,wr as o,zr as s}from"./chevron-right-CITY6nl4.js";var c=e(`<div><!></div>`);function l(e,l){let u=t(l,`gap`,3,`sm`),d=t(l,`justify`,3,`start`),f=t(l,`align`,3,`center`);var p=c(),m=n(p);i(m,()=>l.children),r(p),s(()=>a(p,1,`cluster gap-${u()??``} justify-${d()??``} align-${f()??``}`,`svelte-2y2hj5`)),o(e,p)}export{l as t};
