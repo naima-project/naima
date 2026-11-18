@@ -80,12 +80,16 @@ naima meeting date review none                     # no date: whenever you're re
 ```
 
 You don't need to type these. Ask the agent in the chat ("put this on Friday's review", "move the review to Monday") and it runs them.
+On Home you can also drag a meeting's square along the river to another day, or off it to take its date away
+([Home](the-window.md#home)).
 
 ## In the app
 
 The Meetings screen lists your meetings: the one on now, then those coming up by date, then those waiting with no date, which take place whenever you're ready.
 Each says when it is, how many things are on it, and opens to show its agenda. Every item that waits for you, on any screen, says so, and says which meeting
 it is on, or that it is on none yet. Home's Needs you starts with your next meeting and the others waiting.
+On Home, the meetings with a date are small squares on the river ahead; a click holds one in the stage, one question at a
+time, and a click on the question brings it into the chat ([Home](the-window.md#home)).
 
 When you are ready, press **Take this meeting now**. Naima records that the meeting started and tells the agent in your chat, which opens with the agenda.
 The same from a terminal is `naima meeting take <meeting>`. The agent learns of it because it keeps `naima meeting wait` running in the background: the

@@ -288,6 +288,27 @@ tagged, or else the day its release was filed. A click on a crown shows the goal
 while Home is open, its ring ahead shrinks and travels back to that day, settling there as the crown; with reduced
 motion it is simply there.
 
+Your meetings with a date stand on the river ahead as small squares at their day, each with the number of questions
+waiting on it. A click on a square, or Enter on it, holds that meeting in the stage, one question at a time: the
+question up is large, the next ones recede behind it. A click on the question up brings it into the chat, where the
+agent raises it with you at once (as `naima meeting raise` would); once it is answered there it goes, and the next one
+rises into its place. A click on a question behind brings that one up and into the chat instead. The questions of the
+meetings with no date are one quiet phrase beside the caption, such as "and 3 for when you have time", and a click on it
+holds them in the stage the same way.
+
+A meeting's date can be changed from Home. Drag its square along the river to another day, drag it off the river to
+take its date away, or drag a meeting with no date onto the river; with the keyboard, the arrow keys on a square move it
+a day at a time, and Escape gives the move up. The meeting held in the stage also has its date to pick, or No date.
+Each change runs `naima meeting date`, the command an agent would run, and the square stays where you put it while the
+command runs; if it fails, the square goes back to its day.
+
+The quiet Calendar beside the diary's title shows the month as a calendar in the stage: a grid of its days with no
+lines, a small square on a day with a meeting, a small ring on a day a goal is due or expected, and today's number in
+orange. It shows the month of the moment Home shows; ‹ and › show the month before and after. A click on a day opens it
+beside the grid, which narrows to a column: the day in full, its meetings with their questions (a click holds one in
+the stage) and its goals. The address says what the stage holds (`s=meeting~<name>`, `s=calendar~<month>` with `i=` for
+the day), so Back, Forward and a reload come back to it.
+
 When the project has development lines (`naima line`), the river carries them beside main. The line Home follows runs
 under main as a full tributary: it branches off where the line was cut, carries its own commits as dots and its agents
 as green lines, and its dotted orange path leads from today back up to main at its goal's ring, where the line will
@@ -473,8 +494,9 @@ With no live claim, a branch that has commits its base lacks is **done, waiting 
 ## Actions
 
 The window can run a few naima commands for you: record a decision (`decide`), add a note (`note`), close a gate's step (`gate step`, not adding or removing
-one), claim items or post a step (`claim`), release a claim (`release`) and name a commit of the map (`name-stop`). Each runs as a run of `naima run`, exactly
-as if you typed the command, so every rule and check applies, and the window can follow the run: its state, its exit code and what it printed. None of them
+one), claim items or post a step (`claim`), release a claim (`release`), name a commit of the map (`name-stop`), and take a meeting, bring a question
+into the chat or change a meeting's date (`meeting take`, `meeting raise`, `meeting date`). Each runs as a run of `naima run`, exactly
+as if you typed the command, on the data the window shows, so every rule and check applies, and the window can follow the run: its state, its exit code and what it printed. None of them
 rewrites history. Another page in your browser cannot run one.
 
 ## How it is built

@@ -65,6 +65,10 @@ The open UI keeps everything it shows in one central store: a set of machines, s
 A transition moves what the owner sees: call only what the owner would want shown, never one that starts work or changes the project.
 On Home, for example, `board.unfold` unfolds the goal's numbers under its ring and `board.fold` folds them again.
 `stage.home` goes Home from any screen: the Diary in the stage, nothing open beside it, the header unfolded.
+`stage.meeting` holds a meeting in Home's stage by its name (none: the questions of the meetings with no date), and
+`stage.calendar` shows the month as a calendar there. `meetingHeld.bring` brings the question up into the chat and
+`meetingDate.choose` changes a meeting's date: both change the project (they run `naima meeting raise` and `naima meeting date`),
+so call them only when the owner asked for that.
 
 ## Showing a place
 
