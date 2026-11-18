@@ -302,7 +302,7 @@ a day at a time, and Escape gives the move up. The meeting held in the stage als
 Each change runs `naima meeting date`, the command an agent would run, and the square stays where you put it while the
 command runs; if it fails, the square goes back to its day.
 
-The quiet Calendar beside the diary's title shows the month as a calendar in the stage: a grid of its days with no
+Calendar, in the stage's index (its title, described below), shows the month as a calendar in the stage: a grid of its days with no
 lines, a small square on a day with a meeting, a small ring on a day a goal is due or expected, and today's number in
 orange. It shows the month of the moment Home shows; ‹ and › show the month before and after. A click on a day opens it
 beside the grid, which narrows to a column: the day in full, its meetings with their questions (a click holds one in
@@ -359,7 +359,7 @@ its story after a `~`. With reduced motion nothing glides.
 The stage under the river holds the diary by default, or the list a click above opened in it: Waiting for you, What's
 left, a part of the week's commits, the bugs or the features. A quiet title says what it holds, with "‹ Diary" to go
 back; Escape goes back too. The title is also the stage's index: a click on it lists the Diary, Waiting for you, What's
-left, Ahead, Bugs and Features, so every list is two clicks away. Under the goal's numbers a quiet line says how many
+left, Ahead, Bugs, Features and Calendar, so every list is two clicks away. Under the goal's numbers a quiet line says how many
 bugs are to fix now and how many features are being built, and each opens its list; a goal's ring on the river shows
 how many bugs and features that goal has, and each opens that goal's own list. The bugs come in three groups, those
 blocking the goal, those to fix now and the rest, and the features in three, being built, built and waiting for their
