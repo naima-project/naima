@@ -970,8 +970,8 @@ export function meetingsData(
   rows.sort((a, b) => rank(a) - rank(b) || (a.on ?? "").localeCompare(b.on ?? "") || a.name.localeCompare(b.name))
   const on: Record<string, string> = {}
   for (const r of rows) for (const a of r.agenda) on[a.ref] ??= r.name
-  // Since when each open question or decision, and each open item on a meeting, has waited (the day it was filed), for the
-  // ages Waiting for you says; and the topics sent to the chat from it, for the marks on its entries (none outside git).
+  // Since when each open question or decision, each open item on a meeting, and each open item the owner runs (a test of
+  // theirs), has waited (the day it was filed), for the ages Waiting for you says and its order on the timeline; and the topics sent to the chat from it, for the marks on its entries (none outside git).
   // What waits on each open item that holds open work (its open blocked-by items), for what an entry unblocks.
   const since: Record<string, string> = {}
   const blocks: Record<string, { ref: string; title: string }[]> = {}
@@ -979,7 +979,8 @@ export function meetingsData(
     if (!isOpen(ctx, i)) continue
     const ref = label(i)
     const created = i.meta["created"]
-    if (typeof created === "string" && (isDiscussion(i) || i.type === "decisions" || ref in on)) since[ref] = created
+    const owners = i.meta["runBy"] === "human" || i.meta["runBy"] === "owner"
+    if (typeof created === "string" && (isDiscussion(i) || i.type === "decisions" || owners || ref in on)) since[ref] = created
     const waiting = linked(ctx, i, "blocks").filter((x) => isOpen(ctx, x))
     if (waiting.length) blocks[ref] = waiting.map((x) => ({ ref: label(x), title: x.meta.title }))
   }

@@ -254,7 +254,8 @@ measure says "not measured here". This browser remembers the choice for each pro
 close the gallery.
 
 Under a hairline, one sentence says what needs you: "Nothing needs you.", or, for example, "Three decisions need you.".
-It is a link to [Waiting for you](discussions-and-meetings.md#waiting-for-you): the board slides away and Waiting for you
+It counts what Waiting for you lists, at the moment Home shows: at a day of the past it says what needed you then. It is a
+link to [Waiting for you](discussions-and-meetings.md#waiting-for-you): the board slides away and Waiting for you
 slides in, the sentence travelling into its caption, and Back slides them the other way. The key d still takes the
 decisions one at a time. When what needs you is an agent gone quiet, its detail on Home links to that agent's entry in
 Waiting for you, where one click brings the case to the chat.

@@ -94,7 +94,12 @@ command ends when a meeting is taken and prints its agenda.
 ### Waiting for you
 
 Waiting for you shows everything that waits for you, one per row, each in one sentence with how long it has waited: questions and decisions, work waiting
-for your approval or your test, and agents that have gone quiet. What unblocks the most comes first. When nothing waits, the page says so and stays quiet.
+for your approval or your test, and agents that have gone quiet. It lists only what concerns the goal Home shows: what belongs to that goal or to one
+before it, and anything that asks you now, such as an item on the owner's gate or on a meeting; a question that only holds a later release waits until
+its turn. The longest waiting comes first. When nothing waits, the page says so and stays quiet.
+
+It lists exactly what Home's sentence counts, at the moment Home shows. When the today mark or the Diary shows a day of the past, Waiting for you shows
+what waited for you then, with its age on that day, and nothing is sent from there.
 
 Open an entry to see why it waits and what waits on it; reveal it to see all of that, item by item, and the meeting it is on. **Bring it to the chat**
 hands it to the agent in your chat, which raises it with you at once, with its context. The entry then says it was sent, then that it is in the chat, and
