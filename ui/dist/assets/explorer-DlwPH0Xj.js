@@ -1,1 +1,0 @@
-import"./chevron-right-IamRWP51.js";import{t as e}from"./mount-C3Z1jLeb.js";e(document.getElementById(`app`));
