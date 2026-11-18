@@ -264,6 +264,17 @@ of a part of the week, larger when they changed more lines. The agents at work a
 each as long as the agent has held its work. Today is an orange line, and a dotted orange path leads to the goal's
 milestone, a ring with its short name and its expected day; the later goals are grey rings with their month.
 
+When the project has development lines (`naima line`), the river carries them beside main. The line Home follows runs
+under main as a full tributary: it branches off where the line was cut, carries its own commits as dots and its agents
+as green lines, and its dotted orange path leads from today back up to main at its goal's ring, where the line will
+land. By default Home follows the line of the goal it shows. Every other line is a faint thread above main, branching
+off and rejoining it the same way at its own goal's ring. A click on a thread, or Enter on the threads (the next line
+each time), follows that line: the tributary moves to it, and the ring, its caption, the faces and the diary turn to that
+line's goal and its work. The line followed is written in the address as `l=` and the line's goal, so Back and Forward
+step through the lines followed and a reload shows the same one; with no `l=`, Home follows its own goal's line again. A
+line that has landed rejoins main where it landed, with a small ring on main at that moment; a click on it shows that
+landing and the items it closed.
+
 The orange line of today can be dragged along the river, with the mouse, a trackpad or a finger, to see the whole of Home
 as it was at that moment: the ring and its percent, the goal's line and its expected day, the agents at work then and what
 needed you then, all read at the newest commit of main before the moment. The day at the top says "As it was on" that

@@ -3519,7 +3519,7 @@ naima name-stop 3ab303aa --clear
 | `item` | Item | one item, picked by `?item=`: its evidence — its attachments and the items of a type that can prove, whether each proves or refutes now — then its fields, its other links and its prose; its data is `naima show <item> --json`, null when none is picked |
 | `map` | Map | the graphs the new UI's map draws besides the lines and their commits: each gate's goal with its start, due date and steps (with the day each closed), and the items that wait for others, as edges from the item first to the one that waits |
 | `projects` | All projects | every project Naima knows on this machine, this one first: its gates, its queue, its open bugs, its failing tests and its last change |
-| `week` | Week | the trunk's first-parent commits of the seven days before the moment shown, newest first, each with its hash, its time, its subject and its size (lines added and removed against its first parent, and files changed): what Home's river draws behind today |
+| `week` | Week | the trunk's first-parent commits of the seven days before the moment shown (or of `days` days, at most 366), newest first, each with its hash, its time, its subject and its size (lines added and removed against its first parent, and files changed): what Home's river draws behind today; read live, also the development lines of those days, open or landed on the trunk then, each with where it was cut, its own commits, and for a landed one its marker and the items it closed: what the river draws beside the trunk |
 
 ## metrics
 
