@@ -1,0 +1,1 @@
+import"./chevron-right-DopayX1p.js";import{t as e}from"./mount-RSCgIRq1.js";e(document.getElementById(`app`));

@@ -222,11 +222,14 @@ A click on the ring, or Enter on it, turns the board over. The ring and its word
 how much of the goal was done over time: an orange line of its percent done, with the count of items closed above it,
 and ahead of today a faint band from the percent now to 100% at the expected date, widening to the date it is 85% sure
 by. Its time is the river's, so each moment stands right above the same moment on the river, and the band ends above
-the goal's milestone; dragging, zooming or moving the river's today line moves the chart with it. The line is worked
-out from the dates the goal's items were planned and closed, so a change in which items belong to the goal shows only
-from when those items first appeared. A click on the chart, Escape or Back turns the board back to the ring. The
-address says which side is up (`#home/chart`), so Back, Forward and a reload keep it. With reduced motion the two sides
-cross-fade instead of turning.
+the goal's milestone; dragging, zooming or moving the river's today line moves the chart with it. The line passes
+through the goal's exact percent at the last landing of each of the last 30 days, and of each week before them, read
+from the tracker as it was at that commit. These are read in the background while the chart is shown, the newest first,
+and each commit only once, so a pan or a zoom reads only the days it adds. Until a day is read, that stretch shows an
+estimate from the dates the goal's items were planned and closed, and the line moves to each exact point as it
+arrives. The band ahead comes from the recent pace, as the expected date does. A click on the chart, Escape or Back
+turns the board back to the ring. The address says which side is up (`#home/chart`), so Back, Forward and a reload
+keep it. With reduced motion one side simply replaces the other.
 
 Under a hairline, one sentence says what needs you: "Nothing needs you.", or, for example, "Three decisions need you.".
 It is a link to [Waiting for you](discussions-and-meetings.md#waiting-for-you): the board slides away and Waiting for you

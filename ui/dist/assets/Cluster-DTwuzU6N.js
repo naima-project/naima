@@ -1,1 +1,0 @@
-import{$r as e,Pr as t,lr as n,tr as r,xr as i,yr as a,zn as o,zr as s}from"./chevron-right-Dv9M-NXw.js";var c=i(`<div><!></div>`);function l(i,l){let u=o(l,`gap`,3,`sm`),d=o(l,`justify`,3,`start`),f=o(l,`align`,3,`center`);var p=c(),m=s(p);n(m,()=>l.children),e(p),t(()=>r(p,1,`cluster gap-${u()??``} justify-${d()??``} align-${f()??``}`,`svelte-2y2hj5`)),a(i,p)}export{l as t};
