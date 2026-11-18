@@ -102,7 +102,8 @@ its turn. The longest waiting comes first. When nothing waits, the page says so 
 It lists exactly what Home's sentence counts, at the moment Home shows. When the today mark or the Diary shows a day of the past, Waiting for you shows
 what waited for you then, with its age on that day, and nothing is sent from there.
 
-Open an entry to see why it waits and what waits on it; reveal it to see all of that, item by item, and the meeting it is on. **Bring it to the chat**
+Open an entry to see why it waits and what waits on it; reveal it to see all of that, item by item, and the meeting it is on. In Home's stage an entry
+opens beside the list instead, with all of that, the item's own page in plain words and its history. **Bring it to the chat**
 hands it to the agent in your chat, which raises it with you at once, with its context. The entry then says it was sent, then that it is in the chat, and
 it leaves the list once it is settled. Each step has its own address, so the browser's Back and Forward move between them and a reload keeps your place.
 The same from a terminal is `naima meeting raise <item>`.

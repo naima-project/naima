@@ -307,7 +307,16 @@ opens its page. The address keeps the day opened as `d=` and the date. With redu
 
 The stage under the river holds the diary by default, or the list a click above opened in it: Waiting for you, What's
 left, or a part of the week's commits. A quiet title says what it holds, with "‹ Diary" to go back; Escape goes back too.
-Every list follows the moment Home shows and the line it follows. Scrolling down in the stage, with the wheel, a
+Every list follows the moment Home shows and the line it follows. Every list looks the same: one row each, its age or
+its hour on the left, a dot for what it is, and its sentence. A click on a row, or Enter, opens it beside the list: the
+item slides in from the right and the list narrows to a column on the left, so you can go from one item to the next as
+in a mail app, by clicking in the column or with the arrow keys. The item is said in plain words: what it is and where
+it stands, why it waits (with **Bring it to the chat** for an entry of Waiting for you), when and where a commit was
+made and what it closed, what the item is about, what it is linked to and its history; every item it names opens there
+in its place. Back, Escape or a click on the stage's title give the whole list back. On a phone the column hides and the
+item takes the stage. Whatever opens in the stage, a list, an item or a part of What's left, condenses everything above
+it at once, in one smooth move, since the full board beside a list is only noise; going back to the diary leaves it
+condensed, and the bar brings Home back. Scrolling down in the stage, with the wheel, a
 trackpad, a finger or the keys, first condenses everything above it, following the scroll as it goes: the top shrinks
 into one thin bar of small pictures (a small ring with the goal's name and percent, then each other face chosen as a
 tiny chart, bars for amounts, a line for levels, stars for events), the river thins to a hairline with its dots and the
@@ -316,10 +325,10 @@ never walks Home back in time while the board is open. The hairline river still 
 on it, to move through time, and click it, or press Enter, to open the nearest commits in the stage. Scrolling back to
 the stage's top unfolds everything again, and a click, a tap or Enter anywhere on the bar brings Home back at once; a
 click on one of its small pictures brings Home back on that face. A scroll that stops half way goes on to the nearer
-end. What the stage holds is a place in the browser's history, written in the address as `s=` (with `w=` for the entry
-of Waiting for you opened in it), and the condensed top as `c=1`, so Back and Forward step through what the stage
-showed and a reload keeps it, condensed or not. With reduced motion nothing shrinks or fades: the bar simply replaces
-the top once it is condensed.
+end. What the stage holds is a place in the browser's history, written in the address as `s=` (with `i=` for the item
+open beside the list, and `w=` for an entry of Waiting for you sent to the chat), and the condensed top as `c=1`, so Back
+and Forward step through what the stage showed and a reload keeps it, condensed or not. With reduced motion nothing
+shrinks, fades or slides: the bar simply replaces the top once it is condensed, and the item appears beside the column at once.
 
 When a goal is chosen on the timeline, Home shows that goal in the ring. Each part is drawn as soon as what it needs has
 been read, and until the goal can be drawn a quiet line says what is being read, such as "Reading the schedule… 7 of 10".
