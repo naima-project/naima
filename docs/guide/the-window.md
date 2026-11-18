@@ -330,6 +330,12 @@ open beside the list, and `w=` for an entry of Waiting for you sent to the chat)
 and Forward step through what the stage showed and a reload keeps it, condensed or not. With reduced motion nothing
 shrinks, fades or slides: the bar simply replaces the top once it is condensed, and the item appears beside the column at once.
 
+The word "naima" at the top left of every screen is the way Home: a click on it, or Enter while it has the focus, returns to
+Home from wherever you are. On another screen it shows Home; on Home it closes whatever the stage shows back to the
+diary and unfolds the condensed top, in one smooth move. Its only cue is that it dims a little under the pointer. The key
+H does the same from any screen, and so does pressing Escape twice in a row on Home. Back and Forward step through it as
+through any other move, and with reduced motion the top unfolds at once.
+
 When a goal is chosen on the timeline, Home shows that goal in the ring. Each part is drawn as soon as what it needs has
 been read, and until the goal can be drawn a quiet line says what is being read, such as "Reading the schedule… 7 of 10".
 Home is built from the views' data, the same the commands print with `--json`: `naima gates`, `naima queue`, `naima

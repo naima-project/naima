@@ -64,6 +64,7 @@ The open UI keeps everything it shows in one central store: a set of machines, s
 
 A transition moves what the owner sees: call only what the owner would want shown, never one that starts work or changes the project.
 On Home, for example, `board.unfold` unfolds the goal's numbers under its ring and `board.fold` folds them again.
+`stage.home` goes Home from any screen: the Diary in the stage, nothing open beside it, the header unfolded.
 
 ## Showing a place
 
