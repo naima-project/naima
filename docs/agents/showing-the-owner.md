@@ -65,6 +65,8 @@ The open UI keeps everything it shows in one central store: a set of machines, s
 A transition moves what the owner sees: call only what the owner would want shown, never one that starts work or changes the project.
 On Home, for example, `board.unfold` unfolds the goal's numbers under its ring and `board.fold` folds them again.
 `stage.home` goes Home from any screen: the Diary in the stage, nothing open beside it, the header unfolded.
+`stage.bugs` and `stage.features` open the open bugs or the features in Home's stage, grouped by what matters; with a goal's gate as their argument
+(`stage.bugs("release-1.2")`) they hold that goal's own, and `stage.item` then opens one beside the list.
 `stage.item` with a day (`2026-11-17`) opens that day's story beside the Diary narrowed to a column of dates, `stage.inner` with an item's
 reference opens an item the story names in its place, `stage.story` gives the story back and `stage.list` the whole Diary.
 `stage.meeting` holds a meeting in Home's stage by its name (none: the questions of the meetings with no date), and

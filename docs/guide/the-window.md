@@ -357,9 +357,15 @@ still marked in the column; the day's date in the stage's title, Back or Escape 
 its story after a `~`. With reduced motion nothing glides.
 
 The stage under the river holds the diary by default, or the list a click above opened in it: Waiting for you, What's
-left, or a part of the week's commits. A quiet title says what it holds, with "‹ Diary" to go back; Escape goes back too.
-Every list follows the moment Home shows and the line it follows. Every list looks the same, the diary's too: one row
-each, its date, its age or its hour on the left, a dot for what it is, and its sentence. A click on a row, or Enter, opens it beside the list: the
+left, a part of the week's commits, the bugs or the features. A quiet title says what it holds, with "‹ Diary" to go
+back; Escape goes back too. The title is also the stage's index: a click on it lists the Diary, Waiting for you, What's
+left, Ahead, Bugs and Features, so every list is two clicks away. Under the goal's numbers a quiet line says how many
+bugs are to fix now and how many features are being built, and each opens its list; a goal's ring on the river shows
+how many bugs and features that goal has, and each opens that goal's own list. The bugs come in three groups, those
+blocking the goal, those to fix now and the rest, and the features in three, being built, built and waiting for their
+proof, and asked; each row is one line, with its age and who holds it. Every list follows the moment Home shows and
+the line it follows. Every list looks the same, the diary's too: one row each, its date, its age or its hour on the
+left, a dot for what it is, and its sentence. A click on a row, or Enter, opens it beside the list: the
 item slides in from the right and the list narrows to a column on the left, so you can go from one item to the next as
 in a mail app, by clicking in the column or with the arrow keys. The item is said in plain words: what it is and where
 it stands, why it waits (with **Bring it to the chat** for an entry of Waiting for you), when and where a commit was
