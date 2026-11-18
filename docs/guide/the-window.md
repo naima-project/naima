@@ -251,8 +251,16 @@ The "+" at the end of the hairline opens a gallery in place of the faces. It sho
 picture of its face, grouped by kind: levels as a line (the pace, and the key numbers you recorded with
 [`naima metrics`](metrics-and-budgets.md)), distributions as a line with a pale band (the complexity across functions,
 when the project records two statistics of it, such as the median and the largest), amounts as bars (landings, lines
-changed, commits, items filed, bugs filed, items closed) and events as stars (decisions, releases). A click puts a metric
-on Home or takes it off. Home shows at most four faces, the goal's ring always first, and a metric the project does not
+changed, commits, items filed, bugs filed, items closed) and events as stars (decisions, releases). Two more faces sit
+there. Goals shows the goals with work left, up to four, two by two, each a smaller ring with its name and its day under
+it; the goal Home shows has a short orange mark under its name, and a click on another makes it Home's goal: its ring
+grows into the large one, Home follows that goal's development line when it has one, and the address keeps the choice
+(`?g=` names the goal). Flow shows your tasks, bugs, features and epics by where their work stands, one layer for each
+state over the river's window: done at the bottom in grey, then waiting for proof, in progress and to do in shades of
+orange. An item counts as in progress from its claim, back to do when the claim is released without a landing, waiting
+for proof from its landing, and done when it is closed. The bottom of the drawing is what was done before the window
+starts. Under it, each state's count at the moment shown; a click on a layer or a count lists that state's items in the
+stage. A click puts a metric on Home or takes it off. Home shows at most four faces, the goal's ring always first, and a metric the project does not
 measure says "not measured here". This browser remembers the choice for each project. Escape, the "+" again or Done
 close the gallery.
 
@@ -266,6 +274,19 @@ Last is the river of the week. The commits of the last seven days on main are gr
 of a part of the week, larger when they changed more lines. The agents at work are short green lines arriving at today,
 each as long as the agent has held its work. Today is an orange line, and a dotted orange path leads to the goal's
 milestone, a ring with its short name and its expected day; the later goals are grey rings with their month.
+
+Everything else ahead that has a day stands on the river too, as a small grey ring at that day: the milestones the goals'
+rings leave out, the sub-goals with a due or expected day, and the epics with work left and a planned or expected end. A
+ring is larger when there is more of it: the items a milestone has left, the days of work an epic is expected to take.
+At the week only the heaviest few show; zooming in reveals more of them, each growing into place, and none is drawn over
+another ring. A click on a small ring, or Enter on it, opens Ahead in the stage, the list of everything ahead with a day,
+nearest first, with that one open beside it: what it is, its day, and how its goal stands. The address says so (`s=ahead`
+and the item), so Back, Forward and a reload come back to it; the same ring again gives the stage back to the diary.
+
+A goal that is closed sits on the river as a small grey crown at the day it was released: the day its version was
+tagged, or else the day its release was filed. A click on a crown shows the goal under the river. When a goal closes
+while Home is open, its ring ahead shrinks and travels back to that day, settling there as the crown; with reduced
+motion it is simply there.
 
 When the project has development lines (`naima line`), the river carries them beside main. The line Home follows runs
 under main as a full tributary: it branches off where the line was cut, carries its own commits as dots and its agents
