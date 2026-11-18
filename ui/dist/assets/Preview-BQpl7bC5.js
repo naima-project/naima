@@ -1,1 +1,0 @@
-import{$n as e,_i as t,gi as n}from"./chevron-right-Bju8P69I.js";import{t as r}from"./App-CKlXExY6.js";function i(i,a){t(a,!0),e(a.store),r(i,{}),n()}export{i as default};

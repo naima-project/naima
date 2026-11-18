@@ -1,0 +1,1 @@
+import{Hr as e,Mi as t,Pr as n,Qr as r,ei as i,pi as a,vi as o,vr as s}from"./chevron-right-Cr-7UUpB.js";var c=i(`<div><!></div>`);function l(i,l){let u=s(l,`gap`,3,`md`),d=s(l,`align`,3,`stretch`);var f=c(),p=o(f);e(p,()=>l.children),t(f),a(()=>n(f,1,`stack gap-${u()??``} align-${d()??``}`,`svelte-1382wtz`)),r(i,f)}export{l as t};
