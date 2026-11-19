@@ -445,15 +445,33 @@ function section(page: string, heading: string): string {
   return after.split(/\n\s*\n|\n## /)[0]?.replace(/\s+/g, " ").trim() ?? ""
 }
 
-/** Every dated decision, as the diary tells it: its title, and its reason when its page gives one. */
+/** Every dated decision, as the diary tells it: a decision item with its title, and its reason when its page gives
+ *  one; a discussion decided with the decision it reached. */
 function decisionsOf(ctx: Context): { date: string; title: string; text: string; ref: string }[] {
-  if (!ctx.registry.types.has(DECISIONS)) return []
+  if (!ctx.registry.types.has(DECISIONS)) return decidedOf(ctx)
   return ctx.repo.items.filter((i) => i.type === DECISIONS).flatMap((d) => {
     const date = fieldValue(d, DECIDED_ON) ?? created(d)
     if (!isDate(date)) return []
     const title = String(d.meta.title ?? "")
     const why = section(readReadme(d), "Why")
     return [{ date, title, text: why ? `${title}. Why: ${why}` : title, ref: label(d) }]
+  }).concat(decidedOf(ctx))
+}
+
+const DISCUSSIONS = "discussions"
+const DECISION = { name: "decision", kind: "string" } as const
+const DECISION_ON = { name: "decisionOn", kind: "date" } as const
+
+/** Every discussion decided with `naima decide`, on the day it was: its question and the decision it reached. */
+function decidedOf(ctx: Context): { date: string; title: string; text: string; ref: string }[] {
+  if (!ctx.registry.types.has(DISCUSSIONS)) return []
+  return ctx.repo.items.filter((i) => i.type === DISCUSSIONS).flatMap((d) => {
+    const decision = fieldValue(d, DECISION)?.trim()
+    const date = fieldValue(d, DECISION_ON)
+    if (!decision || !date || !isDate(date)) return []
+    const title = String(d.meta.title ?? "").trim()
+    const said = /[.!?]$/.test(decision) ? decision : `${decision}.`
+    return [{ date, title, text: title ? `${said} On: ${title}` : said, ref: label(d) }]
   })
 }
 
