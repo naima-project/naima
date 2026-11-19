@@ -3,10 +3,12 @@
 // trailer; `naima checkpoint` runs what is owed and records the result as a file of the data directory's `checkpoints/`.
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
+import { relative, sep } from "node:path"
 import { DATA_FILE } from "./layout.ts"
-import { gitOrNull } from "./git.ts"
+import { gitOrNull, trunk } from "./git.ts"
 import { heavyAnswer } from "./heavy.ts"
 import { privateContext, redactPrivate } from "./private.ts"
+import { developmentLine } from "./trunk-only.ts"
 import type { Context } from "./types.ts"
 
 /** The trailer a landing marker names the checks it did not run in. */
@@ -17,8 +19,47 @@ export const CHECKPOINTS = "checkpoints"
 
 export type CheckMode = "continuous" | "checkpoint"
 
-/** A coordination option: the branch tip's own configuration first when `at` holds it, else the one `ctx` runs with. */
+/**
+ * The options that say where and when heavy checks run: the owner's choice, recorded on the trunk by `naima heavy-checks`.
+ * A development line's copy of naima.json may predate that choice, so in a checkout of a line the trunk's value wins.
+ */
+const TRUNK_OPTIONS: readonly string[] = ["heavyChecks", "checks", "landingHost", "verifyHost"]
+
+const trunkOptions = new Map<string, Record<string, unknown>>()
+
+/** The coordination options the trunk's naima.json records, read from git (not from the checkout); empty outside a development line or when the trunk has none. */
+function trunkConfigured(ctx: Context): Record<string, unknown> {
+  if (!developmentLine(ctx.root)) return {}
+  const main = trunk(ctx.root)
+  if (!main) return {}
+  const file = relative(ctx.root, join(ctx.trackerRoot, DATA_FILE)).split(sep).join("/")
+  if (file.startsWith("..")) return {}
+  const sha = gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `refs/heads/${main}^{commit}`)
+  if (!sha) return {}
+  const key = `${ctx.root}\0${sha}\0${file}`
+  const known = trunkOptions.get(key)
+  if (known) return known
+  let options: Record<string, unknown> = {}
+  try {
+    const raw = gitOrNull(ctx.root, "show", `${sha}:${file}`)
+    const parsed = raw === null ? null : (JSON.parse(raw) as { plugins?: Record<string, { options?: Record<string, unknown> }> })
+    options = parsed?.plugins?.["coordination"]?.options ?? {}
+  } catch {
+    // no readable naima.json on the trunk: the checkout's configuration decides
+  }
+  trunkOptions.set(key, options)
+  return options
+}
+
+/**
+ * A coordination option: for those that say where heavy checks run, on a development line, the trunk's recorded value;
+ * else the branch tip's own configuration first when `at` holds it, else the one `ctx` runs with.
+ */
 export function option(ctx: Context, name: string, at?: Context): unknown {
+  if (TRUNK_OPTIONS.includes(name)) {
+    const main = trunkConfigured(ctx)[name]
+    if (main !== undefined) return main
+  }
   if (at) {
     try {
       const tip = (JSON.parse(readFileSync(join(at.trackerRoot, DATA_FILE), "utf8")) as { plugins?: Record<string, { options?: Record<string, unknown> }> })
