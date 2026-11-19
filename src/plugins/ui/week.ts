@@ -6,7 +6,7 @@
 // with the moment it was cut (its opening commit, `Open line/<gate>`), its own first-parent commits in the window, and
 // for a landed line its marker and the items it closed. Read from git alone, in one process.
 
-import { type Context, runGitAsync, trunk } from "../../core/api.ts"
+import { type Context, runGit, runGitAsync, trunk } from "../../core/api.ts"
 
 /** How many days the river looks back by default, and the most a reader may ask for (its parameter `days`). */
 export const WEEK_DAYS = 7
@@ -24,6 +24,9 @@ export interface WeekCommit {
   changes: number
   files: number
   subject: string
+  /** False when the commit's tree has no tracker where the project keeps it now (the data kept elsewhere then, or not
+   *  yet made): Home cannot be read at it, and the moments shown keep to the commits that have one. Absent otherwise. */
+  tracker?: false
 }
 
 export interface WeekData {
@@ -126,6 +129,18 @@ export async function riverLines(ctx: Context, main: string, commits: readonly W
   return Promise.all([...opens, ...lands])
 }
 
+/** The commits marked whose tree has no tracker at the place the project keeps it, asked of git in one process
+ *  (cat-file --batch-check of each commit's <hash>:<prefix>); unchanged when the tracker is the repository's root or
+ *  another repository's. */
+export function withoutTracker(ctx: Context, commits: WeekCommit[]): WeekCommit[] {
+  const prefix = ctx.trackerPrefix
+  if (!prefix || !commits.length) return commits
+  const r = runGit(ctx.root, ["cat-file", "--batch-check"], { input: commits.map((c) => `${c.hash}:${prefix}`).join("\n") + "\n" })
+  if (!r.ok) return commits
+  const answers = r.out.split("\n")
+  return commits.map((c, i) => (/ missing$/.test(answers[i] ?? "") ? { ...c, tracker: false as const } : c))
+}
+
 /** The commits of the `days` days before `at` (a commit's full hash), or before now on the trunk: a week by default. */
 export async function weekData(ctx: Context, at: string | null, days: number = WEEK_DAYS): Promise<WeekData> {
   const ref = at ?? trunk(ctx.root) ?? "HEAD"
@@ -149,7 +164,7 @@ export async function weekData(ctx: Context, at: string | null, days: number = W
     ],
     GIT_MS,
   )
-  const commits = r.ok ? parseWeek(r.out).filter((c) => c.t > since && c.t <= until) : []
+  const commits = withoutTracker(ctx, r.ok ? parseWeek(r.out).filter((c) => c.t > since && c.t <= until) : [])
   const main = trunk(ctx.root)
   const lines = at === null && main && r.ok ? await riverLines(ctx, main, commits, since, until) : []
   return { ref: r.ok ? ref : null, until, days, commits, lines }
