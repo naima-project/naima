@@ -21,7 +21,24 @@ export type Exec = (cmd: string, args: string[]) => { ok: boolean; err: string }
 
 /** What git and ssh say when the link dropped, as opposed to when the host refused: worth another try. */
 const DROPPED =
-  /could not read from remote repository|connection (closed|reset|timed out|refused)|broken pipe|kex_exchange|ssh: connect to host|operation timed out|lost connection/i
+  /could not read from remote repository|connection (closed|reset|timed out|refused)|broken pipe|kex_exchange|ssh: connect to host|operation timed out|transfer timed out|lost connection|server unexpectedly closed/i
+
+/**
+ * The limits of every transfer to a host: ssh gives up on a connection that stopped answering (a keep-alive every 10 s,
+ * three missed), and no command runs longer than the hard limit, whatever it is doing. A hung transfer thus ends, as a
+ * failed run that says why, instead of holding the run for ever.
+ */
+export const TRANSFER_LIMIT_MS = 600_000
+const SSH_LIMITS = "-o BatchMode=yes -o ConnectTimeout=8 -o ServerAliveInterval=10 -o ServerAliveCountMax=3"
+
+/** The environment a git transfer runs with: ssh with the limits above, unless the user named their own ssh command; never a prompt. */
+export const transferEnv = (env: Record<string, string | undefined> = process.env): Record<string, string> => ({
+  GIT_TERMINAL_PROMPT: "0",
+  ...(env["GIT_SSH_COMMAND"] ? {} : { GIT_SSH_COMMAND: `${env["GIT_SSH"] ?? "ssh"} ${SSH_LIMITS}` }),
+})
+
+/** Why a transfer that was ended at its limit failed: in words a person can act on. */
+const stalled = (cmd: string, ms: number): string => `${cmd} transfer timed out after ${Math.ceil(ms / 1000)} s without finishing: the connection looks dead`
 
 /** How often a command that met a dropped link is run, and the pause before each new try. */
 const TRIES = 3
@@ -87,7 +104,19 @@ function sendCommit(root: string, h: Host, tip: string, exec: Exec, pause: (ms: 
     if (!made.ok) return fail(made.err)
     const bundled = exec("git", ["-C", root, "bundle", "create", "--quiet", local, ref])
     if (!bundled.ok) return fail(bundled.err)
-    const copied = persist(exec, pause, "scp", ["-q", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", local, `${h.ssh}:${fwd}/.git/${file}`])
+    const copied = persist(exec, pause, "scp", [
+      "-q",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "ConnectTimeout=8",
+      "-o",
+      "ServerAliveInterval=10",
+      "-o",
+      "ServerAliveCountMax=3",
+      local,
+      `${h.ssh}:${fwd}/.git/${file}`,
+    ])
     if (!copied.ok) return fail(copied.err)
     const there = cmdQuote(`${winDir}\\.git\\${file}`)
     const fetched = persist(exec, pause, "ssh", [
@@ -95,6 +124,10 @@ function sendCommit(root: string, h: Host, tip: string, exec: Exec, pause: (ms: 
       "BatchMode=yes",
       "-o",
       "ConnectTimeout=8",
+      "-o",
+      "ServerAliveInterval=10",
+      "-o",
+      "ServerAliveCountMax=3",
       h.ssh,
       `cd /d ${cmdEscape(/[\s%]/.test(winDir) ? `"${winDir}"` : winDir)} && git fetch -q ${there} +${ref}:${ref} && del /q ${there}`,
     ])
@@ -106,13 +139,19 @@ function sendCommit(root: string, h: Host, tip: string, exec: Exec, pause: (ms: 
 }
 
 /** Run a command for real: git through Naima's own git runner, the rest as itself. */
-export function realExec(root: string): Exec {
+export function realExec(root: string, limitMs: number = TRANSFER_LIMIT_MS): Exec {
   return (cmd, args) => {
     if (cmd === "git") {
-      const r = runGit(root, args.slice(2))
+      const rest = args.slice(2)
+      const r = runGit(root, rest, { timeoutMs: limitMs, env: transferEnv() })
+      // Ended by the time limit: git was killed with nothing to say.
+      if (!r.ok && (r.status === null || r.status === undefined) && !r.err && !r.notInstalled) {
+        return { ok: false, err: stalled("git", limitMs) }
+      }
       return { ok: r.ok, err: r.ok ? "" : gitReason(r) }
     }
-    const r = spawnSync(cmd, args, { encoding: "utf8", timeout: 600_000, stdio: ["ignore", "pipe", "pipe"] })
+    const r = spawnSync(cmd, args, { encoding: "utf8", timeout: limitMs, env: { ...process.env, ...transferEnv() }, stdio: ["ignore", "pipe", "pipe"] })
+    if (r.error && (r.error as { code?: string }).code === "ETIMEDOUT") return { ok: false, err: stalled(cmd, limitMs) }
     // No status, no signal and no error: the program was never started, as when the launcher does not let this command run it.
     const never = !r.error && r.status == null && !r.signal
     return {
