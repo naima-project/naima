@@ -69,6 +69,12 @@ beta — Public beta (version 0.9; due 2026-12-01, 17 days left): BLOCKED by 2
 gate still doesn't hold, `naima check` warns about it (the check `milestone-overdue`). This is a note rather than a failure, because a late milestone is
 something to know about, not a sign that the project is broken.
 
+Naima also says so by itself, without waiting for anyone to look. A goal with work left is at risk when its date is two days away or less, or when the pace of
+the last four weeks would end it after the date, and late once the date has passed. Each state is said once, in a message the next `naima hello` and the next
+turn-end tick give to the agent: a warning for at risk, and for late an urgent message that comes back every hour until the owner acknowledges it with
+`naima messages ack`. A question about the goal (move the date, cut what is left, add capacity) is also put on the agenda of the owner's next meeting, when the
+project has one. A goal with no work left, or already released, says nothing.
+
 A date moves, or comes off, with `naima gate set`: `naima gate set beta --due
 2026-12-15` changes it, and `naima gate set beta --due ""` takes it off. The same
 command changes a gate's title, what it says, its version, what it holds on and its coverage lists, and makes it a release gate that waits for the full suite
@@ -220,28 +226,23 @@ naima plan paper-ready --json   # the whole graph, as the plan view gives it
 naima plan                      # one line for each goal with open work
 ```
 
-The plan holds the goal's open items and every open item they wait for, even on another goal. An item waits for another
-through `blocked-by`, for its parts through `has-part`, and the proof of an item (`verified-by`) runs after the item. Each
-wave holds what is ready once the waves before it are done, at most as many items as the coordination option `maxWorkers`
-allows, the item with the longest chain after it first. The critical path is the heaviest chain: an item weighs its effort
-(S is half a unit, M one, L two, XL four) and one unit when it has none. The heavy runs come at the checkpoint, once every
-piece of work is done: items whose code is done and whose proof is owed, properties to check, tests and metrics to run, and
-the full test suite of a release gate.
+The plan holds the goal's open items and every open item they wait for, even on another goal. An item waits for another through `blocked-by`, for its parts
+through `has-part`, and the proof of an item (`verified-by`) runs after the item. Each wave holds what is ready once the waves before it are done, at most as
+many items as the coordination option `maxWorkers` allows, the item with the longest chain after it first. The critical path is the heaviest chain: an item
+weighs its effort (S is half a unit, M one, L two, XL four) and one unit when it has none. The heavy runs come at the checkpoint, once every piece of work is
+done: items whose code is done and whose proof is owed, properties to check, tests and metrics to run, and the full test suite of a release gate.
 
-An agent proposes or revises a note on the plan with `naima plan <goal> --propose "<note>"`, and the owner approves the
-plan with `naima plan <goal> --approve`, or with the Approve button of the Plan view in `naima ui`. A new note clears the
-approval. An approval records the plan as it was, so when the work changes the plan says it needs approving again. A worker
-or an agent can't approve.
+An agent proposes or revises a note on the plan with `naima plan <goal> --propose "<note>"`, and the owner approves the plan with `naima plan <goal> --approve`,
+or with the Approve button of the Plan view in `naima ui`. A new note clears the approval. An approval records the plan as it was, so when the work changes the
+plan says it needs approving again. A worker or an agent can't approve.
 
-The plan also shows where the work stops for you. An open discussion, something only a person can do (an item whose
-`runBy` is `human`) and each meeting with one of them on its agenda are nodes of their own, labelled "meeting with you",
-dated when the meeting has a date and waiting otherwise. Everything after them waits until the meeting is held, and a
-meeting takes no worker's place. An item a discussion is about (`concerns`) waits for its decision.
+The plan also shows where the work stops for you. An open discussion, something only a person can do (an item whose `runBy` is `human`) and each meeting with
+one of them on its agenda are nodes of their own, labelled "meeting with you", dated when the meeting has a date and waiting otherwise. Everything after them
+waits until the meeting is held, and a meeting takes no worker's place. An item a discussion is about (`concerns`) waits for its decision.
 
-In the UI, select a goal on the Roadmap to unfold its waves under its bar, placed at the pace
-its items closed lately, and open the Plan view to see the whole graph with the critical path drawn strong. Under the Roadmap's time axis, each
-checkpoint run (`naima checkpoint`) is a small square joined to the goal it checks: filled when it passed, red when it
-failed, and hollow at a goal's expected end while one is owed.
+In the UI, select a goal on the Roadmap to unfold its waves under its bar, placed at the pace its items closed lately, and open the Plan view to see the whole
+graph with the critical path drawn strong. Under the Roadmap's time axis, each checkpoint run (`naima checkpoint`) is a small square joined to the goal it
+checks: filled when it passed, red when it failed, and hollow at a goal's expected end while one is owed.
 
 ## Keep a diary
 

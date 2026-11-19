@@ -216,8 +216,8 @@ selected), at each call of the bridge's `tab` command, in Naima's process. It re
 A `src` and a `page` are paths in the folder `files(ctx)` returns, read at each request. In a browser every file of that folder is served under
 `/files/<key>/<tab>/`, where the key is derived from the run's token: it opens those files and nothing else. Each goes out with a Content-Security-Policy whose
 `sandbox` (scripts and forms allowed, never the same origin) puts it in an opaque origin of its own, even when opened on its own, so its scripts cannot reach
-the window, its cookie, its data or its actions; it loads only from the same server and connects nowhere. A page the plugin makes (`{ html, css? }`) goes to
-the window whole, which frames it in the same sandbox. No code of the plugin runs in the window.
+the window, its cookie, its data or its actions; it loads only from the same server and connects nowhere. A page the plugin makes (`{ html, css? }`) goes to the
+window whole, which frames it in the same sandbox. No code of the plugin runs in the window.
 
 ```js
 export default function looks() {

@@ -50,17 +50,17 @@ The owner's attention is the scarcest thing in the work.
 
 The header holds these keys, and no others:
 
-| Key          | What it holds                                                                                                                                                                                                                                                                                    |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `name`       | The rule's name, lower case with dashes. Required. Its id is `<plugin>/<name>`, which a project's `retire` option can name.                                                                                                                                                                      |
-| `title`      | The rule in one line. Required.                                                                                                                                                                                                                                                                  |
-| `audience`   | `agents`, `people` or `everyone`. Required.                                                                                                                                                                                                                                                      |
-| `strength`   | `must` or `should`. Required.                                                                                                                                                                                                                                                                    |
-| `ack`        | The phrase an agent gives back to acknowledge the rule, when it asks for one.                                                                                                                                                                                                                    |
-| `enforcedBy` | The check or gate that enforces it, when one does. `naima check` reports a name that is neither.                                                                                                                                                                                                 |
-| `verifiedBy` | How the rule is verified: the check or gate that verifies it, or `agent` for a convention the agent verifies by reading its own work against the rule. Left out, it is the `enforcedBy` check. `naima rules` shows it when it differs from that check, and `naima rules --json` always gives it. |
+| Key          | What it holds                                                                                                                                                                                                                                                                                                                            |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`       | The rule's name, lower case with dashes. Required. Its id is `<plugin>/<name>`, which a project's `retire` option can name.                                                                                                                                                                                                              |
+| `title`      | The rule in one line. Required.                                                                                                                                                                                                                                                                                                          |
+| `audience`   | `agents`, `people` or `everyone`. Required.                                                                                                                                                                                                                                                                                              |
+| `strength`   | `must` or `should`. Required.                                                                                                                                                                                                                                                                                                            |
+| `ack`        | The phrase an agent gives back to acknowledge the rule, when it asks for one.                                                                                                                                                                                                                                                            |
+| `enforcedBy` | The check or gate that enforces it, when one does. `naima check` reports a name that is neither.                                                                                                                                                                                                                                         |
+| `verifiedBy` | How the rule is verified: the check or gate that verifies it, or `agent` for a convention the agent verifies by reading its own work against the rule. Left out, it is the `enforcedBy` check. `naima rules` shows it when it differs from that check, and `naima rules --json` always gives it.                                         |
 | `covers`     | For a rule the agent verifies, the files it is about, from the project's root: a path, which covers everything under it, or a pattern with `*` and `**`. One value or a list. A landing that changes one of them without a recorded review of the rule gets a note ([below](#a-review-the-agent-records)). `{{setting}}` works here too. |
-| `when`       | A condition on the plugin's settings, `<setting>=<value>`, or a list of them that must all hold. Without it, the file always applies.                                                                                                                                                            |
+| `when`       | A condition on the plugin's settings, `<setting>=<value>`, or a list of them that must all hold. Without it, the file always applies.                                                                                                                                                                                                    |
 
 The header is a small, strict part of YAML, read by Naima itself with no package: one key per line, `key: value`, or `key:` followed by lines that start with
 `-` for a list. A value is plain text, or a string in double quotes (as in JSON) or single quotes. Put a value in quotes when it contains a colon followed by a
@@ -96,9 +96,10 @@ No check can hold a rule verified by `agent`, so the agent reads its change agai
 naima reviewed stance-ui/ui-consistent-help --item bugs/help-moves "the help link stays last in the header on every page, the new settings page included"
 ```
 
-This writes one small file under `rule-reviews/` in the tracker, which is committed on the branch with the change. When the branch lands, `naima land` prints each
-review it carries. If the landing changes a file that such a rule `covers` and carries no review of it, `naima land` adds a note that names the rule, the files
-and the command above. The note doesn't stop the landing. `naima reviewed` refuses a rule that a check verifies, since `naima check` already runs that check.
+This writes one small file under `rule-reviews/` in the tracker, which is committed on the branch with the change. When the branch lands, `naima land` prints
+each review it carries. If the landing changes a file that such a rule `covers` and carries no review of it, `naima land` adds a note that names the rule, the
+files and the command above. The note doesn't stop the landing. `naima reviewed` refuses a rule that a check verifies, since `naima check` already runs that
+check.
 
 ## Sharing a project's vocabulary
 
@@ -129,8 +130,8 @@ changed, or refuse a status set by hand when that status should only ever be set
 
 ## Hooks in the agent tool
 
-A plugin can ask the agent tool to run one of its commands at a moment the tool knows about, such as after every edit. It declares the hook under
-`agent-hooks` and leaves the writing to Naima:
+A plugin can ask the agent tool to run one of its commands at a moment the tool knows about, such as after every edit. It declares the hook under `agent-hooks`
+and leaves the writing to Naima:
 
 ```ts
 contributes: {
@@ -145,13 +146,13 @@ contributes: {
 }
 ```
 
-`tool` names the agent tool by its adapter's id, as `agents` in `naima.json` names it, and `event` and `matcher` are in that tool's own terms. `command` is the naima
-command the hook runs, as a list of words. Naima writes the line that starts it through the project's launcher, and marks it with the hook's id
+`tool` names the agent tool by its adapter's id, as `agents` in `naima.json` names it, and `event` and `matcher` are in that tool's own terms. `command` is the
+naima command the hook runs, as a list of words. Naima writes the line that starts it through the project's launcher, and marks it with the hook's id
 (`<plugin>/<name>`) so it can find it again.
 
-Naima installs the hook in the settings file the tool's adapter names, at `naima init`, `naima update` and `naima stance adopt`. The project's
-own hooks and Naima's are kept as they are. A hook whose declaration changed is rewritten in place, and a hook whose plugin is no longer loaded is removed at the
-next `naima update`. Until then, `naima check` notes it. A plugin never writes the tool's settings itself: the launcher doesn't let it.
+Naima installs the hook in the settings file the tool's adapter names, at `naima init`, `naima update` and `naima stance adopt`. The project's own hooks and
+Naima's are kept as they are. A hook whose declaration changed is rewritten in place, and a hook whose plugin is no longer loaded is removed at the next
+`naima update`. Until then, `naima check` notes it. A plugin never writes the tool's settings itself: the launcher doesn't let it.
 
 ## Views
 

@@ -245,9 +245,9 @@ git clone <source> naima-tracker/naima
 followed by any `naima` command, which then aligns the clone with the lock. A new [worktree](glossary.md#worktree) of the project is the same case. `naima open`
 makes its program a local clone of the current one (`git clone --local`, then a checkout of the lock), so opening a worktree never touches the network.
 
-A launcher run by its path from inside another project, the main worktree's from a fresh worktree for instance, serves that other project only while it has
-no program of its own: it clones the program there at the lock. Once that project has its program, a launcher always serves its own project, wherever it
-is run from: `sh ../other/naima-tracker/naima.sh show <item>` reads the other project's tracker, not the one of the current folder.
+A launcher run by its path from inside another project, the main worktree's from a fresh worktree for instance, serves that other project only while it has no
+program of its own: it clones the program there at the lock. Once that project has its program, a launcher always serves its own project, wherever it is run
+from: `sh ../other/naima-tracker/naima.sh show <item>` reads the other project's tracker, not the one of the current folder.
 
 ## Every run aligns the program
 
@@ -353,17 +353,17 @@ any program. An install downloads from whatever host a redirect points to (a rel
 **`naima land`, and no other command besides `naima run` and `naima wait`,** may also run `ssh`, to start a heavy landing check on the landing host through
 `naima run --host` and wait on it there ([closing a worktree](../agents/closing-a-worktree.md)).
 
-**`naima recover`, and no other command,** may also read the folders where the agent tools in use keep their sessions' transcripts, to brief the worker
-that resumes a dead or stuck one ([several branches](several-branches.md#see-who-is-doing-what)). It only reads them and writes nothing.
+**`naima recover`, and no other command,** may also read the folders where the agent tools in use keep their sessions' transcripts, to brief the worker that
+resumes a dead or stuck one ([several branches](several-branches.md#see-who-is-doing-what)). It only reads them and writes nothing.
 
-**`naima describe`, `naima note`, `naima attach` and `naima pass`, and no other command,** may also read the system's temporary folder (`/tmp` and `TMPDIR`, or `TEMP` and
-`TMP` on Windows) and its subfolders, where an agent keeps the files it hands them in its scratch directory. They only read there, and what they read is
-checked for private data and secrets as any other text.
+**`naima describe`, `naima note`, `naima attach` and `naima pass`, and no other command,** may also read the system's temporary folder (`/tmp` and `TMPDIR`, or
+`TEMP` and `TMP` on Windows) and its subfolders, where an agent keeps the files it hands them in its scratch directory. They only read there, and what they read
+is checked for private data and secrets as any other text.
 
-**A normal run never touches the network.** Only these commands do, each granted it by the launcher for that command alone: `naima update` and alignment
-(git, and a release's download), `naima tools install` and `naima backup create`, `naima issues`, and `naima hello` through gh, and `naima run --host`,
-`naima verify --host` and a heavy landing check of `naima land` through ssh. Besides these, any command may ask GitHub's API whether the tracker's repository is public or private, at most once a day
-([where the tracker lives](#where-the-tracker-lives)).
+**A normal run never touches the network.** Only these commands do, each granted it by the launcher for that command alone: `naima update` and alignment (git,
+and a release's download), `naima tools install` and `naima backup create`, `naima issues`, and `naima hello` through gh, and `naima run --host`,
+`naima verify --host` and a heavy landing check of `naima land` through ssh. Besides these, any command may ask GitHub's API whether the tracker's repository is
+public or private, at most once a day ([where the tracker lives](#where-the-tracker-lives)).
 
 The allow-list of variables is `ENV` in `src/launcher.ts`. Deno can't grant a named list of variables and still let the program pass its environment on to git,
 so the launcher enforces the list by giving the program only those variables. An unrelated secret, such as a cloud key, simply isn't there. Deno also splits its
@@ -401,5 +401,5 @@ it needs no network when one is available. A fresh clone of a project on another
 The code uses the standard APIs that Deno, Node and Bun share and has no dependencies, and its tests run on all three, on macOS and Linux. Windows isn't covered
 by the tests. Deno is the documented runtime because of its permissions. If you run Naima directly with Node or Bun
 (`node naima-tracker/naima/src/cli.ts <command>`), it works on the data, but it doesn't align or update, and nothing restricts what it can do. Node runs the
-TypeScript source from version 22.18 or 23.6; from 22.6 to 22.17 it needs `node --experimental-strip-types`. An older Node, or one built without TypeScript support (as
-some Linux distributions ship it), cannot run it.
+TypeScript source from version 22.18 or 23.6; from 22.6 to 22.17 it needs `node --experimental-strip-types`. An older Node, or one built without TypeScript
+support (as some Linux distributions ship it), cannot run it.

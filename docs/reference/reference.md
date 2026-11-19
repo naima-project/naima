@@ -158,7 +158,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `guide` | core | a block `naima guide` prints first, inside a project, before the documentation pages | triage, verifier, rules |
 | `facts` | core | lines `naima show` prints of an item under its fields, and in its JSON as `facts`: what a plugin knows of the item that its files do not say | coordination |
 | `rank` | core | an additive term of every item's urgency; lower is more urgent | triage, gates |
-| `jobs` | core | a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it, among those its canRunHere admits (a process it does not claims no attempt); what it finds is shown to the owner as messages | outside-issues, long-work |
+| `jobs` | core | a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it, among those its canRunHere admits (a process it does not claims no attempt); what it finds is shown to the owner as messages | gates, outside-issues, long-work |
 | `extends` | core | additive changes to another plugin's type — statuses (an existing one only with its category), traits, transitions — or field — enum values, more types or traits it applies to | discussions, knowledge, roles |
 | `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done; `beforeText(text, ctx)` may refuse a write of free text or a file that is not an item's (a session note, an event, an attachment) or add to its record | core, trackers, coordination, triage, epics, discussions, planning, knowledge, verifier, privacy |
 | `setup` | core | what a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init` and `naima update` after their own work: `install(ctx) → lines`, each said | coordination, planning, backup, metrics |
@@ -2193,6 +2193,12 @@ naima order first-public
 **Summary sections**: `gates`.
 
 **Rank terms**, added to every item's urgency: `gate`.
+
+**Jobs** the tick runs when due
+
+| Job | Every | What it does |
+|---|---|---|
+| `goal-alarm` | hour | every hour, on the trunk's checkout: each goal (a gate with a due date) that has work left and is at risk (its date is within two days, or the pace of the last four weeks would end it after the date) or late (its date has passed) is said once per state in a message, a warning when at risk and an urgent one the owner acknowledges when late, shown at naima hello and at the turn-end tick, and one question about it is filed on the agenda of the owner's next meeting |
 
 **Migrations** of its own data, run by `naima update` after the core's; its format is 2:
 

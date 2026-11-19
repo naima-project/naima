@@ -26,18 +26,19 @@ Follow this page for any command you expect to take more than a few minutes, or 
 4. **Clean** with `naima run clean <name>` once the results are kept somewhere else. It removes exactly what was declared.
 
 To verify a property on a host, don't use `naima run --host`: a remote run must leave tracked files alone, and `naima verify` writes the property. Run the
-verification here with `--host`, inside a local run when it is long: `naima run <name> --budget-time <d> -- naima verify <property> --host <h>`. The commit
-this checkout is at is sent to the host and verified there; commit what the verification reads first, or the run is refused and nothing is written. Tool flags that only change what the tool prints go in
-`--tool-args=<flags>` and are kept with the run ([proving on another machine](../guide/prove-and-close.md#properties-proven-by-a-tool)).
+verification here with `--host`, inside a local run when it is long: `naima run <name> --budget-time <d> -- naima verify <property> --host <h>`. The commit this
+checkout is at is sent to the host and verified there; commit what the verification reads first, or the run is refused and nothing is written. Tool flags that
+only change what the tool prints go in `--tool-args=<flags>` and are kept with the run
+([proving on another machine](../guide/prove-and-close.md#properties-proven-by-a-tool)).
 
 Nothing runs unattended ([the rule](../guide/rules.md#nothing-runs-unattended)). Never schedule a run, and never start a long run, such as the full suite or a
 model's verification, without the owner's yes. When `naima hello` or `naima summary` says a long run is due, pass the line on, run `naima run due` to file it as
 a todo (one per run; it marks the todo done once the run is current), and ask the owner. With their yes, start it by its name, `naima run <name>`, and follow
 the steps above ([when a long run is due](../guide/long-work.md#when-a-long-run-is-due)).
 
-A shell call is never given a tool timeout over 60 seconds, except `naima run` and `naima wait`. A hook Naima installs for a tool that has hooks (the install page lists them) refuses it, saying to use
-`naima run` (`naima update` installs the hook), and the check `foreground-timeouts` fails on any such call found in the agents' transcripts since the last
-session note. Wait in short turns: `naima wait <name> --timeout 50s`, again as often as needed.
+A shell call is never given a tool timeout over 60 seconds, except `naima run` and `naima wait`. A hook Naima installs for a tool that has hooks (the install
+page lists them) refuses it, saying to use `naima run` (`naima update` installs the hook), and the check `foreground-timeouts` fails on any such call found in
+the agents' transcripts since the last session note. Wait in short turns: `naima wait <name> --timeout 50s`, again as often as needed.
 
 Don't wait with a `while`/`until` loop around `sleep`, with `pgrep -f`/`pkill -f`, with a bare `nohup ... &`, or by polling a remote file over ssh by hand.
 `naima check` flags waits like these in committed scripts (check `wait-loops`), and a script that really does need a retry loop marks the line
