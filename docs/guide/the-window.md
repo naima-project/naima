@@ -285,11 +285,29 @@ Beyond it the river is only a sketch of the road ahead, drawn faint: every later
 expected or due day after the dated ones in goal order, and the milestones, with no epics or sub-goals. A question that
 only concerns a goal beyond the horizon, even on a meeting with no date, waits there until the horizon reaches it.
 
-To widen the focus, click a later goal's ring, or drag the horizon onto it, or press the right arrow key on it: the
-horizon glides there, and that goal's events appear in full, its meetings and questions join what needs you, and the ring
-at the top, its caption and the faces follow that goal. The left arrow key steps it back one goal, and Home (the wordmark
-or the key H) or the Home key on the line brings it back to its default goal. The horizon moved is written in the address
+To move the focus, click another goal's ring ahead, or drag the horizon onto it (take the orange line anywhere along
+its height), or press the arrow keys on it: the horizon glides there. At a later goal its events appear in full and its
+meetings and questions join what needs you; at an earlier one the focus narrows to what comes before it. The ring at the
+top, its caption and the faces follow that goal. The arrow keys step it one goal at a time (the left one goes a day into
+the past from the first goal ahead), and Home (the wordmark or the key H) or the Home key on the line brings it back to
+its default goal. The horizon moved is written in the address
 as `h=` and the goal, so Back, Forward and a reload show the same focus.
+
+A goal missed, whose due day has passed with work still left, is not drawn ahead: its ring stands in the past at its
+due day, ring and name in red, named "missed" (for example "Public launch · missed 17 Nov"), at the river's left edge
+when that day is before the week shown. A click on it shows the goal.
+
+Every dated thing, on the river and in the stage's lists, says how urgent it is, quietly. It is drawn as usual while
+all is well. It turns amber when it is at risk: its forecast passes its due day, or its due day is two days away or less
+with work left. It turns red once it is late: its due day has passed with work left (a goal or a milestone missed, a
+meeting whose day passed unheld). On the river the ring's stroke (or a meeting's two rings) takes the colour; in a
+list, the row's date does, and the words say it under the title ("at risk, due 2 Dec"). Every ring's description, read
+by a screen reader, says it too.
+
+On Home's upper part, what can be clicked says what it does with a faint mark after its words. A small chevron (⌄)
+reveals something in place, just under it, and turns over once open, as the goal's caption, the agents and two of the
+three numbers do. A small arrow down (↓) opens a list in the stage below: what is left to do, what needs you, the bugs,
+the features, the questions for when you have time.
 
 Everything else ahead that has a day stands on the river too, as a small grey ring at that day: the milestones the goals'
 rings leave out, the sub-goals with a due or expected day, and the epics with work left and a planned or expected end. A

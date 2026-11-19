@@ -73,9 +73,10 @@ reference opens an item the story names in its place, `stage.story` gives the st
 `stage.calendar` shows the month as a calendar there. `meetingHeld.bring` brings the question up into the chat and
 `meetingDate.choose` changes a meeting's date: both change the project (they run `naima meeting raise` and `naima meeting date`),
 so call them only when the owner asked for that.
-`mark.reach` with a later goal's gate (`mark.reach("release-1.5")`) moves Home's focus horizon there, so that goal's events, meetings
-and questions join what Home counts as waiting for the owner; `mark.now` brings it back to the default goal, the next major goal of
-the line followed.
+`mark.reach` with the gate of a goal ahead (`mark.reach("release-1.5")`), later or earlier than the default, moves Home's focus
+horizon there, so what Home counts as waiting for the owner widens to that goal's events, meetings and questions, or narrows to what
+comes before it; a missed goal (its due day passed) is drawn in the past and is never a horizon. `mark.now` brings it back to the
+default goal, the next major goal of the line followed.
 
 ## Showing a place
 
