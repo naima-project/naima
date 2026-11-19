@@ -92,6 +92,7 @@ import { applyPlan, planSweep, type SweepInputs, type SweepItem, sweepLines, typ
 import { changeNotesCheck, changesCommand } from "./changes.ts"
 import { checkpointCommand } from "./checkpoint.ts"
 import { heavyChecksCommand, heavyChecksSection } from "./heavy-checks.ts"
+import { formattedLanding, readFormatCheck } from "./formatted.ts"
 import { idOf, land, landingCheckCommand, landingReportsPoint, landingsAreMarkers, landingsPaired } from "./land.ts"
 import { claimsReports, claimsReportsPoint } from "./claims-reports.ts"
 import { handoverCommand, handoverSection, readHandoverOptions } from "./handover.ts"
@@ -1419,6 +1420,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
   const policy = readPolicy(options)
   const diaryPerDay = readDiaryPerDay(options)
   const silentAfter = readSilentAfter(options)
+  const formatCheck = readFormatCheck(options)
   const handover = readHandoverOptions(options)
   const staleAfter = readStaleAfter(options)
   const guarded = readTrunkGuard(options)
@@ -1592,6 +1594,12 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
         default: "continuous",
       },
       {
+        name: "formatCheck",
+        says:
+          "the command that checks the project's files are formatted, such as `deno fmt --check`, written as words split on spaces and run without a shell: naima land runs it on the branch tip's files, as the landing check formatted, and refuses a branch for which it fails; unset, no landing checks formatting",
+        default: "none",
+      },
+      {
         name: "fastChecks",
         says: "in checkpoint mode, the landing checks (by name, as naima docs lists them) that still run on every landing: a list of names",
         default: "[]",
@@ -1683,6 +1691,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
         readyUiView(policy),
         workerDiffUiView,
       ],
+      "landing-reports": formatCheck.length ? [formattedLanding(formatCheck)] : [],
       rules: { folder: "rules/", settings: { trunkGuard: String(guarded) } },
     },
     // The claims are a panel of naima ui, the timeline and the session notes tabs, when the ui plugin is loaded; without it, still commands and a view.

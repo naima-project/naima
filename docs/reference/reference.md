@@ -1205,6 +1205,7 @@ Options, each with the default it takes when nothing sets it:
 | `silentAfter` | `15` | minutes without a sign of life (a step posted with naima claim --step, or a commit on the branch) after which naima claims and naima summary flag a claim with a step as possibly stuck: a positive whole number |
 | `landingHost` | `none: this machine` | the host heavy landing checks run on (one that declares itself heavy, such as a check that opens a browser): a host declared for naima run --host, in the long-work plugin's hosts option or in the user's private hosts; naima land sends the branch tip there, runs the check through naima run --host and waits on it; with none named, or `here`, it runs the check on this machine through naima run, in a checkout of the tip, and waits on it; the host the branch being landed names comes first, so that the branch that sets it lands by it |
 | `checks` | `continuous` | when the landing checks, suites and model checks run: `continuous` runs every landing check on every landing; `checkpoint` has naima land run only the checks fastChecks names and write the others into the landing marker as owed (a `Checks-owed:` trailer), and has workers run only a build and their own new test; naima checkpoint, a gate step closing and a goal reached run what is owed, and a failed checkpoint blocks the gate |
+| `formatCheck` | `none` | the command that checks the project's files are formatted, such as `deno fmt --check`, written as words split on spaces and run without a shell: naima land runs it on the branch tip's files, as the landing check formatted, and refuses a branch for which it fails; unset, no landing checks formatting |
 | `fastChecks` | `[]` | in checkpoint mode, the landing checks (by name, as naima docs lists them) that still run on every landing: a list of names |
 | `heavyChecks` | `unset: the owner is asked` | the project's answer to how often heavy checks (a browser, a suite, model checking) run: `landing` at every landing, `checkpoint` at a checkpoint, `demand` only when asked (naima checkpoint, naima check --heavy), `off` never; written by naima heavy-checks together with checks, landingHost and verifyHost; unset, a project that already set checks, a host or checkpoint runs has answered by those, and one that set none has not answered, so naima asks the owner and runs no heavy check |
 | `checkpointChecks` | `[]` | the landing checks a checkpoint runs whether or not a landing owed them: a list of names; empty means every heavy one |
@@ -4289,6 +4290,7 @@ naima stance-ui toolchain
 | `ui-no-raw-drag` | only the widget set's Draggable and Pannable handle dragging, so every drag has the same moves as buttons, keys or scrolling (WCAG 2.2 SC 2.5.7) |
 | `ui-auth-only` | only the widget set's Auth asks for a password or a one-time code, so every sign-in is accessible (WCAG 2.2 SC 3.3.8) |
 | `ui-transitions` | agent parity: the registry of transitions is what the machines generate, each says what it does, and every transition a component calls is in it |
+| `ui-affordances` | every transition a person takes declares its affordance: the element that offers it, its cue at rest, on hover or focus and on touch, and how a person discovers one that shows nothing at rest |
 | `ui-agent-endpoint` | the MCP server's files import no app logic, only the registry and the agent channel, so an agent acts through the page and the store |
 | `ui-a11y` | the app's pages pass axe-core at WCAG 2.2 AA in both themes on desktop and phone, every control is reached with Tab and shows its focus, and the page reflows at 320 CSS px |
 | `ui-target-size` | every pointer target is at least 24 by 24 CSS px, or far enough from the others (WCAG 2.2 SC 2.5.8) |
@@ -4333,6 +4335,7 @@ naima stance-ui toolchain
 | Rule | Title | For | Strength | Enforced by | Verified by | Ack |
 |---|---|---|---|---|---|---|
 | `ui-accessible` | The interface meets EN 301 549 and WCAG 2.2 at level AA | everyone | must | `ui-a11y` | `ui-a11y` |  |
+| `ui-affordances` | Every action a person can take shows how it is taken: each transition declares its affordance, visible at rest or discoverable | everyone | must | `ui-affordances` | `ui-affordances` |  |
 | `ui-agent-parity` | Agents and the user do the same things: every change of the UI is a transition, and an agent calls those | everyone | must | `ui-transitions` | `ui-transitions` |  |
 | `ui-components-keep-only-local-ui-state` | Components keep only their own UI state, read the store and call transitions | everyone | must | `ui-component-imports` | `ui-component-imports` |  |
 | `ui-compositional-widget-set` | Larger components are built from smaller ones | everyone | should |  | `agent` |  |
