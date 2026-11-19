@@ -3,9 +3,12 @@
 // trailer; `naima checkpoint` runs what is owed and records the result as a file of the data directory's `checkpoints/`.
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
+import { relative, sep } from "node:path"
 import { DATA_FILE } from "./layout.ts"
-import { gitOrNull } from "./git.ts"
+import { gitOrNull, trunk } from "./git.ts"
 import { heavyAnswer } from "./heavy.ts"
+import { privateContext, redactPrivate } from "./private.ts"
+import { developmentLine } from "./trunk-only.ts"
 import type { Context } from "./types.ts"
 
 /** The trailer a landing marker names the checks it did not run in. */
@@ -16,8 +19,47 @@ export const CHECKPOINTS = "checkpoints"
 
 export type CheckMode = "continuous" | "checkpoint"
 
-/** A coordination option: the branch tip's own configuration first when `at` holds it, else the one `ctx` runs with. */
+/**
+ * The options that say where and when heavy checks run: the owner's choice, recorded on the trunk by `naima heavy-checks`.
+ * A development line's copy of naima.json may predate that choice, so in a checkout of a line the trunk's value wins.
+ */
+const TRUNK_OPTIONS: readonly string[] = ["heavyChecks", "checks", "landingHost", "verifyHost"]
+
+const trunkOptions = new Map<string, Record<string, unknown>>()
+
+/** The coordination options the trunk's naima.json records, read from git (not from the checkout); empty outside a development line or when the trunk has none. */
+function trunkConfigured(ctx: Context): Record<string, unknown> {
+  if (!developmentLine(ctx.root)) return {}
+  const main = trunk(ctx.root)
+  if (!main) return {}
+  const file = relative(ctx.root, join(ctx.trackerRoot, DATA_FILE)).split(sep).join("/")
+  if (file.startsWith("..")) return {}
+  const sha = gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `refs/heads/${main}^{commit}`)
+  if (!sha) return {}
+  const key = `${ctx.root}\0${sha}\0${file}`
+  const known = trunkOptions.get(key)
+  if (known) return known
+  let options: Record<string, unknown> = {}
+  try {
+    const raw = gitOrNull(ctx.root, "show", `${sha}:${file}`)
+    const parsed = raw === null ? null : (JSON.parse(raw) as { plugins?: Record<string, { options?: Record<string, unknown> }> })
+    options = parsed?.plugins?.["coordination"]?.options ?? {}
+  } catch {
+    // no readable naima.json on the trunk: the checkout's configuration decides
+  }
+  trunkOptions.set(key, options)
+  return options
+}
+
+/**
+ * A coordination option: for those that say where heavy checks run, on a development line, the trunk's recorded value;
+ * else the branch tip's own configuration first when `at` holds it, else the one `ctx` runs with.
+ */
 export function option(ctx: Context, name: string, at?: Context): unknown {
+  if (TRUNK_OPTIONS.includes(name)) {
+    const main = trunkConfigured(ctx)[name]
+    if (main !== undefined) return main
+  }
   if (at) {
     try {
       const tip = (JSON.parse(readFileSync(join(at.trackerRoot, DATA_FILE), "utf8")) as { plugins?: Record<string, { options?: Record<string, unknown> }> })
@@ -142,8 +184,24 @@ export function readCheckpoints(ctx: Context): CheckpointRecord[] {
   })
 }
 
+/**
+ * A record with its free text scrubbed the way tracker writes are: a run's failure text, copied from its log, may hold a
+ * host name or a home path, which become placeholders (<host>, <path>, <user>) before the record is written.
+ */
+export function scrubRecord<T extends Partial<CheckpointRecord>>(r: T): T {
+  const pc = privateContext()
+  const clean = (t: string): string => redactPrivate(t, pc)
+  return {
+    ...r,
+    ...(r.ran ? { ran: r.ran.map(clean) } : {}),
+    ...(r.failed ? { failed: r.failed.map(clean) } : {}),
+    ...(r.runs ? { runs: r.runs.map((x) => ({ ...x, what: clean(x.what), ...(x.why !== undefined ? { why: clean(x.why) } : {}) })) } : {}),
+  }
+}
+
 /** Write a record; its file name starts with the time, so the files sort in the order made. */
-export function writeCheckpoint(ctx: Context, r: Omit<CheckpointRecord, "id">): string {
+export function writeCheckpoint(ctx: Context, record: Omit<CheckpointRecord, "id">): string {
+  const r = scrubRecord(record)
   const dir = join(ctx.trackerRoot, CHECKPOINTS)
   mkdirSync(dir, { recursive: true })
   const id = `${ctx.now().toISOString().replace(/[:.]/g, "-")}-${String(readdirSync(dir).length).padStart(4, "0")}-${r.tip.slice(0, 12)}`
@@ -155,7 +213,7 @@ export function writeCheckpoint(ctx: Context, r: Omit<CheckpointRecord, "id">): 
 export function updateCheckpoint(ctx: Context, id: string, patch: Partial<Omit<CheckpointRecord, "id">>): CheckpointRecord {
   const file = join(ctx.trackerRoot, CHECKPOINTS, `${id}.json`)
   const { id: _id, ...old } = JSON.parse(readFileSync(file, "utf8")) as CheckpointRecord
-  const next = { ...old, ...patch }
+  const next = { ...old, ...scrubRecord(patch) }
   writeFileSync(file, JSON.stringify(next, null, 2) + "\n")
   return { ...next, id }
 }
