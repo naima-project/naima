@@ -6,6 +6,7 @@ import { join } from "node:path"
 import { DATA_FILE } from "./layout.ts"
 import { gitOrNull } from "./git.ts"
 import { heavyAnswer } from "./heavy.ts"
+import { privateContext, redactPrivate } from "./private.ts"
 import type { Context } from "./types.ts"
 
 /** The trailer a landing marker names the checks it did not run in. */
@@ -142,8 +143,24 @@ export function readCheckpoints(ctx: Context): CheckpointRecord[] {
   })
 }
 
+/**
+ * A record with its free text scrubbed the way tracker writes are: a run's failure text, copied from its log, may hold a
+ * host name or a home path, which become placeholders (<host>, <path>, <user>) before the record is written.
+ */
+export function scrubRecord<T extends Partial<CheckpointRecord>>(r: T): T {
+  const pc = privateContext()
+  const clean = (t: string): string => redactPrivate(t, pc)
+  return {
+    ...r,
+    ...(r.ran ? { ran: r.ran.map(clean) } : {}),
+    ...(r.failed ? { failed: r.failed.map(clean) } : {}),
+    ...(r.runs ? { runs: r.runs.map((x) => ({ ...x, what: clean(x.what), ...(x.why !== undefined ? { why: clean(x.why) } : {}) })) } : {}),
+  }
+}
+
 /** Write a record; its file name starts with the time, so the files sort in the order made. */
-export function writeCheckpoint(ctx: Context, r: Omit<CheckpointRecord, "id">): string {
+export function writeCheckpoint(ctx: Context, record: Omit<CheckpointRecord, "id">): string {
+  const r = scrubRecord(record)
   const dir = join(ctx.trackerRoot, CHECKPOINTS)
   mkdirSync(dir, { recursive: true })
   const id = `${ctx.now().toISOString().replace(/[:.]/g, "-")}-${String(readdirSync(dir).length).padStart(4, "0")}-${r.tip.slice(0, 12)}`
@@ -155,7 +172,7 @@ export function writeCheckpoint(ctx: Context, r: Omit<CheckpointRecord, "id">): 
 export function updateCheckpoint(ctx: Context, id: string, patch: Partial<Omit<CheckpointRecord, "id">>): CheckpointRecord {
   const file = join(ctx.trackerRoot, CHECKPOINTS, `${id}.json`)
   const { id: _id, ...old } = JSON.parse(readFileSync(file, "utf8")) as CheckpointRecord
-  const next = { ...old, ...patch }
+  const next = { ...old, ...scrubRecord(patch) }
   writeFileSync(file, JSON.stringify(next, null, 2) + "\n")
   return { ...next, id }
 }
