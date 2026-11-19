@@ -6,6 +6,9 @@
 // an entry tells the page through the timeline-position event, and the page names each change with timeline_placed,
 // which moves the checkmark, so the menu always checks where the timeline stands.
 //
+// Reload (Cmd+R in View) reloads the page: the address holds its state, so the place is kept. Windows and Linux have no
+// menu bar, so the page itself takes Ctrl+R and F5 (RELOAD_KEYS).
+//
 // Zoom is the webview's own (set_zoom), in the steps a browser takes, from the menu, its shortcuts and Cmd or Ctrl with
 // the wheel; on macOS a pinch on the trackpad magnifies the page too, and Actual Size undoes both.
 use std::sync::Mutex;
@@ -92,6 +95,14 @@ pub const WHEEL: &str = "(() => { if (window.__naimaZoomWheel) return; window.__
     if (Math.abs(acc) < 100) return; const by = acc < 0 ? 1 : -1; acc = 0; \
     window.__TAURI_INTERNALS__.invoke('zoom_by', { by }); }, { passive: false }); })()";
 
+/// Evaluated in the page once loaded, on Windows and Linux, which have no menu bar to carry the accelerator: Ctrl+R and
+/// F5 reload the page as a browser does. The address holds every state of the page, so a reload keeps the place.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+pub const RELOAD_KEYS: &str = "(() => { if (window.__naimaReloadKeys) return; window.__naimaReloadKeys = true; \
+    addEventListener('keydown', (e) => { const key = e.key.toLowerCase(); \
+    if ((key === 'r' && e.ctrlKey && !e.altKey && !e.metaKey) || (key === 'f5' && !e.altKey && !e.metaKey)) { \
+    e.preventDefault(); location.reload(); } }); })()";
+
 /// On macOS, let a pinch on the trackpad magnify the page.
 pub fn allow_pinch<R: Runtime>(webview: &Webview<R>) {
     #[cfg(target_os = "macos")]
@@ -130,6 +141,8 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .item(&MenuItemBuilder::with_id("zoom-in", "Zoom In").accelerator("CmdOrCtrl+=").build(app)?)
         .item(&MenuItemBuilder::with_id("zoom-out", "Zoom Out").accelerator("CmdOrCtrl+-").build(app)?)
         .item(&MenuItemBuilder::with_id("zoom-reset", "Actual Size").accelerator("CmdOrCtrl+0").build(app)?)
+        .separator()
+        .item(&MenuItemBuilder::with_id("reload", "Reload").accelerator("CmdOrCtrl+R").build(app)?)
         .separator();
     for (id, label, _) in PLACES {
         view = view.item(&CheckMenuItemBuilder::with_id(id, label).build(app)?);
@@ -165,6 +178,7 @@ pub fn on_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
         "zoom-in" => return zoom(webview, 1),
         "zoom-out" => return zoom(webview, -1),
         "zoom-reset" => return zoom(webview, 0),
+        "reload" => "location.reload()".to_string(),
         "go-back" => "history.back()".to_string(),
         "go-forward" => "history.forward()".to_string(),
         _ => match SCREENS.iter().find(|s| s.0 == id) {
@@ -196,6 +210,11 @@ mod tests {
         assert_eq!(ids.len(), SCREENS.len());
         assert_eq!(keys.len(), SCREENS.len());
         assert!(SCREENS.iter().all(|s| s.2.starts_with('#') && !s.2.contains('\'')));
+    }
+
+    #[test]
+    fn the_reload_keys_cover_ctrl_r_and_f5_and_the_menu_has_reload() {
+        assert!(RELOAD_KEYS.contains("location.reload()") && RELOAD_KEYS.contains("'f5'") && RELOAD_KEYS.contains("e.ctrlKey"));
     }
 
     #[test]

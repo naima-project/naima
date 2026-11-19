@@ -31,6 +31,9 @@ worktree other than the clone's main checkout, so agents working in their own wo
 `naima plugin set ui atStart=false`; to turn it off for yourself everywhere, put `{"atStart": false}` in `ui.json` in your Naima config folder
 (`~/.config/naima/` on macOS and Linux).
 
+In the desktop app, Cmd+R on macOS (View, Reload) and Ctrl+R or F5 on Windows and Linux reload the page, as a browser does. The address holds every state of the
+window, so a reload brings you back to the same place.
+
 ### What agents use
 
 An agent reaches Naima through two MCP servers, which keep the screen and the tracker apart. `naima ui --mcp` (named `naima-ui` in an agent's client) is

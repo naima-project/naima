@@ -73,6 +73,8 @@ pub fn run() {
         .on_page_load(move |webview, payload| {
             if let PageLoadEvent::Finished = payload.event() {
                 let _ = webview.eval(menu::WHEEL);
+                #[cfg(not(target_os = "macos"))]
+                let _ = webview.eval(menu::RELOAD_KEYS);
                 menu::allow_pinch(webview);
             }
             if let (Some(script), PageLoadEvent::Finished) = (&e2e, payload.event()) {
