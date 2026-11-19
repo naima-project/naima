@@ -68,6 +68,8 @@ import {
   TRACKER_TRAILER,
   trackerChanges,
   trackerPath,
+  TRANSFER_LIMIT_MS,
+  transferEnv,
   trunk,
   usageError,
   WAIVERS,
@@ -294,7 +296,10 @@ async function heavyCheck(ctx: Context, name: string, landing: Landing, at: Cont
   const runName = `landing-${name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").slice(0, 40)}-${landing.to.slice(0, 12)}`
   const dest = host ? `${host.ssh}:${host.dir}` : ""
   if (host) {
-    const pushed = runGit(ctx.root, ["push", "--no-verify", "--quiet", "--force", dest, `${landing.to}:${landingRef(runName)}`])
+    const pushed = runGit(ctx.root, ["push", "--no-verify", "--quiet", "--force", dest, `${landing.to}:${landingRef(runName)}`], {
+      timeoutMs: TRANSFER_LIMIT_MS,
+      env: transferEnv(),
+    })
     if (!pushed.ok) return refusal(`could not send ${landing.to.slice(0, 12)} to ${host.name}: ${gitReason(pushed)} — not run`)
   }
   const lines: string[] = []
@@ -346,7 +351,7 @@ async function heavyCheck(ctx: Context, name: string, landing: Landing, at: Cont
     return refusal(`could not run on ${place}: ${message(e)}`)
   } finally {
     await clean()
-    if (host) runGit(ctx.root, ["push", "--no-verify", "--quiet", dest, `:${landingRef(runName)}`])
+    if (host) runGit(ctx.root, ["push", "--no-verify", "--quiet", dest, `:${landingRef(runName)}`], { timeoutMs: TRANSFER_LIMIT_MS, env: transferEnv() })
   }
 }
 
