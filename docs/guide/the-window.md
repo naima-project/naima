@@ -348,9 +348,11 @@ When the project has development lines (`naima line`), the river carries them be
 under main as a full tributary: it branches off where the line was cut, carries its own commits as dots and its agents
 as green lines, and its dotted orange path leads from today back up to main at its goal's ring, where the line will
 land. By default Home follows the line of the goal it shows. Every other line is a faint thread above main, branching
-off and rejoining it the same way at its own goal's ring. A click on a thread, or Enter on the threads (the next line
-each time), follows that line: the tributary moves to it, and the ring, its caption, the faces and the diary turn to that
-line's goal and its work. The line followed is written in the address as `l=` and the line's goal, so Back and Forward
+off and rejoining it the same way at its own goal's ring. The line followed is named under its tributary, after today,
+as a quiet menu, "line release-1.2" with a small chevron: it lists the open lines, and choosing one follows it. A
+thread under the pointer lifts and says its line's name. A click on a thread, the menu, or Enter on the threads (the
+next line each time, named while they hold the focus) follows that line: the tributary moves to it, and the ring, its
+caption, the faces and the diary turn to that line's goal and its work. The line followed is written in the address as `l=` and the line's goal, so Back and Forward
 step through the lines followed and a reload shows the same one; with no `l=`, Home follows its own goal's line again. A
 line that has landed rejoins main where it landed, with a small ring on main at that moment; a click on it shows that
 landing and the items it closed.
