@@ -49,10 +49,10 @@ what is set now and what a plugin's options are. It refuses a name that is neith
 option the plugin doesn't declare. It exists mainly for opt-in plugins that start a program, such as `verifier-mcrl2`, which you turn on with
 `naima plugin enable verifier-mcrl2` and then `naima plugin set verifier-mcrl2 bin=/usr/local/bin`; setting an option of an opt-in plugin that is off is
 refused, since its entry alone would turn it on. `<option>.<key>=<value>` sets one key of an option that is an object, such as a model's window:
-`naima plugin set coordination contextWindows.my-model=1000000`. Every other key of the file keeps its place. On the main branch `naima plugin set`
-commits its own change, with a `Naima-Command: plugin` trailer, and the trunk guard takes a commit that changes only plugin options, so setting an option is
-one command; turning a plugin on or off still lands from an item's branch. Changing a plugin's `checks` and adding a third-party plugin's `source` still have
-to be done by editing the file.
+`naima plugin set coordination contextWindows.my-model=1000000`. Every other key of the file keeps its place. On the main branch `naima plugin set` commits its
+own change, with a `Naima-Command: plugin` trailer, and the trunk guard takes a commit that changes only plugin options, so setting an option is one command;
+turning a plugin on or off still lands from an item's branch. Changing a plugin's `checks` and adding a third-party plugin's `source` still have to be done by
+editing the file.
 
 | Key          | Default | What it is                                                                                                                                        |
 | ------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |

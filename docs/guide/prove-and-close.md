@@ -251,15 +251,15 @@ add `--force` with a reason to make a new one with the flags. The flags start wi
 naima verify <property> --tool-args="--verbose --timings" --force "to see how long each tool takes"
 ```
 
-A heavy check can run on another machine declared as a [host](long-work.md#on-another-machine). `naima verify <property> --host lab` sends the commit this checkout is at to the machine, under a ref of its own that is removed afterwards, and asks the copy of
-Naima there to run the verifier on a checkout of that commit, made for the run and removed after, and print the run, which writes nothing in the machine's own
-checkout. The property need not be on the branch the machine's checkout is on. The checkout made for the run has no submodules, so a model that lives in one is
-not found there. The run is attached here with `host` set to the machine's name, and kept only when it was made on exactly what this checkout has: the same
-property, verifier and options, and every file it read with the same content. When this checkout has uncommitted changes to what the verification reads, it is
-refused and nothing is written, so commit them first. The tool's version is the host's; if this machine has a
-different version of the tool, `naima check` says the property holds by another version. A verification that takes hours can be started with
-`naima run verify-lab --budget-time 8h -- naima verify --all --host lab`, which runs here and keeps its ssh connection to the host for as long as the check
-takes.
+A heavy check can run on another machine declared as a [host](long-work.md#on-another-machine). `naima verify <property> --host lab` sends the commit this
+checkout is at to the machine, under a ref of its own that is removed afterwards, and asks the copy of Naima there to run the verifier on a checkout of that
+commit, made for the run and removed after, and print the run, which writes nothing in the machine's own checkout. The property need not be on the branch the
+machine's checkout is on. The checkout made for the run has no submodules, so a model that lives in one is not found there. The run is attached here with `host`
+set to the machine's name, and kept only when it was made on exactly what this checkout has: the same property, verifier and options, and every file it read
+with the same content. When this checkout has uncommitted changes to what the verification reads, it is refused and nothing is written, so commit them first.
+The tool's version is the host's; if this machine has a different version of the tool, `naima check` says the property holds by another version. A verification
+that takes hours can be started with `naima run verify-lab --budget-time 8h -- naima verify --all --host lab`, which runs here and keeps its ssh connection to
+the host for as long as the check takes.
 
 ### The mCRL2 model checker
 
@@ -326,20 +326,22 @@ flag that could change a verdict never reaches the tools. Three of them decide h
   produce different linear processes, so the choice is part of the key the state space is kept under, and part of what identifies a run: a run made one way is
   never reused for the other. The earlier boolean `noRewrite` is still read, `true` as `"no-rewrite"` and `false` as `"rewrite"`.
 - `cached` (true unless set to false) generates the state space with `lps2lts --cached`, which remembers what it has already enumerated.
-- `rewriter` names the rewriter mCRL2 evaluates data with, passed as `--rewriter` to every tool that takes one (`mcrl22lps`, `lps2lts` and `pbessolve`): `"jitty"`,
-  mCRL2's default, `"jittyc"`, the compiled rewriter, which explores a large state space many times faster, or another that `lps2lts --help` lists. It changes how fast
-  the tools run and never the state space or the verdict, so it is no part of the key the state space is kept under nor of what identifies a run. It is chosen at
-  three levels, the first that is given winning: the property's `verifierOptions.rewriter`; the machine's, the environment variable `NAIMA_MCRL2_REWRITER`
-  (for a host reached with `--host`, set it in the host's `naima` command, as in `"naima": "NAIMA_MCRL2_REWRITER=jittyc deno run -A naima-tracker/naima/naima.ts"`); and the
-  project's, the plugin option `rewriter` of `verifier-mcrl2`: `naima plugin set verifier-mcrl2 rewriter=jittyc`. A name mCRL2 does not know is the tool's own error.
+- `rewriter` names the rewriter mCRL2 evaluates data with, passed as `--rewriter` to every tool that takes one (`mcrl22lps`, `lps2lts` and `pbessolve`):
+  `"jitty"`, mCRL2's default, `"jittyc"`, the compiled rewriter, which explores a large state space many times faster, or another that `lps2lts --help` lists.
+  It changes how fast the tools run and never the state space or the verdict, so it is no part of the key the state space is kept under nor of what identifies a
+  run. It is chosen at three levels, the first that is given winning: the property's `verifierOptions.rewriter`; the machine's, the environment variable
+  `NAIMA_MCRL2_REWRITER` (for a host reached with `--host`, set it in the host's `naima` command, as in
+  `"naima": "NAIMA_MCRL2_REWRITER=jittyc deno run -A naima-tracker/naima/naima.ts"`); and the project's, the plugin option `rewriter` of `verifier-mcrl2`:
+  `naima plugin set verifier-mcrl2 rewriter=jittyc`. A name mCRL2 does not know is the tool's own error.
 
-The tools rewrite with `jitty`, mCRL2's default rewriter, unless a `rewriter` is chosen. On macOS and Linux, `lps2lts` and `pbessolve` are started with the stack limit raised
-(unlimited, or the system's hard limit where unlimited is refused), since rewriting deep terms recurses deeply; on Windows a program's stack is fixed when it is
-built, so they start as they are. A tool killed by a signal makes the run an error whose output says `<tool> crashed (signal N, NAME) on <model>`.
+The tools rewrite with `jitty`, mCRL2's default rewriter, unless a `rewriter` is chosen. On macOS and Linux, `lps2lts` and `pbessolve` are started with the
+stack limit raised (unlimited, or the system's hard limit where unlimited is refused), since rewriting deep terms recurses deeply; on Windows a program's stack
+is fixed when it is built, so they start as they are. A tool killed by a signal makes the run an error whose output says
+`<tool> crashed (signal N, NAME) on <model>`.
 
-The run record keeps the options that were used and the speed. Every run gives `details.linearise` and `details.rewriter` (null when no rewriter was chosen). On the LTS route, `details.lts.exploration` gives the
-arguments of `mcrl22lps` and `lps2lts`, and `details.rate` gives the states generated per second. On the standard route, `details.rate` gives the equations
-`pbessolve` generated per second. A rate that stays very low tells a slow model apart from one that hangs.
+The run record keeps the options that were used and the speed. Every run gives `details.linearise` and `details.rewriter` (null when no rewriter was chosen). On
+the LTS route, `details.lts.exploration` gives the arguments of `mcrl22lps` and `lps2lts`, and `details.rate` gives the states generated per second. On the
+standard route, `details.rate` gives the equations `pbessolve` generated per second. A rate that stays very low tells a slow model apart from one that hangs.
 
 After linearising, the verifier also measures the condition of every summand, counting the operators and variables in it. Summands above the plugin option
 `summandConditionLimit` (10000 unless set; 0 switches the measurement off) are listed in the run's output on a line that begins with `lint:`, and in

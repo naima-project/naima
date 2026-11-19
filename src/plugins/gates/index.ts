@@ -35,6 +35,7 @@
 // them all, whoever declared them.
 
 import { existsSync, readFileSync } from "node:fs"
+import { goalAlarmJob } from "./alarms.ts"
 import { join } from "node:path"
 import {
   alongside,
@@ -1432,6 +1433,7 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
     // order and the landing check are for the coordination plugin's development lines, when it is loaded.
     optional: ["ui-views", "goal-order", "landing-reports"],
     migrations: [moveGates],
+    jobs: [goalAlarmJob],
     rank: [{ name: "gate", score: (i) => (onGates(i).length ? 0 : 4) }],
     checks: [
       gatedProofIsGated,

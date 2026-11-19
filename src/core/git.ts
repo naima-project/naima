@@ -431,8 +431,9 @@ export function commitOn(root: string, lands = false): string {
 }
 
 /**
- * The trunk: the local branch origin's HEAD names, else `main`, else
- * `master`; null when there is none of them. One git process.
+ * The trunk: the local branch origin's HEAD names, else `main`, else `master`; for a project whose trunk is named
+ * otherwise and has no origin HEAD, the local branch git's own `init.defaultBranch` names, else the branch the main
+ * checkout stands on; null when there is none of them. One git process when `main` or `master` exists.
  */
 export function trunk(root: string): string | null {
   const refs = new Map<string, string>()
@@ -446,7 +447,15 @@ export function trunk(root: string): string | null {
   const origin = refs.get("refs/remotes/origin/HEAD")?.replace(/^refs\/remotes\/origin\//, "")
   // The branch origin's HEAD names, when it is one of the two asked for above, is known to exist without another process.
   if (origin && (refs.has(`refs/heads/${origin}`) || gitOrNull(root, "rev-parse", "--verify", "--quiet", `refs/heads/${origin}`) !== null)) return origin
-  return refs.has("refs/heads/main") ? "main" : refs.has("refs/heads/master") ? "master" : null
+  if (refs.has("refs/heads/main")) return "main"
+  if (refs.has("refs/heads/master")) return "master"
+  const exists = (b: string) => gitOrNull(root, "rev-parse", "--verify", "--quiet", `refs/heads/${b}`) !== null
+  const configured = gitOrNull(root, "config", "--get", "init.defaultBranch")?.trim()
+  if (configured && exists(configured)) return configured
+  // The main checkout is the first worktree git lists; the branch it stands on is the one a landing lands on.
+  const first = (gitOrNull(root, "worktree", "list", "--porcelain") ?? "").split("\n\n")[0] ?? ""
+  const branch = first.split("\n").find((l) => l.startsWith("branch refs/heads/"))?.slice("branch refs/heads/".length)
+  return branch && exists(branch) ? branch : null
 }
 
 /** Every local and remote branch name, with remote prefixes also stripped. Answers "does this branch still exist". */

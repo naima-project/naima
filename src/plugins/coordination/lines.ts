@@ -41,6 +41,7 @@ import {
 import { aheadBehind, exists, home, plural, type Policy, SEGMENT, SEGMENT_SAYS, worktreesDir } from "./worktrees.ts"
 import { archiveTag } from "./index.ts"
 import { landOnLine, unfixOnLine } from "./land.ts"
+import { resolveTrackerConflicts, unmerged } from "./tracker-merge.ts"
 
 /** The namespace of the lines' branches. */
 export const LINE_PREFIX = "line/"
@@ -308,8 +309,17 @@ async function syncLine(ctx: Context, policy: Policy, gate: string): Promise<num
   mustGit(ctx.root, "worktree", "add", "-q", "-b", sync, path, branch)
   const merged = runGit(path, ["merge", "--no-ff", "--no-edit", "-m", `Sync ${branch} with ${main}`, main])
   if (!merged.ok) {
-    ctx.out(`the trunk does not merge cleanly into ${branch}: resolve the conflicts in ${path}, commit the merge on ${sync}, then naima land ${sync}`)
-    return 1
+    // Tracker items changed on both sides are merged field by field; only what still conflicts is left to a person.
+    const r = resolveTrackerConflicts(path, ctx.trackerDir)
+    const rest = unmerged(path)
+    if (rest.length) {
+      for (const c of r.conflicts) ctx.out(`${c.file}: ${c.field} was changed on both sides (${branch}: ${c.ours}; ${main}: ${c.theirs})`)
+      if (r.resolved.length) ctx.out(`merged field by field: ${plural(r.resolved.length, "tracker file")}`)
+      ctx.out(`the trunk does not merge cleanly into ${branch}: resolve the conflicts in ${path}, commit the merge on ${sync}, then naima land ${sync}`)
+      return 1
+    }
+    mustGit(path, "commit", "-q", "--no-edit")
+    ctx.out(`merged field by field: ${plural(r.resolved.length, "tracker file")}`)
   }
   // Landed, the sync's worktree and branch are removed: landOnLine does it for every sync, this one or one finished by hand.
   return await landOnLine(ctx, sync, gate, [])
@@ -354,7 +364,7 @@ export function lineCommand(policy: Policy): Command {
   return {
     name: "line",
     says:
-      "parallel development lines, one long-lived branch line/<gate> per goal of the trunk: new starts one from the trunk; list shows the open ones, each with its gate, latest update, how far it lags and the items fixed on it; use sets the line this chat works on (kept outside the repository), which open, claims, queue --ready and land follow; sync merges the trunk into a line through a short branch; unfix withdraws an item's fixed mark on a line, so that the line's landing leaves it open; abandon keeps its commits under archive/line/<gate> and deletes it",
+      "parallel development lines, one long-lived branch line/<gate> per goal of the trunk: new starts one from the trunk; list shows the open ones, each with its gate, latest update, how far it lags and the items fixed on it; use sets the line this chat works on (kept outside the repository), which open, claims, queue --ready and land follow; sync merges the trunk into a line through a short branch, tracker items changed on both sides field by field (notes from both in date order, a field changed on one side taken, one changed differently on both reported for a person); unfix withdraws an item's fixed mark on a line, so that the line's landing leaves it open; abandon keeps its commits under archive/line/<gate> and deletes it",
     enforces:
       "a line starts only from the trunk, tied to a gate the project declares, never from another line; the trunk reaches a line only by a sync, never the reverse, and a line reaches the trunk only by landing; unfix runs from the main checkout, only for an item fixed on the open line, and moves the line by one marker of its own, a merge whose tree is the line's with the item's fixedOn removed, with an Unfixes: trailer naming the item and the reason in its message, refused when the reason holds private infrastructure; the item's work stays on the line; abandon keeps every commit under its archive tag and writes nothing on the trunk, so the items fixed on the line are open there again; nothing is supported with the tracker in a repository of its own",
     usage:

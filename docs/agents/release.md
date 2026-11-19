@@ -40,9 +40,9 @@ A release is a tag, an artifact and an announcement, and the runbook below makes
 
 ## Releases and development lines
 
-A release finishes its goal: the tag of its version is what lets the [line](../guide/lines.md) of the next goal land, and what ends the goal's freeze, if it
-has one (`naima gate set <gate> --freeze <date>`). While the goal is frozen, no landing on the trunk closes a feature; fixes still land, and so does a line of
-the frozen goal that holds only fixes. Work for the next release waits on its line until then.
+A release finishes its goal: the tag of its version is what lets the [line](../guide/lines.md) of the next goal land, and what ends the goal's freeze, if it has
+one (`naima gate set <gate> --freeze <date>`). While the goal is frozen, no landing on the trunk closes a feature; fixes still land, and so does a line of the
+frozen goal that holds only fixes. Work for the next release waits on its line until then.
 
 ## The runbook
 
@@ -59,10 +59,10 @@ evidence.
    and test suite to be current: run them first with `naima verify --all` and `naima metrics run --record`, which reuse every result whose inputs haven't
    changed ([a release gate](../guide/read-the-board.md#a-release-gate-waits-for-the-full-suite)).
 2. **Private draft** (stage `private draft`). The artifact is built and put somewhere only the release role can see it, such as a draft release or an unlisted
-   build, and not yet in the public location. For Naima, a stance or naima-codegen, the artifact is the release's two assets: once the tag `v<version>` is
-   made, `sh bin/release-assets.sh <version>` (in the product, `naima-tracker/naima/bin/` in a project) writes `<name>-<version>.tar.gz`, the files of
-   the tag, and `<name>-<version>.tar.gz.sha256`, and prints the command that uploads them: `gh release upload v<version> <both files>`, on a draft release.
-   Installs and updates download that archive and refuse a release without it, so a release without its assets cannot be installed
+   build, and not yet in the public location. For Naima, a stance or naima-codegen, the artifact is the release's two assets: once the tag `v<version>` is made,
+   `sh bin/release-assets.sh <version>` (in the product, `naima-tracker/naima/bin/` in a project) writes `<name>-<version>.tar.gz`, the files of the tag, and
+   `<name>-<version>.tar.gz.sha256`, and prints the command that uploads them: `gh release upload v<version> <both files>`, on a draft release. Installs and
+   updates download that archive and refuse a release without it, so a release without its assets cannot be installed
    ([Naima updates to releases](../guide/update-naima.md#naima-updates-to-releases)).
 3. **Test the artifact, not the code** (stage `test the artifact`). Install or run the thing that was built rather than the source it came from, because a build
    step can quietly drop a file the tests never touched. Write down the gesture as you would for any [proof](../guide/glossary.md#proof): what was run, on what,

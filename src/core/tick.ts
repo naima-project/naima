@@ -445,6 +445,7 @@ export function startTick(opts: TickOptions): { finish(): Promise<TickResult> } 
       const now = opts.clock()
       try {
         escalate(opts, now)
+        raiseUrgent(opts, now)
         const shown = opts.quiet ? [] : dueNotices(opts, now).filter((n) => claimShow(opts.dir, n, now))
         wake(opts.dir, nextDue(opts, now), now)
         return { ran, shown }
@@ -452,6 +453,27 @@ export function startTick(opts: TickOptions): { finish(): Promise<TickResult> } 
         return { ran, shown: [] }
       }
     },
+  }
+}
+
+/**
+ * Raise, once per clone, each urgent notice a job's last success holds: it becomes a message item the owner acknowledges,
+ * as the urgent message of a failing streak does (its title is the notice's first sentence).
+ */
+function raiseUrgent(opts: TickOptions, now: Date): void {
+  for (const task of opts.tasks) {
+    for (const n of lastSuccess(task, opts.dir)?.notices ?? []) {
+      if (n.level !== "urgent" || ackedHere(opts.dir).has(n.id)) continue
+      const title = n.text.split(/(?<=[.!?])\s/)[0] ?? n.text
+      const created = now.toISOString().slice(0, 10)
+      if (publish(join(opts.dir, "messages", `${n.id}.json`), JSON.stringify({ id: n.id, level: "urgent", title, text: n.text, created }))) {
+        try {
+          opts.store?.raise(n.id, title, n.text, created)
+        } catch {
+          // the tracker could not take it here: the tick's own copy is shown all the same
+        }
+      }
+    }
   }
 }
 

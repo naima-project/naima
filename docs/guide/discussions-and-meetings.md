@@ -4,13 +4,13 @@ Some questions can't be settled with a quick yes or no. A name for a new idea, t
 Naima keeps each of these as a discussion, and gathers discussions into meetings, so that when you sit down with an agent it starts with what is waiting for
 you.
 
-| Word           | What it is                                                                                  | Made with                                |
-| -------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| **discussion** | a question that needs time with a person: the question, the options, and later the decision | `naima new discussions "<topic>"`        |
-| **meeting**    | a gate whose agenda is the discussions on it, and anything else that waits for you; it holds once every discussion on it is decided | `naima meeting new <name> "<title>"`     |
-| **decision**   | what a discussion settled, recorded on it                                                   | `naima decide <discussion> "<decision>"` |
-| **package**    | the work the decisions of a meeting call for, one per item they concern                     | `naima meeting <name> --close`           |
-| **ready queue** | the work you approved, which the coordinator starts on its own when a worker is free       | `naima queue --ready`                    |
+| Word            | What it is                                                                                                                          | Made with                                |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| **discussion**  | a question that needs time with a person: the question, the options, and later the decision                                         | `naima new discussions "<topic>"`        |
+| **meeting**     | a gate whose agenda is the discussions on it, and anything else that waits for you; it holds once every discussion on it is decided | `naima meeting new <name> "<title>"`     |
+| **decision**    | what a discussion settled, recorded on it                                                                                           | `naima decide <discussion> "<decision>"` |
+| **package**     | the work the decisions of a meeting call for, one per item they concern                                                             | `naima meeting <name> --close`           |
+| **ready queue** | the work you approved, which the coordinator starts on its own when a worker is free                                                | `naima queue --ready`                    |
 
 ## File a discussion
 
@@ -79,41 +79,38 @@ naima meeting date review 2026-11-20
 naima meeting date review none                     # no date: whenever you're ready
 ```
 
-You don't need to type these. Ask the agent in the chat ("put this on Friday's review", "move the review to Monday") and it runs them.
-On Home you can also drag a meeting's square along the river to another day, or off it to take its date away
-([Home](the-window.md#home)).
+You don't need to type these. Ask the agent in the chat ("put this on Friday's review", "move the review to Monday") and it runs them. On Home you can also drag
+a meeting's square along the river to another day, or off it to take its date away ([Home](the-window.md#home)).
 
 ## In the app
 
 The Meetings screen lists your meetings: the one on now, then those coming up by date, then those waiting with no date, which take place whenever you're ready.
-Each says when it is, how many things are on it, and opens to show its agenda. Every item that waits for you, on any screen, says so, and says which meeting
-it is on, or that it is on none yet. Home's Needs you starts with your next meeting and the others waiting.
-On Home, the meetings with a date before the focus horizon are two small rings overlapping on the river ahead; a click
-holds one in the stage, one question at a time, and a click on the question brings it into the chat
-([Home](the-window.md#home)).
+Each says when it is, how many things are on it, and opens to show its agenda. Every item that waits for you, on any screen, says so, and says which meeting it
+is on, or that it is on none yet. Home's Needs you starts with your next meeting and the others waiting. On Home, the meetings with a date before the focus
+horizon are two small rings overlapping on the river ahead; a click holds one in the stage, one question at a time, and a click on the question brings it into
+the chat ([Home](the-window.md#home)).
 
-When you are ready, press **Take this meeting now**. Naima records that the meeting started and tells the agent in your chat, which opens with the agenda.
-The same from a terminal is `naima meeting take <meeting>`. The agent learns of it because it keeps `naima meeting wait` running in the background: the
-command ends when a meeting is taken and prints its agenda.
+When you are ready, press **Take this meeting now**. Naima records that the meeting started and tells the agent in your chat, which opens with the agenda. The
+same from a terminal is `naima meeting take <meeting>`. The agent learns of it because it keeps `naima meeting wait` running in the background: the command ends
+when a meeting is taken and prints its agenda.
 
 ### Waiting for you
 
-Waiting for you opens in Home's stage, under the river, from Home's sentence of what needs you, and on a page of its own at
-`#waiting`. It shows everything that waits for you, one per row, each in one sentence with how long it has waited: questions and decisions, work waiting
-for your approval or your test, and agents that have gone quiet. It lists only what lies before Home's focus horizon, the orange line on the river, which
-stands by default at the next major goal of the line Home follows: what belongs to that goal, to one the river draws before it or to no goal, what is on a
-meeting dated before the horizon's day, and anything that asks you now, such as an agent gone quiet. A question that only holds a later release waits
-until the horizon reaches it, on the owner's gate or a meeting with no date too; moving the horizon to that release brings it in. The longest waiting
-comes first. When nothing waits, the page says so and stays quiet.
+Waiting for you opens in Home's stage, under the river, from Home's sentence of what needs you, and on a page of its own at `#waiting`. It shows everything that
+waits for you, one per row, each in one sentence with how long it has waited: questions and decisions, work waiting for your approval or your test, and agents
+that have gone quiet. It lists only what lies before Home's focus horizon, the orange line on the river, which stands by default at the next major goal of the
+line Home follows: what belongs to that goal, to one the river draws before it or to no goal, what is on a meeting dated before the horizon's day, and anything
+that asks you now, such as an agent gone quiet. A question that only holds a later release waits until the horizon reaches it, on the owner's gate or a meeting
+with no date too; moving the horizon to that release brings it in. The longest waiting comes first. When nothing waits, the page says so and stays quiet.
 
-It lists exactly what Home's sentence counts, at the moment Home shows. When the orange line or the Diary shows a day of the past, Waiting for you shows
-what waited for you then, with its age on that day, and nothing is sent from there.
+It lists exactly what Home's sentence counts, at the moment Home shows. When the orange line or the Diary shows a day of the past, Waiting for you shows what
+waited for you then, with its age on that day, and nothing is sent from there.
 
-Open an entry to see why it waits and what waits on it; reveal it to see all of that, item by item, and the meeting it is on. In Home's stage an entry
-opens beside the list instead, with all of that, the item's own page in plain words and its history. **Bring it to the chat**
-hands it to the agent in your chat, which raises it with you at once, with its context. The entry then says it was sent, then that it is in the chat, and
-it leaves the list once it is settled. Each step has its own address, so the browser's Back and Forward move between them and a reload keeps your place.
-The same from a terminal is `naima meeting raise <item>`.
+Open an entry to see why it waits and what waits on it; reveal it to see all of that, item by item, and the meeting it is on. In Home's stage an entry opens
+beside the list instead, with all of that, the item's own page in plain words and its history. **Bring it to the chat** hands it to the agent in your chat,
+which raises it with you at once, with its context. The entry then says it was sent, then that it is in the chat, and it leaves the list once it is settled.
+Each step has its own address, so the browser's Back and Forward move between them and a reload keeps your place. The same from a terminal is
+`naima meeting raise <item>`.
 
 ## At the start of a session
 
@@ -123,8 +120,8 @@ The same from a terminal is `naima meeting raise <item>`.
 Meeting owner (With the owner) has 2 discussions to take (1 more deferred): when owner is here, open with its agenda, in its order — naima meeting owner — one question per message, each answer recorded at once (naima decide), no work started until it closes; owner decides when to stop, and what is left stays queued.
 ```
 
-The agent then opens with that agenda, one question per message. It records each answer as soon as you give it, and starts no work while the meeting is on.
-You decide when to stop. Whatever you didn't get to stays on the agenda for the next meeting.
+The agent then opens with that agenda, one question per message. It records each answer as soon as you give it, and starts no work while the meeting is on. You
+decide when to stop. Whatever you didn't get to stays on the agenda for the next meeting.
 
 ## Record the decision
 
@@ -132,8 +129,8 @@ You decide when to stop. Whatever you didn't get to stays on the agenda for the 
 naima decide discussions/what-call-authored-expertise-sets "Call them playbooks"
 ```
 
-This records the decision and the day on the discussion, and marks it decided. A discussion can't be marked decided without its decision. The agent can do
-this on the main branch during the meeting: the trunk guard accepts it, because deciding changes only what Naima fills in.
+This records the decision and the day on the discussion, and marks it decided. A discussion can't be marked decided without its decision. The agent can do this
+on the main branch during the meeting: the trunk guard accepts it, because deciding changes only what Naima fills in.
 
 A decision often calls for work. The agent files that work only after you say yes, and records your yes with it:
 
@@ -145,8 +142,8 @@ The follow-up is a todo, linked to the discussion with `concerns`.
 
 ## Close the meeting
 
-When you stop, the agent closes the meeting, and a meeting you took is marked held. Naima groups the decisions you just made into work packages, one for each open item they concern, and proposes
-them:
+When you stop, the agent closes the meeting, and a meeting you took is marked held. Naima groups the decisions you just made into work packages, one for each
+open item they concern, and proposes them:
 
 ```text
 $ naima meeting owner --close
@@ -166,9 +163,9 @@ answers:
 naima meeting owner --close --consent "yes; start the export fix now" --start bugs/export-alpha
 ```
 
-Nothing is written until you have said yes. Each package's item gets a `ready` record: the day, the meeting, the decisions it carries, your yes, and whether
-to start it now. Each decision is marked as turned into work, so the next close doesn't propose it again. A decision that concerns no open item is kept as it
-is. If it calls for work, file that work, link it to the discussion with `concerns`, and close again.
+Nothing is written until you have said yes. Each package's item gets a `ready` record: the day, the meeting, the decisions it carries, your yes, and whether to
+start it now. Each decision is marked as turned into work, so the next close doesn't propose it again. A decision that concerns no open item is kept as it is.
+If it calls for work, file that work, link it to the discussion with `concerns`, and close again.
 
 ## The ready queue
 
@@ -176,10 +173,10 @@ is. If it calls for work, file that work, link it to the discussion with `concer
 naima queue --ready
 ```
 
-This lists the work you approved, in the order it starts: what you said to start now first, then by priority. Naima feeds itself from this queue. Whenever
-fewer workers are running than the coordination option `maxWorkers` allows, the coordinator starts the next item with a worker, without asking you, and
-`naima hello` and `naima claims` say which one to start. It starts nothing while a meeting with you is going on. `naima check` notes a worker slot left idle
-while approved work waits.
+This lists the work you approved, in the order it starts: what you said to start now first, then by priority. Naima feeds itself from this queue. Whenever fewer
+workers are running than the coordination option `maxWorkers` allows, the coordinator starts the next item with a worker, without asking you, and `naima hello`
+and `naima claims` say which one to start. It starts nothing while a meeting with you is going on. `naima check` notes a worker slot left idle while approved
+work waits.
 
 ## Where to read more
 

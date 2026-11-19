@@ -51,8 +51,9 @@ lands, as the merge of any file does. On a line, and on a branch opened from one
 - the filing of a new item by a branch that holds a claim: the item is born on the line, and the line's landing brings it to the trunk.
 
 Everything else is refused with a message saying to run the command in the trunk's checkout, where the line gets it at its next sync: a change to an item the
-trunk holds and the branch does not work on, a move of such an item, an event, a diary entry, and any change to `naima.json`, Naima's settings, which change only
-on the trunk. Two branches that write the same item, or a branch and the trunk, meet as a merge conflict, at the sync or at the landing, resolved as for code.
+trunk holds and the branch does not work on, a move of such an item, an event, a diary entry, and any change to `naima.json`, Naima's settings, which change
+only on the trunk. Two branches that write the same item, or a branch and the trunk, meet as a merge conflict, at the sync or at the landing, resolved as for
+code.
 
 ## Keep a line up to date with the trunk
 
@@ -157,7 +158,9 @@ Lines need the tracker committed with the code: a project that keeps its tracker
 
 ## Heavy checks are agreed with you
 
-A heavy check opens a browser, runs a test suite or model-checks, so it costs your machines and time, and where and how often it runs is your choice. A project that has a heavy check and has not answered gets the question, and no heavy check runs until it is answered: a landing leaves the check owed, `naima checkpoint` and `naima check --heavy` say the question and stop. The answer is one command:
+A heavy check opens a browser, runs a test suite or model-checks, so it costs your machines and time, and where and how often it runs is your choice. A project
+that has a heavy check and has not answered gets the question, and no heavy check runs until it is answered: a landing leaves the check owed, `naima checkpoint`
+and `naima check --heavy` say the question and stop. The answer is one command:
 
 ```sh
 naima heavy-checks checkpoint --host here    # at a checkpoint, on this machine
@@ -167,13 +170,20 @@ naima heavy-checks off                       # never; every start of a heavy che
 naima heavy-checks                           # show the answer, or the question
 ```
 
-It records the coordination option `heavyChecks` and sets `checks`, `landingHost` and `verifyHost` with it. A project that already set `checks`, a landing host, a verify host, fast checks or checkpoint runs has answered by those, and keeps what it chose. With `demand`, a gate step closing and a goal reached start no checkpoint by themselves. With `off`, a checkpoint runs only the landing checks that are not heavy and starts no suite or verification.
+It records the coordination option `heavyChecks` and sets `checks`, `landingHost` and `verifyHost` with it. A project that already set `checks`, a landing host,
+a verify host, fast checks or checkpoint runs has answered by those, and keeps what it chose. With `demand`, a gate step closing and a goal reached start no
+checkpoint by themselves. With `off`, a checkpoint runs only the landing checks that are not heavy and starts no suite or verification.
 
 ## Checks at checkpoints
 
-By default every landing runs every landing check (the coordination option `checks` is `continuous`). A project in rapid development can set `checks` to `checkpoint`: `naima land` then runs only the checks the option `fastChecks` names, and records the others in the landing marker as owed, in a `Checks-owed:` trailer. Workers run a build and their own new test, nothing wider. `naima gates` lists what is owed since the last checkpoint. `naima checkpoint [<gate>]` runs it all, with the heavy suites and model checks, on the current tip and records a pass, or a failure that blocks the gate until a later checkpoint passes. A gate step closing and a line landing on the trunk run it by themselves.
+By default every landing runs every landing check (the coordination option `checks` is `continuous`). A project in rapid development can set `checks` to
+`checkpoint`: `naima land` then runs only the checks the option `fastChecks` names, and records the others in the landing marker as owed, in a `Checks-owed:`
+trailer. Workers run a build and their own new test, nothing wider. `naima gates` lists what is owed since the last checkpoint. `naima checkpoint [<gate>]` runs
+it all, with the heavy suites and model checks, on the current tip and records a pass, or a failure that blocks the gate until a later checkpoint passes. A gate
+step closing and a line landing on the trunk run it by themselves.
 
-A checkpoint also runs the project's test suites and its model checks, in the background through `naima run`. The coordination option `checkpointRuns` lists the commands, each a plain command or an object with a `command`, a `host` and a `budget`:
+A checkpoint also runs the project's test suites and its model checks, in the background through `naima run`. The coordination option `checkpointRuns` lists the
+commands, each a plain command or an object with a `command`, a `host` and a `budget`:
 
 ```json
 "checkpointRuns": ["deno task verify", { "command": "deno task verify", "host": "<host>", "name": "suite" }]

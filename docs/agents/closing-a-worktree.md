@@ -107,13 +107,18 @@ refactor or a new test, say so in the hand-over instead (step 7), so the coordin
 
 ## 5. Run the gates, and read what breaks
 
-Which checks to run depends on the project's check mode (the coordination option `checks`; `naima plugin` shows it). In `continuous` mode, run the project's full [gate](../guide/glossary.md#gate) set, including `naima check`, as follows. In `checkpoint` mode, run a build and the one or two test files you wrote or touched, and nothing wider: no suite, no model check, no landing check. `naima land` runs only the checks the project names as fast (`fastChecks`) and writes the rest into the landing marker as owed, `naima gates` lists them, and `naima checkpoint` runs them at a gate step closing, a goal reached, or when asked. Heavy checks (a browser, a suite, model checking) run only as the project agreed with its owner (`naima heavy-checks` shows the answer): when it has not answered, no heavy check runs, and the owner is asked once, with `naima heavy-checks landing | checkpoint | demand --host <name | here>` or `off` recording the answer; never choose it yourself. Say in the report which wider runs are owed.
+Which checks to run depends on the project's check mode (the coordination option `checks`; `naima plugin` shows it). In `continuous` mode, run the project's
+full [gate](../guide/glossary.md#gate) set, including `naima check`, as follows. In `checkpoint` mode, run a build and the one or two test files you wrote or
+touched, and nothing wider: no suite, no model check, no landing check. `naima land` runs only the checks the project names as fast (`fastChecks`) and writes
+the rest into the landing marker as owed, `naima gates` lists them, and `naima checkpoint` runs them at a gate step closing, a goal reached, or when asked.
+Heavy checks (a browser, a suite, model checking) run only as the project agreed with its owner (`naima heavy-checks` shows the answer): when it has not
+answered, no heavy check runs, and the owner is asked once, with `naima heavy-checks landing | checkpoint | demand --host <name | here>` or `off` recording the
+answer; never choose it yourself. Say in the report which wider runs are owed.
 
-In `continuous` mode: Where the project declares [metrics](../guide/metrics-and-budgets.md),
-also run `naima metrics run --record` and commit the record with the work. Report each number together with the one it is compared to, as the command prints it.
-A bound loosened to make the work fit is refused unless an item says why (`--because`). If a red result arrives with the trunk, don't absorb it quietly. Find
-out where it comes from (a detached worktree at the trunk settles it in one command), and if it is the trunk's, open an item and say so in the
-[session note](../guide/glossary.md#session-note).
+In `continuous` mode: Where the project declares [metrics](../guide/metrics-and-budgets.md), also run `naima metrics run --record` and commit the record with
+the work. Report each number together with the one it is compared to, as the command prints it. A bound loosened to make the work fit is refused unless an item
+says why (`--because`). If a red result arrives with the trunk, don't absorb it quietly. Find out where it comes from (a detached worktree at the trunk settles
+it in one command), and if it is the trunk's, open an item and say so in the [session note](../guide/glossary.md#session-note).
 
 ## 6. Merge the trunk into the branch
 
@@ -170,11 +175,10 @@ what the branch changed there. Then it moves the trunk, only if the trunk hasn't
   `--stale-proofs "<reason>"`, and the marker keeps the reason in a `Stale-proofs:` trailer;
 - a plugin's landing check fails on the branch's files, such as a stance's checks on a file they read. No flag lets this through, `--stale-proofs` included: the
   worker fixes the branch. A check that declares itself heavy, such as one that opens a browser, never runs where `naima land` runs: it runs detached, through
-  `naima run`, in a checkout of the tip, and `naima land` waits on it: on the host the coordination option `landingHost` names, through `naima run --host`,
-  or on this machine when no host is named or `landingHost` is `here`. The host is read from the branch's own
-  configuration first, then from the trunk's, so the branch that sets `landingHost` lands by it. A heavy check that says which files it covers is not needed
-  on a landing that changes none of them, and then needs no host. Each check prints one line, where it ran and what it found, or that it was not needed. The
-  same checks run before a landing on a development line;
+  `naima run`, in a checkout of the tip, and `naima land` waits on it: on the host the coordination option `landingHost` names, through `naima run --host`, or
+  on this machine when no host is named or `landingHost` is `here`. The host is read from the branch's own configuration first, then from the trunk's, so the
+  branch that sets `landingHost` lands by it. A heavy check that says which files it covers is not needed on a landing that changes none of them, and then needs
+  no host. Each check prints one line, where it ran and what it found, or that it was not needed. The same checks run before a landing on a development line;
 - an untracked file in the main checkout would be overwritten, in which case nothing moves.
 
 After the landing, `naima land` prints what each landing report says. Among them are the reviews recorded with `naima reviewed` that the branch carries, and a

@@ -48,11 +48,11 @@ naima hello
 
 The first line it prints is the one the agent shows you, for example
 `I'm Naima, the No-guesswork Artificial Intelligence Meta-Agent, active in this repository: version 1.0.0, commit 45ba22c1134c.` The version is the latest
-release tag at or before the locked commit. `naima --version` (or `naima version`) prints that line alone. After that comes what Naima found about newer versions, then one line for each long run that is due
-([long work](long-work.md#when-a-long-run-is-due)), one line for each repository you chose to keep without a remote
-([a remote for every repository](private-tracker.md#a-remote-for-every-repository)), and a reminder of what you can ask for: an explanation of Naima and its
-documentation, a check for an update, or an update. With an agent tool that has a session-start hook, you see one line of it directly: the first line, and
-whether anything waits on your decision. The rest goes to the agent, which answers your message and tells you, one line each, only what waits on you; every
+release tag at or before the locked commit. `naima --version` (or `naima version`) prints that line alone. After that comes what Naima found about newer
+versions, then one line for each long run that is due ([long work](long-work.md#when-a-long-run-is-due)), one line for each repository you chose to keep without
+a remote ([a remote for every repository](private-tracker.md#a-remote-for-every-repository)), and a reminder of what you can ask for: an explanation of Naima
+and its documentation, a check for an update, or an update. With an agent tool that has a session-start hook, you see one line of it directly: the first line,
+and whether anything waits on your decision. The rest goes to the agent, which answers your message and tells you, one line each, only what waits on you; every
 command it is told to run is written as it runs in the project, `sh naima-tracker/naima.sh <command>`. `naima hello` never changes the lock and never starts a
 run. Its check for a newer Naima counts as the day's update check.
 
@@ -71,10 +71,10 @@ naima update --mode check
 
 There are three settings:
 
-| `updates` | What a session start does                                                                                                                        |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `off`     | It doesn't contact the source at all.                                                                                                            |
-| `check`   | It tells you when a newer release exists, and which version it is. This is the default.                                                          |
+| `updates` | What a session start does                                                                                           |
+| --------- | ------------------------------------------------------------------------------------------------------------------- |
+| `off`     | It doesn't contact the source at all.                                                                               |
+| `check`   | It tells you when a newer release exists, and which version it is. This is the default.                             |
 | `update`  | It also tells you what the newer Naima would change, with its change notes, and the agent asks whether you want it. |
 
 The default is `check` because it only reads, and changes nothing. Even with `update`, nothing is applied until you say yes.
@@ -104,19 +104,19 @@ Then comes what Naima works out by comparing the two versions itself:
   update` will
   do about them.
 
-Last, when you ask for it, comes a rehearsal. `naima update --check` says what changes in seconds and does not rehearse. `naima update --check --rehearse` runs the newer
-version's own `naima check` on your project, after the running one's, and tells you what would newly fail and what would newly be noted; it says its
-progress as it goes, and reuses what a check found on a commit and a project that have not changed since the last rehearsal. `--rehearse-in-background` starts it
-as a run named `update-rehearsal` (`naima wait update-rehearsal` follows it) and returns at once; its result is recorded, and every later `naima update --check`
-says it. A line such as `newly failing: …` is something to fix after the update, or before it.
+Last, when you ask for it, comes a rehearsal. `naima update --check` says what changes in seconds and does not rehearse. `naima update --check --rehearse` runs
+the newer version's own `naima check` on your project, after the running one's, and tells you what would newly fail and what would newly be noted; it says its
+progress as it goes, and reuses what a check found on a commit and a project that have not changed since the last rehearsal. `--rehearse-in-background` starts
+it as a run named `update-rehearsal` (`naima wait update-rehearsal` follows it) and returns at once; its result is recorded, and every later
+`naima update --check` says it. A line such as `newly failing: …` is something to fix after the update, or before it.
 
 To find all this out, Naima reads the newer version's code straight from its own git copy, into a temporary folder that it deletes afterwards, and runs its
 check from there. Your project is not touched. If the newer Naima changes the data format, the rehearsal can't run on data that hasn't been migrated yet. It
 says so, and the check at the end of the update takes its place.
 
 While it downloads, verifies and finishes, `naima update` says each stage with its count (the bytes of the archive, the checks done) on standard error, or in
-the run's progress file under `naima run`. `naima update --no-rehearse` leaves out, at its end, the older version's check on a temporary copy; the new version's own
-`naima check` still runs, and what it finds is not filed as items.
+the run's progress file under `naima run`. `naima update --no-rehearse` leaves out, at its end, the older version's check on a temporary copy; the new version's
+own `naima check` still runs, and what it finds is not filed as items.
 
 ## Updating
 
@@ -234,7 +234,8 @@ removed.
 
 ## When a teammate updated
 
-Pull their commit and run any `naima` command: it notices the lock moved, says `naima: the program moved to the locked commit, <a> → <b>; naima.json is unchanged` once, and follows it.
+Pull their commit and run any `naima` command: it notices the lock moved, says
+`naima: the program moved to the locked commit, <a> → <b>; naima.json is unchanged` once, and follows it.
 
 ### On a branch opened before the update
 
