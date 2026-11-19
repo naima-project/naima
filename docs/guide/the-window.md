@@ -272,8 +272,21 @@ Waiting for you, where one click brings the case to the chat.
 
 Last is the river of the week. The commits of the last seven days on main are grey dots on one line, each dot the commits
 of a part of the week, larger when they changed more lines. The agents at work are short green lines arriving at today,
-each as long as the agent has held its work. Today is an orange line, and a dotted orange path leads to the goal's
-milestone, a ring with its short name and its expected day; the later goals are grey rings with their month.
+each as long as the agent has held its work. Today is a small orange tick on the line, and a dotted orange path leads to
+the goal's ring, where the river's one orange line stands: the focus horizon, with the goal's short name and expected day
+above it. By default it stands at the next major goal of the line Home follows, such as the next release.
+
+Everything before the horizon is shown in full and is what Home counts: the goals between today and it, their meetings,
+milestones and epics, and what needs you from them, in the sentence, in Waiting for you and in "for when you have time".
+Beyond it the river is only a sketch of the road ahead, drawn faint: every later goal as a grey ring, those with no
+expected or due day after the dated ones in goal order, and the milestones, with no epics or sub-goals. A question that
+only concerns a goal beyond the horizon, even on a meeting with no date, waits there until the horizon reaches it.
+
+To widen the focus, click a later goal's ring, or drag the horizon onto it, or press the right arrow key on it: the
+horizon glides there, and that goal's events appear in full, its meetings and questions join what needs you, and the ring
+at the top, its caption and the faces follow that goal. The left arrow key steps it back one goal, and Home (the wordmark
+or the key H) or the Home key on the line brings it back to its default goal. The horizon moved is written in the address
+as `h=` and the goal, so Back, Forward and a reload show the same focus.
 
 Everything else ahead that has a day stands on the river too, as a small grey ring at that day: the milestones the goals'
 rings leave out, the sub-goals with a due or expected day, and the epics with work left and a planned or expected end. A
@@ -288,19 +301,20 @@ tagged, or else the day its release was filed. A click on a crown shows the goal
 while Home is open, its ring ahead shrinks and travels back to that day, settling there as the crown; with reduced
 motion it is simply there.
 
-Your meetings with a date stand on the river ahead as small squares at their day, each with the number of questions
-waiting on it. A click on a square, or Enter on it, holds that meeting in the stage, one question at a time: the
+Your meetings with a date stand on the river ahead at their day, before the horizon only, each as two small rings
+overlapping, people meeting, with the number of questions waiting on it. A click on a meeting, or Enter on it, holds that
+meeting in the stage, one question at a time: the
 question up is large, the next ones recede behind it. A click on the question up brings it into the chat, where the
 agent raises it with you at once (as `naima meeting raise` would); once it is answered there it goes, and the next one
 rises into its place. A click on a question behind brings that one up and into the chat instead. The questions of the
-meetings with no date are one quiet phrase beside the caption, such as "and 3 for when you have time", and a click on it
-holds them in the stage the same way.
+meetings with no date, those that concern a goal before the horizon, are one quiet phrase beside the caption, such as
+"and 3 for when you have time", and a click on it holds them in the stage the same way.
 
-A meeting's date can be changed from Home. Drag its square along the river to another day, drag it off the river to
-take its date away, or drag a meeting with no date onto the river; with the keyboard, the arrow keys on a square move it
-a day at a time, and Escape gives the move up. The meeting held in the stage also has its date to pick, or No date.
-Each change runs `naima meeting date`, the command an agent would run, and the square stays where you put it while the
-command runs; if it fails, the square goes back to its day.
+A meeting's date can be changed from Home. Drag it along the river to another day, drag it off the river to take its
+date away, or drag a meeting with no date onto the river; with the keyboard, the arrow keys on a meeting move it a day at
+a time, and Escape gives the move up. The meeting held in the stage also has its date to pick, or No date. Each change
+runs `naima meeting date`, the command an agent would run, and the meeting stays where you put it while the command runs;
+if it fails, it goes back to its day.
 
 Calendar, in the stage's index (its title, described below), shows the month as a calendar in the stage: a grid of its days with no
 lines, a small square on a day with a meeting, a small ring on a day a goal is due or expected, and today's number in
@@ -320,12 +334,13 @@ step through the lines followed and a reload shows the same one; with no `l=`, H
 line that has landed rejoins main where it landed, with a small ring on main at that moment; a click on it shows that
 landing and the items it closed.
 
-The orange line of today can be dragged along the river, with the mouse, a trackpad or a finger, to see the whole of Home
-as it was at that moment: the ring and its percent, the goal's line and its expected day, the agents at work then and what
+The orange line can also be dragged back along the river, past today, with the mouse, a trackpad or a finger, to see the
+whole of Home as it was at that moment: the ring and its percent, the goal's line and its expected day, the agents at work then and what
 needed you then, all read at the newest commit of main before the moment. The day at the top says "As it was on" that
 day, the ring and the agents' dots lose some of their colour, the line carries the day, and the commits after it fade.
-The arrow keys on the line, or the small ‹ and › beside the day at the top, move it a day back or on. "Back to today", or
-the quiet "now ›" where today stands on the river, brings Home back to now, the line gliding to its place. Each moment
+The left arrow key on the line at its default goal takes it a day back; in the past the arrow keys on the line, or the
+small ‹ and › beside the day at the top, move it a day back or on. "Back to today", or the quiet "now ›" where today
+stands on the river, brings Home back to now, the line gliding to the horizon's goal. Each moment
 you drop the line at is a place in the browser's history, written in the address as `t=` and the time in seconds, so
 Back and Forward step through the moments seen and a reload shows the same one.
 
@@ -394,7 +409,7 @@ shrinks, fades or slides: the bar simply replaces the top once it is condensed, 
 The word "naima" at the top left of every screen is the way Home: a click on it, or Enter while it has the focus, returns to
 Home from wherever you are. On another screen it shows Home; on Home it gives Home back as it starts, in one smooth move:
 the stage closes back to the diary with no item open, the condensed top unfolds, the ring turns back to its front and
-the first face comes up, no detail is left open, the moment returns to now with the today mark and the river there. The
+the first face comes up, no detail is left open, the moment returns to now with the river there and the orange line, the focus horizon, at its default goal. The
 line you follow does not change. Its only cue is that it dims a little under the pointer. The key H does the same from
 any screen, and so does pressing Escape twice in a row on Home. Back and Forward step through it as through any other
 move, and with reduced motion the top unfolds at once and nothing glides.

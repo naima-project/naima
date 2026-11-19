@@ -88,8 +88,9 @@ On Home you can also drag a meeting's square along the river to another day, or 
 The Meetings screen lists your meetings: the one on now, then those coming up by date, then those waiting with no date, which take place whenever you're ready.
 Each says when it is, how many things are on it, and opens to show its agenda. Every item that waits for you, on any screen, says so, and says which meeting
 it is on, or that it is on none yet. Home's Needs you starts with your next meeting and the others waiting.
-On Home, the meetings with a date are small squares on the river ahead; a click holds one in the stage, one question at a
-time, and a click on the question brings it into the chat ([Home](the-window.md#home)).
+On Home, the meetings with a date before the focus horizon are two small rings overlapping on the river ahead; a click
+holds one in the stage, one question at a time, and a click on the question brings it into the chat
+([Home](the-window.md#home)).
 
 When you are ready, press **Take this meeting now**. Naima records that the meeting started and tells the agent in your chat, which opens with the agenda.
 The same from a terminal is `naima meeting take <meeting>`. The agent learns of it because it keeps `naima meeting wait` running in the background: the
@@ -99,11 +100,13 @@ command ends when a meeting is taken and prints its agenda.
 
 Waiting for you opens in Home's stage, under the river, from Home's sentence of what needs you, and on a page of its own at
 `#waiting`. It shows everything that waits for you, one per row, each in one sentence with how long it has waited: questions and decisions, work waiting
-for your approval or your test, and agents that have gone quiet. It lists only what concerns the goal Home shows: what belongs to that goal or to one
-before it, and anything that asks you now, such as an item on the owner's gate or on a meeting; a question that only holds a later release waits until
-its turn. The longest waiting comes first. When nothing waits, the page says so and stays quiet.
+for your approval or your test, and agents that have gone quiet. It lists only what lies before Home's focus horizon, the orange line on the river, which
+stands by default at the next major goal of the line Home follows: what belongs to that goal, to one the river draws before it or to no goal, what is on a
+meeting dated before the horizon's day, and anything that asks you now, such as an agent gone quiet. A question that only holds a later release waits
+until the horizon reaches it, on the owner's gate or a meeting with no date too; moving the horizon to that release brings it in. The longest waiting
+comes first. When nothing waits, the page says so and stays quiet.
 
-It lists exactly what Home's sentence counts, at the moment Home shows. When the today mark or the Diary shows a day of the past, Waiting for you shows
+It lists exactly what Home's sentence counts, at the moment Home shows. When the orange line or the Diary shows a day of the past, Waiting for you shows
 what waited for you then, with its age on that day, and nothing is sent from there.
 
 Open an entry to see why it waits and what waits on it; reveal it to see all of that, item by item, and the meeting it is on. In Home's stage an entry
