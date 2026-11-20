@@ -49,6 +49,8 @@ pub fn serve(sidecar: Arc<Sidecar>, request: Request<Vec<u8>>, responder: UriSch
                         .header(header::CONTENT_TYPE, file["type"].as_str().unwrap_or("application/octet-stream"))
                         .header(header::CONTENT_SECURITY_POLICY, POLICY)
                         .header(header::CACHE_CONTROL, "no-store")
+                        // A sandboxed page's origin is opaque: the module scripts it imports are loaded with CORS.
+                        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "null")
                         .body(bytes),
                     None => Response::builder().status(500).body(b"naima: a file that is not one".to_vec()),
                 }

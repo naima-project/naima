@@ -42,7 +42,8 @@ import { mapView } from "./graphs.ts"
 import { projectsView } from "./projects.ts"
 import { weekView } from "./week.ts"
 import { browserCommand, openBrowser, type Opened, osName } from "./open.ts"
-import { filesKey, filesUrl, newToken, serve, type ServeOptions } from "./serve.ts"
+import { BUNDLE, filesKey, filesUrl, newToken, serve, type ServeOptions } from "./serve.ts"
+import { studyFolder } from "./studies.ts"
 import { resumed, switchFile, writeSwitch } from "./switch.ts"
 import { agentChannel } from "./agent-endpoint.ts"
 import { runUiMcp } from "./mcp.ts"
@@ -273,6 +274,9 @@ export const realDeps: UiDeps = {
 /** The folder of a tab's files now, by the tab's name: null for a tab with none, or one whose folder fails. */
 export function tabFolder(ctx: Context, tabs: readonly UiTab[], name: string): string | null {
   try {
+    // The Models tab's: a study's frames come from its declaring file's folder, the frame's host page from the bundle.
+    if (name === "naima-study") return join(BUNDLE, "study")
+    if (name.startsWith("study-")) return studyFolder(ctx.root, ctx.program, name.slice("study-".length))
     return tabs.find((t) => t.name === name)?.files?.(ctx) ?? null
   } catch {
     return null

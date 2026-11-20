@@ -1,0 +1,19 @@
+<!doctype html>
+<!-- The host of a study's frames (develop/models-tab.md §6, §7): served with the policy of a tab's page, a sandbox of
+     its own with no connection anywhere. The tab names the role and the module in the address's fragment. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Study</title>
+    <style>
+      html, body { margin: 0; background: transparent; color: var(--color-text); font-family: var(--font-family-body); }
+      #view { min-height: 100vh; }
+      .problem { font-family: var(--font-family-mono); font-size: 12px; color: var(--color-text-muted); padding: 16px; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <div id="view"></div>
+    <script type="module" src="./host.js"></script>
+  </body>
+</html>

@@ -31,7 +31,7 @@ export const BUNDLE: string = fileURLToPath(new URL("../../../ui/dist/", import.
 
 /** The bundle's pages may load only what the bundle and this server hold, and frame only this server's files. */
 const POLICY =
-  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
 
 const SAFE = { "cache-control": "no-store", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" }
 
@@ -177,7 +177,11 @@ export function serve(opts: ServeOptions): Promise<Served> {
       const dir = opts.tabFolder(tab)
       const found = dir ? fileIn(dir, rel, PAGE_TYPES) : null
       if (!found) return plain(res, 404, `no ${parts.slice(3).join("/")}`)
-      return file(req, res, found, PAGE_TYPES[extname(found).toLowerCase()]!, { "content-security-policy": pagePolicy(origin) })
+      // A sandboxed page's origin is opaque ("null"): its module scripts (a study's frames import theirs) are loaded with
+      // CORS, so a script answers that origin. The key in the path is still what opens the file.
+      const ext = extname(found).toLowerCase()
+      const cors: Record<string, string> = ext === ".js" || ext === ".mjs" ? { "access-control-allow-origin": "null" } : {}
+      return file(req, res, found, PAGE_TYPES[ext]!, { "content-security-policy": pagePolicy(origin), ...cors })
     }
     const given = url.searchParams.get("token") ?? cookieToken(req, name)
     if (!given || !same(given, token)) return plain(res, 403, "this address needs the token it was opened with")

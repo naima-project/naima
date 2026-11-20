@@ -10,6 +10,11 @@
 //   tabs                           the tabs plugins contribute to the new UI, each with its subtabs
 //   tab {name, sub?, at?, query?}  what a tab shows for a subtab at the moment: a component's data, the address of a
 //                                  page of its folder, or a page it makes, as a whole HTML document the app frames
+//   studies                        the Models tab's studies of the project, each declared by a `%@ui` block of a `.mcrl2`
+//                                  file (studies.ts): { studies: [{ id, file, title, says, model, stepper, observer, view,
+//                                  config, says_lines, problems }] }, no file contents
+//   study {id}                     one study, with its stepper's bytes (`stepper`, base64) and the addresses of its frames
+//                                  (`frames`: the host page, the observer and the view, the last two null when absent)
 //   metro                          what the rail draws: the trunk, the lines, the branches, the workers, the goals ahead,
 //                                  the people, the checkouts and the stops' names
 //   action {name, args}            one naima command of a short list, started through `naima run`: answers its run;
@@ -38,7 +43,9 @@
 //
 // Every command reads the files when it is called, so the UI is live.
 
-import { resolve } from "node:path"
+import { readFileSync } from "node:fs"
+import { Buffer } from "node:buffer"
+import { dirname, join, resolve } from "node:path"
 import { askHostsInBackground, type Context, gitReadScope, headCommit, type KnownProject, knownProjects } from "../../core/api.ts"
 import { actionArgv, actionCommand, actionOf, ACTIONS, naimaEntry, runCommand } from "./actions.ts"
 import { showCall } from "./agent-endpoint.ts"
@@ -50,6 +57,7 @@ import { stampOf, type ViewCache } from "./view-cache.ts"
 import { PoolDown, type ViewPool } from "./view-pool.ts"
 import { type AgentRequest, askAgent, awaitAnswer, listenShows, openUis, type Place, requestId, taken, type UiRequest, writeAnswer } from "./show.ts"
 import { commandJson, type JsonOf, metroData, VIEW_OF_COMMAND } from "./metro.ts"
+import { findStudies } from "./studies.ts"
 import { contentProblem, framePage, tabList, type UiTab, type UiTabContent, type UiView } from "./tabs.ts"
 
 export { actionArgv, actionCommand, actionOf, ACTIONS, naimaEntry, runCommand } from "./actions.ts"
@@ -299,6 +307,17 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       const problem = contentProblem(content)
       if (problem) throw new Error(`the ${tab.name} tab's content ${problem}`)
       return shown(tab, sub, content)
+    },
+    studies: () => json({ studies: findStudies(ctx.root, ctx.program) }),
+    study: (args) => {
+      const id = text(args["id"])
+      const study = findStudies(ctx.root, ctx.program).find((s) => s.id === id)
+      if (!study) throw new Error(`no study ${String(args["id"])}`)
+      if (study.problems.length || study.stepper === null) throw new Error(`the study ${study.id} cannot open: ${study.problems.join("; ")}`)
+      const dir = join(ctx.root, dirname(study.file))
+      const stepper = Buffer.from(readFileSync(join(dir, study.stepper))).toString("base64")
+      const frame = (rel: string | null): string | null => (rel === null ? null : opts.fileUrl(`study-${study.id}`, rel))
+      return json({ ...study, stepper, frames: { host: opts.fileUrl("naima-study", "host.html"), observer: frame(study.observer), view: frame(study.view) } })
     },
     metro: async () => (await kept("metro", async () => json(await metroData(momentOf(null), viaViews)))) as Json,
     action: async (args) => {

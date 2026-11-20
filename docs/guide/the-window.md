@@ -511,6 +511,7 @@ rewrites history. Another page in your browser cannot run one.
 The interface is a Svelte app that ships with Naima, already built: Naima needs no npm package and no network to show it. It is built with the
 [UI stance](stances.md): its tokens, widgets, store and rules, which the stance's checks hold it to. Everything it reads and does goes through the stance's
 bridge, as commands of Naima's own: `describe`, `data` (a view's data, live or at a commit), `tabs`, `tab` (what a tab shows), `metro` (the rail's map),
+`studies` (the Models tab's studies, each declared by a `%@ui` block of an mCRL2 file of the project) and `study` (one of them, with its stepper's bytes and the addresses of its frames),
 `action` and `run`, and the feed `changes`, which says when the project changed. In the browser the bridge is `POST /bridge/<command>` and, for the feed, a
 stream of server-sent events at `/bridge/changes`, behind the run's token; a command is refused from any page but the server's own. Its logic is generated from
 a model. The moment, the rail, the current screen and the plugin's tab and subtab shown form one state machine, modelled in mCRL2 and checked with its
