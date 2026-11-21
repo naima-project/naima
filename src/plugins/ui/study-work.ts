@@ -81,17 +81,22 @@ export function studyFilePath(root: string, study: Study, rel: string): string |
   return resolve(root, dirname(study.file), rel)
 }
 
+/** The editor holds a file's text with `\n` line ends, as every editor does: a file with `\r\n` (a Windows checkout) is read as such, and written back with them. */
 export function readStudyFile(root: string, study: Study, rel: string): string {
   const path = studyFilePath(root, study, rel)
   if (typeof path !== "string") throw new Error(path.refused)
-  return readFileSync(path, "utf8")
+  return readFileSync(path, "utf8").replace(/\r\n/g, "\n")
 }
 
 export function writeStudyFile(root: string, study: Study, rel: string, text: string): void {
   const path = studyFilePath(root, study, rel)
   if (typeof path !== "string") throw new Error(path.refused)
   if (Buffer.byteLength(text, "utf8") > MAX_BYTES) throw new Error(`${rel} would be larger than ${MAX_BYTES} bytes`)
-  writeFileSync(path, text)
+  let was = ""
+  try {
+    was = readFileSync(path, "utf8")
+  } catch { /* a file not there yet: the text as given */ }
+  writeFileSync(path, was.includes("\r\n") ? text.replace(/\r?\n/g, "\r\n") : text)
 }
 
 /** A word of a command line, quoted for the shell that runs it: POSIX sh, or Windows' cmd. */
