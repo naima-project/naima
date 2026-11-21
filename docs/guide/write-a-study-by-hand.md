@@ -331,6 +331,30 @@ export default defineConfig({
 
 The same file builds `src/view.ts` and `src/observer.svelte.ts` as two ES modules into `../build/`, with what they share in `shared.js`.
 
+## 7a. Explain the view to the person using it
+
+A view is read by someone who does not know the model. Each part of it says, in plain words, what it is and what is happening now, so the person is never left
+guessing whether something is stuck, what a status means or why a line appeared. Follow these rules whoever writes the view, a person or an agent.
+
+1. Every part opens with an introduction of two or three sentences: what the part shows, and what the person does with it. Write it in the model's own
+   vocabulary as its author uses it, not in mCRL2's. The tab folds it to two lines; a click opens it.
+2. Under the introduction, say what is happening now, computed from the state, in one line per thing that matters: what is waiting, on whom, and what the person
+   can do about it. When the model waits for the person, say so and name the steps that move it on. When nothing can happen, say why.
+3. Explain every status the part draws the first time it can appear, and in the legend: for the scheduler, "in the store?" is a question the store has not
+   answered yet, "restoring" is a value coming back from the store, "computing" is a kernel on a worker, and a finished value computed and one restored look
+   different.
+4. Say why things appear and disappear. A new line, a new node or a new state is never silent: the situation line says what made it.
+5. Put the actions where the thing they act on is drawn, labelled in words (for the scheduler, "in the store" and "not in the store" at the end of the line
+   asking the store), and only when the model accepts them.
+6. Use the widget set for every control (`Action`, `Segmented`, the graph's toolbar), each with a hint that says what it does and a reason when it is disabled.
+7. Fit the card: the part is laid out for the card it is in, its controls never leave it, and only what cannot fit scrolls inside it.
+8. Describe the state: give each parameter of the model's process a comment beside it, or a `%@state <name>: "<what it
+   is>"` line in the study's file; the
+   tab shows them in its state card.
+
+The scheduler's view (in VoxLogicA, `model/frames/study/view/src/View.svelte`) does all of this; its `INTRO` table and `situation` function are the place to
+start reading.
+
 ## 8. Name the diagrams you draw
 
 When a view draws something a reader already knows as a standard diagram, call it by its name and draw that notation as the standard defines it. A UML state

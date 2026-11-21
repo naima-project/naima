@@ -5,8 +5,10 @@
      transitions open arrowheads; a directed graph's nodes are circles with filled arrowheads. A node may be pinned and
      bookmarked through its marks, shown on hover and focus. -->
 <script lang="ts">
+  import { untrack } from "svelte";
   import Pannable from "../ui/components/Pannable.svelte";
   import { type Direction, type Layout, layout } from "./layout.ts";
+  import { arrowOf, pathOf, route } from "./route.ts";
   import Icon from "../ui/components/Icon.svelte";
   import ArrowRight from "@lucide/svelte/icons/arrow-right";
   import ArrowDown from "@lucide/svelte/icons/arrow-down";
@@ -39,6 +41,8 @@
     follow?: string | null;
     /** Zoom to fit while the drawing is larger than its box and nobody has zoomed by hand. */
     autofit?: boolean;
+    /** Where the flow goes at first: auto lets the card's shape decide (horizontal in a wide card, vertical in a tall one). */
+    orient?: "right" | "down" | "left" | "up" | "auto";
     /** Place each node once and never move it as the graph grows (a path explored), at the price of more crossings. */
     stable?: boolean;
   }
@@ -56,6 +60,7 @@
     onbookmark,
     follow = null,
     autofit = false,
+    orient: initialOrient,
     stable = false,
   }: Props = $props();
 
@@ -80,7 +85,8 @@
   let boxH = $state(0);
   // ---- the layout chosen: where the flow goes (or the card's shape decides), and how much room it takes
   type Orient = "right" | "down" | "left" | "up" | "auto";
-  let orient = $state<Orient>(direction === "vertical" ? "down" : "right");
+  // The flow at first, from the props once: afterwards it is the person's choice.
+  let orient = $state<Orient>(untrack(() => initialOrient ?? (direction === "vertical" ? "down" : "right")));
   let spacing = $state(1);
   const flow: Exclude<Orient, "auto"> = $derived(orient === "auto" ? (boxH > boxW * 1.15 ? "down" : "right") : orient);
   const dir: Direction = $derived(flow === "down" || flow === "up" ? "vertical" : "horizontal");
@@ -92,8 +98,8 @@
         direction: dir,
         incremental: stable,
         // Captions under the nodes need room: layers as far apart as the longest caption, rows clear of it.
-        layerGap: spacing * (uml ? 96 : path ? Math.max(90, Math.min(150, edgeWidth + 24)) : Math.max(84, (dir === "horizontal" ? subWidth : 0) + 30)),
-        nodeGap: spacing * (uml ? 34 : path ? 22 : subWidth > 0 ? (dir === "horizontal" ? 66 : subWidth - 10) : 40),
+        layerGap: spacing * (uml ? 96 : path ? (dir === "horizontal" ? Math.max(90, Math.min(150, edgeWidth + 24)) : 64) : dir === "horizontal" ? Math.max(84, subWidth + 30) : 76),
+        nodeGap: spacing * (uml ? 34 : path ? (dir === "horizontal" ? 22 : 60) : subWidth > 0 ? (dir === "horizontal" ? 58 : subWidth + 24) : 40),
         ...(order ? { order } : {}),
         ...(nodes.some((n) => n.rank !== undefined) ? { rank: Object.fromEntries(nodes.filter((n) => n.rank !== undefined).map((n) => [n.id, n.rank!])) } : {}),
       },
@@ -114,7 +120,29 @@
       }),
     };
   };
-  const placed = $derived(mirror(laid, flow === "left", flow === "up"));
+  /** Edge labels' and fanned words' widths, in the drawing's units. */
+  const labelW = (id: string) => {
+    const e = edges.find((x) => x.id === id);
+    return e?.label ? e.label.length * (path ? 6.6 : 6) : 0;
+  };
+  const fanW = (id: string) => {
+    const n = byId.get(id);
+    return n ? (n.label.length + (n.sub?.length ?? 0)) * 6.6 + 12 : 0;
+  };
+  const routed = $derived(
+    route(laid, dir, {
+      ...(path
+        ? {
+          fan: nodes.filter(isAhead).map((n) => n.id),
+          fanFrom: nodes.find(isCurrent)?.id ?? null,
+          avoid: nodes.filter((n) => (n.cls ?? "").split(" ").includes("faded")).map((n) => n.id),
+        }
+        : {}),
+      fanWidth: fanW,
+      labelWidth: labelW,
+    }),
+  );
+  const placed = $derived(mirror(routed, flow === "left", flow === "up"));
 
   // ---- moving: nodes and arrows glide together from the old layout to the new one, the arrows always on the nodes
   let shown: Layout = $state.raw({ nodes: [], edges: [], width: 0, height: 0 });
@@ -138,6 +166,18 @@
     return () => cancelAnimationFrame(frame);
   });
   const byId = $derived(new Map(nodes.map((n) => [n.id, n])));
+  /** Several loops on one node: their labels are stacked, one line each, never on top of each other. */
+  const loopLine = $derived.by(() => {
+    const seen = new Map<string, number>();
+    const out = new Map<string, number>();
+    for (const e of edges) {
+      if (e.from !== e.to) continue;
+      const k = seen.get(e.from) ?? 0;
+      out.set(e.id, k);
+      seen.set(e.from, k + 1);
+    }
+    return out;
+  });
   const edgeById = $derived(new Map(edges.map((e) => [e.id, e])));
 
   // ---- zoom and pan
@@ -154,13 +194,11 @@
   };
   /** Room around the drawing for the captions under the nodes, which may be wider than the nodes. */
   const pad = $derived(uml ? 8 : path ? 20 : Math.max(8, subWidth / 2 - 10));
-  /** Room at the right of a path for the words of the steps possible now. */
-  const tail = $derived(path ? Math.max(0, ...nodes.filter(isAhead).map((n) => (n.label.length + (n.sub?.length ?? 0)) * 6.8 + 30)) : 0);
-  const W = $derived(placed.width + 2 * pad + tail);
+  const W = $derived(placed.width + 2 * pad);
   const H = $derived(placed.height + 2 * pad);
   $effect(() => {
     if (!autofit || byHand || !boxW || !boxH) return;
-    const z = Math.min(1, boxW / W, boxH / H);
+    const z = Math.min(1.6, boxW / W, boxH / H);
     if (Math.abs(z - zoom) > 0.01) zoom = Math.max(0.2, z);
   });
 
@@ -186,22 +224,8 @@
 
 <script module lang="ts">
   import type { Layout as L } from "./layout.ts";
+  import { arrowOf as arrowAt, pathOf as pathThrough } from "./route.ts";
   type P = [number, number];
-  /** An SVG path through a start and cubic segments (three points each). */
-  export function pathOf(p: P[]): string {
-    if (p.length === 0) return "";
-    let d = `M ${p[0]![0]},${p[0]![1]}`;
-    for (let i = 1; i + 2 < p.length; i += 3) d += ` C ${p[i]![0]},${p[i]![1]} ${p[i + 1]![0]},${p[i + 1]![1]} ${p[i + 2]![0]},${p[i + 2]![1]}`;
-    return d;
-  }
-  /** The arrowhead at a path's end, along its last segment. */
-  export function arrowOf(p: P[]): { x: number; y: number; angle: number } {
-    const e = p[p.length - 1]!;
-    let k = p.length - 2;
-    while (k > 0 && p[k]![0] === e[0] && p[k]![1] === e[1]) k--;
-    const b = p[k] ?? e;
-    return { x: e[0], y: e[1], angle: (Math.atan2(e[1] - b[1], e[0] - b[0]) * 180) / Math.PI };
-  }
   const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
   /** A layout part of the way from one to another: nodes and the points of each edge move together. */
   export function between(a: L, b: L, t: number): L {
@@ -218,7 +242,7 @@
         const o = ea.get(e.id);
         if (!o || o.points.length !== e.points.length) return e;
         const points = e.points.map((q, i): P => [lerp(o.points[i]![0], q[0], t), lerp(o.points[i]![1], q[1], t)]);
-        return { ...e, points, path: pathOf(points), arrow: arrowOf(points), label: { x: lerp(o.label.x, e.label.x, t), y: lerp(o.label.y, e.label.y, t) } };
+        return { ...e, points, path: pathThrough(points), arrow: arrowAt(points), label: { x: lerp(o.label.x, e.label.x, t), y: lerp(o.label.y, e.label.y, t) } };
       }),
     };
   }
@@ -245,8 +269,10 @@
     <button class="ico" aria-label="Zoom in" title="Zoom in" onclick={() => zoomBy(1.25)}><Icon><ZoomIn /></Icon></button>
     <button class="ico" aria-label="Fit" title="Fit the card" onclick={() => ((byHand = true), fit())}><Icon><Fit /></Icon></button>
   </div>
+  <!-- The window the drawing is seen through: its size is the card's, never the drawing's, so fit can shrink it. -->
+  <div class="window" bind:clientWidth={boxW} bind:clientHeight={boxH}>
   <Pannable {label} class="pan" ignore=".node, .mark" bind:box>
-    <div class="measure" bind:clientWidth={boxW} bind:clientHeight={boxH}>
+    <div class="measure">
       <svg
         width={W * zoom}
         height={H * zoom}
@@ -261,7 +287,7 @@
             {#if !path || pe.back || pe.self}
               <path class="head" class:open={uml} d={arrow(pe.arrow.x, pe.arrow.y, pe.arrow.angle)} />
             {/if}
-            {#if e?.label}<text class="elabel" class:big={path} x={pe.label.x} y={pe.label.y} text-anchor="middle">{e.label}</text>{/if}
+            {#if e?.label}<text class="elabel" class:big={path} x={pe.label.x} y={pe.label.y - (loopLine.get(pe.id) ?? 0) * 15} text-anchor="middle">{e.label}</text>{/if}
             {#if e?.title}<title>{e.title}</title>{/if}
           </g>
         {/each}
@@ -289,19 +315,31 @@
                     <circle class="disc" r="11" />
                   {:else if isAhead(n)}
                     <circle class="maybe" r="6" />
-                    <text class="aword" x="14" y="4">{n.label}{#if n.sub}<tspan class="aarg" dx="6">{n.sub}</tspan>{/if}</text>
+                    <text class="aword" x={flow === "left" ? -14 : 14} y="4" text-anchor={flow === "left" ? "end" : "start"}>{n.label}{#if n.sub}<tspan class="aarg" dx="6">{n.sub}</tspan>{/if}</text>
                   {:else}
                     <circle class="dot" r="7" />
                   {/if}
-                  {#if !isAhead(n) && n.label}<text class="pname" y={isCurrent(n) ? 32 : 22} text-anchor="middle">{n.label}</text>{/if}
+                  {#if !isAhead(n) && n.label}
+                    {#if dir === "vertical"}
+                      <text class="pname" x={isCurrent(n) ? 22 : 13} y="4" text-anchor="start">{n.label}</text>
+                    {:else}
+                      <text class="pname" y={isCurrent(n) ? 32 : 22} text-anchor="middle">{n.label}</text>
+                    {/if}
+                  {/if}
                 {:else}
                   <circle class="shape" r={pn.width / 2} />
                   <text class="nlabel" y="4" text-anchor="middle">{n.label}</text>
                 {/if}
                 {#if n.sub && !path}
-                  <text class="nsub" y={pn.height / 2 + 14} text-anchor="middle">
-                    {#each n.sub.split("\n") as line, li (li)}<tspan x="0" dy={li === 0 ? 0 : 13}>{line}</tspan>{/each}
-                  </text>
+                  {#if dir === "vertical"}
+                    <text class="nsub" x={pn.width / 2 + 8} y={n.sub.includes("\n") ? -3 : 4} text-anchor="start">
+                      {#each n.sub.split("\n") as line, li (li)}<tspan x={pn.width / 2 + 8} dy={li === 0 ? 0 : 13}>{line}</tspan>{/each}
+                    </text>
+                  {:else}
+                    <text class="nsub" y={pn.height / 2 + 14} text-anchor="middle">
+                      {#each n.sub.split("\n") as line, li (li)}<tspan x="0" dy={li === 0 ? 0 : 13}>{line}</tspan>{/each}
+                    </text>
+                  {/if}
                 {/if}
                 {#if n.title}<title>{n.title}</title>{/if}
               </g>
@@ -344,6 +382,7 @@
       </svg>
     </div>
   </Pannable>
+  </div>
 </div>
 
 <style>
@@ -401,9 +440,14 @@
     min-inline-size: var(--size-target);
     text-align: center;
   }
-  .graph :global(.pan) {
+  .window {
+    position: relative;
     flex: 1;
     min-block-size: 0;
+  }
+  .graph :global(.pan) {
+    position: absolute;
+    inset: 0;
     overflow: auto;
   }
   .measure {

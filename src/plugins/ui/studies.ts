@@ -31,6 +31,11 @@ export interface Study {
   /** The view's parts, each a card of its own (`id: title; …`); empty when the view is one card. */
   parts: { id: string; title: string }[];
   says_lines: SayLine[];
+  /**
+   * What each state variable is, in its author's words: the comment beside each parameter of the model's process, with
+   * the section it is under; a `%@state <name>: "<text>"` line of the declaring file adds or replaces one.
+   */
+  state_notes: { name: string; section: string; note: string }[];
   /** Why the study cannot open, or is not as declared; empty when it is sound. */
   problems: string[];
 }
@@ -104,6 +109,7 @@ function studyOf(root: string, file: string, text: string): Study | null {
     view: null,
     config: {},
     says_lines: saysIn(file, text),
+    state_notes: [],
     problems: [],
   };
   const dir = join(root, dirname(file));
@@ -187,12 +193,58 @@ function studyOf(root: string, file: string, text: string): Study | null {
       const modelText = study.model === file ? null : read(full);
       if (modelText !== null) {
         study.says_lines.push(...saysIn(study.model, modelText));
+        study.state_notes = stateNotes(modelText);
       } else if (study.model !== file && !existsSync(full)) {
         study.problems.push(`the model file ${model} does not exist`);
       }
     }
   }
+  // The declaring file's own notes on the state: added, or replacing the model's.
+  for (
+    const m of text.matchAll(
+      /^%@state\s+([A-Za-z_][\w']*)\s*:\s*"((?:[^"\\]|\\.)*)"\s*$/gm,
+    )
+  ) {
+    const at = study.state_notes.findIndex((n) => n.name === m[1]);
+    const note = {
+      name: m[1]!,
+      section: at >= 0 ? study.state_notes[at]!.section : "",
+      note: m[2]!.replace(/\\(.)/g, "$1"),
+    };
+    if (at >= 0) study.state_notes[at] = note;
+    else study.state_notes.push(note);
+  }
   return study;
+}
+
+/**
+ * The parameters of a model's process and their comments, read from its source: the first `proc <Name>(` with
+ * parameters, one per line as `name: Sort, % comment`, and `% <section>` lines between them. A model written otherwise
+ * gives no notes, which only leaves the state's rows without words.
+ */
+export function stateNotes(
+  text: string,
+): { name: string; section: string; note: string }[] {
+  const out: { name: string; section: string; note: string }[] = [];
+  const lines = text.split(/\r?\n/);
+  const start = lines.findIndex((l) =>
+    /^proc\s+\w+\s*\(\s*$/.test(l.trim()) ||
+    /^proc\s+\w+\s*\(\s*%/.test(l.trim())
+  );
+  if (start < 0) return out;
+  let section = "";
+  for (let i = start + 1; i < lines.length; i++) {
+    const l = lines[i]!.trim();
+    if (/^\)\s*=/.test(l)) break;
+    const sec = /^%\s*(.+)$/.exec(l);
+    if (sec) {
+      section = sec[1]!.trim();
+      continue;
+    }
+    const p = /^([A-Za-z_][\w']*)\s*:[^%]*?(?:%\s*(.*))?$/.exec(l);
+    if (p) out.push({ name: p[1]!, section, note: (p[2] ?? "").trim() });
+  }
+  return out;
 }
 
 /** Every study of the project at `root`, in the order of their files; `program` is Naima's own folder, left out. */

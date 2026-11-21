@@ -50,10 +50,31 @@
     left = r.left;
     top = box.getBoundingClientRect().top;
     vw = document.documentElement.clientWidth;
-    vh = document.documentElement.clientHeight;
+    vh = globalThis.innerHeight;
   };
+  // Measured again whenever anything above or around it changes size (a header settling as its fonts load, the window),
+  // so the mosaic always ends at the window's bottom. While it is shown, the page and every scrolling box around it are
+  // held still: only the cards scroll, inside.
   $effect(() => {
+    if (!box) return;
     measure();
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(document.documentElement);
+    if (box.parentElement) ro.observe(box.parentElement);
+    void document.fonts?.ready.then(measure);
+    const held: { el: HTMLElement; overflow: string }[] = [];
+    for (let el: HTMLElement | null = box.parentElement; el; el = el.parentElement) {
+      const o = getComputedStyle(el).overflowY;
+      if (o === "auto" || o === "scroll" || el === document.documentElement || el === document.body) {
+        held.push({ el, overflow: el.style.overflow });
+        el.scrollTop = 0;
+        el.style.overflow = "hidden";
+      }
+    }
+    return () => {
+      ro.disconnect();
+      for (const h of held) h.el.style.overflow = h.overflow;
+    };
   });
   /** The gutter's width, in CSS px: read from the spacing token, so it follows the theme's density. */
   let g = $state(10);
@@ -298,9 +319,15 @@
     min-block-size: var(--size-target);
     padding: var(--space-xs) var(--space-sm) var(--space-none) var(--space-md);
   }
+  /* The title gives way first: it ends in an ellipsis, the card's tools always stay inside it. */
   .handle {
-    flex: none;
+    flex: 0 1 auto;
     min-inline-size: 0;
+    overflow: hidden;
+  }
+  .handle :global(.content) {
+    min-inline-size: 0;
+    overflow: hidden;
   }
   /* The stance's Draggable, made part of the card's title: no box of its own. */
   .handle :global(.draggable) {
@@ -323,6 +350,9 @@
     opacity: 1;
   }
   .title {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-family: var(--font-family-mono);
     font-size: var(--font-size-2xs);
     letter-spacing: var(--font-letter-spacing-label);
@@ -331,7 +361,7 @@
     white-space: nowrap;
   }
   .own {
-    flex: 1;
+    flex: 1 1 0;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -340,6 +370,7 @@
     min-inline-size: 0;
   }
   .tools {
+    flex: none;
     display: flex;
     opacity: 0;
     transition: opacity var(--motion-duration-fast) var(--motion-easing-standard);
