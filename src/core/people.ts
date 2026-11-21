@@ -8,16 +8,16 @@
 //
 // Each write of an item appends one line to the item's history, `history.jsonl`
 // beside its meta.json: when, who ordered it, the agent that made it when one
-// did, what changed and through which command. The tracker's .gitattributes
-// merges that file by union, so two branches that both append to it never
-// conflict. A tracker commit Naima makes itself carries an `Ordered-by:` trailer.
+// did, what changed and through which command. The tracker's .gitattributes,
+// put in place by naima init and naima update, merges that file by union, so
+// two branches that both append to it never conflict. A tracker commit Naima makes itself carries an `Ordered-by:` trailer.
 
 import { appendFileSync, existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { writeFileAtomic } from "./files.ts"
 import { gitOrNull, isGitRepo } from "./git.ts"
 import { filerRole, type Role } from "./origin.ts"
-import type { Context, FieldDef, Item, Write, WriteHook } from "./types.ts"
+import type { Context, FieldDef, Item, Setup, Write, WriteHook } from "./types.ts"
 
 /** The file of an item's history: one JSON line per change. */
 export const HISTORY = "history.jsonl"
@@ -139,12 +139,20 @@ export function orderFor(ctx: Context, write: Write): Order {
   }
 }
 
-/** Make the tracker's .gitattributes merge every item's history by union, once. */
-function unionMerge(ctx: Context): void {
-  const path = join(ctx.trackerRoot, ".gitattributes")
-  const text = existsSync(path) ? readFileSync(path, "utf8") : ""
-  if (text.split("\n").some((l) => l.trim() === HISTORY_ATTRIBUTE)) return
-  writeFileAtomic(path, `${text}${text && !text.endsWith("\n") ? "\n" : ""}${HISTORY_ATTRIBUTE}\n`)
+/**
+ * The tracker's .gitattributes merges every item's history by union, so that two branches that both add to one never
+ * conflict: put in place by naima init and naima update where it is missing.
+ */
+export const historyMergeSetup: Setup = {
+  name: "history-merge",
+  says: "the tracker's .gitattributes line that merges every item's history.jsonl by union, so that two branches adding to one history never conflict",
+  install(ctx) {
+    const path = join(ctx.trackerRoot, ".gitattributes")
+    const text = existsSync(path) ? readFileSync(path, "utf8") : ""
+    if (text.split("\n").some((l) => l.trim() === HISTORY_ATTRIBUTE)) return []
+    writeFileAtomic(path, `${text}${text && !text.endsWith("\n") ? "\n" : ""}${HISTORY_ATTRIBUTE}\n`)
+    return [`${ctx.trackerDir}/.gitattributes merges every item's history by union`]
+  },
 }
 
 /**
@@ -165,7 +173,6 @@ export const orderedByHook: WriteHook = {
         last.on.slice(0, 10) === entry.on.slice(0, 10)
       ) return
       appendFileSync(join(write.item.dir, HISTORY), JSON.stringify(entry) + "\n")
-      unionMerge(ctx)
     } catch {
       // the history says who ordered a change; a folder that cannot be written loses the line, never the change
     }

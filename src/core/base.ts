@@ -36,7 +36,18 @@ import { asRendered, type Format, linesAs, rendered } from "./rendered.ts"
 import { flagsOf } from "./vocabulary.ts"
 import { waive, WAIVERS } from "./waivers.ts"
 import { askedByOption, ORIGIN, originCommand, originMatches, originOf, originOnce } from "./origin.ts"
-import { type Comment, commentsOf, historyOf, noteAuthor, type Order, orderedByHook, orderLine, personAtKeyboard, WAITS_ON } from "./people.ts"
+import {
+  type Comment,
+  commentsOf,
+  historyMergeSetup,
+  historyOf,
+  noteAuthor,
+  type Order,
+  orderedByHook,
+  orderLine,
+  personAtKeyboard,
+  WAITS_ON,
+} from "./people.ts"
 import { waitingLine, waitingOn } from "./waiting.ts"
 import { LEVEL, messagesCommand, messagesType } from "./messages.ts"
 import { READY_FIELD } from "./ready.ts"
@@ -1058,6 +1069,7 @@ export const corePlugin: Plugin = {
     { name: "blocked-by", inverse: "blocks", says: "waits on" },
   ],
   types: [messagesType],
+  setup: [historyMergeSetup],
   dirs: [WAIVERS],
   checks: coreChecks,
   commands: [

@@ -163,7 +163,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `jobs` | core | a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it, among those its canRunHere admits (a process it does not claims no attempt); what it finds is shown to the owner as messages | gates, outside-issues, long-work |
 | `extends` | core | additive changes to another plugin's type — statuses (an existing one only with its category), traits, transitions — or field — enum values, more types or traits it applies to | discussions, knowledge, roles |
 | `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done; `beforeText(text, ctx)` may refuse a write of free text or a file that is not an item's (a session note, an event, an attachment) or add to its record | core, trackers, coordination, triage, epics, discussions, planning, knowledge, verifier, privacy |
-| `setup` | core | what a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init` and `naima update` after their own work: `install(ctx) → lines`, each said | coordination, planning, backup, metrics |
+| `setup` | core | what a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init` and `naima update` after their own work: `install(ctx) → lines`, each said | core, coordination, planning, backup, metrics |
 | `agent-hooks` | core | a hook the agent tool runs, which Naima installs in the tool's settings beside its own at `naima init`, `naima update` and `naima stance adopt`, and removes once the plugin is gone: `name`, `says`, `tool` (the agent tool, by adapter id), `event` and optionally `matcher` in that tool's terms, and `command`, the naima command it runs as a list of words | stance-ui |
 | `migrations` | core | a plugin's own data migrations, in order from its format 1, run by `naima update` after the core's | gates |
 | `credits` | core | what a plugin runs or builds on without installing it (a program found on PATH, say), credited by `naima credits`: name, homepage, source, authors, license, version (provisional) | verifier |
@@ -977,6 +977,12 @@ Moves allowed: `acknowledged` → ; a status not named moves to any.
 | `private-infrastructure` | a write of an item's title, fields or prose that adds a machine name, an IP address, a URI with a port, a home-directory path, the user's name or a word of the private list is refused, each finding listed with the placeholder to write instead; --allow-private "<reason>" lets a deliberate mention through and records the reason in the item's notes |
 | `origin-once` | every new item records its origin (who asked, in what role, who filed it, the session, the instant, the branch, the item it came from) and no later write changes or drops it; every write in a session is logged, outside the repository, for naima origin |
 | `ordered-by` | every write of an item records who ordered it — the person (--by, else NAIMA_PERSON, else git's user.name), the agent that made it, what changed and the command — as one line of the item's history.jsonl, which the tracker merges by union |
+
+**Setup**, put in place by `naima init` and `naima update` where missing
+
+| Step | What it puts in place |
+|---|---|
+| `history-merge` | the tracker's .gitattributes line that merges every item's history.jsonl by union, so that two branches adding to one history never conflict |
 
 ## trackers
 

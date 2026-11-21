@@ -11,7 +11,7 @@ import { join, relative } from "node:path"
 import { isDeepStrictEqual, stripVTControlCharacters } from "node:util"
 import { randomUUID } from "node:crypto"
 import { fileURLToPath } from "node:url"
-import { mkdirSync, readFileSync, rmSync, statSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs"
 import {
   appliesTo,
   bool,
@@ -918,6 +918,8 @@ function recordMarker(ctx: Context, marker: string, ids: string[]): void {
       if (had.includes(marker)) continue
       saveMeta(ctx, { ...item, meta: { ...item.meta, [COMMITS]: [...had, marker] } })
       files.push(relative(ctx.trackerGit, join(item.dir, META)))
+      // The line its history takes for the record, when it keeps one.
+      if (existsSync(join(item.dir, HISTORY))) files.push(relative(ctx.trackerGit, join(item.dir, HISTORY)))
       refs.push(label(item))
     }
     if (!files.length) return
@@ -941,6 +943,7 @@ export function recordsMarker(ctx: Context, sha: string, files: { status: string
   if (!files.length) return false
   const data = ctx.trackerPrefix ? `${ctx.trackerPrefix}/` : ""
   for (const { status, path } of files) {
+    if ((status === "M" || status === "A") && path.startsWith(data) && path.endsWith(`/${HISTORY}`)) continue // the line its history takes
     if (status !== "M" || !path.startsWith(data) || !path.endsWith(`/${META}`)) return false
     const [before, after] = textsAt(ctx.trackerGit, [`${sha}^:${path}`, `${sha}:${path}`])
     let a: Record<string, unknown>, b: Record<string, unknown>
