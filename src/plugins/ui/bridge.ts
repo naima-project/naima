@@ -15,12 +15,21 @@
 //                                  config, says_lines, problems }] }, no file contents
 //   study {id}                     one study, with its stepper's bytes (`stepper`, base64) and the addresses of its frames
 //                                  (`frames`: the host page, the observer and the view, the last two null when absent)
+//                                  and the files a person may edit in the tab (`files`), the model first
+//   study-file {id, file}          the text of one of those files
+//   study-save {id, file, text}    writes it (study-work.ts): never a generated file, a build or a saved path
+//   study-job {id, job, property?} starts a job of the Models tab's workbench under `naima run` (study-work.ts): check
+//                                  (naima model-check on the study's properties, or on `property`), generate
+//                                  (naima-codegen, then the study's build) or run (its program); answers the run's name,
+//                                  which `run` reads with the end of its log
+//   study-stop {run}               stops a job the tab started
 //   metro                          what the rail draws: the trunk, the lines, the branches, the workers, the goals ahead,
 //                                  the people, the checkouts and the stops' names
 //   action {name, args}            one naima command of a short list, started through `naima run`: answers its run;
 //                                  record-metrics records the metrics (naima metrics run --record), name-stop names a
 //                                  commit of the map (naima name-stop)
-//   run {name}                     that run as `naima run status --json` shows it, with the end of its log
+//   run {name, tail?}              that run as `naima run status --json` shows it, with the end of its log (`tail` lines,
+//                                  50 by default, at most 500)
 //   show {screen|view|item|commit|line}  asks every UI open on the project to show that place (show.ts), as the
 //                                  transition of the UI's sequence that shows it (agent.showScreen and the like):
 //                                  what an agent calls to show the owner something; answers how many open UIs took it
@@ -57,7 +66,8 @@ import { stampOf, type ViewCache } from "./view-cache.ts"
 import { PoolDown, type ViewPool } from "./view-pool.ts"
 import { type AgentRequest, askAgent, awaitAnswer, listenShows, openUis, type Place, requestId, taken, type UiRequest, writeAnswer } from "./show.ts"
 import { commandJson, type JsonOf, metroData, VIEW_OF_COMMAND } from "./metro.ts"
-import { findStudies, savedPaths } from "./studies.ts"
+import { findStudies, savedPaths, type Study } from "./studies.ts"
+import { codegenCommand, type Job, jobLine, readStudyFile, shellLine, studyFiles, writeStudyFile } from "./study-work.ts"
 import { contentProblem, framePage, tabList, type UiTab, type UiTabContent, type UiView } from "./tabs.ts"
 
 export { actionArgv, actionCommand, actionOf, ACTIONS, naimaEntry, runCommand } from "./actions.ts"
@@ -246,6 +256,12 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
     return json({ ...head, ...c })
   }
   const known = opts.known ?? (() => knownProjects())
+  /** A study of the project by its id, whole and openable, for the workbench's commands. */
+  const studyOf = (id: Json | undefined): Study => {
+    const study = findStudies(ctx.root, ctx.program).find((s) => s.id === text(id))
+    if (!study) throw new Error(`no study ${String(id)}`)
+    return study
+  }
   const handlers: Handlers = {
     describe: () => json({ app: "naima", root: ctx.root.split(/[\\/]/).filter(Boolean).pop() ?? "", path: resolve(ctx.root), actions: ACTIONS }),
     recent: () => json({ projects: recentProjects(ctx.root, known()), canSwitch: opts.switcher?.can ?? false }),
@@ -322,7 +338,58 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
         stepper,
         frames: { host: opts.fileUrl("naima-study", "host.html"), observer: frame(study.observer), view: frame(study.view) },
         saved: savedPaths(ctx.root, study) as unknown as Json,
+        files: studyFiles(ctx.root, study),
       })
+    },
+    "study-file": (args) => {
+      const study = studyOf(args["id"])
+      const file = text(args["file"]) ?? ""
+      return json({ file, text: readStudyFile(ctx.root, study, file) })
+    },
+    "study-save": (args) => {
+      const study = studyOf(args["id"])
+      const file = text(args["file"]) ?? ""
+      const body = args["text"]
+      if (typeof body !== "string") throw new Error("study-save takes the file's text")
+      writeStudyFile(ctx.root, study, file, body)
+      return json({ saved: file })
+    },
+    "study-job": async (args) => {
+      const study = studyOf(args["id"])
+      const job = String(args["job"])
+      if (job !== "check" && job !== "generate" && job !== "run") throw new Error(`no job ${job}: the jobs are check, generate and run`)
+      const windows = process.platform === "win32"
+      const line = jobLine(job as Job, study, {
+        root: ctx.root,
+        naima: actionCommand(opts.entry ?? naimaEntry(), ctx.trackerRoot, []),
+        codegen: codegenCommand(process.env, windows),
+        windows,
+      }, text(args["property"]) ?? undefined)
+      if (typeof line !== "string") throw new Error(line.refused)
+      const run = `ui-study-${job}-${ctx.now().toISOString().replace(/\D/g, "").slice(0, 14)}-${++runs}`
+      const started = await runCommand(ctx, [
+        "run",
+        run,
+        "--budget-time",
+        job === "run" ? "1h" : "2h",
+        ...(job === "check" ? ["--stale", "30m"] : [
+          "--stale",
+          "30m",
+          "--no-progress",
+          job === "generate" ? "naima-codegen and a study's build print their stages, not a count" : "a study's program writes what it writes",
+        ]),
+        "--",
+        shellLine(line, windows),
+      ])
+      if (started.code !== 0) throw new Error(started.err.trim() || started.out.trim() || `naima run exited with ${started.code}`)
+      return json({ run, job, command: line })
+    },
+    "study-stop": async (args) => {
+      const name = text(args["run"])
+      if (name === null || !name.startsWith("ui-study-")) throw new Error("study-stop names a job the Models tab started")
+      const r = await runCommand(ctx, ["run", "stop", name])
+      if (r.code !== 0) throw new Error(r.err.trim() || `could not stop ${name}`)
+      return json({ stopped: name })
     },
     metro: async () => (await kept("metro", async () => json(await metroData(momentOf(null), viaViews)))) as Json,
     action: async (args) => {
@@ -409,7 +476,8 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
     run: async (args) => {
       const name = text(args["name"])
       if (name === null || !name.startsWith("ui-")) throw new Error("run names a run an action started")
-      const r = await runCommand(ctx, ["run", "status", name, "--json", "--tail", "50"])
+      const tail = Math.min(500, Math.max(1, Number(args["tail"]) || 50))
+      const r = await runCommand(ctx, ["run", "status", name, "--json", "--tail", String(tail)])
       if (r.code !== 0) throw new Error(r.err.trim() || `no run ${name}`)
       return JSON.parse(r.out) as Json
     },

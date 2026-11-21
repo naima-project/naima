@@ -1,0 +1,3 @@
+% Mutual exclusion: after the lock is granted to a client, it is not granted to any
+% client (itself included) before that client lets it go.
+forall c, d: Client . [true* . grant(c) . !release(c)* . grant(d)] false

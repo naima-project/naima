@@ -141,12 +141,20 @@
   {/if}
 {/snippet}
 
-{#if closed.length > 0}
-  {#if closedRow}{@render closedRow(closed)}{:else}
-    <div class="closed" aria-label="cards closed">
+{#if closedRow && closed.length > 0}{@render closedRow(closed)}{:else}
+  <!-- The row above the mosaic: the cards closed, to bring back, what a maximised card means, and the way back to the
+       first arrangement. A card is moved by its title, resized by the gaps between cards. -->
+  <div class="closed" aria-label="the cards">
+    {#if m.maximised}
+      <span class="say">{title(m.maximised)} fills the window: Esc, or Restore at its top right, brings the other cards back.</span>
+    {:else if closed.length > 0}
+      <span class="say">Closed, a click brings it back:</span>
       {#each closed as c (c.id)}<button class="reopen" onclick={c.reopen}>+ {c.title}</button>{/each}
-    </div>
-  {/if}
+    {:else}
+      <span class="say">Drag a card by its title to move it, and the gap between two cards to resize them.</span>
+    {/if}
+    <button class="reopen reset" title="Every card back where it was first, open" onclick={() => set(initial)}>Reset the layout</button>
+  </div>
 {/if}
 
 <div class="mosaic" class:live={resizing || target !== null}>
@@ -167,7 +175,16 @@
   .closed {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: var(--space-xs);
+  }
+  .say {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+  }
+  .reset {
+    margin-inline-start: auto;
+    border-style: solid;
   }
   .reopen {
     font-family: var(--font-family-mono);
@@ -282,9 +299,7 @@
   }
   .title {
     display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
     font-family: var(--font-family-mono);
     font-size: var(--font-size-2xs);
     letter-spacing: var(--font-letter-spacing-label);
@@ -303,7 +318,7 @@
   .tools {
     flex: none;
     display: flex;
-    opacity: 0;
+    opacity: 0.45;
     transition: opacity var(--motion-duration-fast) var(--motion-easing-standard);
   }
   .card:hover .tools,

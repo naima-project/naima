@@ -76,6 +76,7 @@ import {
 } from "./lts-cache.ts"
 import { type ConditionLint, lintConditionsOfFile, lintLine, sizeText } from "./lps-lint.ts"
 import { MCRL2 } from "./tool.ts"
+import { modelCheck } from "./model-check.ts"
 
 export { MCRL2 } from "./tool.ts"
 
@@ -1167,12 +1168,18 @@ export function mcrl2Plugin(options: Record<string, unknown> = {}, run: Runner =
   if (explained !== "note" && explained !== "problem") {
     throw new Error("verifier-mcrl2: explained must be note or problem, how the findings of explained-formal-work are reported")
   }
+  const verifier = mcrl2Verifier({
+    ...(typeof bin === "string" ? { bin } : {}),
+    ...(typeof rewriter === "string" ? { rewriter } : {}),
+    run,
+    conditionLimit: limit,
+  })
   return {
     name: "verifier-mcrl2",
     contract: CONTRACT,
     says: "the mCRL2 adapter: a property is a modal mu-calculus formula over an mCRL2 specification",
     about:
-      "Off until `naima.json` names it under `plugins`, since it starts programs. Contributes the `mcrl2` verifier and the `mcrl2` tool. `model` is an mCRL2 specification; `property` is a modal mu-calculus formula, inline, or the path of an `.mcf` file from the project root, which is then an input of the run. " +
+      "Off until `naima.json` names it under `plugins`, since it starts programs. Contributes the `mcrl2` verifier, the `mcrl2` tool and the command `naima model-check`, which checks property files on a specification outside any property item and keeps each counterexample as a path the Models tab replays (the Models tab's Check). `model` is an mCRL2 specification; `property` is a modal mu-calculus formula, inline, or the path of an `.mcf` file from the project root, which is then an input of the run. " +
       "A property chooses its route in `verifierOptions.route`. `lps`, the default, is the standard route: `mcrl22lps`, `lps2pbes --counter-example`, and `pbessolve` with an evidence file: `true` holds; `false` is violated, and the evidence, printed by `lps2lts` as an `.aut` labelled transition system, is the counterexample; any other answer, or `verifierOptions.timeoutSeconds` reached by a step, is unknown. " +
       "`lts`, the LTS route, is for a model whose state space is small but whose data makes the standard route slow. `mcrl22lps` and `lps2lts` (with `--threads` from `verifierOptions.threads`) make the LTS once per model version, kept in the run work folder under a key over the model's contents, the toolset's version and the recipe, and shared by every property of that model. `verifierOptions.maxStates` caps the states `lps2lts` may explore (`--max`): a state space larger than the cap makes the run unknown, its output beginning `state cap reached:`, and the LTS cut short is not kept; on the standard route the option is an error, since that route explores with `pbessolve`. Each formula is then reduced only by an equivalence that preserves and reflects it, the coarsest of three: `branching-bisim` for a formula of the fragment the branching equivalences preserve — every visible step right after a star over an action formula that includes tau, no single step that includes tau, fixpoints only as the four inevitability patterns — when it has no fixpoint and no deadlock through a star; `dpbranching-bisim` when it has one of those, which see divergence; `bisim`, strong bisimilarity, for every other formula. With a branching equivalence, `ltsconvert` first hides every action the formula does not mention, unless a label joins such an action to another, in which case the formula takes `bisim` and nothing is hidden. The output says which equivalence was used and why; the reduced LTS is kept beside the LTS, one per equivalence and set of hidden actions, for every formula that needs the same. On the reduced LTS, `lts2pbes --counter-example` and one `pbessolve` with an evidence file decide; on false, the evidence, printed by `ltsconvert` as an `.aut` labelled transition system, is the counterexample, over the reduced LTS, where the hidden actions appear as tau. " +
       "`cross-check` runs both routes and gives a verdict only when they agree; a disagreement is an error whose output begins `the routes disagree:`. Each run records in its `details` the route, the version of every tool it started, and for the LTS route the LTS's key, reuse and size, the mentioned and hidden actions, the equivalence it reduced by and why, the reduced size and whether it was reused, and on false that the counterexample comes from the reduced LTS. While a step runs, every line it prints is the run's progress: `lps2lts` its states, level and transitions, `pbessolve` its BES equations, `ltsconvert` and `lts2pbes`, started with `--verbose`, their stages; a counting step's total is estimated from the count it ended on in the previous run of the same property, model and options. " +
@@ -1208,11 +1215,10 @@ export function mcrl2Plugin(options: Record<string, unknown> = {}, run: Runner =
       },
     ],
     contributes: {
-      verifiers: [
-        mcrl2Verifier({ ...(typeof bin === "string" ? { bin } : {}), ...(typeof rewriter === "string" ? { rewriter } : {}), run, conditionLimit: limit }),
-      ],
+      verifiers: [verifier],
       tools: [MCRL2],
     },
+    commands: [modelCheck(verifier)],
     checks: [summandConditions, explainedCheck(explained)],
     optional: ["verifiers", "tools"],
   }

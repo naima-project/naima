@@ -1,0 +1,2 @@
+% No deadlock: from every reachable state the lock and its clients can take a step.
+[true*] <true> true

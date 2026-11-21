@@ -212,7 +212,7 @@
     // After the glide, where the node will be.
     setTimeout(() => {
       const el = [...d.querySelectorAll<SVGGElement>("g.node")].find((g) => g.dataset["id"] === id);
-      el?.scrollIntoView({ block: "center", inline: path ? "start" : "center", behavior: "smooth" });
+      el?.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
     }, motionMs());
   });
 
@@ -677,6 +677,10 @@
   .place:focus-within .mark,
   .mark.set {
     opacity: 1;
+  }
+  /* On the current state the marks are always there, faint, so that a person finds them. */
+  .place:has(.node.current) .mark:not(.set) {
+    opacity: 0.55;
   }
   .hit {
     fill: transparent;

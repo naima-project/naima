@@ -10,6 +10,12 @@
 % observer  build/observer.js
 % view      build/view.js
 % diagrams  uml-state-machine: each client's phase, idle, waiting or holding; uml-sequence: the clients and the lock, each step a message
+% paths     paths
+% properties properties
+% system    generated/model/systems/small-refined.mcrl2
+% build     sh build.sh
+% build-windows build.cmd
+% run       cargo run --quiet --manifest-path driver/Cargo.toml
 %@ui end
 %
 % Explanations, one line per kind of step: %@say <action>(<args>): "<phrase>" | "<explanation>".

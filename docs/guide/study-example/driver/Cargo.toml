@@ -1,0 +1,14 @@
+# The lock's program: a small driver that runs the code naima-codegen generates from
+# ../model/core.mcrl2 (the crate in ../generated/rust/lock) on a fixed scenario and
+# prints every step. The Models tab's Run starts it (% run in ../study.mcrl2).
+[package]
+name = "lock_driver"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+lock = { path = "../generated/rust/lock" }
+
+# A workspace of its own, so that no enclosing Cargo workspace claims this crate.
+[workspace]

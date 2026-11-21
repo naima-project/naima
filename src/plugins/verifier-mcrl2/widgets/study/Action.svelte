@@ -1,6 +1,6 @@
 <!-- An action, as Naima's widgets draw every action: an icon in its own small disc, a word, and, when there is room, a
      line saying what it does. Primary for the move that matters most now, quiet for the rest, danger for what fails or
-     stops. Disabled, it says why on hover. One of the widget set the Models tab, every study's view and the main UI
+     stops. Disabled, it says why in words under its label (on hover only when compact, a toolbar's icon). One of the widget set the Models tab, every study's view and the main UI
      share (develop/models-tab.md §13). -->
 <script lang="ts">
   import type { Component } from "svelte";
@@ -23,13 +23,16 @@
   }
   let { label, hint, why, icon, variant = "quiet", size = "md", detail = false, compact = false, disabled = false, pressed, onclick }: Props = $props();
   const Icon = $derived(icon);
+  /** A disabled action says why in words, where it has room for words. */
+  const explained = $derived(disabled && !!why && !compact);
 </script>
 
 <button
   class="action {variant} {size}"
   class:detail
   class:compact
-  aria-label={label}
+  class:explained
+  aria-label={explained ? `${label}: ${why}` : label}
   {disabled}
   aria-pressed={pressed}
   title={disabled ? (why ?? hint ?? label) : (hint ?? label)}
@@ -38,7 +41,7 @@
   {#if Icon}<span class="disc" aria-hidden="true"><Icon class="glyph" /></span>{/if}
   <span class="words" class:hidden={compact && !!Icon}>
     <span class="label">{label}</span>
-    {#if detail && hint}<span class="hint">{hint}</span>{/if}
+    {#if explained}<span class="hint why">{why}</span>{:else if detail && hint}<span class="hint">{hint}</span>{/if}
   </span>
 </button>
 
@@ -162,6 +165,24 @@
     cursor: default;
     opacity: 0.38;
     filter: saturate(0.4);
+  }
+  /* Disabled with its reason in words: the control is dimmed, the reason stays readable. */
+  .action.explained:disabled {
+    opacity: 1;
+    filter: none;
+  }
+  .action.explained:disabled .disc,
+  .action.explained:disabled .label {
+    opacity: 0.45;
+  }
+  .why {
+    white-space: normal;
+    color: var(--color-text-muted);
+  }
+  .primary.explained:disabled {
+    --tone: var(--color-text);
+    background: color-mix(in srgb, var(--color-surface-sunken) 55%, transparent);
+    border-color: color-mix(in srgb, var(--color-border-strong) 40%, transparent);
   }
   @media (prefers-reduced-motion: reduce) {
     .action,

@@ -1,6 +1,7 @@
 <!-- A UML sequence diagram (named.ts, uml-sequence), in its notation unaltered: a lifeline per participant, a head
      box and a dashed line down; each message an arrow from sender to receiver with its label, in order from top to
-     bottom. The latest message is the accent; older ones stay, and the card scrolls to the newest. -->
+     bottom. The latest message is the accent; older ones stay, and the card scrolls to the newest. In a card narrower
+     than the drawing, the whole drawing is scaled down to the card's width, so that no lifeline is cut off. -->
 <script module lang="ts">
   export interface Message {
     from: string;
@@ -38,14 +39,14 @@
 
 <div class="sequence">
   <!-- The heads stay in view; the messages scroll under them. -->
-  <svg class="heads" width={W} height="34" viewBox="0 0 {W} 34" aria-hidden="true">
+  <svg class="heads" style:max-inline-size="{W}px" viewBox="0 0 {W} 34" aria-hidden="true">
     {#each lifelines as l (l)}
       <rect class="headbox" x={lx(l) - 66} y="4" width="132" height="26" rx="2" />
       <text class="who" x={lx(l)} y="21" text-anchor="middle">{l}</text>
     {/each}
   </svg>
   <div class="body" bind:this={box}>
-    <svg width={W} height={H} viewBox="0 0 {W} {H}" role="img" aria-label={label}>
+    <svg style:max-inline-size="{W}px" viewBox="0 0 {W} {H}" role="img" aria-label={label}>
       {#each lifelines as l (l)}
         <line class="life" x1={lx(l)} x2={lx(l)} y1="0" y2={H - 8} />
       {/each}
@@ -72,18 +73,24 @@
     align-items: center;
     block-size: 100%;
     min-block-size: 0;
-    overflow-x: auto;
   }
   .heads {
     flex: none;
   }
   .body {
     flex: 1;
+    inline-size: 100%;
     min-block-size: 0;
     overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
   svg {
     display: block;
+    inline-size: 100%;
+    block-size: auto;
+    flex: none;
   }
   text {
     font-family: var(--font-family-body);

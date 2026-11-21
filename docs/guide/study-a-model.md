@@ -2,7 +2,8 @@
 
 The Models tab of `naima ui` lets you take an mCRL2 model of your project step by step: you play its environment, fire the steps it accepts, go back, branch,
 and replay a recorded path or a counterexample. What you see is the model's own state, computed by the code naima-codegen generates from it, so nothing on
-screen is a guess.
+screen is a guess. In the same tab you can change the model, check its properties with mCRL2, replay the counterexample of a property that fails, generate
+its Rust code and run the program built on it, without an agent.
 
 ## What a model needs
 
@@ -30,9 +31,28 @@ The same file holds the explanation of each kind of step, one line each, which t
 An agent writes the stepper's small wrapper, the observer and the view; the specification it follows is in the workshop's `develop/models-tab.md`. A line that
 does not match the model (an action it does not have, the wrong number of arguments) is listed under the study with the reason, and not used.
 
+To check, generate and run from the tab, the block also says where the study's properties and paths are, what the properties are checked on, and how the study
+is built and its program run. The lock of the guide's example (`study-example/`) declares:
+
+```
+% paths      paths
+% properties properties
+% system     generated/model/systems/small-refined.mcrl2
+% build      sh build.sh
+% build-windows build.cmd
+% run        cargo run --quiet --manifest-path driver/Cargo.toml
+```
+
+`properties` is a folder of `.mcf` files, each a modal mu-calculus formula. `system` is the mCRL2 specification they are checked on; for a model of
+naima-codegen it is one of the systems it generates, which the tab generates again before each check, so the check sees the model as you saved it. `build` is
+the command that builds the study again after a generation (the stepper and the view), and `run` the command that runs its program; `build-windows` and
+`run-windows`, when given, are used on Windows instead. The commands run in the study's folder. Checking needs the `verifier-mcrl2` plugin on in `naima.json`
+and the mCRL2 tools (`naima tools install mcrl2`); generating needs naima-codegen on your `PATH`, or named by `NAIMA_CODEGEN`.
+
 ## Using the tab
 
-- Open `naima ui`, then **Models** from Home's list. Pick a study.
+- Open `naima ui`, then **Models**, beside the date on Home or in the menu of Home's list. Pick a study. A note at the top says where to start; close it once
+  you know.
 - The study fills the window with cards, like a mosaic, and the page itself never scrolls. Drag the thin gap between two cards to give one more room. Drag a
   card by its title onto another card: onto its middle to swap the two, onto one of its edges to place it beside. Close a card with its cross and the others
   take its space; it waits above the mosaic, where a click opens it again. Maximise a card to the whole mosaic; Escape restores. The arrangement is kept for
@@ -50,7 +70,27 @@ does not match the model (an action it does not have, the wrong number of argume
   the states you visited, whatever road they are on. **Undo** removes the last step you took. Steps recorded from a real run are never undone, only branched
   from.
 - **Copy path** copies the road; **Load a path** takes one back, or a trace from the model checker, one step per line. A path loads up to the first step the
-  model does not accept, and the tab says which step and why.
+  model does not accept, and the tab says which step and why. A path that is already one of your roads is shown on that road, not added again.
+- A button you cannot use now is dimmed, and says why under its name.
+
+## Changing, checking and running the model
+
+Three cards wait in the row above the mosaic: **The model's files**, **Properties** and **Code**. A click opens one.
+
+- **The model's files** lists the study's files, the mCRL2 specification first, then its own file, the other mCRL2 files, `codegen.toml`, the property formulas
+  and the Rust code. Pick one and it opens in an editor that highlights mCRL2, Rust, TOML and the rest. Change it and press **Save** (or Ctrl-S, Cmd-S on a
+  Mac): the file is written and the tab reads the study again. **Revert** goes back to the file as saved. Files that tools write (the generated code, the
+  builds, the saved paths) are not listed.
+- **Properties** lists the property files with what the last check said of each: holds, violated, or not checked yet. **Check all** checks every one with mCRL2,
+  one after the other, and the card shows how far it is; a property's own button checks it alone. When a property is violated, mCRL2's counterexample (the
+  steps that break it) is saved as a path in the study's `paths` folder, with a first line `% origin:` that says where it comes from, and replayed at once on
+  the path card, a step a second. It stays in **Paths and bookmarks**, to replay again.
+- **Code** has **Generate Rust**, which runs naima-codegen on the study and then its build command, so the tab steps the model as you changed it, and **Run the
+  program**, which runs the study's program and shows what it prints as it prints it. **Stop** ends a job that runs too long.
+- A check, a generation and a run work on the files as saved, one at a time: while the editor holds changes, or a job runs, they wait, and their buttons say
+  so. The tab's own model, where this is checked, is in the workshop's `develop/models/ui/study/`.
+
+The same checks run outside the tab with `naima model-check <specification> <property.mcf>... --paths <folder>`.
 
 ## For a study's own view
 
