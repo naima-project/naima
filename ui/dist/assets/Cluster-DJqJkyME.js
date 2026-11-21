@@ -1,1 +1,0 @@
-import{Di as e,Dr as t,Si as n,Ur as r,Vi as i,Zr as a,li as o,si as s}from"./chevron-right-BarSbbXV.js";var c=o(`<div><!></div>`);function l(o,l){let u=t(l,`gap`,3,`sm`),d=t(l,`justify`,3,`start`),f=t(l,`align`,3,`center`);var p=c(),m=e(p);a(m,()=>l.children),i(p),n(()=>r(p,1,`cluster gap-${u()??``} justify-${d()??``} align-${f()??``}`,`svelte-2y2hj5`)),s(o,p)}export{l as t};
