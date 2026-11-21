@@ -27,6 +27,7 @@ import { bool, parse, str, usageError } from "./args.ts"
 import { writeFileAtomic } from "./files.ts"
 import { currentBranch, gitDirsOf, gitOrNull, isGitRepo, runGit } from "./git.ts"
 import { META, saveMeta } from "./item.ts"
+import { orderingPerson } from "./people.ts"
 import { label } from "./lifecycle.ts"
 import { tickDir } from "./tick.ts"
 import type { Command, Context, FieldDef, Item, OriginRequest, WriteHook } from "./types.ts"
@@ -38,7 +39,7 @@ export type Role = typeof ROLES[number]
 /** An item's origin, as meta.json holds it. */
 export interface Origin {
   askedBy: Role
-  /** The name of the person who asked, when askedBy is person. */
+  /** The name of the person who asked: always when askedBy is person; for owner, which of the project's owners. */
   person?: string
   filedBy: { name?: string; role: Role }
   session?: string
@@ -68,7 +69,7 @@ export const ORIGIN: FieldDef = {
   name: "origin",
   kind: "object",
   says:
-    "where the item comes from, written once by naima new and never changed but for who asked: { askedBy: owner, coordinator, worker, agent, person (with person: the name) or unknown; filedBy: { name, role }; session: the session it was filed in; on: the instant; branch; from: the id of the item it was derived from }, with inferred: true and commit when naima origin --backfill read it from git, and corrected: [{ was, by, on }] for each time naima origin --set changed who asked",
+    "where the item comes from, written once by naima new and never changed but for who asked: { askedBy: owner, coordinator, worker, agent, person or unknown; person: the name of who asked, always for person and, for owner, which of the project's owners (the one --asked-by owner:<name> names, else the person at the keyboard); filedBy: { name, role }; session: the session it was filed in; on: the instant; branch; from: the id of the item it was derived from }, with inferred: true and commit when naima origin --backfill read it from git, and corrected: [{ was, by, on }] for each time naima origin --set changed who asked",
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v)
@@ -180,7 +181,7 @@ export function filerRole(root: string): Role {
   return dirs && dirs.own !== dirs.common ? "worker" : "coordinator"
 }
 
-/** The role `--asked-by` names, with the person's name for `person:<name>`; throws on any other value. */
+/** The role `--asked-by` names, with the person's name for `person:<name>` and `owner:<name>`; throws on any other value. */
 export function askedByOption(value: string): Pick<OriginRequest, "askedBy" | "person"> {
   const [role, ...rest] = value.split(":")
   const name = rest.join(":").trim()
@@ -188,8 +189,9 @@ export function askedByOption(value: string): Pick<OriginRequest, "askedBy" | "p
     if (!name) throw new Error(`--asked-by person needs the name: --asked-by "person:<name>"`)
     return { askedBy: "person", person: name }
   }
+  if (role === "owner" && name) return { askedBy: "owner", person: name }
   if (!(ROLES as readonly string[]).includes(role ?? "") || rest.length) {
-    throw new Error(`--asked-by "${value}" is not a role: ${ROLES.filter((r) => r !== "person").join(", ")}, or "person:<name>"`)
+    throw new Error(`--asked-by "${value}" is not a role: ${ROLES.filter((r) => r !== "person").join(", ")}, "owner:<name>" or "person:<name>"`)
   }
   return { askedBy: role as string }
 }
@@ -201,9 +203,11 @@ export function originFor(ctx: Context, req: OriginRequest = {}): Origin {
   const session = git ? currentSession(ctx.root) : undefined
   const branch = git ? currentBranch(ctx.root) : "HEAD"
   const askedBy = (ROLES as readonly string[]).includes(req.askedBy ?? "") ? req.askedBy as Role : "agent"
+  // An owner who asks is one of the project's owners: the one named, else the person at the keyboard.
+  const person = askedBy === "person" ? req.person : askedBy === "owner" ? req.person ?? orderingPerson(ctx) : undefined
   return {
     askedBy,
-    ...(askedBy === "person" && req.person ? { person: req.person } : {}),
+    ...(person ? { person } : {}),
     filedBy: { ...(name ? { name } : {}), role: filerRole(ctx.root) },
     ...(session ? { session } : {}),
     on: ctx.now().toISOString(),
@@ -263,7 +267,8 @@ const fixedPart = (o: Record<string, unknown>): string => {
 export function isCorrection(was: unknown, now: unknown): boolean {
   if (!isObject(was) || !isObject(now) || fixedPart(was) !== fixedPart(now)) return false
   if (!(ROLES as readonly string[]).includes(now["askedBy"] as string)) return false
-  if (now["askedBy"] === "person" ? typeof now["person"] !== "string" || !now["person"].trim() : now["person"] !== undefined) return false
+  const named = typeof now["person"] === "string" && !!now["person"].trim()
+  if (now["askedBy"] === "person" ? !named : now["askedBy"] === "owner" ? now["person"] !== undefined && !named : now["person"] !== undefined) return false
   const before = Array.isArray(was["corrected"]) ? was["corrected"] : []
   const after = Array.isArray(now["corrected"]) ? now["corrected"] : null
   if (!after || after.length !== before.length + 1 || JSON.stringify(after.slice(0, -1)) !== JSON.stringify(before)) return false
@@ -280,7 +285,7 @@ export function corrected(ctx: Context, o: Origin, asked: Pick<OriginRequest, "a
   return {
     ...rest,
     askedBy: asked.askedBy as Role,
-    ...(asked.askedBy === "person" && asked.person ? { person: asked.person } : {}),
+    ...((asked.askedBy === "person" || asked.askedBy === "owner") && asked.person ? { person: asked.person } : {}),
     corrected: [...(o.corrected ?? []), entry],
   }
 }
@@ -366,7 +371,7 @@ export const originCommand: Command = {
   enforces:
     "an origin is never changed but for who asked, and only through --set, which keeps the rest as it was and records each correction in the origin: what it was, who set it, when; the backfill writes only to items with none, marks each inferred: true with askedBy unknown, for the owner to settle in a review; the session's log is read from outside the repository and never committed",
   usage:
-    "origin [<session>] [--json] | origin --backfill [--dry-run] | origin --set <item> --asked-by <owner|coordinator|worker|agent|unknown|person:<name>> [--by <name>]",
+    "origin [<session>] [--json] | origin --backfill [--dry-run] | origin --set <item> --asked-by <owner|owner:<name>|coordinator|worker|agent|unknown|person:<name>> [--by <name>]",
   options: [
     { name: "--json", says: "print the review as JSON: the session, the items it filed, the items it changed" },
     {
@@ -376,7 +381,10 @@ export const originCommand: Command = {
     },
     { name: "--dry-run", says: "with --backfill: say what it would write, and write nothing" },
     { name: "--set", says: "the item whose origin says who asked to set, as --asked-by gives it; the correction is recorded in its origin" },
-    { name: "--asked-by", says: "with --set: who asked, a role (owner, coordinator, worker, agent, unknown) or person:<name>" },
+    {
+      name: "--asked-by",
+      says: "with --set: who asked, a role (owner, coordinator, worker, agent, unknown), owner:<name> for one of the project's owners, or person:<name>",
+    },
     { name: "--by", says: "with --set: who makes the correction, as it is recorded; absent, git's user.name" },
   ],
   examples: [

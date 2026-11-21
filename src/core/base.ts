@@ -9,7 +9,7 @@ import { coreChecks, heavyCheckNames, runChecks } from "./check.ts"
 import { heavyVerdict } from "./heavy.ts"
 import { groupBy } from "./collections.ts"
 import { appliesTo, fieldValue, isOpenList, parseFieldValue } from "./fields.ts"
-import { currentBranch, gitOrNull, gitReadScope, isGitRepo } from "./git.ts"
+import { currentBranch, gitReadScope, isGitRepo } from "./git.ts"
 import {
   ATTACHMENTS,
   createItem,
@@ -35,7 +35,20 @@ import { addedPrivate, allowanceLine, privateContext, type PrivateFinding, priva
 import { asRendered, type Format, linesAs, rendered } from "./rendered.ts"
 import { flagsOf } from "./vocabulary.ts"
 import { waive, WAIVERS } from "./waivers.ts"
-import { askedByOption, ORIGIN, originCommand, originMatches, originOnce } from "./origin.ts"
+import { askedByOption, ORIGIN, originCommand, originMatches, originOf, originOnce } from "./origin.ts"
+import {
+  type Comment,
+  commentsOf,
+  historyMergeSetup,
+  historyOf,
+  noteAuthor,
+  type Order,
+  orderedByHook,
+  orderLine,
+  personAtKeyboard,
+  WAITS_ON,
+} from "./people.ts"
+import { waitingLine, waitingOn } from "./waiting.ts"
 import { LEVEL, messagesCommand, messagesType } from "./messages.ts"
 import { READY_FIELD } from "./ready.ts"
 import type { Command, Context, Contribution, FieldDef, Item, ItemFacts, Plugin, Rendered, SummarySection, TypeDef, View, Write, WriteHook } from "./types.ts"
@@ -134,7 +147,7 @@ const newCommand: Command = {
     {
       name: "--asked-by",
       says:
-        "who asked for it, recorded in its origin: owner only for what the owner said, asked, reported or decided; coordinator or worker for what that agent asked; agent for what an agent found on its own; person:<name> for someone else",
+        "who asked for it, recorded in its origin: owner only for what an owner said, asked, reported or decided, recorded with that owner's name (owner:<name>, else the person at the keyboard); coordinator or worker for what that agent asked; agent for what an agent found on its own; person:<name> for someone else",
       default: "agent",
     },
     { name: "--by", says: "who files it, recorded in its origin", default: "git's user.name" },
@@ -225,6 +238,22 @@ export interface ItemData {
   /** The files of its attachments/ directory: the evidence attached to it. */
   attachments: string[]
   readme: string
+  /** Who asked for it and who filed it, by name where its origin records one; null when it has no origin. */
+  authors: { askedBy: string; filedBy: string } | null
+  /** Who ordered each change of it, oldest first: its history (core/people.ts). */
+  history: Order[]
+  /** Its notes, as comments with their authors and dates. */
+  comments: Comment[]
+}
+
+/** Who asked for an item and who filed it, by name where its origin records one; null when it has no origin. */
+export function authorsOf(item: Item): ItemData["authors"] {
+  const o = originOf(item)
+  if (!o) return null
+  const askedBy = o.person ? (o.askedBy === "person" ? o.person : `${o.person} (${o.askedBy})`) : o.askedBy
+  const role = o.filedBy.role
+  const filedBy = o.filedBy.name ? `${o.filedBy.name}${role === "person" || role === "unknown" ? "" : ` (${role})`}` : role
+  return { askedBy, filedBy }
 }
 
 /** One item, read now: what `naima show` prints. */
@@ -256,18 +285,22 @@ export function itemData(ctx: Context, item: Item): ItemData {
     facts: ctx.registry.contributions("facts").flatMap((c) => (c.value as ItemFacts).facts(ctx, item)),
     attachments: existsSync(att) ? readdirSync(att).filter((f) => !f.startsWith(".")).sort() : [],
     readme: readReadme(item).trimEnd(),
+    authors: authorsOf(item),
+    history: historyOf(item),
+    comments: commentsOf(splitProse(readReadme(item)).notes),
   }
 }
 
 const show: Command = {
   name: "show",
-  says: "print one item: fields, what the plugins say of it (such as a fix on a development line), links in both directions, attachments, prose",
+  says:
+    "print one item: fields, what the plugins say of it (such as a fix on a development line), links in both directions, attachments, who asked for it and who filed it, each change with the person who ordered it, prose",
   enforces: "nothing: it only reads",
   usage: "show <item> [--json]",
   options: [{
     name: "--json",
     says:
-      "print the item as JSON: its fields, what the plugins say of it (facts), its links with the other end's title and status and whether it is evidence that proves or refutes, its attachments, its prose",
+      "print the item as JSON: its fields, what the plugins say of it (facts), its links with the other end's title and status and whether it is evidence that proves or refutes, its attachments, its prose, its authors (who asked, who filed), its history (each change with who ordered it) and its comments (its notes with author and date)",
   }],
   examples: ["show export-drops", "show bugs/export-drops-alpha-channel", "show export-drops --json"],
   run(args, ctx) {
@@ -284,8 +317,44 @@ const show: Command = {
     for (const f of d.facts) ctx.out(`  ${f}`)
     for (const l of d.links) ctx.out(`  ${l.says} ${l.ref ? `${l.ref} [${l.status}]` : l.id}${l.implied ? "  (inverse)" : ""}`)
     if (d.attachments.length) ctx.out(`  attachments: ${d.attachments.join(", ")}`)
+    if (d.authors) ctx.out(`  asked by ${d.authors.askedBy}, filed by ${d.authors.filedBy}`)
+    if (d.history.length) {
+      ctx.out("  changes, and who ordered them:")
+      for (const o of d.history) ctx.out(`    ${orderLine(o)}`)
+    }
     ctx.out("")
     ctx.out(d.readme)
+    return 0
+  },
+}
+
+const waiting: Command = {
+  name: "waiting",
+  says:
+    "list what waits on the person at the keyboard: what the plugins know waits for an owner (the point waiting), each item once, a decision before a proof to give, leaving out what waits on another person; the one list naima hello counts and the UI's waiting views show",
+  enforces: "nothing: it only reads",
+  usage: "waiting [--for <person> | --everyone] [--json]",
+  options: [
+    { name: "--for", says: "list what waits on this person instead of the person at the keyboard" },
+    { name: "--everyone", says: "list what waits on every owner, each row with the person it waits on when it names one" },
+    {
+      name: "--json",
+      says: "print the list as JSON: each row's reference, title, why it waits (owner, proof or failing), the person it waits on and its source",
+    },
+  ],
+  examples: ["waiting", "waiting --for Ada", "waiting --everyone --json"],
+  async run(args, ctx) {
+    const p = parse(args, { for: { type: "string" }, everyone: { type: "boolean" }, json: { type: "boolean" } })
+    if (p.positionals.length || (str(p, "for") !== undefined && bool(p, "everyone"))) throw usageError(this)
+    const who = bool(p, "everyone") ? null : str(p, "for")?.trim() || undefined
+    const rows = await waitingOn(ctx, who)
+    if (bool(p, "json")) {
+      ctx.out(JSON.stringify(rows, null, 2))
+      return 0
+    }
+    const name = who === null ? "anyone" : who ?? personAtKeyboard(ctx.root)?.name ?? "you"
+    ctx.out(rows.length ? `${rows.length} thing${rows.length === 1 ? "" : "s"} wait${rows.length === 1 ? "s" : ""} on ${name}:` : `Nothing waits on ${name}.`)
+    for (const r of rows) ctx.out(waitingLine(r))
     return 0
   },
 }
@@ -402,10 +471,10 @@ const headings = (text: string): string[] => {
   })
 }
 
-/** Who writes a note: `--by`, else git's user.name in a git project; refused when neither says. */
+/** Who writes a note: `--by`, else the person at the keyboard, with the agent that writes for them; refused when neither says. */
 function author(ctx: Context, by: string | undefined): string {
-  const who = by?.trim() || (isGitRepo(ctx.root) ? gitOrNull(ctx.root, "config", "user.name") : null)
-  if (!who) throw new Error("say who writes the note: --by <name>, or set git's user.name")
+  const who = noteAuthor(ctx, by)
+  if (!who) throw new Error("say who writes the note: --by <name>, or set NAIMA_PERSON or git's user.name")
   return who
 }
 
@@ -416,7 +485,11 @@ const note: Command = {
   enforces: "notes are append-only and attributed: the writer is named, earlier notes are never rewritten, and a note holds no heading of its own",
   usage: 'note <item> "<text>" [--by <who>] | note <item> --file <f> [--by <who>]',
   options: [
-    { name: "--by", says: "who writes the note; without it, git's user.name" },
+    {
+      name: "--by",
+      says:
+        "who writes the note; without it, the person at the keyboard (NAIMA_PERSON, else git's user.name), followed by the agent that writes it for them when an agent does",
+    },
     { name: "--file", says: "read the note from a file instead of the arguments; - reads standard input" },
   ],
   examples: ['note export-drops "Reproduced on a 16-bit PNG; 8-bit keeps alpha." --by "triage agent"', "note export-drops --file finding.md"],
@@ -985,6 +1058,7 @@ export const corePlugin: Plugin = {
     { name: "created", kind: "date", says: "when the item was opened" },
     { name: "tags", kind: "strings", says: "free labels a person puts on an item" },
     ORIGIN,
+    WAITS_ON,
     LEVEL,
     READY_FIELD,
   ],
@@ -995,12 +1069,14 @@ export const corePlugin: Plugin = {
     { name: "blocked-by", inverse: "blocks", says: "waits on" },
   ],
   types: [messagesType],
+  setup: [historyMergeSetup],
   dirs: [WAIVERS],
   checks: coreChecks,
   commands: [
     newCommand,
     show,
     list,
+    waiting,
     set,
     note,
     describe,
@@ -1019,5 +1095,5 @@ export const corePlugin: Plugin = {
     originCommand,
   ],
   summary: [counts],
-  hooks: [statusMoves, notesAppendOnly, privateInfrastructure, originOnce],
+  hooks: [statusMoves, notesAppendOnly, privateInfrastructure, originOnce, orderedByHook],
 }

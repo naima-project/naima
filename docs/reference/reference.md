@@ -56,8 +56,9 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`version`](#naima-version) | core | print the banner naima hello opens with: the running Naima's version and commit; naima --version prints the same | nothing: it only prints |
 | [`help`](#naima-help) | core | list every command the loaded plugins provide, with its usage | nothing: it only prints |
 | [`new`](#naima-new) | core | open an item | every field is validated against its type's declarations before the item exists, and every write hook runs: a typo or a refusal leaves nothing behind; an archive type takes no new item |
-| [`show`](#naima-show) | core | print one item: fields, what the plugins say of it (such as a fix on a development line), links in both directions, attachments, prose | nothing: it only reads |
+| [`show`](#naima-show) | core | print one item: fields, what the plugins say of it (such as a fix on a development line), links in both directions, attachments, who asked for it and who filed it, each change with the person who ordered it, prose | nothing: it only reads |
 | [`list`](#naima-list) | core | list items, most urgent first | nothing: it only reads |
+| [`waiting`](#naima-waiting) | core | list what waits on the person at the keyboard: what the plugins know waits for an owner (the point waiting), each item once, a decision before a proof to give, leaving out what waits on another person; the one list naima hello counts and the UI's waiting views show | nothing: it only reads |
 | [`set`](#naima-set) | core | set fields on an item; an empty value removes the field | every pair is validated against the declared fields and passes every write hook (a status moves only along its type's transitions, and each plugin's own hooks); nothing is written unless all pass |
 | [`note`](#naima-note) | core | append a dated, attributed note to an item's Notes section: the writer's own words, never a person's message pasted in; earlier notes are never rewritten | notes are append-only and attributed: the writer is named, earlier notes are never rewritten, and a note holds no heading of its own |
 | [`describe`](#naima-describe) | core | replace an item's description, keeping its title line and its Notes section | the title line and the Notes section stay as they are: a description holding a title or a Notes section is refused |
@@ -159,11 +160,12 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `summary` | core | a block of `naima summary`; one marked `hello` is said by `naima hello` among what waits on the owner, and one with `goals(ctx)` says there where the project is going | core, trackers, coordination, triage, gates, epics, discussions, planning, beta-markers, verifier, backup, ui, metrics, long-work |
 | `guide` | core | a block `naima guide` prints first, inside a project, before the documentation pages | triage, verifier, rules |
 | `facts` | core | lines `naima show` prints of an item under its fields, and in its JSON as `facts`: what a plugin knows of the item that its files do not say | coordination |
+| `waiting` | core | what waits for an owner, as one source sees it: naima waiting, naima hello and the UI's waiting views list every source's together, each item once, filtered to the person at the keyboard | gates, metrics |
 | `rank` | core | an additive term of every item's urgency; lower is more urgent | triage, gates |
 | `jobs` | core | a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it, among those its canRunHere admits (a process it does not claims no attempt); what it finds is shown to the owner as messages | gates, outside-issues, long-work |
 | `extends` | core | additive changes to another plugin's type — statuses (an existing one only with its category), traits, transitions — or field — enum values, more types or traits it applies to | discussions, knowledge, roles |
 | `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done; `beforeText(text, ctx)` may refuse a write of free text or a file that is not an item's (a session note, an event, an attachment) or add to its record | core, trackers, coordination, triage, epics, discussions, planning, knowledge, verifier, privacy |
-| `setup` | core | what a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init` and `naima update` after their own work: `install(ctx) → lines`, each said | coordination, planning, backup, metrics |
+| `setup` | core | what a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init` and `naima update` after their own work: `install(ctx) → lines`, each said | core, coordination, planning, backup, metrics |
 | `agent-hooks` | core | a hook the agent tool runs, which Naima installs in the tool's settings beside its own at `naima init`, `naima update` and `naima stance adopt`, and removes once the plugin is gone: `name`, `says`, `tool` (the agent tool, by adapter id), `event` and optionally `matcher` in that tool's terms, and `command`, the naima command it runs as a list of words | stance-ui |
 | `migrations` | core | a plugin's own data migrations, in order from its format 1, run by `naima update` after the core's | gates |
 | `credits` | core | what a plugin runs or builds on without installing it (a program found on PATH, say), credited by `naima credits`: name, homepage, source, authors, license, version (provisional) | verifier |
@@ -475,7 +477,7 @@ naima new <type> "<title>" [--section <s>] [--set field=value]... [--asked-by <r
 
 | Option | Default | What it does |
 |---|---|---|
-| `--asked-by` | `agent` | who asked for it, recorded in its origin: owner only for what the owner said, asked, reported or decided; coordinator or worker for what that agent asked; agent for what an agent found on its own; person:<name> for someone else |
+| `--asked-by` | `agent` | who asked for it, recorded in its origin: owner only for what an owner said, asked, reported or decided, recorded with that owner's name (owner:<name>, else the person at the keyboard); coordinator or worker for what that agent asked; agent for what an agent found on its own; person:<name> for someone else |
 | `--by` | `git's user.name` | who files it, recorded in its origin |
 | `--from` |  | the item it was derived from, recorded in its origin: a bug found while working on a feature |
 | `--section` |  | the heading the item is grouped under on its board |
@@ -494,7 +496,7 @@ naima new bugs "Export crashes on an empty layer" --from export-keeps
 
 ### naima show
 
-Print one item: fields, what the plugins say of it (such as a fix on a development line), links in both directions, attachments, prose.
+Print one item: fields, what the plugins say of it (such as a fix on a development line), links in both directions, attachments, who asked for it and who filed it, each change with the person who ordered it, prose.
 
 **Enforces**: Nothing: it only reads.
 
@@ -504,7 +506,7 @@ naima show <item> [--json]
 
 | Option | Default | What it does |
 |---|---|---|
-| `--json` |  | print the item as JSON: its fields, what the plugins say of it (facts), its links with the other end's title and status and whether it is evidence that proves or refutes, its attachments, its prose |
+| `--json` |  | print the item as JSON: its fields, what the plugins say of it (facts), its links with the other end's title and status and whether it is evidence that proves or refutes, its attachments, its prose, its authors (who asked, who filed), its history (each change with who ordered it) and its comments (its notes with author and date) |
 
 Examples:
 
@@ -541,6 +543,31 @@ naima list --origin 2026-10-01..
 naima list --origin 2026-10-27-1a2b3c4d
 ```
 
+### naima waiting
+
+List what waits on the person at the keyboard: what the plugins know waits for an owner (the point waiting), each item once, a decision before a proof to give, leaving out what waits on another person; the one list naima hello counts and the UI's waiting views show.
+
+**Enforces**: Nothing: it only reads.
+
+```sh
+naima waiting [--for <person>
+naima --everyone] [--json]
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--for` |  | list what waits on this person instead of the person at the keyboard |
+| `--everyone` |  | list what waits on every owner, each row with the person it waits on when it names one |
+| `--json` |  | print the list as JSON: each row's reference, title, why it waits (owner, proof or failing), the person it waits on and its source |
+
+Examples:
+
+```sh
+naima waiting
+naima waiting --for Ada
+naima waiting --everyone --json
+```
+
 ### naima set
 
 Set fields on an item; an empty value removes the field.
@@ -571,7 +598,7 @@ naima note <item> --file <f> [--by <who>]
 
 | Option | Default | What it does |
 |---|---|---|
-| `--by` |  | who writes the note; without it, git's user.name |
+| `--by` |  | who writes the note; without it, the person at the keyboard (NAIMA_PERSON, else git's user.name), followed by the agent that writes it for them when an agent does |
 | `--file` |  | read the note from a file instead of the arguments; - reads standard input |
 
 Examples:
@@ -863,7 +890,7 @@ Say the session this worktree is in; with a session id, list what that session f
 ```sh
 naima origin [<session>] [--json]
 naima origin --backfill [--dry-run]
-naima origin --set <item> --asked-by <owner|coordinator|worker|agent|unknown|person:<name>> [--by <name>]
+naima origin --set <item> --asked-by <owner|owner:<name>|coordinator|worker|agent|unknown|person:<name>> [--by <name>]
 ```
 
 | Option | Default | What it does |
@@ -872,7 +899,7 @@ naima origin --set <item> --asked-by <owner|coordinator|worker|agent|unknown|per
 | `--backfill` |  | give each item with no origin the one git gives: the commit that added its meta.json, its author and date, the branch of the landing marker that brought it in; inferred: true, askedBy unknown |
 | `--dry-run` |  | with --backfill: say what it would write, and write nothing |
 | `--set` |  | the item whose origin says who asked to set, as --asked-by gives it; the correction is recorded in its origin |
-| `--asked-by` |  | with --set: who asked, a role (owner, coordinator, worker, agent, unknown) or person:<name> |
+| `--asked-by` |  | with --set: who asked, a role (owner, coordinator, worker, agent, unknown), owner:<name> for one of the project's owners, or person:<name> |
 | `--by` |  | with --set: who makes the correction, as it is recorded; absent, git's user.name |
 
 Examples:
@@ -907,7 +934,8 @@ Moves allowed: `acknowledged` → ; a status not named moves to any.
 | `section` | string | every type | the heading the item is grouped under on its board |  |
 | `created` | date | every type | when the item was opened |  |
 | `tags` | strings | every type | free labels a person puts on an item |  |
-| `origin` | object | every type | where the item comes from, written once by naima new and never changed but for who asked: { askedBy: owner, coordinator, worker, agent, person (with person: the name) or unknown; filedBy: { name, role }; session: the session it was filed in; on: the instant; branch; from: the id of the item it was derived from }, with inferred: true and commit when naima origin --backfill read it from git, and corrected: [{ was, by, on }] for each time naima origin --set changed who asked |  |
+| `origin` | object | every type | where the item comes from, written once by naima new and never changed but for who asked: { askedBy: owner, coordinator, worker, agent, person or unknown; person: the name of who asked, always for person and, for owner, which of the project's owners (the one --asked-by owner:<name> names, else the person at the keyboard); filedBy: { name, role }; session: the session it was filed in; on: the instant; branch; from: the id of the item it was derived from }, with inferred: true and commit when naima origin --backfill read it from git, and corrected: [{ was, by, on }] for each time naima origin --set changed who asked |  |
+| `waitsOn` | string | every type | the person the item waits on, by name, when it waits on one person in particular (naima set <item> waitsOn=<name>): naima hello and the UI's waiting views show the person at the keyboard what waits on them and what waits on nobody in particular, never what waits on someone else |  |
 | `level` | enum | any type tagged `messages` | how much a message weighs: info and warning are said once, urgent is shown once an hour until acknowledged | `info` worth knowing; `warning` worth acting on; `urgent` the owner should know now: shown once an hour until acknowledged |
 | `ready` | object | every type | the owner's approval of the work, as the close of a meeting records it: { on: the day, start: true when the owner said to start it now, meeting, decisions: the ids of the discussions it carries, consent: the owner's yes restated }; an open item with one is on the ready queue |  |
 
@@ -950,6 +978,13 @@ Moves allowed: `acknowledged` → ; a status not named moves to any.
 | `notes-append-only` | a write of an item's prose keeps its Notes section as it was and may only add after it; --force takes a rewrite on |
 | `private-infrastructure` | a write of an item's title, fields or prose that adds a machine name, an IP address, a URI with a port, a home-directory path, the user's name or a word of the private list is refused, each finding listed with the placeholder to write instead; --allow-private "<reason>" lets a deliberate mention through and records the reason in the item's notes |
 | `origin-once` | every new item records its origin (who asked, in what role, who filed it, the session, the instant, the branch, the item it came from) and no later write changes or drops it; every write in a session is logged, outside the repository, for naima origin |
+| `ordered-by` | every write of an item records who ordered it — the person (--by, else NAIMA_PERSON, else git's user.name), the agent that made it, what changed and the command — as one line of the item's history.jsonl, which the tracker merges by union |
+
+**Setup**, put in place by `naima init` and `naima update` where missing
+
+| Step | What it puts in place |
+|---|---|
+| `history-merge` | the tracker's .gitattributes line that merges every item's history.jsonl by union, so that two branches adding to one history never conflict |
 
 ## trackers
 
@@ -1203,6 +1238,7 @@ Options, each with the default it takes when nothing sets it:
 | `workerAt` | `0.6` | the share of its own model's window past which a worker, or any session that does not hold the coordinator role, is told at the turn end to finish its step in full, write its state into its items' notes, run naima claim --at-bound and end, for a fresh worker to continue: above 0 and at most 1. The default awaits the owner's choice |
 | `maxWorkers` | `3` | how many worker worktrees (folders of the worktrees directory, on a branch the scheme applies to) may be open at once: naima open refuses another, naming the open ones, and naima hello states it in one line, saying the owner can ask to change it; a positive whole number |
 | `trunkGuard` | `true` | false turns the trunk guard off: the git hook that refuses a commit, merge or fast-forward of the trunk made by hand is removed and not put back by naima update, the landing rule is not shipped, and landings-are-markers asks only from the first marker; written by naima guard off and naima guard on |
+| `sharedRemote` |  | the remote through which several people's coordinators share one trunk, such as origin: naima land then fetches, brings the trunk up to the remote's, merges it into the branch when the branch lacks it, lands and pushes at once, and lands again on the remote's new trunk when the push is refused, up to three times before it says the remote kept moving; naima claim and naima open commit and push the claim when they make it and say who else on the remote claims the same item. Unset, nothing is fetched or pushed. Not read for a tracker kept in a repository of its own |
 | `diaryPerDay` | `5` | how many diary entries a day may hold before the check diary-entries notes it: a positive whole number |
 | `silentAfter` | `15` | minutes without a sign of life (a step posted with naima claim --step, or a commit on the branch) after which naima claims and naima summary flag a claim with a step as possibly stuck: a positive whole number |
 | `landingHost` | `none: this machine` | the host heavy landing checks run on (one that declares itself heavy, such as a check that opens a browser): a host declared for naima run --host, in the long-work plugin's hosts option or in the user's private hosts; naima land sends the branch tip there, runs the check through naima run --host and waits on it; with none named, or `here`, it runs the check on this machine through naima run, in a checkout of the tip, and waits on it; the host the branch being landed names comes first, so that the branch that sets it lands by it |
@@ -2194,6 +2230,9 @@ naima order first-public
 | `method-steps` | an item's closesStep names a gate that has steps, and one of its steps (of its method or its own); a gate's method is one a loaded plugin contributes, and none of its own steps shares a name with a step of its method |
 
 **Summary sections**: `gates`.
+
+**Waiting sources**, listed together by `naima waiting`
+- `gates`: the owner gate's items, each asking for a decision; on every gate, what is fixed and owes a proof by a person's hands, and what is open and run by a person's hands
 
 **Rank terms**, added to every item's urgency: `gate`.
 
@@ -3575,6 +3614,8 @@ naima name-stop 3ab303aa --clear
 | `summary` | Summary | where the project stands: every plugin's summary section, as `naima summary` prints it; its data is `naima summary --json` |
 | `board` | Boards | a type's board, its open items by section, most urgent first: `?type=` picks the type (the first one that takes new items), `?all=1` adds the done ones; its data is `naima board <type> [--all] --json` |
 | `item` | Item | one item, picked by `?item=`: its evidence — its attachments and the items of a type that can prove, whether each proves or refutes now — then its fields, its other links and its prose; its data is `naima show <item> --json`, null when none is picked |
+| `people` | People | whom things wait on: the person at the keyboard and each open item that waits on one person in particular (its waitsOn field); the UI's waiting views show the person what waits on them and on nobody in particular |
+| `waiting` | Waiting on you | what waits on the person at the keyboard, the one list naima waiting prints and naima hello counts: each item once, a decision before a proof to give, what waits on another person left out; ?for=<name> lists another person's, ?for= everyone's |
 | `map` | Map | the graphs the new UI's map draws besides the lines and their commits: each gate's goal with its start, due date and steps (with the day each closed), and the items that wait for others, as edges from the item first to the one that waits |
 | `projects` | All projects | every project Naima knows on this machine, this one first: its gates, its queue, its open bugs, its failing tests and its last change |
 | `week` | Week | the trunk's first-parent commits of the seven days before the moment shown (or of `days` days, at most 366), newest first, each with its hash, its time, its subject and its size (lines added and removed against its first parent, and files changed): what Home's river draws behind today; read live, also the development lines of those days, open or landed on the trunk then, each with where it was cut, its own commits, and for a landed one its marker and the items it closed: what the river draws beside the trunk |
@@ -3660,6 +3701,9 @@ naima metrics presets
 **Directories** it owns under the tracker root: `metrics/`, `test-runs/`.
 
 **Summary sections**: `metrics`.
+
+**Waiting sources**, listed together by `naima waiting`
+- `failing-tests`: a test a person runs (runBy human or owner) that fails by its latest result, a run or a status that says it failed
 
 **Setup**, put in place by `naima init` and `naima update` where missing
 
