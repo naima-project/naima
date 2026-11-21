@@ -47,8 +47,10 @@
     tools?: Snippet<[string]>;
     /** Where the closed cards are offered again: given, the mosaic leaves that row to its owner. */
     closedRow?: Snippet<[{ id: string; title: string; reopen: () => void }[]]>;
+    /** Notes of the page closed by the person, offered again in the same row as the closed cards. */
+    notes?: { title: string; says: string; reopen: () => void }[];
   }
-  let { key, cards, initial, card, tools, closedRow }: Props = $props();
+  let { key, cards, initial, card, tools, closedRow, notes = [] }: Props = $props();
 
   let m: Mosaic = $state({ root: null, closed: [], maximised: null });
   $effect.pre(() => {
@@ -252,8 +254,9 @@
   <div class="closed" aria-label="the cards">
     {#if m.maximised}
       <span class="say">{title(m.maximised)} fills the window: Esc, or Restore at its top right, brings the other cards back.</span>
-    {:else if closed.length > 0}
+    {:else if closed.length > 0 || notes.length > 0}
       <span class="say">Closed, a click brings it back:</span>
+      {#each notes as n (n.title)}<button class="reopen" title={`Show ${n.says} again`} onclick={n.reopen}>+ {n.title}</button>{/each}
       {#each closed as c (c.id)}<button class="reopen" onclick={c.reopen}>+ {c.title}</button>{/each}
     {:else}
       <span class="say">Drag a card by its title to move it, and the gap between two cards to resize them.</span>
