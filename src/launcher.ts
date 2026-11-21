@@ -246,6 +246,31 @@ function codegenRuns(os: string = hostOs()): string[] {
   return exe ? [VERIFY_PROGRAM] : files.length ? ["python"] : [VERIFY_PROGRAM]
 }
 
+/**
+ * The folders of the project's studies, each a `.mcrl2` file with a `%@ui begin` line, tracked or not ignored: what
+ * `naima ui` may write besides the tracker, for the Models tab's editor (develop/models-tab.md §15). Read here, since
+ * the grant is made before the program runs; none when git cannot list them.
+ */
+export function studyFolders(root: string): string[] {
+  try {
+    const r = new Deno.Command("git", {
+      args: ["-C", root, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.mcrl2"],
+      stdout: "piped",
+      stderr: "null",
+    }).outputSync()
+    if (!r.success) return []
+    const out = new Set<string>()
+    for (const f of new TextDecoder().decode(r.stdout).split("\0").filter(Boolean)) {
+      try {
+        if (/^%@ui\s+begin\s*$/m.test(readFileSync(join(root, f), "utf8"))) out.add(resolve(root, dirname(f)))
+      } catch { /* a file gone since git listed it */ }
+    }
+    return [...out].filter((d) => !d.includes(","))
+  } catch {
+    return []
+  }
+}
+
 /** Whether the project at `root` has an origin on GitHub: what lets the session start read its outside issues with gh. */
 export function githubOrigin(root: string): boolean {
   try {
@@ -267,7 +292,7 @@ export function passedSignals(rest: readonly string[], os: string): Deno.Signal[
 }
 
 /**
- * The grant of `command`: only `ui`, `run`, `wait`, `land`, `tools`, `backup create`, `verify`, `stance adopt`, `guard server`, `issues` and, in a project
+ * The grant of `command`: only `ui`, `run`, `wait`, `land`, `tools`, `backup create`, `verify`, `model-check`, `stance adopt`, `guard server`, `issues` and, in a project
  * whose origin is on GitHub, `hello` have one; `tools` is the tools directory to write; `rest`, the arguments after the command; `github`, whether
  * the project's origin is on GitHub.
  */
@@ -306,6 +331,14 @@ export function uiGrant(
         ...(rest.some((a) => a === "--host" || a.startsWith("--host=")) ? ["ssh", "scp"] : []),
       ],
     }
+  }
+  // naima model-check writes the counterexample of each violated property in the one folder --paths names, a path from the
+  // project root inside it (src/plugins/verifier-mcrl2/model-check.ts): that folder alone, never one outside the project.
+  if (command === "model-check") {
+    const at = rest.findIndex((a) => a === "--paths" || a.startsWith("--paths="))
+    const named = at < 0 ? undefined : rest[at]!.startsWith("--paths=") ? rest[at]!.slice("--paths=".length) : rest[at + 1]
+    const inside = named !== undefined && named !== "" && !isAbsolute(named) && !named.split(/[\\/]/).includes("..")
+    return { net: [], read: [], runs: [], ...(inside ? { writeDirs: [resolve(named)] } : {}) }
   }
   // ssh for naima land: a heavy landing check runs on the landing host, started and waited on through naima run --host in process.
   if (command === "land") return { net: [], read: [deno], runs: [deno, "ssh", ...(os === "windows" ? ["powershell.exe"] : [])] }
@@ -708,6 +741,12 @@ export async function launch(args: string[], cwd: string, resume?: Omit<UiSwitch
     parsed.rest[0] === "hello" && githubOrigin(root),
     Deno.env.toObject(),
   )
+  // naima ui, in a browser or the desktop app's sidecar, writes the files of the project's studies the Models tab edits.
+  if (
+    granted && parsed.rest[0] === "ui" && !parsed.rest.includes("--mcp") && !parsed.rest.includes("--mcp-tracker") && !parsed.rest.includes("--install-desktop")
+  ) {
+    granted.writeDirs = [...(granted.writeDirs ?? []), ...studyFolders(root)]
+  }
   // naima ui --install-desktop's build folder is made here, whole, so that the program's fence need reach no folder above it (the caches).
   if (granted?.writeDirs?.includes(buildDir(Deno.env.toObject()))) {
     try {

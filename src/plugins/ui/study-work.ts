@@ -138,8 +138,9 @@ export function jobLine(job: Job, study: Study, ctx: JobContext, property?: stri
       `checked in the Models tab`,
     ])
     // The system a naima-codegen study is checked on is generated from its model: generated again first, so that the
-    // check sees the model as saved.
-    return study.codegen ? `${generate} && ${check}` : check
+    // check sees the model as saved. Naima runs from the project's root, where the paths it is given start.
+    const atRoot = ctx.windows ? `cd /d ${q(ctx.root)} && ` : `cd ${q(ctx.root)} && `
+    return atRoot + (study.codegen ? `${generate} && ${check}` : check)
   }
   if (job === "generate") {
     if (!study.codegen) return { refused: "the study's folder holds no codegen.toml: there is nothing for naima-codegen to generate" }
