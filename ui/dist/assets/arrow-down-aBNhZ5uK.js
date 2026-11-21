@@ -1,5 +1,0 @@
-<<<<<<<< HEAD:ui/dist/assets/arrow-down-aBNhZ5uK.js
-import{Dr as e,Or as t,n}from"./chevron-right-C4O2SEAo.js";var r={name:`arrow-up`,size:24,node:[[`path`,{d:`m5 12 7-7 7 7`}],[`path`,{d:`M12 19V5`}]]};r.node;var i=new Set([`$$slots`,`$$events`,`$$legacy`]);function a(a,o){let s=e(o,i);n(a,t(()=>s,{get icon(){return r}}))}var o={name:`arrow-down`,size:24,node:[[`path`,{d:`M12 5v14`}],[`path`,{d:`m19 12-7 7-7-7`}]]};o.node;var s=new Set([`$$slots`,`$$events`,`$$legacy`]);function c(r,i){let a=e(i,s);n(r,t(()=>a,{get icon(){return o}}))}export{a as n,c as t};
-========
-import{Mr as e,Nr as t,n}from"./chevron-right-DB6oAEga.js";var r={name:`arrow-up`,size:24,node:[[`path`,{d:`m5 12 7-7 7 7`}],[`path`,{d:`M12 19V5`}]]};r.node;var i=new Set([`$$slots`,`$$events`,`$$legacy`]);function a(a,o){let s=e(o,i);n(a,t(()=>s,{get icon(){return r}}))}var o={name:`arrow-down`,size:24,node:[[`path`,{d:`M12 5v14`}],[`path`,{d:`m19 12-7 7-7-7`}]]};o.node;var s=new Set([`$$slots`,`$$events`,`$$legacy`]);function c(r,i){let a=e(i,s);n(r,t(()=>a,{get icon(){return o}}))}export{a as n,c as t};
->>>>>>>> origin/worker/item-actions:ui/dist/assets/arrow-down-BIDz-yjl.js
