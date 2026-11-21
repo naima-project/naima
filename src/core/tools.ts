@@ -87,6 +87,17 @@ export const CODEGEN_MISSING = `naima-codegen is not installed, and Naima does n
   "named naima-codegen beside this project (or beside a folder above it), or anywhere and set NAIMA_CODEGEN to its naima-codegen file " +
   "before starting naima ui. It needs Python 3.11 or later and the mCRL2 tools (naima tools install mcrl2)."
 
+/** Whether a path is known not to exist: false when it exists, or when this program may not look. */
+const surelyAbsent = (p: string): boolean => {
+  try {
+    statSync(p)
+    return false
+  } catch (e) {
+    const err = e as { code?: string; name?: string }
+    return err.code === "ENOENT" || err.code === "ENOTDIR" || err.name === "NotFound"
+  }
+}
+
 const isFile = (p: string): boolean => {
   try {
     return statSync(p).isFile()
@@ -102,8 +113,10 @@ const isFile = (p: string): boolean => {
  * computes it for naima ui, which may not read the folders of PATH, and hands it on as NAIMA_CODEGEN.
  */
 export function findCodegen(root: string, env: Record<string, string | undefined> = process.env, os: string = process.platform): string | null {
+  // Named by NAIMA_CODEGEN, it is taken unless it is surely not there: a program that may not read the folder (naima ui,
+  // to which the launcher hands the one it found) cannot look, and trusts the launcher.
   const named = env["NAIMA_CODEGEN"]
-  if (named && isAbsolute(named) && isFile(named)) return named
+  if (named && isAbsolute(named) && (isFile(named) || !surelyAbsent(named))) return named
   const names = osOf(os) === "windows" ? ["naima-codegen.exe", "naima-codegen.com", "naima-codegen"] : ["naima-codegen"]
   for (const name of names) {
     for (const dir of (env["PATH"] ?? env["Path"] ?? "").split(osOf(os) === "windows" ? ";" : delimiter)) {
