@@ -189,6 +189,30 @@ the drawer, a panel on the right: its kind and where it stands, its release, pri
 its history, with "Open its page" at the top. The drawer closes when another screen is shown. Every item's address is `#item/<type>/<slug>`, so a link opened in
 a new tab shows that item's page.
 
+### Bringing anything to the chat
+
+Anything in the window can be brought to the chat you have with your agent: an item's row or its page, a count such as the bugs waiting for you, a goal, a
+day, the diary, a study on Models, or a few words you selected. Right-click it (on a touch screen, press and hold; from the keyboard, the menu key on what has
+the focus). A strip at the foot of the window says what will be brought, for example "Bring to the chat: the item bugs/login-fails", and its button brings it.
+What reaches the chat says what the thing is, its reference when it has one, the screen you were on and a short text, so the agent can take it up without
+asking which one you meant. Shift with the right-click gives the browser's own menu, and a field keeps its own menu as usual.
+
+The strip then says how it went. "Sent to the chat" means your chat session's Naima server took the message and wrote it into the session; "In the chat"
+means the agent has said it has it. When no chat session is listening, the strip says so at once and offers "Copy the message": paste it in your chat
+yourself. It offers the same copy when the agent has not taken the message within about twenty seconds, which usually means the session was started
+without Naima's channel; a message nobody took by then is withdrawn, so it never arrives later as well as pasted.
+
+The message travels through Claude Code's channels, which deliver an outside event into a running session. They work in Claude Code's terminal app, not
+yet in the desktop app, and while they are a research preview a channel that is not on Anthropic's list is turned on for one session at its start. Start
+Claude Code in the project's folder with the name its MCP settings give `naima ui --mcp` (often `naima` or `naima-ui`):
+
+```sh
+claude --dangerously-load-development-channels server:naima
+```
+
+Claude Code asks you once to confirm, and then shows that messages from that server reach the session. A session started without the flag still works
+as before; the window simply offers the copy.
+
 ### Days, on the left of every screen
 
 Every screen has a Days button at the top left. It opens a time panel down the left side of the window, and closes it again; the window remembers whether you

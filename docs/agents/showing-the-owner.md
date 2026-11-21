@@ -98,3 +98,13 @@ with their state, in about 2 000 characters. `mode: "text"` gives the page's tex
 under a CSS selector. Use it to check what a `show` did and what the owner is looking at. `screenshot` answers a PNG of the UI's window as it is on the screen,
 taken with the system's screen capture on macOS; elsewhere it says it cannot. A picture costs far more than the text: take one only for a rare visual check that
 the text cannot answer, such as a layout or a colour.
+
+## What the owner brings to the chat
+
+The other way round, the owner brings anything in the UI to your chat with a right-click: an item, a count, a goal, a day, the diary, a study, a selection.
+`naima ui --mcp` declares Claude Code's channel (`claude/channel`), and while it runs it writes each message into your session as a `<channel>` event whose
+attributes are `brought_id`, `kind`, `ref` (when the element has a reference) and `view` (the screen it was on), with the message as its text. Call the tool
+`chat_taken` with the `brought_id` first, so the owner's window shows that it reached you, then take it up with the owner at once, as if they had said it.
+The event arrives only in a session the owner started with the channel on
+(`claude --dangerously-load-development-channels server:<the server's name>`); otherwise the window offers the owner the message to paste, and it reaches you
+as an ordinary message.

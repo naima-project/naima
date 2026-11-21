@@ -34,6 +34,13 @@
 //                                  transition of the UI's sequence that shows it (agent.showScreen and the like):
 //                                  what an agent calls to show the owner something; answers how many open UIs took it
 //                                  and, when the UI refused it, why
+//   chat-bring {kind, id, label, view, text}  brings an element of the UI to the chat session the person works in
+//                                  (chat-channel.ts): { state: "nobody", message } when no session's naima MCP server
+//                                  listens, the message composed for the person to copy, else { state: "sent", id,
+//                                  message }, left for the one server that takes it into its session
+//   chat-brought {id}              where that message stands: waiting, taken, read (the agent said it took it),
+//                                  withdrawn or unknown
+//   chat-withdraw {id}             withdraws it if no session took it yet: { withdrawn }
 //   answer {id, ...}               the open UI's answer to an agent's question the feed show carried (the page as
 //                                  text, where its window is), kept for the agent (show.ts)
 //   agent-answer {id, ok, answer | error}  the open UI's answer to a request the feed agent carried, in the UI
@@ -67,6 +74,7 @@ import { PoolDown, type ViewPool } from "./view-pool.ts"
 import { type AgentRequest, askAgent, awaitAnswer, listenShows, openUis, type Place, requestId, taken, type UiRequest, writeAnswer } from "./show.ts"
 import { commandJson, type JsonOf, metroData, VIEW_OF_COMMAND } from "./metro.ts"
 import { findStudies, savedPaths, type Study } from "./studies.ts"
+import { bring as bringToChat, broughtOf, stand as chatStand, withdraw as withdrawChat } from "./chat-channel.ts"
 import { codegenCommand, type Job, jobLine, readStudyFile, shellLine, studyFiles, writeStudyFile } from "./study-work.ts"
 import { contentProblem, framePage, tabList, type UiTab, type UiTabContent, type UiView } from "./tabs.ts"
 
@@ -451,6 +459,13 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
           : `not shown: ${answer.error ?? answer.says ?? "the UI refused it now"}`,
       })
     },
+    "chat-bring": (args) => {
+      const b = broughtOf(args)
+      if (typeof b === "string") throw new Error(b)
+      return json(bringToChat(ctx.root, b))
+    },
+    "chat-brought": (args) => json({ state: chatStand(ctx.root, text(args["id"]) ?? "") }),
+    "chat-withdraw": (args) => json({ withdrawn: withdrawChat(ctx.root, text(args["id"]) ?? "") }),
     answer: (args) => {
       const id = text(args["id"])
       if (id === null) throw new Error("answer names the request it answers: id")
