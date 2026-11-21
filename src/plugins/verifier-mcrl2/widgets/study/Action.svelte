@@ -116,7 +116,6 @@
   .hint {
     font-size: var(--font-size-2xs);
     color: var(--color-text-muted);
-    white-space: nowrap;
   }
   /* Hover: a quiet tint and the disc lit; no ring, so the edge stays one clean hairline. */
   .action:hover:not(:disabled) {
@@ -152,6 +151,11 @@
   }
   .primary .hint {
     color: color-mix(in srgb, var(--color-on-accent) 75%, transparent);
+  }
+  /* The primary keeps its accent on hover, a shade deeper, so that its words stay readable. */
+  .action.primary:hover:not(:disabled) {
+    background: var(--color-accent-hover);
+    border-color: var(--color-accent-hover);
   }
   .primary:hover:not(:disabled) .disc {
     --disc: color-mix(in srgb, var(--color-on-accent) 32%, transparent);

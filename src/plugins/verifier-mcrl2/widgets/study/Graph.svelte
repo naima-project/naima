@@ -213,7 +213,12 @@
     // After the glide, where the node will be.
     setTimeout(() => {
       const el = [...d.querySelectorAll<SVGGElement>("g.node")].find((g) => g.dataset["id"] === id);
-      el?.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
+      // Only the graph's own window scrolls to it: never the card, the mosaic or the page around it.
+      const pan = d.closest<HTMLElement>(".pan");
+      if (!el || !pan) return;
+      const a = el.getBoundingClientRect();
+      const b = pan.getBoundingClientRect();
+      pan.scrollTo({ left: pan.scrollLeft + a.left + a.width / 2 - b.left - b.width / 2, top: pan.scrollTop + a.top + a.height / 2 - b.top - b.height / 2, behavior: "smooth" });
     }, motionMs());
   });
 
