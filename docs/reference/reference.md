@@ -4249,7 +4249,7 @@ naima privacy scrub
 
 | Hook | What it does |
 |---|---|
-| `signed-writes` | a write of free text the writer authored (naima new, describe, note, a free-text field with naima set) is refused unless --revised names the no-leaks checklist the program ships, byte for byte — except the first unsigned one in a worktree, which prints the checklist and goes on, signed as shown; the signature (the checklist's hash, who, the day) goes in the item's field revised. Session notes, events and attachments are held the same way and carry it in their own record. Statuses, links, claims and what Naima fills or generates need none; the option signed: false turns it off |
+| `signed-writes` | a write of free text the writer authored (naima new, describe, note, a free-text field with naima set) is refused unless --revised names the no-leaks checklist the program ships, byte for byte — except the first unsigned one in a worktree, which prints the checklist and goes on, signed as shown; the signature (the checklist's hash, who, the day) goes in the item's field revised. Session notes, events and attachments are held the same way and carry it in their own record. Statuses, links, claims and what Naima fills or generates need none, nor does what a person writes in the window (the UI runs it with NAIMA_ROLE=person), since the checklist binds agents; the option signed: false turns it off |
 
 ## adopt
 
