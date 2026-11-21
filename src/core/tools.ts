@@ -5,8 +5,8 @@
 // module, so the launcher can grant every command reading it and `naima tools`
 // alone writing it.
 
-import { existsSync } from "node:fs"
-import { isAbsolute, join, posix, win32 } from "node:path"
+import { existsSync, statSync } from "node:fs"
+import { delimiter, dirname, isAbsolute, join, posix, win32 } from "node:path"
 
 /** The platforms a tool declaration names, as `<os>-<arch>`. */
 export const PLATFORMS = ["darwin-arm64", "darwin-x64", "linux-x64", "linux-arm64", "windows-x64"] as const
@@ -76,5 +76,45 @@ export function installedProgram(tool: InstalledToolRef, program: string): strin
   } catch {
     // A command the launcher did not let read the tools directory: nothing is installed, as far as it can see.
     return null
+  }
+}
+
+/** Where naima-codegen comes from: Naima does not install it (`naima tools` has no package of it). */
+export const CODEGEN_SOURCE = "https://github.com/naima-project/naima-codegen"
+
+/** What to do when naima-codegen is not found, said to a person (develop/models-tab.md §15). */
+export const CODEGEN_MISSING = `naima-codegen is not installed, and Naima does not install it. To install it, clone ${CODEGEN_SOURCE} into a folder ` +
+  "named naima-codegen beside this project (or beside a folder above it), or anywhere and set NAIMA_CODEGEN to its naima-codegen file " +
+  "before starting naima ui. It needs Python 3.11 or later and the mCRL2 tools (naima tools install mcrl2)."
+
+const isFile = (p: string): boolean => {
+  try {
+    return statSync(p).isFile()
+  } catch {
+    return false
+  }
+}
+
+/**
+ * naima-codegen's program on this machine, or null: NAIMA_CODEGEN when it names a file; else naima-codegen on PATH (on
+ * Windows its .exe or .com first); else a checkout in Naima's tools directory (`<tools>/naima-codegen/naima-codegen`);
+ * else a checkout named naima-codegen beside `root` or beside a folder above it, as a workshop keeps one. The launcher
+ * computes it for naima ui, which may not read the folders of PATH, and hands it on as NAIMA_CODEGEN.
+ */
+export function findCodegen(root: string, env: Record<string, string | undefined> = process.env, os: string = process.platform): string | null {
+  const named = env["NAIMA_CODEGEN"]
+  if (named && isAbsolute(named) && isFile(named)) return named
+  const names = osOf(os) === "windows" ? ["naima-codegen.exe", "naima-codegen.com", "naima-codegen"] : ["naima-codegen"]
+  for (const name of names) {
+    for (const dir of (env["PATH"] ?? env["Path"] ?? "").split(osOf(os) === "windows" ? ";" : delimiter)) {
+      if (dir && isFile(join(dir, name))) return join(dir, name)
+    }
+  }
+  const tools = toolsDir(env, os)
+  if (tools && isFile(join(tools, "naima-codegen", "naima-codegen"))) return join(tools, "naima-codegen", "naima-codegen")
+  for (let dir = root;; dir = dirname(dir)) {
+    const beside = join(dirname(dir), "naima-codegen", "naima-codegen")
+    if (dirname(dir) !== dir && isFile(beside)) return beside
+    if (dirname(dir) === dir) return null
   }
 }

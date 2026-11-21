@@ -55,8 +55,8 @@
 import { readFileSync } from "node:fs"
 import { Buffer } from "node:buffer"
 import { dirname, join, resolve } from "node:path"
-import { askHostsInBackground, type Context, gitReadScope, headCommit, type KnownProject, knownProjects } from "../../core/api.ts"
-import { actionArgv, actionCommand, actionOf, ACTIONS, naimaEntry, runCommand } from "./actions.ts"
+import { askHostsInBackground, type Context, findCodegen, gitReadScope, headCommit, type KnownProject, knownProjects } from "../../core/api.ts"
+import { actionArgv, actionCommand, actionOf, ACTIONS, naimaEntry, runCommand, selfEntry } from "./actions.ts"
 import { showCall } from "./agent-endpoint.ts"
 import { AtCache, commitOf } from "./at.ts"
 import { knownAt, recentProjects } from "./switch.ts"
@@ -361,8 +361,9 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       const windows = process.platform === "win32"
       const line = jobLine(job as Job, study, {
         root: ctx.root,
-        naima: actionCommand(opts.entry ?? naimaEntry(), ctx.trackerRoot, []),
-        codegen: codegenCommand(process.env, windows),
+        // This program, never the one the project pins: model-check may be newer than it.
+        naima: actionCommand(opts.entry ?? selfEntry(), ctx.trackerRoot, []),
+        codegen: codegenCommand(findCodegen(ctx.root), windows),
         windows,
       }, text(args["property"]) ?? undefined)
       if (typeof line !== "string") throw new Error(line.refused)

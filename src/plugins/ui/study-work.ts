@@ -7,6 +7,7 @@
 import { Buffer } from "node:buffer"
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path"
+import { CODEGEN_MISSING } from "../../core/api.ts"
 import type { Study } from "./studies.ts"
 
 /** The folders of a study never listed for editing: what tools write, and what a person never edits by hand. */
@@ -97,16 +98,16 @@ export interface JobContext {
   root: string
   /** The command line that starts this Naima on the project's data, before its command's words. */
   naima: readonly string[]
-  /** How naima-codegen is started: NAIMA_CODEGEN when set, else its name on PATH. */
-  codegen: readonly string[]
+  /** How naima-codegen is started, or null when it is not installed. */
+  codegen: readonly string[] | null
   windows: boolean
 }
 
-/** naima-codegen as a command line: NAIMA_CODEGEN when set (a script without extension is handed to Python on Windows), else its name. */
-export function codegenCommand(env: Record<string, string | undefined>, windows: boolean): string[] {
-  const named = env["NAIMA_CODEGEN"]
-  if (!named) return ["naima-codegen"]
-  return windows && !/\.(exe|com|cmd|bat)$/i.test(named) ? ["python", named] : [named]
+/** naima-codegen as a command line, from where it was found (core/tools.ts, findCodegen): on Windows a script without an
+ * extension is handed to Python; null when it was found nowhere. */
+export function codegenCommand(found: string | null, windows: boolean): string[] | null {
+  if (!found) return null
+  return windows && !/\.(exe|com|cmd|bat)$/i.test(found) ? ["python", found] : [found]
 }
 
 /**
@@ -118,7 +119,7 @@ export function jobLine(job: Job, study: Study, ctx: JobContext, property?: stri
   const q = (w: string) => quoted(w, ctx.windows)
   const line = (words: readonly string[]) => words.map(q).join(" ")
   const inFolder = (command: string) => (ctx.windows ? `cd /d ${q(folder)} && ${command}` : `cd ${q(folder)} && ${command}`)
-  const generate = line([...ctx.codegen, "generate", "--project", folder])
+  const generate = ctx.codegen ? line([...ctx.codegen, "generate", "--project", folder]) : null
   if (job === "check") {
     if (!study.system) return { refused: "the study declares no system to check its properties on (% system in its %@ui block)" }
     const props = property === undefined ? study.properties : study.properties.filter((p) => p === property)
@@ -140,10 +141,15 @@ export function jobLine(job: Job, study: Study, ctx: JobContext, property?: stri
     // The system a naima-codegen study is checked on is generated from its model: generated again first, so that the
     // check sees the model as saved. Naima runs from the project's root, where the paths it is given start.
     const atRoot = ctx.windows ? `cd /d ${q(ctx.root)} && ` : `cd ${q(ctx.root)} && `
-    return atRoot + (study.codegen ? `${generate} && ${check}` : check)
+    // Without naima-codegen the system is checked as it was last generated, and the output says so first.
+    const stale = `echo ${
+      q(`naima-codegen is not installed, so the properties are checked on ${study.system} as it was last generated, not on the model as saved. ${CODEGEN_MISSING}`)
+    }`
+    return atRoot + (!study.codegen ? check : generate ? `${generate} && ${check}` : `${stale} && ${check}`)
   }
   if (job === "generate") {
     if (!study.codegen) return { refused: "the study's folder holds no codegen.toml: there is nothing for naima-codegen to generate" }
+    if (!generate) return { refused: CODEGEN_MISSING }
     return study.build ? `${generate} && ${inFolder(study.build)}` : generate
   }
   if (!study.run) return { refused: "the study declares no program to run (% run in its %@ui block)" }

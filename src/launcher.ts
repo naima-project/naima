@@ -60,6 +60,7 @@ import {
   DATA_FILE,
   DEFAULT_ENTRY_FILES,
   EXCLUDE_FILES,
+  findCodegen,
   findData,
   globalOptions,
   launcherSet,
@@ -728,6 +729,12 @@ export async function launch(args: string[], cwd: string, resume?: Omit<UiSwitch
   const env: Record<string, string> = { ...allowedEnv(Deno.env.toObject()), ...marks, NAIMA_LAUNCHER_SET: launcherSet(marks, Deno.env.toObject()) }
   // The hand-over count is this launcher's alone: a Naima the program starts counts from zero.
   delete env[HANDOVERS]
+  // naima ui starts naima-codegen for the Models tab's Generate and Check, and may not read the folders of PATH: the
+  // launcher finds it, where Naima looks for it (core/tools.ts), and hands it on.
+  if (parsed.rest[0] === "ui") {
+    const codegen = findCodegen(root, Deno.env.toObject())
+    if (codegen) env["NAIMA_CODEGEN"] = codegen
+  }
   const others = otherWorktrees(root, data)
   const tools = toolsDir(Deno.env.toObject(), Deno.build.os)
   // The tick's state, naima/ in the clone's git directory, shared by its worktrees; the program is told its tick/ folder.

@@ -2,6 +2,7 @@
 // and the runner, shared by the bridge (bridge.ts) and the tracker's MCP server (mcp-tracker.ts). Nothing of the screen.
 
 import { join } from "node:path"
+import process from "node:process"
 import { fileURLToPath } from "node:url"
 import type { Command, Context } from "../../core/api.ts"
 
@@ -80,6 +81,17 @@ const PROGRAM = fileURLToPath(new URL("../../../", import.meta.url))
 export function naimaEntry(): string[] {
   const deno = (globalThis as { Deno?: { execPath(): string } }).Deno
   return deno ? [deno.execPath(), "run", "-A", join(PROGRAM, "naima.ts")] : [process.execPath, join(PROGRAM, "src", "cli.ts")]
+}
+
+/**
+ * How this very program is started again, for a command only it may have (naima model-check, which the Models tab runs):
+ * through the launcher when it was launched, which runs this program with its permissions; else, run directly, as itself,
+ * never through the launcher, which would run the program the project pins.
+ */
+export function selfEntry(env: Record<string, string | undefined> = process.env): string[] {
+  const deno = (globalThis as { Deno?: { execPath(): string } }).Deno
+  if (deno && env["NAIMA_LAUNCHED"] === "1") return naimaEntry()
+  return deno ? [deno.execPath(), "run", "-A", join(PROGRAM, "src", "cli.ts")] : [process.execPath, join(PROGRAM, "src", "cli.ts")]
 }
 
 /**

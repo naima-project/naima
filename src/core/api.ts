@@ -249,7 +249,18 @@ export {
   windowsArg,
   windowsCommandLine,
 } from "./hosts.ts"
-export { installDirOf, installedProgram, type InstalledToolRef, platformKey, PLATFORMS, programFile, RECEIPT, toolsDir } from "./tools.ts"
+export {
+  CODEGEN_MISSING,
+  findCodegen,
+  installDirOf,
+  installedProgram,
+  type InstalledToolRef,
+  platformKey,
+  PLATFORMS,
+  programFile,
+  RECEIPT,
+  toolsDir,
+} from "./tools.ts"
 export { cell, code, sentence, table } from "./markdown.ts"
 export { align, cloneIntoNewWorktree, isClone, short, type Target } from "./program.ts"
 export { posixRelative } from "./config.ts"
