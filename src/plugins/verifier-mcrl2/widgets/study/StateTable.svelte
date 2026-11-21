@@ -1,8 +1,7 @@
 <!-- A model's state, readable: one row per variable, grouped as its author grouped them, each with the author's words on
      what it is. A function is drawn as the few keys where it is not its default, a list as its items, a value as itself;
      what the last step changed is marked, its old value beside it. A filter and a switch for the changed ones; a row opens
-     on click to show its whole value. One of the widget set the Models tab, every study's view and the main UI share
-     (develop/models-tab.md §13); a table of data is the same widget with other rows. -->
+     on click to show its whole value. One of the widget set; a table of data is the same widget with other rows. -->
 <script module lang="ts">
   export interface StateRow {
     name: string;
@@ -129,8 +128,8 @@
     font: inherit;
     font-size: var(--font-size-sm);
     color: var(--color-text);
-    background: color-mix(in srgb, var(--color-surface-sunken) 70%, transparent);
-    border: var(--border-width-thin) solid color-mix(in srgb, var(--color-border-strong) 50%, transparent);
+    background: var(--color-surface-soft);
+    border: var(--border-width-thin) solid var(--color-border-soft);
     border-radius: var(--radius-full);
   }
   .find:focus {
@@ -206,11 +205,11 @@
   }
   .row:hover,
   .row:focus-visible {
-    background: color-mix(in srgb, var(--color-accent) 7%, transparent);
+    background: var(--color-accent-tint);
     outline: none;
   }
   .row.ch {
-    background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+    background: var(--color-accent-tint);
   }
   .name {
     display: flex;
@@ -280,7 +279,7 @@
   .item {
     padding: var(--space-none) var(--space-xs);
     border-radius: var(--radius-sm);
-    background: color-mix(in srgb, var(--color-surface-sunken) 70%, transparent);
+    background: var(--color-surface-soft);
   }
   .quiet,
   .more {

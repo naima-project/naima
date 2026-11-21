@@ -6,10 +6,10 @@
      bookmarked through its marks, shown on hover and focus. -->
 <script lang="ts">
   import { untrack } from "svelte";
-  import Pannable from "../ui/components/Pannable.svelte";
+  import Pannable from "../Pannable.svelte";
   import { type Direction, type Layout, layout } from "./layout.ts";
   import { arrowOf, pathOf, route } from "./route.ts";
-  import Icon from "../ui/components/Icon.svelte";
+  import Icon from "../Icon.svelte";
   import Action from "./Action.svelte";
   import ArrowRight from "@lucide/svelte/icons/arrow-right";
   import ArrowDown from "@lucide/svelte/icons/arrow-down";

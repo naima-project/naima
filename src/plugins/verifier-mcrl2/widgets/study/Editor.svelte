@@ -1,8 +1,8 @@
 <!-- A text editor for a study's files: CodeMirror 6, with mCRL2 highlighted by the library's own tokenizer
      (mcrl2-tokens.ts) as a stream language, and Rust, TOML, shell, TypeScript and JSON by CodeMirror's; the language
      chosen by the file's extension. Line numbers, undo, search, and Ctrl-S or
-     Cmd-S to save. Drawn in Naima's tokens, light or dark with the page. It fills its card and scrolls inside it. One of
-     the widget set the Models tab and every study's view share (develop/models-tab.md §13). -->
+     Cmd-S to save. Drawn in the design tokens, light or dark with the page. It fills its card and scrolls inside it. One of
+     the widget set. -->
 <script lang="ts">
   import { onMount } from "svelte";
   import { Compartment, EditorState } from "@codemirror/state";
@@ -71,7 +71,7 @@
     ".cm-scroller": { fontFamily: "var(--font-family-mono)", lineHeight: "var(--font-line-height-normal)" },
     ".cm-content": { caretColor: "var(--color-accent)" },
     ".cm-gutters": { backgroundColor: "var(--color-surface-sunken)", color: "var(--color-text-muted)", borderRight: "var(--border-width-thin) solid var(--color-border)" },
-    ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "color-mix(in srgb, var(--color-accent-soft) 45%, transparent)" },
+    ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "var(--color-accent-tint)" },
     "&.cm-focused": { outline: "var(--border-width-focus) solid var(--color-focus)" },
     ".cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection": { backgroundColor: "var(--color-accent-soft)" },
     ".cm-searchMatch": { backgroundColor: "var(--color-accent-soft)" },

@@ -3,7 +3,7 @@
      ahead takes it. It zooms (the space between steps) and pans when longer than its box, and keeps the current state in
      view. Real steps carry a bar above their state. -->
 <script lang="ts">
-  import Pannable from "../ui/components/Pannable.svelte";
+  import Pannable from "../Pannable.svelte";
 
   interface Props {
     label: string;
@@ -23,10 +23,10 @@
 
   let dx = $state(112);
   const X0 = 40;
-  /** The drawing's height follows the card's: the line at its middle, the steps ahead spread over it. */
-  let boxH = $state(220);
-  const H = $derived(Math.max(150, boxH - 6));
-  const Y = $derived(H / 2 + 6);
+  /** The drawing's own height, the line at its middle and the steps ahead spread over it; the box centres it, and a
+   * card lower than the drawing scrolls it. */
+  const H = 214;
+  const Y = H / 2 + 6;
   const xOf = (k: number) => X0 + k * dx;
   const xNow = $derived(xOf(position));
   const fade = (k: number) => (pinned.has(k) ? 1 : Math.max(0.22, 1 - (position - k) * 0.09));
@@ -50,7 +50,6 @@
     <button aria-label="Further apart" onclick={() => (dx = Math.min(260, dx * 1.25))}>+</button>
   </div>
   <Pannable {label} class="pan" ignore=".state, .ahead" bind:box>
-    <span class="hmeasure" bind:clientHeight={boxH}></span>
     <svg width={W} height={H} viewBox="0 0 {W} {H}" role="img" aria-label={label}>
       <line class="track" x1={xOf(0)} x2={xOf(past.length)} y1={Y} y2={Y} />
       {#each past as p, i (i)}
@@ -129,17 +128,12 @@
     flex: 1;
     min-block-size: 0;
     overflow: auto;
+    display: flex;
+    align-items: safe center;
   }
   svg {
     display: block;
-  }
-  .hmeasure {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-  }
-  .timeline :global(.pan) {
-    position: relative;
+    flex: none;
   }
   text {
     font-family: var(--font-family-body);

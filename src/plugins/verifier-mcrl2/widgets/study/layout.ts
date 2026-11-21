@@ -1,4 +1,4 @@
-// A layered graph layout, with no dependency, for the drawings of the Models tab: state machines (cycles,
+// A layered graph layout, with no dependency, for drawings of models: state machines (cycles,
 // self-loops, parallel edges) and DAGs (a program's nodes and what each reads).
 //
 // The method is the classic one (Sugiyama, as in dagre and ELK), in four phases:
@@ -146,10 +146,8 @@ export function layout(
   // Internal sizes: along the flow (f) and across it (c).
   const fsOf = (v: number) => (horizontal ? nd(v).width : nd(v).height);
   const csOf = (v: number) => (horizontal ? nd(v).height : nd(v).width);
-  const labelF = (i: number) =>
-    (horizontal ? ge(i).labelWidth : ge(i).labelHeight) ?? 0;
-  const labelC = (i: number) =>
-    (horizontal ? ge(i).labelHeight : ge(i).labelWidth) ?? 0;
+  const labelF = (i: number) => (horizontal ? ge(i).labelWidth : ge(i).labelHeight) ?? 0;
+  const labelC = (i: number) => (horizontal ? ge(i).labelHeight : ge(i).labelWidth) ?? 0;
 
   const all: E[] = [];
   edges.forEach((e, i) => {
@@ -197,9 +195,7 @@ export function layout(
   });
   const forced = nodes.map((x) => {
     const r = opts.rank?.[x.id];
-    return typeof r === "number" && Number.isFinite(r)
-      ? Math.round(r)
-      : undefined;
+    return typeof r === "number" && Number.isFinite(r) ? Math.round(r) : undefined;
   });
   const topo: number[] = [];
   {
@@ -309,12 +305,10 @@ export function layout(
     let dx = toward[0] - center[0], dy = toward[1] - center[1];
     if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) [dx, dy] = [1, 0];
     if (a <= 0 || b <= 0) return [center[0], center[1]];
-    const t = shapeOf(v) === "circle"
-      ? 1 / Math.sqrt((dx / a) ** 2 + (dy / b) ** 2)
-      : Math.min(
-        dx ? a / Math.abs(dx) : Infinity,
-        dy ? b / Math.abs(dy) : Infinity,
-      );
+    const t = shapeOf(v) === "circle" ? 1 / Math.sqrt((dx / a) ** 2 + (dy / b) ** 2) : Math.min(
+      dx ? a / Math.abs(dx) : Infinity,
+      dy ? b / Math.abs(dy) : Infinity,
+    );
     return [center[0] + dx * t, center[1] + dy * t];
   };
   // The k-th self-loop of a node: one cubic on the negative side across the flow, nested by k.
@@ -372,12 +366,8 @@ export function layout(
       }
       // the slot the neighbours point to: after every node whose placed neighbours lie before them on average
       const mean = (ds: Link[]) => {
-        const ps = ds.filter((d) => placedV[d.u]).map((d) =>
-          o(d.u) / Math.max(lay(vn(d.u).layer).length, 1)
-        );
-        return ps.length
-          ? ps.reduce((a, b) => a + b, 0) / ps.length
-          : undefined;
+        const ps = ds.filter((d) => placedV[d.u]).map((d) => o(d.u) / Math.max(lay(vn(d.u).layer).length, 1));
+        return ps.length ? ps.reduce((a, b) => a + b, 0) / ps.length : undefined;
       };
       const mx = mean(mine);
       let target = L.length;
@@ -540,8 +530,7 @@ export function layout(
   // ── 3. Coordinates ─────────────────────────────────────────────────────────────────────────────────
   const C = new Array<number>(V.length).fill(0);
   const c = (v: number) => C[v]!;
-  const sep = (a: number, b: number) =>
-    vn(a).hi + vn(b).lo + (vn(a).real && vn(b).real ? nodeGap : nodeGap / 2);
+  const sep = (a: number, b: number) => vn(a).hi + vn(b).lo + (vn(a).real && vn(b).real ? nodeGap : nodeGap / 2);
   // Brandes–Köpf: four alignments (to the medians above or below, scanning from either side), each
   // compacted into blocks, aligned to the narrowest, and balanced as the mean of the two middle values.
   {
@@ -553,9 +542,7 @@ export function layout(
       const prev = lay(l - 1), L = lay(l);
       let k0 = 0, scan = 0;
       L.forEach((v, i) => {
-        const inner = vn(v).real
-          ? undefined
-          : vn(v).up.find((d) => !vn(d.u).real);
+        const inner = vn(v).real ? undefined : vn(v).up.find((d) => !vn(d.u).real);
         const k1 = inner ? o(inner.u) : prev.length;
         if (inner || i === L.length - 1) {
           for (const s of L.slice(scan, i + 1)) {
@@ -690,9 +677,7 @@ export function layout(
 
   const F = new Array<number>(V.length).fill(0);
   {
-    const size = layers.map((L) =>
-      L.reduce((m, v) => Math.max(m, vn(v).fs), 0)
-    );
+    const size = layers.map((L) => L.reduce((m, v) => Math.max(m, vn(v).fs), 0));
     let f = 0;
     layers.forEach((L, l) => {
       if (l) f += size[l - 1]! / 2 + layerGap / 2 + size[l]! / 2;
@@ -721,9 +706,7 @@ export function layout(
     const m = anchors.length;
     const tan = anchors.map((_, k): P =>
       tangents[k] ??
-        (k === 0
-          ? unit(A(1)[0] - A(0)[0], A(1)[1] - A(0)[1])
-          : unit(A(k)[0] - A(k - 1)[0], A(k)[1] - A(k - 1)[1]))
+        (k === 0 ? unit(A(1)[0] - A(0)[0], A(1)[1] - A(0)[1]) : unit(A(k)[0] - A(k - 1)[0], A(k)[1] - A(k - 1)[1]))
     );
     const pts: P[] = [A(0)];
     for (let k = 0; k + 1 < m; k++) {
@@ -758,8 +741,7 @@ export function layout(
   };
 
   // How many edges join the same two nodes across layers.
-  const pairKey = (rt: Route) =>
-    `${Math.min(rt.e.s, rt.e.t)} ${Math.max(rt.e.s, rt.e.t)}`;
+  const pairKey = (rt: Route) => `${Math.min(rt.e.s, rt.e.t)} ${Math.max(rt.e.s, rt.e.t)}`;
   const pairs = new Map<string, number>();
   for (const rt of routes) {
     if (!rt.flat) pairs.set(pairKey(rt), (pairs.get(pairKey(rt)) ?? 0) + 1);
@@ -829,9 +811,7 @@ export function layout(
     } else {
       // the curve's middle, on the negative side across the flow
       const segs = (pts.length - 1) / 3;
-      const { at: mid, tan } = segs % 2
-        ? bez(pts, (segs - 1) / 2, 0.5)
-        : bez(pts, segs / 2, 0);
+      const { at: mid, tan } = segs % 2 ? bez(pts, (segs - 1) / 2, 0.5) : bez(pts, segs / 2, 0);
       let nrm: P = [-tan[1], tan[0]];
       if (nrm[1] > 0) nrm = [-nrm[0], -nrm[1]];
       const d = clearance(tan, i);

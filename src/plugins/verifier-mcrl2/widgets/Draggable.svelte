@@ -148,6 +148,7 @@
 <style>
   .draggable {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-sm);
     padding: var(--space-xs);
@@ -178,6 +179,7 @@
     outline-offset: 0;
   }
   .slim {
+    flex-wrap: nowrap;
     padding: 0 var(--space-xs);
     border: var(--border-width-thin) solid transparent;
     border-radius: 0;
@@ -208,11 +210,12 @@
     flex: 0 0 auto;
   }
   .content {
-    flex: 1;
+    flex: 1 1 auto;
     min-width: 0;
   }
   .moves {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--space-xs);
   }
 </style>

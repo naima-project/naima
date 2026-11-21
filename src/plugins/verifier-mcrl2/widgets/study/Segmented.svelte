@@ -1,6 +1,6 @@
 <!-- A choice of one among a few, drawn as one capsule whose lit segment is the choice; with `current`, the segment that
      says how things stand now is marked too, so a person sees both where things are and what each choice would do.
-     One of the widget set the Models tab, every study's view and the main UI share (develop/models-tab.md §13). -->
+     One of the widget set. -->
 <script lang="ts">
   import type { Component } from "svelte";
 
@@ -49,8 +49,8 @@
     padding: var(--space-xs);
     gap: var(--space-xs);
     border-radius: var(--radius-full);
-    background: color-mix(in srgb, var(--color-surface-sunken) 70%, transparent);
-    border: var(--border-width-thin) solid color-mix(in srgb, var(--color-border-strong) 50%, transparent);
+    background: var(--color-surface-soft);
+    border: var(--border-width-thin) solid var(--color-border-soft);
   }
   .opt {
     position: relative;
@@ -71,7 +71,7 @@
   }
   .opt:hover:not(:disabled) {
     color: var(--color-text);
-    background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+    background: var(--color-accent-tint);
   }
   .opt.on {
     color: var(--color-on-accent);

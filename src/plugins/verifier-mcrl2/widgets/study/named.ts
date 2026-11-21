@@ -1,4 +1,4 @@
-// The named diagrams (develop/models-tab.md §13): when a view maps a model's state to a standard diagram, it draws that
+// The named diagrams: when a view maps a model's state to a standard diagram, it draws that
 // standard's notation unaltered and is called by its name, so that a reader recognises it. A study declares the
 // diagrams its view draws in its %@ui block (`% diagrams <name>: <what it maps>; …`); the tab checks each name here.
 // The list is open: a formalism or a notation is added with its name, its standard and the elements it draws.
@@ -44,8 +44,7 @@ export const NAMED: readonly NamedDiagram[] = [
   {
     name: "uml-communication",
     title: "UML communication diagram (collaboration diagram)",
-    standard:
-      "OMG UML 2.5.1, clause 17.9 (Interactions, communication diagrams)",
+    standard: "OMG UML 2.5.1, clause 17.9 (Interactions, communication diagrams)",
     elements: [
       "lifeline (rectangle)",
       "link (line)",
@@ -90,15 +89,13 @@ export const NAMED: readonly NamedDiagram[] = [
   {
     name: "directed-graph",
     title: "Directed graph",
-    standard:
-      "no standard notation: nodes and arrows, named so that it is not mistaken for one",
+    standard: "no standard notation: nodes and arrows, named so that it is not mistaken for one",
     elements: ["node (circle)", "edge (filled arrowhead)"],
     widget: "Graph",
   },
 ];
 
-export const named = (name: string): NamedDiagram | undefined =>
-  NAMED.find((d) => d.name === name);
+export const named = (name: string): NamedDiagram | undefined => NAMED.find((d) => d.name === name);
 
 /** A study's declared diagrams (`name: what it maps; …`), each checked: known ones, and the problems of the rest. */
 export function declaredDiagrams(
@@ -114,9 +111,7 @@ export function declaredDiagrams(
     const d = named(name);
     if (!d) {
       problems.push(
-        `${name} is not a named diagram this Naima knows (${
-          NAMED.map((x) => x.name).join(", ")
-        })`,
+        `${name} is not a named diagram the widget set knows (${NAMED.map((x) => x.name).join(", ")})`,
       );
     } else {diagrams.push({
         diagram: d,

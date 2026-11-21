@@ -8,8 +8,8 @@
      flex column, for one). -->
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import Draggable from "../ui/components/Draggable.svelte";
-  import Icon from "../ui/components/Icon.svelte";
+  import Draggable from "../Draggable.svelte";
+  import Icon from "../Icon.svelte";
   import Maximize from "@lucide/svelte/icons/maximize-2";
   import Minimize from "@lucide/svelte/icons/minimize-2";
   import X from "@lucide/svelte/icons/x";
@@ -116,35 +116,27 @@
     step(on ? "enter_divider" : "leave");
     lit = on ? new Set([path]) : new Set();
   };
-  // A junction: every divider meeting there and every one on their lines.
-  let start: { x: number; y: number; id: number } | null = null;
-  const junctionDown = (e: PointerEvent, paths: string[]) => {
-    if (drag.over !== "JUNCTION") step("enter_junction");
-    if (!step("press")) return;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    start = { x: e.clientX, y: e.clientY, id: e.pointerId };
-    begin(paths);
-    e.preventDefault();
-  };
-  const junctionMove = (e: PointerEvent) => {
-    if (start && e.pointerId === start.id) travel(e.clientX - start.x, e.clientY - start.y);
-  };
-  const junctionUp = (e: PointerEvent, how: "release" | "cancel") => {
-    if (!start || e.pointerId !== start.id) return;
-    start = null;
-    finish(how);
+  // A junction, through its Draggable: every divider meeting there and every one on their lines; its first travel is
+  // the press.
+  const junctionTravel = (paths: string[], dx: number, dy: number, done: boolean) => {
+    if (!base) {
+      if (drag.over !== "JUNCTION") step("enter_junction");
+      if (!step("press")) return;
+      begin(paths);
+    }
+    travel(dx, dy);
+    if (done) finish("release");
   };
   const hoverJunction = (paths: string[], on: boolean) => {
     if (drag.drag !== "NONE") return;
     step(on ? "enter_junction" : "leave");
     lit = on ? new Set(paths) : new Set();
   };
-  // The keys: on a junction, the arrows move its set a step, as a press, a move and a release.
-  const junctionKey = (e: KeyboardEvent, paths: string[]) => {
-    const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
-    if (!d) return;
-    e.preventDefault();
-    set(moveDividers(m, paths, { x: d[0]! * 0.02, y: d[1]! * 0.02 }, false));
+  // The keys: on a junction, the arrows move its set a step.
+  const junctionStep = (paths: string[], d: "up" | "down" | "left" | "right") => {
+    const x = d === "left" ? -1 : d === "right" ? 1 : 0;
+    const y = d === "up" ? -1 : d === "down" ? 1 : 0;
+    set(moveDividers(m, paths, { x: x * 0.02, y: y * 0.02 }, false));
   };
 
   // ---- a card dragged by its title: where it would go is read from the page under the pointer at that moment
@@ -226,20 +218,20 @@
             <span
               class="junction {end}"
               class:cross={jn.cross}
-              role="slider"
-              tabindex="0"
-              aria-label={`where ${jn.meeting.length} dividers meet: drag to move them and the ${jn.moves.length - jn.meeting.length} aligned with them`}
-              aria-valuenow={Math.round((t.dir === "row" ? jn.x : jn.y) * 100)}
+              role="presentation"
               title="Drag to move every divider meeting here, and those on the same lines"
               onpointerenter={() => hoverJunction(jn.moves, true)}
               onpointerleave={() => hoverJunction(jn.moves, false)}
-              onpointerdown={(e) => junctionDown(e, jn.moves)}
-              onpointermove={junctionMove}
-              onpointerup={(e) => junctionUp(e, "release")}
-              onpointercancel={(e) => junctionUp(e, "cancel")}
-              onlostpointercapture={(e) => junctionUp(e, "release")}
-              onkeydown={(e) => junctionKey(e, jn.moves)}
-            ></span>
+            >
+              <Draggable
+                label={`the ${jn.meeting.length} dividers meeting here and the ${jn.moves.length - jn.meeting.length} aligned with them`}
+                slim
+                buttons={false}
+                moves={["left", "right", "up", "down"]}
+                onmove={(d) => junctionStep(jn.moves, d)}
+                ontravel={(dx, dy, done) => junctionTravel(jn.moves, dx, dy, done)}
+              />
+            </span>
           {/if}
         {/each}
       </div>
@@ -499,13 +491,11 @@
     inset: calc(50% - var(--space-xs));
     border-radius: var(--radius-full);
     background: transparent;
+    pointer-events: none;
   }
   .junction:hover::after,
-  .junction:focus-visible::after {
+  .junction:focus-within::after {
     background: var(--color-accent-soft);
-  }
-  .junction:focus-visible {
-    outline: var(--border-width-focus) solid var(--color-focus);
   }
   .gutter.row {
     inline-size: var(--space-sm);
@@ -566,6 +556,17 @@
   .gutter :global(.dragging .handle)::after,
   .gutter :global(.handle:focus-visible)::after {
     background: var(--color-accent-soft);
+  }
+  /* A junction's Draggable: its whole square the handle, which draws no pill of its own (the junction's dot is it). */
+  .gutter .junction :global(.draggable) {
+    position: absolute;
+    inset: 0;
+  }
+  .gutter .junction :global(.handle) {
+    cursor: move;
+  }
+  .gutter .junction :global(.handle)::after {
+    display: none;
   }
   @media (prefers-reduced-motion: reduce) {
     .side {

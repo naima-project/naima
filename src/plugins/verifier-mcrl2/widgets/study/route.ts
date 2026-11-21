@@ -1,4 +1,4 @@
-// The edges of a laid-out graph drawn as a person would draw them (develop/models-tab.md §13): every edge leaves its
+// The edges of a laid-out graph drawn as a person would draw them: every edge leaves its
 // node on the side the flow goes and enters the next on the side the flow comes from, as a smooth curve whose
 // tangents follow the flow at both ends and at every bend, so arrows read as curves, never as stiff diagonals; and a
 // fan of the steps possible now drawn as a tidy list beside the node they leave from, whatever the flow. Back edges and
@@ -26,9 +26,7 @@ export function pathOf(p: readonly P[]): string {
   if (p.length === 0) return "";
   let d = `M ${p[0]![0]},${p[0]![1]}`;
   for (let i = 1; i + 2 < p.length; i += 3) {
-    d += ` C ${p[i]![0]},${p[i]![1]} ${p[i + 1]![0]},${p[i + 1]![1]} ${
-      p[i + 2]![0]
-    },${p[i + 2]![1]}`;
+    d += ` C ${p[i]![0]},${p[i]![1]} ${p[i + 1]![0]},${p[i + 1]![1]} ${p[i + 2]![0]},${p[i + 2]![1]}`;
   }
   return d;
 }
@@ -81,15 +79,11 @@ export function flowCurve(anchors: readonly P[], dir: Direction): P[] {
 const exit = (
   n: PlacedNode,
   dir: Direction,
-): P => (dir === "horizontal"
-  ? [n.x + n.width / 2, n.y]
-  : [n.x, n.y + n.height / 2]);
+): P => (dir === "horizontal" ? [n.x + n.width / 2, n.y] : [n.x, n.y + n.height / 2]);
 const entry = (
   n: PlacedNode,
   dir: Direction,
-): P => (dir === "horizontal"
-  ? [n.x - n.width / 2, n.y]
-  : [n.x, n.y - n.height / 2]);
+): P => (dir === "horizontal" ? [n.x - n.width / 2, n.y] : [n.x, n.y - n.height / 2]);
 
 export function route(
   l: Layout,
@@ -128,9 +122,7 @@ export function route(
       const top = Math.min(...fanNodes.map((n) => n.y - n.height / 2)) - 16;
       const bottom = Math.max(...fanNodes.map((n) => n.y + n.height / 2)) + 28;
       const left = Math.min(...fanNodes.map((n) => n.x - n.width / 2)) - 24;
-      const right = Math.max(...fanNodes.map((n) =>
-        n.x + n.width / 2 + 12 + (opts.fanWidth?.(n.id) ?? 0)
-      )) + 24;
+      const right = Math.max(...fanNodes.map((n) => n.x + n.width / 2 + 12 + (opts.fanWidth?.(n.id) ?? 0))) + 24;
       for (const id of opts.avoid ?? []) {
         const n = byId.get(id);
         if (!n || fan.has(id)) {
@@ -179,9 +171,7 @@ export function route(
       }
     }
     const start = exit(a, dir);
-    const end: P = fanned && dir === "vertical"
-      ? [b.x - b.width / 2, b.y]
-      : entry(b, dir);
+    const end: P = fanned && dir === "vertical" ? [b.x - b.width / 2, b.y] : entry(b, dir);
     const points = fanned && dir === "vertical"
       ? [
         start,
@@ -192,13 +182,9 @@ export function route(
       : flowCurve([start, ...bends, end], dir);
     // The label at the middle of the middle segment, set off the curve.
     const k = Math.max(0, Math.floor((points.length - 1) / 3 / 2)) * 3;
-    const m = points.length >= 4
-      ? bez(points[k]!, points[k + 1]!, points[k + 2]!, points[k + 3]!, 0.5)
-      : start;
+    const m = points.length >= 4 ? bez(points[k]!, points[k + 1]!, points[k + 2]!, points[k + 3]!, 0.5) : start;
     const w = opts.labelWidth?.(e.id) ?? 0;
-    const label = dir === "horizontal"
-      ? { x: m[0], y: m[1] - 8 }
-      : { x: m[0] - 10 - w / 2, y: m[1] + 4 };
+    const label = dir === "horizontal" ? { x: m[0], y: m[1] - 8 } : { x: m[0] - 10 - w / 2, y: m[1] + 4 };
     return {
       ...e,
       points,

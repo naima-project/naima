@@ -1,5 +1,5 @@
-// mCRL2 for the editor (develop/models-tab.md §13, §15): a CodeMirror stream language for mCRL2 specifications (.mcrl2)
-// and modal mu-calculus formulas (.mcf), which share their data language. It marks comments, Naima's annotations in
+// mCRL2 for the editor: a CodeMirror stream language for mCRL2 specifications (.mcrl2)
+// and modal mu-calculus formulas (.mcf), which share their data language. It marks comments, the annotations (%@…) in
 // comments (%@ui, %@say, %@input, %@order, %@state …), the section keywords (sort, act, proc, init …), the process
 // operators (sum, allow, comm, hide …), the sorts built in, the formulas' fixpoints and quantifiers, numbers, process
 // names (capitalised) and the operators. It highlights; it does not parse: a mistake is the toolset's to report.
@@ -41,7 +41,34 @@ const tagOf = new Map<string, string>([
 ]);
 
 /** The operators, longest first, so that `->` is one token and not `-` then `>`. */
-const OPERATORS = ["<=>", "=>", "->", "<>", "||_", "||", "|>", "<|", "++", "&&", "==", "!=", "<=", ">=", "|", "+", "-", "*", ".", "!", "<", ">", "#", "=", ":", "@"];
+const OPERATORS = [
+  "<=>",
+  "=>",
+  "->",
+  "<>",
+  "||_",
+  "||",
+  "|>",
+  "<|",
+  "++",
+  "&&",
+  "==",
+  "!=",
+  "<=",
+  ">=",
+  "|",
+  "+",
+  "-",
+  "*",
+  ".",
+  "!",
+  "<",
+  ">",
+  "#",
+  "=",
+  ":",
+  "@",
+];
 
 export interface State {
   /** Inside a %@ui block: its lines are keys and values, not prose. */
@@ -54,7 +81,7 @@ export const mcrl2Parser = {
   token(stream: Stream, state: State): string | null {
     if (stream.eatSpace()) return null;
     if (stream.peek() === "%") {
-      // A Naima annotation in a comment: the tag, then the rest of the line as the comment it is.
+      // An annotation in a comment: the tag, then the rest of the line as the comment it is.
       const tag = stream.match(/^%@[A-Za-z-]+(\s+(begin|end))?/) as RegExpMatchArray | null;
       if (tag) {
         if (/%@ui\s+begin/.test(tag[0])) state.ui = true;
@@ -84,5 +111,14 @@ export const mcrl2Parser = {
 /** The name of a file's language, as the editor's card says it, by its extension. */
 export function languageName(file: string): string {
   const ext = /\.([A-Za-z0-9]+)$/.exec(file)?.[1]?.toLowerCase() ?? "";
-  return ({ mcrl2: "mCRL2", mcf: "mCRL2 formula", rs: "Rust", toml: "TOML", sh: "shell", ts: "TypeScript", svelte: "TypeScript", json: "JSON" } as Record<string, string>)[ext] ?? "text";
+  return ({
+    mcrl2: "mCRL2",
+    mcf: "mCRL2 formula",
+    rs: "Rust",
+    toml: "TOML",
+    sh: "shell",
+    ts: "TypeScript",
+    svelte: "TypeScript",
+    json: "JSON",
+  } as Record<string, string>)[ext] ?? "text";
 }

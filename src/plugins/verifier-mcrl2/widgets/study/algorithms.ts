@@ -1,4 +1,4 @@
-// More ways to draw a graph than in layers (develop/models-tab.md §13): around a centre (radial), as springs pulling
+// More ways to draw a graph than in layers: around a centre (radial), as springs pulling
 // linked nodes together and pushing the others apart (force-directed), or in rows (grid). Each starts from the layered
 // layout, so the order a reader already knows is kept, and returns the same shape of layout, with curved edges that
 // leave and enter on the nodes' borders. These are a drawing's own coordinates, scaled by the browser with the
@@ -47,9 +47,7 @@ function radial(nodes: PlacedNode[], gap: number) {
 
 /** In rows, in reading order, as many columns as make the drawing about square. */
 function grid(nodes: PlacedNode[], gap: number) {
-  const order = [...nodes].sort((a, b) =>
-    a.layer - b.layer || a.x + a.y - (b.x + b.y)
-  );
+  const order = [...nodes].sort((a, b) => a.layer - b.layer || a.x + a.y - (b.x + b.y));
   const cols = Math.max(1, Math.ceil(Math.sqrt(order.length)));
   order.forEach((n, i) => {
     n.x = (i % cols) * gap * 1.4;
@@ -60,9 +58,9 @@ function grid(nodes: PlacedNode[], gap: number) {
 /** Springs: linked nodes pull together, every pair pushes apart; a fixed number of cooling steps from the layered start. */
 function force(nodes: PlacedNode[], edges: readonly PlacedEdge[], gap: number) {
   const idx = new Map(nodes.map((n, i) => [n.id, i]));
-  const links = edges.filter((e) => !e.self).map((e) =>
-    [idx.get(e.from)!, idx.get(e.to)!] as const
-  ).filter(([a, b]) => a !== undefined && b !== undefined);
+  const links = edges.filter((e) => !e.self).map((e) => [idx.get(e.from)!, idx.get(e.to)!] as const).filter(([a, b]) =>
+    a !== undefined && b !== undefined
+  );
   const k = gap;
   let t = gap;
   for (let step = 0; step < 300; step++) {
