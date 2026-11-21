@@ -1,0 +1,11 @@
+% observers.mcrl2 -- invariants of the lock, for verification only. Each summand is
+% enabled exactly in a reachable state where its invariant fails, and changes nothing.
+% They never reach the generated code.
+% @act
+act o_two: Client # Client;
+    o_free: Client;
+% @summands
+  % mutual exclusion: never two clients holding the lock at once
+  + sum c, d: Client . (c != d && phase(c) == HOLDING && phase(d) == HOLDING) -> o_two(c, d) . Core()
+  % the lock is never free while a client holds it
+  + sum c: Client . (free && phase(c) == HOLDING) -> o_free(c) . Core()

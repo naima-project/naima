@@ -1,0 +1,41 @@
+# codegen.toml -- what naima-codegen needs to know about the lock (naima-codegen's
+# docs/spec.md §3.6): the toolset version, the process parameters with their roles,
+# and every action with its kind. The generated Rust crate goes to generated/rust/lock/.
+mcrl2_version = "202607.0"
+id_sorts = []
+
+[project]
+backends = ["rust"]
+rust_crate = "lock"
+
+# phase is a function over an enumeration (Client), so its role is a table.
+[[parameter]]
+name = "phase"
+role = "table"
+
+[[parameter]]
+name = "queue"
+role = "scalar"
+
+[[parameter]]
+name = "free"
+role = "scalar"
+
+[[action]]
+label = "c_ask"
+kind = "input"
+args = ["client"]
+
+[[action]]
+label = "c_release"
+kind = "input"
+args = ["client"]
+
+[[action]]
+label = "c_grant"
+kind = "output"
+args = ["client"]
+
+# The system the refinement is checked on: one instance, the three clients.
+[systems.groups]
+small = ["three"]

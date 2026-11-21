@@ -1,0 +1,3 @@
+# policy.toml -- the lock's policy. It has one output, grant, and the client it grants
+# to is already fixed by the model (the head of the queue), so there is nothing to select.
+order = ["c_grant"]

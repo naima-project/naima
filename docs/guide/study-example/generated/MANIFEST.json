@@ -1,0 +1,90 @@
+{
+  "files": {
+    "model/core-probe.mcrl2": "14f01080355ee1a946c568f304cdefdfc1bc409da0d9a6d15060dd072cb43075",
+    "model/core-refined.mcrl2": "479cc5fc91ddba7e954159c2d2f8c332bd5433e91631916db73ac3da63377908",
+    "model/probe.mcf": "a757d597e7a24a6005506627ff7cb330eaa505f7c25dcbe8469a87c169eb83ec",
+    "model/systems/small-model.mcrl2": "ed1fea7cb1390ae70ea37bced148d5c9316edb80cf1d921fc728f1c5a24176c3",
+    "model/systems/small-probe.mcrl2": "d03a2e4eafaf32dd6040dbd40479bef98f823b42ccca13e49b0b5db45723568a",
+    "model/systems/small-refined.mcrl2": "a297a50379867aa0272b4369cd633b26882117c680a408f5f7afb37ca45f1ee6",
+    "rust/lock/Cargo.toml": "5fa19fd862ac88e988ef4da113441ca670ff18c39b8d14859782a523f79dc0e9",
+    "rust/lock/src/lib.rs": "47c14c5e8f86bfcfd4b26025b55c7abe0c4e0bb268a76ff40371f73e510254a4"
+  },
+  "generator": {
+    "naima-codegen": "5d2d02cc462dabbf463b4e67f2f3f3ab927491625a7ed1661492b376d181188b",
+    "naima_codegen/__init__.py": "47f989f1fcdec27178005b515d46628a31d15cad8e4aac4dcecd1c5d13ad1723",
+    "naima_codegen/__main__.py": "91a1938b6924036e98a7032ef2188a78fb6467ab6df6876b40443836ea26099d",
+    "naima_codegen/aterm.py": "c412a1cdb5cf139db51e89bcea35f756ac2103b68b25c683254448b358d4018f",
+    "naima_codegen/checks.py": "9e912229d0517842805331b8fe4c56fbc0d0633c21ccbb413db986ab93543508",
+    "naima_codegen/cli.py": "f5ebe5482a172812011f6cd60ab9688d5ec14bc174c9532090767ac8ee6d0542",
+    "naima_codegen/config.py": "84cb98fba19a0a6a09d3c25c093b8260a810f8f4a03ab2b16b5a56a5d716ab4a",
+    "naima_codegen/errors.py": "d567bb7bde05acb085aa0867ffbb56b7f2ccddc7aab2eb82357099724b9c4eca",
+    "naima_codegen/evaluate.py": "6bff0cf0c273062497f75bc78aea9ffe1abe0f84a3754549bb49b31e9446b0e0",
+    "naima_codegen/expr.py": "e36596d0f1551444b42b69ce051c748187c6cd5f5a13ca451ab3a8386a7a7294",
+    "naima_codegen/frontend.py": "d29d15e7acd70bb73c0bf3eb097fc250647503275d636463a1a8cd4214114e68",
+    "naima_codegen/functions.py": "8cf8fbb9aea0544aaf49724e465b354de90d6b3fda018a5dd8b912c849252c3d",
+    "naima_codegen/header.py": "c545202fc26a6a400591064480be77b3df5855ee88ab36b450bd9e053bfd4493",
+    "naima_codegen/layout.py": "0837de68267bc4585bb9aba1122b13160d6809531aa412e38861fb4157feebbd",
+    "naima_codegen/lower.py": "c9640c8c29359ca27b3577663380a00ab5dbac1649e1d1920b7be9f80c12c3e8",
+    "naima_codegen/lps.py": "a3d47d2d68b4d8e04d2299981129ac240a8df4f852db731cebb571fb9e975497",
+    "naima_codegen/outputs.py": "4d7c255ee85de4a0e7a173c998963cc80d4847681841553ae3e52530392d4824",
+    "naima_codegen/policy.py": "8e6e45f3f71af347d94acebfd0c6a621a231fb5f391df5bd2b6f6e86ffe9e82a",
+    "naima_codegen/project.py": "337a0f52400055c90b560625a603b0178604ef64749c6e288f2a0016372f0a40",
+    "naima_codegen/pyback.py": "6e6f581a015e8c77076eb0dcf91d1b5b2a9c62594954fd240f527a13dbfbbde4",
+    "naima_codegen/refine.py": "335139df4bf9e20d67d204f6dd2599931aea10055a3cfddf2632cf4a485a8725",
+    "naima_codegen/render.py": "8a5f47bd336590430275ece48c3c09e3a5f79c88e4bac24d5ca44e910bf1efff",
+    "naima_codegen/rustback.py": "679f7861a7af7dd5698eac32c32217ec57eae9c54e33b9f92f594861b0cd5580",
+    "naima_codegen/sortedlists.py": "ca78229145d99c4fac84bd5f64634ccc154ba1a1a1d1ac1270095474e8f9449c",
+    "naima_codegen/source.py": "df13d79547280ceda93475354652579263db29153abe01c54441b6bc4f8501d2",
+    "naima_codegen/stepper.py": "a8b27c95f39f47a89668962722c05654dff3047166456cc0ff5903f84e451d4e",
+    "naima_codegen/systems.py": "641e10ccb7090dd126af819923466d95285d83182f5fe971f0b67d352b64b080",
+    "naima_codegen/toolchain.py": "72159544f0a1cefd2902add26e0ea30a1783ce49aabbfb6d991a418455c464fd",
+    "naima_codegen/tsback.py": "49c806557a6e48f0498addda6c05761d2e9c826cb65048cd89bd47622d35a98e"
+  },
+  "inputs": {
+    "codegen.toml": "62ff58aadadff20e3ef98cadadabcd78210746298bb46a28a020faa91be707b4",
+    "model/codegen-init.mcrl2": "77ff3dc87cf7eb7aabe65ef7f7eb7719167750146a480776f28e59857d36120e",
+    "model/core.mcrl2": "d40a0c937fc18a1e954144b689112aa58b86ec2e49f8aff44530afa907b3edd5",
+    "model/env.mcrl2": "fbd69d70f92208c10e019015cc8cbb00591588669eed8a55649b4201589e81ae",
+    "model/instances/three.mcrl2": "c53e2a7414b332ac5332c2e7bdc801eadf31eb2ae50ebacac441757a83faf0a1",
+    "model/observers.mcrl2": "e2adb359dbb9b64be949c6cc2b2156b72bda9c6d43a1ad2ec7f0dfb95ff74e6f",
+    "model/policy.toml": "e82d0eaef31ab0462e08a10ba1f31ec3463f3e95d7e65e05e273bd58b9bb5d60"
+  },
+  "layout": {
+    "python": {},
+    "rust": {}
+  },
+  "stepper": {
+    "deferred": [],
+    "indexes": []
+  },
+  "summands": [
+    {
+      "cost": [],
+      "kind": "input",
+      "name": "c_ask",
+      "policy": null
+    },
+    {
+      "cost": [],
+      "kind": "input",
+      "name": "c_release",
+      "policy": null
+    },
+    {
+      "cost": [],
+      "kind": "output",
+      "name": "c_grant",
+      "policy": 0
+    }
+  ],
+  "systems": [
+    {
+      "group": "small",
+      "instances": [
+        "three"
+      ]
+    }
+  ],
+  "toolset": "202607.0",
+  "walks": []
+}

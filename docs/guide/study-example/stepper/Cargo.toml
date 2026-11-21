@@ -1,0 +1,24 @@
+# The lock's stepper for Naima's Models tab: the code naima-codegen generates from
+# ../model/core.mcrl2 (the crate in ../generated/rust/lock), behind the stepper
+# interface, version 1, and compiled to WebAssembly. Build it with ../build.sh.
+[package]
+name = "lock_stepper"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+# cdylib is the .wasm module; rlib lets `cargo test` run the tests natively.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lock = { path = "../generated/rust/lock" }
+
+# A workspace of its own, so that no enclosing Cargo workspace claims this crate.
+[workspace]
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"

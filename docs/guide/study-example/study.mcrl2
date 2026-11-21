@@ -1,0 +1,23 @@
+% The study of the lock in Naima's Models tab: its declaration (%@ui) and the
+% explanation of every kind of step (%@say). This file holds only comments; the model
+% is model/core.mcrl2. In the tab you are the clients, and the lock answers you.
+%
+%@ui begin
+% title     A lock shared by three clients
+% says      Be the clients: ask for the lock and let it go, and watch who gets it and how long the others wait.
+% model     model/core.mcrl2
+% stepper   build/stepper.wasm
+% observer  build/observer.js
+% view      build/view.js
+% diagrams  uml-state-machine: each client's phase, idle, waiting or holding; uml-sequence: the clients and the lock, each step a message
+%@ui end
+%
+% Explanations, one line per kind of step: %@say <action>(<args>): "<phrase>" | "<explanation>".
+% An argument is a variable, bound to the step's value, or a value the step must carry;
+% {var} is replaced by the value. The first line that matches a step explains it.
+%
+% ---- what the clients say
+%@say ask(c): "ask for the lock" | "{c} asks for the lock. If the lock is free and nobody waits, {c} gets it at once; otherwise it joins the end of the queue."
+%@say release(c): "let the lock go" | "{c} lets the lock go. The lock is free again, and the client that has waited longest gets it."
+% ---- what the lock says
+%@say grant(c): "the lock is granted" | "The lock is free and {c} has waited longest: {c} now holds it."

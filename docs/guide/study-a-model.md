@@ -33,12 +33,30 @@ does not match the model (an action it does not have, the wrong number of argume
 ## Using the tab
 
 - Open `naima ui`, then **Models** from Home's list. Pick a study.
-- The line at the top is the path: the states taken, the past fading to the left, the current state as the orange disc, and the steps possible now on the right.
-  Click one of those to take it, or click a past state to go back to it.
-- **What happened** explains the last step and the model's own replies. **What may happen now** lists every step the model accepts in this state.
-- The model's view, when it has one, sits below, and fires steps the same way.
-- **Back** and **Forward** move along the path; firing from a past state starts a new branch and keeps the old one. **Undo** removes the last step you took.
-  Steps recorded from a real run are never undone, only branched from.
-- **Copy path** copies the path; **Load a path** takes one back, or a trace from the model checker, one step per line. A path loads up to the first step the
+- The study is a set of cards. Move a card by its title (drag it, or use the arrow keys on it), make it wider, narrower, taller or shorter with the buttons on
+  its bar, fold it, or maximise it to the whole window (Escape restores). The arrangement is kept for that study. A card never grows: what it holds scrolls,
+  pans or zooms inside it.
+- **Timeline**: the states taken on a line, the past fading to the left, the current state as the orange disc, the steps possible now on the right. Click one of
+  those to take it, or a past state to go back to it.
+- **State machine explored**: every state reached on any road, once each, as a UML state machine diagram. The road you are on is solid; the roads you went back
+  from are faded, dashed and drawn below; the steps possible now are dotted. Click any state to go there. On a state, the pin keeps it from fading and the star
+  bookmarks it. Switch between horizontal and vertical layouts, zoom in and out, or fit.
+- **What happened** explains the last step and the model's own replies, and lists your bookmarks. **What may happen now** lists every step the model accepts in
+  this state. **The state** shows every variable of the model, exactly as the model has it.
+- **The model's view**, when it has one, is a card too, and fires steps the same way. When it draws a standard diagram, such as a UML sequence diagram, it says
+  so, and draws it in that standard's notation.
+- **Back** and **Forward** move along the road; firing from a past state starts a new road and keeps the old one. **Previous** and **Next state seen** move over
+  the states you visited, whatever road they are on. **Undo** removes the last step you took. Steps recorded from a real run are never undone, only branched
+  from.
+- **Copy path** copies the road; **Load a path** takes one back, or a trace from the model checker, one step per line. A path loads up to the first step the
   model does not accept, and the tab says which step and why.
-- **The state** shows every variable of the model, exactly as the model has it.
+
+## For a study's own view
+
+The widgets the tab is drawn with (the bento, graphs laid out by themselves, the timeline, the UML sequence diagram) are a library a view imports as
+`@naima/study/…`, from `naima-tracker/naima/src/plugins/verifier-mcrl2/widgets/` in your project. A view that draws a standard diagram declares it in the `%@ui`
+block, with what it maps:
+
+```
+% diagrams  uml-sequence: the two parties, each step a message; directed-graph: the program's nodes
+```

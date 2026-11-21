@@ -1,0 +1,34 @@
+% core.mcrl2 -- a lock shared by three clients, the classic mutual exclusion example,
+% written as one linear process in naima-codegen's form: every summand is
+%   condition -> c_<label>(args) . Core(assignments)
+% and follows a tag line, %@input for what the environment says, %@order <level> for
+% what the lock decides itself.
+%
+% A client asks for the lock when it neither holds it nor waits for it, and lets it go
+% when it holds it. Those are the inputs. When the lock is free and someone waits, the
+% lock grants it to the client that has waited longest: that is the output.
+
+sort Client = struct c1 | c2 | c3;              % the clients
+sort Phase = struct IDLE | WAITING | HOLDING;   % where a client stands
+
+act  c_ask, c_release: Client;                  % inputs, from the clients
+     c_grant: Client;                           % the lock's own output
+
+% phase: each client's phase; queue: the clients waiting, the longest first;
+% free: nobody holds the lock
+proc Core(phase: Client -> Phase, queue: List(Client), free: Bool) =
+% ---- inputs: the clients
+%@input
+    sum c: Client . (phase(c) == IDLE) ->
+      c_ask(c) . Core(phase = phase[c -> WAITING], queue = queue <| c)
+%@input
+  + sum c: Client . (phase(c) == HOLDING) ->
+      c_release(c) . Core(phase = phase[c -> IDLE], free = true)
+
+% ---- outputs: the lock's decision
+%@order 1
+  + sum c: Client . (free && queue != [] && c == head(queue)) ->
+      c_grant(c) . Core(phase = phase[c -> HOLDING], queue = tail(queue), free = false)
+
+%@observers
+  + delta;

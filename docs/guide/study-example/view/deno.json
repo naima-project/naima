@@ -1,0 +1,6 @@
+{
+  "nodeModulesDir": "auto",
+  "tasks": {
+    "build": "deno run -A npm:vite@8.3.5 build --logLevel warn"
+  }
+}
