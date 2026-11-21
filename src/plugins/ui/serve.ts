@@ -180,7 +180,7 @@ export function serve(opts: ServeOptions): Promise<Served> {
       // A sandboxed page's origin is opaque ("null"): its module scripts (a study's frames import theirs) are loaded with
       // CORS, so a script answers that origin. The key in the path is still what opens the file.
       const ext = extname(found).toLowerCase()
-      const cors: Record<string, string> = ext === ".js" || ext === ".mjs" ? { "access-control-allow-origin": "null" } : {}
+      const cors: Record<string, string> = ext === ".js" || ext === ".mjs" || ext === ".css" ? { "access-control-allow-origin": "null" } : {}
       return file(req, res, found, PAGE_TYPES[ext]!, { "content-security-policy": pagePolicy(origin), ...cors })
     }
     const given = url.searchParams.get("token") ?? cookieToken(req, name)

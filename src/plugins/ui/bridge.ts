@@ -52,9 +52,9 @@
 //
 // Every command reads the files when it is called, so the UI is live.
 
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { Buffer } from "node:buffer"
-import { dirname, join, resolve } from "node:path"
+import { basename, dirname, join, resolve } from "node:path"
 import { askHostsInBackground, type Context, findCodegen, gitReadScope, headCommit, type KnownProject, knownProjects } from "../../core/api.ts"
 import { actionArgv, actionCommand, actionOf, ACTIONS, naimaEntry, runCommand, selfEntry } from "./actions.ts"
 import { showCall } from "./agent-endpoint.ts"
@@ -67,6 +67,7 @@ import { PoolDown, type ViewPool } from "./view-pool.ts"
 import { type AgentRequest, askAgent, awaitAnswer, listenShows, openUis, type Place, requestId, taken, type UiRequest, writeAnswer } from "./show.ts"
 import { commandJson, type JsonOf, metroData, VIEW_OF_COMMAND } from "./metro.ts"
 import { findStudies, savedPaths, type Study } from "./studies.ts"
+import { inUiTab, spaceFile, spaceSystem, studyCache, studyCode, uiTab } from "./study-space.ts"
 import { codegenCommand, type Job, jobLine, readStudyFile, shellLine, studyFiles, writeStudyFile } from "./study-work.ts"
 import { contentProblem, framePage, tabList, type UiTab, type UiTabContent, type UiView } from "./tabs.ts"
 
@@ -258,12 +259,19 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
   const known = opts.known ?? (() => knownProjects())
   /** A study of the project by its id, whole and openable, for the workbench's commands. */
   const studyOf = (id: Json | undefined): Study => {
-    const study = findStudies(ctx.root, ctx.program).find((s) => s.id === text(id))
+    const study = findStudies(ctx.root, ctx.program, ctx.trackerRoot).find((s) => s.id === text(id))
     if (!study) throw new Error(`no study ${String(id)}`)
     return study
   }
   const handlers: Handlers = {
-    describe: () => json({ app: "naima", root: ctx.root.split(/[\\/]/).filter(Boolean).pop() ?? "", path: resolve(ctx.root), actions: ACTIONS }),
+    describe: () =>
+      json({
+        app: "naima",
+        root: ctx.root.split(/[\\/]/).filter(Boolean).pop() ?? "",
+        path: resolve(ctx.root),
+        actions: ACTIONS,
+        uiTab: uiTab(ctx.root, ctx.program) !== null,
+      }),
     recent: () => json({ projects: recentProjects(ctx.root, known()), canSwitch: opts.switcher?.can ?? false }),
     switch: async (args) => {
       const root = text(args["root"])
@@ -324,11 +332,42 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       if (problem) throw new Error(`the ${tab.name} tab's content ${problem}`)
       return shown(tab, sub, content)
     },
-    studies: () => json({ studies: findStudies(ctx.root, ctx.program) }),
+    studies: (args) => {
+      const all = findStudies(ctx.root, ctx.program, ctx.trackerRoot)
+      if (text(args["source"]) !== "ui") return json({ studies: all })
+      const tab = uiTab(ctx.root, ctx.program)
+      return json({ studies: tab ? all.filter((s) => inUiTab(tab, s)) : [] })
+    },
     study: (args) => {
       const id = text(args["id"])
-      const study = findStudies(ctx.root, ctx.program).find((s) => s.id === id)
+      const study = findStudies(ctx.root, ctx.program, ctx.trackerRoot).find((s) => s.id === id)
       if (!study) throw new Error(`no study ${String(args["id"])}`)
+      if (study.kind !== "declared") {
+        // A default study: stepped through its generated code in a sandboxed frame, or on its space explored here.
+        const code = study.kind === "codegen" ? studyCode(ctx.root, study) : null
+        if (!code && !(study.system && existsSync(join(ctx.root, dirname(study.file), study.system)))) {
+          throw new Error(`the model ${study.title} cannot open: ${study.problems.join("; ") || "it has no system to explore"}`)
+        }
+        const tab = uiTab(ctx.root, ctx.program)
+        const card = tab?.card && inUiTab(tab, study) && existsSync(join(ctx.root, tab.card.page))
+          ? opts.fileUrl("ui-card", basename(tab.card.page))
+          : null
+        return json({
+          ...study,
+          stepper: null,
+          stepping: code ? "code" : "space",
+          frames: {
+            host: opts.fileUrl("naima-study", "host.html"),
+            observer: null,
+            view: null,
+            code: code ? opts.fileUrl(`study-code-${study.id}`, code) : null,
+            card,
+            cardBuilt: tab?.card ? existsSync(join(ctx.root, tab.card.page)) : false,
+          },
+          saved: savedPaths(ctx.root, study) as unknown as Json,
+          files: studyFiles(ctx.root, study),
+        })
+      }
       if (study.problems.length || study.stepper === null) throw new Error(`the study ${study.id} cannot open: ${study.problems.join("; ")}`)
       const dir = join(ctx.root, dirname(study.file))
       const stepper = Buffer.from(readFileSync(join(dir, study.stepper))).toString("base64")
@@ -384,6 +423,40 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       ])
       if (started.code !== 0) throw new Error(started.err.trim() || started.out.trim() || `naima run exited with ${started.code}`)
       return json({ run, job, command: line })
+    },
+    "study-explore": async (args) => {
+      const study = studyOf(args["id"])
+      const system = spaceSystem(ctx.root, study)
+      if (!system || !existsSync(join(ctx.root, system))) throw new Error(`the model ${study.title} has no system to explore`)
+      const bound = Math.max(1, Math.floor(Number(args["bound"]) || 20_000))
+      const f = args["from"]
+      const from = f && typeof f === "object" && !Array.isArray(f)
+        ? Object.fromEntries(Object.entries(f).map(([k, v]) => [k, String(v)]))
+        : null
+      const out = spaceFile(ctx.root, system, bound, from)
+      const key = basename(out)
+      if (existsSync(out)) {
+        const kept = JSON.parse(readFileSync(out, "utf8")) as Json
+        // A failure is not kept: the tools may be installed since, or the time budget larger.
+        if (!(kept && typeof kept === "object" && "failed" in kept)) return json({ key, space: kept })
+      }
+      const words = ["model-explore", system, "--out", out, "--max", String(bound)]
+      if (from) {
+        writeFileSync(`${out}.from`, JSON.stringify(from))
+        words.push("--from", `${out}.from`)
+      }
+      const naima = actionCommand(opts.entry ?? selfEntry(), ctx.trackerRoot, [])
+      const run = `ui-study-explore-${ctx.now().toISOString().replace(/\D/g, "").slice(0, 14)}-${++runs}`
+      const started = await runCommand(ctx, ["run", run, "--budget-time", "30m", "--stale", "10m", "--", ...naima, ...words])
+      if (started.code !== 0) throw new Error(started.err.trim() || started.out.trim() || `naima run exited with ${started.code}`)
+      return json({ key, run })
+    },
+    "study-space": (args) => {
+      const key = text(args["key"]) ?? ""
+      if (!/^[0-9a-f]{24}\.json$/.test(key)) throw new Error("study-space names a space study-explore gave")
+      const file = join(studyCache(ctx.root, "spaces"), key)
+      if (!existsSync(file)) return json({ pending: true })
+      return JSON.parse(readFileSync(file, "utf8")) as Json
     },
     "study-stop": async (args) => {
       const name = text(args["run"])
