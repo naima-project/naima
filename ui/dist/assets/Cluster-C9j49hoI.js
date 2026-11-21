@@ -1,0 +1,1 @@
+import{Bi as e,Ei as t,Er as n,Hr as r,Xr as i,ci as a,oi as o,xi as s}from"./chevron-right-C4O2SEAo.js";var c=a(`<div><!></div>`);function l(a,l){let u=n(l,`gap`,3,`sm`),d=n(l,`justify`,3,`start`),f=n(l,`align`,3,`center`);var p=c(),m=t(p);i(m,()=>l.children),e(p),s(()=>r(p,1,`cluster gap-${u()??``} justify-${d()??``} align-${f()??``}`,`svelte-2y2hj5`)),o(a,p)}export{l as t};

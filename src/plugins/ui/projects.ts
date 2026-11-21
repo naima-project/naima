@@ -8,7 +8,7 @@
 
 import { readFileSync } from "node:fs"
 import { basename, join, resolve } from "node:path"
-import { type Context, contextOfProject, isOpen, isRetired, type KnownProject, knownProjects, runGit } from "../../core/api.ts"
+import { type Context, contextOfProject, isOpen, isRetired, type KnownProject, knownProjects, runGit, personAtKeyboard, waitingOn } from "../../core/api.ts"
 import { runCommand } from "./bridge.ts"
 import type { UiView } from "./tabs.ts"
 
@@ -21,6 +21,8 @@ export interface ProjectRow {
   queue: unknown
   bugs: { ref: string; title: string; created: string }[]
   tests: { ref: string; title: string }[]
+  /** What waits on the person at the keyboard there, as `naima waiting` lists it (the same list the project's own Home shows). */
+  waiting: { person: string | null; items: unknown[] }
   lastChange: string | null
   error?: string
 }
@@ -81,10 +83,11 @@ export async function projectRow(ctx: Context, here: boolean): Promise<ProjectRo
         created: String(i.meta["created"] ?? ""),
       })),
       tests: await failingNow(ctx),
+      waiting: { person: personAtKeyboard(ctx.root)?.name ?? null, items: await waitingOn(ctx) },
       lastChange: last.ok ? last.out.trim() || null : null,
     }
   } catch (e) {
-    return { ...head, gates: [], queue: null, bugs: [], tests: [], lastChange: null, error: e instanceof Error ? e.message : String(e) }
+    return { ...head, gates: [], queue: null, bugs: [], tests: [], waiting: { person: null, items: [] }, lastChange: null, error: e instanceof Error ? e.message : String(e) }
   }
 }
 

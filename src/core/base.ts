@@ -31,6 +31,7 @@ import { byUrgency, isEvidenceType, isOpen, label, proves, refutes } from "./lif
 import { CONTRACT } from "./contract.ts"
 import { shortOrId } from "./names.ts"
 import { readText, writeFileAtomic } from "./files.ts"
+import { contextAt } from "./context.ts"
 import { addedPrivate, allowanceLine, privateContext, type PrivateFinding, privateRefusal } from "./private.ts"
 import { asRendered, type Format, linesAs, rendered } from "./rendered.ts"
 import { flagsOf } from "./vocabulary.ts"
@@ -333,19 +334,29 @@ const waiting: Command = {
   says:
     "list what waits on the person at the keyboard: what the plugins know waits for an owner (the point waiting), each item once, a decision before a proof to give, leaving out what waits on another person; the one list naima hello counts and the UI's waiting views show",
   enforces: "nothing: it only reads",
-  usage: "waiting [--for <person> | --everyone] [--json]",
+  usage: "waiting [--for <person> | --everyone] [--at <commit>] [--json]",
   options: [
     { name: "--for", says: "list what waits on this person instead of the person at the keyboard" },
     { name: "--everyone", says: "list what waits on every owner, each row with the person it waits on when it names one" },
+    { name: "--at", says: "list what waited at this commit (or any ref git knows): the tracker as that commit had it, read only; the UI's Home reads the same moment" },
     {
       name: "--json",
       says: "print the list as JSON: each row's reference, title, why it waits (owner, proof or failing), the person it waits on and its source",
     },
   ],
-  examples: ["waiting", "waiting --for Ada", "waiting --everyone --json"],
+  examples: ["waiting", "waiting --for Ada", "waiting --everyone --json", "waiting --at HEAD~20"],
   async run(args, ctx) {
-    const p = parse(args, { for: { type: "string" }, everyone: { type: "boolean" }, json: { type: "boolean" } })
+    const p = parse(args, { for: { type: "string" }, everyone: { type: "boolean" }, json: { type: "boolean" }, at: { type: "string" } })
     if (p.positionals.length || (str(p, "for") !== undefined && bool(p, "everyone"))) throw usageError(this)
+    const at = str(p, "at")
+    if (at !== undefined) {
+      const made = contextAt(ctx, at)
+      try {
+        return await this.run(args.filter((a, i) => a !== "--at" && !a.startsWith("--at=") && args[i - 1] !== "--at"), made.ctx)
+      } finally {
+        made.dispose()
+      }
+    }
     const who = bool(p, "everyone") ? null : str(p, "for")?.trim() || undefined
     const rows = await waitingOn(ctx, who)
     if (bool(p, "json")) {
