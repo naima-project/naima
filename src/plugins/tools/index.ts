@@ -98,8 +98,18 @@ export interface PlanStep {
   unavailable?: string
 }
 
-const declared = (ctx: Context): { decl: ToolDeclaration; plugin: string }[] =>
-  ctx.registry.contributions("tools").map((c) => ({ decl: c.value as ToolDeclaration, plugin: c.plugin }))
+/** Every declared tool; one that two plugins declare in the same words (Python, for Storm and for the mCRL2 plugin's code generator) once, under both plugins. */
+const declared = (ctx: Context): { decl: ToolDeclaration; plugin: string }[] => {
+  const out: { decl: ToolDeclaration; plugin: string }[] = []
+  for (const c of ctx.registry.contributions("tools")) {
+    const decl = c.value as ToolDeclaration
+    const same = out.find((o) => o.decl.name === decl.name && JSON.stringify(o.decl) === JSON.stringify(decl))
+    if (same) {
+      if (!same.plugin.split(", ").includes(c.plugin)) same.plugin += `, ${c.plugin}`
+    } else out.push({ decl, plugin: c.plugin })
+  }
+  return out
+}
 
 function declOf(ctx: Context, name: string): ToolDeclaration {
   const found = declared(ctx).find((d) => d.decl.name === name)

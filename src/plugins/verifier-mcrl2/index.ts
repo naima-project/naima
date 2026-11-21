@@ -54,6 +54,7 @@ import {
   NO_PROGRESS,
   type Plugin,
   type Progress,
+  PYTHON,
 } from "../../core/api.ts"
 import { explainedCheck } from "./explained.ts"
 import { checkFragment, labelActions } from "./formula.ts"
@@ -1217,7 +1218,7 @@ export function mcrl2Plugin(options: Record<string, unknown> = {}, run: Runner =
     ],
     contributes: {
       verifiers: [verifier],
-      tools: [MCRL2],
+      tools: [MCRL2, PYTHON],
     },
     commands: [modelCheck(verifier), modelExplore({ run, path: (tool) => toolPath(tool, typeof bin === "string" ? bin : undefined) })],
     checks: [summandConditions, explainedCheck(explained)],

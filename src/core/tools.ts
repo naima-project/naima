@@ -85,7 +85,7 @@ export const CODEGEN_SOURCE = "https://github.com/naima-project/naima-codegen"
 /** What to do when naima-codegen is not found, said to a person (develop/models-tab.md §15). */
 export const CODEGEN_MISSING = `naima-codegen is not installed, and Naima does not install it. To install it, clone ${CODEGEN_SOURCE} into a folder ` +
   "named naima-codegen beside this project (or beside a folder above it), or anywhere and set NAIMA_CODEGEN to its naima-codegen file " +
-  "before starting naima ui. It needs Python 3.11 or later and the mCRL2 tools (naima tools install mcrl2)."
+  "before starting naima ui. It needs Python 3.11 or later (on a machine with none, naima tools install python) and the mCRL2 tools (naima tools install mcrl2)."
 
 /** Whether a path is known not to exist: false when it exists, or when this program may not look. */
 const surelyAbsent = (p: string): boolean => {

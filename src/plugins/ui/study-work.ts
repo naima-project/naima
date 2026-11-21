@@ -5,7 +5,7 @@
 // (develop/models/ui/study/); this file only says what each job runs.
 
 import { Buffer } from "node:buffer"
-import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { CODEGEN_MISSING } from "../../core/api.ts"
 import type { Study } from "./studies.ts"
@@ -110,14 +110,34 @@ export interface JobContext {
   naima: readonly string[]
   /** How naima-codegen is started, or null when it is not installed. */
   codegen: readonly string[] | null
+  /** What a study's build needs to start naima-codegen itself (`codegenEnv`), set before its command; absent, none. */
+  codegenEnv?: Readonly<Record<string, string>>
   windows: boolean
 }
 
 /** naima-codegen as a command line, from where it was found (core/tools.ts, findCodegen): on Windows a script without an
- * extension is handed to Python; null when it was found nowhere. */
-export function codegenCommand(found: string | null, windows: boolean): string[] | null {
+ * extension is handed to Python, the one Naima installed (`naima tools install python`) when `python` names it, else the
+ * one on PATH; null when it was found nowhere. */
+export function codegenCommand(found: string | null, windows: boolean, python: string | null = null): string[] | null {
   if (!found) return null
-  return windows && !/\.(exe|com|cmd|bat)$/i.test(found) ? ["python", found] : [found]
+  return windows && !/\.(exe|com|cmd|bat)$/i.test(found) ? [python ?? "python", found] : [found]
+}
+
+/**
+ * What a study's build script needs to start naima-codegen itself, as environment variables: on Windows `NAIMA_CODEGEN`,
+ * which a batch file calls, so a program or the `naima-codegen.cmd` that sits beside the script (it starts the script
+ * with the Python named by `NAIMA_PYTHON`), and that Python when Naima installed one. Elsewhere the script runs itself and
+ * the launcher has already named it.
+ */
+export function codegenEnv(
+  found: string | null,
+  windows: boolean,
+  python: string | null,
+  exists: (file: string) => boolean = existsSync,
+): Record<string, string> {
+  if (!found || !windows) return {}
+  const runnable = /\.(exe|com|cmd|bat)$/i.test(found) ? found : exists(`${found}.cmd`) ? `${found}.cmd` : null
+  return { ...(runnable ? { NAIMA_CODEGEN: runnable } : {}), ...(python ? { NAIMA_PYTHON: python } : {}) }
 }
 
 /**
@@ -129,6 +149,7 @@ export function jobLine(job: Job, study: Study, ctx: JobContext, property?: stri
   const q = (w: string) => quoted(w, ctx.windows)
   const line = (words: readonly string[]) => words.map(q).join(" ")
   const inFolder = (command: string) => (ctx.windows ? `cd /d ${q(folder)} && ${command}` : `cd ${q(folder)} && ${command}`)
+  const withEnv = (command: string) => ctx.windows ? Object.entries(ctx.codegenEnv ?? {}).map(([k, v]) => `set "${k}=${v}" && `).join("") + command : command
   const generate = ctx.codegen ? line([...ctx.codegen, "generate", "--project", folder]) : null
   if (job === "check") {
     if (!study.system) return { refused: "the study declares no system to check its properties on (% system in its %@ui block)" }
@@ -160,7 +181,7 @@ export function jobLine(job: Job, study: Study, ctx: JobContext, property?: stri
   if (job === "generate") {
     if (!study.codegen) return { refused: "the study's folder holds no codegen.toml: there is nothing for naima-codegen to generate" }
     if (!generate) return { refused: CODEGEN_MISSING }
-    return study.build ? `${generate} && ${inFolder(study.build)}` : generate
+    return study.build ? `${generate} && ${withEnv(inFolder(study.build))}` : generate
   }
   if (!study.run) return { refused: "the study declares no program to run (% run in its %@ui block)" }
   return inFolder(study.run)

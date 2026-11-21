@@ -29,7 +29,7 @@
 import { spawn } from "node:child_process"
 import { existsSync, realpathSync, statSync } from "node:fs"
 import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
-import { type Context, message, NO_PROGRESS, projectFiles } from "../../../core/api.ts"
+import { type Context, installedPython, message, NO_PROGRESS, projectFiles } from "../../../core/api.ts"
 import type { Verifier, VerifyRequest, VerifyResult } from "../contract.ts"
 
 /** The program, by name on PATH: what the launcher grants `naima verify`. */
@@ -73,18 +73,24 @@ export function programOnPath(name: string, opts: { script?: boolean; os?: strin
   return null
 }
 
-/** Python as Windows has it on PATH: what starts naima-codegen's script there, which Windows cannot run by itself. */
+/** Python as Windows has it on PATH, the last resort: what starts naima-codegen's script there when Naima's own Python (`naima tools install python`) is not installed. */
 export const WINDOWS_PYTHON = "python"
 
 /**
  * How `program` is started: as itself, or on Windows, when PATH finds only the extensionless script of a naima-codegen
- * checkout, through Python with the script's path first (GitHub issue #7).
+ * checkout, through Python with the script's path first (GitHub issue #7): the Python Naima installed, else the one on PATH.
  */
-export function commandOf(program: string, args: string[], os: string = process.platform, path?: string): [string, string[]] {
+export function commandOf(
+  program: string,
+  args: string[],
+  os: string = process.platform,
+  path?: string,
+  python: string = installedPython() ?? WINDOWS_PYTHON,
+): [string, string[]] {
   if (os !== "win32" || isAbsolute(program)) return [program, args]
   const found = programOnPath(program, { os, ...(path !== undefined ? { path } : {}) })
   if (!found) return [program, args]
-  return WINDOWS_EXECUTABLES.some((e) => found.toLowerCase().endsWith(e)) ? [program, args] : [WINDOWS_PYTHON, [found, ...args]]
+  return WINDOWS_EXECUTABLES.some((e) => found.toLowerCase().endsWith(e)) ? [program, args] : [python, [found, ...args]]
 }
 
 /** What one run of the program gave. */

@@ -62,7 +62,17 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { Buffer } from "node:buffer"
 import { basename, dirname, join, resolve } from "node:path"
-import { askHostsInBackground, type Context, findCodegen, gitReadScope, headCommit, type KnownProject, knownProjects, personAtKeyboard } from "../../core/api.ts"
+import {
+  askHostsInBackground,
+  type Context,
+  findCodegen,
+  gitReadScope,
+  headCommit,
+  installedPython,
+  type KnownProject,
+  knownProjects,
+  personAtKeyboard,
+} from "../../core/api.ts"
 import { actionArgv, actionCommand, actionOf, ACTIONS, naimaEntry, runCommand, selfEntry } from "./actions.ts"
 import { showCall } from "./agent-endpoint.ts"
 import { AtCache, commitOf } from "./at.ts"
@@ -76,7 +86,7 @@ import { commandJson, type JsonOf, metroData, VIEW_OF_COMMAND } from "./metro.ts
 import { findStudies, savedPaths, type Study } from "./studies.ts"
 import { bring as bringToChat, broughtOf, stand as chatStand, withdraw as withdrawChat } from "./chat-channel.ts"
 import { inUiTab, spaceFile, spaceSystem, studyCache, studyCode, uiTab } from "./study-space.ts"
-import { codegenCommand, type Job, jobLine, readStudyFile, shellLine, studyFiles, writeStudyFile } from "./study-work.ts"
+import { codegenCommand, codegenEnv, type Job, jobLine, readStudyFile, shellLine, studyFiles, writeStudyFile } from "./study-work.ts"
 import { contentProblem, framePage, tabList, type UiTab, type UiTabContent, type UiView } from "./tabs.ts"
 
 export { actionArgv, actionCommand, actionOf, ACTIONS, naimaEntry, runCommand } from "./actions.ts"
@@ -404,11 +414,14 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       const job = String(args["job"])
       if (job !== "check" && job !== "generate" && job !== "run") throw new Error(`no job ${job}: the jobs are check, generate and run`)
       const windows = process.platform === "win32"
+      const codegen = findCodegen(ctx.root)
+      const python = installedPython()
       const line = jobLine(job as Job, study, {
         root: ctx.root,
         // This program, never the one the project pins: model-check may be newer than it.
         naima: actionCommand(opts.entry ?? selfEntry(), ctx.trackerRoot, []),
-        codegen: codegenCommand(findCodegen(ctx.root), windows),
+        codegen: codegenCommand(codegen, windows, python),
+        codegenEnv: codegenEnv(codegen, windows, python),
         windows,
       }, text(args["property"]) ?? undefined)
       if (typeof line !== "string") throw new Error(line.refused)

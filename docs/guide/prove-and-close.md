@@ -381,7 +381,7 @@ longer current, and a run on exactly the same files is reused. A project naima-c
 error whose output begins with `refused:` and lists the problems.
 
 naima-codegen is not installed by `naima tools`, and it has no releases yet. The verifier is made for one commit of it, `5aca11dbb1e0`. Clone its repository,
-check out that commit, and put its `naima-codegen` script on `PATH`; it needs Python 3.11 or later and the mCRL2 tools at the version the model pins.
+check out that commit, and put its `naima-codegen` script on `PATH`; it needs Python 3.11 or later (`naima tools install python` installs one for Naima to use, as it does on Windows, where the system has none) and the mCRL2 tools at the version the model pins.
 
 ```sh
 git clone https://github.com/naima-project/naima-codegen
