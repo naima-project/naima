@@ -97,7 +97,14 @@ impl Sidecar {
         let live = std::env::var("NAIMA_PROGRAM").ok().map(PathBuf::from).filter(|p| p.join("naima.ts").is_file());
         let mut command = if let Some(program) = live {
             let mut c = Command::new(std::env::var("NAIMA_DENO").unwrap_or_else(|_| "deno".into()));
-            c.arg("run").arg("-A").arg(program.join("naima.ts")).args(["ui", "--sidecar", "--watch"]);
+            // The program's own entry, not its launcher, which would run the version the project's lock names; the data is
+            // the project's tracker when it has one.
+            c.arg("run").arg("-A").arg(program.join("src").join("cli.ts"));
+            let data = root.join("naima-tracker").join("naima-data");
+            if data.is_dir() {
+                c.arg("--data").arg(data);
+            }
+            c.args(["ui", "--sidecar", "--watch"]);
             c
         } else if cfg!(windows) {
             let mut c = Command::new(root.join("naima-tracker").join("naima.cmd"));
