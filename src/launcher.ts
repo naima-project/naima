@@ -383,7 +383,14 @@ export function uiGrant(
   return {
     net: ["127.0.0.1"],
     read: [deno, ...apps],
-    runs: [deno, BROWSER_OPENER[os] ?? "xdg-open", ...(apps.length ? [os === "windows" ? "tasklist" : "ps"] : []), ...apps.flatMap((d) => programsIn(d))],
+    // PowerShell on Windows: the Models tab's jobs and every run the UI starts are begun by naima run in process, through WMI.
+    runs: [
+      deno,
+      BROWSER_OPENER[os] ?? "xdg-open",
+      ...(os === "windows" ? ["powershell.exe"] : []),
+      ...(apps.length ? [os === "windows" ? "tasklist" : "ps"] : []),
+      ...apps.flatMap((d) => programsIn(d)),
+    ],
   }
 }
 
