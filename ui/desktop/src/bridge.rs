@@ -100,10 +100,16 @@ impl Sidecar {
             // The program's own entry, not its launcher, which would run the version the project's lock names; the data is
             // the project's tracker when it has one.
             c.arg("run").arg("-A").arg(program.join("src").join("cli.ts"));
-            let data = root.join("naima-tracker").join("naima-data");
+            // The data of the project this sidecar answers for: the one NAIMA_DATA names when it is the project the app
+            // was opened on, else the project's own tracker; never one left in the environment for another project.
+            let opened = project().ok();
+            let named = std::env::var("NAIMA_DATA").ok().map(PathBuf::from).filter(|_| opened.as_deref() == Some(root.as_path()));
+            let own = root.join("naima-tracker").join("naima-data");
+            let data = named.filter(|d| d.is_dir()).unwrap_or(own);
             if data.is_dir() {
                 c.arg("--data").arg(data);
             }
+            c.env_remove("NAIMA_DATA");
             c.args(["ui", "--sidecar", "--watch"]);
             c
         } else if cfg!(windows) {
@@ -182,15 +188,23 @@ impl Sidecar {
 
 /// Forwards the command the page invoked, its arguments as they came, and says so once per call, which is how the
 /// stance's platforms check sees the app ready.
-async fn forward(current: State<'_, Current>, command: &'static str, request: Request<'_>) -> Answer {
+async fn forward(current: State<'_, Current>, command: &str, request: Request<'_>) -> Answer {
     let args = match request.body() {
         InvokeBody::Json(v) if v.is_object() => v.clone(),
         _ => json!({}),
     };
+    forward_args(current, command, args).await
+}
+
+/// Forwards `command` with `args` to the sidecar.
+async fn forward_args(current: State<'_, Current>, command: &str, args: Value) -> Answer {
+    let command = command.to_string();
+    let name = command.clone();
     let sidecar = current.get();
-    let answer = tauri::async_runtime::spawn_blocking(move || sidecar.call(command, args))
+    let answer = tauri::async_runtime::spawn_blocking(move || sidecar.call(&command, args))
         .await
         .map_err(|e| e.to_string())?;
+    let command = name;
     println!("bridge: {command} -> {}", if answer.is_ok() { "ok" } else { "error" });
     answer
 }
@@ -206,6 +220,25 @@ macro_rules! commands {
 
 // Naima's bridge commands (naima/src/plugins/ui/bridge.ts), each listed in lib.rs's generate_handler!.
 commands!(describe, data, tabs, tab, metro, action, run, recent);
+
+/// Every other bridge command (the Models tab's studies, study, study-job and the rest, whatever Naima's bridge adds): the
+/// page names the command and its arguments, and the sidecar, which answers every command the bridge does, answers it.
+/// `switch` is the shell's own: it restarts the sidecar.
+#[tauri::command]
+pub async fn bridge(app: AppHandle, current: State<'_, Current>, dir: State<'_, Dir>, request: Request<'_>) -> Answer {
+    let (command, args) = match request.body() {
+        InvokeBody::Json(v) => (
+            v.get("command").and_then(Value::as_str).map(str::to_string),
+            v.get("args").filter(|a| a.is_object()).cloned().unwrap_or_else(|| json!({})),
+        ),
+        _ => (None, json!({})),
+    };
+    let command = command.ok_or("bridge names a command")?;
+    if command == "switch" {
+        return switch_to(app, current, dir, &args).await;
+    }
+    forward_args(current, &command, args).await
+}
 
 /// The root of the recent project `root` names, when the sidecar lists it among the recent projects and it is not
 /// the one shown now; why not otherwise.
@@ -224,11 +257,15 @@ pub fn chosen(recent: &Value, root: &str) -> Result<PathBuf, String> {
 /// The page's `switch`: Naima is restarted in the recent project chosen, and answers there from then on.
 #[tauri::command]
 pub async fn switch(app: AppHandle, current: State<'_, Current>, dir: State<'_, Dir>, request: Request<'_>) -> Answer {
-    let root = match request.body() {
-        InvokeBody::Json(v) => v.get("root").and_then(Value::as_str).map(str::to_string),
-        _ => None,
-    }
-    .ok_or("switch names the project's root")?;
+    let args = match request.body() {
+        InvokeBody::Json(v) => v.clone(),
+        _ => json!({}),
+    };
+    switch_to(app, current, dir, &args).await
+}
+
+async fn switch_to(app: AppHandle, current: State<'_, Current>, dir: State<'_, Dir>, args: &Value) -> Answer {
+    let root = args.get("root").and_then(Value::as_str).map(str::to_string).ok_or("switch names the project's root")?;
     let sidecar = current.get();
     let recent = tauri::async_runtime::spawn_blocking(move || sidecar.call("recent", json!({})))
         .await

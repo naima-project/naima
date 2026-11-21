@@ -71,8 +71,20 @@ export async function openDesktop(
   // project's pinned program, and a second one does not either; the sidecar it starts names it in the registry.
   if (live) {
     try {
+      // One live window per project and program: a second `naima ui --watch` brings the first forward.
+      const file = dir ? join(dir, "live.json") : null
+      if (file && existsSync(file)) {
+        const was = JSON.parse(readFileSync(file, "utf8")) as { pid?: number; program?: string }
+        if (typeof was.pid === "number" && was.program === live["NAIMA_PROGRAM"] && deps.alive(was.pid)) {
+          return (await deps.raise(root)) ? { opened: true, how: "raised" } : { opened: true, how: "starting" }
+        }
+      }
       const pid = deps.start([app], { NAIMA_PROJECT: root, ...live }, root)
       if (pid === null) return { opened: false, reason: `${app} did not start` }
+      if (file && dir) {
+        mkdirSync(dir, { recursive: true })
+        writeFileSync(file, JSON.stringify({ pid, program: live["NAIMA_PROGRAM"] }))
+      }
       await deps.sleep(SETTLE_MS)
       return deps.alive(pid) ? { opened: true, how: "started" } : { opened: false, reason: "it ended as it started" }
     } catch (e) {
@@ -124,10 +136,10 @@ export function copyTree(from: string, to: string): void {
 }
 
 /** What makes the desktop app live: this Naima's program for its sidecar, and the Deno that runs it. */
-export function liveEnv(env: Record<string, string | undefined>): Record<string, string> {
+export function liveEnv(env: Record<string, string | undefined>, data: string): Record<string, string> {
   const exe = process.execPath
   const deno = /(^|[\\/])deno(\.exe)?$/i.test(exe) ? exe : env["NAIMA_DENO"] ?? "deno"
-  return { NAIMA_PROGRAM: PRODUCT.replace(/[\\/]$/, ""), NAIMA_DENO: deno }
+  return { NAIMA_PROGRAM: PRODUCT.replace(/[\\/]$/, ""), NAIMA_DENO: deno, NAIMA_DATA: data }
 }
 
 /** The line `naima ui` says about the desktop app it opened. */
@@ -155,7 +167,7 @@ export async function desktopFirst(
     return false
   }
   const name = ctx.root.split(/[\\/]/).filter(Boolean).pop() ?? ctx.root
-  const o = await openDesktop(ctx.root, registryDir(ctx.root), app, deps, watch ? liveEnv(env) : null)
+  const o = await openDesktop(ctx.root, registryDir(ctx.root), app, deps, watch ? liveEnv(env, ctx.trackerRoot) : null)
   if (o.opened) {
     ctx.out(
       watch ? `naima ui: opened the desktop app on ${name}, live: it runs this Naima (${PRODUCT}) and reloads when its UI is rebuilt` : desktopLine(o, name),

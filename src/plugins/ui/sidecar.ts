@@ -109,6 +109,24 @@ export class SidecarMachine {
   }
 }
 
+/**
+ * The commands the sidecar answers: every one of the bridge's table, the same that `naima ui` answers over HTTP, so that a
+ * command the bridge gains (the Models tab's studies, study and jobs) reaches the desktop app with nothing else to list,
+ * and two of the shell's own: `bundle`, the folder of the page it shows, and `file`, a file of a tab's folder.
+ */
+export function sidecarHandlers(bridge: Handlers, opts: Pick<SidecarOptions, "bundle" | "tabFolder">): Handlers {
+  return {
+    ...bridge,
+    bundle: () => ({ dir: opts.bundle ?? BUNDLE }),
+    file: ({ tab, path }) => {
+      const dir = opts.tabFolder(String(tab))
+      const found = dir ? fileIn(dir, String(path ?? ""), PAGE_TYPES) : null
+      if (!found) throw new Error(`no file ${String(path)} in the ${String(tab)} tab`)
+      return { type: PAGE_TYPES[extname(found).toLowerCase()]!, base64: readFileSync(found).toString("base64") }
+    },
+  }
+}
+
 /** Answers the shell until its input ends and every request read is answered; returns the exit code. */
 export async function runSidecar(ctx: Context, opts: SidecarOptions): Promise<number> {
   const bridge = naimaBridge(ctx, {
@@ -122,16 +140,7 @@ export async function runSidecar(ctx: Context, opts: SidecarOptions): Promise<nu
     switcher: { can: true },
     ...(opts.watch ? { watch: opts.watch } : {}),
   })
-  const handlers: Handlers = {
-    ...bridge.handlers,
-    bundle: () => ({ dir: opts.bundle ?? BUNDLE }),
-    file: ({ tab, path }) => {
-      const dir = opts.tabFolder(String(tab))
-      const found = dir ? fileIn(dir, String(path ?? ""), PAGE_TYPES) : null
-      if (!found) throw new Error(`no file ${String(path)} in the ${String(tab)} tab`)
-      return { type: PAGE_TYPES[extname(found).toLowerCase()]!, base64: readFileSync(found).toString("base64") }
-    },
-  }
+  const handlers = sidecarHandlers(bridge.handlers, opts)
   const send = (message: { [key: string]: Json }) => opts.write(JSON.stringify(message))
   let exited: () => void = () => {}
   const stopped = new Promise<void>((resolve) => (exited = resolve))

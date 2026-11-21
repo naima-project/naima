@@ -66,6 +66,7 @@ pub fn run() {
             bridge::run,
             bridge::recent,
             bridge::switch,
+            bridge::bridge,
             e2e_report,
             menu::zoom_by,
             menu::timeline_placed
