@@ -362,6 +362,8 @@ export interface McpOptions {
   capture?(rect: Rect): Uint8Array | string
   /** How long a show waits for the open UI's answer, in ms. */
   showWait?: number
+  /** The chat side: the server listens for messages brought from the UI and writes them into the session; none without it. */
+  chat?: ChatSide
   input: Readable
   write(line: string): void
 }
@@ -395,8 +397,108 @@ async function show(opts: McpOptions, args: { [k: string]: Json }): Promise<stri
 /** Serves the UI as an MCP server until the input ends; returns the exit code. */
 export async function runUiMcp(opts: McpOptions): Promise<number> {
   const handlers: Handlers = { show: (args) => show(opts, args) }
-  const server = bridgeMcp({ name: "naima-ui", version: opts.version, instructions: INSTRUCTIONS, handlers, tools: uiTools(opts.tabs) })
-  const mcp = withLookTools(server, lookTools(opts.channel, opts.capture ?? screenCapture(opts.shotsDir)))
-  await serveMcpLines(mcp, createInterface({ input: opts.input, crlfDelay: Infinity }), opts.write)
+  const instructions = opts.chat ? `${INSTRUCTIONS} ${CHAT_INSTRUCTIONS}` : INSTRUCTIONS
+  const server = bridgeMcp({ name: "naima-ui", version: opts.version, instructions, handlers, tools: uiTools(opts.tabs) })
+  const looking = withLookTools(server, lookTools(opts.channel, opts.capture ?? screenCapture(opts.shotsDir)))
+  const chat = opts.chat ? withChat(looking, opts.chat, opts.write) : null
+  try {
+    await serveMcpLines(chat?.server ?? looking, createInterface({ input: opts.input, crlfDelay: Infinity }), opts.write)
+  } finally {
+    chat?.stop()
+  }
   return 0
+}
+
+/**
+ * The chat side of the server (chat-channel.ts, wired by `naima ui --mcp`): it says it listens for the project's chat,
+ * takes each message the owner brings from the UI and writes it into the session, and answers the tool chat_taken.
+ */
+export interface ChatSide {
+  /** Says this server listens, again every beat while it runs. */
+  beat(): void
+  /** Stops listening. */
+  stop(): void
+  /** The messages taken for this session now: each one's id and its channel event (the notification's method and params). */
+  take(): { id: string; event: { method: string; params: { [k: string]: Json } } }[]
+  /** The message `id` was written into the session. */
+  emitted(id: string): void
+  /** The agent took the message `id`: what it was about, or null when no message was taken under that id. */
+  acknowledge(id: string): string | null
+  /** How often it says it listens and looks for a message, in ms. */
+  beatMs: number
+  pollMs: number
+}
+
+/** What the agent reads of the channel, with the server's other instructions. */
+export const CHAT_INSTRUCTIONS =
+  "The owner can bring any element of the Naima UI to this chat (an item, a count, a goal, a day, a card, a selection): it arrives as " +
+  "a <channel> event with the attributes brought_id, kind, ref and view, and what it is about as its text. Call chat_taken with its brought_id first, " +
+  "so the UI shows the owner it reached you, then take it up with the owner at once, as if they had said it."
+
+/** The tool the agent calls on a message brought from the UI. */
+export const CHAT_TOOL = {
+  name: "chat_taken",
+  description:
+    "Say you took a message the owner brought from the Naima UI (a <channel> event with a brought_id): the UI then shows the owner it reached the chat. Call it first, with the event's brought_id.",
+  inputSchema: obj({ brought_id: str("the brought_id of the <channel> event") }, ["brought_id"]),
+} as const
+
+/**
+ * The server declaring the Claude Code channel (capabilities.experimental "claude/channel"), with the tool chat_taken
+ * beside its own; once a client has initialized it, it says it listens and writes each message taken into the session as
+ * a notifications/claude/channel line. A client that did not start the session with the channel drops the lines.
+ */
+export function withChat(server: McpServer, chat: ChatSide, write: (line: string) => void): { server: McpServer; stop(): void } {
+  let timer: ReturnType<typeof setInterval> | null = null
+  let lastBeat = 0
+  const listen = () => {
+    if (timer) return
+    const tick = () => {
+      if (Date.now() - lastBeat >= chat.beatMs) {
+        chat.beat()
+        lastBeat = Date.now()
+      }
+      for (const m of chat.take()) {
+        write(JSON.stringify({ jsonrpc: "2.0", ...m.event }))
+        chat.emitted(m.id)
+      }
+    }
+    tick()
+    timer = setInterval(tick, chat.pollMs)
+  }
+  const wrapped: McpServer = async (message) => {
+    const m = message as { id?: Json; method?: string; params?: { name?: string; arguments?: { [k: string]: Json } } }
+    if (m.method === "tools/call" && m.params?.name === CHAT_TOOL.name) {
+      const id = typeof m.params.arguments?.["brought_id"] === "string" ? m.params.arguments["brought_id"] : ""
+      const about = chat.acknowledge(id)
+      return {
+        jsonrpc: "2.0",
+        id: m.id ?? null,
+        result: about === null
+          ? said(`no message brought from the UI was taken under ${JSON.stringify(id)}`, true)
+          : said(`taken: the UI shows the owner that ${about} reached the chat`),
+      }
+    }
+    const answer = await server(message)
+    // Messages go out once the client said it is initialized (or asked anything after initialize), never before its answer.
+    if (typeof m.method === "string" && m.method !== "initialize") listen()
+    if (m.method === "initialize" && answer && typeof answer === "object" && "result" in answer) {
+      const result = (answer as { result: { capabilities?: { [k: string]: Json } } }).result
+      const capabilities = { ...result.capabilities, experimental: { "claude/channel": {} } }
+      return { ...answer, result: { ...result, capabilities } } as Json
+    }
+    if (m.method === "tools/list" && answer && typeof answer === "object" && "result" in answer) {
+      const result = (answer as { result: { tools: Json[] } }).result
+      return { ...answer, result: { tools: [...result.tools, CHAT_TOOL as unknown as Json] } }
+    }
+    return answer
+  }
+  return {
+    server: wrapped,
+    stop() {
+      if (timer) clearInterval(timer)
+      timer = null
+      chat.stop()
+    },
+  }
 }

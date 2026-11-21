@@ -47,6 +47,7 @@ import { studyFolder } from "./studies.ts"
 import { resumed, switchFile, writeSwitch } from "./switch.ts"
 import { agentChannel } from "./agent-endpoint.ts"
 import { runUiMcp } from "./mcp.ts"
+import { chatSide } from "./chat-channel.ts"
 import { runTrackerMcp } from "./mcp-tracker.ts"
 import { runSidecar } from "./sidecar.ts"
 import { buildDir, desktopFirst, findCargo, installDesktop, installedApp, PRODUCT } from "./desktop-app.ts"
@@ -396,7 +397,7 @@ const uiCommand: Command = {
     {
       name: "--mcp",
       says:
-        "serve the UI to an agent as an MCP server on standard input and output, the server that only drives the screen: show (a place to the owner), store, transitions and transition (the open UI's central store), read_page and screenshot, every one through the agent channel to the UI open on the project: what an agent's client starts (claude mcp add naima-ui -- naima ui --mcp)",
+        "serve the UI to an agent as an MCP server on standard input and output, the server that only drives the screen: show (a place to the owner), store, transitions and transition (the open UI's central store), read_page and screenshot, every one through the agent channel to the UI open on the project; and the chat channel: what the owner brings to the chat from the UI (a right-click on any element) is written into the agent's session as a Claude Code channel event, and the tool chat_taken says the agent took it: what an agent's client starts (claude mcp add naima-ui -- naima ui --mcp)",
     },
     {
       name: "--mcp-tracker",
@@ -457,6 +458,8 @@ const uiCommand: Command = {
           const desktop = desktopApp(desktopAppDirs(process.env, osName()))
           return dir && (desktop || naima) ? await openAtStart({ root: ctx.root, dir, app: desktop, naima: naima ?? [] }) : null
         },
+        // The chat side: messages the owner brings from the UI reach this session as channel events (chat-channel.ts).
+        chat: chatSide(ctx.root),
         input: process.stdin,
         write: (line) => void process.stdout.write(line + "\n"),
       })

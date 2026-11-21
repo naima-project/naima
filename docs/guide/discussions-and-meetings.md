@@ -108,9 +108,11 @@ waited for you then, with its age on that day, and nothing is sent from there.
 
 Open an entry to see why it waits and what waits on it; reveal it to see all of that, item by item, and the meeting it is on. In Home's stage an entry opens
 beside the list instead, with all of that, the item's own page in plain words and its history. **Bring it to the chat** hands it to the agent in your chat,
-which raises it with you at once, with its context. The entry then says it was sent, then that it is in the chat, and it leaves the list once it is settled.
-Each step has its own address, so the browser's Back and Forward move between them and a reload keeps your place. The same from a terminal is
-`naima meeting raise <item>`.
+with why it waits and what waits on it, the same way anything in the window is brought to the chat
+([bringing anything to the chat](the-window.md#bringing-anything-to-the-chat)): the strip at the foot of the window says when the agent has it, or offers
+the message to copy when no chat session is listening. The entry leaves the list once it is settled. Opening and revealing an entry each have their own
+address, so the browser's Back and Forward move between them and a reload keeps your place. From a terminal, `naima meeting raise <item>` leaves the topic
+for an agent running `naima meeting wait`.
 
 ## At the start of a session
 
