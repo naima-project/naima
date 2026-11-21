@@ -104,6 +104,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`gate`](#naima-gate) | gates | declare a gate — a milestone, with a date and a version, or one that follows a stance's method — put items on it or take them off, add steps of its own, close its steps, and show one; writes go to naima.json and to the items, validated, through the write hooks | writes to naima.json and to the items are validated and pass the write hooks |
 | [`plan`](#naima-plan) | gates | the plan of a goal: its open items and what they wait for as a graph, in waves that run at once within maxWorkers, with the critical path and the heavy runs at the checkpoint; an agent proposes a note on it, the owner approves it | --approve is refused for the roles worker and agent: an agent proposes, the owner approves; plain plan prints derived state and writes nothing |
 | [`queue`](#naima-queue) | gates | open items on a gate, split by whose hands the proof needs; at its foot, the summary sections that stand beside the work, such as the metrics. With --role, one role's queue instead | nothing: it prints derived state, never stored |
+| [`start`](#naima-start) | gates | put open items on the ready queue to start now, on the word of the person who orders it: the coordinator starts them first, whenever a worker slot is free | only an open item is put on the queue, and only on a person's word: --by, else the person at the keyboard; an agent's own --by agent is refused. The item's ready record says the day, start: true, by whom and the consent; nothing else changes |
 | [`coverage`](#naima-coverage) | gates | each normative list the project declares — read from its source now, never copied — every entry with the test that proves it, or NO TEST | nothing: it reads each list from its source every time, never a copy, and marks an entry no test proves NO TEST |
 | [`ready`](#naima-ready) | gates | the open items that wait on nothing still open -- every `blocked-by` target settled -- most urgent first: what can start now; on a gate, only its items | nothing: it prints derived state, never stored |
 | [`order`](#naima-order) | gates | every open item in an order that puts it after everything it waits on (`blocked-by`), with its depth -- how many waits stand before it; items stuck on a cycle are listed apart | nothing: it prints derived state, never stored |
@@ -937,7 +938,7 @@ Moves allowed: `acknowledged` → ; a status not named moves to any.
 | `origin` | object | every type | where the item comes from, written once by naima new and never changed but for who asked: { askedBy: owner, coordinator, worker, agent, person or unknown; person: the name of who asked, always for person and, for owner, which of the project's owners (the one --asked-by owner:<name> names, else the person at the keyboard); filedBy: { name, role }; session: the session it was filed in; on: the instant; branch; from: the id of the item it was derived from }, with inferred: true and commit when naima origin --backfill read it from git, and corrected: [{ was, by, on }] for each time naima origin --set changed who asked |  |
 | `waitsOn` | string | every type | the person the item waits on, by name, when it waits on one person in particular (naima set <item> waitsOn=<name>): naima hello and the UI's waiting views show the person at the keyboard what waits on them and what waits on nobody in particular, never what waits on someone else |  |
 | `level` | enum | any type tagged `messages` | how much a message weighs: info and warning are said once, urgent is shown once an hour until acknowledged | `info` worth knowing; `warning` worth acting on; `urgent` the owner should know now: shown once an hour until acknowledged |
-| `ready` | object | every type | the owner's approval of the work, as the close of a meeting records it: { on: the day, start: true when the owner said to start it now, meeting, decisions: the ids of the discussions it carries, consent: the owner's yes restated }; an open item with one is on the ready queue |  |
+| `ready` | object | every type | the owner's approval of the work, as the close of a meeting records it: { on: the day, start: true when the owner said to start it now, meeting, decisions: the ids of the discussions it carries, consent: the owner's yes restated, by: the person who started it with naima start }; an open item with one is on the ready queue |  |
 
 **Link relations** — only the direction written is stored; the inverse is derived when read.
 
@@ -1041,10 +1042,12 @@ Archive a resolved item: fixed, and proven by an item that has passed; or a fini
 
 ```sh
 naima close <item> [--force] [--reason "<why>"]
+naima close <item> --wont-fix --reason "<why>"
 ```
 
 | Option | Default | What it does |
 |---|---|---|
+| `--wont-fix` |  | close it as won't fix, with --reason: the item stays where it is, in its type's status for work deliberately not done (a bug's wontfix, a todo's or a requirement's dropped, a feature's withdrawn), and the reason is added to its page as a note by the person who ordered it |
 | `--force` |  | close it although a write hook refuses — for the one who owns the evidence, say an item this branch claims whose proof someone else performed |
 | `--reason` |  | close a todo whose work is a judgement with no code — kind review or decision, its status done or dropped — without a proof: what was settled and where it is written, kept in closedBecause and listed by naima check as closed-without-proof |
 
@@ -1054,6 +1057,7 @@ Examples:
 naima close export-drops
 naima close export-drops --force
 naima close review-last-two-days --reason "each change reviewed with the owner; the decisions are in the item's notes"
+naima close export-drops --wont-fix --reason "the old exporter is going away in 2.0"
 ```
 
 ### naima retire
@@ -1105,7 +1109,7 @@ Traits: `fixable`.
 |---|---|---|---|
 | `open` | open |  | nothing on the page has been done |
 | `partial` | open |  | some of it has, and the page says what is left |
-| `wontfix` | done |  | deliberately not fixed; the reason is on the page |
+| `wontfix` | done | declined | deliberately not fixed; the reason is on the page |
 
 ### type: todos
 
@@ -1118,7 +1122,7 @@ Traits: `fixable`, `follow-up`.
 | `open` | open |  | not started |
 | `partial` | open |  | started; the page says what is left |
 | `done` | done |  | finished |
-| `dropped` | done |  | deliberately not done; the reason is on the page |
+| `dropped` | done | declined | deliberately not done; the reason is on the page |
 
 ### type: features
 
@@ -1131,7 +1135,7 @@ Traits: `fixable`.
 | `requested` | open |  | asked for; no code exists |
 | `planned` | open |  | agreed and scheduled |
 | `shipped` | done |  | on the trunk, with its documentation |
-| `withdrawn` | done |  | decided against |
+| `withdrawn` | done | declined | decided against |
 
 ### type: tests
 
@@ -2146,6 +2150,28 @@ naima queue first-public --role implementer
 naima queue --ready
 ```
 
+### naima start
+
+Put open items on the ready queue to start now, on the word of the person who orders it: the coordinator starts them first, whenever a worker slot is free.
+
+**Enforces**: Only an open item is put on the queue, and only on a person's word: --by, else the person at the keyboard; an agent's own --by agent is refused. The item's ready record says the day, start: true, by whom and the consent; nothing else changes.
+
+```sh
+naima start <item>... [--by <who>] [--consent "<the yes, restated>"]
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--by` |  | the person who orders it, when not the one at the keyboard; kept in the ready record and in the item's history |
+| `--consent` |  | their yes, restated; without it, the record says they started it themselves |
+
+Examples:
+
+```sh
+naima start export-drops
+naima start export-drops parse-dates --by Ada --consent "yes, start both now"
+```
+
 ### naima coverage
 
 Each normative list the project declares — read from its source now, never copied — every entry with the test that proves it, or NO TEST.
@@ -2595,7 +2621,7 @@ Traits: `standard`.
 | `proposed` | open | proposed | filed by someone other than the owner and not yet confirmed by the owner (naima confirm): no gate counts it as a goal |
 | `stated` | open |  | stated, and not yet proven |
 | `met` | done |  | proven: a test or property linked to it has passed, and none refutes it |
-| `dropped` | done |  | no longer required; the page says why |
+| `dropped` | done | declined | no longer required; the page says why |
 
 ### type: specs
 

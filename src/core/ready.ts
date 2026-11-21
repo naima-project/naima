@@ -1,5 +1,5 @@
 // The ready-for-implementation queue: work the owner approved at the close of
-// a meeting, which the coordinator starts on its own whenever a worker slot is
+// a meeting, or that a person started (naima start), which the coordinator starts on its own whenever a worker slot is
 // free. An item is on it while it is open and carries a `ready` record: the
 // command that closes a meeting writes it, and whoever starts work leaves out
 // what a branch already holds.
@@ -14,7 +14,7 @@ export const READY_FIELD: FieldDef = {
   ...READY,
   filled: true,
   says:
-    "the owner's approval of the work, as the close of a meeting records it: { on: the day, start: true when the owner said to start it now, meeting, decisions: the ids of the discussions it carries, consent: the owner's yes restated }; an open item with one is on the ready queue",
+    "the owner's approval of the work, as the close of a meeting records it: { on: the day, start: true when the owner said to start it now, meeting, decisions: the ids of the discussions it carries, consent: the owner's yes restated, by: the person who started it with naima start }; an open item with one is on the ready queue",
 }
 
 /** An item's approval, as the close of a meeting records it. */
@@ -29,6 +29,8 @@ export interface ReadyRecord {
   decisions?: string[]
   /** The owner's yes, restated. */
   consent?: string
+  /** The person who ordered it, when it was started by naima start rather than at a meeting's close. */
+  by?: string
 }
 
 /** An item's ready record, or undefined when it has none. */

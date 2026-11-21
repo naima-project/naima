@@ -62,7 +62,16 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { Buffer } from "node:buffer"
 import { basename, dirname, join, resolve } from "node:path"
-import { askHostsInBackground, type Context, findCodegen, gitReadScope, headCommit, type KnownProject, knownProjects, personAtKeyboard } from "../../core/api.ts"
+import {
+  askHostsInBackground,
+  type Context,
+  findCodegen,
+  gitReadScope,
+  headCommit,
+  type KnownProject,
+  knownProjects,
+  personAtKeyboard,
+} from "../../core/api.ts"
 import { actionArgv, actionCommand, actionOf, ACTIONS, naimaEntry, runCommand, selfEntry } from "./actions.ts"
 import { showCall } from "./agent-endpoint.ts"
 import { AtCache, commitOf } from "./at.ts"

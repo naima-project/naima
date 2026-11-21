@@ -14,6 +14,22 @@ import type { Command, Context } from "../../core/api.ts"
 export const ACTIONS: readonly { name: string; words: string[]; says: string; budget?: string; progress?: boolean; noArgs?: boolean }[] = [
   { name: "decide", words: ["decide"], says: "record a decision on an item" },
   { name: "note", words: ["note"], says: "add a note to an item" },
+  { name: "start", words: ["start"], says: "put an item on the ready queue to start now: args are the item (naima start <item>)" },
+  {
+    name: "move-gate",
+    words: ["set"],
+    says: "put an item on one goal or release, off the others: args are the item and the gate (naima set <item> gate=<gate>)",
+  },
+  {
+    name: "confirm",
+    words: ["confirm"],
+    says: 'approve a proposed requirement: args are the requirement and the yes, restated (naima confirm <requirement> --words "<yes>")',
+  },
+  {
+    name: "wont-fix",
+    words: ["close"],
+    says: 'close an item as won\'t fix: args are the item and the reason (naima close <item> --wont-fix --reason "<why>")',
+  },
   { name: "gate-step", words: ["gate", "step"], says: "close a step of a gate with the item that records it (not add or remove one)" },
   { name: "claim", words: ["claim"], says: "claim items for this branch, or post its step" },
   {
@@ -71,6 +87,16 @@ export function actionArgv(name: string, args: unknown): string[] | string {
     return args.length === 2 && plain ? ["plan", args[0] as string, "--propose", args[1] as string] : "plan-propose takes the goal and the note"
   }
   if (action.name === "plan-approve") return args.length === 1 && plain ? ["plan", args[0] as string, "--approve"] : "plan-approve takes the goal"
+  // The item page's actions take the item and one value each, never a flag: the flags are the action's.
+  const one = (n: number, what: string): string | null =>
+    args.length === n && plain && (args as string[]).every((a) => a.trim()) ? null : `${action.name} takes ${what}`
+  if (action.name === "start") return one(1, "the item") ?? ["start", args[0] as string]
+  if (action.name === "move-gate") {
+    return one(2, "the item and the gate") ??
+      (/^[\w.-]+$/.test(args[1] as string) ? ["set", args[0] as string, `gate=${args[1]}`] : "move-gate takes a gate's name")
+  }
+  if (action.name === "confirm") return one(2, "the requirement and the yes") ?? ["confirm", args[0] as string, "--words", args[1] as string]
+  if (action.name === "wont-fix") return one(2, "the item and the reason") ?? ["close", args[0] as string, "--wont-fix", "--reason", args[1] as string]
   return [...action.words, ...(args as string[])]
 }
 
