@@ -681,19 +681,23 @@
   }
 
   /* ---- the marks: pin and bookmark, shown on hover and focus, always when set */
+  /* A mark nobody can see takes no clicks: a hidden mark of one state would otherwise sit over its neighbour. */
   .mark {
     cursor: pointer;
     opacity: 0;
+    pointer-events: none;
     transition: opacity var(--motion-duration-fast) var(--motion-easing-standard);
   }
   .place:hover .mark,
   .place:focus-within .mark,
   .mark.set {
     opacity: 1;
+    pointer-events: auto;
   }
   /* On the current state the marks are always there, faint, so that a person finds them. */
   .place:has(.node.current) .mark:not(.set) {
     opacity: 0.55;
+    pointer-events: auto;
   }
   .hit {
     fill: transparent;
