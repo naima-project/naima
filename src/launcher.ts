@@ -383,7 +383,14 @@ export function uiGrant(
   return {
     net: ["127.0.0.1"],
     read: [deno, ...apps],
-    runs: [deno, BROWSER_OPENER[os] ?? "xdg-open", ...(apps.length ? [os === "windows" ? "tasklist" : "ps"] : []), ...apps.flatMap((d) => programsIn(d))],
+    // PowerShell on Windows: the Models tab's jobs and every run the UI starts are begun by naima run in process, through WMI.
+    runs: [
+      deno,
+      BROWSER_OPENER[os] ?? "xdg-open",
+      ...(os === "windows" ? ["powershell.exe"] : []),
+      ...(apps.length ? [os === "windows" ? "tasklist" : "ps"] : []),
+      ...apps.flatMap((d) => programsIn(d)),
+    ],
   }
 }
 
@@ -734,6 +741,8 @@ export async function launch(args: string[], cwd: string, resume?: Omit<UiSwitch
   if (parsed.rest[0] === "ui") {
     const codegen = findCodegen(root, Deno.env.toObject())
     if (codegen) env["NAIMA_CODEGEN"] = codegen
+    // The batch file beside a script, which a study's build.cmd can call: naima ui may not look for it.
+    if (codegen && Deno.build.os === "windows" && existsSync(`${codegen}.cmd`)) env["NAIMA_CODEGEN_BATCH"] = `${codegen}.cmd`
   }
   const others = otherWorktrees(root, data)
   const tools = toolsDir(Deno.env.toObject(), Deno.build.os)

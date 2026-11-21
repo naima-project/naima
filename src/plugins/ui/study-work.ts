@@ -81,17 +81,22 @@ export function studyFilePath(root: string, study: Study, rel: string): string |
   return resolve(root, dirname(study.file), rel)
 }
 
+/** The editor holds a file's text with `\n` line ends, as every editor does: a file with `\r\n` (a Windows checkout) is read as such, and written back with them. */
 export function readStudyFile(root: string, study: Study, rel: string): string {
   const path = studyFilePath(root, study, rel)
   if (typeof path !== "string") throw new Error(path.refused)
-  return readFileSync(path, "utf8")
+  return readFileSync(path, "utf8").replace(/\r\n/g, "\n")
 }
 
 export function writeStudyFile(root: string, study: Study, rel: string, text: string): void {
   const path = studyFilePath(root, study, rel)
   if (typeof path !== "string") throw new Error(path.refused)
   if (Buffer.byteLength(text, "utf8") > MAX_BYTES) throw new Error(`${rel} would be larger than ${MAX_BYTES} bytes`)
-  writeFileSync(path, text)
+  let was = ""
+  try {
+    was = readFileSync(path, "utf8")
+  } catch { /* a file not there yet: the text as given */ }
+  writeFileSync(path, was.includes("\r\n") ? text.replace(/\r?\n/g, "\r\n") : text)
 }
 
 /** A word of a command line, quoted for the shell that runs it: POSIX sh, or Windows' cmd. */
@@ -114,10 +119,37 @@ export interface JobContext {
 }
 
 /** naima-codegen as a command line, from where it was found (core/tools.ts, findCodegen): on Windows a script without an
- * extension is handed to Python; null when it was found nowhere. */
-export function codegenCommand(found: string | null, windows: boolean): string[] | null {
+ * extension is handed to Python, the one Naima installed (`naima tools install python`) when `python` names it, else the
+ * one on PATH; null when it was found nowhere. */
+export function codegenCommand(found: string | null, windows: boolean, python: string | null = null): string[] | null {
   if (!found) return null
-  return windows && !/\.(exe|com|cmd|bat)$/i.test(found) ? ["python", found] : [found]
+  return windows && !/\.(exe|com|cmd|bat)$/i.test(found) ? [python ?? "python", found] : [found]
+}
+
+/**
+ * What a study's build script needs to start naima-codegen itself, as environment variables: on Windows `NAIMA_CODEGEN`,
+ * which a batch file calls, so a program or the `naima-codegen.cmd` that sits beside the script (it starts the script
+ * with the Python named by `NAIMA_PYTHON`), which the launcher found and hands on as `NAIMA_CODEGEN_BATCH`, and that Python when Naima installed one. Elsewhere the script runs itself and
+ * the launcher has already named it.
+ */
+export function codegenEnv(found: string | null, windows: boolean, python: string | null, batch: string | null = null): Record<string, string> {
+  if (!found || !windows) return {}
+  const runnable = /\.(exe|com|cmd|bat)$/i.test(found) ? found : batch
+  return { ...(runnable ? { NAIMA_CODEGEN: runnable } : {}), ...(python ? { NAIMA_PYTHON: python } : {}) }
+}
+
+/**
+ * The environment a job is started with besides the caller's: what `codegenEnv` says, and PATH with the folders of the
+ * installed mCRL2 first, which naima-codegen runs `mcrl22lps` from. Given to the process, never written into the shell
+ * line, which two shells and their quoting stand between.
+ */
+export function jobEnv(
+  codegenVars: Readonly<Record<string, string>>,
+  pathFirst: readonly string[],
+  path: string | undefined,
+  windows: boolean,
+): Record<string, string> {
+  return { ...codegenVars, ...(pathFirst.length ? { PATH: [...pathFirst, ...(path ? [path] : [])].join(windows ? ";" : ":") } : {}) }
 }
 
 /**

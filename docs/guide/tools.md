@@ -13,7 +13,7 @@ naima tools
 ```text
 tools on this machine (darwin-arm64), in /Users/you/Library/Application Support/naima/tools:
   mcrl2    202607.0         installed  [verifier-mcrl2]
-  python   3.13.16+20261003 missing — naima tools install python  [storm]
+  python   3.13.16+20261003 missing — naima tools install python  [verifier-mcrl2, storm]
   storm    1.14.0           missing — naima tools install storm  [storm]
 ```
 
@@ -66,7 +66,7 @@ other tool has been removed.
 | -------- | -------------- | ---------------- | ---------------------- | ---------------------- | ------------------------ | ------------------------ | ------------------ |
 | `mcrl2`  | 202607.0       | `verifier-mcrl2` | yes                    | yes                    | yes, glibc 2.38 or later | no build published       | yes                |
 | `storm`  | stormpy 1.14.0 | `storm`          | yes, macOS 14 or later | yes, macOS 15 or later | yes, glibc 2.34 or later | yes, glibc 2.34 or later | no build published |
-| `python` | 3.13.16        | `storm`          | yes                    | yes                    | yes                      | yes                      | yes                |
+| `python` | 3.13.16        | `verifier-mcrl2`, `storm` | yes                    | yes                    | yes                      | yes                      | yes                |
 | `node`   | 24.22.2        | `runtimes`       | yes                    | yes                    | yes                      | yes                      | yes                |
 | `bun`    | 1.4.4          | `runtimes`       | yes                    | yes                    | yes, with AVX2           | yes                      | yes, with AVX2     |
 
@@ -77,6 +77,7 @@ other tool has been removed.
 - Node and Bun are the JavaScript runtimes a project's tests can run on besides Deno. Node 22.18 or later runs TypeScript test files directly, by stripping
   their types, and the declared version is later. Each comes from its official archive, with the sha256 its release publishes. The `runtimes` plugin stays off
   until the project turns it on with `naima plugin enable runtimes`.
+- Python is also what starts naima-codegen, the code generator of the Models tab and of `naima verify`. Where the system has no usable Python, as on a Windows machine whose `python` only opens the Store, or a uv-managed one that a ssh session cannot reach, `naima tools install python` gives Naima one of its own, and the Models tab and the verifier use it before the one on `PATH`.
 - Where a platform has no build, `naima tools` says so and tells you what to do instead, which is to run that work on another machine (see below).
 
 ## On another machine

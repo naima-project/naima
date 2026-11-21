@@ -269,6 +269,7 @@ export {
   windowsArg,
   windowsCommandLine,
 } from "./hosts.ts"
+export { installedPython, PYTHON } from "./python.ts"
 export {
   CODEGEN_MISSING,
   findCodegen,

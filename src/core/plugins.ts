@@ -66,8 +66,21 @@ function fetched(where: Where, name: string, git: string, commit: string): strin
     fresh = true
   }
   if (fresh || at() !== commit) {
-    if (!runGit(dir, ["cat-file", "-e", `${commit}^{commit}`]).ok) mustGit(dir, "fetch", "--quiet", "origin")
-    if (!runGit(dir, ["cat-file", "-e", `${commit}^{commit}`]).ok) throw new Error(`${DATA_FILE}: plugins.${name}: ${git} has no commit ${commit}`)
+    // The pin is a commit of some branch, not necessarily the main one (a stance's integration branch): a clone made for the
+    // main branch alone, or by an older Naima, does not have it. It is fetched by its id first, then every branch of the
+    // origin, whatever refs the clone was set to follow.
+    const has = () => runGit(dir, ["cat-file", "-e", `${commit}^{commit}`]).ok
+    let said = ""
+    for (const what of [[commit], ["+refs/heads/*:refs/remotes/origin/*"]]) {
+      if (has()) break
+      const r = runGit(dir, ["fetch", "--quiet", "--no-tags", "origin", ...what])
+      if (!r.ok) said = r.err.trim()
+    }
+    if (!has()) {
+      throw new Error(
+        `${DATA_FILE}: plugins.${name}: ${git} has no commit ${commit}, neither by its id nor on any of its branches${said ? ` (git said: ${said})` : ""}`,
+      )
+    }
     mustGit(dir, "-c", "advice.detachedHead=false", "checkout", "--quiet", "--detach", commit)
   }
   if (runGit(dir, ["status", "--porcelain"]).out.trim()) {

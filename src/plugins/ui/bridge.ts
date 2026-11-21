@@ -68,6 +68,9 @@ import {
   findCodegen,
   gitReadScope,
   headCommit,
+  installedProgram,
+  installedPython,
+  type InstalledToolRef,
   type KnownProject,
   knownProjects,
   personAtKeyboard,
@@ -85,8 +88,20 @@ import { commandJson, type JsonOf, metroData, VIEW_OF_COMMAND } from "./metro.ts
 import { findStudies, savedPaths, type Study } from "./studies.ts"
 import { bring as bringToChat, broughtOf, stand as chatStand, withdraw as withdrawChat } from "./chat-channel.ts"
 import { inUiTab, spaceFile, spaceSystem, studyCache, studyCode, uiTab } from "./study-space.ts"
-import { codegenCommand, type Job, jobLine, readStudyFile, shellLine, studyFiles, writeStudyFile } from "./study-work.ts"
+import { codegenCommand, codegenEnv, type Job, jobEnv, jobLine, readStudyFile, shellLine, studyFiles, writeStudyFile } from "./study-work.ts"
 import { contentProblem, framePage, tabList, type UiTab, type UiTabContent, type UiView } from "./tabs.ts"
+
+/**
+ * The folder of the mCRL2 tools naima-codegen runs `mcrl22lps` from: the `bin` the mCRL2 plugin is given when it exists on
+ * this machine, else the mCRL2 `naima tools install mcrl2` installed; none when neither is here and PATH has to serve.
+ */
+export function mcrl2Folders(ctx: Context): string[] {
+  const bin = ctx.config.plugins["verifier-mcrl2"]?.options?.["bin"]
+  if (typeof bin === "string" && existsSync(bin)) return [bin]
+  const tool = ctx.registry.contributions("tools").map((c) => c.value as InstalledToolRef).find((t) => t.name === "mcrl2")
+  const program = tool ? installedProgram(tool, "mcrl22lps") : null
+  return program ? [dirname(program)] : []
+}
 
 export { actionArgv, actionCommand, actionOf, ACTIONS, naimaEntry, runCommand } from "./actions.ts"
 
@@ -413,29 +428,44 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       const job = String(args["job"])
       if (job !== "check" && job !== "generate" && job !== "run") throw new Error(`no job ${job}: the jobs are check, generate and run`)
       const windows = process.platform === "win32"
+      const codegen = findCodegen(ctx.root)
+      const python = installedPython()
       const line = jobLine(job as Job, study, {
         root: ctx.root,
         // This program, never the one the project pins: model-check may be newer than it.
         naima: actionCommand(opts.entry ?? selfEntry(), ctx.trackerRoot, []),
-        codegen: codegenCommand(findCodegen(ctx.root), windows),
+        codegen: codegenCommand(codegen, windows, python),
         windows,
       }, text(args["property"]) ?? undefined)
       if (typeof line !== "string") throw new Error(line.refused)
       const run = `ui-study-${job}-${ctx.now().toISOString().replace(/\D/g, "").slice(0, 14)}-${++runs}`
-      const started = await runCommand(ctx, [
-        "run",
-        run,
-        "--budget-time",
-        job === "run" ? "1h" : "2h",
-        ...(job === "check" ? ["--stale", "30m"] : [
-          "--stale",
-          "30m",
-          "--no-progress",
-          job === "generate" ? "naima-codegen and a study's build print their stages, not a count" : "a study's program writes what it writes",
-        ]),
-        "--",
-        shellLine(line, windows),
-      ])
+      // The run is started with this environment, handed to the process, not written into the line: the installed mCRL2 first
+      // on PATH, and on Windows the batch file a study's build.cmd calls. Put back when the run has started.
+      const env = jobEnv(codegenEnv(codegen, windows, python, process.env["NAIMA_CODEGEN_BATCH"] ?? null), mcrl2Folders(ctx), process.env["PATH"], windows)
+      const before = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]))
+      Object.assign(process.env, env)
+      let started
+      try {
+        started = await runCommand(ctx, [
+          "run",
+          run,
+          "--budget-time",
+          job === "run" ? "1h" : "2h",
+          ...(job === "check" ? ["--stale", "30m"] : [
+            "--stale",
+            "30m",
+            "--no-progress",
+            job === "generate" ? "naima-codegen and a study's build print their stages, not a count" : "a study's program writes what it writes",
+          ]),
+          "--",
+          shellLine(line, windows),
+        ])
+      } finally {
+        for (const [k, v] of Object.entries(before)) {
+          if (v === undefined) delete process.env[k]
+          else process.env[k] = v
+        }
+      }
       if (started.code !== 0) throw new Error(started.err.trim() || started.out.trim() || `naima run exited with ${started.code}`)
       return json({ run, job, command: line })
     },
