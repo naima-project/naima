@@ -255,13 +255,20 @@ the moment Home shows: at a day of the past it says what needed you then. It is 
 in the stage. The key d still takes the decisions one at a time. When what needs you is an agent gone quiet, its detail on Home links to that agent's entry in
 Waiting for you, where one click brings the case to the chat.
 
-Last is the river. Today stands near its left edge and the future takes the rest of its width, since what is ahead matters most; the past is
-still there, to the left of today, and you reach it by dragging the river to the right or swiping it sideways. The commits on main are grey dots on one line,
-each dot the commits of a part of the time shown, larger when they changed more lines. The agents at work are short green lines arriving at today, each as long
-as the agent has held its work. Today is a small orange tick on the line, and a dotted orange path leads to the goal's ring, where the river's one orange line
-stands: the focus horizon, with the goal's short name and expected day above it. By default it stands at the next major goal of the line Home follows, such as
-the next release. Every goal with a due day has its ring ahead until that day, even one with no work left in it, so every deadline of the project can be seen
-on the river.
+Last is the river. It shows the future first: at rest today stands at its very left edge and the next month takes its whole width, on one even scale, so
+a goal twice as far away stands twice as far from today. Under the river you choose how much of the future it shows: a week, a month, a quarter, up to the
+next deadline, or everything. The days shown are written beside the choices (for example "21 Nov – 20 Dec"), with − and + to widen or narrow them. Ctrl
+or Cmd with the wheel, or a pinch on a trackpad, zooms around the pointer, and a double-click on an empty part of the river zooms in there. The plain wheel
+scrolls the page, never the river. The goals after the end of the window are gathered into one marker at its right edge, for example "12 more, to Jul 2027
+→"; a click on it widens the window until they all show.
+
+The past is reached by dragging the river to the right, or by swiping it. The commits on main are grey dots on one line, each dot the commits of a part of
+the time shown, larger when they changed more lines. The agents at work are short green lines arriving at today, each as long as the agent has held its
+work. Today is a small orange tick on the line, and the river's one orange line stands at the goal's ring: the focus horizon, with the goal's short name
+and how far ahead it is above it (for example "in 4 days"). By default it stands at the next major goal of the line Home follows, such as the next release.
+Every goal with a due day has its ring ahead until that day, even one with no work left in it, so every deadline of the project can be seen on the river. Each
+ring is named by its own words: when several goals share the start of their titles (as "CAV 2027: full paper submitted" and "CAV 2027: author response"
+do), each is named by the rest of its title, and the full title shows when the pointer rests on the ring.
 
 Everything before the horizon is shown in full and is what Home counts: the goals between today and it, their meetings, milestones and epics, and what needs you
 from them, in the sentence, in Waiting for you and in "for when you have time". Beyond it the river is only a sketch of the road ahead, drawn faint: every later
@@ -274,14 +281,15 @@ what comes before it. The ring at the top, its caption and the faces follow that
 the past from the first goal ahead), and Home (the wordmark or the key H) or the Home key on the line brings it back to its default goal. The horizon moved is
 written in the address as `h=` and the goal, so Back, Forward and a reload show the same focus.
 
-A click on anything drawn on the river, in the past or ahead, only shows it under the river and never moves the orange line or Home's moment. A goal's ring
+A click on anything drawn on the river, in the past or ahead, only shows it under the river and never moves the orange line, Home's moment or the page's scroll. A goal's ring
 ahead shows the goal and, at once, the items that have to close before it can be reached: its own open items and those of every goal it comes after, in an
 order in which they can be done, each item after the ones it waits on and the earlier goal's items first. A click on an item opens it. The small rings ahead
 of the sub-goals and epics show the same list for themselves. Moving through time is done only with the orange line, by dragging it or with its keys, or by
 picking a day on the calendar.
 
 A goal missed, whose due day has passed with work still left, is not drawn ahead: its ring stands in the past at its due day, ring and name in red, named
-"missed" (for example "Public launch · missed 17 Nov"), at the river's left edge when that day is before the week shown. A click on it shows the goal.
+"missed" (for example "Public launch · missed 17 Nov"). When that day is before the window shown, a red "‹ 1 missed" under the river takes the window back
+to it. A click on the ring shows the goal.
 
 Every dated thing, on the river and in the stage's lists, says how urgent it is, quietly. It is drawn as usual while all is well. It turns amber when it is at
 risk: its forecast passes its due day, or its due day is two days away or less with work left. It turns red once it is late: its due day has passed with work
@@ -341,7 +349,8 @@ The orange line can also be dragged back along the river, past today, with the m
 the ring and its percent, the goal's line and its expected day, the agents at work then and what needed you then, all read at the newest commit of main before
 the moment. The day at the top says "As it was on" that day, the ring and the agents' dots lose some of their colour, the line carries the day, and the commits
 after it fade. The left arrow key on the line at its default goal takes it a day back; in the past the arrow keys on the line move it a day back or on, and the
-calendar takes it to any day. "Back to today", or the quiet "now ›" where today stands on the river, brings Home back to now, the line gliding to
+calendar takes it to any day. Dragged past today at the river's left edge, the river opens on the past behind it. "Back to today", or the quiet "now"
+where today stands on the river (or at the edge it lies beyond), brings Home back to now, the line gliding to
 the horizon's goal. Each moment you drop the line at is a place in the browser's history, written in the address as `t=` and the time in seconds, so Back and
 Forward step through the moments seen and a reload shows the same one.
 
