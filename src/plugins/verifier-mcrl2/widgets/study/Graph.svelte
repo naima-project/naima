@@ -10,6 +10,7 @@
   import { type Direction, type Layout, layout } from "./layout.ts";
   import { arrowOf, pathOf, route } from "./route.ts";
   import Icon from "../ui/components/Icon.svelte";
+  import Action from "./Action.svelte";
   import ArrowRight from "@lucide/svelte/icons/arrow-right";
   import ArrowDown from "@lucide/svelte/icons/arrow-down";
   import ArrowLeft from "@lucide/svelte/icons/arrow-left";
@@ -277,9 +278,10 @@
     <button class="ico" aria-label="Further apart" title="Further apart" disabled={spacing >= 2} onclick={() => (spacing = Math.min(2, spacing * 1.25))}><Icon><Spread /></Icon></button>
     <span class="sep"></span>
     <button class="ico" aria-label="Zoom out" title="Zoom out" onclick={() => zoomBy(1 / 1.25)}><Icon><ZoomOut /></Icon></button>
-    <span class="pct">{zoom === null ? "fit" : `${Math.round(zoom * 100)}%`}</span>
+    <!-- A readout, never a button: fitted, it says so quietly; zoomed, its percentage, and Fit is the action back. -->
+    <span class="pct" class:quiet={zoom === null} role="status" title={zoom === null ? "The whole drawing fits the card" : "How large the drawing is drawn"}>{zoom === null ? "all in view" : `${Math.round(zoom * 100)}%`}</span>
     <button class="ico" aria-label="Zoom in" title="Zoom in" onclick={() => zoomBy(1.25)}><Icon><ZoomIn /></Icon></button>
-    <button class="ico" aria-label="Fit" title="Fit the card" aria-pressed={zoom === null} onclick={fit}><Icon><Fit /></Icon></button>
+    {#if zoom !== null}<Action size="sm" icon={Fit} label="Fit" hint="fit the whole drawing in the card" onclick={fit} />{/if}
   </div>
   <!-- The window the drawing is seen through: its size is the card's, never the drawing's. -->
   <div class="window" bind:clientWidth={boxW} bind:clientHeight={boxH}>
@@ -454,6 +456,12 @@
   .pct {
     min-inline-size: var(--size-target);
     text-align: center;
+    cursor: default;
+    user-select: none;
+  }
+  .pct.quiet {
+    font-style: italic;
+    color: var(--color-text-muted);
   }
   .window {
     position: relative;

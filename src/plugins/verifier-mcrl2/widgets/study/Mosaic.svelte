@@ -13,7 +13,27 @@
   import Maximize from "@lucide/svelte/icons/maximize-2";
   import Minimize from "@lucide/svelte/icons/minimize-2";
   import X from "@lucide/svelte/icons/x";
-  import { arrange, close, dock, keep, kept, maximise, type Mosaic, neighbour, open, resize, type Side, sideAt, type Tile } from "./mosaic.ts";
+  import {
+    arrange,
+    close,
+    dock,
+    DRAG_IDLE,
+    type DragEvent,
+    type DragState,
+    dragStep,
+    junctionAt,
+    keep,
+    kept,
+    maximise,
+    type Mosaic,
+    moveDividers,
+    neighbour,
+    open,
+    resize,
+    type Side,
+    sideAt,
+    type Tile,
+  } from "./mosaic.ts";
 
   interface Props {
     /** Where the arrangement is kept: one key per mosaic (a study's id). */
@@ -41,9 +61,10 @@
   const title = (id: string) => cards.find((c) => c.id === id)?.title ?? id;
   const closed = $derived(m.closed.map((id) => ({ id, title: title(id), reopen: () => set(open(m, id)) })));
 
-  // ---- a gutter dragged: the share of its division follows the pointer, read against the division's own box
-  let grab: { path: string; ratio: number; span: number } | null = null;
-  let resizing = $state(false);
+  // ---- a divider or a junction dragged (mosaic.ts): the drag machine says what a press drags; the dividers move by the
+  // pointer's travel over the mosaic, read once when the drag starts, each from where it stood then, snapping to aligned
+  // lines. Hover lights what a press would move: the one divider, or a junction's whole set.
+  let mosaicEl: HTMLElement | undefined = $state();
   const ratioAt = (path: string): number => {
     let t: Tile | null = m.root;
     for (const c of path) {
@@ -52,15 +73,76 @@
     }
     return t && !("card" in t) ? t.ratio : 0.5;
   };
-  let gutterEl: HTMLElement | null = null;
+  let drag: DragState = $state(DRAG_IDLE);
+  let lit: ReadonlySet<string> = $state(new Set());
+  let resizing = $state(false);
+  const step = (e: DragEvent): boolean => {
+    const next = dragStep(drag, e);
+    if (next) drag = next;
+    return next !== null;
+  };
+  let base: { m: Mosaic; w: number; h: number; paths: string[] } | null = null;
+  const begin = (paths: string[]) => {
+    const box = mosaicEl?.getBoundingClientRect();
+    base = { m, w: box?.width || 1, h: box?.height || 1, paths };
+    resizing = true;
+  };
+  const travel = (dx: number, dy: number) => {
+    if (!base) return;
+    step("move");
+    set(moveDividers(base.m, base.paths, { x: dx / base.w, y: dy / base.h }));
+  };
+  const finish = (e: "release" | "cancel") => {
+    if (e === "cancel" && base) set(base.m);
+    step(e);
+    base = null;
+    resizing = false;
+    if (drag.over === "NOTHING") lit = new Set();
+  };
+  // A divider by itself, through its Draggable: its first travel is the press.
   const gutterTravel = (path: string, dir: "row" | "col", d: number, done: boolean) => {
-    if (!grab || grab.path !== path) {
-      const box = gutterEl?.parentElement?.getBoundingClientRect();
-      grab = { path, ratio: ratioAt(path), span: (dir === "row" ? box?.width : box?.height) || 1 };
+    if (!base) {
+      if (drag.over !== "DIVIDER") step("enter_divider");
+      if (!step("press")) return;
+      begin([path]);
     }
-    resizing = !done;
-    set(resize(m, path, grab.ratio + d / grab.span));
-    if (done) grab = null;
+    travel(dir === "row" ? d : 0, dir === "col" ? d : 0);
+    if (done) finish("release");
+  };
+  const hoverDivider = (path: string, on: boolean) => {
+    if (drag.drag !== "NONE") return;
+    step(on ? "enter_divider" : "leave");
+    lit = on ? new Set([path]) : new Set();
+  };
+  // A junction: every divider meeting there and every one on their lines.
+  let start: { x: number; y: number; id: number } | null = null;
+  const junctionDown = (e: PointerEvent, paths: string[]) => {
+    if (drag.over !== "JUNCTION") step("enter_junction");
+    if (!step("press")) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    start = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    begin(paths);
+    e.preventDefault();
+  };
+  const junctionMove = (e: PointerEvent) => {
+    if (start && e.pointerId === start.id) travel(e.clientX - start.x, e.clientY - start.y);
+  };
+  const junctionUp = (e: PointerEvent, how: "release" | "cancel") => {
+    if (!start || e.pointerId !== start.id) return;
+    start = null;
+    finish(how);
+  };
+  const hoverJunction = (paths: string[], on: boolean) => {
+    if (drag.drag !== "NONE") return;
+    step(on ? "enter_junction" : "leave");
+    lit = on ? new Set(paths) : new Set();
+  };
+  // The keys: on a junction, the arrows move its set a step, as a press, a move and a release.
+  const junctionKey = (e: KeyboardEvent, paths: string[]) => {
+    const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+    if (!d) return;
+    e.preventDefault();
+    set(moveDividers(m, paths, { x: d[0]! * 0.02, y: d[1]! * 0.02 }, false));
   };
 
   // ---- a card dragged by its title: where it would go is read from the page under the pointer at that moment
@@ -126,7 +208,7 @@
   {:else}
     <div class="split {t.dir}">
       <div class="side" style:flex-grow={t.ratio}>{@render tile(t.a, `${path}a`)}</div>
-      <div class="gutter {t.dir}" onpointerdown={(e) => (gutterEl = e.currentTarget as HTMLElement)}>
+      <div class="gutter {t.dir}" role="presentation" class:lit={lit.has(path)} onpointerenter={() => hoverDivider(path, true)} onpointerleave={() => hoverDivider(path, false)}>
         <Draggable
           label="the divider"
           slim
@@ -135,6 +217,29 @@
           onmove={(d) => set(resize(m, path, ratioAt(path) + (d === "left" || d === "up" ? -0.04 : 0.04)))}
           ontravel={(dx, dy, done) => gutterTravel(path, t.dir, t.dir === "row" ? dx : dy, done)}
         />
+        <!-- Where this divider meets others, a handle that moves all of them, and every divider on their lines. -->
+        {#each ["start", "end"] as const as end (end)}
+          {@const jn = junctionAt(m.root, path, end)}
+          {#if jn}
+            <span
+              class="junction {end}"
+              class:cross={jn.cross}
+              role="slider"
+              tabindex="0"
+              aria-label={`where ${jn.meeting.length} dividers meet: drag to move them and the ${jn.moves.length - jn.meeting.length} aligned with them`}
+              aria-valuenow={Math.round((t.dir === "row" ? jn.x : jn.y) * 100)}
+              title="Drag to move every divider meeting here, and those on the same lines"
+              onpointerenter={() => hoverJunction(jn.moves, true)}
+              onpointerleave={() => hoverJunction(jn.moves, false)}
+              onpointerdown={(e) => junctionDown(e, jn.moves)}
+              onpointermove={junctionMove}
+              onpointerup={(e) => junctionUp(e, "release")}
+              onpointercancel={(e) => junctionUp(e, "cancel")}
+              onlostpointercapture={(e) => junctionUp(e, "release")}
+              onkeydown={(e) => junctionKey(e, jn.moves)}
+            ></span>
+          {/if}
+        {/each}
       </div>
       <div class="side" style:flex-grow={1 - t.ratio}>{@render tile(t.b, `${path}b`)}</div>
     </div>
@@ -157,7 +262,7 @@
   </div>
 {/if}
 
-<div class="mosaic" class:live={resizing || target !== null}>
+<div class="mosaic" class:live={resizing || target !== null} bind:this={mosaicEl}>
   {#if m.maximised}
     {@render cardOf(m.maximised)}
   {:else if m.root}
@@ -355,6 +460,49 @@
   .gutter {
     flex: none;
     display: grid;
+    position: relative;
+  }
+  /* A junction's handle: a square three gutters wide centred where the dividers meet, over the gutters there. */
+  .junction {
+    position: absolute;
+    z-index: 2;
+    inline-size: calc(3 * var(--space-sm));
+    block-size: calc(3 * var(--space-sm));
+    border-radius: var(--radius-full);
+    cursor: move;
+    touch-action: none;
+  }
+  .gutter.row .junction {
+    inset-inline-start: calc(-1 * var(--space-sm));
+  }
+  .gutter.row .junction.start {
+    inset-block-start: calc(-2 * var(--space-sm));
+  }
+  .gutter.row .junction.end {
+    inset-block-end: calc(-2 * var(--space-sm));
+  }
+  .gutter.col .junction {
+    inset-block-start: calc(-1 * var(--space-sm));
+  }
+  .gutter.col .junction.start {
+    inset-inline-start: calc(-2 * var(--space-sm));
+  }
+  .gutter.col .junction.end {
+    inset-inline-end: calc(-2 * var(--space-sm));
+  }
+  .junction::after {
+    content: "";
+    position: absolute;
+    inset: calc(50% - var(--space-xs));
+    border-radius: var(--radius-full);
+    background: transparent;
+  }
+  .junction:hover::after,
+  .junction:focus-visible::after {
+    background: var(--color-accent-soft);
+  }
+  .junction:focus-visible {
+    outline: var(--border-width-focus) solid var(--color-focus);
   }
   .gutter.row {
     inline-size: var(--space-sm);
@@ -390,9 +538,30 @@
   .gutter :global(.grip) {
     display: none;
   }
-  .gutter:hover :global(.handle),
-  .gutter :global(.dragging .handle),
-  .gutter :global(.handle:focus-visible) {
+  /* The bar lit on hover and drag: a thin rounded pill in the gutter's middle, apart from the cards on both sides and
+     short of both ends; the whole gutter stays the handle. */
+  .gutter :global(.handle) {
+    position: relative;
+  }
+  .gutter :global(.handle)::after {
+    content: "";
+    position: absolute;
+    border-radius: var(--radius-full);
+    background: transparent;
+    transition: background var(--motion-duration-fast) var(--motion-easing-standard);
+  }
+  .gutter.row :global(.handle)::after {
+    inset-block: 18%;
+    inset-inline: calc(50% - var(--border-width-focus));
+  }
+  .gutter.col :global(.handle)::after {
+    inset-inline: 18%;
+    inset-block: calc(50% - var(--border-width-focus));
+  }
+  .gutter:hover :global(.handle)::after,
+  .gutter.lit :global(.handle)::after,
+  .gutter :global(.dragging .handle)::after,
+  .gutter :global(.handle:focus-visible)::after {
     background: var(--color-accent-soft);
   }
   @media (prefers-reduced-motion: reduce) {
