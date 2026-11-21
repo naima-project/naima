@@ -373,6 +373,9 @@ export function pairTracker(root: string, trackerGit: string, codeBranch: string
  */
 export const CLI_TRAILER = "Naima-Command"
 
+/** The trailer of a commit that names the person who ordered it (core/people.ts). */
+export const ORDERED_BY = "Ordered-by"
+
 /** The files a tracker's working tree has changed, each with its status as git status says it: path → the two status letters. */
 export function trackerChanges(trackerGit: string): Map<string, string> {
   const out = new Map<string, string>()
@@ -382,8 +385,8 @@ export function trackerChanges(trackerGit: string): Map<string, string> {
   return out
 }
 
-/** The message of a tracker commit made by `naima <command>`: the items (or files) it wrote in the subject, the command in the trailer. */
-export function cliCommitMessage(command: string, paths: readonly string[], prefix = ""): string {
+/** The message of a tracker commit made by `naima <command>`: the items (or files) it wrote in the subject, the command in a trailer, and who ordered it in another. */
+export function cliCommitMessage(command: string, paths: readonly string[], prefix = "", orderedBy?: string): string {
   const names = [
     ...new Set(paths.map((p) => {
       const parts = (prefix && p.startsWith(`${prefix}/`) ? p.slice(prefix.length + 1) : p).split("/")
@@ -391,17 +394,18 @@ export function cliCommitMessage(command: string, paths: readonly string[], pref
     })),
   ].sort()
   const shown = names.length > 3 ? `${names.slice(0, 3).join(", ")} and ${names.length - 3} more` : names.join(", ")
-  return `naima ${command}: ${shown}\n\n${CLI_TRAILER}: ${command}\n`
+  const by = orderedBy?.trim() ? `${ORDERED_BY}: ${orderedBy.trim()}\n` : ""
+  return `naima ${command}: ${shown}\n\n${CLI_TRAILER}: ${command}\n${by}`
 }
 
 /** Commit `paths` of a tracker kept as a repository of its own, as `naima <command>` wrote them. Null when done, else why not. */
-export function commitTrackerPaths(trackerGit: string, command: string, paths: readonly string[], prefix = ""): string | null {
+export function commitTrackerPaths(trackerGit: string, command: string, paths: readonly string[], prefix = "", orderedBy?: string): string | null {
   if (!paths.length) return null
   const input = paths.join("\0") + "\0"
   const spec = ["--pathspec-from-file=-", "--pathspec-file-nul"]
   const added = runGit(trackerGit, ["--literal-pathspecs", "add", "-A", ...spec], { input })
   if (!added.ok) return `git add: ${gitReason(added)}`
-  const made = runGit(trackerGit, ["--literal-pathspecs", "commit", "-q", "-m", cliCommitMessage(command, paths, prefix), ...spec], { input })
+  const made = runGit(trackerGit, ["--literal-pathspecs", "commit", "-q", "-m", cliCommitMessage(command, paths, prefix, orderedBy), ...spec], { input })
   return made.ok ? null : `git commit: ${gitReason(made)}`
 }
 
@@ -410,11 +414,11 @@ export function commitTrackerPaths(trackerGit: string, command: string, paths: r
  * from `before`, the tracker's changes when the command started, in one commit. A file changed before the command
  * and not by it is left as it is, and said. Returns the lines to say.
  */
-export function commitTrackerWrites(trackerGit: string, command: string, before: ReadonlyMap<string, string>): string[] {
+export function commitTrackerWrites(trackerGit: string, command: string, before: ReadonlyMap<string, string>, orderedBy?: string): string[] {
   const after = trackerChanges(trackerGit)
   const mine = [...after].filter(([p, s]) => before.get(p) !== s).map(([p]) => p)
   const out: string[] = []
-  const failed = commitTrackerPaths(trackerGit, command, mine)
+  const failed = commitTrackerPaths(trackerGit, command, mine, "", orderedBy)
   if (failed) out.push(`what naima ${command} wrote to the tracker is not committed (${failed}): git -C ${TRACKER_DIR}/${DATA_DIR} commit it`)
   const left = [...before.keys()].filter((p) => after.has(p) && !mine.includes(p))
   if (left.length) {

@@ -75,6 +75,25 @@ export {
 } from "./item.ts"
 export { storedLinks } from "./repo.ts"
 export { currentSession, filerRole, sessionLine, setSessionLine } from "./origin.ts"
+export {
+  AGENT_OWN,
+  type Comment,
+  commentsOf,
+  forPersonAtKeyboard,
+  HISTORY,
+  historyOf,
+  type Order,
+  orderedBy,
+  orderingPeople,
+  orderingPerson,
+  orderLine,
+  type Person,
+  personAtKeyboard,
+  samePerson,
+  WAITS_ON,
+  waitsOnOf,
+} from "./people.ts"
+export { type For, type WaitingEntry, waitingLine, waitingOn, waitingPoint, type WaitingRow, type WaitingSource, type WaitsFor } from "./waiting.ts"
 export { adapter, ADAPTERS, type AgentAdapter } from "./adapters/index.ts"
 export { checkoutAt, contextAt, contextIn, contextOfProject, type IO } from "./context.ts"
 export { type KnownProject, knownProjects, UI_SWITCH, UI_SWITCH_ENV, type UiSwitch } from "./projects.ts"
@@ -215,6 +234,7 @@ export {
   HOOKS_OFF_KEY,
   installTrailerHooks,
   naimaHooks,
+  ORDERED_BY,
   pairedBranch,
   pairTracker,
   pointHooksPath,

@@ -7,6 +7,7 @@ import { code, sentence, table } from "./markdown.ts"
 import { DEFAULT_DATA } from "./layout.ts"
 import { flagsOf } from "./vocabulary.ts"
 import { TICK_FOLDERS } from "./tick.ts"
+import { waitingPoint } from "./waiting.ts"
 import type {
   AgentHookContribution,
   Attribution,
@@ -462,6 +463,7 @@ export const CORE_POINTS: readonly ExtensionPoint[] = [
   summaryPoint,
   guidePoint,
   factsPoint,
+  waitingPoint,
   rankPoint,
   jobsPoint,
   extendsPoint,

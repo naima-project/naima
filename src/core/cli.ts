@@ -63,6 +63,8 @@ import {
   trunkGuardRuns,
   writeSiblingMarker,
 } from "./repos.ts"
+import { byOption, orderedBy } from "./people.ts"
+import { waitingOn } from "./waiting.ts"
 import { exclusions } from "./excludes.ts"
 import {
   ALLOW_PRIVATE,
@@ -1716,6 +1718,20 @@ async function hello(args: string[], opts: CliOptions, place: Located, io: IO): 
     }
     decisions.push(...await waiting)
     try {
+      // What waits on the person at the keyboard: the one list naima waiting prints and the UI shows.
+      const mine = await waitingOn(ctx)
+      if (mine.length) {
+        const shown = mine.slice(0, 3).map((r) => r.ref).join(", ")
+        decisions.push(
+          `${mine.length} thing${mine.length === 1 ? "" : "s"} wait${mine.length === 1 ? "s" : ""} on you: ${shown}${
+            mine.length > 3 ? ` and ${mine.length - 3} more` : ""
+          } — naima waiting lists them`,
+        )
+      }
+    } catch {
+      // a source that cannot be read here: naima waiting says why
+    }
+    try {
       offers.push(...await offersAtSessionStart(ctx))
     } catch {
       // an offer that cannot be rendered here is left out
@@ -2319,12 +2335,16 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     const cmd = ctx.registry.find<Command>("commands", command as string)?.value
     if (!cmd) throw new Error(`unknown command "${command}" — naima help`)
     if (args.includes("--help") || args.includes("-h")) return commandHelp(cmd, io)
+    // Who ordered what this command writes: --by on any command; a command that declares --by reads it too.
+    const ordered = byOption(commandArgs, !!cmd.options?.some((o) => o.name === "--by"))
+    if (ordered.by) ctx.orderedBy = ordered.by
+    ctx.command = command as string
     if (cmd.hook) {
       // Run by a git hook, inside a commit or a ref update: it only reads, and waits for nothing beside it.
       setWriteGuard(() => {
         throw new Error(`naima ${command} runs from a git hook and writes nothing`)
       })
-      return await cmd.run(commandArgs, ctx)
+      return await cmd.run(ordered.rest, ctx)
     }
     // The tracker's privacy, an invariant: every write through the core's helpers is refused while it is exposed.
     const exposure = await trackerExposure(ctx)
@@ -2344,10 +2364,10 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     const tick = beginTick(opts, place, ctx)
     let code: number
     try {
-      code = await cmd.run(commandArgs, ctx)
+      code = await cmd.run(ordered.rest, ctx)
     } finally {
       for (const n of (await endTick(tick)).shown) io.err(messageLine(n))
-      if (before) { for (const line of commitTrackerWrites(ctx.trackerGit, command as string, before)) io.err(`naima: ${line}`) }
+      if (before) { for (const line of commitTrackerWrites(ctx.trackerGit, command as string, before, orderedBy(ctx))) io.err(`naima: ${line}`) }
     }
     if (trunkBefore && code === 0) {
       const failed = commitTrunkWrites(ctx.trackerGit, ctx.trackerPrefix, command as string, trunkBefore)
