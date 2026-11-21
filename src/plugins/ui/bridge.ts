@@ -68,7 +68,9 @@ import {
   findCodegen,
   gitReadScope,
   headCommit,
+  installedProgram,
   installedPython,
+  type InstalledToolRef,
   type KnownProject,
   knownProjects,
   personAtKeyboard,
@@ -88,6 +90,18 @@ import { bring as bringToChat, broughtOf, stand as chatStand, withdraw as withdr
 import { inUiTab, spaceFile, spaceSystem, studyCache, studyCode, uiTab } from "./study-space.ts"
 import { codegenCommand, codegenEnv, type Job, jobLine, readStudyFile, shellLine, studyFiles, writeStudyFile } from "./study-work.ts"
 import { contentProblem, framePage, tabList, type UiTab, type UiTabContent, type UiView } from "./tabs.ts"
+
+/**
+ * The folder of the mCRL2 tools naima-codegen runs `mcrl22lps` from: the `bin` the mCRL2 plugin is given when it exists on
+ * this machine, else the mCRL2 `naima tools install mcrl2` installed; none when neither is here and PATH has to serve.
+ */
+export function mcrl2Folders(ctx: Context): string[] {
+  const bin = ctx.config.plugins["verifier-mcrl2"]?.options?.["bin"]
+  if (typeof bin === "string" && existsSync(bin)) return [bin]
+  const tool = ctx.registry.contributions("tools").map((c) => c.value as InstalledToolRef).find((t) => t.name === "mcrl2")
+  const program = tool ? installedProgram(tool, "mcrl22lps") : null
+  return program ? [dirname(program)] : []
+}
 
 export { actionArgv, actionCommand, actionOf, ACTIONS, naimaEntry, runCommand } from "./actions.ts"
 
@@ -422,6 +436,7 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
         naima: actionCommand(opts.entry ?? selfEntry(), ctx.trackerRoot, []),
         codegen: codegenCommand(codegen, windows, python),
         codegenEnv: codegenEnv(codegen, windows, python),
+        pathFirst: mcrl2Folders(ctx),
         windows,
       }, text(args["property"]) ?? undefined)
       if (typeof line !== "string") throw new Error(line.refused)

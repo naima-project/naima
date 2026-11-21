@@ -112,6 +112,8 @@ export interface JobContext {
   codegen: readonly string[] | null
   /** What a study's build needs to start naima-codegen itself (`codegenEnv`), set before its command; absent, none. */
   codegenEnv?: Readonly<Record<string, string>>
+  /** Folders put first on PATH for naima-codegen and a study's build: the installed mCRL2's, which naima-codegen runs `mcrl22lps` from. */
+  pathFirst?: readonly string[]
   windows: boolean
 }
 
@@ -149,8 +151,16 @@ export function jobLine(job: Job, study: Study, ctx: JobContext, property?: stri
   const q = (w: string) => quoted(w, ctx.windows)
   const line = (words: readonly string[]) => words.map(q).join(" ")
   const inFolder = (command: string) => (ctx.windows ? `cd /d ${q(folder)} && ${command}` : `cd ${q(folder)} && ${command}`)
-  const withEnv = (command: string) => ctx.windows ? Object.entries(ctx.codegenEnv ?? {}).map(([k, v]) => `set "${k}=${v}" && `).join("") + command : command
-  const generate = ctx.codegen ? line([...ctx.codegen, "generate", "--project", folder]) : null
+  // Before the command that starts naima-codegen, which the study's build after it inherits: its variables, and the folders it finds mCRL2 in.
+  const withEnv = (command: string) => {
+    const first = ctx.pathFirst ?? []
+    if (ctx.windows) {
+      const path = first.length ? [`set "PATH=${first.join(";")};%PATH%" && `] : []
+      return [...path, ...Object.entries(ctx.codegenEnv ?? {}).map(([k, v]) => `set "${k}=${v}" && `)].join("") + command
+    }
+    return (first.length ? `export PATH=${q(first.join(":"))}:"$PATH" && ` : "") + command
+  }
+  const generate = ctx.codegen ? withEnv(line([...ctx.codegen, "generate", "--project", folder])) : null
   if (job === "check") {
     if (!study.system) return { refused: "the study declares no system to check its properties on (% system in its %@ui block)" }
     const props = property === undefined ? study.properties : study.properties.filter((p) => p === property)
@@ -181,7 +191,7 @@ export function jobLine(job: Job, study: Study, ctx: JobContext, property?: stri
   if (job === "generate") {
     if (!study.codegen) return { refused: "the study's folder holds no codegen.toml: there is nothing for naima-codegen to generate" }
     if (!generate) return { refused: CODEGEN_MISSING }
-    return study.build ? `${generate} && ${withEnv(inFolder(study.build))}` : generate
+    return study.build ? `${generate} && ${inFolder(study.build)}` : generate
   }
   if (!study.run) return { refused: "the study declares no program to run (% run in its %@ui block)" }
   return inFolder(study.run)
