@@ -1,7 +1,8 @@
 // A mosaic of cards (develop/models-tab.md §13): the window divided again and again, each piece a card, so the cards
-// always tile the whole space, like a Mondrian canvas. Each division has a ratio, moved by dragging the gutter between
-// its two sides. A card moved onto the edge of another divides that one; moved onto its middle, the two swap; closed,
-// its space goes to its neighbour. Plain data, kept per study and tested without a page.
+// always tile the whole space, like a Mondrian canvas. It is only a tree: each division has a direction and a ratio,
+// which the page draws as nested flex boxes (the ratio is each side's flex-grow), so the browser lays it out and no
+// position or size is ever computed here. A card moved onto the edge of another divides that one; moved onto its middle,
+// the two swap; closed, its space goes to its neighbour. Plain data, kept per study and tested without a page.
 
 export type Tile = { card: string } | {
   dir: "row" | "col";
@@ -19,21 +20,6 @@ export interface Mosaic {
 
 export type Side = "left" | "right" | "top" | "bottom" | "center";
 
-export interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-/** A gutter between the two sides of a division: where it is, and the path to the division in the tree. */
-export interface Gutter extends Rect {
-  path: string;
-  dir: "row" | "col";
-  /** The division's own space, to turn a drag into a ratio. */
-  span: number;
-}
-
 const MIN = 0.12;
 const clamp = (r: number) => Math.max(MIN, Math.min(1 - MIN, r));
 const isCard = (t: Tile): t is { card: string } => "card" in t;
@@ -42,64 +28,6 @@ const isCard = (t: Tile): t is { card: string } => "card" in t;
 export function cardsOf(t: Tile | null): string[] {
   if (!t) return [];
   return isCard(t) ? [t.card] : [...cardsOf(t.a), ...cardsOf(t.b)];
-}
-
-/** Where every card and every gutter is, in a box of w by h with gutters g wide. */
-export function place(
-  m: Mosaic,
-  w: number,
-  h: number,
-  g: number,
-): { cards: Map<string, Rect>; gutters: Gutter[] } {
-  const cards = new Map<string, Rect>();
-  const gutters: Gutter[] = [];
-  if (m.maximised && cardsOf(m.root).includes(m.maximised)) {
-    cards.set(m.maximised, { x: 0, y: 0, w, h });
-    return { cards, gutters };
-  }
-  const walk = (t: Tile, r: Rect, path: string) => {
-    if (isCard(t)) {
-      cards.set(t.card, r);
-      return;
-    }
-    if (t.dir === "row") {
-      const aw = Math.round((r.w - g) * t.ratio);
-      walk(t.a, { x: r.x, y: r.y, w: aw, h: r.h }, `${path}a`);
-      walk(
-        t.b,
-        { x: r.x + aw + g, y: r.y, w: r.w - aw - g, h: r.h },
-        `${path}b`,
-      );
-      gutters.push({
-        path,
-        dir: "row",
-        x: r.x + aw,
-        y: r.y,
-        w: g,
-        h: r.h,
-        span: r.w - g,
-      });
-    } else {
-      const ah = Math.round((r.h - g) * t.ratio);
-      walk(t.a, { x: r.x, y: r.y, w: r.w, h: ah }, `${path}a`);
-      walk(
-        t.b,
-        { x: r.x, y: r.y + ah + g, w: r.w, h: r.h - ah - g },
-        `${path}b`,
-      );
-      gutters.push({
-        path,
-        dir: "col",
-        x: r.x,
-        y: r.y + ah,
-        w: r.w,
-        h: g,
-        span: r.h - g,
-      });
-    }
-  };
-  if (m.root) walk(m.root, { x: 0, y: 0, w, h }, "");
-  return { cards, gutters };
 }
 
 const at = (t: Tile, path: string): Tile | null => {
@@ -151,28 +79,16 @@ export function close(m: Mosaic, id: string): Mosaic {
   };
 }
 
-/** Opens a closed card beside the largest card, dividing it along its longer side. */
-export function open(m: Mosaic, id: string, w: number, h: number): Mosaic {
+/** Opens a closed card at the right of everything, taking a quarter of the width; then it can be moved anywhere. */
+export function open(m: Mosaic, id: string): Mosaic {
   const closed = m.closed.filter((c) => c !== id);
   if (!m.root) return { ...m, root: { card: id }, closed };
   if (cardsOf(m.root).includes(id)) return { ...m, closed };
-  const { cards } = place({ ...m, maximised: null }, w, h, 0);
-  let best = cardsOf(m.root)[0]!;
-  let area = -1;
-  for (const [c, r] of cards) {
-    if (r.w * r.h > area) {
-      area = r.w * r.h;
-      best = c;
-    }
-  }
-  const r = cards.get(best)!;
-  return dock(
-    { ...m, closed },
-    id,
-    best,
-    r.w >= r.h ? "right" : "bottom",
-    true,
-  );
+  return {
+    ...m,
+    closed,
+    root: { dir: "row", ratio: 0.75, a: m.root, b: { card: id } },
+  };
 }
 
 /** Moves a card onto another: beside it on one side, dividing it, or in its place (center), the two swapping. */
@@ -208,50 +124,25 @@ export function dock(
   return { ...m, root: split(rest) };
 }
 
-/** The card next to this one in a direction, by their places: the keyboard's way of moving a card. */
+/** The card before or after this one in reading order: the keyboard's way of moving a card, swapping it. */
 export function neighbour(
   m: Mosaic,
   id: string,
   dir: "left" | "right" | "up" | "down",
-  w: number,
-  h: number,
 ): string | null {
-  const { cards } = place({ ...m, maximised: null }, w, h, 0);
-  const me = cards.get(id);
-  if (!me) return null;
-  const cx = me.x + me.w / 2;
-  const cy = me.y + me.h / 2;
-  let best: string | null = null;
-  let dist = Infinity;
-  for (const [c, r] of cards) {
-    if (c === id) continue;
-    const x = r.x + r.w / 2;
-    const y = r.y + r.h / 2;
-    const ok = dir === "left"
-      ? x < cx - 1
-      : dir === "right"
-      ? x > cx + 1
-      : dir === "up"
-      ? y < cy - 1
-      : y > cy + 1;
-    if (!ok) continue;
-    const d = Math.hypot(x - cx, y - cy);
-    if (d < dist) {
-      dist = d;
-      best = c;
-    }
-  }
-  return best;
+  const order = cardsOf(m.root);
+  const i = order.indexOf(id);
+  if (i < 0) return null;
+  return order[dir === "left" || dir === "up" ? i - 1 : i + 1] ?? null;
 }
 
 export function maximise(m: Mosaic, id: string): Mosaic {
   return { ...m, maximised: m.maximised === id ? null : id };
 }
 
-/** Where a card dragged over a target would go: an edge band of a quarter of the card docks beside it, the middle swaps. */
-export function sideAt(r: Rect, x: number, y: number): Side {
-  const fx = (x - r.x) / r.w;
-  const fy = (y - r.y) / r.h;
+/** Where a card dragged over a target would go, from where the pointer is in it (fractions of its width and height,
+ * read from the page at the moment of the drop): an edge band of a quarter docks beside it, the middle swaps. */
+export function sideAt(fx: number, fy: number): Side {
   const edge = Math.min(fx, 1 - fx, fy, 1 - fy);
   if (edge > 0.25) return "center";
   if (edge === fx) return "left";
@@ -281,7 +172,7 @@ export function arrange(
       : null,
   };
   for (const c of all) {
-    if (!shown.includes(c) && !closed.includes(c)) m = open(m, c, 1600, 1000);
+    if (!shown.includes(c) && !closed.includes(c)) m = open(m, c);
   }
   return m;
 }

@@ -180,36 +180,25 @@
   });
   const edgeById = $derived(new Map(edges.map((e) => [e.id, e])));
 
-  // ---- zoom and pan
-  let zoom = $state(1);
+  // ---- zoom and pan. Fit is the browser's: the drawing scaled to its window by CSS (preserveAspectRatio), nothing
+  // computed. A zoom is a scale the person chose, from 1 (the drawing's own size) up or down.
+  let zoom: number | null = $state(untrack(() => (autofit ? null : 1)));
   let box: HTMLDivElement | undefined = $state();
-  const fit = () => {
-    if (!boxW || !boxH) return;
-    zoom = Math.max(0.2, Math.min(2.5, Math.min(boxW / W, boxH / H)));
-  };
-  let byHand = $state(false);
-  const zoomBy = (f: number) => {
-    byHand = true;
-    zoom = Math.max(0.2, Math.min(4, zoom * f));
-  };
+  const fit = () => (zoom = null);
+  const zoomBy = (f: number) => (zoom = Math.max(0.2, Math.min(4, (zoom ?? 1) * f)));
   /** Room around the drawing for the captions under the nodes, which may be wider than the nodes. */
   const pad = $derived(uml ? 8 : path ? 20 : Math.max(8, subWidth / 2 - 10));
   const W = $derived(placed.width + 2 * pad);
   const H = $derived(placed.height + 2 * pad);
-  $effect(() => {
-    if (!autofit || byHand || !boxW || !boxH) return;
-    const z = Math.min(1.6, boxW / W, boxH / H);
-    if (Math.abs(z - zoom) > 0.01) zoom = Math.max(0.2, z);
-  });
+  let drawing: SVGSVGElement | undefined = $state();
 
+  // The node followed is brought into view by the browser, when the drawing is larger than its window.
   $effect(() => {
     const id = follow;
-    const p = shown.nodes.find((n) => n.id === id);
-    if (!p || !box) return;
-    // Left of centre, so that what comes next, at its right, is in view.
-    const x = (p.x + pad) * zoom - box.clientWidth * (path ? 0.3 : 0.5);
-    const y = (p.y + pad) * zoom - box.clientHeight / 2;
-    box.scrollTo({ left: Math.max(0, x), top: Math.max(0, y), behavior: "smooth" });
+    void shown;
+    if (!id || zoom === null || !drawing) return;
+    const el = [...drawing.querySelectorAll<SVGGElement>("g.node")].find((g) => g.dataset["id"] === id);
+    el?.scrollIntoView({ block: "center", inline: path ? "start" : "center", behavior: "smooth" });
   });
 
   const arrow = (x: number, y: number, a: number) => {
@@ -265,17 +254,19 @@
     <button class="ico" aria-label="Further apart" title="Further apart" disabled={spacing >= 2} onclick={() => (spacing = Math.min(2, spacing * 1.25))}><Icon><Spread /></Icon></button>
     <span class="sep"></span>
     <button class="ico" aria-label="Zoom out" title="Zoom out" onclick={() => zoomBy(1 / 1.25)}><Icon><ZoomOut /></Icon></button>
-    <span class="pct">{Math.round(zoom * 100)}%</span>
+    <span class="pct">{zoom === null ? "fit" : `${Math.round(zoom * 100)}%`}</span>
     <button class="ico" aria-label="Zoom in" title="Zoom in" onclick={() => zoomBy(1.25)}><Icon><ZoomIn /></Icon></button>
-    <button class="ico" aria-label="Fit" title="Fit the card" onclick={() => ((byHand = true), fit())}><Icon><Fit /></Icon></button>
+    <button class="ico" aria-label="Fit" title="Fit the card" aria-pressed={zoom === null} onclick={fit}><Icon><Fit /></Icon></button>
   </div>
-  <!-- The window the drawing is seen through: its size is the card's, never the drawing's, so fit can shrink it. -->
+  <!-- The window the drawing is seen through: its size is the card's, never the drawing's. -->
   <div class="window" bind:clientWidth={boxW} bind:clientHeight={boxH}>
   <Pannable {label} class="pan" ignore=".node, .mark" bind:box>
-    <div class="measure">
+    <div class="measure" class:fitting={zoom === null}>
       <svg
-        width={W * zoom}
-        height={H * zoom}
+        bind:this={drawing}
+        class:fit={zoom === null}
+        width={zoom === null ? undefined : W * zoom}
+        height={zoom === null ? undefined : H * zoom}
         viewBox="{-pad} {-pad} {W} {H}"
         role="img"
         aria-label={label}
@@ -296,6 +287,7 @@
           {#if n}
             <g class="place" style:transform="translate({pn.x}px, {pn.y}px)">
               <g
+                data-id={n.id}
                 class="node {n.cls ?? ''}"
                 class:pinned={pinned.has(n.id)}
                 role="button"
@@ -450,6 +442,10 @@
     inset: 0;
     overflow: auto;
   }
+  .measure.fitting {
+    inline-size: 100%;
+    block-size: 100%;
+  }
   .measure {
     min-inline-size: 100%;
     min-block-size: 100%;
@@ -458,6 +454,10 @@
   }
   svg {
     display: block;
+  }
+  svg.fit {
+    inline-size: 100%;
+    block-size: 100%;
   }
   text {
     font-family: var(--font-family-body);

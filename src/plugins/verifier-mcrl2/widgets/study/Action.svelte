@@ -58,7 +58,7 @@
     text-align: start;
     color: var(--tone);
     background: color-mix(in srgb, var(--color-surface-sunken) 55%, transparent);
-    border: var(--border-width-thin) solid color-mix(in srgb, var(--color-border-strong) 60%, transparent);
+    border: var(--border-width-thin) solid color-mix(in srgb, var(--color-border-strong) 40%, transparent);
     border-radius: var(--radius-full);
     cursor: pointer;
     transition: background var(--motion-duration-fast) var(--motion-easing-standard), border-color var(--motion-duration-fast) var(--motion-easing-standard), transform var(--motion-duration-fast) var(--motion-easing-standard), box-shadow var(--motion-duration-fast) var(--motion-easing-standard);
@@ -82,8 +82,9 @@
     transition: background var(--motion-duration-fast) var(--motion-easing-standard), color var(--motion-duration-fast) var(--motion-easing-standard);
   }
   .disc :global(.glyph) {
-    inline-size: 60%;
-    block-size: 60%;
+    inline-size: 58%;
+    block-size: 58%;
+    stroke-width: 1.75;
   }
   .sm .disc {
     inline-size: calc(var(--size-target) - var(--space-xs));
@@ -114,13 +115,14 @@
     color: var(--color-text-muted);
     white-space: nowrap;
   }
+  /* Hover: a quiet tint and the disc lit; no ring, so the edge stays one clean hairline. */
   .action:hover:not(:disabled) {
-    border-color: var(--color-accent);
-    box-shadow: 0 0 0 var(--border-width-focus) var(--color-accent-soft);
+    background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface-raised));
+    border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
   }
   .action:hover:not(:disabled) .disc {
-    --disc: color-mix(in srgb, var(--color-accent) 22%, var(--color-surface-sunken));
-    --disc-ink: var(--color-accent);
+    --disc: var(--color-accent);
+    --disc-ink: var(--color-on-accent);
   }
   .action:active:not(:disabled) {
     transform: scale(0.97);
