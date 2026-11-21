@@ -66,15 +66,20 @@ import {
   label,
   linked,
   type Migration,
+  orderingPerson,
   owedLine,
   parse,
   type Plugin,
+  READY,
   readyQueue,
+  type ReadyRecord,
   readyRecord,
   refutes,
   rendered,
+  saveMeta,
   sessionLine,
   setFields,
+  setFieldValue,
   str,
   type SummarySection,
   table,
@@ -775,6 +780,49 @@ function readyList(ctx: Context, gate: string | undefined): number {
   })
   if (!items.length) ctx.out("  nothing approved waits: the close of a meeting fills it (naima meeting <meeting> --close)")
   return 0
+}
+
+/**
+ * `naima start`: put open items on the ready queue to start now, on the word of the person who orders it (--by, else
+ * the person at the keyboard): the coordinator starts them first whenever a worker slot is free. The item keeps the
+ * meeting and decisions an earlier approval recorded; one already to start now is said and left as it is.
+ */
+const startCommand: Command = {
+  name: "start",
+  says:
+    "put open items on the ready queue to start now, on the word of the person who orders it: the coordinator starts them first, whenever a worker slot is free",
+  enforces:
+    "only an open item is put on the queue, and only on a person's word: --by, else the person at the keyboard; an agent's own --by agent is refused. The item's ready record says the day, start: true, by whom and the consent; nothing else changes",
+  usage: 'start <item>... [--by <who>] [--consent "<the yes, restated>"]',
+  options: [
+    { name: "--by", says: "the person who orders it, when not the one at the keyboard; kept in the ready record and in the item's history" },
+    { name: "--consent", says: "their yes, restated; without it, the record says they started it themselves" },
+  ],
+  examples: ["start export-drops", 'start export-drops parse-dates --by Ada --consent "yes, start both now"'],
+  run(args, ctx) {
+    const p = parse(args, { by: { type: "string" }, consent: { type: "string" } })
+    if (!p.positionals.length) throw usageError(this)
+    const by = str(p, "by")?.trim() || orderingPerson(ctx)
+    if (!by || by === "agent") {
+      throw new Error("start puts work on the queue only on a person's word: name them with --by, or set NAIMA_PERSON or git's user.name")
+    }
+    const consent = str(p, "consent")?.trim() || `${by} started it`
+    if (consent.includes("\n")) throw new Error("--consent takes the yes on one line")
+    const items = p.positionals.map((r) => ctx.repo.resolve(r))
+    for (const item of items) if (!isOpen(ctx, item)) throw new Error(`${label(item)} is not open: only open work is started`)
+    for (const item of items) {
+      const prev = readyRecord(item)
+      if (prev?.start) {
+        ctx.out(`${label(item)}: already on the ready queue to start now`)
+        continue
+      }
+      const record: ReadyRecord & { by: string } = { ...(prev ?? {}), on: today(ctx), start: true, by, consent }
+      setFieldValue(item, READY, record as unknown as Record<string, unknown>)
+      saveMeta(ctx, item)
+      ctx.out(`${label(item)}: on the ready queue to start now — the coordinator starts it when a worker slot is free`)
+    }
+    return 0
+  },
 }
 
 /** The open items of a gate, or of every gate, by whose hands their proof needs. */
@@ -1481,7 +1529,16 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
         ),
       ),
     ],
-    commands: [gatesCommand, gateCommand, planCommand(planDeps), queue, coverageCommand(lists), readyCommand(gatedItems), orderCommand(gatedItems)],
+    commands: [
+      gatesCommand,
+      gateCommand,
+      planCommand(planDeps),
+      queue,
+      startCommand,
+      coverageCommand(lists),
+      readyCommand(gatedItems),
+      orderCommand(gatedItems),
+    ],
     summary: [status],
   }
 }

@@ -37,6 +37,7 @@ import {
   rendered,
   RETIRED,
   runChecks,
+  setFields,
   setFieldValue,
   str,
   type SummarySection,
@@ -47,6 +48,9 @@ import {
   type WriteHook,
 } from "../../core/api.ts"
 import { declaredRepositories, type ForeignVerdict, parseForeign, verifyForeign } from "./foreign.ts"
+
+/** The flag of a status that holds work deliberately not done, which naima close --wont-fix sets. */
+export const DECLINED = "declined"
 
 /**
  * A retired item in words — `closed/x (title) retired on 2026-11-01: why; replaced by features/y` — from the fields and
@@ -465,8 +469,13 @@ const closeCommand = (repositories: readonly string[]): Command => ({
   says: "archive a resolved item: fixed, and proven by an item that has passed; or a finished review or decision, with the reason",
   enforces:
     "an item is archived only when fixed and proven: fixedOn set and a verified-by item that has passed, with every write hook agreeing; --force takes a hook's refusal on, for the one who owns the evidence. --reason closes, without fixedOn, proof or commit, only a todo whose kind is review or decision and whose status is done or dropped; the reason is kept in closedBecause and naima check lists it",
-  usage: 'close <item> [--force] [--reason "<why>"]',
+  usage: 'close <item> [--force] [--reason "<why>"] | close <item> --wont-fix --reason "<why>"',
   options: [
+    {
+      name: "--wont-fix",
+      says:
+        "close it as won't fix, with --reason: the item stays where it is, in its type's status for work deliberately not done (a bug's wontfix, a todo's or a requirement's dropped, a feature's withdrawn), and the reason is added to its page as a note by the person who ordered it",
+    },
     {
       name: "--force",
       says: "close it although a write hook refuses — for the one who owns the evidence, say an item this branch claims whose proof someone else performed",
@@ -481,15 +490,17 @@ const closeCommand = (repositories: readonly string[]): Command => ({
     "close export-drops",
     "close export-drops --force",
     'close review-last-two-days --reason "each change reviewed with the owner; the decisions are in the item\'s notes"',
+    'close export-drops --wont-fix --reason "the old exporter is going away in 2.0"',
   ],
   async run(args, ctx) {
-    const p = parse(args, { force: { type: "boolean" }, reason: { type: "string" } })
+    const p = parse(args, { force: { type: "boolean" }, reason: { type: "string" }, "wont-fix": { type: "boolean" } })
     const ref = p.positionals[0]
     if (!ref?.trim() || p.positionals.length > 1) throw usageError(this)
     const item = ctx.repo.resolve(ref)
     const state = lifecycle(ctx, item)
     if (state === "closed") throw new Error(`${label(item)} is already closed`)
     const reason = str(p, "reason")?.trim()
+    if (bool(p, "wont-fix")) return closeWontFix(ctx, item, reason ?? "")
     if (reason !== undefined) return closeWithReason(ctx, item, reason, bool(p, "force"))
     const problem = await proofProblem(ctx, item)
     if (problem) throw new Error(`${label(item)} cannot be closed: ${problem}`)
@@ -572,6 +583,32 @@ const retire: Command = {
  * Close a todo whose work is a judgement with no code — a review, a decision — with the reason instead of a proof:
  * it has no fixedOn, no test and no commit to show, and its status (done or dropped) already says it is finished.
  */
+/** The status a type keeps for work deliberately not done, flagged declined; null when it has none. */
+export function declinedStatus(ctx: Context, type: string): string | null {
+  const def = ctx.registry.types.get(type)
+  return Object.entries(def?.statuses ?? {}).find(([, s]) => s.flags?.includes(DECLINED))?.[0] ?? null
+}
+
+/**
+ * `naima close <item> --wont-fix --reason`: the reason added to the page as a note, by whoever ordered it, then the
+ * item set to its type's declined status, where it stays.
+ */
+async function closeWontFix(ctx: Context, item: Item, reason: string): Promise<number> {
+  if (!reason || reason.includes("\n")) throw new Error("--wont-fix takes --reason: why it will not be done, on one line")
+  if (!isOpen(ctx, item)) throw new Error(`${label(item)} is ${item.meta.status}: only open work is closed as won't fix`)
+  const status = declinedStatus(ctx, item.type)
+  if (!status) throw new Error(`${label(item)} cannot be closed as won't fix: a ${item.type} item has no status for work deliberately not done`)
+  const note = ctx.registry.find<Command>("commands", "note")?.value
+  if (!note) throw new Error("close --wont-fix needs the note command")
+  const by = ctx.orderedBy?.trim()
+  const quiet = Object.create(ctx, { out: { value: () => {} } }) as Context
+  const code = await note.run([label(item), `Closed as won't fix: ${reason}`, ...(by ? ["--by", by] : [])], quiet)
+  if (typeof code === "number" && code !== 0) return code
+  setFields(ctx, ctx.repo.resolve(label(item)), [["status", status]])
+  ctx.out(`${label(item)}: ${status}, won't fix — ${reason}`)
+  return 0
+}
+
 function closeWithReason(ctx: Context, item: Item, reason: string, force: boolean): number {
   if (!reason || reason.includes("\n")) throw new Error("--reason takes what was settled and where it is written, on one line")
   const kind = fieldValue(item, KIND)
@@ -752,7 +789,7 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
         statuses: {
           open: { category: "open", says: "nothing on the page has been done" },
           partial: { category: "open", says: "some of it has, and the page says what is left" },
-          wontfix: { category: "done", says: "deliberately not fixed; the reason is on the page" },
+          wontfix: { category: "done", flags: [DECLINED], says: "deliberately not fixed; the reason is on the page" },
         },
         initialStatus: "open",
         template: report,
@@ -767,7 +804,7 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
           open: { category: "open", says: "not started" },
           partial: { category: "open", says: "started; the page says what is left" },
           done: { category: "done", says: "finished" },
-          dropped: { category: "done", says: "deliberately not done; the reason is on the page" },
+          dropped: { category: "done", flags: [DECLINED], says: "deliberately not done; the reason is on the page" },
         },
         initialStatus: "open",
         template: work,
@@ -783,7 +820,7 @@ export default function trackers(options: Record<string, unknown> = {}): Plugin 
           requested: { category: "open", says: "asked for; no code exists" },
           planned: { category: "open", says: "agreed and scheduled" },
           shipped: { category: "done", says: "on the trunk, with its documentation" },
-          withdrawn: { category: "done", says: "decided against" },
+          withdrawn: { category: "done", flags: [DECLINED], says: "decided against" },
         },
         initialStatus: "requested",
         traits: [FIXABLE],

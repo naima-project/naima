@@ -422,7 +422,13 @@ line it follows. Every list looks the same, the diary's too: one row each, its d
 click on a row, or Enter, opens it beside the list: the item slides in from the right and the list narrows to a column on the left, so you can go from one item
 to the next as in a mail app, by clicking in the column or with the arrow keys. The item is said in plain words: what it is and where it stands, why it waits
 (with **Bring it to the chat** for an entry of Waiting for you), when and where a commit was made and what it closed, what the item is about, what it is linked
-to and its history; every item it names opens there in its place. Back, Escape or a click on the stage's title give the whole list back. On a phone the column
+to and its history; every item it names opens there in its place. Under the title of an item of the tracker is a row of what you can do with it:
+**Start now** puts it on the queue the coordinator starts first (`naima start`); **Move to a goal or release** picks one of the open goals and releases
+and puts it there, off the others; **Decide** or **Approve** settles the open question it is, or the one it is blocked by, or confirms a proposed
+requirement; **Comment** adds a note in your name; **Close as won't fix** asks why and closes it with the status its kind keeps for work deliberately not
+done (`naima close --wont-fix`). An action the item does not allow is greyed, with the reason under its name. A form opens under the row for those that
+ask something; each change runs as a command in your name, one at a time, and the row says how it goes and how it ended, then the item is read again.
+Back, Escape or a click on the stage's title give the whole list back. On a phone the column
 hides and the item takes the stage. Whatever opens in the stage, a list, an item, a day's story or a part of What's left, condenses everything above it at once,
 in one smooth move, since the full board beside a list is only noise, and folds what was open up there: the chart turns back to the ring, a detail closes, the
 gallery of faces shuts. The top and the stage take turns: while the stage shows anything but the diary's own list the top stays the bar, and scrolling never

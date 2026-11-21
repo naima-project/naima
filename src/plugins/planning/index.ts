@@ -129,7 +129,7 @@ const requirementsType: TypeDef = {
     },
     stated: { category: "open", says: "stated, and not yet proven" },
     met: { category: "done", says: "proven: a test or property linked to it has passed, and none refutes it" },
-    dropped: { category: "done", says: "no longer required; the page says why" },
+    dropped: { category: "done", flags: ["declined"], says: "no longer required; the page says why" },
   },
   initialStatus: "stated",
   template: (title) =>
