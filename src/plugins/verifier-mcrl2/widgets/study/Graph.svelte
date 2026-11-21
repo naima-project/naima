@@ -159,7 +159,9 @@
   let frame = 0;
   $effect(() => {
     const to = placed;
-    const from = shown;
+    // Where the glide starts is read without subscribing: the glide writes `shown` every frame, and an effect that
+    // depended on it would restart the glide each frame, so the drawing would approach its place forever.
+    const from = untrack(() => shown);
     cancelAnimationFrame(frame);
     const ms = motionMs();
     if (ms <= 0 || from.nodes.length === 0) {
