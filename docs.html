@@ -3,105 +3,116 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Naima</title>
-<meta name="description" content="Naima's documentation, read from the product's repository and shown in the site's style.">
-<meta name="color-scheme" content="light">
+<title>NAIMA</title>
+<meta name="description" content="NAIMA's documentation, read from the product's repository and shown in the site's style.">
+<meta name="color-scheme" content="dark">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="alternate" type="text/plain" href="llms.txt" title="Naima, for AI agents: how to install it">
-<link rel="preload" href="fonts/inter-tight-latin.woff2" as="font" type="font/woff2" crossorigin>
 <style>
-  /* palette */
-  :root {
-    color-scheme: light;
-    --bg:      #fbfaf7;
-    --fg:      #16181d;
-    --text:    #2f3238;
-    --muted:   #50535a;
-    --line:    #dcdad3;
-    --surface: #f2f0ea;
-    --accent:  #2a3f8f;
-    --sans: "Inter Tight", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  }
-  /* end palette */
-  /* Inter Tight, SIL Open Font License 1.1 (fonts/OFL.txt), served from this site. */
-  @font-face { font-family: "Inter Tight"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("fonts/inter-tight-latin.woff2") format("woff2"); }
-  @font-face { font-family: "Inter Tight"; font-style: italic; font-weight: 500; font-display: swap; src: url("fonts/inter-tight-italic-latin.woff") format("woff"); }
+/* IBM Plex Sans and IBM Plex Mono, SIL Open Font License 1.1 (fonts/OFL.txt), served from this site. */
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:400;font-display:swap;src:url("fonts/plex-sans-400.woff2") format("woff2")}
+@font-face{font-family:'IBM Plex Sans';font-style:italic;font-weight:400;font-display:swap;src:url("fonts/plex-sans-400-italic.woff2") format("woff2")}
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:500;font-display:swap;src:url("fonts/plex-sans-500.woff2") format("woff2")}
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:600;font-display:swap;src:url("fonts/plex-sans-600.woff2") format("woff2")}
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:700;font-display:swap;src:url("fonts/plex-sans-700.woff2") format("woff2")}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url("fonts/plex-mono-400.woff2") format("woff2")}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:swap;src:url("fonts/plex-mono-500.woff2") format("woff2")}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:700;font-display:swap;src:url("fonts/plex-mono-700.woff2") format("woff2")}
+/* palette */
+:root{--bg:#121820;--ink:#e8efff;--text:#c9d6f0;--dim:#9fb3d9;--faint:#6f86b3;--blue:#4d8dff;--phos:#8fb8ff;--screen:#0a1220;--line:rgba(77,141,255,.45);--rule:rgba(77,141,255,.22);--card:#151d29;
+  --sans:'IBM Plex Sans',system-ui,sans-serif;--mono:'IBM Plex Mono',ui-monospace,monospace;--on-blue:#0e1520;--head:#f2f6ff;--code:#cfe0ff}
+/* end palette */
+*{box-sizing:border-box;margin:0}
+html,body{overflow-x:clip}
+body{background:var(--bg);color:var(--ink);font:16px/1.6 var(--sans);-webkit-font-smoothing:antialiased;
+  background-image:linear-gradient(rgba(77,141,255,.10) 1px,transparent 1px),linear-gradient(90deg,rgba(77,141,255,.10) 1px,transparent 1px),linear-gradient(rgba(77,141,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(77,141,255,.045) 1px,transparent 1px);
+  background-size:120px 120px,120px 120px,24px 24px,24px 24px;background-attachment:fixed}
+::selection{background:rgba(77,141,255,.35)}
+a{color:var(--phos);text-decoration:none;border-bottom:1px solid rgba(143,184,255,.4);transition:color .2s,border-color .2s}
+a:hover{color:var(--ink);border-color:currentColor}
+:focus-visible{outline:2px solid var(--phos);outline-offset:3px;border-radius:4px}
+.skip{position:absolute;left:-999px}.skip:focus{left:16px;top:12px;z-index:99;background:var(--blue);color:var(--on-blue);padding:6px 10px;border-radius:6px}
 
-  * { box-sizing: border-box; }
-  html, body { margin: 0; }
-  body { background: var(--bg); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
-  ::selection { background: color-mix(in srgb, var(--accent) 16%, transparent); }
-  a { color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent); transition: color .2s ease, text-decoration-color .2s ease; }
-  a:hover { color: var(--fg); text-decoration-color: currentColor; }
-  a:focus-visible { outline: none; border-radius: 6px; box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px color-mix(in srgb, var(--accent) 55%, transparent); }
+/* top bar, as on the homepage */
+.bar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:20px;padding:10px clamp(16px,3vw,32px);background:rgba(18,24,32,.86);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid rgba(77,141,255,.25)}
+.bar a{border:0}
+.bar .home{display:flex;align-items:center;gap:10px}
+.bar .home img{width:30px;height:30px;border-radius:7px}
+.bar .home .name{font:700 18px var(--mono);color:var(--phos);letter-spacing:.02em}
+.bar .btn{margin-left:auto;display:inline-block;background:var(--blue);color:var(--on-blue);font-weight:600;padding:7px 14px;font-size:14px;border-radius:7px;box-shadow:0 0 22px rgba(77,141,255,.35)}
+.bar .btn:hover{color:var(--on-blue)}
 
-  .top { max-width: 760px; margin: 0 auto; padding: 28px 16px 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 28px; }
-  .top .home { font-size: 26px; font-weight: 600; letter-spacing: -.5px; color: var(--fg); text-decoration: none; }
-  .top .home .ai { color: var(--accent); }
-  .top nav { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 16px; }
-  .top .home { transition: color .2s ease; }
-  .top .home:hover { color: var(--fg); }
-  .top nav a { color: var(--muted); text-decoration: none; background: linear-gradient(currentColor, currentColor) 0 100% / 0 1px no-repeat; padding-bottom: 2px; transition: color .2s ease, background-size .3s cubic-bezier(.2, .7, .1, 1); }
-  .top nav a:hover, .top nav a[aria-current="page"] { color: var(--fg); background-size: 100% 1px; }
-  article h2:target, article h3:target, article h4:target { color: var(--accent); }
-  @media (prefers-reduced-motion: reduce) { a, .top .home, .top nav a { transition: none; } }
+/* the documents' own menu */
+.docs{max-width:820px;margin:0 auto;padding:22px 16px 0;display:flex;flex-wrap:wrap;gap:6px 8px;font:500 13.5px var(--mono)}
+.docs a{border:1px solid var(--rule);border-radius:6px;padding:5px 10px;color:var(--dim)}
+.docs a:hover{color:var(--ink);border-color:var(--line)}
+.docs a[aria-current="page"]{background:var(--phos);border-color:var(--phos);color:var(--screen)}
 
-  article { max-width: 760px; margin: 0 auto; padding: 40px 16px 96px; font-size: 18px; line-height: 1.65; color: var(--text); }
-  article > :first-child { margin-top: 0; }
-  article h1, article h2, article h3, article h4 { color: var(--fg); line-height: 1.2; scroll-margin-top: 24px; }
-  article h1 { font-size: 46px; font-weight: 500; letter-spacing: -1px; margin: 0 0 28px; }
-  article h2 { font-size: 30px; font-weight: 500; letter-spacing: -.5px; margin: 56px 0 16px; }
-  article h3 { font-size: 22px; font-weight: 600; margin: 36px 0 12px; }
-  article h4 { font-size: 18px; font-weight: 600; margin: 28px 0 8px; }
-  article p, article ul, article ol, article blockquote, article pre, article .table { margin: 0 0 18px; }
-  article ul, article ol { padding-left: 1.4em; }
-  article li { margin: 6px 0; }
-  article li > p { margin: 0 0 8px; }
-  article strong { color: var(--fg); font-weight: 600; }
-  article em { font-style: italic; }
-  article blockquote { margin-left: 0; padding: 4px 0 4px 20px; border-left: 2px solid var(--line); color: var(--muted); }
-  article code { font: .86em var(--mono); background: var(--surface); padding: .1em .35em; border-radius: 5px; }
-  article pre { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; overflow-x: auto; }
-  article pre code { background: none; padding: 0; font-size: 14px; line-height: 1.55; }
-  article .table { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; }
-  article table { border-collapse: collapse; width: 100%; font-size: 16px; line-height: 1.5; }
-  article th, article td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
-  article th { color: var(--fg); font-weight: 600; background: var(--surface); }
-  article tr:last-child td { border-bottom: 0; }
-  article hr { border: 0; border-top: 1px solid var(--line); margin: 40px 0; }
-  .status { color: var(--muted); }
-  .source { max-width: 760px; margin: -64px auto 0; padding: 0 16px 64px; font-size: 14px; color: var(--muted); }
-  .source a { color: var(--muted); }
-
-  @media (max-width: 640px) {
-    article { font-size: 17px; padding-top: 28px; }
-    article h1 { font-size: 34px; }
-    article h2 { font-size: 25px; margin-top: 44px; }
-  }
-  .skip { position: absolute; left: 12px; top: -80px; z-index: 10; background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-weight: 600; text-decoration: none; }
-  .skip:focus { top: 12px; }
-  .foot { text-align: center; padding: 32px 24px 40px; font-size: 14px; }
-  .foot a { display: inline-block; padding: 4px 8px; color: var(--text); text-underline-offset: 3px; }
+/* the document */
+/* the page is one screen: the bar and the menu stay, the document scrolls inside its box */
+html,body{height:100%}
+body{display:flex;flex-direction:column;overflow:hidden}
+main{flex:1;min-height:0;display:flex;flex-direction:column;width:100%;max-width:852px;margin:0 auto;padding:16px 16px 0}
+.box{flex:1;min-height:0;position:relative;background:rgba(10,18,32,.72);border:1px solid var(--line);border-radius:12px}
+.box::before{z-index:1;content:"";position:absolute;inset:-1px;border-radius:12px;pointer-events:none;
+  background:linear-gradient(var(--blue),var(--blue)) 0 0/22px 1.5px,linear-gradient(var(--blue),var(--blue)) 0 0/1.5px 22px,linear-gradient(var(--blue),var(--blue)) 100% 0/22px 1.5px,linear-gradient(var(--blue),var(--blue)) 100% 0/1.5px 22px,
+  linear-gradient(var(--blue),var(--blue)) 0 100%/22px 1.5px,linear-gradient(var(--blue),var(--blue)) 0 100%/1.5px 22px,linear-gradient(var(--blue),var(--blue)) 100% 100%/22px 1.5px,linear-gradient(var(--blue),var(--blue)) 100% 100%/1.5px 22px;background-repeat:no-repeat}
+article{height:100%;overflow-y:auto;overscroll-behavior:contain;padding:clamp(24px,4vw,48px) clamp(18px,4vw,52px) 40px;font-size:17px;line-height:1.7;color:var(--text);
+  border-radius:12px;scrollbar-width:thin;scrollbar-color:rgba(77,141,255,.5) transparent}
+article > :first-child{margin-top:0}
+article h1,article h2,article h3,article h4,article h5,article h6{color:var(--head);line-height:1.18;letter-spacing:-.015em;scroll-margin-top:20px;text-wrap:balance}
+article h1{font-size:clamp(32px,4.4vw,46px);font-weight:600;letter-spacing:-.025em;margin:0 0 26px}
+article h2{font-size:clamp(24px,2.8vw,30px);font-weight:600;margin:52px 0 14px;padding-top:18px;border-top:1px solid var(--rule)}
+article h3{font-size:21px;font-weight:600;margin:34px 0 10px}
+article h4,article h5,article h6{font:600 13.5px var(--mono);letter-spacing:.02em;color:var(--phos);margin:28px 0 8px}
+article :is(h2,h3,h4):target{color:var(--phos)}
+article p,article ul,article ol,article blockquote,article pre,article .table{margin:0 0 18px}
+article ul,article ol{padding-left:1.4em}
+article li{margin:6px 0}
+article li > p{margin:0 0 8px}
+article ul > li::marker{color:var(--blue)}
+article ol > li::marker{color:var(--phos);font:500 .9em var(--mono)}
+article strong{color:var(--ink);font-weight:600}
+article blockquote{padding:10px 16px;border-left:3px solid var(--blue);background:rgba(77,141,255,.07);color:var(--dim);border-radius:0 8px 8px 0}
+article blockquote > :last-child{margin-bottom:0}
+article code{font:.86em var(--mono);color:var(--code);background:rgba(77,141,255,.12);border:1px solid var(--rule);padding:.05em .35em;border-radius:5px}
+article pre{background:var(--screen);border:1px solid rgba(143,184,255,.18);border-radius:10px;padding:16px 18px;overflow-x:auto;position:relative;box-shadow:0 18px 40px rgba(0,0,0,.35)}
+article pre code{background:none;border:0;padding:0;font:500 14px/1.6 var(--mono);color:var(--phos);text-shadow:0 0 6px rgba(143,184,255,.25)}
+article .table{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+article table{border-collapse:collapse;width:100%;font-size:15px;line-height:1.5}
+article th,article td{text-align:left;vertical-align:top;padding:10px 14px;border-bottom:1px solid var(--rule)}
+article th{color:var(--phos);font:500 13px var(--mono);background:rgba(77,141,255,.08)}
+article tr:last-child td{border-bottom:0}
+article hr{border:0;border-top:1px solid var(--rule);margin:40px 0}
+article img{max-width:100%;height:auto;border-radius:8px}
+.status{color:var(--faint);font-family:var(--mono)}
+.status::after{content:"▌";margin-left:4px;color:var(--phos);animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.source{margin:0;padding:8px 2px 0;font:400 12.5px var(--mono);color:var(--faint)}
+.source a{color:var(--dim);border-color:rgba(159,179,217,.35)}
+footer{text-align:center;padding:8px 16px 12px;color:var(--faint);font-size:13.5px}
+footer a{color:var(--dim)}
+@media (prefers-reduced-motion:reduce){a{transition:none}.status::after{animation:none}}
+@media (max-width:640px){article{font-size:16.5px}.box,.box::before,article{border-radius:10px}main{padding:12px 10px 0}.docs{padding-top:12px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.docs a{flex:none}}
 </style>
 </head>
 <body>
 <a class="skip" href="#main">Skip to the content</a>
-<header class="top">
-  <a class="home" href="./" aria-label="Naima, home">N<span class="ai">AI</span>MA</a>
-  <nav aria-label="Documentation">
-    <a href="docs.html?p=guide/naima-in-one-minute.md" data-doc="guide/naima-in-one-minute.md">In one minute</a>
-    <a href="docs.html?p=guide/naima-in-ten-minutes.md" data-doc="guide/naima-in-ten-minutes.md">In ten minutes</a>
-    <a href="docs.html?p=guide/primer.md" data-doc="guide/primer.md">Primer</a>
-    <a href="docs.html?p=guide/glossary.md" data-doc="guide/glossary.md">Glossary</a>
-    <a href="docs.html?p=README.md" data-doc="README.md">All documentation</a>
-    <a href="install.html">Use it now</a>
-  </nav>
+<header class="bar">
+  <a class="home" href="./" aria-label="NAIMA, home"><img src="naima-icon-64.png" alt=""><span class="name">NAIMA</span></a>
+  <a class="btn" href="install.html">Use it now</a>
 </header>
+<nav class="docs" aria-label="Documentation">
+  <a href="docs.html?p=guide/naima-in-one-minute.md" data-doc="guide/naima-in-one-minute.md">In one minute</a>
+  <a href="docs.html?p=guide/naima-in-ten-minutes.md" data-doc="guide/naima-in-ten-minutes.md">In ten minutes</a>
+  <a href="docs.html?p=guide/primer.md" data-doc="guide/primer.md">Primer</a>
+  <a href="docs.html?p=guide/glossary.md" data-doc="guide/glossary.md">Glossary</a>
+  <a href="docs.html?p=README.md" data-doc="README.md">All documentation</a>
+</nav>
 <main id="main">
-  <article id="doc" aria-live="polite"><p class="status">Loading…</p></article>
+  <div class="box"><article id="doc" aria-live="polite" tabindex="0"><p class="status">Loading</p></article></div>
   <p class="source" id="source" hidden></p>
 </main>
+<footer>NAIMA · MIT · free and open source · <a href="accessibility.html">Accessibility</a></footer>
 
 <script src="vendor/marked.umd.js"></script>
 <script>
@@ -110,12 +121,13 @@
   // the site always shows the current text; rendered here in the site's own style.
   const REPO = "https://github.com/naima-project/naima"
   const RAW = "https://raw.githubusercontent.com/naima-project/naima/main/docs/"
-  // A preview on this machine may read the docs from a local server instead (docs.html?local):
+  // A preview on this machine may read the docs from a local server instead (?local):
   // only on localhost, so the published site always reads the product's main.
   const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname) && new URLSearchParams(location.search).has("local")
   const SOURCE = LOCAL ? "http://localhost:8766/" : RAW
   const BLOB = REPO + "/blob/main/docs/"
   const DEFAULT = "guide/naima-in-one-minute.md"
+  const SELF = location.pathname.split("/").pop() || "docs.html"
 
   const asked = new URLSearchParams(location.search).get("p") || DEFAULT
   // Only a markdown file under docs/: no scheme, no climbing out.
@@ -142,7 +154,7 @@
     if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("#")) return
     const u = new URL(href, BLOB + path)
     const rel = u.href.startsWith(BLOB) ? decodeURIComponent(u.pathname.slice(new URL(BLOB).pathname.length)) : ""
-    a.href = /^[\w-]+(\/[\w-]+)*\.md$/.test(rel) ? `docs.html?p=${rel}${LOCAL ? "&local" : ""}${u.hash}` : u.href
+    a.href = /^[\w-]+(\/[\w-]+)*\.md$/.test(rel) ? `${SELF}?p=${rel}${LOCAL ? "&local" : ""}${u.hash}` : u.href
   }
 
   fetch(SOURCE + path)
@@ -151,7 +163,8 @@
       return r.text()
     })
     .then((md) => {
-      doc.innerHTML = marked.parse(md)
+      // The name is written NAIMA everywhere (owner's decision), in the docs too.
+      doc.innerHTML = marked.parse(md.replace(/\bNaima\b/g, "NAIMA"))
       const seen = new Map()
       for (const h of doc.querySelectorAll("h1, h2, h3, h4, h5, h6")) h.id = slug(h.textContent, seen)
       for (const a of doc.querySelectorAll("a[href]")) relink(a)
@@ -165,17 +178,16 @@
         box.append(t)
       }
       const h1 = doc.querySelector("h1")
-      if (h1) document.title = `${h1.textContent} · Naima`
+      if (h1) document.title = `${h1.textContent} · NAIMA`
       source.innerHTML = `Read from <a href="${BLOB + path}">docs/${escape(path)}</a> on GitHub.`
       source.hidden = false
       // Scroll to the heading once the fonts have set the page, so it lands exactly.
       if (location.hash) document.fonts.ready.then(() => document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView())
     })
     .catch(() => {
-      doc.innerHTML = `<p class="status">This page could not be loaded. Read it on GitHub: <a href="${BLOB + path}">docs/${escape(path)}</a>.</p>`
+      doc.innerHTML = `<p>This page could not be loaded. Read it on GitHub: <a href="${BLOB + path}">docs/${escape(path)}</a>.</p>`
     })
 })()
 </script>
-<footer class="foot"><a href="accessibility.html">Accessibility</a></footer>
 </body>
 </html>
