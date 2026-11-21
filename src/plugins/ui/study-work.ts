@@ -5,7 +5,7 @@
 // (develop/models/ui/study/); this file only says what each job runs.
 
 import { Buffer } from "node:buffer"
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
+import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { CODEGEN_MISSING } from "../../core/api.ts"
 import type { Study } from "./studies.ts"
@@ -133,17 +133,12 @@ export function codegenCommand(found: string | null, windows: boolean, python: s
 /**
  * What a study's build script needs to start naima-codegen itself, as environment variables: on Windows `NAIMA_CODEGEN`,
  * which a batch file calls, so a program or the `naima-codegen.cmd` that sits beside the script (it starts the script
- * with the Python named by `NAIMA_PYTHON`), and that Python when Naima installed one. Elsewhere the script runs itself and
+ * with the Python named by `NAIMA_PYTHON`), which the launcher found and hands on as `NAIMA_CODEGEN_BATCH`, and that Python when Naima installed one. Elsewhere the script runs itself and
  * the launcher has already named it.
  */
-export function codegenEnv(
-  found: string | null,
-  windows: boolean,
-  python: string | null,
-  exists: (file: string) => boolean = existsSync,
-): Record<string, string> {
+export function codegenEnv(found: string | null, windows: boolean, python: string | null, batch: string | null = null): Record<string, string> {
   if (!found || !windows) return {}
-  const runnable = /\.(exe|com|cmd|bat)$/i.test(found) ? found : exists(`${found}.cmd`) ? `${found}.cmd` : null
+  const runnable = /\.(exe|com|cmd|bat)$/i.test(found) ? found : batch
   return { ...(runnable ? { NAIMA_CODEGEN: runnable } : {}), ...(python ? { NAIMA_PYTHON: python } : {}) }
 }
 

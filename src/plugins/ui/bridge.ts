@@ -435,7 +435,7 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
         // This program, never the one the project pins: model-check may be newer than it.
         naima: actionCommand(opts.entry ?? selfEntry(), ctx.trackerRoot, []),
         codegen: codegenCommand(codegen, windows, python),
-        codegenEnv: codegenEnv(codegen, windows, python),
+        codegenEnv: codegenEnv(codegen, windows, python, process.env["NAIMA_CODEGEN_BATCH"] ?? null),
         pathFirst: mcrl2Folders(ctx),
         windows,
       }, text(args["property"]) ?? undefined)
