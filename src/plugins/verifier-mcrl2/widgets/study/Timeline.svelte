@@ -23,12 +23,15 @@
 
   let dx = $state(112);
   const X0 = 40;
-  const Y = 110;
+  /** The drawing's height follows the card's: the line at its middle, the steps ahead spread over it. */
+  let boxH = $state(220);
+  const H = $derived(Math.max(150, boxH - 6));
+  const Y = $derived(H / 2 + 6);
   const xOf = (k: number) => X0 + k * dx;
   const xNow = $derived(xOf(position));
   const fade = (k: number) => (pinned.has(k) ? 1 : Math.max(0.22, 1 - (position - k) * 0.09));
   const drawn = $derived(ahead.slice(0, show));
-  const yAhead = (i: number, n: number) => Y + (i - (n - 1) / 2) * 30;
+  const yAhead = (i: number, n: number) => Y + (i - (n - 1) / 2) * Math.min(30, (H - 40) / Math.max(1, n));
   const W = $derived(Math.max(xOf(past.length), xNow + 1.6 * dx) + 260);
   const short = (t: string) => (t.length > 20 ? `${t.slice(0, 19)}…` : t);
 
@@ -47,7 +50,8 @@
     <button aria-label="Further apart" onclick={() => (dx = Math.min(260, dx * 1.25))}>+</button>
   </div>
   <Pannable {label} class="pan" ignore=".state, .ahead" bind:box>
-    <svg width={W} height="220" viewBox="0 0 {W} 220" role="img" aria-label={label}>
+    <span class="hmeasure" bind:clientHeight={boxH}></span>
+    <svg width={W} height={H} viewBox="0 0 {W} {H}" role="img" aria-label={label}>
       <line class="track" x1={xOf(0)} x2={xOf(past.length)} y1={Y} y2={Y} />
       {#each past as p, i (i)}
         <g class="past" class:after={i >= position} style:opacity={i < position ? fade(i) : 0.3}>
@@ -128,6 +132,14 @@
   }
   svg {
     display: block;
+  }
+  .hmeasure {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .timeline :global(.pan) {
+    position: relative;
   }
   text {
     font-family: var(--font-family-body);

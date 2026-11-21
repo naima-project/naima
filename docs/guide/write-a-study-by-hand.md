@@ -246,23 +246,23 @@ From `view/src/observer.svelte.ts`:
 
 ```ts
 export function on(m: Memory, e: Entry): Memory {
-  const n: Memory = structuredClone(m);
-  n.steps++;
-  const who = String(e.input.args[0]);
-  if (e.input.action === "ask") n.askedAt[who] = n.steps;
-  n.messages.push({ from: who, to: LOCK, label: e.input.phrase ?? e.input.action, title: e.input.label });
+  const n: Memory = structuredClone(m)
+  n.steps++
+  const who = String(e.input.args[0])
+  if (e.input.action === "ask") n.askedAt[who] = n.steps
+  n.messages.push({ from: who, to: LOCK, label: e.input.phrase ?? e.input.action, title: e.input.label })
   for (const o of e.outputs) {
-    const to = String(o.args[0]);
+    const to = String(o.args[0])
     if (o.action === "grant" && to in n.askedAt) {
-      n.waits[to] = [...(n.waits[to] ?? []), n.steps - n.askedAt[to]!];
-      delete n.askedAt[to];
+      n.waits[to] = [...(n.waits[to] ?? []), n.steps - n.askedAt[to]!]
+      delete n.askedAt[to]
     }
-    n.messages.push({ from: LOCK, to, label: o.phrase ?? o.action, title: o.label });
+    n.messages.push({ from: LOCK, to, label: o.phrase ?? o.action, title: o.label })
   }
-  n.messages = n.messages.slice(-MESSAGES);
-  n.holder = holderOf(e.after);
-  n.queue = [...e.after.queue];
-  return n;
+  n.messages = n.messages.slice(-MESSAGES)
+  n.holder = holderOf(e.after)
+  n.queue = [...e.after.queue]
+  return n
 }
 ```
 
@@ -310,10 +310,10 @@ async function fire(label: string) {
 The frame receives Naima's design tokens as CSS custom properties, such as `--color-accent`, `--color-text`, `--color-text-muted`, `--color-border-strong`,
 `--color-danger` and `--font-family-body`. They follow the light and dark themes, so a view styled with them looks like the rest of Naima.
 
-The widgets the tab itself is drawn with form a library your view can import as `@naima/study/…`: `Bento.svelte` (cards on a grid), `Graph.svelte` (a graph laid
-out by itself), `Timeline.svelte` and `Sequence.svelte` (a UML sequence diagram). They are in Naima at `src/plugins/verifier-mcrl2/widgets/study/`. The build
-finds them through an alias in `view/vite.config.ts`. The example lives inside Naima, so its alias points four folders up; in your project, point it at the
-Naima you use.
+The widgets the tab itself is drawn with form a library your view can import as `@naima/study/…`: `Mosaic.svelte` (cards tiling the window, which the tab itself
+uses; a view declared in parts needs no layout of its own), `Graph.svelte` (a graph laid out by itself), `Timeline.svelte` and `Sequence.svelte` (a UML sequence
+diagram). They are in Naima at `src/plugins/verifier-mcrl2/widgets/study/`. The build finds them through an alias in `view/vite.config.ts`. The example lives
+inside Naima, so its alias points four folders up; in your project, point it at the Naima you use.
 
 ```ts
 const widgets = fileURLToPath(new URL("../../../../src/plugins/verifier-mcrl2/widgets/study", import.meta.url));

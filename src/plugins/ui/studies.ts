@@ -28,6 +28,8 @@ export interface Study {
   config: Record<string, number | boolean>;
   /** The named standard diagrams its view draws, as declared (`name: what it maps; …`); the tab checks the names. */
   diagrams: string;
+  /** The view's parts, each a card of its own (`id: title; …`); empty when the view is one card. */
+  parts: { id: string; title: string }[];
   says_lines: SayLine[];
   /** Why the study cannot open, or is not as declared; empty when it is sound. */
   problems: string[];
@@ -42,6 +44,7 @@ const KEYS = [
   "config",
   "says",
   "diagrams",
+  "parts",
 ];
 const BEGIN = /^%@ui\s+begin\s*$/;
 const END = /^%@ui\s+end\s*$/;
@@ -94,6 +97,7 @@ function studyOf(root: string, file: string, text: string): Study | null {
     title: file,
     says: "",
     diagrams: "",
+    parts: [],
     model: null,
     stepper: null,
     observer: null,
@@ -129,6 +133,14 @@ function studyOf(root: string, file: string, text: string): Study | null {
   if (values["title"]) study.title = values["title"];
   study.says = values["says"] ?? "";
   study.diagrams = values["diagrams"] ?? "";
+  for (
+    const part of (values["parts"] ?? "").split(";").map((p) => p.trim())
+      .filter(Boolean)
+  ) {
+    const m = /^([a-z][a-z0-9-]*)\s*:\s*(.+)$/.exec(part);
+    if (!m) study.problems.push(`the part ${part} is not "id: title"`);
+    else study.parts.push({ id: m[1]!, title: m[2]!.trim() });
+  }
   for (const part of (values["config"] ?? "").split(/\s+/).filter(Boolean)) {
     const eq = /^([A-Za-z_][A-Za-z0-9_]*)=(.+)$/.exec(part);
     const v = eq?.[2];

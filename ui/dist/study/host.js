@@ -3,12 +3,15 @@
 //
 //   #role=observer&src=<url>   loads the study's observer (init, on) and folds what the tab sends it
 //   #role=view&src=<url>       loads the study's view (mount) and gives it the store's data; fire and can go back
+//   &part=<id>                 with a view declared in parts: the one part this frame draws
 //
 // The tab's messages carry { naima: "study", t, ... }; this host answers in the same shape.
 
 const params = new URLSearchParams(location.hash.slice(1));
 const role = params.get("role");
 const src = params.get("src");
+// A view declared in parts draws one of them in this frame (the study's %@ui block names them).
+const part = params.get("part") ?? undefined;
 const parentWin = window.parent;
 const post = (m) => parentWin.postMessage({ naima: "study", ...m }, "*");
 const problem = (why) => {
@@ -130,6 +133,8 @@ async function view(mod) {
       const root = document.documentElement;
       for (const [k, v] of Object.entries(m.vars)) root.style.setProperty(k, v);
       root.dataset.theme = m.theme;
+      // A frame whose colour scheme differs from its page's is painted opaque: it follows the page's.
+      root.style.colorScheme = m.theme === "dark" ? "dark" : "light";
     } else if (m.t === "says") says = m.says;
     else if (m.t === "data") {
       data = m.data;
@@ -141,7 +146,7 @@ async function view(mod) {
   });
   const target = document.getElementById("view");
   try {
-    mod.mount(target, host);
+    mod.mount(target, host, part);
   } catch (err) {
     return problem(String(err?.stack ?? err));
   }

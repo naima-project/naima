@@ -33,9 +33,10 @@ does not match the model (an action it does not have, the wrong number of argume
 ## Using the tab
 
 - Open `naima ui`, then **Models** from Home's list. Pick a study.
-- The study is a set of cards. Move a card by its title (drag it, or use the arrow keys on it), make it wider, narrower, taller or shorter with the buttons on
-  its bar, fold it, or maximise it to the whole window (Escape restores). The arrangement is kept for that study. A card never grows: what it holds scrolls,
-  pans or zooms inside it.
+- The study fills the window with cards, like a mosaic, and the page itself never scrolls. Drag the thin gap between two cards to give one more room. Drag a
+  card by its title onto another card: onto its middle to swap the two, onto one of its edges to place it beside. Close a card with its cross and the others
+  take its space; it waits above the mosaic, where a click opens it again. Maximise a card to the whole mosaic; Escape restores. The arrangement is kept for
+  that study. The arrow keys do all of this too: on a gap they move it, on a card's title they swap it with its neighbour.
 - **Timeline**: the states taken on a line, the past fading to the left, the current state as the orange disc, the steps possible now on the right. Click one of
   those to take it, or a past state to go back to it.
 - **State machine explored**: every state reached on any road, once each, as a UML state machine diagram. The road you are on is solid; the roads you went back
@@ -43,8 +44,8 @@ does not match the model (an action it does not have, the wrong number of argume
   bookmarks it. Switch between horizontal and vertical layouts, zoom in and out, or fit.
 - **What happened** explains the last step and the model's own replies, and lists your bookmarks. **What may happen now** lists every step the model accepts in
   this state. **The state** shows every variable of the model, exactly as the model has it.
-- **The model's view**, when it has one, is a card too, and fires steps the same way. When it draws a standard diagram, such as a UML sequence diagram, it says
-  so, and draws it in that standard's notation.
+- **The model's view**, when it has one, is a card too, or several cards, one per part of it,, and fires steps the same way. When it draws a standard diagram,
+  such as a UML sequence diagram, it says so, and draws it in that standard's notation.
 - **Back** and **Forward** move along the road; firing from a past state starts a new road and keeps the old one. **Previous** and **Next state seen** move over
   the states you visited, whatever road they are on. **Undo** removes the last step you took. Steps recorded from a real run are never undone, only branched
   from.
@@ -53,7 +54,7 @@ does not match the model (an action it does not have, the wrong number of argume
 
 ## For a study's own view
 
-The widgets the tab is drawn with (the bento, graphs laid out by themselves, the timeline, the UML sequence diagram) are a library a view imports as
+The widgets the tab is drawn with (the mosaic of cards, graphs laid out by themselves, the timeline, the UML sequence diagram) are a library a view imports as
 `@naima/study/…`, from `naima-tracker/naima/src/plugins/verifier-mcrl2/widgets/` in your project. A view that draws a standard diagram declares it in the `%@ui`
 block, with what it maps:
 
