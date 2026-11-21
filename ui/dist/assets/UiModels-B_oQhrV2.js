@@ -1,0 +1,1 @@
+import"./chevron-right-EHzkDXKe.js";import e from"./Models-Djk7-MrQ.js";function t(t){e(t,{which:`uiModels`})}export{t as default};
