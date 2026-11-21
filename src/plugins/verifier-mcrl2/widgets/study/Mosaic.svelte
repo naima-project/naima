@@ -39,9 +39,18 @@
   let box: HTMLDivElement | undefined = $state();
   let w = $state(0);
   let h = $state(0);
+  /** The window's own size, without scrollbars, and where the mosaic starts in it: the mosaic takes all that is left. */
+  let left = $state(0);
   let top = $state(0);
+  let vw = $state(0);
+  let vh = $state(0);
   const measure = () => {
-    if (box) top = box.getBoundingClientRect().top + globalThis.scrollY;
+    if (!box) return;
+    const r = box.parentElement!.getBoundingClientRect();
+    left = r.left;
+    top = box.getBoundingClientRect().top;
+    vw = document.documentElement.clientWidth;
+    vh = document.documentElement.clientHeight;
   };
   $effect(() => {
     measure();
@@ -94,6 +103,9 @@
     if (n) set(dock(m, id, n, "center"));
   };
 
+  /** A gutter being dragged: the cards follow the pointer at once, with no animation. */
+  let resizing = $state(false);
+
   const onkey = (e: KeyboardEvent) => {
     if (e.key === "Escape" && m.maximised) set(maximise(m, m.maximised));
   };
@@ -109,7 +121,17 @@
   </div>
 {/if}
 
-<div class="mosaic" bind:this={box} bind:clientWidth={w} bind:clientHeight={h} style:--top={top}>
+<div
+  class="mosaic"
+  class:live={moving !== null || resizing}
+  bind:this={box}
+  bind:clientWidth={w}
+  bind:clientHeight={h}
+  style:--left={left}
+  style:--top={top}
+  style:--vw={vw}
+  style:--vh={vh}
+>
   {#each [...placed.cards] as [id, r] (id)}
     <section
       class="card"
@@ -163,6 +185,7 @@
         onmove={(d) => set(resize(m, gu.path, ratioAt(m, gu.path) + (d === "left" || d === "up" ? -0.04 : 0.04)))}
         ontravel={(dx, dy, done) => {
           if (!grab || grab.path !== gu.path) grab = { path: gu.path, ratio: ratioAt(m, gu.path) };
+          resizing = !done;
           set(resize(m, gu.path, grab.ratio + (gu.dir === "row" ? dx : dy) / gu.span));
           if (done) grab = null;
         }}
@@ -200,15 +223,13 @@
   .mosaic {
     --mosaic-gutter: 10;
     position: relative;
-    inline-size: calc(100vw - 2 * var(--space-md));
-    margin-inline-start: calc(50% - 50vw + var(--space-md));
-    block-size: calc(100dvh - var(--top) * var(--size-hairline) - var(--space-md));
+    inline-size: calc(var(--vw) * var(--size-hairline) - 2 * var(--space-md));
+    margin-inline-start: calc(var(--space-md) - var(--left) * var(--size-hairline));
+    block-size: calc((var(--vh) - var(--top)) * var(--size-hairline) - var(--space-md));
     min-block-size: calc(var(--size-thumbnail-height) * 3);
   }
   .closed {
     display: flex;
-    inline-size: calc(100vw - 2 * var(--space-md));
-    margin-inline-start: calc(50% - 50vw + var(--space-md));
     flex-wrap: wrap;
     gap: var(--space-xs);
     margin-block-end: var(--space-sm);
@@ -250,10 +271,14 @@
     border-radius: var(--radius-lg);
     overflow: hidden;
     transition:
-      left var(--motion-duration-settle) var(--motion-easing-standard),
-      top var(--motion-duration-settle) var(--motion-easing-standard),
-      width var(--motion-duration-settle) var(--motion-easing-standard),
-      height var(--motion-duration-settle) var(--motion-easing-standard);
+      left var(--motion-duration-fast) var(--motion-easing-standard),
+      top var(--motion-duration-fast) var(--motion-easing-standard),
+      width var(--motion-duration-fast) var(--motion-easing-standard),
+      height var(--motion-duration-fast) var(--motion-easing-standard);
+  }
+  /* While a gutter or a card is dragged, the cards follow at once. */
+  .mosaic.live .card {
+    transition: none;
   }
   .card.max {
     z-index: 5;
@@ -308,6 +333,7 @@
   .own {
     flex: 1;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
     gap: var(--space-xs);

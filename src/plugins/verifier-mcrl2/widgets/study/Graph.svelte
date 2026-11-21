@@ -6,14 +6,27 @@
      bookmarked through its marks, shown on hover and focus. -->
 <script lang="ts">
   import Pannable from "../ui/components/Pannable.svelte";
-  import { type Direction, layout } from "./layout.ts";
+  import { type Direction, type Layout, layout } from "./layout.ts";
+  import Icon from "../ui/components/Icon.svelte";
+  import ArrowRight from "@lucide/svelte/icons/arrow-right";
+  import ArrowDown from "@lucide/svelte/icons/arrow-down";
+  import ArrowLeft from "@lucide/svelte/icons/arrow-left";
+  import ArrowUp from "@lucide/svelte/icons/arrow-up";
+  import Auto from "@lucide/svelte/icons/wand-sparkles";
+  import Compact from "@lucide/svelte/icons/fold-horizontal";
+  import Spread from "@lucide/svelte/icons/unfold-horizontal";
+  import ZoomIn from "@lucide/svelte/icons/zoom-in";
+  import ZoomOut from "@lucide/svelte/icons/zoom-out";
+  import Fit from "@lucide/svelte/icons/scan";
   import type { GraphEdge, GraphNode } from "./graph.ts";
 
   interface Props {
     label: string;
     nodes: readonly GraphNode[];
     edges: readonly GraphEdge[];
-    notation?: "uml-state-machine" | "directed-graph";
+    /** uml-state-machine and directed-graph are named notations (named.ts); path is the timeline's own drawing, a
+     * path of states on a line with the steps possible now fanning out, which is no standard and is never called one. */
+    notation?: "uml-state-machine" | "directed-graph" | "path";
     direction?: Direction;
     /** Nodes of the same layer drawn first come first: the road before the roads left. */
     order?: (a: string, b: string) => number;
@@ -34,7 +47,7 @@
     nodes,
     edges,
     notation = "directed-graph",
-    direction = $bindable("horizontal"),
+    direction = "horizontal",
     order,
     onpick,
     pinned = new Set(),
@@ -47,33 +60,89 @@
   }: Props = $props();
 
   const uml = $derived(notation === "uml-state-machine");
+  const path = $derived(notation === "path");
+  const isAhead = (n: GraphNode) => (n.cls ?? "").split(" ").includes("ahead");
+  const isCurrent = (n: GraphNode) => (n.cls ?? "").split(" ").includes("current");
+  /** In a path, the widest label on a step: the layers are that far apart, so no label covers another. */
+  const edgeWidth = $derived(Math.max(0, ...edges.filter((e) => !(e.cls ?? "").includes("ahead")).map((e) => (e.label ? e.label.length * 6.6 : 0))));
   /** The widest caption, in the drawing's units. */
   const subWidth = $derived(Math.max(0, ...nodes.map((n) => (n.sub ? Math.max(...n.sub.split("\n").map((l) => l.length)) * 6.2 : 0))));
   const size = (n: GraphNode) =>
-    n.kind === "initial" ? { width: 18, height: 18 } : uml ? { width: Math.max(64, 18 + n.label.length * 8), height: 36 } : { width: 34, height: 34 };
-  const placed = $derived(
+    n.kind === "initial"
+      ? { width: 18, height: 18 }
+      : uml
+      ? { width: Math.max(64, 18 + n.label.length * 8), height: 36 }
+      : path
+      ? isCurrent(n) ? { width: 26, height: 26 } : { width: 16, height: 16 }
+      : { width: 34, height: 34 };
+  /** The card's box, which "auto" reads to choose where the flow goes, and fit reads to zoom. */
+  let boxW = $state(0);
+  let boxH = $state(0);
+  // ---- the layout chosen: where the flow goes (or the card's shape decides), and how much room it takes
+  type Orient = "right" | "down" | "left" | "up" | "auto";
+  let orient = $state<Orient>(direction === "vertical" ? "down" : "right");
+  let spacing = $state(1);
+  const flow: Exclude<Orient, "auto"> = $derived(orient === "auto" ? (boxH > boxW * 1.15 ? "down" : "right") : orient);
+  const dir: Direction = $derived(flow === "down" || flow === "up" ? "vertical" : "horizontal");
+  const laid = $derived(
     layout(
       nodes.map((n) => ({ id: n.id, ...size(n), shape: n.kind === "initial" || !uml ? ("circle" as const) : ("rounded" as const) })),
       edges.map((e) => ({ id: e.id, from: e.from, to: e.to, labelWidth: e.label ? Math.min(150, e.label.length * 6.5) : 0, labelHeight: e.label ? 14 : 0 })),
       {
-        direction,
+        direction: dir,
         incremental: stable,
         // Captions under the nodes need room: layers as far apart as the longest caption, rows clear of it.
-        layerGap: uml ? 96 : Math.max(84, (direction === "horizontal" ? subWidth : 0) + 30),
-        nodeGap: uml ? 34 : subWidth > 0 ? (direction === "horizontal" ? 66 : subWidth - 10) : 40,
+        layerGap: spacing * (uml ? 96 : path ? Math.max(90, Math.min(150, edgeWidth + 24)) : Math.max(84, (dir === "horizontal" ? subWidth : 0) + 30)),
+        nodeGap: spacing * (uml ? 34 : path ? 22 : subWidth > 0 ? (dir === "horizontal" ? 66 : subWidth - 10) : 40),
         ...(order ? { order } : {}),
         ...(nodes.some((n) => n.rank !== undefined) ? { rank: Object.fromEntries(nodes.filter((n) => n.rank !== undefined).map((n) => [n.id, n.rank!])) } : {}),
       },
     ),
   );
+  /** The layout turned to flow right to left, or bottom to top: mirrored, arrows turned with it. */
+  const mirror = (l: Layout, fx: boolean, fy: boolean): Layout => {
+    if (!fx && !fy) return l;
+    const X = (x: number) => (fx ? l.width - x : x);
+    const Y = (y: number) => (fy ? l.height - y : y);
+    const pt = ([x, y]: [number, number]): [number, number] => [X(x), Y(y)];
+    return {
+      ...l,
+      nodes: l.nodes.map((n) => ({ ...n, x: X(n.x), y: Y(n.y) })),
+      edges: l.edges.map((e) => {
+        const points = e.points.map(pt);
+        return { ...e, points, path: pathOf(points), arrow: arrowOf(points), label: { x: X(e.label.x), y: Y(e.label.y) } };
+      }),
+    };
+  };
+  const placed = $derived(mirror(laid, flow === "left", flow === "up"));
+
+  // ---- moving: nodes and arrows glide together from the old layout to the new one, the arrows always on the nodes
+  let shown: Layout = $state.raw({ nodes: [], edges: [], width: 0, height: 0 });
+  let frame = 0;
+  $effect(() => {
+    const to = placed;
+    const from = shown;
+    cancelAnimationFrame(frame);
+    const ms = motionMs();
+    if (ms <= 0 || from.nodes.length === 0) {
+      shown = to;
+      return;
+    }
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const t = Math.min(1, (now - t0) / ms);
+      shown = between(from, to, 1 - (1 - t) * (1 - t));
+      if (t < 1) frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  });
   const byId = $derived(new Map(nodes.map((n) => [n.id, n])));
   const edgeById = $derived(new Map(edges.map((e) => [e.id, e])));
 
   // ---- zoom and pan
   let zoom = $state(1);
   let box: HTMLDivElement | undefined = $state();
-  let boxW = $state(0);
-  let boxH = $state(0);
   const fit = () => {
     if (!boxW || !boxH) return;
     zoom = Math.max(0.2, Math.min(2.5, Math.min(boxW / W, boxH / H)));
@@ -84,8 +153,10 @@
     zoom = Math.max(0.2, Math.min(4, zoom * f));
   };
   /** Room around the drawing for the captions under the nodes, which may be wider than the nodes. */
-  const pad = $derived(uml ? 8 : Math.max(8, subWidth / 2 - 10));
-  const W = $derived(placed.width + 2 * pad);
+  const pad = $derived(uml ? 8 : path ? 20 : Math.max(8, subWidth / 2 - 10));
+  /** Room at the right of a path for the words of the steps possible now. */
+  const tail = $derived(path ? Math.max(0, ...nodes.filter(isAhead).map((n) => (n.label.length + (n.sub?.length ?? 0)) * 6.8 + 30)) : 0);
+  const W = $derived(placed.width + 2 * pad + tail);
   const H = $derived(placed.height + 2 * pad);
   $effect(() => {
     if (!autofit || byHand || !boxW || !boxH) return;
@@ -95,9 +166,10 @@
 
   $effect(() => {
     const id = follow;
-    const p = placed.nodes.find((n) => n.id === id);
+    const p = shown.nodes.find((n) => n.id === id);
     if (!p || !box) return;
-    const x = (p.x + pad) * zoom - box.clientWidth / 2;
+    // Left of centre, so that what comes next, at its right, is in view.
+    const x = (p.x + pad) * zoom - box.clientWidth * (path ? 0.3 : 0.5);
     const y = (p.y + pad) * zoom - box.clientHeight / 2;
     box.scrollTo({ left: Math.max(0, x), top: Math.max(0, y), behavior: "smooth" });
   });
@@ -112,15 +184,66 @@
   };
 </script>
 
+<script module lang="ts">
+  import type { Layout as L } from "./layout.ts";
+  type P = [number, number];
+  /** An SVG path through a start and cubic segments (three points each). */
+  export function pathOf(p: P[]): string {
+    if (p.length === 0) return "";
+    let d = `M ${p[0]![0]},${p[0]![1]}`;
+    for (let i = 1; i + 2 < p.length; i += 3) d += ` C ${p[i]![0]},${p[i]![1]} ${p[i + 1]![0]},${p[i + 1]![1]} ${p[i + 2]![0]},${p[i + 2]![1]}`;
+    return d;
+  }
+  /** The arrowhead at a path's end, along its last segment. */
+  export function arrowOf(p: P[]): { x: number; y: number; angle: number } {
+    const e = p[p.length - 1]!;
+    let k = p.length - 2;
+    while (k > 0 && p[k]![0] === e[0] && p[k]![1] === e[1]) k--;
+    const b = p[k] ?? e;
+    return { x: e[0], y: e[1], angle: (Math.atan2(e[1] - b[1], e[0] - b[0]) * 180) / Math.PI };
+  }
+  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+  /** A layout part of the way from one to another: nodes and the points of each edge move together. */
+  export function between(a: L, b: L, t: number): L {
+    const na = new Map(a.nodes.map((n) => [n.id, n]));
+    const ea = new Map(a.edges.map((e) => [e.id, e]));
+    return {
+      width: lerp(a.width, b.width, t),
+      height: lerp(a.height, b.height, t),
+      nodes: b.nodes.map((n) => {
+        const o = na.get(n.id);
+        return o ? { ...n, x: lerp(o.x, n.x, t), y: lerp(o.y, n.y, t) } : n;
+      }),
+      edges: b.edges.map((e) => {
+        const o = ea.get(e.id);
+        if (!o || o.points.length !== e.points.length) return e;
+        const points = e.points.map((q, i): P => [lerp(o.points[i]![0], q[0], t), lerp(o.points[i]![1], q[1], t)]);
+        return { ...e, points, path: pathOf(points), arrow: arrowOf(points), label: { x: lerp(o.label.x, e.label.x, t), y: lerp(o.label.y, e.label.y, t) } };
+      }),
+    };
+  }
+  /** How long a move takes: the motion token's, none when the person asked for less motion. */
+  export function motionMs(): number {
+    if (globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return 0;
+    const v = getComputedStyle(document.documentElement).getPropertyValue("--motion-duration-normal").trim();
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? (v.endsWith("ms") ? n : n * 1000) : 0;
+  }
+</script>
+
 <div class="graph">
   <div class="controls" role="toolbar" aria-label="{label}: layout and zoom">
-    <button class:on={direction === "horizontal"} onclick={() => (direction = "horizontal")}>horizontal</button>
-    <button class:on={direction === "vertical"} onclick={() => (direction = "vertical")}>vertical</button>
+    {#each [["right", "Flow left to right", ArrowRight], ["down", "Flow top to bottom", ArrowDown], ["left", "Flow right to left", ArrowLeft], ["up", "Flow bottom to top", ArrowUp], ["auto", "Flow as the card's shape suits", Auto]] as const as [o, says, I] (o)}
+      <button class="ico" class:on={orient === o} aria-label={says} title={says} aria-pressed={orient === o} onclick={() => (orient = o)}><Icon><I /></Icon></button>
+    {/each}
+    <span class="gap"></span>
+    <button class="ico" aria-label="Closer together" title="Closer together" disabled={spacing <= 0.6} onclick={() => (spacing = Math.max(0.6, spacing / 1.25))}><Icon><Compact /></Icon></button>
+    <button class="ico" aria-label="Further apart" title="Further apart" disabled={spacing >= 2} onclick={() => (spacing = Math.min(2, spacing * 1.25))}><Icon><Spread /></Icon></button>
     <span class="sep"></span>
-    <button aria-label="Zoom out" onclick={() => zoomBy(1 / 1.25)}>−</button>
+    <button class="ico" aria-label="Zoom out" title="Zoom out" onclick={() => zoomBy(1 / 1.25)}><Icon><ZoomOut /></Icon></button>
     <span class="pct">{Math.round(zoom * 100)}%</span>
-    <button aria-label="Zoom in" onclick={() => zoomBy(1.25)}>+</button>
-    <button onclick={() => ((byHand = true), fit())}>fit</button>
+    <button class="ico" aria-label="Zoom in" title="Zoom in" onclick={() => zoomBy(1.25)}><Icon><ZoomIn /></Icon></button>
+    <button class="ico" aria-label="Fit" title="Fit the card" onclick={() => ((byHand = true), fit())}><Icon><Fit /></Icon></button>
   </div>
   <Pannable {label} class="pan" ignore=".node, .mark" bind:box>
     <div class="measure" bind:clientWidth={boxW} bind:clientHeight={boxH}>
@@ -131,16 +254,18 @@
         role="img"
         aria-label={label}
       >
-        {#each placed.edges as pe (pe.id)}
+        {#each shown.edges as pe (pe.id)}
           {@const e = edgeById.get(pe.id)}
           <g class="edge {e?.cls ?? ''}" class:back={pe.back}>
             <path class="line" d={pe.path} />
-            <path class="head" class:open={uml} d={arrow(pe.arrow.x, pe.arrow.y, pe.arrow.angle)} />
-            {#if e?.label}<text class="elabel" x={pe.label.x} y={pe.label.y} text-anchor="middle">{e.label}</text>{/if}
+            {#if !path || pe.back || pe.self}
+              <path class="head" class:open={uml} d={arrow(pe.arrow.x, pe.arrow.y, pe.arrow.angle)} />
+            {/if}
+            {#if e?.label}<text class="elabel" class:big={path} x={pe.label.x} y={pe.label.y} text-anchor="middle">{e.label}</text>{/if}
             {#if e?.title}<title>{e.title}</title>{/if}
           </g>
         {/each}
-        {#each placed.nodes as pn (pn.id)}
+        {#each shown.nodes as pn (pn.id)}
           {@const n = byId.get(pn.id)}
           {#if n}
             <g class="place" style:transform="translate({pn.x}px, {pn.y}px)">
@@ -158,11 +283,22 @@
                 {:else if uml}
                   <rect class="shape" x={-pn.width / 2} y={-pn.height / 2} width={pn.width} height={pn.height} rx="12" />
                   <text class="nlabel" y="4" text-anchor="middle">{n.label}</text>
+                {:else if path}
+                  {#if isCurrent(n)}
+                    <circle class="halo" r="17" />
+                    <circle class="disc" r="11" />
+                  {:else if isAhead(n)}
+                    <circle class="maybe" r="6" />
+                    <text class="aword" x="14" y="4">{n.label}{#if n.sub}<tspan class="aarg" dx="6">{n.sub}</tspan>{/if}</text>
+                  {:else}
+                    <circle class="dot" r="7" />
+                  {/if}
+                  {#if !isAhead(n) && n.label}<text class="pname" y={isCurrent(n) ? 32 : 22} text-anchor="middle">{n.label}</text>{/if}
                 {:else}
                   <circle class="shape" r={pn.width / 2} />
                   <text class="nlabel" y="4" text-anchor="middle">{n.label}</text>
                 {/if}
-                {#if n.sub}
+                {#if n.sub && !path}
                   <text class="nsub" y={pn.height / 2 + 14} text-anchor="middle">
                     {#each n.sub.split("\n") as line, li (li)}<tspan x="0" dy={li === 0 ? 0 : 13}>{line}</tspan>{/each}
                   </text>
@@ -220,6 +356,7 @@
   }
   .controls {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-xs);
     font-family: var(--font-family-mono);
@@ -239,6 +376,19 @@
   }
   .controls button:hover {
     color: var(--color-accent);
+  }
+  .controls .ico {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-none);
+  }
+  .controls button:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  .gap {
+    inline-size: var(--space-sm);
   }
   .controls button.on {
     color: var(--color-text);
@@ -268,14 +418,7 @@
   text {
     font-family: var(--font-family-body);
   }
-  .place {
-    transition: transform var(--motion-duration-settle) var(--motion-easing-standard), opacity var(--motion-duration-settle) var(--motion-easing-standard);
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .place {
-      transition: none;
-    }
-  }
+
 
   /* ---- edges: the road solid, the roads left dashed and faint, what may come dotted */
   .line {
@@ -402,6 +545,59 @@
   }
   .node.goal .shape {
     stroke-width: 3;
+  }
+
+  /* ---- a path: the timeline's drawing */
+  .dot {
+    fill: var(--color-surface-raised);
+    stroke: var(--color-text);
+    stroke-width: 1.4;
+  }
+  .disc {
+    fill: var(--color-accent);
+  }
+  .halo {
+    fill: none;
+    stroke: var(--color-accent);
+    stroke-width: 1;
+    opacity: 0.45;
+  }
+  .maybe {
+    fill: none;
+    stroke: var(--color-text-muted);
+    stroke-width: 1.2;
+  }
+  .aword {
+    font-size: var(--font-size-sm);
+    fill: var(--color-text-muted);
+  }
+  .aarg {
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-2xs);
+  }
+  .node:hover .maybe,
+  .node:focus .maybe {
+    stroke: var(--color-accent);
+    fill: var(--color-accent-soft);
+  }
+  .node:hover .aword,
+  .node:focus .aword {
+    fill: var(--color-accent);
+  }
+  .node:hover .dot,
+  .node:focus .dot {
+    stroke: var(--color-accent);
+  }
+  .pname {
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-2xs);
+    fill: var(--color-text-muted);
+  }
+  .elabel.big {
+    font-size: var(--font-size-sm);
+  }
+  .node.ahead {
+    opacity: 1;
   }
 
   /* ---- the marks: pin and bookmark, shown on hover and focus, always when set */

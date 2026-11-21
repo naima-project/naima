@@ -17,8 +17,11 @@
       color: var(--color-text);
       font-family: var(--font-family-body);
     }
+    /* The frame is a card's body: the part fills it, and only what overflows it scrolls, inside. */
+    html,
+    body,
     #view {
-      min-height: 100vh;
+      height: 100%;
     }
     .problem {
       font-family: var(--font-family-mono);
