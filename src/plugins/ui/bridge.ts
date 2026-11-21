@@ -349,9 +349,7 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
           throw new Error(`the model ${study.title} cannot open: ${study.problems.join("; ") || "it has no system to explore"}`)
         }
         const tab = uiTab(ctx.root, ctx.program)
-        const card = tab?.card && inUiTab(tab, study) && existsSync(join(ctx.root, tab.card.page))
-          ? opts.fileUrl("ui-card", basename(tab.card.page))
-          : null
+        const card = tab?.card && inUiTab(tab, study) && existsSync(join(ctx.root, tab.card.page)) ? opts.fileUrl("ui-card", basename(tab.card.page)) : null
         return json({
           ...study,
           stepper: null,
@@ -430,9 +428,7 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       if (!system || !existsSync(join(ctx.root, system))) throw new Error(`the model ${study.title} has no system to explore`)
       const bound = Math.max(1, Math.floor(Number(args["bound"]) || 20_000))
       const f = args["from"]
-      const from = f && typeof f === "object" && !Array.isArray(f)
-        ? Object.fromEntries(Object.entries(f).map(([k, v]) => [k, String(v)]))
-        : null
+      const from = f && typeof f === "object" && !Array.isArray(f) ? Object.fromEntries(Object.entries(f).map(([k, v]) => [k, String(v)])) : null
       const out = spaceFile(ctx.root, system, bound, from)
       const key = basename(out)
       if (existsSync(out)) {

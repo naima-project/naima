@@ -146,8 +146,7 @@ export async function exploreSpace(
 export function modelExplore(tools: ExploreTools): Command {
   return {
     name: "model-explore",
-    says:
-      "explore an mCRL2 specification's state space up to a bound, from its init or from a given state, and write it as JSON: the Models tab steps on it",
+    says: "explore an mCRL2 specification's state space up to a bound, from its init or from a given state, and write it as JSON: the Models tab steps on it",
     enforces: "nothing: it reads the specification and writes only the file --out names",
     usage: "model-explore <specification> --out <file.json> [--max <states>] [--from <state.json>]",
     long: {

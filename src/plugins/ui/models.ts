@@ -51,9 +51,12 @@ export function headingOf(text: string, marker: "%" | "#"): string {
   }
   const joined = lines.join(" ").replace(/\s+/g, " ").trim()
   // A heading often opens with the file's name and a dash ("core.mcrl2 -- the …"): the words after it say what it is.
-  const words = joined.replace(/^\S+\.(mcrl2|toml)\s+(--|—|-)\s+/, "")
+  // References in parentheses are left out of a title, as is a naima-codegen project's opening formula.
+  const words = joined.replace(/^\S+\.(mcrl2|toml)\s+(--|—|-)\s+/, "").replace(/\s*\([^()]*\)/g, "")
   const end = /[.:;](\s|$)/.exec(words)
-  const first = (end ? words.slice(0, end.index) : words).trim()
+  let first = (end ? words.slice(0, end.index) : words).trim()
+  first = first.replace(/^the interface declaration of (the )?/i, "").replace(/\s+and its project table$/, "")
+  first = first.charAt(0).toUpperCase() + first.slice(1)
   return first.length > 160 ? first.slice(0, 157).trimEnd() + "…" : first
 }
 
@@ -140,8 +143,7 @@ const blank = (file: string, kind: "codegen" | "plain"): Study => ({
   sizes: {},
 })
 
-const saysIn = (file: string, text: string) =>
-  text.split(/\r?\n/).flatMap((l, i) => (/^\s*%@say(\s|$)/.test(l) ? [{ file, line: i + 1, text: l.trim() }] : []))
+const saysIn = (file: string, text: string) => text.split(/\r?\n/).flatMap((l, i) => (/^\s*%@say(\s|$)/.test(l) ? [{ file, line: i + 1, text: l.trim() }] : []))
 
 /**
  * The default studies of the project at `root`: its naima-codegen projects and its other whole specifications, those a

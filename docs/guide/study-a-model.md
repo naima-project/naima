@@ -5,10 +5,46 @@ and replay a recorded path or a counterexample. What you see is the model's own 
 screen is a guess. In the same tab you can change the model, check its properties with mCRL2, replay the counterexample of a property that fails, generate
 its Rust code and run the program built on it, without an agent.
 
-## What a model needs
+## Every model opens
 
-A model appears in the tab once it has a _study_: a WebAssembly stepper built from its generated Rust code, and, if you want a picture of it, a view. You
-declare the study in an mCRL2 file next to the model, in comments:
+The tab lists every mCRL2 model of the project, grouped by folder, with no setup. A model is a naima-codegen project (a folder with a `codegen.toml`) or a
+tracked `.mcrl2` file that is a whole specification, one with an `init`. Opening one gives the tab's usual cards: the path, what happened and what can happen,
+paths and bookmarks, the state, the model's files, its properties with Check, and for a naima-codegen project its code with Generate.
+
+A naima-codegen project is stepped through its generated TypeScript, which runs in a frame of its own with no access to the page or the network. Its states
+and steps are the generated code's, and its labels are those of the refined system, so a counterexample of that system loads as it is. A plain specification
+is explored by the server with mCRL2 (`naima model-explore`, under `naima run`) and stepped on the states found. Where the model is nondeterministic, a step
+leads to every state that label reaches, and the state card shows each value that differs among them.
+
+The properties listed are the `.mcf` files beside the model or in a `properties` folder next to it, and the property items that name the model or its system.
+A counterexample found by Check is saved in the model's `paths` folder and replayed.
+
+A model with more than 20,000 states is shown cut: the first 20,000 found from the start, nearest first. The tab says so. Explore more explores again to
+twice the bound. On a state at the edge, whose steps were not explored, Explore from here explores on from that state and adds what it finds. Saving the
+model, or generating its code again, explores it again, and the path you were on is replayed on the new states.
+
+## The UI tab
+
+A project that uses the UI stance can declare its app's machines in `stance-ui.json`:
+
+```json
+"tab": {
+  "models": ["../develop/models/ui"],
+  "generated": "src/logic/generated",
+  "card": { "page": "dist/uicard.html", "build": ["deno", "task", "build"] }
+}
+```
+
+The paths are relative to that file. The UI tab then lists the naima-codegen projects under those folders, and opens each like the Models tab does, with one
+card more: the app itself, in the state the machine is in. The card is the page the project builds for it, which mounts the app on recorded data and walks
+the machine along the path from its start, so what it shows is what the real code does in that state. Its controls work, and a step taken there is added
+to the path. When the app asks for a step the model refuses in that state, the card says so above the app until you dismiss it. Naima's own UI declares
+its machines this way, and a model that has no place in the app's `src/uicard/places.ts` opens without the app.
+
+## A study of your own
+
+A model can also have a declared _study_: a WebAssembly stepper built from its generated Rust code, and, if you want a picture of it, a view. You declare the
+study in an mCRL2 file next to the model, in comments, and it takes the place of the model's default study:
 
 ```
 %@ui begin

@@ -1,0 +1,1 @@
+import"./chevron-right-Cm2-l2Yd.js";import e from"./Models-BTmpRGYQ.js";function t(t){e(t,{which:`uiModels`})}export{t as default};
