@@ -21,9 +21,8 @@ import {
   itemData,
   type ItemLink,
   label,
-  personAtKeyboard,
-  waitsOnOf,
   parse,
+  personAtKeyboard,
   type Plugin,
   progressFor,
   rendered,
@@ -36,6 +35,8 @@ import {
   typeOrThrow,
   UI_SWITCH,
   usageError,
+  waitingOn,
+  waitsOnOf,
 } from "../../core/api.ts"
 import { join } from "node:path"
 import { commitOf } from "./at.ts"
@@ -241,6 +242,31 @@ export const peopleView: UiView = {
         rows.length
           ? `<table><tbody>${rows.map(([ref, who]) => `<tr><td><code>${esc(ref)}</code></td><td>waits on ${esc(who)}</td></tr>`).join("")}</tbody></table>`
           : "<p>Nothing waits on one person in particular.</p>",
+      ].join("\n"),
+    }
+  },
+}
+
+export const waitingView: UiView = {
+  name: "waiting",
+  title: "Waiting on you",
+  says:
+    "what waits on the person at the keyboard, the one list naima waiting prints and naima hello counts: each item once, a decision before a proof to give, what waits on another person left out; ?for=<name> lists another person's, ?for= everyone's",
+  order: 26,
+  async render(params, ctx) {
+    const asked = params["for"]?.[0]
+    const who = asked === undefined ? undefined : asked.trim() || null
+    const rows = await waitingOn(ctx, who)
+    const person = who === undefined ? personAtKeyboard(ctx.root)?.name ?? null : who
+    return {
+      data: { person, items: rows },
+      html: [
+        `<h1>Waiting on ${esc(person ?? "anyone")}</h1>`,
+        rows.length
+          ? `<ul>${
+            rows.map((r) => `<li><code>${esc(r.ref)}</code> ${esc(r.title)} (${esc(r.why)}${r.waitsOn ? `, waits on ${esc(r.waitsOn)}` : ""})</li>`).join("")
+          }</ul>`
+          : "<p>Nothing waits.</p>",
       ].join("\n"),
     }
   },
@@ -543,7 +569,7 @@ export default function ui(options: Record<string, unknown> = {}): Plugin {
       "Two MCP servers serve an agent on standard input and output, split by what they touch. `naima ui --mcp` (the UI stance's bridge-mcp.ts) drives the screen the way a person does, and imports only the UI stance's registry and its agent channel (agent-endpoint.ts): `show` (a screen, a plugin's view, an item, a commit or a line), `store`, `transitions` and `transition`, `read_page` and `screenshot` all ask every UI open on the project on the feed `agent` (the request `{ id, tool, args }` of the UI stance's agent protocol, answered on the command `agent-answer` as `{ id, ok, answer }` or `{ id, ok: false, error }`), one request at a time; a show opens a UI as naima hello opens one when none is, so that an agent shows the owner something in the UI instead of making a page of its own. `naima ui --mcp-tracker` never touches the screen: it reads Naima's core directly (the views, the lines' map, git) for `overview`, `items`, `gates`, `lines`, `history`, `work`, `metrics`, `meetings` and `view`, and runs the UI's actions with `action` and `run`. " +
       "At a session start `naima hello` opens the UI on the project by itself, in the background, and says so on its greeting's line, with the address in a browser: the desktop app when it is installed, else `naima ui` on a port it picks, which opens the browser; a UI already open on the project, named in a registry in the clone's Naima state folder that `naima ui` and the sidecar write too, is reused instead. It is off with the option `atStart` false, for a user with `{\"atStart\": false}` in the ui.json of their Naima config folder, and never on CI, with NAIMA_NO_UI or NAIMA_DATA set, nor in a worktree other than the clone's main checkout.",
     points: [viewsPoint, uiTabsPoint],
-    contributes: { "ui-views": [summaryView, boardView, itemView, peopleView, mapView, projectsView, weekView] },
+    contributes: { "ui-views": [summaryView, boardView, itemView, peopleView, waitingView, mapView, projectsView, weekView] },
     commands: [uiCommand, nameStopCommand],
     options: [
       {

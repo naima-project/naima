@@ -9,7 +9,7 @@ import { coreChecks, heavyCheckNames, runChecks } from "./check.ts"
 import { heavyVerdict } from "./heavy.ts"
 import { groupBy } from "./collections.ts"
 import { appliesTo, fieldValue, isOpenList, parseFieldValue } from "./fields.ts"
-import { currentBranch, gitOrNull, gitReadScope, isGitRepo } from "./git.ts"
+import { currentBranch, gitReadScope, isGitRepo } from "./git.ts"
 import {
   ATTACHMENTS,
   createItem,
@@ -35,8 +35,9 @@ import { addedPrivate, allowanceLine, privateContext, type PrivateFinding, priva
 import { asRendered, type Format, linesAs, rendered } from "./rendered.ts"
 import { flagsOf } from "./vocabulary.ts"
 import { waive, WAIVERS } from "./waivers.ts"
-import { askedByOption, ORIGIN, originCommand, originMatches, originOnce, originOf } from "./origin.ts"
-import { type Comment, commentsOf, historyOf, noteAuthor, type Order, orderedByHook, orderLine, WAITS_ON } from "./people.ts"
+import { askedByOption, ORIGIN, originCommand, originMatches, originOf, originOnce } from "./origin.ts"
+import { type Comment, commentsOf, historyOf, noteAuthor, type Order, orderedByHook, orderLine, personAtKeyboard, WAITS_ON } from "./people.ts"
+import { waitingLine, waitingOn } from "./waiting.ts"
 import { LEVEL, messagesCommand, messagesType } from "./messages.ts"
 import { READY_FIELD } from "./ready.ts"
 import type { Command, Context, Contribution, FieldDef, Item, ItemFacts, Plugin, Rendered, SummarySection, TypeDef, View, Write, WriteHook } from "./types.ts"
@@ -312,6 +313,37 @@ const show: Command = {
     }
     ctx.out("")
     ctx.out(d.readme)
+    return 0
+  },
+}
+
+const waiting: Command = {
+  name: "waiting",
+  says:
+    "list what waits on the person at the keyboard: what the plugins know waits for an owner (the point waiting), each item once, a decision before a proof to give, leaving out what waits on another person; the one list naima hello counts and the UI's waiting views show",
+  enforces: "nothing: it only reads",
+  usage: "waiting [--for <person> | --everyone] [--json]",
+  options: [
+    { name: "--for", says: "list what waits on this person instead of the person at the keyboard" },
+    { name: "--everyone", says: "list what waits on every owner, each row with the person it waits on when it names one" },
+    {
+      name: "--json",
+      says: "print the list as JSON: each row's reference, title, why it waits (owner, proof or failing), the person it waits on and its source",
+    },
+  ],
+  examples: ["waiting", "waiting --for Ada", "waiting --everyone --json"],
+  async run(args, ctx) {
+    const p = parse(args, { for: { type: "string" }, everyone: { type: "boolean" }, json: { type: "boolean" } })
+    if (p.positionals.length || (str(p, "for") !== undefined && bool(p, "everyone"))) throw usageError(this)
+    const who = bool(p, "everyone") ? null : str(p, "for")?.trim() || undefined
+    const rows = await waitingOn(ctx, who)
+    if (bool(p, "json")) {
+      ctx.out(JSON.stringify(rows, null, 2))
+      return 0
+    }
+    const name = who === null ? "anyone" : who ?? personAtKeyboard(ctx.root)?.name ?? "you"
+    ctx.out(rows.length ? `${rows.length} thing${rows.length === 1 ? "" : "s"} wait${rows.length === 1 ? "s" : ""} on ${name}:` : `Nothing waits on ${name}.`)
+    for (const r of rows) ctx.out(waitingLine(r))
     return 0
   },
 }
@@ -1032,6 +1064,7 @@ export const corePlugin: Plugin = {
     newCommand,
     show,
     list,
+    waiting,
     set,
     note,
     describe,

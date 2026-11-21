@@ -7,7 +7,7 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { ATTACHMENTS, type Context, type Item, label, refutedAt } from "../../core/api.ts"
+import { ATTACHMENTS, type Context, type Item, label, refutedAt, type WaitingSource } from "../../core/api.ts"
 
 /** One recorded run of a test item: when, at which commit, and whether every test it covers that ran passed. */
 export interface HistoryRun {
@@ -75,6 +75,20 @@ export function testHistory(ctx: Context): HistoryRow[] {
       runs,
     }]
   })
+}
+
+/** What the test runs know waits for an owner, the point `waiting` (core/waiting.ts): a test a person runs that fails by its latest result. */
+export const failingTestsWaiting: WaitingSource = {
+  name: "failing-tests",
+  says: "a test a person runs (runBy human or owner) that fails by its latest result, a run or a status that says it failed",
+  waiting(ctx) {
+    return testHistory(ctx).flatMap((r) => {
+      const last = r.runs.at(-1)
+      return last && !last.ok && (r.runBy === "human" || r.runBy === "owner")
+        ? [{ ref: r.ref, title: r.title, why: "failing" as const, runBy: r.runBy, failedOn: last.at.slice(0, 10) }]
+        : []
+    })
+  },
 }
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")

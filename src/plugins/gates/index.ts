@@ -80,6 +80,10 @@ import {
   table,
   today,
   usageError,
+  type WaitingEntry,
+  waitingOn,
+  type WaitingSource,
+  type WaitsFor,
   writeJson,
 } from "../../core/api.ts"
 import { type CoverageConfig, coverageLines, coverageOf, coverageReasons, coverageUiView, COVERS, readCoverage, staleCovers } from "./coverage.ts"
@@ -558,6 +562,30 @@ interface GateRow {
   finished: boolean
 }
 
+/** Whether a proof by these hands is a person's: a person's own hands, or the owner's. */
+const byPerson = (runBy: string): boolean => runBy === "human" || runBy === "owner"
+
+/**
+ * What the gates know waits for an owner, the point `waiting` (core/waiting.ts): the owner gate's items, each asking
+ * for a decision; then on every gate what is fixed and owes a proof by a person's hands; then what is open and run by
+ * a person's hands.
+ */
+export const gatesWaiting: WaitingSource = {
+  name: "gates",
+  says:
+    "the owner gate's items, each asking for a decision; on every gate, what is fixed and owes a proof by a person's hands, and what is open and run by a person's hands",
+  async waiting(ctx) {
+    const rows = (await gateRows(ctx)).map((r) => r.row)
+    const owner = rows.find((g) => g.gate === "owner")
+    const entry = (i: GateItemRow, why: WaitsFor): WaitingEntry => ({ ref: i.ref, title: i.title, why, runBy: i.runBy, ...(i.proof ? { proof: i.proof } : {}) })
+    return [
+      ...[...(owner?.blocking ?? []), ...(owner?.owed ?? [])].map((i) => entry(i, "owner")),
+      ...rows.flatMap((g) => g.owed.filter((i) => byPerson(i.runBy)).map((i) => entry(i, "proof"))),
+      ...rows.flatMap((g) => g.blocking.filter((i) => byPerson(i.runBy)).map((i) => entry(i, "owner"))),
+    ]
+  },
+}
+
 /** The gates named — every one when none is — each evaluated now: what `naima gates` prints and the gates view shows. */
 async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: GateDef; result: GateResult; row: GateRow }[]> {
   const all = gatesOf(ctx).map((g) => g.name)
@@ -839,6 +867,9 @@ const queue: Command = {
         ctx.out(`  ${label(i)}  ${i.meta.title}  (${why})`)
       }
     }
+    // What waits on the person at the keyboard is counted once, by the one list (naima waiting), never here by hands.
+    const mine = await waitingOn(ctx)
+    ctx.out(`  waiting on you: ${mine.length}${mine.length ? " — naima waiting lists them" : ""}`)
     for (const l of await alongside(ctx)) ctx.out(l)
     return 0
   },
@@ -1428,6 +1459,7 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
       "ui-views": [gatesUiView, queueUiView, coverageUiView(lists), planUiView(planDeps), checkpointsUiView],
       "goal-order": [goalOrder],
       "landing-reports": [goalsLanding],
+      waiting: [gatesWaiting],
     },
     // The gates are a view of naima ui, coverage a tab, when the ui plugin is loaded; without it, still a command. The goal
     // order and the landing check are for the coordination plugin's development lines, when it is loaded.

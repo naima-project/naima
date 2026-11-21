@@ -40,7 +40,6 @@ import { join } from "node:path"
 import {
   addLink,
   bool,
-  forPersonAtKeyboard,
   byUrgency,
   type Check,
   type Command,
@@ -53,6 +52,7 @@ import {
   fieldValues,
   FILLED,
   type Finding,
+  forPersonAtKeyboard,
   isOpen,
   type Item,
   joinProse,

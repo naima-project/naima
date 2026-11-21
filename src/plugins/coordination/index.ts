@@ -130,7 +130,7 @@ import {
   onLine,
   openLines,
 } from "./lines.ts"
-import { bringUp, fetchShared, landShared, SHARED_REMOTE, shareClaim, sharedRemote } from "./shared.ts"
+import { bringUp, fetchShared, landShared, shareClaim, SHARED_REMOTE, sharedRemote } from "./shared.ts"
 import { atRiskSection } from "./at-risk.ts"
 import { trunkOnlyTracker } from "./trunk-only.ts"
 
@@ -433,7 +433,15 @@ const claimCommand: Command = {
     const remote = sharedRemote(ctx)
     if (remote && items.length) {
       // On a trunk several people share, a claim on items is pushed when made, so that another person's agents see it.
-      shareClaim(ctx, remote, ctx.root, branch, join(ctx.trackerRoot, CLAIMS, mine.file), items.map((i) => ({ id: i.meta.id, ref: label(i) })), rel(ctx, CLAIMS))
+      shareClaim(
+        ctx,
+        remote,
+        ctx.root,
+        branch,
+        join(ctx.trackerRoot, CLAIMS, mine.file),
+        items.map((i) => ({ id: i.meta.id, ref: label(i) })),
+        rel(ctx, CLAIMS),
+      )
       return 0
     }
     ctx.out(`wrote ${written} — commit it ${commitOn(ctx.root)} with your work`)
@@ -1525,7 +1533,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       // On a trunk several people share, the landing fetches, lands and pushes at once, again when the push is refused.
       const remote = sharedRemote(ctx)
       const branch = args.find((a) => !a.startsWith("-"))
-      const once = () => land.run.call(land, args, ctx)
+      const once = async () => await land.run.call(land, args, ctx)
       const code = remote && branch && !args.includes("--repair") ? await landShared(ctx, remote, branch, once) : await once()
       if (code === 0) sweeping(ctx)
       return code

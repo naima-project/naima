@@ -381,7 +381,10 @@ export const originCommand: Command = {
     },
     { name: "--dry-run", says: "with --backfill: say what it would write, and write nothing" },
     { name: "--set", says: "the item whose origin says who asked to set, as --asked-by gives it; the correction is recorded in its origin" },
-    { name: "--asked-by", says: "with --set: who asked, a role (owner, coordinator, worker, agent, unknown), owner:<name> for one of the project's owners, or person:<name>" },
+    {
+      name: "--asked-by",
+      says: "with --set: who asked, a role (owner, coordinator, worker, agent, unknown), owner:<name> for one of the project's owners, or person:<name>",
+    },
     { name: "--by", says: "with --set: who makes the correction, as it is recorded; absent, git's user.name" },
   ],
   examples: [

@@ -32,9 +32,13 @@ An item can name the one person it waits on:
 naima set export-drops waitsOn=Ada
 ```
 
-A question on a meeting's agenda is an item too, so it can name its person the same way. `naima hello` and the UI's waiting
-views (Home's "Needs you", Waiting for you) show you what waits on you and what waits on nobody in particular. What waits on
-another owner is left out, and the item page says whom it waits on.
+A question on a meeting's agenda is an item too, so it can name its person the same way.
+
+`naima waiting` lists what waits on you: the owner gate's questions and decisions, what is fixed and waits for a proof by your
+hands, what is open and needs your hands, and a test you run that fails. Each item appears once. What waits on another owner is
+left out, and what waits on nobody in particular stays in. `naima waiting --for Bob` shows Bob's list and `--everyone` shows
+all of them. `naima hello` counts this same list, `naima queue` says its size, and the UI reads it from the bridge's `waiting`
+view, so every place gives the same number. The item page says whom an item waits on.
 
 ## One trunk, several coordinators
 

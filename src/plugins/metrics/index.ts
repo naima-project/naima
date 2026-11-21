@@ -95,7 +95,7 @@ import {
 import { builtinFormats, type TestFormat } from "./formats.ts"
 import { htmlReport, plotSvg, REPORT_CSS, selectionPage, type Series } from "./plot.ts"
 import { PRESETS, type Reference, SUITE_PRESETS } from "./presets.ts"
-import { testRunsView } from "./test-history.ts"
+import { failingTestsWaiting, testRunsView } from "./test-history.ts"
 import { metricsSetup } from "./proposal.ts"
 import { performanceRequirements, satisfiesChecked } from "./requirements.ts"
 import {
@@ -2279,6 +2279,7 @@ export default function metrics(options: Record<string, unknown> = {}): Plugin {
       gates: [...(defs.length ? [metricsGate] : []), ...(suiteDefs.length ? [suitesGate] : [])],
       "ui-views": [metricsView, metricRunView, testRunsView, testHistoryView],
       "landing-reports": suiteDefs.length ? [suitesCurrent] : [],
+      waiting: [failingTestsWaiting],
     },
     // The gate is for the gates plugin, the view for the ui plugin, the landing check for the coordination plugin, when
     // each is loaded: without them the metrics still run.

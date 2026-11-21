@@ -64,6 +64,7 @@ import {
   writeSiblingMarker,
 } from "./repos.ts"
 import { byOption, orderedBy } from "./people.ts"
+import { waitingOn } from "./waiting.ts"
 import { exclusions } from "./excludes.ts"
 import {
   ALLOW_PRIVATE,
@@ -1716,6 +1717,20 @@ async function hello(args: string[], opts: CliOptions, place: Located, io: IO): 
       // a goal that cannot be evaluated here: naima gates says why
     }
     decisions.push(...await waiting)
+    try {
+      // What waits on the person at the keyboard: the one list naima waiting prints and the UI shows.
+      const mine = await waitingOn(ctx)
+      if (mine.length) {
+        const shown = mine.slice(0, 3).map((r) => r.ref).join(", ")
+        decisions.push(
+          `${mine.length} thing${mine.length === 1 ? "" : "s"} wait${mine.length === 1 ? "s" : ""} on you: ${shown}${
+            mine.length > 3 ? ` and ${mine.length - 3} more` : ""
+          } — naima waiting lists them`,
+        )
+      }
+    } catch {
+      // a source that cannot be read here: naima waiting says why
+    }
     try {
       offers.push(...await offersAtSessionStart(ctx))
     } catch {

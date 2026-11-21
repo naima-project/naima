@@ -386,7 +386,7 @@ export function trackerChanges(trackerGit: string): Map<string, string> {
 }
 
 /** The message of a tracker commit made by `naima <command>`: the items (or files) it wrote in the subject, the command in a trailer, and who ordered it in another. */
-export function cliCommitMessage(command: string, paths: readonly string[], prefix = ""): string {
+export function cliCommitMessage(command: string, paths: readonly string[], prefix = "", orderedBy?: string): string {
   const names = [
     ...new Set(paths.map((p) => {
       const parts = (prefix && p.startsWith(`${prefix}/`) ? p.slice(prefix.length + 1) : p).split("/")
@@ -399,13 +399,13 @@ export function cliCommitMessage(command: string, paths: readonly string[], pref
 }
 
 /** Commit `paths` of a tracker kept as a repository of its own, as `naima <command>` wrote them. Null when done, else why not. */
-export function commitTrackerPaths(trackerGit: string, command: string, paths: readonly string[], prefix = ""): string | null {
+export function commitTrackerPaths(trackerGit: string, command: string, paths: readonly string[], prefix = "", orderedBy?: string): string | null {
   if (!paths.length) return null
   const input = paths.join("\0") + "\0"
   const spec = ["--pathspec-from-file=-", "--pathspec-file-nul"]
   const added = runGit(trackerGit, ["--literal-pathspecs", "add", "-A", ...spec], { input })
   if (!added.ok) return `git add: ${gitReason(added)}`
-  const made = runGit(trackerGit, ["--literal-pathspecs", "commit", "-q", "-m", cliCommitMessage(command, paths, prefix), ...spec], { input })
+  const made = runGit(trackerGit, ["--literal-pathspecs", "commit", "-q", "-m", cliCommitMessage(command, paths, prefix, orderedBy), ...spec], { input })
   return made.ok ? null : `git commit: ${gitReason(made)}`
 }
 
@@ -418,7 +418,7 @@ export function commitTrackerWrites(trackerGit: string, command: string, before:
   const after = trackerChanges(trackerGit)
   const mine = [...after].filter(([p, s]) => before.get(p) !== s).map(([p]) => p)
   const out: string[] = []
-  const failed = commitTrackerPaths(trackerGit, command, mine, orderedBy)
+  const failed = commitTrackerPaths(trackerGit, command, mine, "", orderedBy)
   if (failed) out.push(`what naima ${command} wrote to the tracker is not committed (${failed}): git -C ${TRACKER_DIR}/${DATA_DIR} commit it`)
   const left = [...before.keys()].filter((p) => after.has(p) && !mine.includes(p))
   if (left.length) {

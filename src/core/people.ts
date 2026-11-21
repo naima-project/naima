@@ -113,7 +113,7 @@ export function historyOf(item: Item): Order[] {
 /** What a write changed, in a few words. */
 export function whatChanged(write: Write, command: string | undefined): string {
   if (write.kind === "create") return "filed"
-  const before = write.before ?? {}
+  const before = (write.before ?? {}) as Record<string, unknown>
   const now = write.item.meta as Record<string, unknown>
   const parts: string[] = []
   if (write.kind === "move") parts.push(`moved to ${write.to?.id ?? write.item.type}`)
