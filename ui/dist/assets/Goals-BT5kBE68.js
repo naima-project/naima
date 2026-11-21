@@ -1,0 +1,1 @@
+import{Bi as e,Vi as t,wr as n}from"./chevron-right-CKNw35FH.js";import r from"./Roadmap-BybG-MMo.js";function i(i,a){t(a,!0);let{roadmap:o}=n();r(i,{get screen(){return o},get onopen(){return a.onitem}}),e()}export{i as default};
