@@ -2,7 +2,7 @@
 // `%@ui end` block in a `.mcrl2` file of the project, tracked or not yet ignored, and explained by its `%@say` lines. The
 // stepper, observer and view it names are served from the declaring file's folder; the model it names is only read.
 
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { gitPath, projectFiles } from "../../core/api.ts";
 
@@ -30,6 +30,8 @@ export interface Study {
   diagrams: string;
   /** The view's parts, each a card of its own (`id: title; …`); empty when the view is one card. */
   parts: { id: string; title: string }[];
+  /** The folder of the study's saved paths (relative to the declaring file), or null: counterexamples, test paths, runs. */
+  paths: string | null;
   says_lines: SayLine[];
   /**
    * What each state variable is, in its author's words: the comment beside each parameter of the model's process, with
@@ -50,6 +52,7 @@ const KEYS = [
   "says",
   "diagrams",
   "parts",
+  "paths",
 ];
 const BEGIN = /^%@ui\s+begin\s*$/;
 const END = /^%@ui\s+end\s*$/;
@@ -103,6 +106,7 @@ function studyOf(root: string, file: string, text: string): Study | null {
     says: "",
     diagrams: "",
     parts: [],
+    paths: null,
     model: null,
     stepper: null,
     observer: null,
@@ -268,4 +272,36 @@ export function studyFolder(
 ): string | null {
   const s = findStudies(root, program).find((x) => x.id === id);
   return s ? join(root, dirname(s.file)) : null;
+}
+
+/** A saved path of a study: its file's name, where it comes from, and its text, which the tab loads. */
+export interface SavedPath {
+  name: string;
+  /** Where it was found, from its file's first `% origin: …` line: the model checker, a test, model-based testing, a proof. */
+  origin: string;
+  text: string;
+}
+
+/**
+ * The saved paths of a study: every `.trace` (one label per line, as mCRL2's tracepp prints a counterexample) and `.json`
+ * (the tab's own path) file of its paths folder, which must be inside the declaring file's folder.
+ */
+export function savedPaths(root: string, study: Study): SavedPath[] {
+  if (!study.paths) return [];
+  const dir = resolve(root, dirname(study.file));
+  const folder = resolve(dir, study.paths);
+  const r = relative(dir, folder);
+  if (
+    r.startsWith("..") || isAbsolute(r) || !existsSync(folder) ||
+    !statSync(folder).isDirectory()
+  ) return [];
+  const out: SavedPath[] = [];
+  for (const name of readdirSync(folder).sort()) {
+    if (!/\.(trace|json)$/.test(name)) continue;
+    const text = readFileSync(join(folder, name), "utf8");
+    const m = /^%\s*origin\s*:\s*(.+)$/m.exec(text) ??
+      /"origin"\s*:\s*"([^"]+)"/.exec(text);
+    out.push({ name, origin: m ? m[1]!.trim() : "saved", text });
+  }
+  return out;
 }

@@ -57,7 +57,7 @@ import { stampOf, type ViewCache } from "./view-cache.ts"
 import { PoolDown, type ViewPool } from "./view-pool.ts"
 import { type AgentRequest, askAgent, awaitAnswer, listenShows, openUis, type Place, requestId, taken, type UiRequest, writeAnswer } from "./show.ts"
 import { commandJson, type JsonOf, metroData, VIEW_OF_COMMAND } from "./metro.ts"
-import { findStudies } from "./studies.ts"
+import { findStudies, savedPaths } from "./studies.ts"
 import { contentProblem, framePage, tabList, type UiTab, type UiTabContent, type UiView } from "./tabs.ts"
 
 export { actionArgv, actionCommand, actionOf, ACTIONS, naimaEntry, runCommand } from "./actions.ts"
@@ -317,7 +317,12 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       const dir = join(ctx.root, dirname(study.file))
       const stepper = Buffer.from(readFileSync(join(dir, study.stepper))).toString("base64")
       const frame = (rel: string | null): string | null => (rel === null ? null : opts.fileUrl(`study-${study.id}`, rel))
-      return json({ ...study, stepper, frames: { host: opts.fileUrl("naima-study", "host.html"), observer: frame(study.observer), view: frame(study.view) } })
+      return json({
+        ...study,
+        stepper,
+        frames: { host: opts.fileUrl("naima-study", "host.html"), observer: frame(study.observer), view: frame(study.view) },
+        saved: savedPaths(ctx.root, study) as unknown as Json,
+      })
     },
     metro: async () => (await kept("metro", async () => json(await metroData(momentOf(null), viaViews)))) as Json,
     action: async (args) => {

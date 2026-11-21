@@ -20,6 +20,11 @@
   import ZoomIn from "@lucide/svelte/icons/zoom-in";
   import ZoomOut from "@lucide/svelte/icons/zoom-out";
   import Fit from "@lucide/svelte/icons/scan";
+  import Layered from "@lucide/svelte/icons/network";
+  import Radial from "@lucide/svelte/icons/orbit";
+  import Force from "@lucide/svelte/icons/atom";
+  import GridIcon from "@lucide/svelte/icons/grid-3x3";
+  import { type Algorithm, redraw } from "./algorithms.ts";
   import type { GraphEdge, GraphNode } from "./graph.ts";
 
   interface Props {
@@ -142,7 +147,11 @@
       labelWidth: labelW,
     }),
   );
-  const placed = $derived(mirror(routed, flow === "left", flow === "up"));
+  /** How the graph is drawn: in layers (with its flow), or around a centre, as springs, in rows. */
+  let algorithm: Algorithm = $state("layered");
+  const placed = $derived(
+    algorithm === "layered" ? mirror(routed, flow === "left", flow === "up") : redraw(laid, algorithm, { gap: 90 * spacing }),
+  );
 
   // ---- moving: nodes and arrows glide together from the old layout to the new one, the arrows always on the nodes
   let shown: Layout = $state.raw({ nodes: [], edges: [], width: 0, height: 0 });
@@ -193,12 +202,18 @@
   let drawing: SVGSVGElement | undefined = $state();
 
   // The node followed is brought into view by the browser, when the drawing is larger than its window.
+  // Only when the followed node changes (a step taken, a state chosen): between moves, the person pans freely.
+  let followed: string | null = null;
   $effect(() => {
     const id = follow;
-    void shown;
-    if (!id || zoom === null || !drawing) return;
-    const el = [...drawing.querySelectorAll<SVGGElement>("g.node")].find((g) => g.dataset["id"] === id);
-    el?.scrollIntoView({ block: "center", inline: path ? "start" : "center", behavior: "smooth" });
+    if (!id || id === followed || zoom === null || !drawing) return;
+    followed = id;
+    const d = drawing;
+    // After the glide, where the node will be.
+    setTimeout(() => {
+      const el = [...d.querySelectorAll<SVGGElement>("g.node")].find((g) => g.dataset["id"] === id);
+      el?.scrollIntoView({ block: "center", inline: path ? "start" : "center", behavior: "smooth" });
+    }, motionMs());
   });
 
   const arrow = (x: number, y: number, a: number) => {
@@ -246,9 +261,17 @@
 
 <div class="graph">
   <div class="controls" role="toolbar" aria-label="{label}: layout and zoom">
-    {#each [["right", "Flow left to right", ArrowRight], ["down", "Flow top to bottom", ArrowDown], ["left", "Flow right to left", ArrowLeft], ["up", "Flow bottom to top", ArrowUp], ["auto", "Flow as the card's shape suits", Auto]] as const as [o, says, I] (o)}
-      <button class="ico" class:on={orient === o} aria-label={says} title={says} aria-pressed={orient === o} onclick={() => (orient = o)}><Icon><I /></Icon></button>
-    {/each}
+    {#if !path}
+      {#each [["layered", "In layers, along the flow", Layered], ["radial", "Around a centre", Radial], ["force", "As springs: linked nodes together", Force], ["grid", "In rows", GridIcon]] as const as [a, says, I] (a)}
+        <button class="ico" class:on={algorithm === a} aria-label={says} title={says} aria-pressed={algorithm === a} onclick={() => (algorithm = a)}><Icon><I /></Icon></button>
+      {/each}
+      <span class="gap"></span>
+    {/if}
+    {#if algorithm === "layered"}
+      {#each [["right", "Flow left to right", ArrowRight], ["down", "Flow top to bottom", ArrowDown], ["left", "Flow right to left", ArrowLeft], ["up", "Flow bottom to top", ArrowUp], ["auto", "Flow as the card's shape suits", Auto]] as const as [o, says, I] (o)}
+        <button class="ico" class:on={orient === o} aria-label={says} title={says} aria-pressed={orient === o} onclick={() => (orient = o)}><Icon><I /></Icon></button>
+      {/each}
+    {/if}
     <span class="gap"></span>
     <button class="ico" aria-label="Closer together" title="Closer together" disabled={spacing <= 0.6} onclick={() => (spacing = Math.max(0.6, spacing / 1.25))}><Icon><Compact /></Icon></button>
     <button class="ico" aria-label="Further apart" title="Further apart" disabled={spacing >= 2} onclick={() => (spacing = Math.min(2, spacing * 1.25))}><Icon><Spread /></Icon></button>
@@ -323,7 +346,7 @@
                   <text class="nlabel" y="4" text-anchor="middle">{n.label}</text>
                 {/if}
                 {#if n.sub && !path}
-                  {#if dir === "vertical"}
+                  {#if dir === "vertical" && algorithm === "layered"}
                     <text class="nsub" x={pn.width / 2 + 8} y={n.sub.includes("\n") ? -3 : 4} text-anchor="start">
                       {#each n.sub.split("\n") as line, li (li)}<tspan x={pn.width / 2 + 8} dy={li === 0 ? 0 : 13}>{line}</tspan>{/each}
                     </text>
