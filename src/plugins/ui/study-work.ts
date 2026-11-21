@@ -115,10 +115,6 @@ export interface JobContext {
   naima: readonly string[]
   /** How naima-codegen is started, or null when it is not installed. */
   codegen: readonly string[] | null
-  /** What a study's build needs to start naima-codegen itself (`codegenEnv`), set before its command; absent, none. */
-  codegenEnv?: Readonly<Record<string, string>>
-  /** Folders put first on PATH for naima-codegen and a study's build: the installed mCRL2's, which naima-codegen runs `mcrl22lps` from. */
-  pathFirst?: readonly string[]
   windows: boolean
 }
 
@@ -143,6 +139,20 @@ export function codegenEnv(found: string | null, windows: boolean, python: strin
 }
 
 /**
+ * The environment a job is started with besides the caller's: what `codegenEnv` says, and PATH with the folders of the
+ * installed mCRL2 first, which naima-codegen runs `mcrl22lps` from. Given to the process, never written into the shell
+ * line, which two shells and their quoting stand between.
+ */
+export function jobEnv(
+  codegenVars: Readonly<Record<string, string>>,
+  pathFirst: readonly string[],
+  path: string | undefined,
+  windows: boolean,
+): Record<string, string> {
+  return { ...codegenVars, ...(pathFirst.length ? { PATH: [...pathFirst, ...(path ? [path] : [])].join(windows ? ";" : ":") } : {}) }
+}
+
+/**
  * The command line of a job, run through the platform's shell by `naima run`, or why the study cannot run it. `property`
  * narrows a check to one property file; absent, every property of the study is checked.
  */
@@ -151,16 +161,7 @@ export function jobLine(job: Job, study: Study, ctx: JobContext, property?: stri
   const q = (w: string) => quoted(w, ctx.windows)
   const line = (words: readonly string[]) => words.map(q).join(" ")
   const inFolder = (command: string) => (ctx.windows ? `cd /d ${q(folder)} && ${command}` : `cd ${q(folder)} && ${command}`)
-  // Before the command that starts naima-codegen, which the study's build after it inherits: its variables, and the folders it finds mCRL2 in.
-  const withEnv = (command: string) => {
-    const first = ctx.pathFirst ?? []
-    if (ctx.windows) {
-      const path = first.length ? [`set "PATH=${first.join(";")};%PATH%" && `] : []
-      return [...path, ...Object.entries(ctx.codegenEnv ?? {}).map(([k, v]) => `set "${k}=${v}" && `)].join("") + command
-    }
-    return (first.length ? `export PATH=${q(first.join(":"))}:"$PATH" && ` : "") + command
-  }
-  const generate = ctx.codegen ? withEnv(line([...ctx.codegen, "generate", "--project", folder])) : null
+  const generate = ctx.codegen ? line([...ctx.codegen, "generate", "--project", folder]) : null
   if (job === "check") {
     if (!study.system) return { refused: "the study declares no system to check its properties on (% system in its %@ui block)" }
     const props = property === undefined ? study.properties : study.properties.filter((p) => p === property)
