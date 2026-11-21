@@ -39,7 +39,7 @@ The paths are relative to that file. The UI tab then lists the naima-codegen pro
 card more: the app itself, in the state the machine is in. The card is the page the project builds for it, which mounts the app on recorded data and walks
 the machine along the path from its start, so what it shows is what the real code does in that state. Its controls work, and a step taken there is added
 to the path. When the app asks for a step the model refuses in that state, the card says so above the app until you dismiss it. Naima's own UI declares
-its machines this way, and a model that has no place in the app's `src/uicard/places.ts` opens without the app.
+its machines this way, its card being the copy of the page the product ships, and a model that has no place in the app's `src/uicard/places.ts` opens without the app.
 
 ## A study of your own
 
