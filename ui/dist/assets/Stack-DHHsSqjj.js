@@ -1,0 +1,1 @@
+import{Bi as e,Ei as t,Er as n,Hr as r,Xr as i,ci as a,oi as o,xi as s}from"./chevron-right-q0JVw02A.js";var c=a(`<div><!></div>`);function l(a,l){let u=n(l,`gap`,3,`md`),d=n(l,`align`,3,`stretch`);var f=c(),p=t(f);i(p,()=>l.children),e(f),s(()=>r(f,1,`stack gap-${u()??``} align-${d()??``}`,`svelte-1382wtz`)),o(a,f)}export{l as t};
