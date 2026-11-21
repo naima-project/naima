@@ -177,7 +177,11 @@ export function shareClaim(
   const path = relative(where, file).split("\\").join("/")
   const changed = gitOrNull(where, "status", "--porcelain", "--", path)
   if (changed) {
-    const c = runGit(where, ["commit", "-q", "--no-verify", "-m", `Claim ${items.map((i) => i.ref).join(", ") || "the step"} on ${branch}`, "--", path])
+    // A new claim is not known to git yet: added first, then committed alone.
+    const added = runGit(where, ["add", "-A", "--", path])
+    const c = added.ok
+      ? runGit(where, ["commit", "-q", "--no-verify", "-m", `Claim ${items.map((i) => i.ref).join(", ") || "the step"} on ${branch}`, "--", path])
+      : added
     if (!c.ok) {
       ctx.out(`the claim is not shared: it could not be committed on ${branch} (${gitReason(c)})`)
       return
