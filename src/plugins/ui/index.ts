@@ -34,7 +34,7 @@ import {
   UI_SWITCH,
   usageError,
 } from "../../core/api.ts"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { commitOf } from "./at.ts"
 import { viewCache } from "./view-cache.ts"
 import { naimaBridge } from "./bridge.ts"
@@ -44,6 +44,7 @@ import { weekView } from "./week.ts"
 import { browserCommand, openBrowser, type Opened, osName } from "./open.ts"
 import { BUNDLE, filesKey, filesUrl, newToken, serve, type ServeOptions } from "./serve.ts"
 import { studyFolder } from "./studies.ts"
+import { codeFolder, uiTab } from "./study-space.ts"
 import { resumed, switchFile, writeSwitch } from "./switch.ts"
 import { agentChannel } from "./agent-endpoint.ts"
 import { runUiMcp } from "./mcp.ts"
@@ -278,7 +279,13 @@ export function tabFolder(ctx: Context, tabs: readonly UiTab[], name: string): s
   try {
     // The Models tab's: a study's frames come from its declaring file's folder, the frame's host page from the bundle.
     if (name === "naima-study") return join(BUNDLE, "study")
+    if (name.startsWith("study-code-")) return codeFolder(ctx.root, name.slice("study-code-".length))
     if (name.startsWith("study-")) return studyFolder(ctx.root, ctx.program, name.slice("study-".length))
+    // The UI tab's card: the folder of the page the project builds for it (develop/ui-tab.md §3.1), read only.
+    if (name === "ui-card") {
+      const page = uiTab(ctx.root, ctx.program)?.card?.page
+      return page ? join(ctx.root, dirname(page)) : null
+    }
     return tabs.find((t) => t.name === name)?.files?.(ctx) ?? null
   } catch {
     return null

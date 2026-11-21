@@ -7,6 +7,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { gitPath, projectFiles } from "../../core/api.ts"
+import { defaultStudies } from "./models.ts"
 
 export interface SayLine {
   file: string
@@ -17,6 +18,17 @@ export interface SayLine {
 export interface Study {
   /** A slug of the declaring file's project-relative path. */
   id: string
+  /**
+   * Declared by a `%@ui` block, or a default study (models.ts): a naima-codegen project (its declaring file is its
+   * codegen.toml) or a plain whole specification (its declaring file is itself).
+   */
+  kind: "declared" | "codegen" | "plain"
+  /** The folder the list groups it under, relative to the project. */
+  folder: string
+  /** A naima-codegen project's generated TypeScript module, relative to its folder, or null: what its default study steps. */
+  typescript: string | null
+  /** How many values each id sort of its instance takes (`% @items 2`), for stepping its generated code. */
+  sizes: Record<string, number>
   /** The declaring file, relative to the project, with forward slashes. */
   file: string
   title: string
@@ -117,6 +129,10 @@ function studyOf(root: string, file: string, text: string): Study | null {
   if (begin < 0) return null
   const study: Study = {
     id: studyId(file),
+    kind: "declared",
+    folder: gitPath(dirname(file)),
+    typescript: null,
+    sizes: {},
     file,
     title: file,
     says: "",
@@ -307,8 +323,17 @@ export function stateNotes(
   return out
 }
 
-/** Every study of the project at `root`, in the order of their files; `program` is Naima's own folder, left out. */
-export function findStudies(root: string, program?: string): Study[] {
+/**
+ * Every study of the project at `root`: the declared ones, in the order of their files, then every other model in a
+ * default study (models.ts); `program` is Naima's own folder, left out; `tracker` adds its property items' formulas.
+ */
+export function findStudies(root: string, program?: string, tracker?: string): Study[] {
+  const declared = declaredStudies(root, program)
+  return [...declared, ...defaultStudies(root, program, declared, tracker)]
+}
+
+/** The studies a `%@ui` block declares, in the order of their files. */
+export function declaredStudies(root: string, program?: string): Study[] {
   const out: Study[] = []
   for (const file of projectFiles(root, program)) {
     if (!file.toLowerCase().endsWith(".mcrl2")) continue
@@ -326,7 +351,7 @@ export function studyFolder(
   program: string | undefined,
   id: string,
 ): string | null {
-  const s = findStudies(root, program).find((x) => x.id === id)
+  const s = declaredStudies(root, program).find((x) => x.id === id) ?? findStudies(root, program).find((x) => x.id === id)
   return s ? join(root, dirname(s.file)) : null
 }
 

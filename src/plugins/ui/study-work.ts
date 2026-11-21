@@ -6,7 +6,7 @@
 
 import { Buffer } from "node:buffer"
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
-import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path"
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { CODEGEN_MISSING } from "../../core/api.ts"
 import type { Study } from "./studies.ts"
 
@@ -34,6 +34,16 @@ function rank(rel: string, study: Study, folder: string, root: string): number {
 /** The files of a study a person may edit in the tab, relative to its declaring file's folder, in the editor's order. */
 export function studyFiles(root: string, study: Study): string[] {
   const folder = join(root, dirname(study.file))
+  // A plain model shares its folder with others: its files are itself and its properties.
+  if (study.kind === "plain") {
+    return [basename(study.file), ...study.properties].filter((f) => {
+      try {
+        return statSync(join(folder, f)).size <= MAX_BYTES
+      } catch {
+        return false
+      }
+    })
+  }
   const out: string[] = []
   const walk = (dir: string, depth: number): void => {
     let names: string[]

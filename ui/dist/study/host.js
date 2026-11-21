@@ -4,6 +4,8 @@
 //   #role=observer&src=<url>   loads the study's observer (init, on) and folds what the tab sends it
 //   #role=view&src=<url>       loads the study's view (mount) and gives it the store's data; fire and can go back
 //   &part=<id>                 with a view declared in parts: the one part this frame draws
+//   #role=explore&src=<url>    loads a module naima-codegen generated and explores its state space (explore.js) when
+//                              the tab asks, from its start or from a state it explored before
 //
 // The tab's messages carry { naima: "study", t, ... }; this host answers in the same shape.
 
@@ -157,13 +159,55 @@ async function view(mod) {
   post({ t: "ready" });
 }
 
-if (!src || (role !== "observer" && role !== "view")) {
+// ---- the explorer of a generated machine (develop/models-default-study.md §3.1): the project's code runs here only
+
+async function explorer(mod) {
+  const { exploreModule } = await import("./explore.js");
+  if (
+    !Array.isArray(mod.inputs) || !Array.isArray(mod.outputs) ||
+    typeof mod.start !== "function"
+  ) {
+    return problem(
+      "the module is not one naima-codegen generated: it has no transition table",
+    );
+  }
+  // The states as the module holds them, by its key, to explore again from one of them.
+  const held = new Map();
+  addEventListener("message", (e) => {
+    if (e.source !== parentWin || e.data?.naima !== "study") return;
+    const m = e.data;
+    if (m.t !== "explore") return;
+    try {
+      const from = m.from === undefined || m.from === null
+        ? null
+        : held.get(m.from);
+      if (m.from && !from) {
+        throw new Error("that state is not one this frame explored");
+      }
+      const space = exploreModule(
+        mod,
+        m.sizes ?? {},
+        m.bound ?? 20000,
+        from ?? null,
+      );
+      space.raw.forEach((s, i) => held.set(space.keys[i], s));
+      delete space.raw;
+      post({ t: "space", id: m.id, space });
+    } catch (err) {
+      post({ t: "error", id: m.id, why: String(err?.message ?? err) });
+    }
+  });
+  post({ t: "ready" });
+}
+
+const roles = { observer, view, explore: explorer };
+if (!src || !Object.hasOwn(roles, role)) {
   problem(
     "this page is a study's frame: its address names a role and a module",
   );
 } else {
   import(src).then(
-    (mod) => (role === "observer" ? observer(mod) : view(mod)),
+    (mod) => roles[role](mod),
     (err) => problem(`the module did not load: ${err}`),
   );
 }
