@@ -39,7 +39,7 @@
 // Every command reads the files when it is called, so the UI is live.
 
 import { resolve } from "node:path"
-import { askHostsInBackground, type Context, gitReadScope, headCommit, type KnownProject, knownProjects } from "../../core/api.ts"
+import { askHostsInBackground, type Context, gitReadScope, headCommit, type KnownProject, knownProjects, personAtKeyboard } from "../../core/api.ts"
 import { actionArgv, actionCommand, actionOf, ACTIONS, naimaEntry, runCommand } from "./actions.ts"
 import { showCall } from "./agent-endpoint.ts"
 import { AtCache, commitOf } from "./at.ts"
@@ -308,15 +308,27 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       if (typeof argv === "string") throw new Error(argv)
       const action = actionOf(String(args["name"]))!
       const run = `ui-${argv[0]}-${ctx.now().toISOString().replace(/\D/g, "").slice(0, 14)}-${++runs}`
-      const started = await runCommand(ctx, [
-        "run",
-        run,
-        "--budget-time",
-        action.budget ?? "5m",
-        ...(action.progress ? ["--stale", "10m"] : ["--stale", "1m", "--no-progress", "a naima command the UI ran, which prints its result when it ends"]),
-        "--",
-        ...actionCommand(opts.entry ?? naimaEntry(), ctx.trackerRoot, argv),
-      ])
+      // What the UI runs is the doing of the person at the keyboard, never an agent's own: --by names them, so a note
+      // is theirs and each change records who ordered it, and the command it starts runs as a person's.
+      const person = personAtKeyboard(ctx.root)?.name
+      const by = person && !argv.includes("--by") ? ["--by", person] : []
+      const role = process.env["NAIMA_ROLE"]
+      process.env["NAIMA_ROLE"] = "person"
+      let started: Awaited<ReturnType<typeof runCommand>>
+      try {
+        started = await runCommand(ctx, [
+          "run",
+          run,
+          "--budget-time",
+          action.budget ?? "5m",
+          ...(action.progress ? ["--stale", "10m"] : ["--stale", "1m", "--no-progress", "a naima command the UI ran, which prints its result when it ends"]),
+          "--",
+          ...actionCommand(opts.entry ?? naimaEntry(), ctx.trackerRoot, [...argv, ...by]),
+        ])
+      } finally {
+        if (role === undefined) delete process.env["NAIMA_ROLE"]
+        else process.env["NAIMA_ROLE"] = role
+      }
       if (started.code !== 0) throw new Error(started.err.trim() || started.out.trim() || `naima run exited with ${started.code}`)
       return json({ run, command: ["naima", ...argv] })
     },

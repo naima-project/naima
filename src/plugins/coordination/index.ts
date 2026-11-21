@@ -130,6 +130,7 @@ import {
   onLine,
   openLines,
 } from "./lines.ts"
+import { bringUp, fetchShared, landShared, SHARED_REMOTE, shareClaim, sharedRemote } from "./shared.ts"
 import { atRiskSection } from "./at-risk.ts"
 import { trunkOnlyTracker } from "./trunk-only.ts"
 
@@ -428,7 +429,14 @@ const claimCommand: Command = {
       mine.items.push({ id: item.meta.id, ref: label(item), title: item.meta.title })
       ctx.out(`claimed ${label(item)}`)
     }
-    ctx.out(`wrote ${writeClaim(ctx, mine)} — commit it ${commitOn(ctx.root)} with your work`)
+    const written = writeClaim(ctx, mine)
+    const remote = sharedRemote(ctx)
+    if (remote && items.length) {
+      // On a trunk several people share, a claim on items is pushed when made, so that another person's agents see it.
+      shareClaim(ctx, remote, ctx.root, branch, join(ctx.trackerRoot, CLAIMS, mine.file), items.map((i) => ({ id: i.meta.id, ref: label(i) })), rel(ctx, CLAIMS))
+      return 0
+    }
+    ctx.out(`wrote ${written} — commit it ${commitOn(ctx.root)} with your work`)
     return 0
   },
 }
@@ -1004,7 +1012,19 @@ function openCommand(policy: Policy): Command {
         if (!SEGMENT.test(value)) throw new Error(`${flag} ${value}: each part of a branch name is a ${SEGMENT_SAYS}`)
       }
       const gate = openLine(ctx, items, str(p, "line"), bool(p, "trunk"))
-      const { path } = openWork(ctx, policy, items, who, what, str(p, "note"), gate)
+      const remote = sharedRemote(ctx)
+      if (remote) {
+        // On a trunk several people share, the branch starts from the remote's work and its claim is pushed at once.
+        const unfetched = fetchShared(ctx, remote)
+        if (unfetched) ctx.out(`could not fetch ${remote} (${unfetched}): the branch starts from the trunk as it is here`)
+        else {
+          const behind = bringUp(ctx, remote, gate ? lineBranch(gate) : trunk(ctx.root) ?? "")
+          if (behind) ctx.out(`${behind} — the branch starts from it as it is here`)
+          ctx.reload()
+        }
+      }
+      const { path, branch, claimFile } = openWork(ctx, policy, items, who, what, str(p, "note"), gate)
+      if (remote) shareClaim(ctx, remote, path, branch, join(path, claimFile), items.map((i) => ({ id: i.meta.id, ref: label(i) })), rel(ctx, CLAIMS))
       ctx.out(`next: cd ${path}, and install the dependencies a fresh checkout lacks`)
       return 0
     },
@@ -1502,7 +1522,11 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
   const landing: Command = {
     ...land,
     async run(args, ctx) {
-      const code = await land.run.call(land, args, ctx)
+      // On a trunk several people share, the landing fetches, lands and pushes at once, again when the push is refused.
+      const remote = sharedRemote(ctx)
+      const branch = args.find((a) => !a.startsWith("-"))
+      const once = () => land.run.call(land, args, ctx)
+      const code = remote && branch && !args.includes("--repair") ? await landShared(ctx, remote, branch, once) : await once()
       if (code === 0) sweeping(ctx)
       return code
     },
@@ -1573,6 +1597,11 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
         says:
           "false turns the trunk guard off: the git hook that refuses a commit, merge or fast-forward of the trunk made by hand is removed and not put back by naima update, the landing rule is not shipped, and landings-are-markers asks only from the first marker; written by naima guard off and naima guard on",
         default: "true",
+      },
+      {
+        name: SHARED_REMOTE,
+        says:
+          "the remote through which several people's coordinators share one trunk, such as origin: naima land then fetches, brings the trunk up to the remote's, merges it into the branch when the branch lacks it, lands and pushes at once, and lands again on the remote's new trunk when the push is refused, up to three times before it says the remote kept moving; naima claim and naima open commit and push the claim when they make it and say who else on the remote claims the same item. Unset, nothing is fetched or pushed. Not read for a tracker kept in a repository of its own",
       },
       { name: "diaryPerDay", says: "how many diary entries a day may hold before the check diary-entries notes it: a positive whole number", default: "5" },
       {

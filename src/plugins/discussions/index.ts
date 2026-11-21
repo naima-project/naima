@@ -40,6 +40,7 @@ import { join } from "node:path"
 import {
   addLink,
   bool,
+  forPersonAtKeyboard,
   byUrgency,
   type Check,
   type Command,
@@ -1007,7 +1008,10 @@ const meetingsUiView = (base: Record<string, MeetingConfig>) => ({
   },
 })
 
-/** What `naima hello` says: each meeting due now with discussions to take, how it runs, and the decisions waiting for its close. */
+/**
+ * What `naima hello` says: each meeting due now with discussions to take, how it runs, and the decisions waiting for its
+ * close; of these, only what waits on the person at the keyboard or on nobody in particular (core/people.ts).
+ */
 function helloSection(base: Record<string, MeetingConfig>): SummarySection {
   return {
     name: "meetings",
@@ -1017,15 +1021,17 @@ function helloSection(base: Record<string, MeetingConfig>): SummarySection {
       const rows = Object.entries(meetings)
         .filter(([, m]) => dueNow(ctx, m))
         .map(([name, m]) => {
-          const ordered = orderedAgenda(ctx, name, meetings)
+          // Only what waits on the person at the keyboard, or on nobody in particular: a question for another owner is theirs.
+          const mine = (i: Item) => forPersonAtKeyboard(ctx, i)
+          const ordered = orderedAgenda(ctx, name, meetings).filter((o) => mine(o.item))
           return {
             meeting: name,
             title: m.title,
             needs: needsOf(m),
-            open: [...ordered.filter((o) => o.place !== "deferred").map((o) => label(o.item)), ...othersOn(ctx, name).map(label)],
+            open: [...ordered.filter((o) => o.place !== "deferred").map((o) => label(o.item)), ...othersOn(ctx, name).filter(mine).map(label)],
             taken: m.taken ?? null,
             deferred: ordered.filter((o) => o.place === "deferred").map((o) => label(o.item)),
-            toClose: packagesOf(ctx, name).packages.map((k) => label(k.item)),
+            toClose: packagesOf(ctx, name).packages.filter((k) => mine(k.item)).map((k) => label(k.item)),
           }
         })
         .filter((r) => r.taken || r.open.length || r.toClose.length)

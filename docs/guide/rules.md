@@ -349,6 +349,14 @@ published at once. Acknowledged as "Outside issues mode on". **Convention**.
 Agents ask a person only for things that are really theirs to give, such as a judgement of how something looks or feels, a decision reserved to the
 [owner](glossary.md#owner), a credential or a physical act. **Convention** ([asking the human](../agents/asking-the-human.md)).
 
+### Every change records the person who ordered it
+
+A project may have several owners, so the tracker says which person asked, decided or approved. An item keeps who asked for it and who filed it, by name. Every
+change to it adds a line to its history with the person who ordered it, taken from git's `user.name` unless `--by` names someone else, or `--by agent` marks an
+agent's own change. A note names its author, and the agent that wrote it for them. An item that waits on one person names them in `waitsOn`, and `naima hello`
+and the UI show each person only what waits on them or on nobody in particular. **Enforced by** the write hook `ordered-by`
+([several owners](several-owners.md)).
+
 ### Don't start implementing until the owner says so
 
 A request isn't an instruction to start building. First its item says what "done" means. For a feature, that is its behaviour, its boundaries and how it will be
@@ -722,7 +730,9 @@ trunk is never rewritten.
 
 Naima has no locks. Only the [coordinator](../agents/coordinator-and-workers.md) lands branches on the trunk, pushes it, publishes the site and makes releases,
 and it does all of that from the trunk. Workers only prepare work, on their own branches. When it matters, the [owner](glossary.md#owner) decides what lands and
-when. **Convention** ([several branches](several-branches.md#one-writer-no-locks)).
+when. A project with several owners has one coordinator on each owner's machine. Their landings meet on the remote named by the coordination option
+`sharedRemote`: each landing fetches first and pushes at once, and lands again on the remote's new trunk when the push is refused. **Convention**
+([several branches](several-branches.md#one-writer-no-locks), [several owners](several-owners.md#one-trunk-several-coordinators)).
 
 Why: with a single writer nothing is contended, so a lock would only add state that can go stale. It also means that what is published is always what the trunk
 holds, never a branch that hasn't landed.

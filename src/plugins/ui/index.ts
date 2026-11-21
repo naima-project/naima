@@ -17,9 +17,12 @@ import {
   type Context,
   CONTRACT,
   type ExtensionPoint,
+  isOpen,
   itemData,
   type ItemLink,
   label,
+  personAtKeyboard,
+  waitsOnOf,
   parse,
   type Plugin,
   progressFor,
@@ -205,6 +208,40 @@ export const itemView: UiView = {
       ].join("\n"),
       css:
         "table{border-collapse:collapse;margin:0 0 12px}th,td{padding:2px 12px 2px 0;text-align:left;vertical-align:top}dl{display:grid;grid-template-columns:max-content 1fr;gap:2px 12px}dd{margin:0}pre{white-space:pre-wrap}.proves{color:#1a7f37}.refutes{color:#cf222e}h2{font-size:1.1em;margin:16px 0 4px}",
+    }
+  },
+}
+
+/** Whom things wait on: the person at the keyboard, and each open item that waits on one person in particular. */
+export interface PeopleData {
+  /** The person at the keyboard: NAIMA_PERSON, else git's user.name; null when neither says. */
+  person: string | null
+  /** The person each open item waits on, by the item's reference: only those that name one. */
+  waitsOn: Record<string, string>
+}
+
+export const peopleView: UiView = {
+  name: "people",
+  title: "People",
+  says:
+    "whom things wait on: the person at the keyboard and each open item that waits on one person in particular (its waitsOn field); the UI's waiting views show the person what waits on them and on nobody in particular",
+  order: 25,
+  render(_params, ctx) {
+    const data: PeopleData = { person: personAtKeyboard(ctx.root)?.name ?? null, waitsOn: {} }
+    for (const i of ctx.repo.items) {
+      const on = isOpen(ctx, i) ? waitsOnOf(i) : undefined
+      if (on) data.waitsOn[label(i)] = on
+    }
+    const rows = Object.entries(data.waitsOn)
+    return {
+      data,
+      html: [
+        "<h1>People</h1>",
+        `<p>At the keyboard: ${esc(data.person ?? "nobody known")}</p>`,
+        rows.length
+          ? `<table><tbody>${rows.map(([ref, who]) => `<tr><td><code>${esc(ref)}</code></td><td>waits on ${esc(who)}</td></tr>`).join("")}</tbody></table>`
+          : "<p>Nothing waits on one person in particular.</p>",
+      ].join("\n"),
     }
   },
 }
@@ -506,7 +543,7 @@ export default function ui(options: Record<string, unknown> = {}): Plugin {
       "Two MCP servers serve an agent on standard input and output, split by what they touch. `naima ui --mcp` (the UI stance's bridge-mcp.ts) drives the screen the way a person does, and imports only the UI stance's registry and its agent channel (agent-endpoint.ts): `show` (a screen, a plugin's view, an item, a commit or a line), `store`, `transitions` and `transition`, `read_page` and `screenshot` all ask every UI open on the project on the feed `agent` (the request `{ id, tool, args }` of the UI stance's agent protocol, answered on the command `agent-answer` as `{ id, ok, answer }` or `{ id, ok: false, error }`), one request at a time; a show opens a UI as naima hello opens one when none is, so that an agent shows the owner something in the UI instead of making a page of its own. `naima ui --mcp-tracker` never touches the screen: it reads Naima's core directly (the views, the lines' map, git) for `overview`, `items`, `gates`, `lines`, `history`, `work`, `metrics`, `meetings` and `view`, and runs the UI's actions with `action` and `run`. " +
       "At a session start `naima hello` opens the UI on the project by itself, in the background, and says so on its greeting's line, with the address in a browser: the desktop app when it is installed, else `naima ui` on a port it picks, which opens the browser; a UI already open on the project, named in a registry in the clone's Naima state folder that `naima ui` and the sidecar write too, is reused instead. It is off with the option `atStart` false, for a user with `{\"atStart\": false}` in the ui.json of their Naima config folder, and never on CI, with NAIMA_NO_UI or NAIMA_DATA set, nor in a worktree other than the clone's main checkout.",
     points: [viewsPoint, uiTabsPoint],
-    contributes: { "ui-views": [summaryView, boardView, itemView, mapView, projectsView, weekView] },
+    contributes: { "ui-views": [summaryView, boardView, itemView, peopleView, mapView, projectsView, weekView] },
     commands: [uiCommand, nameStopCommand],
     options: [
       {

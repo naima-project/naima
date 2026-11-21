@@ -21,6 +21,9 @@ import {
   checkpointAfter,
   CLI_TRAILER,
   code,
+  HISTORY,
+  ORDERED_BY,
+  orderedBy,
   CODE_TRAILER,
   type Command,
   commitTrackerPaths,
@@ -247,6 +250,12 @@ async function heavyNeeded(at: Context, check: LandingReport, landing: Landing):
 
 /** The prefix of the line on which naima landing-check prints its findings, as JSON. */
 export const LANDING_CHECK_LINE = "NAIMA-LANDING-CHECK "
+
+/** The trailer naming the person who ordered the landing, when one is known (core/people.ts). */
+const orderedTrailer = (ctx: Context): string[] => {
+  const by = orderedBy(ctx)
+  return by ? [`${ORDERED_BY}: ${by}`] : []
+}
 
 /** The ref a heavy check's commit is pushed to on the landing host, for the time of the check. */
 const landingRef = (run: string): string => `refs/naima/landing/${run}`
@@ -1050,7 +1059,7 @@ async function landBoth(
       for (const l of notCurrent) ctx.out(`${l} — landed anyway: ${stale!.trim()}`)
     }
     if (trackerOnly !== undefined) own.push(`${TRACKER_ONLY}: ${trackerOnly}`)
-    own.push(...meetsTrailers(met))
+    own.push(...meetsTrailers(met), ...orderedTrailer(ctx))
     const parents = trk.tip === trk.old ? ["-p", trk.old] : ["-p", trk.old, "-p", trk.tip]
     const made = runGit(ctx.trackerGit, ["commit-tree", trkTree, ...parents, "-F", "-"], {
       input: markerMessage(branch, ids, [`${CODE_TRAILER}: ${code.tip}`, ...own, `${CLI_TRAILER}: land`]),
@@ -1132,6 +1141,7 @@ export async function landOnLine(ctx: Context, branch: string, gate: string, clo
   if (noChangeNote !== undefined) trailers.push(`${NO_CHANGE_NOTE}: ${noChangeNote.trim()}`)
   guardLandingMessages(ctx, branch, old, tip)
   trailers.push(...owedTrailer(await lineLandingChecks(ctx, { branch, from: old, to: tip, changed: changedFiles(ctx.root, old, tip), closes: ids })))
+  trailers.push(...orderedTrailer(ctx))
   const made = runGit(ctx.root, ["commit-tree", `${tip}^{tree}`, "-p", old, "-p", tip, "-F", "-"], { input: `Land ${branch}\n\n${trailers.join("\n")}\n` })
   if (!made.ok) throw new Error(`git commit-tree: ${gitReason(made)}`)
   const marker = made.out.trim()
@@ -1624,7 +1634,7 @@ export const land: Command = {
     guardLandingMessages(ctx, branch, old, tip)
     // Tracker data holds no behaviour path: a tracker-only landing asks for no change note, and its reason is its trailer.
     const trailers = trackerOnly !== undefined ? [`${TRACKER_ONLY}: ${trackerOnly}`] : changeNoteTrailers(ctx, branch, old, tip, str(p, "no-change-note"))
-    trailers.push(...meetsTrailers(met))
+    trailers.push(...meetsTrailers(met), ...orderedTrailer(ctx))
     const tree = mustGit(ctx.root, "rev-parse", `${tip}^{tree}`)
     const changed = changedFiles(ctx.root, old, tip)
     // The checkout takes the branch tip's files first, the trunk still where it was, refusing to overwrite an untracked
@@ -1755,7 +1765,8 @@ export function onlyAddsTrackerData(ctx: Context, sha: string, files: { status: 
     const [dir = "", , name, ...more] = path.slice(data.length).split("/")
     if (status !== "M" || more.length || !itemDirs.has(dir)) return false
     if (name === META && onlyFilledChanged(ctx, sha, path)) continue
-    if (name !== "README.md") return false
+    // An item's notes and its history are append-only: a commit that only adds to them only adds tracker data.
+    if (name !== "README.md" && name !== HISTORY) return false
     readmes.push(path)
   }
   if (!readmes.length) return true
@@ -1791,6 +1802,7 @@ export function onlyClosesItems(ctx: Context, sha: string, files: { status: stri
     } else if (status === "A" && dir === closed && slug && rest.length) added.add(`${slug}/${rest.join("/")}`)
     else if (status === "A" && !kept.some((k) => path.startsWith(k)) && path !== `${data}${DATA_FILE}`) continue // a new record beside, as a metrics record
     else if (status === "M" && rest.join("/") === META && groups.has(dir) && onlyStatusChanged(ctx, sha, path)) continue // the epic the close finishes
+    else if (status === "M" && rest.join("/") === HISTORY && groups.has(dir)) continue // and the line its history takes for it
     else return false
   }
   if (!removed.size) return false

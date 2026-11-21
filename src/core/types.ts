@@ -712,4 +712,8 @@ export interface Context {
    * a write of free text or a file (the privacy plugin's hook `signed-writes`).
    */
   revised?: string
+  /** The command running, as typed: what an item's history records with each change (core/people.ts). */
+  command?: string
+  /** Who ordered this command's writes, from `--by`: a person's name, or `agent` for an agent's own change (core/people.ts). */
+  orderedBy?: string
 }
