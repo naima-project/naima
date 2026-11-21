@@ -92,7 +92,14 @@ impl Sidecar {
 
     /// Starts Naima in the project's folder and reads what it says: answers to their request, feeds as events.
     pub fn start_in(app: AppHandle, root: PathBuf) -> Result<Arc<Sidecar>, String> {
-        let mut command = if cfg!(windows) {
+        // NAIMA_PROGRAM names a Naima to run instead of the project's own (naima ui --watch): its program, with the Deno in
+        // NAIMA_DENO, so that a branch not landed shows in the app, and the sidecar watches its UI for the page to reload.
+        let live = std::env::var("NAIMA_PROGRAM").ok().map(PathBuf::from).filter(|p| p.join("naima.ts").is_file());
+        let mut command = if let Some(program) = live {
+            let mut c = Command::new(std::env::var("NAIMA_DENO").unwrap_or_else(|_| "deno".into()));
+            c.arg("run").arg("-A").arg(program.join("naima.ts")).args(["ui", "--sidecar", "--watch"]);
+            c
+        } else if cfg!(windows) {
             let mut c = Command::new(root.join("naima-tracker").join("naima.cmd"));
             c.args(["ui", "--sidecar"]);
             c

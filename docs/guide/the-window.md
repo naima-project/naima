@@ -34,6 +34,19 @@ worktree other than the clone's main checkout, so agents working in their own wo
 In the desktop app, Cmd+R on macOS (View, Reload) and Ctrl+R or F5 on Windows and Linux reload the page, as a browser does. The address holds every state of the
 window, so a reload brings you back to the same place.
 
+### Testing the window while it is being changed
+
+`naima ui --watch` is for whoever changes the UI and wants to see each change as it lands in the bundle. The window reloads by itself whenever the UI is
+rebuilt (`deno task ui build` in the workshop rewrites `ui/dist`, and the files of a study's view count too). A reload keeps the screen, since the address holds
+it, and the scroll place, and the window says "Updated" for a moment in a corner. The rebuild is taken as finished once the files have been quiet for a third of
+a second and `index.html`, written last, is there again.
+
+With the desktop app installed, `naima ui --watch` opens the app on the project running this Naima instead of the one the project pins: the app's page comes from
+this Naima's bundle and its sidecar runs this Naima's program, so a branch that has not landed, new bridge commands included, shows in the app. This is a window
+of its own, apart from one already open on the project. It reads two variables the command sets, `NAIMA_PROGRAM` (the Naima's folder) and `NAIMA_DENO` (the Deno that
+runs it); started by hand with them set, the app does the same. With `--browser` or `--no-open`, or without the app, `--watch` serves the page in the browser and
+tells it to reload. Without `--watch` nothing is watched and nothing changes.
+
 ### What agents use
 
 An agent reaches Naima through two MCP servers, which keep the screen and the tracker apart. `naima ui --mcp` (named `naima-ui` in an agent's client) is the

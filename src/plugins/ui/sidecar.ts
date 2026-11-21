@@ -23,6 +23,7 @@ import { naimaBridge } from "./bridge.ts"
 import * as Model from "./generated/sidecar.ts"
 import type { Handlers, Json } from "./bridge-handler.ts"
 import { BUNDLE, fileIn } from "./serve.ts"
+import type { ReloadWatch } from "./watch.ts"
 import { PAGE_TYPES, type UiTab, type UiView } from "./tabs.ts"
 
 /** Where the desktop's webview loads a file of a tab's folder: the shell's naima-files: scheme, which WebView2 names as a host. */
@@ -42,6 +43,8 @@ export interface SidecarOptions {
   input: Readable
   write(line: string): void
   watch?: { interval?: number; debounce?: number }
+  /** --watch: the feed reload, which tells the shell to reload its page when the UI is rebuilt (watch.ts). */
+  reload?: ReloadWatch
   /** Told each event of the sidecar's machine and each action it takes, as its model's action record has them. */
   record?: (entry: SidecarEntry) => void
 }
@@ -139,8 +142,9 @@ export async function runSidecar(ctx: Context, opts: SidecarOptions): Promise<nu
     if (action === "push") send(event)
     else exited()
   }, opts.record)
-  const stops = (["changes", "show", "agent"] as const).map((feed) =>
-    bridge.feeds[feed]!((e) => {
+  const feeds = opts.reload ? { ...bridge.feeds, reload: opts.reload.feed } : bridge.feeds
+  const stops = (opts.reload ? ["changes", "show", "agent", "reload"] : ["changes", "show", "agent"]).map((feed) =>
+    feeds[feed]!((e) => {
       event = { feed, event: e }
       machine.change()
     })

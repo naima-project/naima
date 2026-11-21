@@ -60,7 +60,25 @@ export const realDesktopDeps: DesktopDeps = {
  * Open the desktop app's program `app` on the project at `root`, or bring forward its window already open there.
  * `dir` is the registry's folder (null outside git). Never throws.
  */
-export async function openDesktop(root: string, dir: string | null, app: string, deps: DesktopDeps = realDesktopDeps): Promise<DesktopOpened> {
+export async function openDesktop(
+  root: string,
+  dir: string | null,
+  app: string,
+  deps: DesktopDeps = realDesktopDeps,
+  live: Record<string, string> | null = null,
+): Promise<DesktopOpened> {
+  // A live app (naima ui --watch) is a window of its own on this Naima: it never takes the place of one open on the
+  // project's pinned program, and a second one does not either; the sidecar it starts names it in the registry.
+  if (live) {
+    try {
+      const pid = deps.start([app], { NAIMA_PROJECT: root, ...live }, root)
+      if (pid === null) return { opened: false, reason: `${app} did not start` }
+      await deps.sleep(SETTLE_MS)
+      return deps.alive(pid) ? { opened: true, how: "started" } : { opened: false, reason: "it ended as it started" }
+    } catch (e) {
+      return { opened: false, reason: (e as Error).message }
+    }
+  }
   try {
     if (await deps.raise(root)) return { opened: true, how: "raised" }
     let gen: number | null = null
@@ -105,6 +123,13 @@ export function copyTree(from: string, to: string): void {
   }
 }
 
+/** What makes the desktop app live: this Naima's program for its sidecar, and the Deno that runs it. */
+export function liveEnv(env: Record<string, string | undefined>): Record<string, string> {
+  const exe = process.execPath
+  const deno = /(^|[\\/])deno(\.exe)?$/i.test(exe) ? exe : env["NAIMA_DENO"] ?? "deno"
+  return { NAIMA_PROGRAM: PRODUCT.replace(/[\\/]$/, ""), NAIMA_DENO: deno }
+}
+
 /** The line `naima ui` says about the desktop app it opened. */
 export const desktopLine = (o: DesktopOpened & { opened: true }, project: string): string =>
   o.how === "raised"
@@ -117,16 +142,24 @@ export const desktopLine = (o: DesktopOpened & { opened: true }, project: string
  * What plain `naima ui` does first: open the desktop app on the project when it is installed, saying so. False sends
  * it on to the browser: the app is not installed (on macOS, with a hint about --install-desktop) or could not open.
  */
-export async function desktopFirst(ctx: Context, env: Record<string, string | undefined>, os: string, deps: DesktopDeps = realDesktopDeps): Promise<boolean> {
+export async function desktopFirst(
+  ctx: Context,
+  env: Record<string, string | undefined>,
+  os: string,
+  deps: DesktopDeps = realDesktopDeps,
+  watch = false,
+): Promise<boolean> {
   const app = desktopApp(desktopAppDirs(env, os))
   if (!app) {
     if (os === "darwin") ctx.out("naima ui: the desktop app is not installed (naima ui --install-desktop builds and installs it); opening the browser")
     return false
   }
   const name = ctx.root.split(/[\\/]/).filter(Boolean).pop() ?? ctx.root
-  const o = await openDesktop(ctx.root, registryDir(ctx.root), app, deps)
+  const o = await openDesktop(ctx.root, registryDir(ctx.root), app, deps, watch ? liveEnv(env) : null)
   if (o.opened) {
-    ctx.out(desktopLine(o, name))
+    ctx.out(
+      watch ? `naima ui: opened the desktop app on ${name}, live: it runs this Naima (${PRODUCT}) and reloads when its UI is rebuilt` : desktopLine(o, name),
+    )
     return true
   }
   ctx.out(`naima ui: the desktop app could not open (${o.reason}); opening the browser`)

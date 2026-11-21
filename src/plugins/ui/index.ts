@@ -53,6 +53,7 @@ import { buildDir, desktopFirst, findCargo, installDesktop, installedApp, PRODUC
 import { desktopApp, desktopAppDirs, naimaCommand, offReason, openAtStart, register, registryDir, unregister, userAtStart } from "./at-start.ts"
 import { nameStopCommand } from "./stops.ts"
 import { viewPool } from "./view-pool.ts"
+import { reloadWatch } from "./watch.ts"
 import { allTabs, tabsPoint, type UiTab, type UiView } from "./tabs.ts"
 import { withDecisionRecords } from "./design-record.ts"
 
@@ -283,8 +284,13 @@ export function tabFolder(ctx: Context, tabs: readonly UiTab[], name: string): s
   }
 }
 
+/** The folders of the tab files this run serves, each once: what --watch watches besides the bundle. */
+export function tabFolders(ctx: Context, tabs: readonly UiTab[]): string[] {
+  return [...new Set(tabs.map((t) => tabFolder(ctx, tabs, t.name)).filter((d): d is string => d !== null))]
+}
+
 /** `naima ui`: serve the UI through the bridge, open it in the browser unless asked not to, and stop on Ctrl-C. */
-export async function runUi(ctx: Context, flags: { open: boolean; port?: number; token?: string }, deps: UiDeps = realDeps): Promise<number> {
+export async function runUi(ctx: Context, flags: { open: boolean; port?: number; token?: string; watch?: boolean }, deps: UiDeps = realDeps): Promise<number> {
   // A run that switched project from another keeps its address and token, so the page that asked finds it there.
   const back = deps.resume !== undefined ? deps.resume : resumed()
   const file = deps.switchFile !== undefined ? deps.switchFile : switchFile()
@@ -314,8 +320,11 @@ export async function runUi(ctx: Context, flags: { open: boolean; port?: number;
       },
     },
   })
+  // --watch: the pages are told to reload when the bundle or a tab's files are rebuilt, on the feed reload.
+  const reloads = flags.watch ? reloadWatch({ bundle: BUNDLE, folders: () => tabFolders(ctx, tabs) }) : null
   const options: ServeOptions = {
     ...bridge,
+    ...(reloads ? { feeds: { ...bridge.feeds, reload: reloads.feed } } : {}),
     token,
     tabFolder: (name) => tabFolder(ctx, tabs, name),
     ...(flags.port ? { port: flags.port } : {}),
@@ -339,6 +348,7 @@ export async function runUi(ctx: Context, flags: { open: boolean; port?: number;
   } finally {
     unregister(registered)
     deps.forget?.()
+    reloads?.stop()
     bridge.close()
     await served.close()
   }
@@ -351,7 +361,7 @@ const uiCommand: Command = {
   enforces:
     "the interface is served only on the loopback interface, and every request without this run's token is refused; a bridge command comes only from the server's own page; an action runs only a command of its short list, through naima run",
   hidden: true,
-  usage: "ui [--browser] [--no-open] [--log] [--port <port>] | ui --install-desktop | ui --sidecar | ui --mcp | ui --mcp-tracker",
+  usage: "ui [--browser] [--no-open] [--log] [--watch] [--port <port>] | ui --install-desktop | ui --sidecar | ui --mcp | ui --mcp-tracker",
   long: {
     reports:
       "--install-desktop reports its stage (copy, compile, install) and, while Cargo compiles, the crates done of the count the last build ended on, on standard error or into the run's progress file",
@@ -366,6 +376,11 @@ const uiCommand: Command = {
       name: "--install-desktop",
       says:
         "build the desktop app from the shell this Naima ships and install it as Naima.app in the user's Applications folder, on macOS; it needs Rust, and its first build takes some minutes",
+    },
+    {
+      name: "--watch",
+      says:
+        "for continuous testing: the window reloads by itself, keeping its screen and scroll place and saying Updated, whenever this Naima's UI is rebuilt (the bundle in ui/dist, or the files of a study's view); with the desktop app installed it opens the app on THIS Naima (its bundle and its program, an unlanded branch included) instead of the project's pinned one, in the browser it serves the page and tells it to reload; without --watch nothing is watched",
     },
     { name: "--no-open", says: "open no browser: print the address, with its token, and serve until Ctrl-C (for a port forwarded from another machine)" },
     { name: "--log", says: "print one line per request on stderr: its status, method and path" },
@@ -389,13 +404,14 @@ const uiCommand: Command = {
         "serve the tracker to an agent as an MCP server on standard input and output, the server that never touches the screen: overview, items, gates, lines, history, work, metrics, meetings, view, and the UI's actions with action and run, read from Naima's core directly: what an agent's client starts (claude mcp add naima-tracker -- naima ui --mcp-tracker)",
     },
   ],
-  examples: ["ui", "ui --browser", "ui --install-desktop", "ui --no-open", "ui --sidecar", "ui --mcp", "ui --mcp-tracker"],
+  examples: ["ui", "ui --watch", "ui --browser", "ui --install-desktop", "ui --no-open", "ui --sidecar", "ui --mcp", "ui --mcp-tracker"],
   async run(args, ctx) {
     const p = parse(args, {
       browser: { type: "boolean" },
       "install-desktop": { type: "boolean" },
       "no-open": { type: "boolean" },
       log: { type: "boolean" },
+      watch: { type: "boolean" },
       sidecar: { type: "boolean" },
       mcp: { type: "boolean" },
       "mcp-tracker": { type: "boolean" },
@@ -408,6 +424,7 @@ const uiCommand: Command = {
     if (bool(p, "mcp") && bool(p, "mcp-tracker")) throw usageError(this)
     if (mcp && (bool(p, "sidecar") || bool(p, "no-open") || bool(p, "log") || port !== undefined)) throw usageError(this)
     if ((bool(p, "sidecar") || mcp) && (bool(p, "browser") || bool(p, "install-desktop"))) throw usageError(this)
+    if (bool(p, "watch") && (bool(p, "install-desktop") || mcp)) throw usageError(this)
     if (bool(p, "install-desktop")) {
       if (bool(p, "browser") || bool(p, "no-open") || bool(p, "log") || port !== undefined) throw usageError(this)
       const env = process.env
@@ -452,17 +469,20 @@ const uiCommand: Command = {
         views: viewsOf(ctx),
         tabs,
         tabFolder: (name) => tabFolder(ctx, tabs, name),
+        ...(bool(p, "watch") ? { reload: reloadWatch({ bundle: BUNDLE, folders: () => tabFolders(ctx, tabs) }) } : {}),
         os: osName(),
         input: process.stdin,
         write: (line) => void process.stdout.write(line + "\n"),
       }).finally(() => unregister(registered))
     }
     // The desktop app when it is installed, on the project; the browser when asked, when the address is wanted, or when the app cannot open.
-    if (!bool(p, "browser") && !bool(p, "no-open") && port === undefined && await desktopFirst(ctx, process.env, osName())) return 0
+    if (!bool(p, "browser") && !bool(p, "no-open") && port === undefined && await desktopFirst(ctx, process.env, osName(), undefined, bool(p, "watch"))) {
+      return 0
+    }
     const token = port !== undefined ? process.env["NAIMA_UI_TOKEN"] || undefined : undefined
     return await runUi(
       ctx,
-      { open: !bool(p, "no-open"), ...(port !== undefined ? { port } : {}), ...(token ? { token } : {}) },
+      { open: !bool(p, "no-open"), ...(bool(p, "watch") ? { watch: true } : {}), ...(port !== undefined ? { port } : {}), ...(token ? { token } : {}) },
       bool(p, "log") ? { ...realDeps, log: (l) => ctx.err(l) } : realDeps,
     )
   },
