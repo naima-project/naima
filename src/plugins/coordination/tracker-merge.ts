@@ -11,8 +11,6 @@
 // Anything else a merge leaves unmerged (a claim, an event, an item moved on one side and changed on the other) is
 // not touched.
 
-import { writeFileSync } from "node:fs"
-import { join } from "node:path"
 import { isDeepStrictEqual } from "node:util"
 import { joinProse, NOTES_HEADING, runGit, splitProse } from "../../core/api.ts"
 
@@ -180,12 +178,20 @@ export function resolveTrackerConflicts(root: string, dataDir: string): { resolv
       for (const c of found) conflicts.push({ file, ...c })
       continue
     }
-    const path = join(root, file)
-    writeFileSync(path, text)
-    if (runGit(root, ["add", "--", file]).ok) resolved.push(file)
+    // Written through git, never by this process: the checkout is a sibling worktree, outside what the launcher lets
+    // Naima write, and git is not fenced.
+    if (stageText(root, file, text)) resolved.push(file)
     else left.push(file)
   }
   return { resolved, conflicts, left }
+}
+
+/** Make `text` the resolved content of an unmerged `file` (index and working tree), by git alone. Whether it could. */
+function stageText(root: string, file: string, text: string): boolean {
+  const made = runGit(root, ["hash-object", "-w", "--stdin", "--path", file], { input: text })
+  if (!made.ok) return false
+  const oid = made.out.trim()
+  return runGit(root, ["update-index", "--add", "--cacheinfo", `100644,${oid},${file}`]).ok && runGit(root, ["checkout-index", "-f", "--", file]).ok
 }
 
 /** What is still unmerged anywhere in the working tree, as paths from the root. */

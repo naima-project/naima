@@ -59,7 +59,8 @@ function persist(exec: Exec, pause: (ms: number) => void, cmd: string, args: str
 /**
  * Put the tip in the host's checkout under the checkpoint's ref. Towards a POSIX host, a git push over ssh. Towards a
  * host whose shell is cmd, git's own ssh quoting breaks the path, so the tip travels as a bundle: made here, copied with
- * scp into the host's git directory, fetched there and removed. A dropped link is tried again, twice. The reason it
+ * scp into the host's checkout folder (a submodule's checkout has a .git file, not a git directory), fetched there
+ * and removed. A dropped link is tried again, twice. The reason it
  * could not be sent, or none.
  */
 export function sendTipWith(
@@ -115,10 +116,10 @@ function sendCommit(root: string, h: Host, tip: string, exec: Exec, pause: (ms: 
       "-o",
       "ServerAliveCountMax=3",
       local,
-      `${h.ssh}:${fwd}/.git/${file}`,
+      `${h.ssh}:${fwd}/${file}`,
     ])
     if (!copied.ok) return fail(copied.err)
-    const there = cmdQuote(`${winDir}\\.git\\${file}`)
+    const there = cmdQuote(`${winDir}\\${file}`)
     const fetched = persist(exec, pause, "ssh", [
       "-o",
       "BatchMode=yes",
