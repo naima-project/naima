@@ -149,7 +149,9 @@ export function runGit(cwd: string, args: string[], opts: GitOptions = {}): GitR
 }
 
 function runGitNow(cwd: string, args: string[], opts: GitOptions): GitRun {
+  const t0 = performance.now() // TEMPORARY trace, removed with the profile
   const r = spawnGit(cwd, args, opts, "utf8")
+  ;(globalThis as { __gitTrace?: unknown[][] }).__gitTrace?.push([cwd.slice(-24), args.slice(0, 5).join(" ").slice(0, 70), Math.round(performance.now() - t0)])
   const notInstalled = (r.error as { code?: string } | undefined)?.code === "ENOENT"
   return { ok: r.status === 0, out: String(r.stdout ?? "").replace(/\r?\n$/, ""), err: String(r.stderr ?? "").trim(), notInstalled, status: r.status }
 }
