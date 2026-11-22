@@ -1,0 +1,1 @@
+import{n as e,oi as t,si as n}from"./chevron-right-BO4OgmPM.js";var r={name:`play`,size:24,node:[[`path`,{d:`M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z`}]]};r.node;var i=new Set([`$$slots`,`$$events`,`$$legacy`]);function a(a,o){let s=t(o,i);e(a,n(()=>s,{get icon(){return r}}))}export{a as t};

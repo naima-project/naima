@@ -1,1 +1,0 @@
-import{n as e,oi as t,si as n}from"./chevron-right-JeAtw_Qy.js";var r={name:`search`,size:24,node:[[`path`,{d:`m21 21-4.34-4.34`}],[`circle`,{cx:`11`,cy:`11`,r:`8`}]]};r.node;var i=new Set([`$$slots`,`$$events`,`$$legacy`]);function a(a,o){let s=t(o,i);e(a,n(()=>s,{get icon(){return r}}))}export{a as t};
