@@ -503,9 +503,9 @@ Health shows the project's [metrics](metrics-and-budgets.md) at the moment the w
 getting worse and one for the steady ones, and its sentence says whether the project is getting healthier: how many metrics got better, worse or stayed steady
 since the first day the charts show. Under it are the key numbers, as Home's numbers stand: the value, its name, its change, the date of its record and a small
 chart of its history. Live, a number shows the newest record and its change since the record before, named by that record's day ("+23 since 26 Oct"). At a commit of the past it shows the value then and its change against live, and says "recorded at this commit" or,
-when that commit has no record, "no record at this commit, nearest:" with the date of the last record at or before it, the one that holds then. Clicking a number
-shows its metric in the large chart below. Beside that chart is the list of every metric, grouped by what it measures, with its value; picking one shows it in
-the large chart, with what it means and how it is measured above it. Every chart runs along the trunk's commits in order, labelled with their dates; a commit of the past is marked by an amber line, and a bound by
+when that commit has no record, "no record at this commit, nearest:" with the date of the last record at or before it, the one that holds then. Under the numbers
+is the list of every metric, grouped by what it measures, with its value, the group of the metric picked open; picking one shows it in the large chart
+under the list, with what it means and how it is measured above the chart, and underlines its number. Every chart runs along the trunk's commits in order, labelled with their dates; a commit of the past is marked by an amber line, and a bound by
 a dashed one. The range picks every commit or the last 500 or 100. Each chart has a text summary that screen readers read. Clicking a point of the large chart,
 or pressing Enter on the one the arrow keys are on, selects its commit, so the whole window shows that moment, and opens below the chart the record of the run
 that measured it: the value and whether it kept its bound, when it was recorded, and how it was taken. For a test suite's number that is the suite's run, with
