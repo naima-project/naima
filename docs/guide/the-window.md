@@ -211,9 +211,9 @@ What reaches the chat says what the thing is, its reference when it has one, the
 asking which one you meant. Shift with the right-click gives the browser's own menu, and a field keeps its own menu as usual.
 
 The strip then says how it went. "Sent to the chat" means your chat session's Naima server took the message and wrote it into the session; "In the chat"
-means the agent has said it has it. When no chat session is listening, the strip says so at once and offers "Copy the message": paste it in your chat
-yourself. It offers the same copy when the agent has not taken the message within about twenty seconds, which usually means the session was started
-without Naima's channel; a message nobody took by then is withdrawn, so it never arrives later as well as pasted.
+means the agent has said it has it. When no chat session is listening, which is the case when your chat is the Claude desktop app, the window copies the
+message at once and the strip says "Copied — paste it in your chat", with the text shown and a "Copy again" button. It offers the same copy when the agent
+has not taken the message within about five seconds, which usually means the session was started without Naima's channel; a message nobody took by then is withdrawn, so it never arrives later as well as pasted.
 
 The message travels through Claude Code's channels, which deliver an outside event into a running session. They work in Claude Code's terminal app, not
 yet in the desktop app, and while they are a research preview a channel that is not on Anthropic's list is turned on for one session at its start. Start
