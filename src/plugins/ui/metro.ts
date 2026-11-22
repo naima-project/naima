@@ -24,8 +24,9 @@
 //            each line's landing
 
 import { basename } from "node:path"
-import { type Command, type Context, gitOrNull, isOpen, runGit, runGitAsync, trunk, worktrees } from "../../core/api.ts"
+import { type Command, type Context, gitOrNull, isOpen, runGit, runGitAsync, trunk, type Worktree, worktrees } from "../../core/api.ts"
 import { type Event as StatusEvent, initial, type State, type Status, step as statusStep } from "./generated/worker-status.ts"
+import { CommitGraph } from "./metro-graph.ts"
 import { stopNames } from "./stops.ts"
 
 /** How many first-parent commits of the trunk the window holds; a branch is shown when it leaves or rejoins within it. */
@@ -331,11 +332,11 @@ interface BranchFacts {
 }
 
 /**
- * The facts of every branch in `refs` (name and tip, tab-separated) that is no line, asked of git for all the branches
- * at once. Whether a commit is on the trunk is asked once per commit: the branches cut from a line share their merge
- * base with it.
+ * The facts of every branch in `refs` (name and tip, tab-separated) that is no line, asked of git branch by branch. Whether
+ * a commit is on the trunk is asked once per commit: the branches cut from a line share their merge base with it. This is
+ * the way for a branch the commit graph cannot settle (factsOf), and for a repository whose graph could not be read.
  */
-async function factsOf(
+async function factsByGit(
   ctx: Context,
   main: string | null,
   lines: readonly LineRow[],
@@ -377,6 +378,122 @@ async function factsOf(
   }))
 }
 
+/** What the map reads of each commit the trunk lacks, in one git call: hash, parents, committer time, author, subject. */
+export const GRAPH_FORMAT = "--format=%H%x09%P%x09%ct%x09%an%x09%s"
+
+/** What the in-memory answers need besides the graph of the commits the trunk lacks. */
+interface Known {
+  graph: CommitGraph | null
+  /** Every local branch's tip. */
+  tips: ReadonlyMap<string, string>
+  /** The trunk's first-parent commits, newest first. */
+  trunkLog: readonly string[]
+  /** The commits of the trunk's window and the merges within it, when a branch merged into the trunk is asked about. */
+  windowGraph: () => Promise<CommitGraph | null>
+}
+
+/** Record `list`'s commits and authors as a log of them would have. */
+function recordFrom(graph: CommitGraph, list: readonly string[], commits: Record<string, MetroCommit>, authors: Authors): void {
+  for (const h of list) {
+    const c = graph.commits.get(h)
+    if (!c) continue
+    commits[h] = { t: c.t, subject: c.subject }
+    if (c.author) authors.set(h, c.author)
+  }
+}
+
+/**
+ * The facts of every branch in `refs` that is no line. The commits the trunk lacks come from one git call, as a graph, and
+ * the base, rejoin, fork and own commits of a branch are walks over it. What the graph cannot settle (a branch whose
+ * fork is not one commit, whose commits the walk leaves for the trunk) is asked of git for that branch alone, and its
+ * answer is what git would have given for every branch: what this returns equals factsByGit's
+ * (test/plugins/ui/metro-equivalence.test.ts). A branch rejoined into its base still costs the two git calls of its fork
+ * and its commits.
+ */
+async function factsOf(
+  ctx: Context,
+  main: string | null,
+  lines: readonly LineRow[],
+  lineNames: ReadonlySet<string>,
+  refs: readonly string[],
+  window: ReadonlySet<string>,
+  commits: Record<string, MetroCommit>,
+  authors: Authors,
+  known: Known,
+): Promise<(BranchFacts | null)[]> {
+  const { graph, tips, trunkLog } = known
+  const mainTip = main ? tips.get(main) : undefined
+  if (!main || !graph || !mainTip) return await factsByGit(ctx, main, lines, lineNames, refs, window, commits, authors)
+  const ask = async (...args: string[]): Promise<string | null> => {
+    const r = await runGitAsync(ctx.root, args, GIT_MS)
+    return r.ok ? r.out.trim() : null
+  }
+  const lineTips = lines.flatMap((l) => (tips.has(l.branch) ? [{ branch: l.branch, tip: tips.get(l.branch)! }] : []))
+  /** undefined: the graph cannot settle this branch. */
+  const fast = async (name: string, tip: string): Promise<BranchFacts | null | undefined> => {
+    const merged = !graph.has(tip)
+    const mine = graph.ancestors(tip)
+    // Its base: the open line whose own commits it carries (a commit of the graph both reach), else the trunk.
+    let base = main
+    let baseTip = mainTip
+    for (const l of lineTips) {
+      const theirs = graph.ancestors(l.tip)
+      if ([...mine].some((c) => theirs.has(c))) {
+        base = l.branch
+        baseTip = l.tip
+        break
+      }
+    }
+    const rejoined = base === main ? merged : graph.ancestors(baseTip).has(tip)
+    let land: string | null = null
+    if (rejoined && tip !== baseTip) {
+      if (base === main) {
+        const around = await known.windowGraph()
+        if (!around) return undefined
+        // Rejoined before the window, or not at all within it: the map does not draw it.
+        if (!around.has(tip)) return null
+        const after = around.descendants(tip)
+        land = trunkLog.slice(0, WINDOW).filter((c) => after.has(c)).at(-1) ?? null
+      } else {
+        const after = graph.descendants(tip)
+        land = graph.firstParents(baseTip, () => false, Infinity).list.filter((c) => after.has(c)).at(-1) ?? null
+      }
+      if (!land) return undefined
+    }
+    if (land && !window.has(land)) return null
+    if (land) {
+      const fork = (await ask("merge-base", `${land}^1`, tip)) || null
+      return { name, tip, base, land, fork, list: fork ? await firstParentAsync(ctx, `${fork}..${tip}`, WINDOW, commits, authors) : [] }
+    }
+    if (rejoined) return { name, tip, base, land: null, fork: tip, list: [] }
+    let fork: string | null
+    let list: string[]
+    if (base === main) {
+      const left = graph.leaving(mine)
+      if (left.length > 1) return undefined
+      fork = left[0] ?? null
+      list = fork ? graph.firstParents(tip, () => false, WINDOW).list : []
+    } else {
+      const theirs = graph.ancestors(baseTip)
+      const shared = graph.newest(new Set([...mine].filter((c) => theirs.has(c))))
+      if (shared.length !== 1) return undefined
+      fork = shared[0]!
+      const behind = graph.ancestors(fork)
+      const walk = graph.firstParents(tip, (c) => behind.has(c), WINDOW)
+      if (walk.end === "outside") return undefined
+      list = walk.list
+    }
+    recordFrom(graph, list, commits, authors)
+    return { name, tip, base, land: null, fork, list }
+  }
+  return await Promise.all(refs.map(async (r): Promise<BranchFacts | null> => {
+    const [name = "", tip = ""] = r.split("\t")
+    if (name === main || lineNames.has(name) || name.startsWith("line/")) return null
+    const got = await fast(name, tip)
+    return got !== undefined ? got : (await factsByGit(ctx, main, lines, lineNames, [r], window, commits, authors))[0] ?? null
+  }))
+}
+
 /** How the metro reads what a command prints with --json: the bridge reads it through the view whose data it is, shared with the screens. */
 export type JsonOf = <T>(ctx: Context, words: string[]) => Promise<T | null>
 
@@ -398,23 +515,51 @@ export async function metroData(ctx: Context, read: JsonOf = commandJson): Promi
     me: asked("config", "user.name"),
     tip: main ? asked("rev-parse", main) : Promise.resolve(""),
     trunkLog: main ? firstParentAsync(ctx, main, HISTORY, commits, authors0) : Promise.resolve([] as string[]),
+    // Every commit the trunk lacks, with what the map reads of it: the branches' bases, forks and commits are walks over it.
+    unmerged: main
+      ? runGitAsync(ctx.root, ["log", GRAPH_FORMAT, "--branches", "--not", main, "--"], GIT_MS).then((r) => (r.ok ? new CommitGraph(r.out) : null))
+      : Promise.resolve(null),
   }
-  const checkouts = checkoutsOf(ctx)
+  const trees = worktrees(ctx.root)
+  const checkouts = checkoutsOf(trees)
   const lines = (await read<{ lines: LineRow[] }>(ctx, ["line", "list"]))?.lines ?? []
   const lineNames = new Set(lines.map((l) => l.branch))
   // Each line's own commits and its fork, and each branch's base, rejoin and fork, asked of git for everything at once
   // and started before the records below are read (those read in turn, and an answer that is ready waits for them):
   // on Windows a git process costs some 35 ms to start, and asked one after another the branches of a busy repository
   // took seconds (bugs/windows-failed-tests-screen-s-cold-load).
-  const ofLines = Promise.all(lines.map(async (l) => ({
-    commits: main ? await firstParentAsync(ctx, `${main}..${l.branch}`, HISTORY, commits, authors0) : [],
-    fork: main ? (await runGitAsync(ctx.root, ["merge-base", main, l.branch], GIT_MS).then((r) => (r.ok ? r.out.trim() : ""))) || null : null,
-  })))
+  const tips = async (): Promise<Map<string, string>> => new Map((await early.refs).split("\n").filter(Boolean).map((r) => r.split("\t") as [string, string]))
+  const ofLines = Promise.all(lines.map(async (l) => {
+    const byGit = async () => ({
+      commits: main ? await firstParentAsync(ctx, `${main}..${l.branch}`, HISTORY, commits, authors0) : [],
+      fork: main ? (await runGitAsync(ctx.root, ["merge-base", main, l.branch], GIT_MS).then((r) => (r.ok ? r.out.trim() : ""))) || null : null,
+    })
+    const graph = await early.unmerged
+    if (!main || !graph) return await byGit()
+    const tip = (await tips()).get(l.branch)
+    if (!tip) return { commits: [] as string[], fork: null }
+    // On the trunk already: it has no commits of its own, and it forks at itself.
+    if (!graph.has(tip)) return { commits: [] as string[], fork: tip }
+    const left = graph.leaving(graph.ancestors(tip))
+    if (left.length > 1) return await byGit()
+    const own = graph.firstParents(tip, () => false, HISTORY).list
+    recordFrom(graph, own, commits, authors0)
+    return { commits: own, fork: left[0] ?? null }
+  }))
   const branches = (async () => {
     const [trunkLog, own] = await Promise.all([early.trunkLog, ofLines])
     const window = new Set(trunkLog.slice(0, WINDOW))
     for (const o of own) for (const c of o.commits) window.add(c)
-    return { window, facts: await factsOf(ctx, main, lines, lineNames, (await early.refs).split("\n").filter(Boolean), window, commits, authors0) }
+    // The trunk's window and the merges inside it: asked only when a branch merged into the trunk has to be placed.
+    let around: Promise<CommitGraph | null> | null = null
+    const windowGraph = (): Promise<CommitGraph | null> =>
+      around ??= (async () => {
+        const last = trunkLog[WINDOW - 1]
+        const r = await runGitAsync(ctx.root, ["log", GRAPH_FORMAT, main!, ...(trunkLog.length >= WINDOW && last ? ["--not", `${last}^1`] : []), "--"], GIT_MS)
+        return r.ok ? new CommitGraph(r.out) : null
+      })()
+    const known: Known = { graph: await early.unmerged, tips: await tips(), trunkLog, windowGraph }
+    return { window, facts: await factsOf(ctx, main, lines, lineNames, (await early.refs).split("\n").filter(Boolean), window, commits, authors0, known) }
   })()
   const claimsJson = await read<{ claims: ClaimRow[]; silentAfter?: number }>(ctx, ["claims"])
   // A claim every item of which is done still says whose the branch was: it is released now, in the records.
@@ -454,7 +599,7 @@ export async function metroData(ctx: Context, read: JsonOf = commandJson): Promi
   )
   const { window, facts } = await branches
   const claimed = new Map(claims.map((c) => [c.branch, c]))
-  const standing = new Set(worktrees(ctx.root).filter((w) => !w.self).flatMap((w) => (w.branch ? [w.branch] : [])))
+  const standing = new Set(trees.filter((w) => !w.self).flatMap((w) => (w.branch ? [w.branch] : [])))
   const workers: Worker[] = []
   for (const f of facts) {
     if (!f) continue
@@ -588,8 +733,7 @@ function peopleOf(ctx: Context, routes: readonly Route[], authors: Authors, head
 }
 
 /** The main checkout and each worktree, with the branch and the commit it stands on, and its work not committed. */
-async function checkoutsOf(ctx: Context): Promise<Checkout[]> {
-  const all = worktrees(ctx.root)
+async function checkoutsOf(all: readonly Worktree[]): Promise<Checkout[]> {
   const dirty = await Promise.all(all.map((w) => dirtyOf(w.path)))
   return all.map((w, i) => ({
     name: basename(w.path),
