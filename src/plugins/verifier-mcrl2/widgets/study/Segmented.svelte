@@ -1,6 +1,6 @@
 <!-- A choice of one among a few, drawn as one capsule whose lit segment is the choice; with `current`, the segment that
      says how things stand now is marked too, so a person sees both where things are and what each choice would do.
-     One of the widget set the Models tab, every study's view and the main UI share (develop/models-tab.md §13). -->
+     One of the widget set. -->
 <script lang="ts">
   import type { Component } from "svelte";
 
@@ -42,28 +42,32 @@
 </div>
 
 <style>
+  /* One capsule whose lit segment is the button's own fill, inset by a border in the capsule's colour: the buttons are as
+     tall as a control, so a finger finds each one whole, and the fill keeps the look of a pill inside the capsule. */
   .seg {
     display: inline-flex;
     flex-wrap: wrap;
     max-inline-size: 100%;
-    padding: var(--space-xs);
-    gap: var(--space-xs);
+    padding-inline: calc(var(--space-xs) / 2);
     border-radius: var(--radius-full);
-    background: color-mix(in srgb, var(--color-surface-sunken) 70%, transparent);
-    border: var(--border-width-thin) solid color-mix(in srgb, var(--color-border-strong) 50%, transparent);
+    background: var(--color-surface-soft);
+    border: var(--border-width-thin) solid var(--color-border-soft);
   }
   .opt {
     position: relative;
     display: inline-flex;
     align-items: center;
     gap: var(--space-xs);
-    min-block-size: calc(var(--size-control) - 2 * var(--space-xs));
+    min-block-size: var(--size-control);
     padding: var(--space-none) var(--space-md);
     font: inherit;
     font-size: var(--font-size-sm);
     color: var(--color-text-muted);
     background: none;
-    border: none;
+    background-clip: padding-box;
+    border: solid var(--color-surface-soft);
+    border-block-width: var(--space-xs);
+    border-inline-width: calc(var(--space-xs) / 2);
     border-radius: var(--radius-full);
     cursor: pointer;
     white-space: nowrap;
@@ -71,11 +75,11 @@
   }
   .opt:hover:not(:disabled) {
     color: var(--color-text);
-    background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+    background-color: var(--color-accent-tint);
   }
   .opt.on {
     color: var(--color-on-accent);
-    background: var(--color-accent);
+    background-color: var(--color-accent);
   }
   .opt:disabled {
     opacity: 0.38;
@@ -97,5 +101,10 @@
   }
   .on .dot {
     background: var(--color-on-accent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .opt {
+      transition: none;
+    }
   }
 </style>

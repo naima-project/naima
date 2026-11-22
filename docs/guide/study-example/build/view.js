@@ -1,8 +1,197 @@
-import { A as template_effect, B as push, C as comment, D as delegate, E as text, F as sibling, I as set, L as state, M as child, N as first_child, O as delegated, P as only_child, R as user_derived, S as append, T as from_svg, V as reset, _ as index, a as prop, b as set_text, c as bind_element_size, d as set_attribute, f as set_style, g as each, h as snippet, i as onMount, j as user_effect, k as get, l as CLASS, m as append_styles, n as LOCK, o as rest_props, p as set_class, r as at, s as bind_this, t as CLIENTS, u as attribute_effect, v as if_block, w as from_html, x as unmount, y as mount$1, z as pop } from "./shared.js";
+import { A as delegate, B as proxy, C as set_text, D as from_html, E as comment, F as user_effect, G as pop, H as state, I as child, J as reset, K as push, L as first_child, M as get, N as untrack, O as from_svg, P as template_effect, R as only_child, S as mount$1, T as append, U as user_derived, V as set, W as getContext, X as noop, Y as fallback, Z as to_array, _ as component, a as prop, b as index, c as bind_this, d as attribute_effect, f as set_attribute, g as element, h as append_styles, i as onMount, j as delegated, k as text, l as bind_element_size, m as set_class, n as LOCK, o as rest_props, p as set_style, q as next, r as at, s as spread_props, t as CLIENTS, u as CLASS, v as snippet, w as unmount, x as if_block, y as each, z as sibling } from "./shared.js";
 // node_modules/.deno/svelte@5.57.3/node_modules/svelte/src/internal/disclose-version.js
 if (typeof window !== "undefined") ((window.__svelte ??= {}).v ??= /* @__PURE__ */ new Set()).add("5");
-// ../../../../src/plugins/verifier-mcrl2/widgets/ui/components/Pannable.svelte
-var rest_excludes = /* @__PURE__ */ new Set([
+// ../../../../src/plugins/verifier-mcrl2/widgets/study/route.ts
+/** The SVG path through a start and cubic segments (three points each). */
+function pathOf(p) {
+	if (p.length === 0) return "";
+	let d = `M ${p[0][0]},${p[0][1]}`;
+	for (let i = 1; i + 2 < p.length; i += 3) d += ` C ${p[i][0]},${p[i][1]} ${p[i + 1][0]},${p[i + 1][1]} ${p[i + 2][0]},${p[i + 2][1]}`;
+	return d;
+}
+/** The arrowhead at a path's end, along its last segment's tangent. */
+function arrowOf(p) {
+	const e = p[p.length - 1];
+	let k = p.length - 2;
+	while (k > 0 && Math.hypot(p[k][0] - e[0], p[k][1] - e[1]) < 1e-6) k--;
+	const b = p[k] ?? e;
+	return {
+		x: e[0],
+		y: e[1],
+		angle: Math.atan2(e[1] - b[1], e[0] - b[0]) * 180 / Math.PI
+	};
+}
+var bez = (a, b, c, d, t) => {
+	const u = 1 - t;
+	return [u * u * u * a[0] + 3 * u * u * t * b[0] + 3 * u * t * t * c[0] + t * t * t * d[0], u * u * u * a[1] + 3 * u * u * t * b[1] + 3 * u * t * t * c[1] + t * t * t * d[1]];
+};
+/** A smooth curve through anchors whose tangents follow the flow: horizontal handles for a horizontal flow. */
+function flowCurve(anchors, dir) {
+	const out = [anchors[0]];
+	for (let i = 0; i + 1 < anchors.length; i++) {
+		const a = anchors[i];
+		const b = anchors[i + 1];
+		if (dir === "horizontal") {
+			const h = Math.max(12, Math.abs(b[0] - a[0]) / 2);
+			const s = Math.sign(b[0] - a[0]) || 1;
+			out.push([a[0] + s * h, a[1]], [b[0] - s * h, b[1]], b);
+		} else {
+			const h = Math.max(12, Math.abs(b[1] - a[1]) / 2);
+			const s = Math.sign(b[1] - a[1]) || 1;
+			out.push([a[0], a[1] + s * h], [b[0], b[1] - s * h], b);
+		}
+	}
+	return out;
+}
+/** Where an edge leaves a node, or enters it, on the flow's side. */
+var exit = (n, dir) => dir === "horizontal" ? [n.x + n.width / 2, n.y] : [n.x, n.y + n.height / 2];
+var entry = (n, dir) => dir === "horizontal" ? [n.x - n.width / 2, n.y] : [n.x, n.y - n.height / 2];
+function route(l, dir, opts = {}) {
+	const margin = opts.margin ?? 20;
+	const nodes = l.nodes.map((n) => ({ ...n }));
+	const byId = new Map(nodes.map((n) => [n.id, n]));
+	const fan = new Set(opts.fan ?? []);
+	const from = opts.fanFrom ? byId.get(opts.fanFrom) : void 0;
+	if (from && fan.size > 0) {
+		const ids = (opts.fan ?? []).filter((id) => byId.has(id));
+		const ROW = 28;
+		ids.forEach((id, i) => {
+			const n = byId.get(id);
+			if (dir === "horizontal") {
+				n.x = from.x + from.width / 2 + 110;
+				n.y = from.y + (i - (ids.length - 1) / 2) * ROW;
+			} else {
+				n.x = from.x + 40;
+				n.y = from.y + from.height / 2 + 54 + i * ROW;
+			}
+		});
+	}
+	const moved = /* @__PURE__ */ new Set();
+	if (from && fan.size > 0) {
+		const fanNodes = [...fan].map((id) => byId.get(id)).filter((n) => !!n);
+		if (fanNodes.length > 0) {
+			const top = Math.min(...fanNodes.map((n) => n.y - n.height / 2)) - 16;
+			const bottom = Math.max(...fanNodes.map((n) => n.y + n.height / 2)) + 28;
+			const left = Math.min(...fanNodes.map((n) => n.x - n.width / 2)) - 24;
+			const right = Math.max(...fanNodes.map((n) => n.x + n.width / 2 + 12 + (opts.fanWidth?.(n.id) ?? 0))) + 24;
+			for (const id of opts.avoid ?? []) {
+				const n = byId.get(id);
+				if (!n || fan.has(id)) continue;
+				const inX = dir === "horizontal" ? n.x + n.width / 2 >= left : n.x + n.width / 2 >= left && n.x - n.width / 2 <= right;
+				const inY = n.y + n.height / 2 >= top && n.y - n.height / 2 <= bottom;
+				if (inX && (inY || n.y > top)) {
+					const by = bottom - (n.y - n.height / 2) + 12;
+					if (by > 0) {
+						n.y += by;
+						moved.add(id);
+					}
+				}
+			}
+		}
+	}
+	const edges = l.edges.map((e) => {
+		if (e.self && moved.has(e.from)) {
+			const n = byId.get(e.from);
+			const o = l.nodes.find((x) => x.id === e.from);
+			const dy = n.y - o.y;
+			const points = e.points.map((p) => [p[0], p[1] + dy]);
+			return {
+				...e,
+				points,
+				path: pathOf(points),
+				arrow: arrowOf(points),
+				label: {
+					x: e.label.x,
+					y: e.label.y + dy
+				}
+			};
+		}
+		if (e.back || e.self) return e;
+		const a = byId.get(e.from);
+		const b = byId.get(e.to);
+		if (!a || !b) return e;
+		const fanned = fan.has(e.to);
+		const bends = [];
+		if (!fanned && !moved.has(e.from) && !moved.has(e.to)) for (let i = 3; i < e.points.length - 1; i += 3) bends.push(e.points[i]);
+		const start = exit(a, dir);
+		const end = fanned && dir === "vertical" ? [b.x - b.width / 2, b.y] : entry(b, dir);
+		const points = fanned && dir === "vertical" ? [
+			start,
+			[start[0], (start[1] + end[1]) / 2],
+			[start[0], end[1]],
+			end
+		] : flowCurve([
+			start,
+			...bends,
+			end
+		], dir);
+		const k = Math.max(0, Math.floor((points.length - 1) / 3 / 2)) * 3;
+		const m = points.length >= 4 ? bez(points[k], points[k + 1], points[k + 2], points[k + 3], .5) : start;
+		const w = opts.labelWidth?.(e.id) ?? 0;
+		const label = dir === "horizontal" ? {
+			x: m[0],
+			y: m[1] - 8
+		} : {
+			x: m[0] - 10 - w / 2,
+			y: m[1] + 4
+		};
+		return {
+			...e,
+			points,
+			path: pathOf(points),
+			arrow: arrowOf(points),
+			label
+		};
+	});
+	let x0 = Infinity;
+	let y0 = Infinity;
+	let x1 = -Infinity;
+	let y1 = -Infinity;
+	const take = (x, y) => {
+		x0 = Math.min(x0, x);
+		y0 = Math.min(y0, y);
+		x1 = Math.max(x1, x);
+		y1 = Math.max(y1, y);
+	};
+	for (const n of nodes) {
+		take(n.x - n.width / 2, n.y - n.height / 2);
+		take(n.x + n.width / 2 + (fan.has(n.id) ? 12 + (opts.fanWidth?.(n.id) ?? 0) : 0), n.y + n.height / 2);
+	}
+	for (const e of edges) {
+		for (const p of e.points) take(p[0], p[1]);
+		const w = opts.labelWidth?.(e.id) ?? 0;
+		take(e.label.x - w / 2, e.label.y - 12);
+		take(e.label.x + w / 2, e.label.y + 4);
+	}
+	if (!Number.isFinite(x0)) return l;
+	const dx = margin - x0;
+	const dy = margin - y0;
+	const shift = (p) => [p[0] + dx, p[1] + dy];
+	return {
+		width: x1 - x0 + 2 * margin,
+		height: y1 - y0 + 2 * margin,
+		nodes: nodes.map((n) => ({
+			...n,
+			x: n.x + dx,
+			y: n.y + dy
+		})),
+		edges: edges.map((e) => {
+			const points = e.points.map(shift);
+			return {
+				...e,
+				points,
+				path: pathOf(points),
+				arrow: arrowOf(points),
+				label: {
+					x: e.label.x + dx,
+					y: e.label.y + dy
+				}
+			};
+		})
+	};
+}
+// ../../../../src/plugins/verifier-mcrl2/widgets/Pannable.svelte
+var rest_excludes$15 = /* @__PURE__ */ new Set([
 	"$$slots",
 	"$$events",
 	"$$legacy",
@@ -19,14 +208,14 @@ var rest_excludes = /* @__PURE__ */ new Set([
 	"children",
 	"class"
 ]);
-var root$3 = from_html(`<div><!></div>`);
-var $$css$3 = {
-	hash: "svelte-1gg7oec",
-	code: ".pannable.svelte-1gg7oec {overflow-x:auto;min-width:0;max-width:100%;cursor:grab;user-select:none;-webkit-user-select:none;}.pannable.panning.svelte-1gg7oec {cursor:grabbing;}"
+var root$6 = from_html(`<div><!></div>`);
+var $$css$5 = {
+	hash: "svelte-j6nuxt",
+	code: ".pannable.svelte-j6nuxt {overflow-x:auto;min-width:0;max-width:100%;cursor:grab;user-select:none;-webkit-user-select:none;}.pannable.panning.svelte-j6nuxt {cursor:grabbing;}"
 };
 function Pannable($$anchor, $$props) {
 	push($$props, true);
-	append_styles($$anchor, $$css$3);
+	append_styles($$anchor, $$css$5);
 	/** What the box shows, as people call it: the box is a region named after it. */
 	/** A selector: a press on an element inside it never pans. */
 	/** The scrolling box, for its owner to scroll or measure. */
@@ -38,7 +227,7 @@ function Pannable($$anchor, $$props) {
 	* owner gives the keys and the wheel that move it as far, and sets touch-action: none on what the drag starts on. */
 	/** A pan starts (the pointer travelled past the slop), and ends (released, or a pinch began). */
 	/** Two pointers pinch the box: their distance before over after a move, and their middle's x in client px. */
-	let box = prop($$props, "box", 15), width = prop($$props, "width", 15, 0), cls = prop($$props, "class", 3, ""), rest = rest_props($$props, rest_excludes);
+	let box = prop($$props, "box", 15), width = prop($$props, "width", 15, 0), cls = prop($$props, "class", 3, ""), rest = rest_props($$props, rest_excludes$15);
 	/** The pointers down on the box, while a pinch may start: their last place. */
 	const down = /* @__PURE__ */ new Map();
 	/** The pinch under way: the two pointers' last distance. */
@@ -149,7 +338,7 @@ function Pannable($$anchor, $$props) {
 		event.stopPropagation();
 		event.preventDefault();
 	}
-	var div = root$3();
+	var div = root$6();
 	attribute_effect(div, () => ({
 		...rest,
 		class: `pannable ${cls() ?? ""}`,
@@ -161,7 +350,7 @@ function Pannable($$anchor, $$props) {
 		onpointercancel: onpointerup,
 		onclickcapture,
 		[CLASS]: { panning: get(panning) }
-	}), void 0, void 0, void 0, "svelte-1gg7oec");
+	}), void 0, void 0, void 0, "svelte-j6nuxt");
 	var node = child(div);
 	snippet(node, () => $$props.children);
 	reset(div);
@@ -877,33 +1066,951 @@ function layout(nodes, edges, opts = {}) {
 		height: maxY - minY + 2 * margin
 	};
 }
+// ../../../../src/plugins/verifier-mcrl2/widgets/Icon.svelte
+var root$5 = from_html(`<span class="icon svelte-xu8iqn" role="img"><!></span>`);
+var root_1$4 = from_html(`<span class="icon svelte-xu8iqn" aria-hidden="true"><!></span>`);
+var $$css$4 = {
+	hash: "svelte-xu8iqn",
+	code: ".icon.svelte-xu8iqn {display:inline-flex;width:var(--size-icon);height:var(--size-icon);color:currentColor;flex:none;}.icon.svelte-xu8iqn svg {width:100%;height:100%;}"
+};
+function Icon$1($$anchor, $$props) {
+	append_styles($$anchor, $$css$4);
+	var fragment = comment();
+	var node = first_child(fragment);
+	var consequent = ($$anchor) => {
+		var span = root$5();
+		var node_1 = child(span);
+		snippet(node_1, () => $$props.children);
+		reset(span);
+		template_effect(() => set_attribute(span, "aria-label", $$props.label));
+		append($$anchor, span);
+	};
+	var alternate = ($$anchor) => {
+		var span_1 = root_1$4();
+		var node_2 = child(span_1);
+		snippet(node_2, () => $$props.children);
+		reset(span_1);
+		append($$anchor, span_1);
+	};
+	if_block(node, ($$render) => {
+		if ($$props.label) $$render(consequent);
+		else $$render(alternate, -1);
+	});
+	append($$anchor, fragment);
+}
+// ../../../../src/plugins/verifier-mcrl2/widgets/study/Action.svelte
+var root$4 = from_html(`<span class="disc svelte-16zm9hq" aria-hidden="true"><!></span>`);
+var root_1$3 = from_html(`<span class="hint why svelte-16zm9hq"> </span>`);
+var root_2$3 = from_html(`<span class="hint svelte-16zm9hq"> </span>`);
+var root_3$2 = from_html(`<button><!> <span><span class="label svelte-16zm9hq"> </span> <!></span></button>`);
+var $$css$3 = {
+	hash: "svelte-16zm9hq",
+	code: ".action.svelte-16zm9hq {--tone: var(--color-text);--disc: var(--color-surface-sunken);--disc-ink: var(--color-text);display:inline-flex;align-items:center;gap:var(--space-sm);min-block-size:var(--size-control);padding:var(--space-xs) var(--space-md) var(--space-xs) var(--space-xs);font:inherit;font-size:var(--font-size-sm);line-height:var(--font-line-height-tight);text-align:start;color:var(--tone);background:var(--color-surface-soft);border:var(--border-width-thin) solid var(--color-border-soft);border-radius:var(--radius-full);cursor:pointer;transition:background var(--motion-duration-fast) var(--motion-easing-standard), border-color var(--motion-duration-fast) var(--motion-easing-standard), transform var(--motion-duration-fast) var(--motion-easing-standard), box-shadow var(--motion-duration-fast) var(--motion-easing-standard);}.action.sm.svelte-16zm9hq {min-block-size:var(--size-target);font-size:var(--font-size-xs);padding:var(--space-none) var(--space-sm) var(--space-none) var(--space-xs);}.action.svelte-16zm9hq:not(:has(.disc)) {padding-inline-start:var(--space-md);}.disc.svelte-16zm9hq {display:inline-grid;place-items:center;inline-size:calc(var(--size-control) - 2 * var(--space-xs));block-size:calc(var(--size-control) - 2 * var(--space-xs));border-radius:var(--radius-full);color:var(--disc-ink);background:var(--disc);transition:background var(--motion-duration-fast) var(--motion-easing-standard), color var(--motion-duration-fast) var(--motion-easing-standard);}.disc.svelte-16zm9hq .glyph {inline-size:58%;block-size:58%;stroke-width:1.75;}.sm.svelte-16zm9hq .disc:where(.svelte-16zm9hq) {inline-size:calc(var(--size-target) - var(--space-xs));block-size:calc(var(--size-target) - var(--space-xs));}.compact.svelte-16zm9hq {padding:var(--space-none);border-color:transparent;background:none;}.hidden.svelte-16zm9hq {position:absolute;inline-size:var(--border-width-thin);block-size:var(--border-width-thin);overflow:hidden;clip-path:inset(50%);}.words.svelte-16zm9hq {display:inline-flex;flex-direction:column;min-inline-size:0;}.label.svelte-16zm9hq {white-space:nowrap;}.hint.svelte-16zm9hq {font-size:var(--font-size-2xs);color:var(--color-text-muted);}\n  /* Hover: a quiet tint and the disc lit; no ring, so the edge stays one clean hairline. */.action.svelte-16zm9hq:hover:not(:disabled) {background:var(--color-accent-tint);border-color:var(--color-accent-line);}.action.svelte-16zm9hq:hover:not(:disabled) .disc:where(.svelte-16zm9hq) {--disc: var(--color-accent);--disc-ink: var(--color-on-accent);}.action.svelte-16zm9hq:active:not(:disabled) {transform:scale(0.97);}.action.svelte-16zm9hq:focus-visible {outline:var(--border-width-focus) solid var(--color-focus);outline-offset:var(--border-width-focus);}.action[aria-pressed=\"true\"].svelte-16zm9hq {border-color:var(--color-accent);color:var(--color-accent);}.action[aria-pressed=\"true\"].svelte-16zm9hq .disc:where(.svelte-16zm9hq) {--disc: var(--color-accent);--disc-ink: var(--color-on-accent);}\n  /* The move that matters now: the accent, its disc darker, so it reads first. */.primary.svelte-16zm9hq {--tone: var(--color-on-accent);--disc: var(--color-on-accent-soft);--disc-ink: var(--color-on-accent);background:linear-gradient(180deg, var(--color-accent-hover), var(--color-accent));border-color:var(--color-accent);}.primary.svelte-16zm9hq .hint:where(.svelte-16zm9hq) {color:var(--color-on-accent);}\n  /* The primary keeps its accent on hover, a shade deeper, so that its words stay readable. */.action.primary.svelte-16zm9hq:hover:not(:disabled) {background:var(--color-accent-hover);border-color:var(--color-accent-hover);}.primary.svelte-16zm9hq:hover:not(:disabled) .disc:where(.svelte-16zm9hq) {--disc: var(--color-on-accent-soft);--disc-ink: var(--color-on-accent);}.danger.svelte-16zm9hq {--tone: var(--color-danger);--disc-ink: var(--color-danger);}.action.svelte-16zm9hq:disabled {cursor:default;opacity:0.38;filter:saturate(0.4);}\n  /* Disabled with its reason in words: the control is dimmed, the reason stays readable. */.action.explained.svelte-16zm9hq:disabled {opacity:1;filter:none;}.action.explained.svelte-16zm9hq:disabled .disc:where(.svelte-16zm9hq),\n  .action.explained.svelte-16zm9hq:disabled .label:where(.svelte-16zm9hq) {opacity:0.45;}.why.svelte-16zm9hq {white-space:normal;color:var(--color-text-muted);}.primary.explained.svelte-16zm9hq:disabled {--tone: var(--color-text);background:var(--color-surface-soft);border-color:var(--color-border-soft);}\n  @media (prefers-reduced-motion: reduce) {.action.svelte-16zm9hq,\n    .disc.svelte-16zm9hq {transition:none;}\n  }"
+};
+function Action($$anchor, $$props) {
+	append_styles($$anchor, $$css$3);
+	/** What it does, in a few words, under the label when `detail` is set, else on hover. */
+	/** Why it cannot be used now, said on hover when disabled. */
+	/** Only the icon, the label said on hover and to screen readers: for a toolbar. */
+	let variant = prop($$props, "variant", 3, "quiet"), size = prop($$props, "size", 3, "md"), detail = prop($$props, "detail", 3, false), compact = prop($$props, "compact", 3, false), disabled = prop($$props, "disabled", 3, false);
+	const Icon = user_derived(() => $$props.icon);
+	/** A disabled action says why in words, where it has room for words. */
+	const explained = user_derived(() => disabled() && !!$$props.why && !compact());
+	var button = root_3$2();
+	let classes;
+	var node = child(button);
+	var consequent = ($$anchor) => {
+		var span = root$4();
+		var node_1 = child(span);
+		component(node_1, () => get(Icon), ($$anchor, Icon_1) => {
+			Icon_1($$anchor, { class: "glyph" });
+		});
+		reset(span);
+		append($$anchor, span);
+	};
+	if_block(node, ($$render) => {
+		if (get(Icon)) $$render(consequent);
+	});
+	var span_1 = sibling(node, 2);
+	let classes_1;
+	var span_2 = child(span_1);
+	var text = only_child(span_2, true);
+	var node_2 = sibling(span_2, 2);
+	var consequent_1 = ($$anchor) => {
+		var span_3 = root_1$3();
+		var text_1 = only_child(span_3, true);
+		template_effect(() => set_text(text_1, $$props.why));
+		append($$anchor, span_3);
+	};
+	var consequent_2 = ($$anchor) => {
+		var span_4 = root_2$3();
+		var text_2 = only_child(span_4, true);
+		template_effect(() => set_text(text_2, $$props.hint));
+		append($$anchor, span_4);
+	};
+	if_block(node_2, ($$render) => {
+		if (get(explained)) $$render(consequent_1);
+		else if (detail() && $$props.hint) $$render(consequent_2, 1);
+	});
+	reset(span_1);
+	reset(button);
+	template_effect(() => {
+		classes = set_class(button, 1, `action ${variant() ?? ""} ${size() ?? ""}`, "svelte-16zm9hq", classes, {
+			detail: detail(),
+			compact: compact(),
+			explained: get(explained)
+		});
+		set_attribute(button, "aria-label", get(explained) ? `${$$props.label}: ${$$props.why}` : $$props.label);
+		button.disabled = disabled();
+		set_attribute(button, "aria-pressed", $$props.pressed);
+		set_attribute(button, "title", disabled() ? $$props.why ?? $$props.hint ?? $$props.label : $$props.hint ?? $$props.label);
+		classes_1 = set_class(span_1, 1, "words svelte-16zm9hq", null, classes_1, { hidden: compact() && !!get(Icon) });
+		set_text(text, $$props.label);
+	});
+	delegated("click", button, function(...$$args) {
+		$$props.onclick?.apply(this, $$args);
+	});
+	append($$anchor, button);
+}
+delegate(["click"]);
+// node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/utils/defaultAttributes.js
+/**
+* @file
+* @license @lucide/svelte v1.60.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var defaultAttributes = {
+	xmlns: "http://www.w3.org/2000/svg",
+	width: 24,
+	height: 24,
+	viewBox: "0 0 24 24",
+	fill: "none",
+	stroke: "currentColor",
+	"stroke-width": 2,
+	"stroke-linecap": "round",
+	"stroke-linejoin": "round"
+};
+// node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/utils/mergeClasses.js
+/**
+* @file
+* @license @lucide/svelte v1.60.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+/**
+* Merges classes into a single string
+*
+* @param {array} classes
+* @returns {string} A string of classes
+*/
+var mergeClasses = (...classes) => classes.filter((className, index, array) => {
+	return Boolean(className) && className.trim() !== "" && array.indexOf(className) === index;
+}).join(" ").trim();
+// node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/utils/buildLucideIconNode.js
+/**
+* @file
+* @license @lucide/svelte v1.60.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+function isDefined(value) {
+	return value !== null && value !== void 0;
+}
+/**
+* Creates a Lucide icon node (an svgson-like format) from a Lucide icon object.
+*
+* @param icon The icon to build.
+* @param params Additional build parameters.
+*/
+function buildLucideIconNode(icon, params = {}) {
+	const attributeNames = params.attributeNames ?? {};
+	const getAttributeName = (attributeName) => attributeNames[attributeName] ?? attributeName;
+	const viewBoxWidth = icon.size ?? icon.width ?? defaultAttributes["width"];
+	const viewBoxHeight = icon.size ?? icon.height ?? defaultAttributes["height"];
+	const aliasClassNames = icon.aliases?.filter((alias) => typeof alias === "string" && alias.trim() !== "").map((alias) => `lucide-${alias}`) ?? [];
+	const iconClassNames = [...icon.name ? [`lucide-${icon.name}`] : [], ...aliasClassNames];
+	const classNamesFromClassName = params.className?.split(" ").filter(Boolean) ?? [];
+	const className = params.includeDefaultClasses === false ? mergeClasses(...classNamesFromClassName) : mergeClasses("lucide", ...iconClassNames, ...classNamesFromClassName);
+	const calculatedStrokeWidth = params.absoluteStrokeWidth ? Number(params.strokeWidth ?? defaultAttributes["stroke-width"]) * Number(icon.size ?? icon.width ?? defaultAttributes["width"]) / Number(params.size ?? params.width ?? defaultAttributes["width"]) : params.strokeWidth ?? defaultAttributes["stroke-width"];
+	return [
+		"svg",
+		{
+			...Object.entries(defaultAttributes).reduce((attrs, [attrName, value]) => {
+				attrs[getAttributeName(attrName)] = value;
+				return attrs;
+			}, {}),
+			..."color" in params && params.color && { [getAttributeName("stroke")]: params.color },
+			..."size" in params && isDefined(params.size) && {
+				[getAttributeName("width")]: params.size,
+				[getAttributeName("height")]: params.size
+			},
+			..."width" in params && isDefined(params.width) && { [getAttributeName("width")]: params.width },
+			..."height" in params && isDefined(params.height) && { [getAttributeName("height")]: params.height },
+			[getAttributeName("stroke-width")]: calculatedStrokeWidth,
+			...className && { [getAttributeName("class")]: className },
+			[getAttributeName("viewBox")]: `0 0 ${viewBoxWidth} ${viewBoxHeight}`,
+			...params.hasA11yProp === false ? { [getAttributeName("aria-hidden")]: "true" } : {},
+			..."attributes" in params && params.attributes
+		},
+		icon.node.map((child) => {
+			const [name, attrs, children] = child;
+			const nextAttrs = params.nonScalingStroke ? {
+				[getAttributeName("vector-effect")]: "non-scaling-stroke",
+				...attrs
+			} : attrs;
+			return children ? [
+				name,
+				nextAttrs,
+				children
+			] : [name, nextAttrs];
+		})
+	];
+}
+// node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/utils/hasA11yProp.js
+/**
+* @file
+* @license @lucide/svelte v1.60.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+/**
+* Check if a component has an accessibility prop
+*
+* @param {object} props
+* @returns {boolean} Whether the component has an accessibility prop
+*/
+var hasA11yProp = (props) => {
+	for (const prop in props) if (prop.startsWith("aria-") || prop === "role" || prop === "title") return true;
+	return false;
+};
+// node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/context.js
+/**
+* @file
+* @license @lucide/svelte v1.60.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var LucideContext = Symbol("lucide-context");
+var getLucideContext = () => getContext(LucideContext);
+// node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/Icon.svelte
+var rest_excludes$14 = /* @__PURE__ */ new Set([
+	"$$slots",
+	"$$events",
+	"$$legacy",
+	"color",
+	"size",
+	"width",
+	"height",
+	"strokeWidth",
+	"absoluteStrokeWidth",
+	"nonScalingStroke",
+	"iconNode",
+	"icon",
+	"class",
+	"children"
+]);
+var root$3 = from_svg(`<svg><!><!></svg>`);
+function Icon($$anchor, $$props) {
+	push($$props, true);
+	const globalProps = getLucideContext() ?? {};
+	const color = prop($$props, "color", 19, () => globalProps.color ?? "currentColor"), size = prop($$props, "size", 19, () => globalProps.size ?? 24), width = prop($$props, "width", 19, size), height = prop($$props, "height", 19, size), strokeWidth = prop($$props, "strokeWidth", 19, () => globalProps.strokeWidth ?? 2), absoluteStrokeWidth = prop($$props, "absoluteStrokeWidth", 19, () => globalProps.absoluteStrokeWidth ?? false), nonScalingStroke = prop($$props, "nonScalingStroke", 19, () => globalProps.nonScalingStroke ?? false), iconNode = prop($$props, "iconNode", 19, () => []), icon = prop($$props, "icon", 19, () => ({
+		node: iconNode(),
+		aliases: [],
+		size: 24
+	})), props = rest_props($$props, rest_excludes$14);
+	const hasAccessibleProp = user_derived(() => Boolean($$props.children) || hasA11yProp(props));
+	const $$d = user_derived(() => buildLucideIconNode(icon(), {
+		color: color(),
+		width: width(),
+		height: height(),
+		strokeWidth: strokeWidth(),
+		absoluteStrokeWidth: absoluteStrokeWidth(),
+		nonScalingStroke: nonScalingStroke(),
+		className: mergeClasses("lucide-icon", globalProps.class),
+		hasA11yProp: get(hasAccessibleProp),
+		attributes: props
+	})), $$array = user_derived(() => to_array(get($$d), 3)), svgAttributes = user_derived(() => get($$array)[1]), builtIconNode = user_derived(() => fallback(get($$array)[2], () => [], true));
+	const iconAttributes = user_derived(() => ({
+		...get(svgAttributes),
+		class: [...get(svgAttributes).class.split(" "), $$props.class]
+	}));
+	var svg = root$3();
+	attribute_effect(svg, () => ({ ...get(iconAttributes) }));
+	var node = child(svg);
+	each(node, 17, () => get(builtIconNode), index, ($$anchor, $$item) => {
+		var $$array_1 = user_derived(() => to_array(get($$item), 2));
+		let tag = () => get($$array_1)[0];
+		let attrs = () => get($$array_1)[1];
+		var fragment = comment();
+		var node_1 = first_child(fragment);
+		element(node_1, tag, true, ($$element, $$anchor) => {
+			attribute_effect($$element, () => ({ ...attrs() }));
+		});
+		append($$anchor, fragment);
+	});
+	var node_2 = sibling(node);
+	snippet(node_2, () => $$props.children ?? noop);
+	reset(svg);
+	append($$anchor, svg);
+	pop();
+}
+// node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/icons/arrow-right.svelte
+var __iconData$13 = {
+	"name": "arrow-right",
+	"size": 24,
+	"node": [["path", { "d": "M5 12h14" }], ["path", { "d": "m12 5 7 7-7 7" }]]
+};
+__iconData$13.node;
+var rest_excludes$13 = /* @__PURE__ */ new Set([
+	"$$slots",
+	"$$events",
+	"$$legacy"
+]);
+function Arrow_right($$anchor, $$props) {
+	let props = rest_props($$props, rest_excludes$13);
+	Icon($$anchor, spread_props(() => props, { get icon() {
+		return __iconData$13;
+	} }));
+}
+// node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/icons/arrow-down.svelte
+var __iconData$12 = {
+	"name": "arrow-down",
+	"size": 24,
+	"node": [["path", { "d": "M12 5v14" }], ["path", { "d": "m19 12-7 7-7-7" }]]
+};
+__iconData$12.node;
+var rest_excludes$12 = /* @__PURE__ */ new Set([
+	"$$slots",
+	"$$events",
+	"$$legacy"
+]);
+function Arrow_down($$anchor, $$props) {
+	let props = rest_props($$props, rest_excludes$12);
+	Icon($$anchor, spread_props(() => props, { get icon() {
+		return __iconData$12;
+	} }));
+}
+// node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/icons/arrow-left.svelte
+var __iconData$11 = {
+	"name": "arrow-left",
+	"size": 24,
+	"node": [["path", { "d": "m12 19-7-7 7-7" }], ["path", { "d": "M19 12H5" }]]
+};
+__iconData$11.node;
+var rest_excludes$11 = /* @__PURE__ */ new Set([
+	"$$slots",
+	"$$events",
+	"$$legacy"
+]);
+function Arrow_left($$anchor, $$props) {
+	let props = rest_props($$props, rest_excludes$11);
+	Icon($$anchor, spread_props(() => props, { get icon() {
+		return __iconData$11;
+	} }));
+}
+// node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/icons/arrow-up.svelte
+var __iconData$10 = {
+	"name": "arrow-up",
+	"size": 24,
+	"node": [["path", { "d": "m5 12 7-7 7 7" }], ["path", { "d": "M12 19V5" }]]
+};
+__iconData$10.node;
+var rest_excludes$10 = /* @__PURE__ */ new Set([
+	"$$slots",
+	"$$events",
+	"$$legacy"
+]);
+function Arrow_up($$anchor, $$props) {
+	let props = rest_props($$props, rest_excludes$10);
+	Icon($$anchor, spread_props(() => props, { get icon() {
+		return __iconData$10;
+	} }));
+}
+// node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/icons/wand-sparkles.svelte
+var __iconData$9 = {
+	"name": "wand-sparkles",
+	"size": 24,
+	"node": [
+		["path", { "d": "m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72" }],
+		["path", { "d": "m14 7 3 3" }],
+		["path", { "d": "M5 6v4" }],
+		["path", { "d": "M19 14v4" }],
+		["path", { "d": "M10 2v2" }],
+		["path", { "d": "M7 8H3" }],
+		["path", { "d": "M21 16h-4" }],
+		["path", { "d": "M11 3H9" }]
+	],
+	"aliases": ["wand-2"]
+};
+__iconData$9.node;
+var rest_excludes$9 = /* @__PURE__ */ new Set([
+	"$$slots",
+	"$$events",
+	"$$legacy"
+]);
+function Wand_sparkles($$anchor, $$props) {
+	let props = rest_props($$props, rest_excludes$9);
+	Icon($$anchor, spread_props(() => props, { get icon() {
+		return __iconData$9;
+	} }));
+}
+// node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/icons/fold-horizontal.svelte
+var __iconData$8 = {
+	"name": "fold-horizontal",
+	"size": 24,
+	"node": [
+		["path", { "d": "M2 12h6" }],
+		["path", { "d": "M22 12h-6" }],
+		["path", { "d": "M12 2v2" }],
+		["path", { "d": "M12 8v2" }],
+		["path", { "d": "M12 14v2" }],
+		["path", { "d": "M12 20v2" }],
+		["path", { "d": "m19 9-3 3 3 3" }],
+		["path", { "d": "m5 15 3-3-3-3" }]
+	]
+};
+__iconData$8.node;
+var rest_excludes$8 = /* @__PURE__ */ new Set([
+	"$$slots",
+	"$$events",
+	"$$legacy"
+]);
+function Fold_horizontal($$anchor, $$props) {
+	let props = rest_props($$props, rest_excludes$8);
+	Icon($$anchor, spread_props(() => props, { get icon() {
+		return __iconData$8;
+	} }));
+}
+// node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/icons/unfold-horizontal.svelte
+var __iconData$7 = {
+	"name": "unfold-horizontal",
+	"size": 24,
+	"node": [
+		["path", { "d": "M16 12h6" }],
+		["path", { "d": "M8 12H2" }],
+		["path", { "d": "M12 2v2" }],
+		["path", { "d": "M12 8v2" }],
+		["path", { "d": "M12 14v2" }],
+		["path", { "d": "M12 20v2" }],
+		["path", { "d": "m19 15 3-3-3-3" }],
+		["path", { "d": "m5 9-3 3 3 3" }]
+	]
+};
+__iconData$7.node;
+var rest_excludes$7 = /* @__PURE__ */ new Set([
+	"$$slots",
+	"$$events",
+	"$$legacy"
+]);
+function Unfold_horizontal($$anchor, $$props) {
+	let props = rest_props($$props, rest_excludes$7);
+	Icon($$anchor, spread_props(() => props, { get icon() {
+		return __iconData$7;
+	} }));
+}
+// node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/icons/zoom-in.svelte
+var __iconData$6 = {
+	"name": "zoom-in",
+	"size": 24,
+	"node": [
+		["circle", {
+			"cx": "11",
+			"cy": "11",
+			"r": "8"
+		}],
+		["line", {
+			"x1": "21",
+			"x2": "16.65",
+			"y1": "21",
+			"y2": "16.65"
+		}],
+		["line", {
+			"x1": "11",
+			"x2": "11",
+			"y1": "8",
+			"y2": "14"
+		}],
+		["line", {
+			"x1": "8",
+			"x2": "14",
+			"y1": "11",
+			"y2": "11"
+		}]
+	]
+};
+__iconData$6.node;
+var rest_excludes$6 = /* @__PURE__ */ new Set([
+	"$$slots",
+	"$$events",
+	"$$legacy"
+]);
+function Zoom_in($$anchor, $$props) {
+	let props = rest_props($$props, rest_excludes$6);
+	Icon($$anchor, spread_props(() => props, { get icon() {
+		return __iconData$6;
+	} }));
+}
+// node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/icons/zoom-out.svelte
+var __iconData$5 = {
+	"name": "zoom-out",
+	"size": 24,
+	"node": [
+		["circle", {
+			"cx": "11",
+			"cy": "11",
+			"r": "8"
+		}],
+		["line", {
+			"x1": "21",
+			"x2": "16.65",
+			"y1": "21",
+			"y2": "16.65"
+		}],
+		["line", {
+			"x1": "8",
+			"x2": "14",
+			"y1": "11",
+			"y2": "11"
+		}]
+	]
+};
+__iconData$5.node;
+var rest_excludes$5 = /* @__PURE__ */ new Set([
+	"$$slots",
+	"$$events",
+	"$$legacy"
+]);
+function Zoom_out($$anchor, $$props) {
+	let props = rest_props($$props, rest_excludes$5);
+	Icon($$anchor, spread_props(() => props, { get icon() {
+		return __iconData$5;
+	} }));
+}
+// node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/icons/scan.svelte
+var __iconData$4 = {
+	"name": "scan",
+	"size": 24,
+	"node": [
+		["path", { "d": "M3 7V5a2 2 0 0 1 2-2h2" }],
+		["path", { "d": "M17 3h2a2 2 0 0 1 2 2v2" }],
+		["path", { "d": "M21 17v2a2 2 0 0 1-2 2h-2" }],
+		["path", { "d": "M7 21H5a2 2 0 0 1-2-2v-2" }]
+	]
+};
+__iconData$4.node;
+var rest_excludes$4 = /* @__PURE__ */ new Set([
+	"$$slots",
+	"$$events",
+	"$$legacy"
+]);
+function Scan($$anchor, $$props) {
+	let props = rest_props($$props, rest_excludes$4);
+	Icon($$anchor, spread_props(() => props, { get icon() {
+		return __iconData$4;
+	} }));
+}
+// node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/icons/network.svelte
+var __iconData$3 = {
+	"name": "network",
+	"size": 24,
+	"node": [
+		["rect", {
+			"x": "16",
+			"y": "16",
+			"width": "6",
+			"height": "6",
+			"rx": "1"
+		}],
+		["rect", {
+			"x": "2",
+			"y": "16",
+			"width": "6",
+			"height": "6",
+			"rx": "1"
+		}],
+		["rect", {
+			"x": "9",
+			"y": "2",
+			"width": "6",
+			"height": "6",
+			"rx": "1"
+		}],
+		["path", { "d": "M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" }],
+		["path", { "d": "M12 12V8" }]
+	]
+};
+__iconData$3.node;
+var rest_excludes$3 = /* @__PURE__ */ new Set([
+	"$$slots",
+	"$$events",
+	"$$legacy"
+]);
+function Network($$anchor, $$props) {
+	let props = rest_props($$props, rest_excludes$3);
+	Icon($$anchor, spread_props(() => props, { get icon() {
+		return __iconData$3;
+	} }));
+}
+// node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/icons/orbit.svelte
+var __iconData$2 = {
+	"name": "orbit",
+	"size": 24,
+	"node": [
+		["path", { "d": "M20.341 6.484A10 10 0 0 1 10.266 21.85" }],
+		["path", { "d": "M3.659 17.516A10 10 0 0 1 13.74 2.152" }],
+		["circle", {
+			"cx": "12",
+			"cy": "12",
+			"r": "3"
+		}],
+		["circle", {
+			"cx": "19",
+			"cy": "5",
+			"r": "2"
+		}],
+		["circle", {
+			"cx": "5",
+			"cy": "19",
+			"r": "2"
+		}]
+	]
+};
+__iconData$2.node;
+var rest_excludes$2 = /* @__PURE__ */ new Set([
+	"$$slots",
+	"$$events",
+	"$$legacy"
+]);
+function Orbit($$anchor, $$props) {
+	let props = rest_props($$props, rest_excludes$2);
+	Icon($$anchor, spread_props(() => props, { get icon() {
+		return __iconData$2;
+	} }));
+}
+// node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/icons/atom.svelte
+var __iconData$1 = {
+	"name": "atom",
+	"size": 24,
+	"node": [
+		["circle", {
+			"cx": "12",
+			"cy": "12",
+			"r": "1"
+		}],
+		["path", { "d": "M20.2 20.2c2.04-2.03.02-7.36-4.5-11.9-4.54-4.52-9.87-6.54-11.9-4.5-2.04 2.03-.02 7.36 4.5 11.9 4.54 4.52 9.87 6.54 11.9 4.5Z" }],
+		["path", { "d": "M15.7 15.7c4.52-4.54 6.54-9.87 4.5-11.9-2.03-2.04-7.36-.02-11.9 4.5-4.52 4.54-6.54 9.87-4.5 11.9 2.03 2.04 7.36.02 11.9-4.5Z" }]
+	]
+};
+__iconData$1.node;
+var rest_excludes$1 = /* @__PURE__ */ new Set([
+	"$$slots",
+	"$$events",
+	"$$legacy"
+]);
+function Atom($$anchor, $$props) {
+	let props = rest_props($$props, rest_excludes$1);
+	Icon($$anchor, spread_props(() => props, { get icon() {
+		return __iconData$1;
+	} }));
+}
+// node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/icons/grid-3x3.svelte
+var __iconData = {
+	"name": "grid-3x3",
+	"size": 24,
+	"node": [
+		["rect", {
+			"width": "18",
+			"height": "18",
+			"x": "3",
+			"y": "3",
+			"rx": "2"
+		}],
+		["path", { "d": "M3 9h18" }],
+		["path", { "d": "M3 15h18" }],
+		["path", { "d": "M9 3v18" }],
+		["path", { "d": "M15 3v18" }]
+	],
+	"aliases": ["grid", "grid-3-x-3"]
+};
+__iconData.node;
+var rest_excludes = /* @__PURE__ */ new Set([
+	"$$slots",
+	"$$events",
+	"$$legacy"
+]);
+function Grid_3x3($$anchor, $$props) {
+	let props = rest_props($$props, rest_excludes);
+	Icon($$anchor, spread_props(() => props, { get icon() {
+		return __iconData;
+	} }));
+}
+// ../../../../src/plugins/verifier-mcrl2/widgets/study/algorithms.ts
+/** The graph again, drawn by another algorithm from its layered layout. */
+function redraw(l, algorithm, opts = {}) {
+	const gap = opts.gap ?? 90;
+	const margin = opts.margin ?? 24;
+	const nodes = l.nodes.map((n) => ({ ...n }));
+	if (nodes.length === 0) return l;
+	if (algorithm === "radial") radial(nodes, gap);
+	else if (algorithm === "grid") grid(nodes, gap);
+	else force(nodes, l.edges, gap);
+	return bounded(nodes, edgesFor(nodes, l.edges), margin);
+}
+/** Layers on rings around the first layer's centre, each node at its place in its layer's order. */
+function radial(nodes, gap) {
+	const layers = /* @__PURE__ */ new Map();
+	for (const n of nodes) layers.set(n.layer, [...layers.get(n.layer) ?? [], n]);
+	[...layers.entries()].sort((a, b) => a[0] - b[0]).forEach(([, ns], ring) => {
+		ns.sort((a, b) => a.x + a.y - (b.x + b.y));
+		const r = ring === 0 && ns.length === 1 ? 0 : (ring + 1) * gap;
+		ns.forEach((n, i) => {
+			const a = -Math.PI / 2 + 2 * Math.PI * i / ns.length + ring * .35;
+			n.x = r * Math.cos(a);
+			n.y = r * Math.sin(a);
+		});
+	});
+}
+/** In rows, in reading order, as many columns as make the drawing about square. */
+function grid(nodes, gap) {
+	const order = [...nodes].sort((a, b) => a.layer - b.layer || a.x + a.y - (b.x + b.y));
+	const cols = Math.max(1, Math.ceil(Math.sqrt(order.length)));
+	order.forEach((n, i) => {
+		n.x = i % cols * gap * 1.4;
+		n.y = Math.floor(i / cols) * gap;
+	});
+}
+/** Springs: linked nodes pull together, every pair pushes apart; a fixed number of cooling steps from the layered start. */
+function force(nodes, edges, gap) {
+	const idx = new Map(nodes.map((n, i) => [n.id, i]));
+	const links = edges.filter((e) => !e.self).map((e) => [idx.get(e.from), idx.get(e.to)]).filter(([a, b]) => a !== void 0 && b !== void 0);
+	const k = gap;
+	let t = gap;
+	for (let step = 0; step < 300; step++) {
+		const d = nodes.map(() => [0, 0]);
+		for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
+			let dx = nodes[i].x - nodes[j].x;
+			let dy = nodes[i].y - nodes[j].y;
+			if (dx === 0 && dy === 0) {
+				dx = .01 * (i - j);
+				dy = .01;
+			}
+			const dist = Math.max(1, Math.hypot(dx, dy));
+			const f = k * k / dist;
+			d[i][0] += dx / dist * f;
+			d[i][1] += dy / dist * f;
+			d[j][0] -= dx / dist * f;
+			d[j][1] -= dy / dist * f;
+		}
+		for (const [a, b] of links) {
+			const dx = nodes[a].x - nodes[b].x;
+			const dy = nodes[a].y - nodes[b].y;
+			const dist = Math.max(1, Math.hypot(dx, dy));
+			const f = dist * dist / k;
+			d[a][0] -= dx / dist * f;
+			d[a][1] -= dy / dist * f;
+			d[b][0] += dx / dist * f;
+			d[b][1] += dy / dist * f;
+		}
+		nodes.forEach((n, i) => {
+			const [dx, dy] = d[i];
+			const len = Math.max(1e-9, Math.hypot(dx, dy));
+			n.x += dx / len * Math.min(len, t);
+			n.y += dy / len * Math.min(len, t);
+		});
+		t = Math.max(.5, t * .97);
+	}
+}
+/** Edges as gentle arcs from border to border; a loop above its node. */
+function edgesFor(nodes, edges) {
+	const byId = new Map(nodes.map((n) => [n.id, n]));
+	return edges.map((e) => {
+		const a = byId.get(e.from);
+		const b = byId.get(e.to);
+		if (!a || !b) return e;
+		if (e.self || a === b) {
+			const r = a.height / 2;
+			const p = [
+				[a.x - 6, a.y - r],
+				[a.x - 26, a.y - r - 34],
+				[a.x + 26, a.y - r - 34],
+				[a.x + 6, a.y - r]
+			];
+			return {
+				...e,
+				points: p,
+				path: pathOf(p),
+				arrow: arrowOf(p),
+				label: {
+					x: a.x,
+					y: a.y - r - 34
+				}
+			};
+		}
+		const dx = b.x - a.x;
+		const dy = b.y - a.y;
+		const dist = Math.max(1, Math.hypot(dx, dy));
+		const ux = dx / dist;
+		const uy = dy / dist;
+		const ra = Math.min(a.width, a.height) / 2;
+		const rb = Math.min(b.width, b.height) / 2;
+		const s = [a.x + ux * ra, a.y + uy * ra];
+		const t = [b.x - ux * rb, b.y - uy * rb];
+		const bend = dist / 7;
+		const nx = -uy * bend;
+		const ny = ux * bend;
+		const p = [
+			s,
+			[s[0] + dx / 3 + nx, s[1] + dy / 3 + ny],
+			[t[0] - dx / 3 + nx, t[1] - dy / 3 + ny],
+			t
+		];
+		return {
+			...e,
+			points: p,
+			path: pathOf(p),
+			arrow: arrowOf(p),
+			label: {
+				x: (s[0] + t[0]) / 2 + nx,
+				y: (s[1] + t[1]) / 2 + ny - 6
+			}
+		};
+	});
+}
+/** Shifted to start at the margin, its width and height covering every node and curve. */
+function bounded(nodes, edges, margin) {
+	let x0 = Infinity;
+	let y0 = Infinity;
+	let x1 = -Infinity;
+	let y1 = -Infinity;
+	const take = (x, y) => {
+		x0 = Math.min(x0, x);
+		y0 = Math.min(y0, y);
+		x1 = Math.max(x1, x);
+		y1 = Math.max(y1, y);
+	};
+	for (const n of nodes) {
+		take(n.x - n.width / 2, n.y - n.height / 2);
+		take(n.x + n.width / 2, n.y + n.height / 2);
+	}
+	for (const e of edges) for (const p of e.points) take(p[0], p[1]);
+	const dx = margin - x0;
+	const dy = margin - y0;
+	const shift = (p) => [p[0] + dx, p[1] + dy];
+	return {
+		width: x1 - x0 + 2 * margin,
+		height: y1 - y0 + 2 * margin,
+		nodes: nodes.map((n) => ({
+			...n,
+			x: n.x + dx,
+			y: n.y + dy
+		})),
+		edges: edges.map((e) => {
+			const points = e.points.map(shift);
+			return {
+				...e,
+				points,
+				path: pathOf(points),
+				arrow: arrowOf(points),
+				label: {
+					x: e.label.x + dx,
+					y: e.label.y + dy
+				}
+			};
+		})
+	};
+}
 // ../../../../src/plugins/verifier-mcrl2/widgets/study/Graph.svelte
-var root$2 = from_svg(`<text class="elabel svelte-1i3pdf7" text-anchor="middle"> </text>`);
-var root_1$2 = from_svg(`<title> </title>`);
-var root_2$2 = from_svg(`<g><path class="line svelte-1i3pdf7"></path><path></path><!><!></g>`);
-var root_3$1 = from_svg(`<circle class="initial svelte-1i3pdf7" r="8"></circle>`);
-var root_4$1 = from_svg(`<rect class="shape svelte-1i3pdf7" rx="12"></rect><text class="nlabel svelte-1i3pdf7" y="4" text-anchor="middle"> </text>`, 1);
-var root_5 = from_svg(`<circle class="shape svelte-1i3pdf7"></circle><text class="nlabel svelte-1i3pdf7" y="4" text-anchor="middle"> </text>`, 1);
-var root_6 = from_svg(`<tspan x="0"> </tspan>`);
-var root_7 = from_svg(`<text class="nsub svelte-1i3pdf7" text-anchor="middle"></text>`);
-var root_8 = from_svg(`<g role="button" tabindex="0"><circle class="hit svelte-1i3pdf7" r="9"></circle><circle class="pinhead svelte-1i3pdf7" cy="-2" r="3.6"></circle><line class="pinneedle svelte-1i3pdf7" x1="0" y1="1.5" x2="0" y2="7"></line><title> </title></g>`);
-var root_9 = from_svg(`<g role="button" tabindex="0"><circle class="hit svelte-1i3pdf7" r="9"></circle><path class="starshape svelte-1i3pdf7" d="M0,-5 L1.5,-1.6 L5,-1.6 L2.2,0.7 L3.2,4.4 L0,2.2 L-3.2,4.4 L-2.2,0.7 L-5,-1.6 L-1.5,-1.6 Z"></path><title> </title></g>`);
-var root_10 = from_svg(`<g class="place svelte-1i3pdf7"><g role="button" tabindex="0"><!><!><!></g><!><!></g>`);
-var root_11 = from_html(`<div class="measure svelte-1i3pdf7"><svg role="img" class="svelte-1i3pdf7"><!><!></svg></div>`);
-var root_12 = from_html(`<div class="graph svelte-1i3pdf7"><div class="controls svelte-1i3pdf7" role="toolbar"><button>horizontal</button> <button>vertical</button> <span class="sep svelte-1i3pdf7"></span> <button aria-label="Zoom out" class="svelte-1i3pdf7">−</button> <span class="pct svelte-1i3pdf7"> </span> <button aria-label="Zoom in" class="svelte-1i3pdf7">+</button> <button class="svelte-1i3pdf7">fit</button></div> <!></div>`);
+var lerp = (a, b, t) => a + (b - a) * t;
+function between(a, b, t) {
+	const na = new Map(a.nodes.map((n) => [n.id, n]));
+	const ea = new Map(a.edges.map((e) => [e.id, e]));
+	return {
+		width: lerp(a.width, b.width, t),
+		height: lerp(a.height, b.height, t),
+		nodes: b.nodes.map((n) => {
+			const o = na.get(n.id);
+			return o ? {
+				...n,
+				x: lerp(o.x, n.x, t),
+				y: lerp(o.y, n.y, t)
+			} : n;
+		}),
+		edges: b.edges.map((e) => {
+			const o = ea.get(e.id);
+			if (!o || o.points.length !== e.points.length) return e;
+			const points = e.points.map((q, i) => [lerp(o.points[i][0], q[0], t), lerp(o.points[i][1], q[1], t)]);
+			return {
+				...e,
+				points,
+				path: pathOf(points),
+				arrow: arrowOf(points),
+				label: {
+					x: lerp(o.label.x, e.label.x, t),
+					y: lerp(o.label.y, e.label.y, t)
+				}
+			};
+		})
+	};
+}
+/** How long a move takes: the motion token's, none when the person asked for less motion. */
+function motionMs() {
+	if (globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return 0;
+	const v = getComputedStyle(document.documentElement).getPropertyValue("--motion-duration-normal").trim();
+	const n = parseFloat(v);
+	return Number.isFinite(n) ? v.endsWith("ms") ? n : n * 1e3 : 0;
+}
+var root$2 = from_html(`<button><!></button>`);
+var root_1$2 = from_html(`<!> <span class="gap svelte-s8ekmc"></span>`, 1);
+var root_2$2 = from_svg(`<path></path>`);
+var root_3$1 = from_svg(`<text text-anchor="middle"> </text>`);
+var root_4$1 = from_svg(`<title> </title>`);
+var root_5 = from_svg(`<g><path class="line svelte-s8ekmc"></path><!><!><!></g>`);
+var root_6 = from_svg(`<circle class="initial svelte-s8ekmc" r="8"></circle>`);
+var root_7 = from_svg(`<rect class="shape svelte-s8ekmc" rx="12"></rect><text class="nlabel svelte-s8ekmc" y="4" text-anchor="middle"> </text>`, 1);
+var root_8 = from_svg(`<circle class="halo svelte-s8ekmc" r="17"></circle><circle class="disc svelte-s8ekmc" r="11"></circle>`, 1);
+var root_9 = from_svg(`<tspan class="aarg svelte-s8ekmc" dx="6"> </tspan>`);
+var root_10 = from_svg(`<circle class="maybe svelte-s8ekmc" r="6"></circle><text class="aword svelte-s8ekmc" y="4"> <!></text>`, 1);
+var root_11 = from_svg(`<circle class="dot svelte-s8ekmc" r="7"></circle>`);
+var root_12 = from_svg(`<text class="pname svelte-s8ekmc" y="4" text-anchor="start"> </text>`);
+var root_13 = from_svg(`<text class="pname svelte-s8ekmc" text-anchor="middle"> </text>`);
+var root_14 = from_svg(`<!><!>`, 1);
+var root_15 = from_svg(`<circle class="shape svelte-s8ekmc"></circle><text class="nlabel svelte-s8ekmc" y="4" text-anchor="middle"> </text>`, 1);
+var root_16 = from_svg(`<tspan> </tspan>`);
+var root_17 = from_svg(`<text class="nsub svelte-s8ekmc" text-anchor="start"></text>`);
+var root_18 = from_svg(`<tspan x="0"> </tspan>`);
+var root_19 = from_svg(`<text class="nsub svelte-s8ekmc" text-anchor="middle"></text>`);
+var root_20 = from_svg(`<g role="button" tabindex="0"><circle class="hit svelte-s8ekmc" r="9"></circle><circle class="pinhead svelte-s8ekmc" cy="-2" r="3.6"></circle><line class="pinneedle svelte-s8ekmc" x1="0" y1="1.5" x2="0" y2="7"></line><title> </title></g>`);
+var root_21 = from_svg(`<g role="button" tabindex="0"><circle class="hit svelte-s8ekmc" r="9"></circle><path class="starshape svelte-s8ekmc" d="M0,-5 L1.5,-1.6 L5,-1.6 L2.2,0.7 L3.2,4.4 L0,2.2 L-3.2,4.4 L-2.2,0.7 L-5,-1.6 L-1.5,-1.6 Z"></path><title> </title></g>`);
+var root_22 = from_svg(`<g class="place svelte-s8ekmc"><g role="button" tabindex="0"><!><!><!></g><!><!></g>`);
+var root_23 = from_html(`<div><svg role="img"><!><!></svg></div>`);
+var root_24 = from_html(`<div class="graph svelte-s8ekmc"><div class="controls svelte-s8ekmc" role="toolbar"><!> <!> <span class="gap svelte-s8ekmc"></span> <button class="ico svelte-s8ekmc" aria-label="Closer together" title="Closer together"><!></button> <button class="ico svelte-s8ekmc" aria-label="Further apart" title="Further apart"><!></button> <span class="sep svelte-s8ekmc"></span> <button class="ico svelte-s8ekmc" aria-label="Zoom out" title="Zoom out"><!></button> <span role="status"> </span> <button class="ico svelte-s8ekmc" aria-label="Zoom in" title="Zoom in"><!></button> <!></div> <div class="window svelte-s8ekmc"><!></div></div>`);
 var $$css$2 = {
-	hash: "svelte-1i3pdf7",
-	code: ".graph.svelte-1i3pdf7 {display:flex;flex-direction:column;block-size:100%;min-block-size:0;gap:var(--space-xs);}.controls.svelte-1i3pdf7 {display:flex;align-items:center;gap:var(--space-xs);font-family:var(--font-family-mono);font-size:var(--font-size-2xs);color:var(--color-text-muted);}.controls.svelte-1i3pdf7 button:where(.svelte-1i3pdf7) {font:inherit;min-block-size:var(--size-target);min-inline-size:var(--size-target);padding:var(--space-none) var(--space-sm);color:var(--color-text-muted);background:none;border:var(--border-width-thin) solid transparent;border-radius:var(--radius-full);cursor:pointer;}.controls.svelte-1i3pdf7 button:where(.svelte-1i3pdf7):hover {color:var(--color-accent);}.controls.svelte-1i3pdf7 button.on:where(.svelte-1i3pdf7) {color:var(--color-text);border-color:var(--color-border-strong);}.sep.svelte-1i3pdf7 {flex:1;}.pct.svelte-1i3pdf7 {min-inline-size:var(--size-target);text-align:center;}.graph.svelte-1i3pdf7 .pan {flex:1;min-block-size:0;overflow:auto;}.measure.svelte-1i3pdf7 {min-inline-size:100%;min-block-size:100%;display:grid;place-items:center;}svg.svelte-1i3pdf7 {display:block;}text.svelte-1i3pdf7 {font-family:var(--font-family-body);}.place.svelte-1i3pdf7 {transition:transform var(--motion-duration-settle) var(--motion-easing-standard), opacity var(--motion-duration-settle) var(--motion-easing-standard);}\n  @media (prefers-reduced-motion: reduce) {.place.svelte-1i3pdf7 {transition:none;}\n  }\n\n  /* ---- edges: the road solid, the roads left dashed and faint, what may come dotted */.line.svelte-1i3pdf7 {fill:none;stroke:var(--color-text-muted);stroke-width:1.3;}.head.svelte-1i3pdf7 {fill:var(--color-text-muted);stroke:var(--color-text-muted);stroke-width:1.3;stroke-linejoin:round;}.edge.road.svelte-1i3pdf7 .line:where(.svelte-1i3pdf7),\n  .edge.road.svelte-1i3pdf7 .head:where(.svelte-1i3pdf7) {stroke:var(--color-text);}.edge.road.svelte-1i3pdf7 .head:where(.svelte-1i3pdf7) {fill:var(--color-text);}\n  /* UML: a transition's arrowhead is open. */.edge.svelte-1i3pdf7 .head.open:where(.svelte-1i3pdf7) {fill:none;}.edge.faded.svelte-1i3pdf7 {opacity:0.38;}.edge.faded.svelte-1i3pdf7 .line:where(.svelte-1i3pdf7) {stroke-dasharray:5 4;}.edge.ahead.svelte-1i3pdf7 .line:where(.svelte-1i3pdf7) {stroke-dasharray:1.5 4;stroke-linecap:round;}.edge.ahead.svelte-1i3pdf7 {opacity:0.55;}.elabel.svelte-1i3pdf7 {font-size:var(--font-size-2xs);fill:var(--color-text-muted);paint-order:stroke;stroke:var(--color-surface-raised);stroke-width:4;stroke-linejoin:round;}.edge.road.svelte-1i3pdf7 .elabel:where(.svelte-1i3pdf7) {fill:var(--color-text);}\n\n  /* ---- nodes */.node.svelte-1i3pdf7 {cursor:pointer;}.shape.svelte-1i3pdf7 {fill:var(--color-surface-raised);stroke:var(--color-text);stroke-width:1.4;}.initial.svelte-1i3pdf7 {fill:var(--color-text);}.nlabel.svelte-1i3pdf7 {font-size:var(--font-size-xs);fill:var(--color-text);}.nsub.svelte-1i3pdf7 {font-size:var(--font-size-2xs);fill:var(--color-text-muted);}.node.svelte-1i3pdf7:hover .shape:where(.svelte-1i3pdf7),\n  .node.svelte-1i3pdf7:focus .shape:where(.svelte-1i3pdf7) {stroke:var(--color-accent);}.node.current.svelte-1i3pdf7 .shape:where(.svelte-1i3pdf7) {fill:var(--color-accent);stroke:var(--color-accent);}.node.current.svelte-1i3pdf7 .nlabel:where(.svelte-1i3pdf7) {fill:var(--color-on-accent);}.node.faded.svelte-1i3pdf7 {opacity:0.38;}.node.faded.pinned.svelte-1i3pdf7 {opacity:1;}.node.ahead.svelte-1i3pdf7 .shape:where(.svelte-1i3pdf7) {fill:none;stroke:var(--color-text-muted);stroke-dasharray:2 3;}.node.ahead.svelte-1i3pdf7 .nlabel:where(.svelte-1i3pdf7) {fill:var(--color-text-muted);}.node.run.svelte-1i3pdf7 .shape:where(.svelte-1i3pdf7) {fill:var(--color-accent);stroke:var(--color-accent);}.node.run.svelte-1i3pdf7 .nlabel:where(.svelte-1i3pdf7),\n  .node.done.svelte-1i3pdf7 .nlabel:where(.svelte-1i3pdf7),\n  .node.queue.svelte-1i3pdf7 .nlabel:where(.svelte-1i3pdf7) {fill:var(--color-surface-raised);}.node.ask.svelte-1i3pdf7 .shape:where(.svelte-1i3pdf7) {stroke:var(--color-accent);stroke-width:2.6;}.node.queue.svelte-1i3pdf7 .shape:where(.svelte-1i3pdf7) {fill:var(--color-text-muted);stroke:var(--color-text-muted);}.node.done.svelte-1i3pdf7 .shape:where(.svelte-1i3pdf7) {fill:var(--color-text);}.node.held.svelte-1i3pdf7 .shape:where(.svelte-1i3pdf7) {stroke-dasharray:2 3;}.node.fail.svelte-1i3pdf7 .shape:where(.svelte-1i3pdf7) {stroke:var(--color-danger);}.node.picked.svelte-1i3pdf7 .shape:where(.svelte-1i3pdf7) {stroke:var(--color-accent);stroke-width:3;}.node.goal.svelte-1i3pdf7 .shape:where(.svelte-1i3pdf7) {stroke-width:3;}\n\n  /* ---- the marks: pin and bookmark, shown on hover and focus, always when set */.mark.svelte-1i3pdf7 {cursor:pointer;opacity:0;transition:opacity var(--motion-duration-fast) var(--motion-easing-standard);}.place.svelte-1i3pdf7:hover .mark:where(.svelte-1i3pdf7),\n  .place.svelte-1i3pdf7:focus-within .mark:where(.svelte-1i3pdf7),\n  .mark.set.svelte-1i3pdf7 {opacity:1;}.hit.svelte-1i3pdf7 {fill:transparent;}.pinhead.svelte-1i3pdf7 {fill:none;stroke:var(--color-text-muted);stroke-width:1.4;}.pinneedle.svelte-1i3pdf7 {stroke:var(--color-text-muted);stroke-width:1.4;}.pin.set.svelte-1i3pdf7 .pinhead:where(.svelte-1i3pdf7) {fill:var(--color-accent);stroke:var(--color-accent);}.pin.set.svelte-1i3pdf7 .pinneedle:where(.svelte-1i3pdf7) {stroke:var(--color-accent);}.starshape.svelte-1i3pdf7 {fill:none;stroke:var(--color-text-muted);stroke-width:1.2;stroke-linejoin:round;}.star.set.svelte-1i3pdf7 .starshape:where(.svelte-1i3pdf7) {fill:var(--color-accent);stroke:var(--color-accent);}.mark.svelte-1i3pdf7:hover .pinhead:where(.svelte-1i3pdf7),\n  .mark.svelte-1i3pdf7:hover .pinneedle:where(.svelte-1i3pdf7),\n  .mark.svelte-1i3pdf7:hover .starshape:where(.svelte-1i3pdf7) {stroke:var(--color-accent);}"
+	hash: "svelte-s8ekmc",
+	code: ".graph.svelte-s8ekmc {display:flex;flex-direction:column;block-size:100%;min-block-size:0;gap:var(--space-xs);}.controls.svelte-s8ekmc {display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-xs);font-family:var(--font-family-mono);font-size:var(--font-size-2xs);color:var(--color-text-muted);}.controls.svelte-s8ekmc button:where(.svelte-s8ekmc) {font:inherit;min-block-size:var(--size-target);min-inline-size:var(--size-target);padding:var(--space-none) var(--space-sm);color:var(--color-text-muted);background:none;border:var(--border-width-thin) solid transparent;border-radius:var(--radius-full);cursor:pointer;}.controls.svelte-s8ekmc button:where(.svelte-s8ekmc):hover {color:var(--color-accent);}.controls.svelte-s8ekmc .ico:where(.svelte-s8ekmc) {display:inline-flex;align-items:center;justify-content:center;padding:var(--space-none);}.controls.svelte-s8ekmc button:where(.svelte-s8ekmc):disabled {opacity:0.35;cursor:default;}.gap.svelte-s8ekmc {inline-size:var(--space-sm);}.controls.svelte-s8ekmc button.on:where(.svelte-s8ekmc) {color:var(--color-text);border-color:var(--color-border-strong);}.sep.svelte-s8ekmc {flex:1;}.pct.svelte-s8ekmc {min-inline-size:var(--size-target);text-align:center;cursor:default;user-select:none;}.pct.quiet.svelte-s8ekmc {font-style:italic;color:var(--color-text-muted);}.window.svelte-s8ekmc {position:relative;flex:1;min-block-size:0;}.graph.svelte-s8ekmc .pan {position:absolute;inset:0;overflow:auto;}.measure.fitting.svelte-s8ekmc {inline-size:100%;block-size:100%;}.measure.svelte-s8ekmc {min-inline-size:100%;min-block-size:100%;display:grid;place-items:center;}svg.svelte-s8ekmc {display:block;}svg.fit.svelte-s8ekmc {inline-size:100%;block-size:100%;}text.svelte-s8ekmc {font-family:var(--font-family-body);}\n\n\n  /* ---- edges: the road solid, the roads left dashed and faint, what may come dotted */.line.svelte-s8ekmc {fill:none;stroke:var(--color-text-muted);stroke-width:1.3;}.head.svelte-s8ekmc {fill:var(--color-text-muted);stroke:var(--color-text-muted);stroke-width:1.3;stroke-linejoin:round;}.edge.road.svelte-s8ekmc .line:where(.svelte-s8ekmc),\n  .edge.road.svelte-s8ekmc .head:where(.svelte-s8ekmc) {stroke:var(--color-text);}.edge.road.svelte-s8ekmc .head:where(.svelte-s8ekmc) {fill:var(--color-text);}\n  /* UML: a transition's arrowhead is open. */.edge.svelte-s8ekmc .head.open:where(.svelte-s8ekmc) {fill:none;}.edge.faded.svelte-s8ekmc {opacity:0.38;}.edge.faded.svelte-s8ekmc .line:where(.svelte-s8ekmc) {stroke-dasharray:5 4;}.edge.ahead.svelte-s8ekmc .line:where(.svelte-s8ekmc) {stroke-dasharray:1.5 4;stroke-linecap:round;}.edge.ahead.svelte-s8ekmc {opacity:0.55;}.elabel.svelte-s8ekmc {font-size:var(--font-size-2xs);fill:var(--color-text-muted);paint-order:stroke;stroke:var(--color-surface-raised);stroke-width:4;stroke-linejoin:round;}.edge.road.svelte-s8ekmc .elabel:where(.svelte-s8ekmc) {fill:var(--color-text);}\n\n  /* ---- nodes */.node.svelte-s8ekmc {cursor:pointer;}.shape.svelte-s8ekmc {fill:var(--color-surface-raised);stroke:var(--color-text);stroke-width:1.4;}.initial.svelte-s8ekmc {fill:var(--color-text);}.nlabel.svelte-s8ekmc {font-size:var(--font-size-xs);fill:var(--color-text);}.nsub.svelte-s8ekmc {font-size:var(--font-size-2xs);fill:var(--color-text-muted);}.node.svelte-s8ekmc:hover .shape:where(.svelte-s8ekmc),\n  .node.svelte-s8ekmc:focus .shape:where(.svelte-s8ekmc) {stroke:var(--color-accent);}.node.current.svelte-s8ekmc .shape:where(.svelte-s8ekmc) {fill:var(--color-accent);stroke:var(--color-accent);}.node.current.svelte-s8ekmc .nlabel:where(.svelte-s8ekmc) {fill:var(--color-on-accent);}.node.faded.svelte-s8ekmc {opacity:0.38;}.node.faded.pinned.svelte-s8ekmc {opacity:1;}.node.ahead.svelte-s8ekmc .shape:where(.svelte-s8ekmc) {fill:none;stroke:var(--color-text-muted);stroke-dasharray:2 3;}.node.ahead.svelte-s8ekmc .nlabel:where(.svelte-s8ekmc) {fill:var(--color-text-muted);}.node.run.svelte-s8ekmc .shape:where(.svelte-s8ekmc) {fill:var(--color-accent);stroke:var(--color-accent);}.node.run.svelte-s8ekmc .nlabel:where(.svelte-s8ekmc),\n  .node.done.svelte-s8ekmc .nlabel:where(.svelte-s8ekmc),\n  .node.queue.svelte-s8ekmc .nlabel:where(.svelte-s8ekmc) {fill:var(--color-surface-raised);}.node.ask.svelte-s8ekmc .shape:where(.svelte-s8ekmc) {stroke:var(--color-accent);stroke-width:2.6;}.node.queue.svelte-s8ekmc .shape:where(.svelte-s8ekmc) {fill:var(--color-text-muted);stroke:var(--color-text-muted);}.node.done.svelte-s8ekmc .shape:where(.svelte-s8ekmc) {fill:var(--color-text);}.node.held.svelte-s8ekmc .shape:where(.svelte-s8ekmc) {stroke-dasharray:2 3;}.node.fail.svelte-s8ekmc .shape:where(.svelte-s8ekmc) {stroke:var(--color-danger);}.node.picked.svelte-s8ekmc .shape:where(.svelte-s8ekmc) {stroke:var(--color-accent);stroke-width:3;}.node.goal.svelte-s8ekmc .shape:where(.svelte-s8ekmc) {stroke-width:3;}\n\n  /* ---- a path: the timeline's drawing */.dot.svelte-s8ekmc {fill:var(--color-surface-raised);stroke:var(--color-text);stroke-width:1.4;}.disc.svelte-s8ekmc {fill:var(--color-accent);}.halo.svelte-s8ekmc {fill:none;stroke:var(--color-accent);stroke-width:1;opacity:0.45;}.maybe.svelte-s8ekmc {fill:none;stroke:var(--color-text-muted);stroke-width:1.2;}.aword.svelte-s8ekmc {font-size:var(--font-size-sm);fill:var(--color-text-muted);}.aarg.svelte-s8ekmc {font-family:var(--font-family-mono);font-size:var(--font-size-2xs);}.node.svelte-s8ekmc:hover .maybe:where(.svelte-s8ekmc),\n  .node.svelte-s8ekmc:focus .maybe:where(.svelte-s8ekmc) {stroke:var(--color-accent);fill:var(--color-accent-soft);}.node.svelte-s8ekmc:hover .aword:where(.svelte-s8ekmc),\n  .node.svelte-s8ekmc:focus .aword:where(.svelte-s8ekmc) {fill:var(--color-accent);}.node.svelte-s8ekmc:hover .dot:where(.svelte-s8ekmc),\n  .node.svelte-s8ekmc:focus .dot:where(.svelte-s8ekmc) {stroke:var(--color-accent);}.pname.svelte-s8ekmc {font-family:var(--font-family-mono);font-size:var(--font-size-2xs);fill:var(--color-text-muted);}.elabel.big.svelte-s8ekmc {font-size:var(--font-size-sm);}.node.ahead.svelte-s8ekmc {opacity:1;}\n\n  /* ---- the marks: pin and bookmark, shown on hover and focus, always when set */\n  /* A mark nobody can see takes no clicks: a hidden mark of one state would otherwise sit over its neighbour. */.mark.svelte-s8ekmc {cursor:pointer;opacity:0;pointer-events:none;transition:opacity var(--motion-duration-fast) var(--motion-easing-standard);}.place.svelte-s8ekmc:hover .mark:where(.svelte-s8ekmc),\n  .place.svelte-s8ekmc:focus-within .mark:where(.svelte-s8ekmc),\n  .mark.set.svelte-s8ekmc {opacity:1;pointer-events:auto;}\n  /* On the current state the marks are always there, faint, so that a person finds them. */.place.svelte-s8ekmc:has(.node.current:where(.svelte-s8ekmc)) .mark:where(.svelte-s8ekmc):not(.set) {opacity:0.55;pointer-events:auto;}.hit.svelte-s8ekmc {fill:transparent;}.pinhead.svelte-s8ekmc {fill:none;stroke:var(--color-text-muted);stroke-width:1.4;}.pinneedle.svelte-s8ekmc {stroke:var(--color-text-muted);stroke-width:1.4;}.pin.set.svelte-s8ekmc .pinhead:where(.svelte-s8ekmc) {fill:var(--color-accent);stroke:var(--color-accent);}.pin.set.svelte-s8ekmc .pinneedle:where(.svelte-s8ekmc) {stroke:var(--color-accent);}.starshape.svelte-s8ekmc {fill:none;stroke:var(--color-text-muted);stroke-width:1.2;stroke-linejoin:round;}.star.set.svelte-s8ekmc .starshape:where(.svelte-s8ekmc) {fill:var(--color-accent);stroke:var(--color-accent);}.mark.svelte-s8ekmc:hover .pinhead:where(.svelte-s8ekmc),\n  .mark.svelte-s8ekmc:hover .pinneedle:where(.svelte-s8ekmc),\n  .mark.svelte-s8ekmc:hover .starshape:where(.svelte-s8ekmc) {stroke:var(--color-accent);}"
 };
 function Graph($$anchor, $$props) {
 	push($$props, true);
 	append_styles($$anchor, $$css$2);
+	/** uml-state-machine and directed-graph are named notations (named.ts); path is the timeline's own drawing, a
+	* path of states on a line with the steps possible now fanning out, which is no standard and is never called one. */
 	/** Nodes of the same layer drawn first come first: the road before the roads left. */
 	/** Follow this node: scroll it into view when it changes. */
 	/** Zoom to fit while the drawing is larger than its box and nobody has zoomed by hand. */
+	/** Where the flow goes at first: auto lets the card's shape decide (horizontal in a wide card, vertical in a tall one). */
 	/** Place each node once and never move it as the graph grows (a path explored), at the price of more crossings. */
-	let notation = prop($$props, "notation", 3, "directed-graph"), direction = prop($$props, "direction", 15, "horizontal"), pinned = prop($$props, "pinned", 19, () => /* @__PURE__ */ new Set()), bookmarked = prop($$props, "bookmarked", 19, () => /* @__PURE__ */ new Set()), follow = prop($$props, "follow", 3, null), autofit = prop($$props, "autofit", 3, false), stable = prop($$props, "stable", 3, false);
+	let notation = prop($$props, "notation", 3, "directed-graph"), direction = prop($$props, "direction", 3, "horizontal"), pinned = prop($$props, "pinned", 19, () => /* @__PURE__ */ new Set()), bookmarked = prop($$props, "bookmarked", 19, () => /* @__PURE__ */ new Set()), follow = prop($$props, "follow", 3, null), autofit = prop($$props, "autofit", 3, false), stable = prop($$props, "stable", 3, false);
 	const uml = user_derived(() => notation() === "uml-state-machine");
+	const path = user_derived(() => notation() === "path");
+	const isAhead = (n) => (n.cls ?? "").split(" ").includes("ahead");
+	const isCurrent = (n) => (n.cls ?? "").split(" ").includes("current");
+	/** In a path, the widest label on a step: the layers are that far apart, so no label covers another. */
+	const edgeWidth = user_derived(() => Math.max(0, ...$$props.edges.filter((e) => !(e.cls ?? "").includes("ahead")).map((e) => e.label ? e.label.length * 6.6 : 0)));
 	/** The widest caption, in the drawing's units. */
 	const subWidth = user_derived(() => Math.max(0, ...$$props.nodes.map((n) => n.sub ? Math.max(...n.sub.split("\n").map((l) => l.length)) * 6.2 : 0)));
 	const size = (n) => n.kind === "initial" ? {
@@ -912,11 +2019,24 @@ function Graph($$anchor, $$props) {
 	} : get(uml) ? {
 		width: Math.max(64, 18 + n.label.length * 8),
 		height: 36
+	} : get(path) ? isCurrent(n) ? {
+		width: 26,
+		height: 26
+	} : {
+		width: 16,
+		height: 16
 	} : {
 		width: 34,
 		height: 34
 	};
-	const placed = user_derived(() => layout($$props.nodes.map((n) => ({
+	/** The card's box, which "auto" reads to choose where the flow goes, and fit reads to zoom. */
+	let boxW = state(0);
+	let boxH = state(0);
+	let orient = state(proxy(untrack(() => $$props.orient ?? (direction() === "vertical" ? "down" : "right"))));
+	let spacing = state(1);
+	const flow = user_derived(() => get(orient) === "auto" ? get(boxH) > get(boxW) * 1.15 ? "down" : "right" : get(orient));
+	const dir = user_derived(() => get(flow) === "down" || get(flow) === "up" ? "vertical" : "horizontal");
+	const laid = user_derived(() => layout($$props.nodes.map((n) => ({
 		id: n.id,
 		...size(n),
 		shape: n.kind === "initial" || !get(uml) ? "circle" : "rounded"
@@ -927,48 +2047,128 @@ function Graph($$anchor, $$props) {
 		labelWidth: e.label ? Math.min(150, e.label.length * 6.5) : 0,
 		labelHeight: e.label ? 14 : 0
 	})), {
-		direction: direction(),
+		direction: get(dir),
 		incremental: stable(),
-		layerGap: get(uml) ? 96 : Math.max(84, (direction() === "horizontal" ? get(subWidth) : 0) + 30),
-		nodeGap: get(uml) ? 34 : get(subWidth) > 0 ? direction() === "horizontal" ? 66 : get(subWidth) - 10 : 40,
+		layerGap: get(spacing) * (get(uml) ? 96 : get(path) ? get(dir) === "horizontal" ? Math.max(90, Math.min(150, get(edgeWidth) + 24)) : 64 : get(dir) === "horizontal" ? Math.max(84, get(subWidth) + 30) : 76),
+		nodeGap: get(spacing) * (get(uml) ? 34 : get(path) ? get(dir) === "horizontal" ? 22 : 60 : get(subWidth) > 0 ? get(dir) === "horizontal" ? 58 : get(subWidth) + 24 : 40),
 		...$$props.order ? { order: $$props.order } : {},
 		...$$props.nodes.some((n) => n.rank !== void 0) ? { rank: Object.fromEntries($$props.nodes.filter((n) => n.rank !== void 0).map((n) => [n.id, n.rank])) } : {}
 	}));
+	/** The layout turned to flow right to left, or bottom to top: mirrored, arrows turned with it. */
+	const mirror = (l, fx, fy) => {
+		if (!fx && !fy) return l;
+		const X = (x) => fx ? l.width - x : x;
+		const Y = (y) => fy ? l.height - y : y;
+		const pt = ([x, y]) => [X(x), Y(y)];
+		return {
+			...l,
+			nodes: l.nodes.map((n) => ({
+				...n,
+				x: X(n.x),
+				y: Y(n.y)
+			})),
+			edges: l.edges.map((e) => {
+				const points = e.points.map(pt);
+				return {
+					...e,
+					points,
+					path: pathOf(points),
+					arrow: arrowOf(points),
+					label: {
+						x: X(e.label.x),
+						y: Y(e.label.y)
+					}
+				};
+			})
+		};
+	};
+	/** Edge labels' and fanned words' widths, in the drawing's units. */
+	const labelW = (id) => {
+		const e = $$props.edges.find((x) => x.id === id);
+		return e?.label ? e.label.length * (get(path) ? 6.6 : 6) : 0;
+	};
+	const fanW = (id) => {
+		const n = get(byId).get(id);
+		return n ? (n.label.length + (n.sub?.length ?? 0)) * 6.6 + 12 : 0;
+	};
+	const routed = user_derived(() => route(get(laid), get(dir), {
+		...get(path) ? {
+			fan: $$props.nodes.filter(isAhead).map((n) => n.id),
+			fanFrom: $$props.nodes.find(isCurrent)?.id ?? null,
+			avoid: $$props.nodes.filter((n) => (n.cls ?? "").split(" ").includes("faded")).map((n) => n.id)
+		} : {},
+		fanWidth: fanW,
+		labelWidth: labelW
+	}));
+	/** How the graph is drawn: in layers (with its flow), or around a centre, as springs, in rows. */
+	let algorithm = state("layered");
+	const placed = user_derived(() => get(algorithm) === "layered" ? mirror(get(routed), get(flow) === "left", get(flow) === "up") : redraw(get(laid), get(algorithm), { gap: 90 * get(spacing) }));
+	let shown = state({
+		nodes: [],
+		edges: [],
+		width: 0,
+		height: 0
+	});
+	let frame = 0;
+	user_effect(() => {
+		const to = get(placed);
+		const from = untrack(() => get(shown));
+		cancelAnimationFrame(frame);
+		const ms = motionMs();
+		if (ms <= 0 || from.nodes.length === 0) {
+			set(shown, to);
+			return;
+		}
+		const t0 = performance.now();
+		const step = (now) => {
+			const t = Math.min(1, (now - t0) / ms);
+			set(shown, between(from, to, 1 - (1 - t) * (1 - t)));
+			if (t < 1) frame = requestAnimationFrame(step);
+		};
+		frame = requestAnimationFrame(step);
+		return () => cancelAnimationFrame(frame);
+	});
 	const byId = user_derived(() => new Map($$props.nodes.map((n) => [n.id, n])));
+	/** Several loops on one node: their labels are stacked, one line each, never on top of each other. */
+	const loopLine = user_derived(() => {
+		const seen = /* @__PURE__ */ new Map();
+		const out = /* @__PURE__ */ new Map();
+		for (const e of $$props.edges) {
+			if (e.from !== e.to) continue;
+			const k = seen.get(e.from) ?? 0;
+			out.set(e.id, k);
+			seen.set(e.from, k + 1);
+		}
+		return out;
+	});
 	const edgeById = user_derived(() => new Map($$props.edges.map((e) => [e.id, e])));
-	let zoom = state(1);
+	let zoom = state(proxy(untrack(() => autofit() ? null : 1)));
 	let box = state(void 0);
-	let boxW = state(0);
-	let boxH = state(0);
-	const fit = () => {
-		if (!get(boxW) || !get(boxH)) return;
-		set(zoom, Math.max(.2, Math.min(2.5, Math.min(get(boxW) / get(W), get(boxH) / get(H)))), true);
-	};
-	let byHand = state(false);
-	const zoomBy = (f) => {
-		set(byHand, true);
-		set(zoom, Math.max(.2, Math.min(4, get(zoom) * f)), true);
-	};
+	const fit = () => set(zoom, null);
+	const zoomBy = (f) => set(zoom, Math.max(.2, Math.min(4, (get(zoom) ?? 1) * f)), true);
 	/** Room around the drawing for the captions under the nodes, which may be wider than the nodes. */
-	const pad = user_derived(() => get(uml) ? 8 : Math.max(8, get(subWidth) / 2 - 10));
+	const pad = user_derived(() => get(uml) ? 8 : get(path) ? 20 : Math.max(8, get(subWidth) / 2 - 10));
 	const W = user_derived(() => get(placed).width + 2 * get(pad));
 	const H = user_derived(() => get(placed).height + 2 * get(pad));
-	user_effect(() => {
-		if (!autofit() || get(byHand) || !get(boxW) || !get(boxH)) return;
-		const z = Math.min(1, get(boxW) / get(W), get(boxH) / get(H));
-		if (Math.abs(z - get(zoom)) > .01) set(zoom, Math.max(.2, z), true);
-	});
+	let drawing = state(void 0);
+	let followed = null;
 	user_effect(() => {
 		const id = follow();
-		const p = get(placed).nodes.find((n) => n.id === id);
-		if (!p || !get(box)) return;
-		const x = (p.x + get(pad)) * get(zoom) - get(box).clientWidth / 2;
-		const y = (p.y + get(pad)) * get(zoom) - get(box).clientHeight / 2;
-		get(box).scrollTo({
-			left: Math.max(0, x),
-			top: Math.max(0, y),
-			behavior: "smooth"
-		});
+		if (!id || id === followed || get(zoom) === null || !get(drawing)) return;
+		followed = id;
+		const d = get(drawing);
+		setTimeout(() => {
+			const el = [...d.querySelectorAll("g.node")].find((g) => g.dataset["id"] === id);
+			const pan = d.closest(".pan");
+			if (!el || !pan) return;
+			const a = el.getBoundingClientRect();
+			const b = pan.getBoundingClientRect();
+			pan.scrollTo({
+				left: pan.scrollLeft + a.left + a.width / 2 - b.left - b.width / 2,
+				top: pan.scrollTop + a.top + a.height / 2 - b.top - b.height / 2,
+				behavior: "smooth"
+			});
+		}, motionMs());
 	});
 	const arrow = (x, y, a) => {
 		const r = a * Math.PI / 180;
@@ -978,19 +2178,183 @@ function Graph($$anchor, $$props) {
 		};
 		return get(uml) ? `M ${back(9, -1)} L ${x},${y} L ${back(9, 1)}` : `M ${back(9, -1)} L ${x},${y} L ${back(9, 1)} Z`;
 	};
-	var div = root_12();
+	var div = root_24();
 	var div_1 = child(div);
-	var button = child(div_1);
-	let classes;
-	var button_1 = sibling(button, 2);
-	let classes_1;
-	var button_2 = sibling(button_1, 4);
-	var span = sibling(button_2, 2);
-	var text = only_child(span);
-	var button_3 = sibling(span, 2);
-	var button_4 = sibling(button_3, 2);
+	var node = child(div_1);
+	var consequent = ($$anchor) => {
+		var fragment = root_1$2();
+		var node_1 = first_child(fragment);
+		each(node_1, 17, () => [
+			[
+				"layered",
+				"In layers, along the flow",
+				Network
+			],
+			[
+				"radial",
+				"Around a centre",
+				Orbit
+			],
+			[
+				"force",
+				"As springs: linked nodes together",
+				Atom
+			],
+			[
+				"grid",
+				"In rows",
+				Grid_3x3
+			]
+		], ([a, says, I]) => a, ($$anchor, $$item) => {
+			var $$array = user_derived(() => to_array(get($$item), 3));
+			let a = () => get($$array)[0];
+			let says = () => get($$array)[1];
+			let I = () => get($$array)[2];
+			var button = root$2();
+			let classes;
+			Icon$1(child(button), {
+				children: ($$anchor, $$slotProps) => {
+					var fragment_1 = comment();
+					var node_3 = first_child(fragment_1);
+					component(node_3, I, ($$anchor, I_1) => {
+						I_1($$anchor, {});
+					});
+					append($$anchor, fragment_1);
+				},
+				$$slots: { default: true }
+			});
+			reset(button);
+			template_effect(() => {
+				classes = set_class(button, 1, "ico svelte-s8ekmc", null, classes, { on: get(algorithm) === a() });
+				set_attribute(button, "aria-label", says());
+				set_attribute(button, "title", says());
+				set_attribute(button, "aria-pressed", get(algorithm) === a());
+			});
+			delegated("click", button, () => set(algorithm, a(), true));
+			append($$anchor, button);
+		});
+		next(2);
+		append($$anchor, fragment);
+	};
+	if_block(node, ($$render) => {
+		if (!get(path)) $$render(consequent);
+	});
+	var node_4 = sibling(node, 2);
+	var consequent_1 = ($$anchor) => {
+		var fragment_2 = comment();
+		var node_5 = first_child(fragment_2);
+		each(node_5, 17, () => [
+			[
+				"right",
+				"Flow left to right",
+				Arrow_right
+			],
+			[
+				"down",
+				"Flow top to bottom",
+				Arrow_down
+			],
+			[
+				"left",
+				"Flow right to left",
+				Arrow_left
+			],
+			[
+				"up",
+				"Flow bottom to top",
+				Arrow_up
+			],
+			[
+				"auto",
+				"Flow as the card's shape suits",
+				Wand_sparkles
+			]
+		], ([o, says, I]) => o, ($$anchor, $$item) => {
+			var $$array_1 = user_derived(() => to_array(get($$item), 3));
+			let o = () => get($$array_1)[0];
+			let says = () => get($$array_1)[1];
+			let I = () => get($$array_1)[2];
+			var button_1 = root$2();
+			let classes_1;
+			Icon$1(child(button_1), {
+				children: ($$anchor, $$slotProps) => {
+					var fragment_3 = comment();
+					var node_7 = first_child(fragment_3);
+					component(node_7, I, ($$anchor, I_2) => {
+						I_2($$anchor, {});
+					});
+					append($$anchor, fragment_3);
+				},
+				$$slots: { default: true }
+			});
+			reset(button_1);
+			template_effect(() => {
+				classes_1 = set_class(button_1, 1, "ico svelte-s8ekmc", null, classes_1, { on: get(orient) === o() });
+				set_attribute(button_1, "aria-label", says());
+				set_attribute(button_1, "title", says());
+				set_attribute(button_1, "aria-pressed", get(orient) === o());
+			});
+			delegated("click", button_1, () => set(orient, o(), true));
+			append($$anchor, button_1);
+		});
+		append($$anchor, fragment_2);
+	};
+	if_block(node_4, ($$render) => {
+		if (get(algorithm) === "layered") $$render(consequent_1);
+	});
+	var button_2 = sibling(node_4, 4);
+	Icon$1(child(button_2), {
+		children: ($$anchor, $$slotProps) => {
+			Fold_horizontal($$anchor, {});
+		},
+		$$slots: { default: true }
+	});
+	reset(button_2);
+	var button_3 = sibling(button_2, 2);
+	Icon$1(child(button_3), {
+		children: ($$anchor, $$slotProps) => {
+			Unfold_horizontal($$anchor, {});
+		},
+		$$slots: { default: true }
+	});
+	reset(button_3);
+	var button_4 = sibling(button_3, 4);
+	Icon$1(child(button_4), {
+		children: ($$anchor, $$slotProps) => {
+			Zoom_out($$anchor, {});
+		},
+		$$slots: { default: true }
+	});
+	reset(button_4);
+	var span = sibling(button_4, 2);
+	let classes_2;
+	var text = only_child(span, true);
+	var button_5 = sibling(span, 2);
+	Icon$1(child(button_5), {
+		children: ($$anchor, $$slotProps) => {
+			Zoom_in($$anchor, {});
+		},
+		$$slots: { default: true }
+	});
+	reset(button_5);
+	var node_12 = sibling(button_5, 2);
+	var consequent_2 = ($$anchor) => {
+		Action($$anchor, {
+			size: "sm",
+			get icon() {
+				return Scan;
+			},
+			label: "Fit",
+			hint: "fit the whole drawing in the card",
+			onclick: fit
+		});
+	};
+	if_block(node_12, ($$render) => {
+		if (get(zoom) !== null) $$render(consequent_2);
+	});
 	reset(div_1);
-	Pannable(sibling(div_1, 2), {
+	var div_2 = sibling(div_1, 2);
+	Pannable(child(div_2), {
 		get label() {
 			return $$props.label;
 		},
@@ -1003,67 +2367,80 @@ function Graph($$anchor, $$props) {
 			set(box, $$value, true);
 		},
 		children: ($$anchor, $$slotProps) => {
-			var div_2 = root_11();
-			var svg = child(div_2);
-			var node_1 = child(svg);
-			each(node_1, 17, () => get(placed).edges, (pe) => pe.id, ($$anchor, pe) => {
+			var div_3 = root_23();
+			let classes_3;
+			var svg = child(div_3);
+			let classes_4;
+			var node_14 = child(svg);
+			each(node_14, 17, () => get(shown).edges, (pe) => pe.id, ($$anchor, pe) => {
 				const e = user_derived(() => get(edgeById).get(get(pe).id));
-				var g = root_2$2();
-				let classes_2;
-				var path = child(g);
-				var path_1 = sibling(path);
-				let classes_3;
-				var node_2 = sibling(path_1);
-				var consequent = ($$anchor) => {
-					var text_1 = root$2();
+				var g_1 = root_5();
+				let classes_5;
+				var path_1 = child(g_1);
+				var node_15 = sibling(path_1);
+				var consequent_3 = ($$anchor) => {
+					var path_2 = root_2$2();
+					let classes_6;
+					template_effect(($0) => {
+						classes_6 = set_class(path_2, 0, "head svelte-s8ekmc", null, classes_6, { open: get(uml) });
+						set_attribute(path_2, "d", $0);
+					}, [() => arrow(get(pe).arrow.x, get(pe).arrow.y, get(pe).arrow.angle)]);
+					append($$anchor, path_2);
+				};
+				if_block(node_15, ($$render) => {
+					if (!get(path) || get(pe).back || get(pe).self) $$render(consequent_3);
+				});
+				var node_16 = sibling(node_15);
+				var consequent_4 = ($$anchor) => {
+					var text_1 = root_3$1();
+					let classes_7;
 					var text_2 = only_child(text_1, true);
-					template_effect(() => {
+					template_effect(($0) => {
+						classes_7 = set_class(text_1, 0, "elabel svelte-s8ekmc", null, classes_7, { big: get(path) });
 						set_attribute(text_1, "x", get(pe).label.x);
-						set_attribute(text_1, "y", get(pe).label.y);
+						set_attribute(text_1, "y", $0);
 						set_text(text_2, get(e).label);
-					});
+					}, [() => get(pe).label.y - (get(loopLine).get(get(pe).id) ?? 0) * 15]);
 					append($$anchor, text_1);
 				};
-				if_block(node_2, ($$render) => {
-					if (get(e)?.label) $$render(consequent);
+				if_block(node_16, ($$render) => {
+					if (get(e)?.label) $$render(consequent_4);
 				});
-				var node_3 = sibling(node_2);
-				var consequent_1 = ($$anchor) => {
-					var title = root_1$2();
+				var node_17 = sibling(node_16);
+				var consequent_5 = ($$anchor) => {
+					var title = root_4$1();
 					var text_3 = only_child(title, true);
 					template_effect(() => set_text(text_3, get(e).title));
 					append($$anchor, title);
 				};
-				if_block(node_3, ($$render) => {
-					if (get(e)?.title) $$render(consequent_1);
+				if_block(node_17, ($$render) => {
+					if (get(e)?.title) $$render(consequent_5);
 				});
-				reset(g);
-				template_effect(($0) => {
-					classes_2 = set_class(g, 0, `edge ${get(e)?.cls ?? "" ?? ""}`, "svelte-1i3pdf7", classes_2, { back: get(pe).back });
-					set_attribute(path, "d", get(pe).path);
-					classes_3 = set_class(path_1, 0, "head svelte-1i3pdf7", null, classes_3, { open: get(uml) });
-					set_attribute(path_1, "d", $0);
-				}, [() => arrow(get(pe).arrow.x, get(pe).arrow.y, get(pe).arrow.angle)]);
-				append($$anchor, g);
+				reset(g_1);
+				template_effect(() => {
+					classes_5 = set_class(g_1, 0, `edge ${get(e)?.cls ?? "" ?? ""}`, "svelte-s8ekmc", classes_5, { back: get(pe).back });
+					set_attribute(path_1, "d", get(pe).path);
+				});
+				append($$anchor, g_1);
 			});
-			var node_4 = sibling(node_1);
-			each(node_4, 17, () => get(placed).nodes, (pn) => pn.id, ($$anchor, pn) => {
+			var node_18 = sibling(node_14);
+			each(node_18, 17, () => get(shown).nodes, (pn) => pn.id, ($$anchor, pn) => {
 				const n = user_derived(() => get(byId).get(get(pn).id));
-				var fragment = comment();
-				var node_5 = first_child(fragment);
-				var consequent_8 = ($$anchor) => {
-					var g_1 = root_10();
+				var fragment_9 = comment();
+				var node_19 = first_child(fragment_9);
+				var consequent_19 = ($$anchor) => {
+					var g_2 = root_22();
 					let styles;
-					var g_2 = child(g_1);
-					let classes_4;
-					var node_6 = child(g_2);
-					var consequent_2 = ($$anchor) => {
-						var circle = root_3$1();
+					var g_3 = child(g_2);
+					let classes_8;
+					var node_20 = child(g_3);
+					var consequent_6 = ($$anchor) => {
+						var circle = root_6();
 						append($$anchor, circle);
 					};
-					var consequent_3 = ($$anchor) => {
-						var fragment_1 = root_4$1();
-						var rect = first_child(fragment_1);
+					var consequent_7 = ($$anchor) => {
+						var fragment_10 = root_7();
+						var rect = first_child(fragment_10);
 						var text_4 = sibling(rect);
 						var text_5 = only_child(text_4, true);
 						template_effect(() => {
@@ -1073,154 +2450,264 @@ function Graph($$anchor, $$props) {
 							set_attribute(rect, "height", get(pn).height);
 							set_text(text_5, get(n).label);
 						});
-						append($$anchor, fragment_1);
+						append($$anchor, fragment_10);
 					};
-					var alternate = ($$anchor) => {
-						var fragment_2 = root_5();
-						var circle_1 = first_child(fragment_2);
-						var text_6 = sibling(circle_1);
-						var text_7 = only_child(text_6, true);
+					var consequent_13 = ($$anchor) => {
+						var fragment_11 = root_14();
+						var node_21 = first_child(fragment_11);
+						var consequent_8 = ($$anchor) => {
+							var fragment_12 = root_8();
+							next();
+							append($$anchor, fragment_12);
+						};
+						var d_1 = user_derived(() => isCurrent(get(n)));
+						var consequent_10 = ($$anchor) => {
+							var fragment_13 = root_10();
+							var text_6 = sibling(first_child(fragment_13));
+							var text_7 = child(text_6, true);
+							var node_22 = sibling(text_7);
+							var consequent_9 = ($$anchor) => {
+								var tspan = root_9();
+								var text_8 = only_child(tspan, true);
+								template_effect(() => set_text(text_8, get(n).sub));
+								append($$anchor, tspan);
+							};
+							if_block(node_22, ($$render) => {
+								if (get(n).sub) $$render(consequent_9);
+							});
+							reset(text_6);
+							template_effect(() => {
+								set_attribute(text_6, "x", get(flow) === "left" ? -14 : 14);
+								set_attribute(text_6, "text-anchor", get(flow) === "left" ? "end" : "start");
+								set_text(text_7, get(n).label);
+							});
+							append($$anchor, fragment_13);
+						};
+						var d_2 = user_derived(() => isAhead(get(n)));
+						var alternate = ($$anchor) => {
+							var circle_1 = root_11();
+							append($$anchor, circle_1);
+						};
+						if_block(node_21, ($$render) => {
+							if (get(d_1)) $$render(consequent_8);
+							else if (get(d_2)) $$render(consequent_10, 1);
+							else $$render(alternate, -1);
+						});
+						var node_23 = sibling(node_21);
+						var consequent_12 = ($$anchor) => {
+							var fragment_14 = comment();
+							var node_24 = first_child(fragment_14);
+							var consequent_11 = ($$anchor) => {
+								var text_9 = root_12();
+								var text_10 = only_child(text_9, true);
+								template_effect(($0) => {
+									set_attribute(text_9, "x", $0);
+									set_text(text_10, get(n).label);
+								}, [() => isCurrent(get(n)) ? 22 : 13]);
+								append($$anchor, text_9);
+							};
+							var alternate_1 = ($$anchor) => {
+								var text_11 = root_13();
+								var text_12 = only_child(text_11, true);
+								template_effect(($0) => {
+									set_attribute(text_11, "y", $0);
+									set_text(text_12, get(n).label);
+								}, [() => isCurrent(get(n)) ? 32 : 22]);
+								append($$anchor, text_11);
+							};
+							if_block(node_24, ($$render) => {
+								if (get(dir) === "vertical") $$render(consequent_11);
+								else $$render(alternate_1, -1);
+							});
+							append($$anchor, fragment_14);
+						};
+						var d_3 = user_derived(() => !isAhead(get(n)) && get(n).label);
+						if_block(node_23, ($$render) => {
+							if (get(d_3)) $$render(consequent_12);
+						});
+						append($$anchor, fragment_11);
+					};
+					var alternate_2 = ($$anchor) => {
+						var fragment_15 = root_15();
+						var circle_2 = first_child(fragment_15);
+						var text_13 = sibling(circle_2);
+						var text_14 = only_child(text_13, true);
 						template_effect(() => {
-							set_attribute(circle_1, "r", get(pn).width / 2);
-							set_text(text_7, get(n).label);
+							set_attribute(circle_2, "r", get(pn).width / 2);
+							set_text(text_14, get(n).label);
 						});
-						append($$anchor, fragment_2);
+						append($$anchor, fragment_15);
 					};
-					if_block(node_6, ($$render) => {
-						if (get(n).kind === "initial") $$render(consequent_2);
-						else if (get(uml)) $$render(consequent_3, 1);
-						else $$render(alternate, -1);
+					if_block(node_20, ($$render) => {
+						if (get(n).kind === "initial") $$render(consequent_6);
+						else if (get(uml)) $$render(consequent_7, 1);
+						else if (get(path)) $$render(consequent_13, 2);
+						else $$render(alternate_2, -1);
 					});
-					var node_7 = sibling(node_6);
-					var consequent_4 = ($$anchor) => {
-						var text_8 = root_7();
-						each(text_8, 21, () => get(n).sub.split("\n"), index, ($$anchor, line, li) => {
-							var tspan = root_6();
-							set_attribute(tspan, "dy", li === 0 ? 0 : 13);
-							var text_9 = only_child(tspan, true);
-							template_effect(() => set_text(text_9, get(line)));
-							append($$anchor, tspan);
+					var node_25 = sibling(node_20);
+					var consequent_15 = ($$anchor) => {
+						var fragment_16 = comment();
+						var node_26 = first_child(fragment_16);
+						var consequent_14 = ($$anchor) => {
+							var text_15 = root_17();
+							each(text_15, 21, () => get(n).sub.split("\n"), index, ($$anchor, line, li) => {
+								var tspan_1 = root_16();
+								set_attribute(tspan_1, "dy", li === 0 ? 0 : 13);
+								var text_16 = only_child(tspan_1, true);
+								template_effect(() => {
+									set_attribute(tspan_1, "x", get(pn).width / 2 + 8);
+									set_text(text_16, get(line));
+								});
+								append($$anchor, tspan_1);
+							});
+							reset(text_15);
+							template_effect(($0) => {
+								set_attribute(text_15, "x", get(pn).width / 2 + 8);
+								set_attribute(text_15, "y", $0);
+							}, [() => get(n).sub.includes("\n") ? -3 : 4]);
+							append($$anchor, text_15);
+						};
+						var alternate_3 = ($$anchor) => {
+							var text_17 = root_19();
+							each(text_17, 21, () => get(n).sub.split("\n"), index, ($$anchor, line, li) => {
+								var tspan_2 = root_18();
+								set_attribute(tspan_2, "dy", li === 0 ? 0 : 13);
+								var text_18 = only_child(tspan_2, true);
+								template_effect(() => set_text(text_18, get(line)));
+								append($$anchor, tspan_2);
+							});
+							reset(text_17);
+							template_effect(() => set_attribute(text_17, "y", get(pn).height / 2 + 14));
+							append($$anchor, text_17);
+						};
+						if_block(node_26, ($$render) => {
+							if (get(dir) === "vertical" && get(algorithm) === "layered") $$render(consequent_14);
+							else $$render(alternate_3, -1);
 						});
-						reset(text_8);
-						template_effect(() => set_attribute(text_8, "y", get(pn).height / 2 + 14));
-						append($$anchor, text_8);
+						append($$anchor, fragment_16);
 					};
-					if_block(node_7, ($$render) => {
-						if (get(n).sub) $$render(consequent_4);
+					if_block(node_25, ($$render) => {
+						if (get(n).sub && !get(path)) $$render(consequent_15);
 					});
-					var node_8 = sibling(node_7);
-					var consequent_5 = ($$anchor) => {
-						var title_1 = root_1$2();
-						var text_10 = only_child(title_1, true);
-						template_effect(() => set_text(text_10, get(n).title));
+					var node_27 = sibling(node_25);
+					var consequent_16 = ($$anchor) => {
+						var title_1 = root_4$1();
+						var text_19 = only_child(title_1, true);
+						template_effect(() => set_text(text_19, get(n).title));
 						append($$anchor, title_1);
 					};
-					if_block(node_8, ($$render) => {
-						if (get(n).title) $$render(consequent_5);
+					if_block(node_27, ($$render) => {
+						if (get(n).title) $$render(consequent_16);
 					});
-					reset(g_2);
-					var node_9 = sibling(g_2);
-					var consequent_6 = ($$anchor) => {
-						var g_3 = root_8();
-						let classes_5;
-						var title_2 = sibling(child(g_3), 3);
-						var text_11 = only_child(title_2, true);
-						reset(g_3);
+					reset(g_3);
+					var node_28 = sibling(g_3);
+					var consequent_17 = ($$anchor) => {
+						var g_4 = root_20();
+						let classes_9;
+						var title_2 = sibling(child(g_4), 3);
+						var text_20 = only_child(title_2, true);
+						reset(g_4);
 						template_effect(($0, $1, $2) => {
-							classes_5 = set_class(g_3, 0, "mark pin svelte-1i3pdf7", null, classes_5, { set: $0 });
-							set_attribute(g_3, "aria-label", $1);
-							set_attribute(g_3, "transform", `translate(${get(pn).width / 2 - 2}, ${-get(pn).height / 2 - 6})`);
-							set_text(text_11, $2);
+							classes_9 = set_class(g_4, 0, "mark pin svelte-s8ekmc", null, classes_9, { set: $0 });
+							set_attribute(g_4, "aria-label", $1);
+							set_attribute(g_4, "transform", `translate(${get(pn).width / 2 - 2}, ${-get(pn).height / 2 - 6})`);
+							set_text(text_20, $2);
 						}, [
 							() => pinned().has(get(n).id),
 							() => pinned().has(get(n).id) ? `unpin ${get(n).label}` : `pin ${get(n).label}, so it never fades`,
 							() => pinned().has(get(n).id) ? "Unpin" : "Pin: it never fades"
 						]);
-						delegated("click", g_3, () => $$props.onpin?.(get(n).id));
-						delegated("keydown", g_3, (ev) => ev.key === "Enter" && $$props.onpin?.(get(n).id));
-						append($$anchor, g_3);
+						delegated("click", g_4, () => $$props.onpin?.(get(n).id));
+						delegated("keydown", g_4, (ev) => ev.key === "Enter" && $$props.onpin?.(get(n).id));
+						append($$anchor, g_4);
 					};
-					if_block(node_9, ($$render) => {
-						if ($$props.onpin && get(n).kind !== "initial") $$render(consequent_6);
+					if_block(node_28, ($$render) => {
+						if ($$props.onpin && get(n).kind !== "initial") $$render(consequent_17);
 					});
-					var node_10 = sibling(node_9);
-					var consequent_7 = ($$anchor) => {
-						var g_4 = root_9();
-						let classes_6;
-						var title_3 = sibling(child(g_4), 2);
-						var text_12 = only_child(title_3, true);
-						reset(g_4);
+					var node_29 = sibling(node_28);
+					var consequent_18 = ($$anchor) => {
+						var g_5 = root_21();
+						let classes_10;
+						var title_3 = sibling(child(g_5), 2);
+						var text_21 = only_child(title_3, true);
+						reset(g_5);
 						template_effect(($0, $1, $2) => {
-							classes_6 = set_class(g_4, 0, "mark star svelte-1i3pdf7", null, classes_6, { set: $0 });
-							set_attribute(g_4, "aria-label", $1);
-							set_attribute(g_4, "transform", `translate(${-get(pn).width / 2 + 2}, ${-get(pn).height / 2 - 6})`);
-							set_text(text_12, $2);
+							classes_10 = set_class(g_5, 0, "mark star svelte-s8ekmc", null, classes_10, { set: $0 });
+							set_attribute(g_5, "aria-label", $1);
+							set_attribute(g_5, "transform", `translate(${-get(pn).width / 2 + 2}, ${-get(pn).height / 2 - 6})`);
+							set_text(text_21, $2);
 						}, [
 							() => bookmarked().has(get(n).id),
 							() => bookmarked().has(get(n).id) ? `remove the bookmark of ${get(n).label}` : `bookmark ${get(n).label}`,
 							() => bookmarked().has(get(n).id) ? "Remove the bookmark" : "Bookmark it"
 						]);
-						delegated("click", g_4, () => $$props.onbookmark?.(get(n).id));
-						delegated("keydown", g_4, (ev) => ev.key === "Enter" && $$props.onbookmark?.(get(n).id));
-						append($$anchor, g_4);
+						delegated("click", g_5, () => $$props.onbookmark?.(get(n).id));
+						delegated("keydown", g_5, (ev) => ev.key === "Enter" && $$props.onbookmark?.(get(n).id));
+						append($$anchor, g_5);
 					};
-					if_block(node_10, ($$render) => {
-						if ($$props.onbookmark && get(n).kind !== "initial") $$render(consequent_7);
+					if_block(node_29, ($$render) => {
+						if ($$props.onbookmark && get(n).kind !== "initial") $$render(consequent_18);
 					});
-					reset(g_1);
+					reset(g_2);
 					template_effect(($0) => {
-						styles = set_style(g_1, "", styles, { transform: `translate(${get(pn).x ?? ""}px, ${get(pn).y ?? ""}px)` });
-						classes_4 = set_class(g_2, 0, `node ${get(n).cls ?? "" ?? ""}`, "svelte-1i3pdf7", classes_4, { pinned: $0 });
-						set_attribute(g_2, "aria-label", get(n).title ?? get(n).label);
+						styles = set_style(g_2, "", styles, { transform: `translate(${get(pn).x ?? ""}px, ${get(pn).y ?? ""}px)` });
+						set_attribute(g_3, "data-id", get(n).id);
+						classes_8 = set_class(g_3, 0, `node ${get(n).cls ?? "" ?? ""}`, "svelte-s8ekmc", classes_8, { pinned: $0 });
+						set_attribute(g_3, "aria-label", get(n).title ?? get(n).label);
 					}, [() => pinned().has(get(n).id)]);
-					delegated("click", g_2, () => $$props.onpick?.(get(n).id));
-					delegated("keydown", g_2, (ev) => ev.key === "Enter" && $$props.onpick?.(get(n).id));
-					append($$anchor, g_1);
+					delegated("click", g_3, () => $$props.onpick?.(get(n).id));
+					delegated("keydown", g_3, (ev) => ev.key === "Enter" && $$props.onpick?.(get(n).id));
+					append($$anchor, g_2);
 				};
-				if_block(node_5, ($$render) => {
-					if (get(n)) $$render(consequent_8);
+				if_block(node_19, ($$render) => {
+					if (get(n)) $$render(consequent_19);
 				});
-				append($$anchor, fragment);
+				append($$anchor, fragment_9);
 			});
 			reset(svg);
-			reset(div_2);
+			bind_this(svg, ($$value) => set(drawing, $$value), () => get(drawing));
+			reset(div_3);
 			template_effect(() => {
-				set_attribute(svg, "width", get(W) * get(zoom));
-				set_attribute(svg, "height", get(H) * get(zoom));
+				classes_3 = set_class(div_3, 1, "measure svelte-s8ekmc", null, classes_3, { fitting: get(zoom) === null });
+				set_attribute(svg, "width", get(zoom) === null ? void 0 : get(W) * get(zoom));
+				set_attribute(svg, "height", get(zoom) === null ? void 0 : get(H) * get(zoom));
 				set_attribute(svg, "viewBox", `${-get(pad)} ${-get(pad)} ${get(W) ?? ""} ${get(H) ?? ""}`);
 				set_attribute(svg, "aria-label", $$props.label);
+				classes_4 = set_class(svg, 0, "svelte-s8ekmc", null, classes_4, { fit: get(zoom) === null });
 			});
-			bind_element_size(div_2, "clientWidth", ($$value) => set(boxW, $$value));
-			bind_element_size(div_2, "clientHeight", ($$value) => set(boxH, $$value));
-			append($$anchor, div_2);
+			append($$anchor, div_3);
 		},
 		$$slots: { default: true }
 	});
+	reset(div_2);
 	reset(div);
 	template_effect(($0) => {
 		set_attribute(div_1, "aria-label", `${$$props.label ?? ""}: layout and zoom`);
-		classes = set_class(button, 1, "svelte-1i3pdf7", null, classes, { on: direction() === "horizontal" });
-		classes_1 = set_class(button_1, 1, "svelte-1i3pdf7", null, classes_1, { on: direction() === "vertical" });
-		set_text(text, `${$0 ?? ""}%`);
-	}, [() => Math.round(get(zoom) * 100)]);
-	delegated("click", button, () => direction("horizontal"));
-	delegated("click", button_1, () => direction("vertical"));
-	delegated("click", button_2, () => zoomBy(1 / 1.25));
-	delegated("click", button_3, () => zoomBy(1.25));
-	delegated("click", button_4, () => (set(byHand, true), fit()));
+		button_2.disabled = get(spacing) <= .6;
+		button_3.disabled = get(spacing) >= 2;
+		classes_2 = set_class(span, 1, "pct svelte-s8ekmc", null, classes_2, { quiet: get(zoom) === null });
+		set_attribute(span, "title", get(zoom) === null ? "The whole drawing fits the card" : "How large the drawing is drawn");
+		set_text(text, $0);
+	}, [() => get(zoom) === null ? "all in view" : `${Math.round(get(zoom) * 100)}%`]);
+	delegated("click", button_2, () => set(spacing, Math.max(.6, get(spacing) / 1.25), true));
+	delegated("click", button_3, () => set(spacing, Math.min(2, get(spacing) * 1.25), true));
+	delegated("click", button_4, () => zoomBy(1 / 1.25));
+	delegated("click", button_5, () => zoomBy(1.25));
+	bind_element_size(div_2, "clientWidth", ($$value) => set(boxW, $$value));
+	bind_element_size(div_2, "clientHeight", ($$value) => set(boxH, $$value));
 	append($$anchor, div);
 	pop();
 }
 delegate(["click", "keydown"]);
 // ../../../../src/plugins/verifier-mcrl2/widgets/study/Sequence.svelte
-var root$1 = from_svg(`<rect class="headbox svelte-hvqg84" y="4" width="132" height="26" rx="2"></rect><text class="who svelte-hvqg84" y="21" text-anchor="middle"> </text>`, 1);
-var root_1$1 = from_svg(`<line class="life svelte-hvqg84" y1="0"></line>`);
+var root$1 = from_svg(`<rect class="headbox svelte-1bhg0sh" y="4" width="132" height="26" rx="2"></rect><text class="who svelte-1bhg0sh" y="21" text-anchor="middle"> </text>`, 1);
+var root_1$1 = from_svg(`<line class="life svelte-1bhg0sh" y1="0"></line>`);
 var root_2$1 = from_svg(`<title> </title>`);
-var root_3 = from_svg(`<g><line class="svelte-hvqg84"></line><path class="head svelte-hvqg84"></path><text text-anchor="middle" class="svelte-hvqg84"> </text><!></g>`);
-var root_4 = from_html(`<div class="sequence svelte-hvqg84"><svg class="heads svelte-hvqg84" height="34" aria-hidden="true"></svg> <div class="body svelte-hvqg84"><svg role="img" class="svelte-hvqg84"><!><!></svg></div></div>`);
+var root_3 = from_svg(`<g><line class="svelte-1bhg0sh"></line><path class="head svelte-1bhg0sh"></path><text text-anchor="middle" class="svelte-1bhg0sh"> </text><!></g>`);
+var root_4 = from_html(`<div class="sequence svelte-1bhg0sh"><svg class="heads svelte-1bhg0sh" aria-hidden="true"></svg> <div class="body svelte-1bhg0sh"><svg role="img" class="svelte-1bhg0sh"><!><!></svg></div></div>`);
 var $$css$1 = {
-	hash: "svelte-hvqg84",
-	code: ".sequence.svelte-hvqg84 {display:flex;flex-direction:column;align-items:center;block-size:100%;min-block-size:0;overflow-x:auto;}.heads.svelte-hvqg84 {flex:none;}.body.svelte-hvqg84 {flex:1;min-block-size:0;overflow-y:auto;}svg.svelte-hvqg84 {display:block;}text.svelte-hvqg84 {font-family:var(--font-family-body);}.headbox.svelte-hvqg84 {fill:var(--color-surface-raised);stroke:var(--color-text);stroke-width:1.2;}.who.svelte-hvqg84 {font-size:var(--font-size-xs);fill:var(--color-text);}.life.svelte-hvqg84 {stroke:var(--color-text-muted);stroke-width:1;stroke-dasharray:5 4;}.msg.svelte-hvqg84 line:where(.svelte-hvqg84) {stroke:var(--color-text-muted);stroke-width:1.2;}.msg.svelte-hvqg84 .head:where(.svelte-hvqg84) {fill:var(--color-text-muted);}.msg.svelte-hvqg84 text:where(.svelte-hvqg84) {font-size:var(--font-size-2xs);fill:var(--color-text-muted);}.msg.latest.svelte-hvqg84 line:where(.svelte-hvqg84) {stroke:var(--color-accent);stroke-width:1.8;}.msg.latest.svelte-hvqg84 .head:where(.svelte-hvqg84) {fill:var(--color-accent);}.msg.latest.svelte-hvqg84 text:where(.svelte-hvqg84) {fill:var(--color-accent);}"
+	hash: "svelte-1bhg0sh",
+	code: ".sequence.svelte-1bhg0sh {display:flex;flex-direction:column;align-items:center;block-size:100%;min-block-size:0;}.heads.svelte-1bhg0sh {flex:none;}.body.svelte-1bhg0sh {flex:1;inline-size:100%;min-block-size:0;overflow-y:auto;display:flex;flex-direction:column;align-items:center;}svg.svelte-1bhg0sh {display:block;inline-size:100%;block-size:auto;flex:none;}text.svelte-1bhg0sh {font-family:var(--font-family-body);}.headbox.svelte-1bhg0sh {fill:var(--color-surface-raised);stroke:var(--color-text);stroke-width:1.2;}.who.svelte-1bhg0sh {font-size:var(--font-size-xs);fill:var(--color-text);}.life.svelte-1bhg0sh {stroke:var(--color-text-muted);stroke-width:1;stroke-dasharray:5 4;}.msg.svelte-1bhg0sh line:where(.svelte-1bhg0sh) {stroke:var(--color-text-muted);stroke-width:1.2;}.msg.svelte-1bhg0sh .head:where(.svelte-1bhg0sh) {fill:var(--color-text-muted);}.msg.svelte-1bhg0sh text:where(.svelte-1bhg0sh) {font-size:var(--font-size-2xs);fill:var(--color-text-muted);}.msg.latest.svelte-1bhg0sh line:where(.svelte-1bhg0sh) {stroke:var(--color-accent);stroke-width:1.8;}.msg.latest.svelte-1bhg0sh .head:where(.svelte-1bhg0sh) {fill:var(--color-accent);}.msg.latest.svelte-1bhg0sh text:where(.svelte-1bhg0sh) {fill:var(--color-accent);}"
 };
 function Sequence($$anchor, $$props) {
 	push($$props, true);
@@ -1246,6 +2733,7 @@ function Sequence($$anchor, $$props) {
 	});
 	var div = root_4();
 	var svg = child(div);
+	let styles;
 	each(svg, 20, () => $$props.lifelines, (l) => l, ($$anchor, l) => {
 		var fragment = root$1();
 		var rect = first_child(fragment);
@@ -1261,6 +2749,7 @@ function Sequence($$anchor, $$props) {
 	reset(svg);
 	var div_1 = sibling(svg, 2);
 	var svg_1 = child(div_1);
+	let styles_1;
 	var node = child(svg_1);
 	each(node, 16, () => $$props.lifelines, (l) => l, ($$anchor, l) => {
 		var line = root_1$1();
@@ -1295,7 +2784,7 @@ function Sequence($$anchor, $$props) {
 		});
 		reset(g);
 		template_effect(() => {
-			classes = set_class(g, 0, "msg svelte-hvqg84", null, classes, { latest: i === get(shown).length - 1 });
+			classes = set_class(g, 0, "msg svelte-1bhg0sh", null, classes, { latest: i === get(shown).length - 1 });
 			set_attribute(line_1, "x1", get(x1));
 			set_attribute(line_1, "x2", get(x2) - get(dir) * 1);
 			set_attribute(line_1, "y1", get(y));
@@ -1312,12 +2801,11 @@ function Sequence($$anchor, $$props) {
 	bind_this(div_1, ($$value) => set(box, $$value), () => get(box));
 	reset(div);
 	template_effect(() => {
-		set_attribute(svg, "width", get(W));
 		set_attribute(svg, "viewBox", `0 0 ${get(W) ?? ""} 34`);
-		set_attribute(svg_1, "width", get(W));
-		set_attribute(svg_1, "height", get(H));
+		styles = set_style(svg, "", styles, { "max-inline-size": `${get(W) ?? ""}px` });
 		set_attribute(svg_1, "viewBox", `0 0 ${get(W) ?? ""} ${get(H) ?? ""}`);
 		set_attribute(svg_1, "aria-label", $$props.label);
+		styles_1 = set_style(svg_1, "", styles_1, { "max-inline-size": `${get(W) ?? ""}px` });
 	});
 	append($$anchor, div);
 	pop();

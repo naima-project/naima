@@ -1,7 +1,6 @@
-<!-- An action, as Naima's widgets draw every action: an icon in its own small disc, a word, and, when there is room, a
+<!-- An action, as the widget set draws every action: an icon in its own small disc, a word, and, when there is room, a
      line saying what it does. Primary for the move that matters most now, quiet for the rest, danger for what fails or
-     stops. Disabled, it says why in words under its label (on hover only when compact, a toolbar's icon). One of the widget set the Models tab, every study's view and the main UI
-     share (develop/models-tab.md §13). -->
+     stops. Disabled, it says why in words under its label (on hover only when compact, a toolbar's icon). One of the widget set. -->
 <script lang="ts">
   import type { Component } from "svelte";
 
@@ -60,8 +59,8 @@
     line-height: var(--font-line-height-tight);
     text-align: start;
     color: var(--tone);
-    background: color-mix(in srgb, var(--color-surface-sunken) 55%, transparent);
-    border: var(--border-width-thin) solid color-mix(in srgb, var(--color-border-strong) 40%, transparent);
+    background: var(--color-surface-soft);
+    border: var(--border-width-thin) solid var(--color-border-soft);
     border-radius: var(--radius-full);
     cursor: pointer;
     transition: background var(--motion-duration-fast) var(--motion-easing-standard), border-color var(--motion-duration-fast) var(--motion-easing-standard), transform var(--motion-duration-fast) var(--motion-easing-standard), box-shadow var(--motion-duration-fast) var(--motion-easing-standard);
@@ -100,8 +99,8 @@
   }
   .hidden {
     position: absolute;
-    inline-size: 1px;
-    block-size: 1px;
+    inline-size: var(--border-width-thin);
+    block-size: var(--border-width-thin);
     overflow: hidden;
     clip-path: inset(50%);
   }
@@ -119,8 +118,8 @@
   }
   /* Hover: a quiet tint and the disc lit; no ring, so the edge stays one clean hairline. */
   .action:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface-raised));
-    border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+    background: var(--color-accent-tint);
+    border-color: var(--color-accent-line);
   }
   .action:hover:not(:disabled) .disc {
     --disc: var(--color-accent);
@@ -144,13 +143,13 @@
   /* The move that matters now: the accent, its disc darker, so it reads first. */
   .primary {
     --tone: var(--color-on-accent);
-    --disc: color-mix(in srgb, var(--color-on-accent) 22%, transparent);
+    --disc: var(--color-on-accent-soft);
     --disc-ink: var(--color-on-accent);
-    background: linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 88%, var(--color-surface-raised)), var(--color-accent));
+    background: linear-gradient(180deg, var(--color-accent-hover), var(--color-accent));
     border-color: var(--color-accent);
   }
   .primary .hint {
-    color: color-mix(in srgb, var(--color-on-accent) 75%, transparent);
+    color: var(--color-on-accent);
   }
   /* The primary keeps its accent on hover, a shade deeper, so that its words stay readable. */
   .action.primary:hover:not(:disabled) {
@@ -158,7 +157,7 @@
     border-color: var(--color-accent-hover);
   }
   .primary:hover:not(:disabled) .disc {
-    --disc: color-mix(in srgb, var(--color-on-accent) 32%, transparent);
+    --disc: var(--color-on-accent-soft);
     --disc-ink: var(--color-on-accent);
   }
   .danger {
@@ -185,8 +184,18 @@
   }
   .primary.explained:disabled {
     --tone: var(--color-text);
-    background: color-mix(in srgb, var(--color-surface-sunken) 55%, transparent);
-    border-color: color-mix(in srgb, var(--color-border-strong) 40%, transparent);
+    background: var(--color-surface-soft);
+    border-color: var(--color-border-soft);
+  }
+  /* A finger needs a whole control: the small action and the icon alone grow to it. */
+  @media (pointer: coarse) {
+    .action.sm {
+      min-block-size: var(--size-control);
+    }
+    .action.compact {
+      min-inline-size: var(--size-control);
+      justify-content: center;
+    }
   }
   @media (prefers-reduced-motion: reduce) {
     .action,

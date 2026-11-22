@@ -1,4 +1,4 @@
-// A mosaic of cards (develop/models-tab.md §13): the window divided again and again, each piece a card, so the cards
+// A mosaic of cards: the window divided again and again, each piece a card, so the cards
 // always tile the whole space, like a Mondrian canvas. It is only a tree: each division has a direction and a ratio,
 // which the page draws as nested flex boxes (the ratio is each side's flex-grow), so the browser lays it out and no
 // position or size is ever computed here. A card moved onto the edge of another divides that one; moved onto its middle,
@@ -167,9 +167,7 @@ export function arrange(
   let m: Mosaic = {
     root,
     closed,
-    maximised: kept.maximised && shown.includes(kept.maximised)
-      ? kept.maximised
-      : null,
+    maximised: kept.maximised && shown.includes(kept.maximised) ? kept.maximised : null,
   };
   for (const c of all) {
     if (!shown.includes(c) && !closed.includes(c)) m = open(m, c);
@@ -194,7 +192,7 @@ export function keep(key: string, m: Mosaic): void {
   }
 }
 
-// ---- dividers, junctions, and moving them (develop/models-tab.md §13): all from the tree's ratios, never from the page.
+// ---- dividers, junctions, and moving them: all from the tree's ratios, never from the page.
 // A division of direction "row" puts its sides left and right of a vertical divider; "col", above and below a horizontal
 // one. In the unit square of the mosaic each divider is a line: where it stands on its axis (`at`), and the span it
 // covers on the other (`from`, `to`). Two dividers of one direction standing at the same place are aligned, whatever
@@ -266,7 +264,11 @@ export function junctionAt(t: Tile | null, path: string, end: "start" | "end"): 
   const d = all.find((x) => x.path === path);
   if (!d) return null;
   const p = endOf(d, end);
-  const on = (x: Divider) => (x.dir === "row" ? near(x.at, p.x) && x.from - EPS <= p.y && p.y <= x.to + EPS : near(x.at, p.y) && x.from - EPS <= p.x && p.x <= x.to + EPS);
+  const on = (
+    x: Divider,
+  ) => (x.dir === "row"
+    ? near(x.at, p.x) && x.from - EPS <= p.y && p.y <= x.to + EPS
+    : near(x.at, p.y) && x.from - EPS <= p.x && p.x <= x.to + EPS);
   const meeting = all.filter(on).map((x) => x.path);
   if (!all.some((x) => x.dir !== d.dir && on(x))) return null;
   const xs = all.filter((x) => x.dir === "row" && meeting.includes(x.path)).map((x) => x.at);
@@ -296,7 +298,12 @@ export function junctionEnds(t: Tile | null, path: string): { start: boolean; en
  * stands. With `snap`, a moved line that comes within SNAP of an aligned line of its direction lands on it. Each ratio is
  * then what puts its divider where it now stands, parents first, within the bounds a card keeps.
  */
-export function moveDividers(m: Mosaic, paths: readonly string[], delta: { x: number; y: number }, snap = true): Mosaic {
+export function moveDividers(
+  m: Mosaic,
+  paths: readonly string[],
+  delta: { x: number; y: number },
+  snap = true,
+): Mosaic {
   if (!m.root) return m;
   const all = dividers(m.root);
   const moved = new Set(paths);
@@ -323,10 +330,20 @@ export function moveDividers(m: Mosaic, paths: readonly string[], delta: { x: nu
     const ratio = t.dir === "row" ? clamp((goal - rect.x) / rect.w) : clamp((goal - rect.y) / rect.h);
     if (t.dir === "row") {
       const x = rect.x + ratio * rect.w;
-      return { ...t, ratio, a: place(t.a, { ...rect, w: x - rect.x }, `${path}a`), b: place(t.b, { ...rect, x, w: rect.x + rect.w - x }, `${path}b`) };
+      return {
+        ...t,
+        ratio,
+        a: place(t.a, { ...rect, w: x - rect.x }, `${path}a`),
+        b: place(t.b, { ...rect, x, w: rect.x + rect.w - x }, `${path}b`),
+      };
     }
     const y = rect.y + ratio * rect.h;
-    return { ...t, ratio, a: place(t.a, { ...rect, h: y - rect.y }, `${path}a`), b: place(t.b, { ...rect, y, h: rect.y + rect.h - y }, `${path}b`) };
+    return {
+      ...t,
+      ratio,
+      a: place(t.a, { ...rect, h: y - rect.y }, `${path}a`),
+      b: place(t.b, { ...rect, y, h: rect.y + rect.h - y }, `${path}b`),
+    };
   };
   return { ...m, root: place(m.root, { x: 0, y: 0, w: 1, h: 1 }, "") };
 }
@@ -334,10 +351,12 @@ export function moveDividers(m: Mosaic, paths: readonly string[], delta: { x: nu
 /** Whether a move snapped: some moved line now stands on an aligned line it did not stand on. */
 export const snappedTo = (m: Mosaic, paths: readonly string[]): boolean => {
   const all = dividers(m.root);
-  return all.some((a) => paths.includes(a.path) && all.some((o) => o.dir === a.dir && !paths.includes(o.path) && near(o.at, a.at)));
+  return all.some((a) =>
+    paths.includes(a.path) && all.some((o) => o.dir === a.dir && !paths.includes(o.path) && near(o.at, a.at))
+  );
 };
 
-// ---- the drag machine, by hand after its verified model (develop/models/ui/mosaic-drag/mosaic-drag.mcrl2)
+// ---- the drag machine, by hand after its verified model (models/mosaic-drag/mosaic-drag.mcrl2)
 
 export type Over = "NOTHING" | "DIVIDER" | "JUNCTION";
 export type DragKind = "NONE" | "ONE" | "SET";
@@ -355,7 +374,9 @@ export function dragStep(s: DragState, e: DragEvent): DragState | null {
     if (e === "enter_divider") return { ...s, over: "DIVIDER" };
     if (e === "enter_junction") return { ...s, over: "JUNCTION" };
     if (e === "leave") return s.over === "NOTHING" ? null : { ...s, over: "NOTHING" };
-    if (e === "press") return s.over === "DIVIDER" ? { ...s, drag: "ONE" } : s.over === "JUNCTION" ? { ...s, drag: "SET" } : null;
+    if (e === "press") {
+      return s.over === "DIVIDER" ? { ...s, drag: "ONE" } : s.over === "JUNCTION" ? { ...s, drag: "SET" } : null;
+    }
     return null;
   }
   if (e === "move") return s;

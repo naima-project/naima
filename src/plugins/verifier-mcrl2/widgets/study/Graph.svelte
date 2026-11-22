@@ -6,10 +6,10 @@
      bookmarked through its marks, shown on hover and focus. -->
 <script lang="ts">
   import { untrack } from "svelte";
-  import Pannable from "../ui/components/Pannable.svelte";
+  import Pannable from "../Pannable.svelte";
   import { type Direction, type Layout, layout } from "./layout.ts";
   import { arrowOf, pathOf, route } from "./route.ts";
-  import Icon from "../ui/components/Icon.svelte";
+  import Icon from "../Icon.svelte";
   import Action from "./Action.svelte";
   import ArrowRight from "@lucide/svelte/icons/arrow-right";
   import ArrowDown from "@lucide/svelte/icons/arrow-down";
@@ -51,6 +51,8 @@
     orient?: "right" | "down" | "left" | "up" | "auto";
     /** Place each node once and never move it as the graph grows (a path explored), at the price of more crossings. */
     stable?: boolean;
+    /** The card gives the graph no height of its own (its height is its contents'): the window has a least of its own. */
+    grow?: boolean;
   }
   let {
     label,
@@ -68,6 +70,7 @@
     autofit = false,
     orient: initialOrient,
     stable = false,
+    grow = false,
   }: Props = $props();
 
   const uml = $derived(notation === "uml-state-machine");
@@ -194,7 +197,9 @@
 
   // ---- zoom and pan. Fit is the browser's: the drawing scaled to its window by CSS (preserveAspectRatio), nothing
   // computed. A zoom is a scale the person chose, from 1 (the drawing's own size) up or down.
-  let zoom: number | null = $state(untrack(() => (autofit ? null : 1)));
+  // Under a finger the drawing is not shrunk to fit: its targets keep the size a finger needs, and it pans.
+  const finger = globalThis.matchMedia?.("(pointer: coarse)").matches ?? false;
+  let zoom: number | null = $state(untrack(() => (autofit && !finger ? null : 1)));
   let box: HTMLDivElement | undefined = $state();
   const fit = () => (zoom = null);
   const zoomBy = (f: number) => (zoom = Math.max(0.2, Math.min(4, (zoom ?? 1) * f)));
@@ -291,7 +296,7 @@
     {#if zoom !== null}<Action size="sm" icon={Fit} label="Fit" hint="fit the whole drawing in the card" onclick={fit} />{/if}
   </div>
   <!-- The window the drawing is seen through: its size is the card's, never the drawing's. -->
-  <div class="window" bind:clientWidth={boxW} bind:clientHeight={boxH}>
+  <div class="window" class:grow bind:clientWidth={boxW} bind:clientHeight={boxH}>
   <Pannable {label} class="pan" ignore=".node, .mark" bind:box>
     <div class="measure" class:fitting={zoom === null}>
       <svg
@@ -300,7 +305,7 @@
         width={zoom === null ? undefined : W * zoom}
         height={zoom === null ? undefined : H * zoom}
         viewBox="{-pad} {-pad} {W} {H}"
-        role="img"
+        role="group"
         aria-label={label}
       >
         {#each shown.edges as pe (pe.id)}
@@ -328,6 +333,7 @@
                 onclick={() => onpick?.(n.id)}
                 onkeydown={(ev) => ev.key === "Enter" && onpick?.(n.id)}
               >
+                <rect class="pad" x={-Math.max(pn.width, 48) / 2} y={-Math.max(pn.height, 48) / 2} width={Math.max(pn.width, 48)} height={Math.max(pn.height, 48)} />
                 {#if n.kind === "initial"}
                   <circle class="initial" r="8" />
                 {:else if uml}
@@ -440,6 +446,11 @@
   .controls button:hover {
     color: var(--color-accent);
   }
+  .controls button:focus-visible,
+  .node:focus-visible,
+  .mark:focus-visible {
+    outline: var(--border-width-focus) solid var(--color-focus);
+  }
   .controls .ico {
     display: inline-flex;
     align-items: center;
@@ -470,10 +481,14 @@
     font-style: italic;
     color: var(--color-text-muted);
   }
+  /* The window takes the height the card gives; with `grow`, a card that gives none has a least of one. */
   .window {
     position: relative;
     flex: 1;
     min-block-size: 0;
+  }
+  .window.grow {
+    min-block-size: var(--size-w-16);
   }
   .graph :global(.pan) {
     position: absolute;
@@ -553,6 +568,21 @@
   /* ---- nodes */
   .node {
     cursor: pointer;
+    border: var(--border-width-thin) solid transparent;
+  }
+  /* The padding that brings a node to a finger's size, drawn in nothing, only where the pointer is a finger. */
+  .pad {
+    display: none;
+    fill: transparent;
+  }
+  @media (pointer: coarse) {
+    .pad {
+      display: inline;
+    }
+    .controls button {
+      min-block-size: var(--size-control);
+      min-inline-size: var(--size-control);
+    }
   }
   .shape {
     fill: var(--color-surface-raised);
@@ -686,15 +716,31 @@
   /* A mark nobody can see takes no clicks: a hidden mark of one state would otherwise sit over its neighbour. */
   .mark {
     cursor: pointer;
+    border: var(--border-width-thin) solid transparent;
     opacity: 0;
     pointer-events: none;
     transition: opacity var(--motion-duration-fast) var(--motion-easing-standard);
   }
-  .place:hover .mark,
   .place:focus-within .mark,
   .mark.set {
     opacity: 1;
     pointer-events: auto;
+  }
+  @media (hover: hover) {
+    .place:hover .mark {
+      opacity: 1;
+      pointer-events: auto;
+    }
+  }
+  /* Where nothing hovers (a finger) the marks are always there, faint, and as large as a finger needs. */
+  @media (hover: none) {
+    .mark:not(.set) {
+      opacity: 0.55;
+      pointer-events: auto;
+    }
+    .mark :global(.hit) {
+      r: calc(var(--size-control) / 2);
+    }
   }
   /* On the current state the marks are always there, faint, so that a person finds them. */
   .place:has(.node.current) .mark:not(.set) {

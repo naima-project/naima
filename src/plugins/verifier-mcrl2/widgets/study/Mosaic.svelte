@@ -8,8 +8,8 @@
      flex column, for one). -->
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import Draggable from "../ui/components/Draggable.svelte";
-  import Icon from "../ui/components/Icon.svelte";
+  import Draggable from "../Draggable.svelte";
+  import Icon from "../Icon.svelte";
   import Maximize from "@lucide/svelte/icons/maximize-2";
   import Minimize from "@lucide/svelte/icons/minimize-2";
   import X from "@lucide/svelte/icons/x";
@@ -116,35 +116,27 @@
     step(on ? "enter_divider" : "leave");
     lit = on ? new Set([path]) : new Set();
   };
-  // A junction: every divider meeting there and every one on their lines.
-  let start: { x: number; y: number; id: number } | null = null;
-  const junctionDown = (e: PointerEvent, paths: string[]) => {
-    if (drag.over !== "JUNCTION") step("enter_junction");
-    if (!step("press")) return;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    start = { x: e.clientX, y: e.clientY, id: e.pointerId };
-    begin(paths);
-    e.preventDefault();
-  };
-  const junctionMove = (e: PointerEvent) => {
-    if (start && e.pointerId === start.id) travel(e.clientX - start.x, e.clientY - start.y);
-  };
-  const junctionUp = (e: PointerEvent, how: "release" | "cancel") => {
-    if (!start || e.pointerId !== start.id) return;
-    start = null;
-    finish(how);
+  // A junction, through its Draggable: every divider meeting there and every one on their lines; its first travel is
+  // the press.
+  const junctionTravel = (paths: string[], dx: number, dy: number, done: boolean) => {
+    if (!base) {
+      if (drag.over !== "JUNCTION") step("enter_junction");
+      if (!step("press")) return;
+      begin(paths);
+    }
+    travel(dx, dy);
+    if (done) finish("release");
   };
   const hoverJunction = (paths: string[], on: boolean) => {
     if (drag.drag !== "NONE") return;
     step(on ? "enter_junction" : "leave");
     lit = on ? new Set(paths) : new Set();
   };
-  // The keys: on a junction, the arrows move its set a step, as a press, a move and a release.
-  const junctionKey = (e: KeyboardEvent, paths: string[]) => {
-    const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
-    if (!d) return;
-    e.preventDefault();
-    set(moveDividers(m, paths, { x: d[0]! * 0.02, y: d[1]! * 0.02 }, false));
+  // The keys: on a junction, the arrows move its set a step.
+  const junctionStep = (paths: string[], d: "up" | "down" | "left" | "right") => {
+    const x = d === "left" ? -1 : d === "right" ? 1 : 0;
+    const y = d === "up" ? -1 : d === "down" ? 1 : 0;
+    set(moveDividers(m, paths, { x: x * 0.02, y: y * 0.02 }, false));
   };
 
   // ---- a card dragged by its title: where it would go is read from the page under the pointer at that moment
@@ -177,6 +169,8 @@
 {#snippet cardOf(id: string)}
   <section class="card" class:max={m.maximised === id} data-card={id} data-drop={target?.id === id ? target.side : undefined} aria-label={title(id)}>
     <header class="bar">
+      <!-- The press only starts a drag of the card: the handle inside it has the keys and the accessible name. -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
       <span class="handle" onpointerdown={(e) => press(id, e)}>
         <Draggable
           label={title(id)}
@@ -200,7 +194,9 @@
         <button class="tool" aria-label="Close {title(id)}" title="Close" onclick={() => set(close(m, id))}><Icon><X /></Icon></button>
       </span>
     </header>
-    <div class="body">{@render card(id)}</div>
+    <!-- A card whose contents scroll is reached by keyboard through its body. -->
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <div class="body" role="region" tabindex="0" aria-label="{title(id)}: contents">{@render card(id)}</div>
   </section>
 {/snippet}
 
@@ -208,8 +204,8 @@
   {#if "card" in t}
     {@render cardOf(t.card)}
   {:else}
-    <div class="split {t.dir}">
-      <div class="side" style:flex-grow={t.ratio}>{@render tile(t.a, `${path}a`)}</div>
+    <div class="split {t.dir}" style:--a="{t.ratio * 100}fr" style:--b="{(1 - t.ratio) * 100}fr">
+      <div class="side">{@render tile(t.a, `${path}a`)}</div>
       <div class="gutter {t.dir}" role="presentation" class:lit={lit.has(path)} onpointerenter={() => hoverDivider(path, true)} onpointerleave={() => hoverDivider(path, false)}>
         <Draggable
           label="the divider"
@@ -226,24 +222,24 @@
             <span
               class="junction {end}"
               class:cross={jn.cross}
-              role="slider"
-              tabindex="0"
-              aria-label={`where ${jn.meeting.length} dividers meet: drag to move them and the ${jn.moves.length - jn.meeting.length} aligned with them`}
-              aria-valuenow={Math.round((t.dir === "row" ? jn.x : jn.y) * 100)}
+              role="presentation"
               title="Drag to move every divider meeting here, and those on the same lines"
               onpointerenter={() => hoverJunction(jn.moves, true)}
               onpointerleave={() => hoverJunction(jn.moves, false)}
-              onpointerdown={(e) => junctionDown(e, jn.moves)}
-              onpointermove={junctionMove}
-              onpointerup={(e) => junctionUp(e, "release")}
-              onpointercancel={(e) => junctionUp(e, "cancel")}
-              onlostpointercapture={(e) => junctionUp(e, "release")}
-              onkeydown={(e) => junctionKey(e, jn.moves)}
-            ></span>
+            >
+              <Draggable
+                label={`the ${jn.meeting.length} dividers meeting here and the ${jn.moves.length - jn.meeting.length} aligned with them`}
+                slim
+                buttons={false}
+                moves={["left", "right", "up", "down"]}
+                onmove={(d) => junctionStep(jn.moves, d)}
+                ontravel={(dx, dy, done) => junctionTravel(jn.moves, dx, dy, done)}
+              />
+            </span>
           {/if}
         {/each}
       </div>
-      <div class="side" style:flex-grow={1 - t.ratio}>{@render tile(t.b, `${path}b`)}</div>
+      <div class="side">{@render tile(t.b, `${path}b`)}</div>
     </div>
   {/if}
 {/snippet}
@@ -278,7 +274,8 @@
     flex: 1 1 auto;
     min-block-size: 0;
     min-inline-size: 0;
-    display: flex;
+    display: grid;
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   }
   .closed {
     display: flex;
@@ -313,24 +310,27 @@
   }
 
   /* ---- the divisions: flex boxes whose sides grow by their shares; nothing is placed by hand */
+  /* Each division is a grid of its two sides and the gutter between them. The sides share what room there is by their
+     ratio; given no height, the grid takes the height its contents need, at the same ratio. */
   .split {
-    flex: 1 1 0;
-    display: flex;
+    display: grid;
     min-block-size: 0;
     min-inline-size: 0;
+    transition: grid-template-columns var(--motion-duration-fast) var(--motion-easing-standard), grid-template-rows var(--motion-duration-fast) var(--motion-easing-standard);
+  }
+  .split.row {
+    grid-template: minmax(0, 1fr) / minmax(0, var(--a)) auto minmax(0, var(--b));
   }
   .split.col {
-    flex-direction: column;
+    grid-template: minmax(0, var(--a)) auto minmax(0, var(--b)) / minmax(0, 1fr);
   }
   .side {
-    flex-basis: 0;
-    flex-shrink: 1;
-    display: flex;
+    display: grid;
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
     min-block-size: 0;
     min-inline-size: 0;
-    transition: flex-grow var(--motion-duration-fast) var(--motion-easing-standard);
   }
-  .mosaic.live .side {
+  .mosaic.live .split {
     transition: none;
   }
 
@@ -344,7 +344,6 @@
     min-block-size: 0;
     background: var(--color-surface-raised);
     border-radius: var(--radius-lg);
-    overflow: hidden;
   }
   /* Where a card being moved would go: half of the target for an edge, all of it for a swap. */
   .card[data-drop]::after {
@@ -371,6 +370,7 @@
   }
   .bar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-sm);
     min-block-size: var(--size-target);
@@ -380,7 +380,6 @@
   .handle {
     flex: 0 1 auto;
     min-inline-size: 0;
-    overflow: hidden;
   }
   .handle :global(.draggable) {
     padding: var(--space-none);
@@ -393,7 +392,6 @@
   }
   .handle :global(.content) {
     min-inline-size: 0;
-    overflow: hidden;
   }
   .handle :global(.handle) {
     min-inline-size: var(--size-target);
@@ -401,7 +399,6 @@
     padding: var(--space-none);
     opacity: 0.35;
   }
-  .card:hover .handle :global(.handle),
   .handle :global(.handle:focus-visible) {
     opacity: 1;
   }
@@ -424,14 +421,29 @@
     min-inline-size: 0;
   }
   .tools {
-    flex: none;
+    flex: 0 1 auto;
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     opacity: 0.45;
     transition: opacity var(--motion-duration-fast) var(--motion-easing-standard);
   }
-  .card:hover .tools,
   .card:focus-within .tools {
     opacity: 1;
+  }
+  /* The card's tools and handle show in full when the pointer is over the card; where nothing hovers (a finger), or more
+     contrast is asked for, they always do. */
+  @media (hover: hover) {
+    .card:hover .handle :global(.handle),
+    .card:hover .tools {
+      opacity: 1;
+    }
+  }
+  @media (hover: none), (prefers-contrast: more) {
+    .handle :global(.handle),
+    .tools {
+      opacity: 1;
+    }
   }
   .tool {
     display: inline-flex;
@@ -442,15 +454,20 @@
     padding: var(--space-none);
     color: var(--color-text-muted);
     background: none;
-    border: none;
+    border: var(--border-width-thin) solid transparent;
     border-radius: var(--radius-sm);
     cursor: pointer;
   }
   .tool:hover {
     color: var(--color-accent);
   }
+  .tool:focus-visible,
+  .reopen:focus-visible,
+  .body:focus-visible {
+    outline: var(--border-width-focus) solid var(--color-focus);
+  }
   .body {
-    flex: 1 1 0;
+    flex: 1 1 0%;
     min-block-size: 0;
     display: grid;
     grid-template-rows: minmax(0, 1fr);
@@ -467,31 +484,32 @@
   }
   /* A junction's handle: a square three gutters wide centred where the dividers meet, over the gutters there. */
   .junction {
+    --j: calc(3 * var(--space-sm));
     position: absolute;
     z-index: 2;
-    inline-size: calc(3 * var(--space-sm));
-    block-size: calc(3 * var(--space-sm));
+    inline-size: var(--j);
+    block-size: var(--j);
     border-radius: var(--radius-full);
     cursor: move;
     touch-action: none;
   }
   .gutter.row .junction {
-    inset-inline-start: calc(-1 * var(--space-sm));
+    inset-inline-start: calc((var(--space-sm) - var(--j)) / 2);
   }
   .gutter.row .junction.start {
-    inset-block-start: calc(-2 * var(--space-sm));
+    inset-block-start: calc(-2 * var(--j) / 3);
   }
   .gutter.row .junction.end {
-    inset-block-end: calc(-2 * var(--space-sm));
+    inset-block-end: calc(-2 * var(--j) / 3);
   }
   .gutter.col .junction {
-    inset-block-start: calc(-1 * var(--space-sm));
+    inset-block-start: calc((var(--space-sm) - var(--j)) / 2);
   }
   .gutter.col .junction.start {
-    inset-inline-start: calc(-2 * var(--space-sm));
+    inset-inline-start: calc(-2 * var(--j) / 3);
   }
   .gutter.col .junction.end {
-    inset-inline-end: calc(-2 * var(--space-sm));
+    inset-inline-end: calc(-2 * var(--j) / 3);
   }
   .junction::after {
     content: "";
@@ -499,13 +517,11 @@
     inset: calc(50% - var(--space-xs));
     border-radius: var(--radius-full);
     background: transparent;
+    pointer-events: none;
   }
   .junction:hover::after,
-  .junction:focus-visible::after {
+  .junction:focus-within::after {
     background: var(--color-accent-soft);
-  }
-  .junction:focus-visible {
-    outline: var(--border-width-focus) solid var(--color-focus);
   }
   .gutter.row {
     inline-size: var(--space-sm);
@@ -513,13 +529,25 @@
   .gutter.col {
     block-size: var(--space-sm);
   }
+  /* The gutter is thin, and its handle is wider than it: a target of the least size, centred on it and lying a little
+     over the two cards' edges, wider still under a finger. */
   .gutter :global(.draggable) {
+    --reach: var(--size-target);
+    position: absolute;
     display: grid;
-    inline-size: 100%;
-    block-size: 100%;
     padding: var(--space-none);
     border: none;
     background: none;
+  }
+  .gutter.row :global(.draggable) {
+    inset-block: 0;
+    inset-inline-start: calc(50% - var(--reach) / 2);
+    inline-size: var(--reach);
+  }
+  .gutter.col :global(.draggable) {
+    inset-inline: 0;
+    inset-block-start: calc(50% - var(--reach) / 2);
+    block-size: var(--reach);
   }
   .gutter :global(.content) {
     display: none;
@@ -567,8 +595,34 @@
   .gutter :global(.handle:focus-visible)::after {
     background: var(--color-accent-soft);
   }
+  /* A junction's Draggable: its whole square the handle, which draws no pill of its own (the junction's dot is it). */
+  .gutter .junction :global(.draggable) {
+    position: absolute;
+    inset: 0;
+  }
+  .gutter .junction :global(.handle) {
+    cursor: move;
+  }
+  .gutter .junction :global(.handle)::after {
+    display: none;
+  }
+  /* Under a finger every target is a whole control. */
+  @media (pointer: coarse) {
+    .tool,
+    .reopen,
+    .handle :global(.handle) {
+      min-inline-size: var(--size-control);
+      min-block-size: var(--size-control);
+    }
+    .gutter :global(.draggable) {
+      --reach: var(--size-control);
+    }
+    .junction {
+      --j: var(--size-control);
+    }
+  }
   @media (prefers-reduced-motion: reduce) {
-    .side {
+    .split {
       transition: none;
     }
   }

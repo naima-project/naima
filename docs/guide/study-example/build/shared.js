@@ -10,6 +10,13 @@ var object_prototype = Object.prototype;
 var array_prototype = Array.prototype;
 var get_prototype_of = Object.getPrototypeOf;
 var is_extensible = Object.isExtensible;
+/**
+* @param {any} thing
+* @returns {thing is Function}
+*/
+function is_function(thing) {
+	return typeof thing === "function";
+}
 var noop = () => {};
 /** @param {Array<() => void>} arr */
 function run_all(arr) {
@@ -32,6 +39,36 @@ function deferred() {
 		resolve,
 		reject
 	};
+}
+/**
+* @template V
+* @param {V} value
+* @param {V | (() => V)} fallback
+* @param {boolean} [lazy]
+* @returns {V}
+*/
+function fallback(value, fallback, lazy = false) {
+	return value === void 0 ? lazy ? fallback() : fallback : value;
+}
+/**
+* When encountering a situation like `let [a, b, c] = $derived(blah())`,
+* we need to stash an intermediate value that `a`, `b`, and `c` derive
+* from, in case it's an iterable
+* @template T
+* @param {ArrayLike<T> | Iterable<T>} value
+* @param {number} [n]
+* @returns {Array<T>}
+*/
+function to_array(value, n) {
+	if (Array.isArray(value)) return value;
+	if (n === void 0 || !(Symbol.iterator in value)) return Array.from(value);
+	/** @type {T[]} */
+	const array = [];
+	for (const element of value) {
+		array.push(element);
+		if (array.length === n) break;
+	}
+	return array;
 }
 // node_modules/.deno/svelte@5.57.3/node_modules/svelte/src/internal/client/constants.js
 /**
@@ -79,6 +116,7 @@ var IS_XHTML = !!globalThis.document?.contentType && /* @__PURE__ */ globalThis.
 var HYDRATION_ERROR = {};
 var UNINITIALIZED = Symbol("uninitialized");
 var NAMESPACE_HTML = "http://www.w3.org/1999/xhtml";
+var NAMESPACE_SVG = "http://www.w3.org/2000/svg";
 /**
 * Reading a derived belonging to a now-destroyed effect may result in stale values
 */
@@ -297,6 +335,28 @@ function svelte_boundary_reset_onerror() {
 var async_mode_flag = false;
 /** True if we're not certain that we only have Svelte 5 code in the compilation */
 var legacy_mode_flag = false;
+// node_modules/.deno/svelte@5.57.3/node_modules/svelte/src/internal/shared/context.js
+/**
+* @typedef {{ p: Context | null, c: Map<unknown, unknown> | null }} Context
+*/
+/**
+* @param {Context} context
+* @returns {Map<unknown, unknown> | null}
+*/
+function get_parent_context(context) {
+	let parent = context.p;
+	while (parent !== null && parent.c === null) parent = parent.p;
+	return parent?.c ?? null;
+}
+/**
+* @param {Context | null} context
+* @param {string} name
+* @returns {Map<unknown, unknown>}
+*/
+function get_or_init_context_map(context, name) {
+	if (context === null) lifecycle_outside_component(name);
+	return context.c ??= new Map(get_parent_context(context) || void 0);
+}
 // node_modules/.deno/svelte@5.57.3/node_modules/svelte/src/internal/client/context.js
 /** @import { ComponentContext, DevStackEntry, Effect } from '#client' */
 /** @type {ComponentContext | null} */
@@ -304,6 +364,21 @@ var component_context = null;
 /** @param {ComponentContext | null} context */
 function set_component_context(context) {
 	component_context = context;
+}
+/**
+* Retrieves the context set with the specified `key` in the current component or any of its
+* ancestors. If multiple components set the same key, the value from the closest one is returned.
+* A `setContext` call in the current component is only visible to `getContext` calls that run after it.
+* Must be called during component initialisation.
+*
+* [`createContext`](https://svelte.dev/docs/svelte/svelte#createContext) is a type-safe alternative.
+*
+* @template T
+* @param {any} key
+* @returns {T}
+*/
+function getContext(key) {
+	return get_or_init_context_map(component_context, "getContext").get(key);
 }
 /**
 * @param {Record<string, unknown>} props
@@ -2870,6 +2945,17 @@ var PASSIVE_EVENTS = ["touchstart", "touchmove"];
 function is_passive_event(name) {
 	return PASSIVE_EVENTS.includes(name);
 }
+/** List of elements that require raw contents and should not have SSR comments put in them */
+var RAW_TEXT_ELEMENTS = [
+	"textarea",
+	"script",
+	"style",
+	"title"
+];
+/** @param {string} name */
+function is_raw_text_element(name) {
+	return RAW_TEXT_ELEMENTS.includes(name);
+}
 // node_modules/.deno/svelte@5.57.3/node_modules/svelte/src/internal/client/dom/elements/events.js
 /**
 * Used on elements, as a map of event type -> event handler,
@@ -4370,6 +4456,100 @@ function snippet(node, get_snippet, ...args) {
 		branches.ensure(snippet, snippet && ((anchor) => snippet(anchor, ...args)));
 	}, EFFECT_TRANSPARENT);
 }
+// node_modules/.deno/svelte@5.57.3/node_modules/svelte/src/internal/client/dom/blocks/svelte-component.js
+/** @import { TemplateNode, Dom } from '#client' */
+/**
+* @template P
+* @template {(props: P) => void} C
+* @param {TemplateNode} node
+* @param {() => C} get_component
+* @param {(anchor: TemplateNode, component: C) => Dom | void} render_fn
+* @returns {void}
+*/
+function component(node, get_component, render_fn) {
+	/** @type {TemplateNode | undefined} */
+	var hydration_start_node;
+	if (hydrating) {
+		hydration_start_node = hydrate_node;
+		hydrate_next();
+	}
+	var branches = new BranchManager(node);
+	block(() => {
+		var component = get_component() ?? null;
+		if (hydrating) {
+			if (read_hydration_instruction(hydration_start_node) === "[" !== (component !== null)) {
+				var anchor = skip_nodes();
+				set_hydrate_node(anchor);
+				branches.anchor = anchor;
+				set_hydrating(false);
+				branches.ensure(component, component && ((target) => render_fn(target, component)));
+				set_hydrating(true);
+				return;
+			}
+		}
+		branches.ensure(component, component && ((target) => render_fn(target, component)));
+	}, EFFECT_TRANSPARENT);
+}
+// node_modules/.deno/svelte@5.57.3/node_modules/svelte/src/internal/client/dom/blocks/svelte-element.js
+/** @import { Effect, EffectNodes, TemplateNode } from '#client' */
+/**
+* @param {Comment | Element} node
+* @param {() => string} get_tag
+* @param {boolean} is_svg
+* @param {undefined | ((element: Element, anchor: Node | null) => void)} render_fn,
+* @param {undefined | (() => string)} get_namespace
+* @param {undefined | [number, number]} location
+* @returns {void}
+*/
+function element(node, get_tag, is_svg, render_fn, get_namespace, location) {
+	let was_hydrating = hydrating;
+	if (hydrating) hydrate_next();
+	/** @type {null | Element} */
+	var element = null;
+	if (hydrating && hydrate_node.nodeType === 1) {
+		element = hydrate_node;
+		hydrate_next();
+	}
+	var anchor = hydrating ? hydrate_node : node;
+	var branches = new BranchManager(anchor, false);
+	block(() => {
+		const next_tag = get_tag() || null;
+		var ns = get_namespace ? get_namespace() : is_svg || next_tag === "svg" ? NAMESPACE_SVG : void 0;
+		if (next_tag === null) {
+			branches.ensure(null, null);
+			return;
+		}
+		branches.ensure(next_tag, (anchor) => {
+			if (next_tag) {
+				var is_hydrating = hydrating;
+				element = hydrating ? element : create_element(next_tag, ns);
+				assign_nodes(element, element);
+				if (render_fn) {
+					var tmp_comment = null;
+					if (hydrating && is_raw_text_element(next_tag)) element.append(tmp_comment = document.createComment(""));
+					var child_anchor = hydrating ? /* @__PURE__ */ get_first_child(element) : element.appendChild(create_text());
+					if (hydrating) {
+						if (child_anchor === null) set_hydrating(false);
+						else set_hydrate_node(child_anchor);
+					}
+					render_fn(element, child_anchor);
+					tmp_comment?.remove();
+				}
+				/** @type {Effect & { nodes: EffectNodes }} */ active_effect.nodes.end = element;
+				if (!is_hydrating) anchor.before(element);
+			}
+			if (hydrating) set_hydrate_node(anchor);
+		});
+		return () => {
+			if (next_tag);
+		};
+	}, EFFECT_TRANSPARENT);
+	teardown(() => {});
+	if (was_hydrating) {
+		set_hydrating(true);
+		set_hydrate_node(anchor);
+	}
+}
 // node_modules/.deno/svelte@5.57.3/node_modules/svelte/src/internal/client/dom/css.js
 /**
 * @param {Node} anchor
@@ -5156,6 +5336,73 @@ function rest_props(props, exclude, name) {
 	}, rest_props_handler);
 }
 /**
+* The proxy handler for spread props. Handles the incoming array of props
+* that looks like `() => { dynamic: props }, { static: prop }, ..` and wraps
+* them so that the whole thing is passed to the component as the `$$props` argument.
+* @type {ProxyHandler<{ props: Array<Record<string | symbol, unknown> | (() => Record<string | symbol, unknown>)> }>}}
+*/
+var spread_props_handler = {
+	get(target, key) {
+		let i = target.props.length;
+		while (i--) {
+			let p = target.props[i];
+			if (is_function(p)) p = p();
+			if (typeof p === "object" && p !== null && key in p) return p[key];
+		}
+	},
+	set(target, key, value) {
+		let i = target.props.length;
+		while (i--) {
+			let p = target.props[i];
+			if (is_function(p)) p = p();
+			const desc = get_descriptor(p, key);
+			if (desc && desc.set) {
+				desc.set(value);
+				return true;
+			}
+		}
+		return false;
+	},
+	getOwnPropertyDescriptor(target, key) {
+		let i = target.props.length;
+		while (i--) {
+			let p = target.props[i];
+			if (is_function(p)) p = p();
+			if (typeof p === "object" && p !== null && key in p) {
+				const descriptor = get_descriptor(p, key);
+				if (descriptor && !descriptor.configurable) descriptor.configurable = true;
+				return descriptor;
+			}
+		}
+	},
+	has(target, key) {
+		if (key === STATE_SYMBOL || key === LEGACY_PROPS) return false;
+		for (let p of target.props) {
+			if (is_function(p)) p = p();
+			if (p != null && key in p) return true;
+		}
+		return false;
+	},
+	ownKeys(target) {
+		/** @type {Array<string | symbol>} */
+		const keys = [];
+		for (let p of target.props) {
+			if (is_function(p)) p = p();
+			if (!p) continue;
+			for (const key in p) if (!keys.includes(key)) keys.push(key);
+			for (const key of Object.getOwnPropertySymbols(p)) if (!keys.includes(key)) keys.push(key);
+		}
+		return keys;
+	}
+};
+/**
+* @param {Array<Record<string, unknown> | (() => Record<string, unknown>)>} props
+* @returns {any}
+*/
+function spread_props(...props) {
+	return new Proxy({ props }, spread_props_handler);
+}
+/**
 * This function is responsible for synchronizing a possibly bound prop with the inner component state.
 * It is used whenever the compiler sees that the component writes to the prop, or when it has a default prop_value.
 * @template V
@@ -5291,4 +5538,4 @@ var CLIENTS = [
 ];
 /** The lock's lifeline in the sequence diagram; each client has its own, named after it. */
 var LOCK = "the lock";
-export { template_effect as A, push as B, comment as C, delegate as D, text as E, sibling as F, set as I, state as L, child as M, first_child as N, delegated as O, only_child as P, user_derived as R, append as S, from_svg as T, reset as V, index as _, prop as a, set_text as b, bind_element_size as c, set_attribute as d, set_style as f, each as g, snippet as h, onMount as i, user_effect as j, get as k, CLASS as l, append_styles$1 as m, LOCK as n, rest_props as o, set_class as p, at as r, bind_this as s, CLIENTS as t, attribute_effect as u, if_block as v, from_html as w, unmount as x, mount as y, pop as z };
+export { delegate as A, proxy as B, set_text as C, from_html as D, comment as E, user_effect as F, pop as G, state as H, child as I, reset as J, push as K, first_child as L, get as M, untrack as N, from_svg as O, template_effect as P, only_child as R, mount as S, append as T, user_derived as U, set as V, getContext as W, noop as X, fallback as Y, to_array as Z, component as _, prop as a, index as b, bind_this as c, attribute_effect as d, set_attribute as f, element as g, append_styles$1 as h, onMount as i, delegated as j, text as k, bind_element_size as l, set_class as m, LOCK as n, rest_props as o, set_style as p, next as q, at as r, spread_props as s, CLIENTS as t, CLASS as u, snippet as v, unmount as w, if_block as x, each as y, sibling as z };

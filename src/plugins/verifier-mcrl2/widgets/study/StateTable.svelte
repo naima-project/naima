@@ -1,8 +1,7 @@
 <!-- A model's state, readable: one row per variable, grouped as its author grouped them, each with the author's words on
      what it is. A function is drawn as the few keys where it is not its default, a list as its items, a value as itself;
      what the last step changed is marked, its old value beside it. A filter and a switch for the changed ones; a row opens
-     on click to show its whole value. One of the widget set the Models tab, every study's view and the main UI share
-     (develop/models-tab.md §13); a table of data is the same widget with other rows. -->
+     on click to show its whole value. One of the widget set; a table of data is the same widget with other rows. -->
 <script module lang="ts">
   export interface StateRow {
     name: string;
@@ -122,19 +121,19 @@
     align-items: center;
   }
   .find {
-    flex: 1;
-    min-inline-size: calc(var(--size-target) * 6);
+    flex: 1 1 calc(var(--size-target) * 6);
+    min-inline-size: 0;
     min-block-size: var(--size-target);
     padding: var(--space-none) var(--space-md);
     font: inherit;
     font-size: var(--font-size-sm);
     color: var(--color-text);
-    background: color-mix(in srgb, var(--color-surface-sunken) 70%, transparent);
-    border: var(--border-width-thin) solid color-mix(in srgb, var(--color-border-strong) 50%, transparent);
+    background: var(--color-surface-soft);
+    border: var(--border-width-thin) solid var(--color-border-soft);
     border-radius: var(--radius-full);
   }
-  .find:focus {
-    outline: none;
+  .find:focus-visible {
+    outline: var(--border-width-focus) solid var(--color-focus);
     border-color: var(--color-accent);
   }
   .switch {
@@ -147,8 +146,11 @@
     font-size: var(--font-size-xs);
     color: var(--color-text-muted);
     background: none;
-    border: none;
+    border: var(--border-width-thin) solid transparent;
     cursor: pointer;
+  }
+  .switch:focus-visible {
+    outline: var(--border-width-focus) solid var(--color-focus);
   }
   .knob {
     position: relative;
@@ -195,10 +197,13 @@
     color: var(--color-text-muted);
     background: var(--color-surface-raised);
   }
+  /* The name and the value side by side, two shares and three, until there is not room for both: then one over the other. */
   .row {
-    display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
-    gap: var(--space-md);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs) var(--space-md);
+    align-content: center;
+    min-block-size: var(--size-target);
     padding: var(--space-xs) var(--space-sm);
     border-radius: var(--radius-sm);
     cursor: pointer;
@@ -206,13 +211,22 @@
   }
   .row:hover,
   .row:focus-visible {
-    background: color-mix(in srgb, var(--color-accent) 7%, transparent);
-    outline: none;
+    background: var(--color-accent-tint);
+  }
+  .row:focus-visible {
+    outline: var(--border-width-focus) solid var(--color-focus);
+    outline-offset: calc(-1 * var(--border-width-focus));
   }
   .row.ch {
-    background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+    background: var(--color-accent-tint);
+  }
+  /* On the tint of a changed row, or of the row under the pointer, the quiet words are the page's own ink. */
+  .row.ch :is(.sort, .note, .was, .k:not(.kch), .quiet, .more),
+  .row:hover :is(.sort, .note, .was, .k:not(.kch), .quiet, .more) {
+    color: var(--color-text);
   }
   .name {
+    flex: 2 1 var(--size-w-8);
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
@@ -235,7 +249,6 @@
     font-family: var(--font-family-mono);
     font-size: var(--font-size-2xs);
     color: var(--color-text-muted);
-    opacity: 0.75;
   }
   .note {
     flex-basis: 100%;
@@ -243,19 +256,21 @@
     line-height: var(--font-line-height-normal);
     color: var(--color-text-muted);
   }
-  .row:not(.open) .note {
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    line-clamp: 1;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
   .value {
+    flex: 3 1 var(--size-w-12);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-none) var(--space-sm);
     min-inline-size: 0;
     font-family: var(--font-family-mono);
     font-size: var(--font-size-xs);
     color: var(--color-text);
     overflow-wrap: anywhere;
+  }
+  .map,
+  .items {
+    flex: 1 1 100%;
   }
   .map {
     display: grid;
@@ -280,20 +295,49 @@
   .item {
     padding: var(--space-none) var(--space-xs);
     border-radius: var(--radius-sm);
-    background: color-mix(in srgb, var(--color-surface-sunken) 70%, transparent);
+    background: var(--color-surface-soft);
   }
   .quiet,
   .more {
     color: var(--color-text-muted);
-    opacity: 0.75;
   }
   .was {
-    margin-inline-start: var(--space-sm);
     color: var(--color-text-muted);
     text-decoration: line-through;
   }
   .empty {
     padding: var(--space-md);
     font-family: var(--font-family-body);
+  }
+  /* With more contrast asked for, the quiet words are the page's own ink and the tint under a row gives way to its edge. */
+  @media (prefers-contrast: more) {
+    .sort,
+    .note,
+    .k,
+    .quiet,
+    .more,
+    .was,
+    .section,
+    .switch {
+      color: var(--color-text);
+    }
+    .row:hover,
+    .row.ch {
+      background: none;
+    }
+    .row.ch {
+      outline: var(--border-width-thin) solid var(--color-text);
+    }
+    .item {
+      background: none;
+      outline: var(--border-width-thin) solid var(--color-border-strong);
+    }
+  }
+  @media (pointer: coarse) {
+    .find,
+    .switch,
+    .row {
+      min-block-size: var(--size-control);
+    }
   }
 </style>

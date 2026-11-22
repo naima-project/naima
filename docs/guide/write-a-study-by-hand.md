@@ -312,7 +312,7 @@ The frame receives Naima's design tokens as CSS custom properties, such as `--co
 
 The widgets the tab itself is drawn with form a library your view can import as `@naima/study/…`: `Mosaic.svelte` (cards tiling the window, which the tab itself
 uses; a view declared in parts needs no layout of its own), `Graph.svelte` (a graph laid out by itself), `Timeline.svelte` and `Sequence.svelte` (a UML sequence
-diagram). They are in Naima at `src/plugins/verifier-mcrl2/widgets/study/`. The build finds them through an alias in `view/vite.config.ts`. The example lives
+diagram). They are the UI stance's widgets, and Naima ships them at `src/plugins/verifier-mcrl2/widgets/study/`. The build finds them through an alias in `view/vite.config.ts`. The example lives
 inside Naima, so its alias points four folders up; in your project, point it at the Naima you use.
 
 ```ts
