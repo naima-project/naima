@@ -174,7 +174,17 @@ export function runGitAsync(cwd: string, args: string[], timeoutMs: number): Pro
       clearTimeout(timer)
       done(r)
     }
+    const t0 = performance.now() // TEMPORARY trace, removed with the profile
     const child = spawn("git", args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] })
+    child.once(
+      "close",
+      () =>
+        (globalThis as { __gitTrace?: unknown[][] }).__gitTrace?.push([
+          cwd.slice(-24),
+          "ASYNC " + args.slice(0, 5).join(" ").slice(0, 63),
+          Math.round(performance.now() - t0),
+        ]),
+    )
     const timer = setTimeout(() => {
       child.kill("SIGKILL")
       finish({ ok: false, out: "", err: `no answer within ${Math.round(timeoutMs / 1000)} s`, notInstalled: false })
