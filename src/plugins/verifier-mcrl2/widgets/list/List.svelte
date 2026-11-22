@@ -8,7 +8,10 @@
      open the row they reach, as a mail app's list beside the message open; back from the item, the keyboard is on the row
      that was open. The cursor moves as models/list/list.mcrl2 says (list.ts). Layout is CSS only: each kind
      of column has a width of its own, the same in every row, and a group off the screen is not drawn (content-visibility), its height
-     reckoned from its count. One of the widget set, beside
+     reckoned from its count. Quiet (`quiet`), its controls fold into one status line of words ("267 items · no filter
+     · not grouped · as listed"), each part a quiet link, the slice the list was opened on first (`slice`); a small
+     search glyph opens the search in place, and Adjust unfolds every control (the filters, the grouping, the sort, the
+     columns) in a sheet under the line. One of the widget set, beside
      Action and Segmented. -->
 <script lang="ts" generics="T">
   import { tick } from "svelte";
@@ -61,6 +64,10 @@
     mark?: (item: T) => string | undefined;
     /** Words said when nothing is kept: "No bug matches". */
     nothing?: string;
+    /** The controls folded into one status line of words, unfolded by Adjust. */
+    quiet?: boolean;
+    /** What the list was opened on, said first on the status line: "bugs · waiting for you". */
+    slice?: string;
   }
   let {
     items,
@@ -73,6 +80,8 @@
     onclose,
     mark,
     nothing = "Nothing matches",
+    quiet = false,
+    slice = "",
   }: Props = $props();
 
   /** Each kind of column's track: the title takes the room left, the others a width of their own (a token), the same in
@@ -153,7 +162,8 @@
         return;
       case "/":
         e.preventDefault();
-        search?.focus();
+        if (quiet && !narrow) void openSearch();
+        else search?.focus();
         return;
     }
   }
@@ -180,11 +190,32 @@
   const sortOptions = $derived([{ value: "", label: "As listed" }, ...spec.columns.map((c) => ({ value: c.id, label: c.label }))]);
   const groupOptions = $derived([{ value: "", label: "None" }, ...(spec.groupings ?? []).map((g) => ({ value: g.id, label: g.label }))]);
   const optional = $derived(spec.columns.filter((c) => c.optional || c.width !== "grow"));
+  // ---- Quiet: the status line, its sheet of controls and its search in place.
+  let adjusting = $state(false);
+  let searching = $state(false);
+  const lower = (w: string) => w.charAt(0).toLowerCase() + w.slice(1);
+  const counted = $derived(model.shown === model.total ? `${model.total} ${model.total === 1 ? "item" : "items"}` : `${model.shown} of ${model.total}`);
+  const filterWords = $derived(
+    model.facets.flatMap((f) => f.chips.filter((c) => c.on).map((c) => lower(c.label))).join(", ") || "no filter",
+  );
+  const groupWords = $derived.by(() => {
+    const g = (spec.groupings ?? []).find((x) => x.id === view.group);
+    return g ? `grouped by ${lower(g.label)}` : "not grouped";
+  });
+  const sortWords = $derived.by(() => {
+    const c = spec.columns.find((x) => x.id === view.sort);
+    return c ? `sorted by ${lower(c.label)}${view.desc ? ", descending" : ""}` : "as listed";
+  });
+  async function openSearch() {
+    searching = true;
+    await tick();
+    search?.focus();
+  }
   const ariaSort = (c: Column<T>) => (view.sort === c.id ? (view.desc ? "descending" : "ascending") : undefined);
 </script>
 
 <section class="list" class:narrow aria-label={label} data-part="list">
-  <div class="bar">
+  {#snippet searchBox()}
     <label class="search">
       <Search class="glyph" aria-hidden="true" />
       <span class="hidden">Search {label}</span>
@@ -204,8 +235,91 @@
             void focus(entry);
           }
         }}
+        onblur={(e) => {
+          if (quiet && !e.currentTarget.value) searching = false;
+        }}
       />
     </label>
+  {/snippet}
+  {#snippet facetRows(all: boolean)}
+      {#each model.facets as f (f.id)}
+        {@const chips = all ? f.chips : f.chips.filter((c) => c.on)}
+        {#if chips.length}
+          <div class="facet" role="group" aria-label={f.label}>
+            <span class="flabel">{f.label}</span>
+            {#each chips as c (c.value)}
+              <button class="chip" class:on={c.on} type="button" aria-pressed={c.on} disabled={!c.on && c.count === 0} onclick={() => (view = toggleFilter(view, c.facet, c.value))}>
+                {c.label}<span class="n">{c.count}</span>
+              </button>
+            {/each}
+          </div>
+        {/if}
+      {/each}
+  {/snippet}
+  {#if quiet && !narrow}
+    <!-- Quiet: one status line of words, each a way to the controls; the search a small glyph that opens in place. -->
+    <div class="status" data-part="list-status">
+      {#if searching || view.search}
+        {@render searchBox()}
+      {:else}
+        <button class="st-glyph" type="button" aria-label="Search {label} (/)" title="Search (/)" onclick={openSearch}><Search class="glyph" aria-hidden="true" /></button>
+      {/if}
+      <p class="st-line" aria-live="polite">
+        {#if slice}<span class="st-slice">{slice}</span><span class="st-sep" aria-hidden="true">·</span>{/if}
+        <span class="st-count">{counted}</span>
+        {#if spec.facets?.length}<span class="st-sep" aria-hidden="true">·</span><button class="st-part" type="button" aria-label="Filters: {filterWords}. Adjust" onclick={() => (adjusting = true)}>{filterWords}</button>{/if}
+        {#if spec.groupings?.length}<span class="st-sep" aria-hidden="true">·</span><button class="st-part" type="button" aria-label="{groupWords}. Adjust" onclick={() => (adjusting = true)}>{groupWords}</button>{/if}
+        <span class="st-sep" aria-hidden="true">·</span><button class="st-part" type="button" aria-label="{sortWords}. Adjust" onclick={() => (adjusting = true)}>{sortWords}</button>
+      </p>
+      <button class="st-adjust" type="button" data-part="list-adjust" aria-expanded={adjusting} onclick={() => (adjusting = !adjusting)}>
+        <SlidersHorizontal class="glyph" aria-hidden="true" />{adjusting ? "Done" : "Adjust"}
+      </button>
+    </div>
+    {#if adjusting}
+      <!-- The sheet: every control the line stands for, the filters with every value and its count. -->
+      <div class="sheet" data-part="list-sheet">
+        <div class="bar">
+    {#if !narrow}
+      {#if spec.groupings?.length}
+        <Segmented label="Group by" options={groupOptions} value={view.group} onchange={(g) => (view = regroup(view, g))} />
+      {/if}
+      <label class="pick">
+        <span>Sort</span>
+        <select
+          value={view.sort ?? ""}
+          onchange={(e) => {
+            const c = spec.columns.find((x) => x.id === e.currentTarget.value);
+            view = c ? { ...view, sort: c.id, desc: !!c.descFirst } : { ...view, sort: null, desc: false };
+          }}
+        >
+          {#each sortOptions as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
+        </select>
+        {#if view.sort}
+          <button class="dir" type="button" aria-label={view.desc ? "Descending: make it ascending" : "Ascending: make it descending"} onclick={() => (view = { ...view, desc: !view.desc })}>{view.desc ? "↓" : "↑"}</button>
+        {/if}
+      </label>
+      <details class="columns">
+        <summary>Columns</summary>
+        <fieldset>
+          <legend class="hidden">Columns shown</legend>
+          {#each optional as c (c.id)}
+            <label><input type="checkbox" checked={model.columns.some((x) => x.id === c.id)} onchange={() => (view = toggleColumn(view, c.id))} /> {c.label}</label>
+          {/each}
+        </fieldset>
+      </details>
+    {/if}
+        </div>
+        {#if spec.facets?.length}
+          <div class="facets" role="group" aria-label="Filters">
+            {@render facetRows(true)}
+            {#if filtersOn(view)}<Action label="Clear filters" icon={X} size="sm" onclick={() => (view = clearFilters(view))} />{/if}
+          </div>
+        {/if}
+      </div>
+    {/if}
+  {:else}
+  <div class="bar">
+    {@render searchBox()}
     {#if !narrow}
       {#if spec.facets?.length}
         <Action
@@ -250,21 +364,10 @@
 
   {#if !narrow && (filtering || filtersOn(view))}
     <div class="facets" role="group" aria-label="Filters">
-      {#each model.facets as f (f.id)}
-        {@const chips = filtering ? f.chips : f.chips.filter((c) => c.on)}
-        {#if chips.length}
-          <div class="facet" role="group" aria-label={f.label}>
-            <span class="flabel">{f.label}</span>
-            {#each chips as c (c.value)}
-              <button class="chip" class:on={c.on} type="button" aria-pressed={c.on} disabled={!c.on && c.count === 0} onclick={() => (view = toggleFilter(view, c.facet, c.value))}>
-                {c.label}<span class="n">{c.count}</span>
-              </button>
-            {/each}
-          </div>
-        {/if}
-      {/each}
+      {@render facetRows(filtering)}
       {#if filtersOn(view)}<Action label="Clear filters" icon={X} size="sm" onclick={() => (view = clearFilters(view))} />{/if}
     </div>
+  {/if}
   {/if}
 
   <!-- svelte-ignore a11y_interactive_supports_focus -->
@@ -473,6 +576,105 @@
     margin-inline-start: auto;
     color: var(--color-text-muted);
     font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- Quiet: the status line, words in the muted grey, each part darker under a pointer; Adjust at its end. */
+  .status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-xs) var(--space-md);
+    min-block-size: var(--size-target);
+    color: var(--color-text-muted);
+  }
+  .status .search {
+    flex: 0 1 var(--size-w-16);
+  }
+  .st-line {
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 var(--space-sm);
+    margin: 0;
+    min-inline-size: 0;
+  }
+  .st-slice,
+  .st-count {
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+  }
+  .st-sep {
+    color: var(--color-border-strong);
+  }
+  .st-part,
+  .st-glyph,
+  .st-adjust {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    min-block-size: var(--size-target);
+    padding: 0;
+    border: var(--border-width-thin) solid transparent;
+    border-radius: var(--radius-sm);
+    background: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-thickness: var(--border-width-thin);
+    text-decoration-color: transparent;
+    text-underline-offset: var(--space-xs);
+  }
+  .st-glyph {
+    justify-content: center;
+    min-inline-size: var(--size-target);
+  }
+  .st-glyph :global(.glyph),
+  .st-adjust :global(.glyph) {
+    inline-size: var(--size-icon);
+    block-size: var(--size-icon);
+  }
+  .st-adjust {
+    margin-inline-start: auto;
+    text-decoration: none;
+  }
+  @media (hover: hover) {
+    .st-part:hover,
+    .st-glyph:hover,
+    .st-adjust:hover {
+      color: var(--color-text);
+      text-decoration-color: var(--color-border-strong);
+    }
+  }
+  .st-part:focus-visible,
+  .st-glyph:focus-visible,
+  .st-adjust:focus-visible {
+    outline: var(--border-width-focus) solid var(--color-focus);
+  }
+  .st-adjust[aria-expanded="true"] {
+    color: var(--color-text);
+  }
+  /* The sheet: the controls on the page's raised ground, a hairline around, unfolding under the line. */
+  .sheet {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    padding: var(--space-md) var(--space-lg);
+    border: var(--border-width-thin) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-raised);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .sheet {
+      animation: sheet var(--motion-duration-normal) var(--motion-easing-standard);
+    }
+  }
+  @keyframes sheet {
+    from {
+      opacity: 0;
+      transform: translateY(calc(var(--space-xs) * -1));
+    }
   }
 
   /* ---- The filters: one line a facet, its values as chips with their counts. */
