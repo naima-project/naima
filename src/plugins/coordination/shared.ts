@@ -17,6 +17,7 @@
 import { relative } from "node:path"
 import { type Context, gitOrNull, gitReason, isAncestor, runGit, TRANSFER_LIMIT_MS, transferEnv, trunk, worktrees } from "../../core/api.ts"
 import { gateOfLine, lineBranch, lineOf, openLines } from "./lines.ts"
+import { dropLandedRemote } from "./remote-branches.ts"
 
 /** The coordination option naming the remote several people's coordinators share. */
 export const SHARED_REMOTE = "sharedRemote"
@@ -129,6 +130,7 @@ export async function landShared(ctx: Context, remote: string, branch: string, l
     const pushed = pushShared(ctx, remote, target, after)
     if (pushed.ok) {
       ctx.out(`pushed ${target} to ${remote}: ${after.slice(0, 12)}`)
+      dropLandedRemote(ctx, remote, branch)
       return 0
     }
     if (!pushed.refused) {
