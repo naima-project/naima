@@ -19,11 +19,12 @@ import {
   usageError,
   writeJson,
 } from "../../core/api.ts"
+import { startDue } from "./check-plan.ts"
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v)
 
 /** Set (or, with undefined, remove) coordination options in naima.json, as the next load reads them. */
-function writeOptions(ctx: Context, set: Record<string, string | undefined>): void {
+function writeOptions(ctx: Context, set: Record<string, string | boolean | undefined>): void {
   const file = join(ctx.trackerRoot, DATA_FILE)
   const raw = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>
   const plugins = isObject(raw["plugins"]) ? raw["plugins"] : {}
@@ -49,13 +50,24 @@ export const heavyChecksCommand: Command = {
     "show or record when and where heavy checks run (a browser, a test suite, model checking): at every landing, at a checkpoint, only on demand, or never; Naima asks the owner first and runs none until the project has answered",
   enforces:
     "the answer is the owner's: an agent records it only after the owner chose; a project with a heavy check and no answer gets the question, never a run; the answer says where (this machine or a declared host) and how often, and `off` turns every heavy check off, which every start of one honours",
-  usage: "heavy-checks [landing | checkpoint | demand --host <name | here> | off]",
+  usage: "heavy-checks [landing | checkpoint | demand --host <name | here> | off | pause | resume]",
   options: [{ name: "--host", says: "with landing, checkpoint or demand: the declared host the heavy checks run on, or `here` for this machine" }],
-  examples: ["heavy-checks", "heavy-checks checkpoint --host here", "heavy-checks demand --host <host>", "heavy-checks off"],
-  run(args, ctx) {
+  examples: ["heavy-checks", "heavy-checks checkpoint --host here", "heavy-checks demand --host <host>", "heavy-checks off", "heavy-checks pause"],
+  async run(args, ctx) {
     const p = parse(args, { host: { type: "string" } })
     const [when, ...rest] = p.positionals
     const host = str(p, "host")?.trim()
+    // A pause holds every planned checkpoint and background run, and stops the one going without a result; resume lets them go on.
+    if (when === "pause" || when === "resume") {
+      if (rest.length || host !== undefined) throw usageError(this)
+      writeOptions(ctx, { heavyChecksPaused: when === "pause" ? true : undefined })
+      ctx.reload()
+      if (when === "pause") {
+        for (const l of await startDue(ctx, { paused: true })) if (l.startsWith("stopped")) ctx.out(l)
+        ctx.out("heavy checks are paused: none starts, and the one going has stopped without a result; naima heavy-checks resume lets them go on")
+      } else ctx.out("heavy checks go on: the point that is due starts when the place they run is idle")
+      return 0
+    }
     if (rest.length || (when !== undefined && !HEAVY_WHEN.includes(when as HeavyWhen))) throw usageError(this)
     if (when === undefined) {
       const a = heavyAnswer(ctx)
@@ -66,7 +78,7 @@ export const heavyChecksCommand: Command = {
             a.how === "recorded" ? "recorded" : "implied by the project's check options"
           })`,
         )
-        if (a.when !== "off") ctx.out("naima heavy-checks off turns them off")
+        if (a.when !== "off") ctx.out("naima heavy-checks off turns them off; naima heavy-checks pause holds them for a while")
       }
       return 0
     }

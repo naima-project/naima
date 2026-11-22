@@ -56,6 +56,7 @@ import {
   owedTrailer,
   ownIdentity,
   parse,
+  planActive,
   privateContext,
   progressFor,
   projectHosts,
@@ -82,6 +83,7 @@ import {
 } from "../../core/api.ts"
 import { changeNoteTrailers, NO_CHANGE_NOTE } from "./changes.ts"
 import { guardLandingMessages } from "./messages.ts"
+import { startDue } from "./check-plan.ts"
 import { CLAIMS } from "./index.ts"
 import { keepSubmoduleCommits, plural } from "./worktrees.ts"
 import { abandonedLineOf, fixedOnLine, FIXES, gateOfLine, lineBranch, lineOf, lineWorkIn, openLines, SYNC, SYNC_PREFIX, UNFIXES, unlanded } from "./lines.ts"
@@ -1103,7 +1105,7 @@ async function landBoth(
   const subs = cm ? (gitOrNull(ctx.root, "diff-tree", "-r", "--no-commit-id", code.old, cm) ?? "").split("\n").filter((l) => /^:\d+ 160000 /.test(l)) : []
   if (subs.length) ctx.out(`${plural(subs.length, "submodule")} moved: git submodule update --init`)
   ctx.out(nextAfterLanding(branch))
-  await goalReached(ctx, branch)
+  await goalReached(ctx, branch, ids)
   return 0
 }
 
@@ -1162,6 +1164,8 @@ export async function landOnLine(ctx: Context, branch: string, gate: string, clo
   )
   if (sync && branch === `${SYNC_PREFIX}${gate}`) return removeSync(ctx, branch, line)
   ctx.out(nextAfterLanding(branch))
+  // The landing that crosses a threshold of the line's milestone starts its checkpoint (in the line's checkout).
+  await planAfterLanding(ctx, [gate])
   return 0
 }
 
@@ -1333,9 +1337,34 @@ const closingLine = (items: Landed[], trackerOnly: string | undefined, met: read
  * A line landing on the trunk is its goal reached: in checkpoint mode that runs the checkpoint for the gate. The landing
  * stands whatever the checkpoint finds; a failure is recorded, says so, and blocks the gate.
  */
-async function goalReached(ctx: Context, branch: string): Promise<void> {
+async function goalReached(ctx: Context, branch: string, ids: readonly string[] = []): Promise<void> {
   const gate = gateOfLine(branch)
   if (gate) await checkpointAfter(ctx, gate)
+  else await planAfterLanding(ctx, gatesOfItems(ctx, ids))
+}
+
+/** The gates the items name, read by name (the gates plugin owns the field). */
+function gatesOfItems(ctx: Context, ids: readonly string[]): string[] {
+  ctx.reload()
+  const out = new Set<string>()
+  for (const id of ids) {
+    const g = ctx.repo.byId.get(id)?.meta["gate"]
+    for (const v of Array.isArray(g) ? g : g === undefined ? [] : [g]) if (typeof v === "string") out.add(v)
+  }
+  return [...out]
+}
+
+/**
+ * After a landing, in a project that plans its heavy checks: the planned point a landing's items cross starts now, detached
+ * (naima check-plan --start), so the landing never waits for it. Whatever it finds is said; the landing stands.
+ */
+async function planAfterLanding(ctx: Context, gates: readonly string[]): Promise<void> {
+  if (!planActive(ctx)) return
+  try {
+    for (const l of await startDue(ctx, { crossed: gates })) ctx.out(`check plan: ${l}`)
+  } catch (e) {
+    ctx.out(`check plan: not started — ${e instanceof Error ? e.message : String(e)}`)
+  }
 }
 
 const nextAfterLanding = (branch: string): string => `next: naima prune --branch ${branch} --write`
@@ -1688,7 +1717,7 @@ export const land: Command = {
     const subs = (gitOrNull(ctx.root, "diff-tree", "-r", "--no-commit-id", old, marker) ?? "").split("\n").filter((l) => /^:\d+ 160000 /.test(l))
     if (subs.length) ctx.out(`${plural(subs.length, "submodule")} moved: git submodule update --init`)
     ctx.out(nextAfterLanding(branch))
-    await goalReached(ctx, branch)
+    await goalReached(ctx, branch, items.map((i) => i.id))
     return 0
   },
 }
