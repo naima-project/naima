@@ -1,1 +1,0 @@
-import{oi as e,si as t}from"./chevron-right-C75edB50.js";import{t as n}from"./Segmented-BvVSff41.js";var r=new Set([`$$slots`,`$$events`,`$$legacy`]);function i(i,a){let o=e(a,r);n(i,t(()=>o))}export{i as t};
