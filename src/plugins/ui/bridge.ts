@@ -3,12 +3,13 @@
 // Naima's; the stance defines only the carriers, and its request handler (bridge-handler.ts) is copied unchanged.
 //
 //   describe                       the project, and the actions the UI may run
-//   data {view, at?, query?}       a `ui-views` view's data, what its command prints with --json; with `at`, as that
+//   data {view, at?, line?, query?} a `ui-views` view's data, what its command prints with --json; with `at`, as that
 //                                  commit had it (at.ts), or, for a view that places a commit itself, about that commit;
 //                                  `query` gives the view its parameters, such as the metric and the commit of the
-//                                  record of a metric's run (the metrics plugin's metric-run)
+//                                  record of a metric's run (the metrics plugin's metric-run); with `line` (a development
+//                                  line's gate), as the tip of that open line has it, as `at` does, which wins over it
 //   tabs                           the tabs plugins contribute to the new UI, each with its subtabs
-//   tab {name, sub?, at?, query?}  what a tab shows for a subtab at the moment: a component's data, the address of a
+//   tab {name, sub?, at?, line?, query?}  what a tab shows for a subtab at the moment: a component's data, the address of a
 //                                  page of its folder, or a page it makes, as a whole HTML document the app frames
 //   studies                        the Models tab's studies of the project, each declared by a `%@ui` block of a `.mcrl2`
 //                                  file (studies.ts): { studies: [{ id, file, title, says, model, stepper, observer, view,
@@ -273,6 +274,18 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
     }
     return atCache.get(ctx, commitOf(ctx, at))
   }
+  /** The tip of the open development line whose gate is `gate`, as a commit: what a read "on a line" is read at. A gate no open line has (the line landed meanwhile: its work is on the trunk) is read live. */
+  const tipOfLine = async (gate: string): Promise<string | null> => {
+    const lines = await viaViews<{ lines?: { gate: string; tip: string }[] }>(ctx, ["line", "list"])
+    return lines?.lines?.find((l) => l.gate === gate)?.tip ?? null
+  }
+  /** What a read is taken at: the commit named (`at`, which wins: a moment of the past), else the tip of the line chosen (`line`), else live (null). */
+  const readAt = async (args: { [key: string]: Json }): Promise<string | null> => {
+    const at = text(args["at"])
+    if (at !== null) return at
+    const line = text(args["line"])
+    return line === null ? null : await tipOfLine(line)
+  }
   /** What a tab shows, as the app takes it: every path of its folder made the address the carrier serves it at. */
   const shown = (tab: UiTab, sub: string | null, c: UiTabContent): Json => {
     const head = { tab: tab.name, sub }
@@ -318,7 +331,7 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       const name = text(args["view"])
       const view = opts.views.find((v) => v.name === name)
       if (!view) throw new Error(`no view ${String(args["view"])}`)
-      const at = text(args["at"])
+      const at = await readAt(args)
       const sha = at === null ? null : commitOf(ctx, at)
       const params: Record<string, string[]> = {}
       const q = args["query"]
@@ -345,7 +358,7 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       if (q && typeof q === "object" && !Array.isArray(q)) {
         for (const [k, v] of Object.entries(q)) if (typeof v === "string") query[k] = [v]
       }
-      const at = text(args["at"])
+      const at = await readAt(args)
       // Live, a tab is read as a view is: shared with the same read asked again, answered from the views' cache while the
       // project's stamp holds, and rendered off the serving thread, so that a slow tab (the summary takes seconds on a
       // large tracker) holds no other request and no file of the page.
