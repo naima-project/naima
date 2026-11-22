@@ -249,7 +249,8 @@ a sheet over the bottom of the page until you close it. It follows the time filt
 
 Home is one board under the bar, with little text, about what matters now. It fits the window, and the page itself never scrolls: the board is a header over a
 stage, the one place for details, described at the end of this section. At the top is the day, or, when the timeline shows a commit of the past, "As it was on"
-that day, with "Back to today". Then the goal nearest its expected date that still has work left: a ring with how much of it is done, its title, and one line
+that day, with "Back to today". Beside the day, a row of quiet words opens the other pages: Models, UI when the project declares it, then Bugs, Tests, Health
+and History, described in [The calm pages](#the-calm-pages). Then the goal nearest its expected date that still has work left: a ring with how much of it is done, its title, and one line
 with its expected date and how sure that date is, such as "Expected 2 January · 85% sure by 17 January" (its due date when there is no forecast yet). Beside it
 is a green dot for each agent at work, and how many there are in words. Under them are the goal's three numbers, always shown: the items left to do, the items
 of the goal the agents hold, and how many items closed a day lately. A click on the number left to do opens What's left of the goal in the stage.
@@ -474,15 +475,37 @@ do that no agent holds yet; then the chain of items waiting on each other that d
 row, then its state and who does it. An agent holding an item is named with its robot and the colour of its line in the Days panel: pointing at it lights that
 line, and clicking it lists what it holds on the goal.
 
+### The calm pages
+
+Bugs, Tests, Health and History are pages in Home's look, each opened by its word beside Home's day and kept at its own address (`#bugs`, `#failed_tests`,
+`#metrics`, `#diary`), so Back returns to Home. Each opens with the day, then a ring beside the page's title and one sentence saying how things stand. The
+ring is split into arcs by how things stand, with the number that matters at its centre, and only what waits for you is orange. Under a hairline comes the
+page's list, the same list as everywhere else, with its controls folded into one quiet line and Adjust. A click on a row, or Enter, opens it beside the list,
+which narrows to a column, and the page does not scroll.
+
+Bugs lists every bug by where it stands: what needs you, what to fix now, next, not sorted yet and later, then what is fixed and waiting to land or proven. Its
+ring counts the open bugs, and a line under the sentence says how many are fixed and how many were found and fixed this week. A bug opened beside the list says
+its release or goal, its age and who holds it, with a link to its own page.
+
+Tests lists the tests and properties that fail, those you run first at the top, and folds those that pass again this week. Its sentence is the same one Home's
+checks say. A test opened beside the list says since when it fails and when it last passed, what to do about it, and its runs over time. Under the list, the
+last 14 days day by day and every test's runs are one click away.
+
+History is the diary: what was decided and what changed the project, a day to a group, newest first, each moment with its hour and the day's routine in one
+quiet row. A choice under the sentence shows the moments, only what was decided with you, only what was finished, or everything. A moment opened beside the
+list is told whole, with the item it names and who worked on what that day. Earlier days come with "Show earlier days".
+
+Health is the metrics page, described next.
+
 ### Metrics
 
-Metrics shows the project's [metrics](metrics-and-budgets.md) at the moment the window shows. At the top are the key numbers, one card each: the value, its
-change, the date of its record and a small chart of its history. Live, a card shows the newest record and its change since the record before, named by that
-record's day ("+23 since 26 Oct"). Above the cards one sentence says whether the project is getting healthier: how many metrics got better, worse or stayed
-steady since the first day the charts show. At a commit of the past it shows the value then and its change against live, and says "recorded at this commit" or,
-when that commit has no record, "no record at this commit, nearest:" with the date of the last record at or before it, the one that holds then. Clicking a card
-shows its metric in the large chart below. Beside that chart is the list of every metric with its value, its change and a small chart; picking one shows it in
-the large chart. Every chart runs along the trunk's commits in order, labelled with their dates; a commit of the past is marked by an amber line, and a bound by
+Health shows the project's [metrics](metrics-and-budgets.md) at the moment the window shows. Its ring has an arc for the metrics getting better, one for those
+getting worse and one for the steady ones, and its sentence says whether the project is getting healthier: how many metrics got better, worse or stayed steady
+since the first day the charts show. Under it are the key numbers, as Home's numbers stand: the value, its name, its change, the date of its record and a small
+chart of its history. Live, a number shows the newest record and its change since the record before, named by that record's day ("+23 since 26 Oct"). At a commit of the past it shows the value then and its change against live, and says "recorded at this commit" or,
+when that commit has no record, "no record at this commit, nearest:" with the date of the last record at or before it, the one that holds then. Clicking a number
+shows its metric in the large chart below. Beside that chart is the list of every metric, grouped by what it measures, with its value; picking one shows it in
+the large chart, with what it means and how it is measured above it. Every chart runs along the trunk's commits in order, labelled with their dates; a commit of the past is marked by an amber line, and a bound by
 a dashed one. The range picks every commit or the last 500 or 100. Each chart has a text summary that screen readers read. Clicking a point of the large chart,
 or pressing Enter on the one the arrow keys are on, selects its commit, so the whole window shows that moment, and opens below the chart the record of the run
 that measured it: the value and whether it kept its bound, when it was recorded, and how it was taken. For a test suite's number that is the suite's run, with
@@ -497,8 +520,7 @@ records. Its data is the metrics view's, whose `timeline` places every record on
 the records as they are now, since a commit's own tree holds none of the records made after it. How the screen reads a moment is a small model of its own,
 checked like the shell's: an answer that arrives after the moment changed is dropped and the new moment read. So is Record metrics: it starts one recording at a
 time, asks for its run's state one request at a time and only while it runs, and reads again when it succeeded. The record of a point is the metrics plugin's
-metric-run view, which the bridge's `data` command reads with the metric and the commit as its query. At the end, one line says how many tests and properties
-fail and links to Failed tests, which lists them.
+metric-run view, which the bridge's `data` command reads with the metric and the commit as its query.
 
 The views of the earlier window are tabs: the summary, the gates, what is next, the claims, the boards, the session notes and each item with its evidence. Every
 view's data is the same data the matching command prints with `--json`, and the new interface reads it from there.
