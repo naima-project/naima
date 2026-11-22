@@ -1,0 +1,1 @@
+import{a as e,i as t}from"./index-client-X9JAE7ip.js";import{g as n}from"./App-Bl5MJ4YP.js";import"./disclose-version-BUmM5bS-.js";var r=new Set([`$$slots`,`$$events`,`$$legacy`]);function i(i,a){let o=t(a,r);n(i,e(()=>o))}export{i as t};

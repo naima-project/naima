@@ -1,0 +1,1 @@
+import{L as e,O as t,Z as n,b as r,nt as i,r as a,yt as o,z as s}from"./index-client-X9JAE7ip.js";import"./disclose-version-BUmM5bS-.js";var c=s(`<div><!></div>`);function l(s,l){let u=a(l,`gap`,3,`md`),d=a(l,`align`,3,`stretch`);var f=c(),p=i(f);t(p,()=>l.children),o(f),n(()=>r(f,1,`stack gap-${u()??``} align-${d()??``}`,`svelte-1382wtz`)),e(s,f)}export{l as t};
