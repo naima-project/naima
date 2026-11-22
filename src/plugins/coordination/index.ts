@@ -864,7 +864,11 @@ const prune: Command = {
     "the trunk is never pruned, and a branch with unmerged commits that no archive/<branch> tag holds is refused, and so is a worktree with anything uncommitted, inside its submodules too; a clean one is removed even when it holds a submodule; a branch on the remote is deleted only when its commit is the trunk's or an ancestor of it, never one with commits the trunk lacks, and a failure to delete is said, not fatal; nothing is removed without --write",
   usage: "prune [--write] | prune --branch <b> [--archive] [--write]",
   options: [
-    { name: "--write", says: "remove the stale claim files, the merged worker branches on the remote, or the branch with its worktree and remote copy, instead of listing what would go" },
+    {
+      name: "--write",
+      says:
+        "remove the stale claim files, the merged worker branches on the remote, or the branch with its worktree and remote copy, instead of listing what would go",
+    },
     { name: "--branch", says: "the branch to delete, with the worktree standing on it" },
     { name: "--archive", says: "tag the branch's commits as archive/<branch> before deleting it, so none is lost" },
   ],
@@ -878,7 +882,9 @@ const prune: Command = {
     const alive = allRefNames(ctx.trackerGit)
     const main = trunk(ctx.trackerGit)
     const stale = readClaims(ctx).map((c) => ({ c, why: staleReason(ctx, c, main, alive) })).filter((s) => s.why)
-    const remoteBranches = (): void => { for (const l of pruneRemote(ctx, write)) ctx.out(l) }
+    const remoteBranches = (): void => {
+      for (const l of pruneRemote(ctx, write)) ctx.out(l)
+    }
     if (!stale.length) {
       ctx.out("no stale claim: every claim names a live branch with open work")
       remoteBranches()

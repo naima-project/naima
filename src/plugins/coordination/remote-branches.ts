@@ -37,7 +37,8 @@ function trunkHolds(ctx: Context, remote: string, sha: string): boolean {
   const known = gitOrNull(ctx.root, "cat-file", "-e", `${sha}^{commit}`) !== null
   if (!known) return false
   return isAncestor(ctx.root, sha, `refs/heads/${main}`) ||
-    (gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `refs/remotes/${remote}/${main}`) !== null && isAncestor(ctx.root, sha, `refs/remotes/${remote}/${main}`))
+    (gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `refs/remotes/${remote}/${main}`) !== null &&
+      isAncestor(ctx.root, sha, `refs/remotes/${remote}/${main}`))
 }
 
 const isWorkerBranch = (ctx: Context, name: string): boolean =>
