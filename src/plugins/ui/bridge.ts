@@ -520,11 +520,10 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       // is theirs and each change records who ordered it, and the command it starts runs as a person's.
       const person = personAtKeyboard(ctx.root)?.name
       const by = person && !argv.includes("--by") ? ["--by", person] : []
-      const role = process.env["NAIMA_ROLE"]
-      process.env["NAIMA_ROLE"] = "person"
-      let started: Awaited<ReturnType<typeof runCommand>>
-      try {
-        started = await runCommand(ctx, [
+      // The command it starts runs as a person's: said to that command alone, never by changing this process's environment.
+      const started = await runCommand(
+        ctx,
+        [
           "run",
           run,
           "--budget-time",
@@ -532,11 +531,9 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
           ...(action.progress ? ["--stale", "10m"] : ["--stale", "1m", "--no-progress", "a naima command the UI ran, which prints its result when it ends"]),
           "--",
           ...actionCommand(opts.entry ?? naimaEntry(), ctx.trackerRoot, [...argv, ...by]),
-        ])
-      } finally {
-        if (role === undefined) delete process.env["NAIMA_ROLE"]
-        else process.env["NAIMA_ROLE"] = role
-      }
+        ],
+        { NAIMA_ROLE: "person" },
+      )
       if (started.code !== 0) throw new Error(started.err.trim() || started.out.trim() || `naima run exited with ${started.code}`)
       return json({ run, command: ["naima", ...argv] })
     },

@@ -312,7 +312,13 @@ async function start(ctx: Context, hosts: Map<string, Host>, cmd: Command, args:
   if (process.platform === "win32") {
     // A detached child stays in the job of an ssh session, and ends with it: WMI starts the supervisor outside it.
     const how = windowsLaunch(process.execPath, supervisorArgs("supervise", dir, [dir]), cwd)
-    const r = spawnSync(how.program, how.args, { cwd, env: callerEnv(process.env), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true })
+    const r = spawnSync(how.program, how.args, {
+      cwd,
+      env: callerEnv({ ...process.env, ...ctx.childEnv }),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    })
     if (r.status !== 0) {
       rmSync(dir, { recursive: true, force: true })
       throw refuse(`naima run: the supervisor could not be started through WMI — ${String(r.stderr || r.error?.message || `exit ${r.status}`).trim()}`)
@@ -323,7 +329,7 @@ async function start(ctx: Context, hosts: Map<string, Host>, cmd: Command, args:
     const errFd = openSync(join(dir, SUPERVISOR_ERR), "a")
     const child = spawn(process.execPath, supervisorArgs("supervise", dir, [dir]), {
       cwd,
-      env: callerEnv(process.env),
+      env: callerEnv({ ...process.env, ...ctx.childEnv }),
       detached: true,
       stdio: ["ignore", "ignore", errFd],
       windowsHide: true,

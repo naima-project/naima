@@ -128,12 +128,20 @@ export function selfEntry(env: Record<string, string | undefined> = process.env)
 export const actionCommand = (entry: readonly string[], data: string, argv: readonly string[]): string[] => [...entry, "--data", data, ...argv]
 
 /** Runs a naima command in this process, through the command the registry holds, and keeps what it prints. */
-export async function runCommand(ctx: Context, words: readonly string[]): Promise<{ code: number; out: string; err: string }> {
+export async function runCommand(
+  ctx: Context,
+  words: readonly string[],
+  childEnv?: Readonly<Record<string, string>>,
+): Promise<{ code: number; out: string; err: string }> {
   const cmd = ctx.registry.find<Command>("commands", words[0]!)?.value
   if (!cmd) return { code: 2, out: "", err: `no command ${words[0]}` }
   const out: string[] = []
   const err: string[] = []
-  const quiet = Object.create(ctx, { out: { value: (l = "") => void out.push(l) }, err: { value: (l = "") => void err.push(l) } }) as Context
+  const quiet = Object.create(ctx, {
+    out: { value: (l = "") => void out.push(l) },
+    err: { value: (l = "") => void err.push(l) },
+    ...(childEnv ? { childEnv: { value: { ...ctx.childEnv, ...childEnv } } } : {}),
+  }) as Context
   try {
     const code = await cmd.run(words.slice(1), quiet)
     return { code: typeof code === "number" ? code : 0, out: out.join("\n"), err: err.join("\n") }

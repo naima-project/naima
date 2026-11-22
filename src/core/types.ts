@@ -715,5 +715,8 @@ export interface Context {
   /** The command running, as typed: what an item's history records with each change (core/people.ts). */
   command?: string
   /** Who ordered this command's writes, from `--by`: a person's name, or `agent` for an agent's own change (core/people.ts). */
+  /** Variables the programs this command starts (naima run's supervised command) get besides the process's own: set for this
+   * command alone, where changing the process's environment would be seen by everything else the process starts meanwhile. */
+  childEnv?: Readonly<Record<string, string>>
   orderedBy?: string
 }
