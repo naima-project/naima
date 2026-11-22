@@ -112,6 +112,7 @@ import {
   timelineView,
 } from "./timeline.ts"
 import { recoverCommand } from "./recover.ts"
+import { dropBranchRemote, pruneRemote } from "./remote-branches.ts"
 import { readyLines, readyNow, readySection, readyWorkWaiting, workerLimitSection } from "./ready.ts"
 import {
   baseOf,
@@ -845,23 +846,25 @@ function pruneBranch(ctx: Context, branch: string, write: boolean, archive: bool
   const plan = sides.flatMap((s) => s.plan)
   if (!write) {
     ctx.out(`would ${plan.join(", ")} — run again with --write`)
+    for (const l of dropBranchRemote(ctx, branch, false)) ctx.out(l)
     return 0
   }
   for (const s of sides) s.run()
   const keptOn = sides.find((s) => s.keptOn)?.keptOn
   ctx.out(`did ${plan.join(", ")}${keptOn ? ` — its commits stay on ${keptOn}` : ""}`)
+  for (const l of dropBranchRemote(ctx, branch, true)) ctx.out(l)
   return 0
 }
 
 const prune: Command = {
   name: "prune",
   says:
-    "list (or with --write remove) stale claim files: their branch is gone, or is the trunk, or merged into the trunk that carries the file, or every item they claim is closed; one only another ref carries is listed with that ref, to be dropped there. With --branch, delete a branch and its worktree, refusing one with unmerged commits that no archive/<branch> tag holds",
+    "list (or with --write remove) stale claim files: their branch is gone, or is the trunk, or merged into the trunk that carries the file, or every item they claim is closed; one only another ref carries is listed with that ref, to be dropped there; and the worker branches on the remote (the shared remote, else origin) that the trunk holds, which --write deletes there. With --branch, delete a branch and its worktree, and its copy on the remote when the trunk holds it, refusing one with unmerged commits that no archive/<branch> tag holds",
   enforces:
-    "the trunk is never pruned, and a branch with unmerged commits that no archive/<branch> tag holds is refused, and so is a worktree with anything uncommitted, inside its submodules too; a clean one is removed even when it holds a submodule; nothing is removed without --write",
+    "the trunk is never pruned, and a branch with unmerged commits that no archive/<branch> tag holds is refused, and so is a worktree with anything uncommitted, inside its submodules too; a clean one is removed even when it holds a submodule; a branch on the remote is deleted only when its commit is the trunk's or an ancestor of it, never one with commits the trunk lacks, and a failure to delete is said, not fatal; nothing is removed without --write",
   usage: "prune [--write] | prune --branch <b> [--archive] [--write]",
   options: [
-    { name: "--write", says: "remove the stale claim files, or the branch and its worktree, instead of listing what would go" },
+    { name: "--write", says: "remove the stale claim files, the merged worker branches on the remote, or the branch with its worktree and remote copy, instead of listing what would go" },
     { name: "--branch", says: "the branch to delete, with the worktree standing on it" },
     { name: "--archive", says: "tag the branch's commits as archive/<branch> before deleting it, so none is lost" },
   ],
@@ -875,8 +878,11 @@ const prune: Command = {
     const alive = allRefNames(ctx.trackerGit)
     const main = trunk(ctx.trackerGit)
     const stale = readClaims(ctx).map((c) => ({ c, why: staleReason(ctx, c, main, alive) })).filter((s) => s.why)
+    const remoteBranches = (): void => { for (const l of pruneRemote(ctx, write)) ctx.out(l) }
     if (!stale.length) {
       ctx.out("no stale claim: every claim names a live branch with open work")
+      remoteBranches()
+      if (!write) ctx.out("nothing removed — run again with --write")
       return 0
     }
     // Only a file on this disk can be removed from here; one another ref carries is dropped on that ref.
@@ -889,9 +895,11 @@ const prune: Command = {
       ctx.out(`  ${c.branch}  ${holds(c)}  ${c.file}  on ${c.ref}: drop it there (git switch ${c.ref}, naima prune --write) — ${why(c)}`)
     }
     if (!write) {
+      remoteBranches()
       ctx.out("nothing removed — run again with --write")
       return 0
     }
+    remoteBranches()
     for (const c of here) unlinkSync(join(ctx.trackerRoot, CLAIMS, c.file))
     ctx.out(
       `removed ${here.length} here${elsewhere.length ? `; ${elsewhere.length} must be dropped on its ref` : ""} — commit the deletions ${commitOn(ctx.root)}`,
@@ -1609,7 +1617,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       {
         name: SHARED_REMOTE,
         says:
-          "the remote through which several people's coordinators share one trunk, such as origin: naima land then fetches, brings the trunk up to the remote's, merges it into the branch when the branch lacks it, lands and pushes at once, and lands again on the remote's new trunk when the push is refused, up to three times before it says the remote kept moving; naima claim and naima open commit and push the claim when they make it and say who else on the remote claims the same item. Unset, nothing is fetched or pushed. Not read for a tracker kept in a repository of its own",
+          "the remote through which several people's coordinators share one trunk, such as origin: naima land then fetches, brings the trunk up to the remote's, merges it into the branch when the branch lacks it, lands and pushes at once, and lands again on the remote's new trunk when the push is refused, up to three times before it says the remote kept moving; once the trunk is pushed, the landed branch's copy on the remote is deleted when the trunk holds it; naima claim and naima open commit and push the claim when they make it and say who else on the remote claims the same item. Unset, nothing is fetched or pushed. Not read for a tracker kept in a repository of its own",
       },
       { name: "diaryPerDay", says: "how many diary entries a day may hold before the check diary-entries notes it: a positive whole number", default: "5" },
       {

@@ -55,6 +55,9 @@ push. The landing is then undone on your machine and made again on the new trunk
 remote kept moving, and the branch is still there to land. When merging the trunk into the branch conflicts, Naima stops and
 names the files to settle.
 
+Once the trunk is pushed, the landed branch's copy on the remote is deleted when the trunk holds its commit. A branch with commits the trunk
+lacks is never deleted, and a failed delete is reported without undoing the landing.
+
 `naima claim` and `naima open` commit and push the claim as soon as they make it, so the other owners' agents see it. They read
 the remote's claims again after the push and tell you when someone else claims the same item. Claims never lock anything: two
 people may work on one item, and now they know it.

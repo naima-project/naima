@@ -239,7 +239,8 @@ there.
 
 ```sh
 naima prune --branch <who>/<what>             # what would go
-naima prune --branch <who>/<what> --write     # remove the worktree, delete the branch
+naima prune --branch <who>/<what> --write     # remove the worktree, delete the branch, and its remote copy when the trunk holds it
+naima prune --write                            # also deletes merged worker branches on the remote (origin, or sharedRemote)
 ```
 
 Run this from the main checkout. It refuses a branch that has commits the trunk lacks, unless an `archive/<branch>` tag holds them. It refuses a worktree with

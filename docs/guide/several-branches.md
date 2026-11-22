@@ -103,7 +103,7 @@ requirement needs a test (or another item) that verifies it and has passed, noth
 the branch is what made it pass. Otherwise nothing lands. The items the branch claimed or that `--closes` names are still closed, and a claimed requirement is
 left out of them.
 
-`prune --branch` deletes a branch only when its commits are held by the trunk or by an `archive/<branch>` tag. `--archive` makes that tag, for work that is set
+`prune --branch` deletes a branch only when its commits are held by the trunk or by an `archive/<branch>` tag. It deletes the branch's copy on the remote (the shared remote, else `origin`) too, but only when the trunk holds that copy's commit. `naima prune --write` with no branch also deletes every merged worker branch it finds on the remote, and says what it removed; without `--write` it lists them. A delete that fails is reported and never stops the prune. `--archive` makes that tag, for work that is set
 aside rather than merged. It removes the worktree only when nothing in it is uncommitted, inside its submodules too; a clean worktree that holds a submodule,
 which git removes only when forced, is then removed with `git worktree remove --force`.
 
