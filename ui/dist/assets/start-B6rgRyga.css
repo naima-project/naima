@@ -1,0 +1,1 @@
+*,:before,:after{transition:none!important;animation:none!important}.uicard-outlined{outline:2px solid var(--color-accent,currentColor);outline-offset:2px}:root[data-role=pictures] body{background:var(--color-surface);color:var(--color-text);font-family:var(--font-family-body);font-size:var(--font-size-reading);line-height:var(--font-line-height-normal);margin:0}

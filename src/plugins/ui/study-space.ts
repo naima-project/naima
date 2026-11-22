@@ -64,8 +64,10 @@ export interface UiTabDeclaration {
   models: string[]
   /** Where the app keeps the generated TypeScript. */
   generated: string | null
-  /** The page that mounts the app for the card, and the command that builds it. */
+  /** The page that mounts the app for the card, and the command that builds it, run in the declaration's folder. */
   card: { page: string; build: string[] } | null
+  /** The folder of the stance's file that declares the tab, relative to the project: where its paths start. */
+  dir: string
 }
 
 /** The project's UI tab, or null when no stance-ui.json declares one. */
@@ -97,6 +99,7 @@ function declaration(root: string, file: string): UiTabDeclaration | null {
     models,
     generated: typeof tab.generated === "string" ? rel(tab.generated) : null,
     card: page ? { page, build } : null,
+    dir: gitPath(dir),
   }
 }
 

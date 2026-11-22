@@ -41,6 +41,16 @@ the machine along the path from its start, so what it shows is what the real cod
 to the path. When the app asks for a step the model refuses in that state, the card says so above the app until you dismiss it. Naima's own UI declares
 its machines this way, its card being the copy of the page the product ships, and a model that has no place in the app's `src/uicard/places.ts` opens without the app.
 
+When the project has not built the card's page yet, the card says so and offers Build, which runs the build the declaration names as a job of the study, as
+Generate runs naima-codegen. Once it ends well the card shows the app.
+
+The card "Every state", closed at first, draws each state the machine rests in as a small picture of the app in that state, nearest the start first, so
+that states that look the same, or look wrong, are seen side by side. A click on a picture goes to that state.
+
+A step the model does not explain with a `%@say` line is named by what offers it in the app, when the project keeps the stance's registry of transitions:
+"← Home, on the river's own page" rather than `back`. The card's page reads the registry and tells the tab when it loads. The card's runtime, which walks the
+app and draws the pictures, is the UI stance's (`src/lib/uicard/`), copied into the project with the rest of the stance.
+
 ## A study of your own
 
 A model can also have a declared _study_: a WebAssembly stepper built from its generated Rust code, and, if you want a picture of it, a view. You declare the

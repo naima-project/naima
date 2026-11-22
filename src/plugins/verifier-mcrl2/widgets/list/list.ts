@@ -378,3 +378,64 @@ export function readView(raw: unknown): ListView {
     toggled: strings(w.toggled),
   };
 }
+
+// ---- Views kept under a name (models/list/views.mcrl2).
+
+/** A view kept under a name. Only what shapes the rows is kept: the filters, the sort, the grouping and the columns.
+ *  The words searched and the groups folded belong to the moment, and a view picked leaves them clear. */
+export interface SavedView {
+  readonly name: string;
+  readonly view: ListView;
+}
+
+const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/** The view as it is kept: without the words searched and the folds. */
+export const kept = (v: ListView): ListView => ({ ...v, search: "", folded: [] });
+
+/** Whether two views show the rows the same way, whatever was searched or folded. */
+export const sameView = (a: ListView, b: ListView): boolean =>
+  JSON.stringify(kept(readView(a))) === JSON.stringify(kept(readView(b)));
+
+/** The view kept under the name (spaces trimmed); a name already kept, in any case, is replaced where it stands. An
+ *  empty name keeps nothing. */
+export function saveView(saved: readonly SavedView[], name: string, v: ListView): SavedView[] {
+  const n = name.trim().replace(/\s+/g, " ");
+  if (!n) return [...saved];
+  const entry = { name: n, view: kept(readView(v)) };
+  return saved.some((s) => same(s.name, n)) ? saved.map((s) => (same(s.name, n) ? entry : s)) : [...saved, entry];
+}
+
+/** The view under the name taken away. */
+export const dropView = (saved: readonly SavedView[], name: string): SavedView[] =>
+  saved.filter((s) => !same(s.name, name));
+
+/** The view picked: the one kept under the name, or the view as it is when none is. */
+export function pickView(saved: readonly SavedView[], name: string, v: ListView): ListView {
+  const s = saved.find((x) => same(x.name, name));
+  return s ? { ...s.view } : v;
+}
+
+/** The name of the view kept that the view is exactly, or null. */
+export const appliedView = (saved: readonly SavedView[], v: ListView): string | null =>
+  saved.find((s) => sameView(s.view, v))?.name ?? null;
+
+/** The views read back from what was kept (the text of its JSON, or the parsed value), whatever is not a view dropped. */
+export function readViews(raw: unknown): SavedView[] {
+  let x = raw;
+  if (typeof raw === "string") {
+    try {
+      x = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(x)) return [];
+  let out: SavedView[] = [];
+  for (const e of x) {
+    const o = e as { name?: unknown; view?: unknown } | null;
+    if (typeof o?.name !== "string" || !o.name.trim()) continue;
+    out = saveView(out, o.name, readView(o.view));
+  }
+  return out;
+}

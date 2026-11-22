@@ -1,1 +1,0 @@
-import{Ei as e,Ii as t,Ri as n,Zi as r,ei as i,ga as a,na as o,vi as s}from"./Text-CLqxmFY1.js";var c=n(`<div><!></div>`);function l(n,l){let u=i(l,`gap`,3,`md`),d=i(l,`align`,3,`stretch`);var f=c(),p=o(f);e(p,()=>l.children),a(f),r(()=>s(f,1,`stack gap-${u()??``} align-${d()??``}`,`svelte-1382wtz`)),t(n,f)}export{l as t};

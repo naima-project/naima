@@ -14,6 +14,8 @@
 //   studies                        the Models tab's studies of the project, each declared by a `%@ui` block of a `.mcrl2`
 //                                  file (studies.ts): { studies: [{ id, file, title, says, model, stepper, observer, view,
 //                                  config, says_lines, problems }] }, no file contents
+//   ui-construction                the UI construction the project's stance-ui.json declares (construction.ts): { construction:
+//                                  { stance, mood, tokens, widgets, checks } | null }, read from the files, nothing run
 //   study {id}                     one study, with its stepper's bytes (`stepper`, base64) and the addresses of its frames
 //                                  (`frames`: the host page, the observer and the view, the last two null when absent)
 //                                  and the files a person may edit in the tab (`files`), the model first
@@ -86,6 +88,7 @@ import { stampOf, type ViewCache } from "./view-cache.ts"
 import { PoolDown, type ViewPool } from "./view-pool.ts"
 import { type AgentRequest, askAgent, awaitAnswer, listenShows, openUis, type Place, requestId, taken, type UiRequest, writeAnswer } from "./show.ts"
 import { commandJson, type JsonOf, metroData, VIEW_OF_COMMAND } from "./metro.ts"
+import { construction } from "./construction.ts"
 import { findStudies, savedPaths, type Study } from "./studies.ts"
 import { bring as bringToChat, broughtOf, stand as chatStand, withdraw as withdrawChat } from "./chat-channel.ts"
 import { inUiTab, spaceFile, spaceSystem, studyCache, studyCode, uiTab } from "./study-space.ts"
@@ -378,6 +381,7 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       if (problem) throw new Error(`the ${tab.name} tab's content ${problem}`)
       return shown(tab, sub, content)
     },
+    "ui-construction": () => json({ construction: construction(ctx.root, ctx.program) }),
     studies: (args) => {
       const all = findStudies(ctx.root, ctx.program, ctx.trackerRoot)
       if (text(args["source"]) !== "ui") return json({ studies: all })
@@ -440,7 +444,12 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
     "study-job": async (args) => {
       const study = studyOf(args["id"])
       const job = String(args["job"])
-      if (job !== "check" && job !== "generate" && job !== "run") throw new Error(`no job ${job}: the jobs are check, generate and run`)
+      if (job !== "check" && job !== "generate" && job !== "run" && job !== "build") {
+        throw new Error(`no job ${job}: the jobs are check, generate, run and build`)
+      }
+      // The build of the UI tab's card page is the project's declared build, for a model of the UI tab only.
+      const tab = job === "build" ? uiTab(ctx.root, ctx.program) : null
+      const card = tab?.card && inUiTab(tab, study) ? { dir: tab.dir, build: tab.card.build } : null
       const windows = process.platform === "win32"
       const codegen = findCodegen(ctx.root)
       const python = installedPython()
@@ -450,6 +459,7 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
         naima: actionCommand(opts.entry ?? selfEntry(), ctx.trackerRoot, []),
         codegen: codegenCommand(codegen, windows, python),
         windows,
+        card,
       }, text(args["property"]) ?? undefined)
       if (typeof line !== "string") throw new Error(line.refused)
       const run = `ui-study-${job}-${ctx.now().toISOString().replace(/\D/g, "").slice(0, 14)}-${++runs}`
@@ -469,7 +479,11 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
             "--stale",
             "30m",
             "--no-progress",
-            job === "generate" ? "naima-codegen and a study's build print their stages, not a count" : "a study's program writes what it writes",
+            job === "generate"
+              ? "naima-codegen and a study's build print their stages, not a count"
+              : job === "build"
+              ? "a project's build prints its stages, not a count"
+              : "a study's program writes what it writes",
           ]),
           "--",
           shellLine(line, windows),

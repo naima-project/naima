@@ -1,1 +1,0 @@
-import{ni as e,ti as t}from"./Text-CLqxmFY1.js";import{n,t as r}from"./Segmented-CPJ7IDse.js";var i=new Set([`$$slots`,`$$events`,`$$legacy`]);function a(n,a){let o=t(a,i);r(n,e(()=>o))}var o=new Set([`$$slots`,`$$events`,`$$legacy`]);function s(r,i){let a=t(i,o);n(r,e(()=>a))}export{a as n,s as t};

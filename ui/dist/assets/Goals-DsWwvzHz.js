@@ -1,1 +1,0 @@
-import{Zr as e,ma as t,pa as n}from"./Text-CLqxmFY1.js";import r from"./Roadmap-BuLzV0Zz.js";function i(i,a){t(a,!0);let{roadmap:o}=e();r(i,{get screen(){return o},get onopen(){return a.onitem}}),n()}export{i as default};
