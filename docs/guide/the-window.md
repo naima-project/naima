@@ -252,10 +252,13 @@ stage, the one place for details, described at the end of this section. At the t
 that day, with "Back to today". Then the goal nearest its expected date that still has work left: a ring with how much of it is done, its title, and one line
 with its expected date and how sure that date is, such as "Expected 2 January · 85% sure by 17 January" (its due date when there is no forecast yet). Beside it
 is a green dot for each agent at work, and how many there are in words. Under them are the goal's three numbers, always shown: the items left to do, the items
-of the goal the agents hold, and how many items closed a day lately. A click on the number left to do opens What's left of the goal in the stage.
+of the goal the agents hold, and how many items closed a day lately. A click on the number left to do opens What's left of the goal in the stage. When the
+goal has a development line, the items already fixed on it are not counted as left: a quiet green line under the number says how many there are, for example
+"195 fixed on the line · closes at the release", since they close on main only when the line lands. The ring counts them as done, and What's left says them
+apart in the same words.
 
-A click on the ring, or Enter on it, turns the board over. The ring and its words turn in depth and show, on their back, how much of the goal was done over
-time: an orange line of its percent done, with the count of items closed above it, and ahead of today a faint band from the percent now to 100% at the expected
+A click on the ring, or Enter on it, turns the board over. The ring and its words fade out and, in their place, the chart fades in, showing how much of the
+goal was done over time: an orange line of its percent done, with the count of items closed above it, and ahead of today a faint band from the percent now to 100% at the expected
 date, widening to the date it is 85% sure by. Its time is the river's, so each moment stands right above the same moment on the river, and the band ends above
 the goal's milestone; dragging, zooming or moving the river's today line moves the chart with it. The line passes through the goal's exact percent at the last
 landing of each of the last 30 days, and of each week before them, read from the tracker as it was at that commit. These are read in the background while the
@@ -292,17 +295,24 @@ the moment Home shows: at a day of the past it says what needed you then. It is 
 in the stage. The key d still takes the decisions one at a time. When what needs you is an agent gone quiet, its detail on Home links to that agent's entry in
 Waiting for you, where one click brings the case to the chat.
 
-Last is the river. It shows the future first: at rest today stands at its very left edge and the next month takes its whole width, on one even scale, so
-a goal twice as far away stands twice as far from today. Under the river you choose how much of the future it shows: a week, a month, a quarter, up to the
+Last is the river, the board's widest part, about a fifth of its width tall. It shows the future first: at rest today stands near its left edge, after a
+short stub of the last few days, and the window reaches the next three goals with a date and every goal after them that follows the one before within a
+month, at most twelve. Ahead of today the river spends its width on what happens rather than on empty weeks: each stretch between two goals gets room by
+how long it is, but a long empty stretch is drawn shorter, with two small slashes across the line where time is skipped, and goals a day apart still stand
+well apart. Because of this, every goal and deadline carries its day in words. Each goal in the window, each due date of a milestone, sub-goal or epic, and
+each goal overdue is named above the line with its day and how far ahead it is, for example "1.2" over "26 Dec · in 5 weeks", in up to three rows so that no
+two names run into each other; the nearest ones are darker and the focused goal's name is bold. A due date is a ring with a dot at its heart, a forecast
+date a dashed ring, and a date only projected at the present pace a dotted one, said "about 11 Jan". Under the river you choose how much of the future it shows: a week, a month, a quarter, up to the
 next deadline, or everything. The days shown are written beside the choices (for example "21 Nov – 20 Dec"), with − and + to widen or narrow them. Ctrl
 or Cmd with the wheel, or a pinch on a trackpad, zooms around the pointer, and a double-click on an empty part of the river zooms in there. The plain wheel
 scrolls the page, never the river. The goals after the end of the window are gathered into one marker at its right edge, for example "12 more, to Jul 2027
 →"; a click on it widens the window until they all show.
 
 The past is reached by dragging the river to the right, or by swiping it. The commits on main are grey dots on one line, each dot the commits of a part of
-the time shown, larger when they changed more lines. The agents at work are short green lines arriving at today, each as long as the agent has held its
-work. Today is a small orange tick on the line, and the river's one orange line stands at the goal's ring: the focus horizon, with the goal's short name
-and how far ahead it is above it (for example "in 4 days"). By default it stands at the next major goal of the line Home follows, such as the next release.
+the time shown, larger when they changed more lines. The agents at work are drawn where their work is going: under the line, a green lane runs from today
+to the ring of the goal whose work they hold, as the count beside the ring says them, named on the lane, for example "4 agents towards 1.2"; work for no goal in view
+is a short lane, "1 agent on other work". A click on a lane shows its agents. Today is a small orange tick on the line, and the river's one orange line
+stands at the goal's ring: the focus horizon. By default it stands at the next major goal of the line Home follows, such as the next release.
 Every goal with a due day has its ring ahead until that day, even one with no work left in it, so every deadline of the project can be seen on the river. Each
 ring is named by its own words: when several goals share the start of their titles (as "CAV 2027: full paper submitted" and "CAV 2027: author response"
 do), each is named by the rest of its title, and the full title shows when the pointer rests on the ring.
@@ -324,9 +334,9 @@ order in which they can be done, each item after the ones it waits on and the ea
 of the sub-goals and epics show the same list for themselves. Moving through time is done only with the orange line, by dragging it or with its keys, or by
 picking a day on the calendar.
 
-A goal missed, whose due day has passed with work still left, is not drawn ahead: its ring stands in the past at its due day, ring and name in red, named
-"missed" (for example "Public launch · missed 17 Nov"). When that day is before the window shown, a red "‹ 1 missed" under the river takes the window back
-to it. A click on the ring shows the goal.
+A goal missed, whose due day has passed with work still left, is not drawn ahead. While today is in view, its red ring stands just before today, named
+"overdue since 17 Nov"; when the river is dragged into the past, it stands at its due day, named "missed 17 Nov". When today is out of view and that day is
+before the window shown, a red "‹ 1 missed" under the river takes the window back to it. A click on the ring shows the goal.
 
 Every dated thing, on the river and in the stage's lists, says how urgent it is, quietly. It is drawn as usual while all is well. It turns amber when it is at
 risk: its forecast passes its due day, or its due day is two days away or less with work left. It turns red once it is late: its due day has passed with work
@@ -435,15 +445,16 @@ gallery of faces shuts. The top and the stage take turns: while the stage shows 
 unfolds it over the list; and whatever you open up top, the chart, a detail, another face or the gallery, gives the stage back to the diary. Going back to the
 diary leaves the top condensed, and the bar brings Home back: the diary under the full board. So Home never shows more than two things open at once, such as a
 list and one item beside it, or the chart and one of its details. Scrolling down in the stage, with the wheel, a trackpad, a finger or the keys, first condenses
-everything above it, following the scroll as it goes: the top shrinks into one thin bar of small pictures (a small ring with the goal's name and percent, then
-each other face chosen as a tiny chart, bars for amounts, a line for levels, stars for events), the river thins to a hairline with its dots and the orange today
-line, and the stage takes the room freed. Only then does the stage itself scroll, so scrolling the diary never walks Home back in time while the board is open.
+everything above it: the top scrolls away flat, nothing in it scaled or tilted, and a thin bar fades in at the top in its place, with small pictures (a small
+ring with the goal's name and percent, then each other face chosen as a tiny chart, bars for amounts, a line for levels, stars for events) and a hairline river
+with its dots and the orange today line, while the stage takes the room freed. A long list in the stage scrolls flat too; when it is longer than its room its
+top and bottom edges fade softly, and only where there is more to scroll to. Only then does the stage itself scroll, so scrolling the diary never walks Home back in time while the board is open.
 The hairline river still works: drag it, or use the arrow keys on it, to move through time, and click it, or press Enter, to open the nearest commits in the
 stage. Scrolling back to the diary's top unfolds everything again, and a click, a tap or Enter anywhere on the bar brings Home back at once; a click on one of
 its small pictures brings Home back on that face. A scroll that stops half way goes on to the nearer end. What the stage holds is a place in the browser's
 history, written in the address as `s=` (with `i=` for the item open beside the list, and `w=` for an entry of Waiting for you sent to the chat), and the
-condensed top as `c=1`, so Back and Forward step through what the stage showed and a reload keeps it, condensed or not. With reduced motion nothing shrinks,
-fades or slides: the bar simply replaces the top once it is condensed, and the item appears beside the column at once.
+condensed top as `c=1`, so Back and Forward step through what the stage showed and a reload keeps it, condensed or not. With reduced motion nothing fades or
+slides: the bar simply replaces the top once it is condensed, and the item appears beside the column at once.
 
 The word "naima" at the top left of every screen is the way Home: a click on it, or Enter while it has the focus, returns to Home from wherever you are. On
 another screen it shows Home; on Home it gives Home back as it starts, in one smooth move: the stage closes back to the diary with no item open, the condensed

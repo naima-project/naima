@@ -1,0 +1,1 @@
+import{ht as e,mt as t}from"./index-client-X9JAE7ip.js";import{i as n}from"./disclose-version-BUmM5bS-.js";import r from"./Roadmap-Ct5BVU-2.js";function i(i,a){e(a,!0);let{roadmap:o}=n();r(i,{get screen(){return o},get onopen(){return a.onitem}}),t()}export{i as default};

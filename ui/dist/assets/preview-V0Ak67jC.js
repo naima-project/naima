@@ -1,0 +1,1 @@
+import"./preload-helper-BmaJr4lw.js";import{P as e}from"./index-client-X9JAE7ip.js";import{D as t,Ut as n,t as r}from"./App-Clvn-9Fx.js";import{r as i}from"./disclose-version-BUmM5bS-.js";import{n as a,t as o}from"./data-D511ZWUb.js";e(r,{target:document.getElementById(`app`),context:i(t(n(a,o)))});
