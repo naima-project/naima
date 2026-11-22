@@ -149,9 +149,7 @@ export function runGit(cwd: string, args: string[], opts: GitOptions = {}): GitR
 }
 
 function runGitNow(cwd: string, args: string[], opts: GitOptions): GitRun {
-  const t0 = performance.now() // TEMPORARY trace, removed with the profile
   const r = spawnGit(cwd, args, opts, "utf8")
-  ;(globalThis as { __gitTrace?: unknown[][] }).__gitTrace?.push([cwd.slice(-24), args.slice(0, 5).join(" ").slice(0, 70), Math.round(performance.now() - t0)])
   const notInstalled = (r.error as { code?: string } | undefined)?.code === "ENOENT"
   return { ok: r.status === 0, out: String(r.stdout ?? "").replace(/\r?\n$/, ""), err: String(r.stderr ?? "").trim(), notInstalled, status: r.status }
 }
@@ -198,17 +196,7 @@ function spawnGitAsync(cwd: string, args: string[], timeoutMs: number): Promise<
       clearTimeout(timer)
       done(r)
     }
-    const t0 = performance.now() // TEMPORARY trace, removed with the profile
     const child = spawn("git", args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] })
-    child.once(
-      "close",
-      () =>
-        (globalThis as { __gitTrace?: unknown[][] }).__gitTrace?.push([
-          cwd.slice(-24),
-          "ASYNC " + args.slice(0, 5).join(" ").slice(0, 63),
-          Math.round(performance.now() - t0),
-        ]),
-    )
     const timer = setTimeout(() => {
       child.kill("SIGKILL")
       finish({ ok: false, out: "", err: `no answer within ${Math.round(timeoutMs / 1000)} s`, notInstalled: false })
