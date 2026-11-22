@@ -160,7 +160,31 @@ function runGitNow(cwd: string, args: string[], opts: GitOptions): GitRun {
  * A git run that does not block the process, ended after `timeoutMs`: what a network call that must stay short
  * uses (the tick's update check). It never prompts for credentials, and never throws: a timeout is a failed run that says so.
  */
-export function runGitAsync(cwd: string, args: string[], timeoutMs: number): Promise<GitRun> {
+export async function runGitAsync(cwd: string, args: string[], timeoutMs: number): Promise<GitRun> {
+  await takeSlot()
+  try {
+    return await spawnGitAsync(cwd, args, timeoutMs)
+  } finally {
+    freeSlot()
+  }
+}
+
+/**
+ * At most this many asynchronous git runs at a time: the map and the claims ask about every branch at once (some 200 runs
+ * on this workshop), and where a process costs 35 ms and the machine has a few cores (Windows), a flood of them starves
+ * every other read of the program for seconds. The rest wait their turn, in order, and a timeout counts from the start.
+ */
+const MAX_ASYNC_GIT = 8
+let asyncRunning = 0
+const asyncWaiting: (() => void)[] = []
+const takeSlot = (): Promise<void> =>
+  asyncRunning < MAX_ASYNC_GIT ? (asyncRunning++, Promise.resolve()) : new Promise((go) => asyncWaiting.push(() => (asyncRunning++, go())))
+const freeSlot = (): void => {
+  asyncRunning--
+  asyncWaiting.shift()?.()
+}
+
+function spawnGitAsync(cwd: string, args: string[], timeoutMs: number): Promise<GitRun> {
   calls++
   const env = { ...(envFor(cwd) ?? process.env), GIT_TERMINAL_PROMPT: "0" }
   return new Promise((done) => {
