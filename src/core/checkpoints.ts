@@ -96,6 +96,8 @@ export interface CheckpointRunSpec {
   host?: string
   /** `naima run --budget-time` for it. */
   budget?: string
+  /** The paths (prefixes) whose change it can be affected by: a release reruns it only when one changed; none means any change. */
+  paths?: string[]
 }
 
 /**
@@ -118,7 +120,14 @@ export function checkpointRuns(ctx: Context): CheckpointRunSpec[] {
     if (!/^[a-z0-9][a-z0-9._-]*$/.test(name)) {
       throw new Error(`the coordination option checkpointRuns: "${name}" is not a run name: lowercase letters, digits, . _ -`)
     }
-    out.push({ name, command: o.command.trim(), ...(o.host ? { host: String(o.host) } : {}), ...(o.budget ? { budget: String(o.budget) } : {}) })
+    const paths = Array.isArray(o.paths) ? o.paths.map(String).filter(Boolean) : []
+    out.push({
+      name,
+      command: o.command.trim(),
+      ...(o.host ? { host: String(o.host) } : {}),
+      ...(o.budget ? { budget: String(o.budget) } : {}),
+      ...(paths.length ? { paths } : {}),
+    })
   }
   return out
 }
@@ -141,8 +150,8 @@ export interface CheckpointRun {
   run: string
   /** Its name in the checkpoint, the same on every tip: what a bug it files is titled by. */
   name: string
-  /** What it is: a configured command (`suite`) or `naima verify` of the properties not current (`verify`). */
-  kind: "suite" | "verify"
+  /** What it is: a configured command (`suite`), `naima verify` of the properties not current (`verify`), or a landing check whose failure is reported (`check`). */
+  kind: "suite" | "verify" | "check"
   /** What it runs, as its name says it: the command, or the properties. */
   what: string
   host?: string
@@ -151,6 +160,17 @@ export interface CheckpointRun {
   why?: string
   /** The bug filed or updated for its failure. */
   bug?: string
+  /** The record of the same commit this result was taken from: nothing was run again. */
+  reused?: string
+}
+
+/** A landing check's result in a checkpoint: passed or failed, on the record's commit, or taken from an earlier record of it. */
+export interface CheckResult {
+  name: string
+  passed: boolean
+  /** What it found, when it failed. */
+  why?: string[]
+  reused?: string
 }
 
 /**
@@ -169,6 +189,14 @@ export interface CheckpointRecord {
   ran: string[]
   failed: string[]
   runs?: CheckpointRun[]
+  /** What it was for: a planned point of its gate's check plan, or a background run between milestones (src/core/check-plan.ts). */
+  point?: "half" | "full" | "release" | "background"
+  /** When it settled. */
+  ended?: string
+  /** Each landing check's result on its commit. */
+  results?: CheckResult[]
+  /** Stopped without a result, for the person's own heavy work or a pause: it counts for nothing, and its point is due again. */
+  yielded?: boolean
 }
 
 /** Every checkpoint record, oldest first. */
@@ -219,7 +247,26 @@ export function updateCheckpoint(ctx: Context, id: string, patch: Partial<Omit<C
 }
 
 /** The newest checkpoint that passed, if any. */
-export const lastPass = (ctx: Context): CheckpointRecord | undefined => readCheckpoints(ctx).filter((r) => r.passed).at(-1)
+export const lastPass = (ctx: Context): CheckpointRecord | undefined => readCheckpoints(ctx).filter((r) => r.passed && !r.yielded).at(-1)
+
+/**
+ * The results recorded for a commit, by check: each landing check's and each background run's (by its name), from the
+ * settled records of that commit, the newest first. A result belongs to its commit and is reused, never recomputed.
+ */
+export function resultsAt(
+  ctx: Context,
+  tip: string,
+): { checks: Map<string, CheckResult & { record: string }>; runs: Map<string, CheckpointRun & { record: string }> } {
+  const checks = new Map<string, CheckResult & { record: string }>()
+  const runs = new Map<string, CheckpointRun & { record: string }>()
+  for (const r of readCheckpoints(ctx).filter((x) => x.tip === tip && !x.pending && !x.yielded).reverse()) {
+    for (const c of r.results ?? []) if (!checks.has(c.name)) checks.set(c.name, { ...c, record: c.reused ?? r.id })
+    for (const x of r.runs ?? []) {
+      if ((x.state === "passed" || x.state === "failed") && !runs.has(x.name)) runs.set(x.name, { ...x, record: x.reused ?? r.id })
+    }
+  }
+  return { checks, runs }
+}
 
 /**
  * The checks the landings since the last passing checkpoint owe, each once, and how many landings owe something: read from
@@ -244,7 +291,8 @@ export function owedSince(ctx: Context): { names: string[]; landings: number } {
 
 /** Why a gate is blocked by a failed checkpoint: the newest checkpoint for it, or for no gate, failed and no later one passed. */
 export function checkpointBlock(ctx: Context, gate: string): string | undefined {
-  const mine = readCheckpoints(ctx).filter((r) => r.gate === gate || r.gate === undefined)
+  // A background run blocks nothing (its failure is reported as an item and at hello), and a run stopped for the person is no result.
+  const mine = readCheckpoints(ctx).filter((r) => (r.gate === gate || r.gate === undefined) && r.point !== "background" && !r.yielded)
   const last = mine.at(-1)
   if (last?.pending) {
     const going = (last.runs ?? []).filter((r) => r.state === "running").map((r) => r.run)
@@ -264,6 +312,9 @@ export async function checkpointAfter(ctx: Context, gate: string): Promise<numbe
   // A project that runs heavy checks only on demand, or not at all, has no checkpoint start by itself.
   const answer = heavyAnswer(ctx)
   if (answer && (answer.when === "demand" || answer.when === "off")) return 0
+  // A project that plans its heavy checks starts only the point of the gate's plan that is due, if one is (naima check-plan).
+  const plan = answer?.when === "checkpoint" ? ctx.registry.commands.get("check-plan") : undefined
+  if (plan) return await plan.run(["--start", gate, "--crossed"], ctx)
   const cmd = ctx.registry.commands.get("checkpoint")
   return cmd ? await cmd.run([gate], ctx) : 0
 }

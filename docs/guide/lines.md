@@ -167,26 +167,63 @@ naima heavy-checks checkpoint --host here    # at a checkpoint, on this machine
 naima heavy-checks landing --host <host>     # at every landing, on a declared host
 naima heavy-checks demand --host here        # only when asked: naima checkpoint, naima check --heavy
 naima heavy-checks off                       # never; every start of a heavy check honours it
+naima heavy-checks pause                     # hold them for now; the one running stops without a result
+naima heavy-checks resume                    # let them go on
 naima heavy-checks                           # show the answer, or the question
 ```
 
 It records the coordination option `heavyChecks` and sets `checks`, `landingHost` and `verifyHost` with it. A project that already set `checks`, a landing host,
 a verify host, fast checks or checkpoint runs has answered by those, and keeps what it chose. With `demand`, a gate step closing and a goal reached start no
-checkpoint by themselves. With `off`, a checkpoint runs only the landing checks that are not heavy and starts no suite or verification.
+checkpoint by themselves, and `naima checkpoint` runs one whenever you ask. With `off`, a checkpoint runs only the landing checks that are not heavy and starts no suite or verification.
 
 ## Checks at checkpoints
 
 By default every landing runs every landing check (the coordination option `checks` is `continuous`). A project in rapid development can set `checks` to
 `checkpoint`: `naima land` then runs only the checks the option `fastChecks` names, and records the others in the landing marker as owed, in a `Checks-owed:`
-trailer. Workers run a build and their own new test, nothing wider. `naima gates` lists what is owed since the last checkpoint. `naima checkpoint [<gate>]` runs
-it all, with the heavy suites and model checks, on the current tip and records a pass, or a failure that blocks the gate until a later checkpoint passes. A gate
-step closing and a line landing on the trunk run it by themselves.
+trailer. Workers run a build and their own new test, nothing wider. `naima gates` lists what is owed since the last checkpoint.
+
+### The check plan of a milestone
+
+When heavy checks run at checkpoints (`naima heavy-checks checkpoint`), each milestone has a plan for them, and they run only at its points. Fast checks run at
+every landing, as before. The heavy ones (the full suites, the model checks, the browser checks, the audit) run at two checkpoints: one once about half the
+milestone's items are closed, and one once all of them are. A milestone of a single item has only the second. Then comes the release check. Naima starts each
+checkpoint itself, at the landing that crosses its threshold or at the hourly tick that finds it crossed, and never earlier. Nobody starts one by hand:
+`naima checkpoint <gate>` is refused while no point of the plan is ready, and says when the next one comes. A project that adopts the plan with work
+already done sets the option `checkPlanSince` to that day: a threshold crossed before it is skipped, so no checkpoint starts for what was finished before.
+
+```sh
+naima check-plan                  # every milestone's plan: its points, their state and how long each is expected to take
+naima check-plan release-1.2      # one milestone
+naima checkpoint release-1.2 --release   # the release check, once the full checkpoint passed
+```
+
+A point is waiting, ready, running, passed or failed. Its expected duration is the mean of the last checkpoints that ran, or the longest budget of the
+project's suites when none has run yet. `naima gates` adds the plan under each milestone, and Home's river marks each checkpoint on the way to the goal's ring
+with a small tick.
+
+Heavy checks run where the project's heavy checks run, and the rules are the same wherever that is. By default it is this machine. Naima starts a heavy run
+there only when the machine is idle: no heavy run of your own is going (anything you started with `naima run`), and its load per processor is under the option
+`idleLoad` (0.5 unless you set it). Each run goes at low priority, under `nice` where the shell has it, within its time budget. When your own heavy work
+starts while a checkpoint runs, or when you pause the heavy checks, the checkpoint stops without a result, and its point is ready again for the next idle
+moment. When the project names a host (`naima heavy-checks checkpoint --host <host>`), the runs go to that host by the same rules: a heavy run of yours there
+holds them too. Only one checkpoint runs at a time.
+
+A result belongs to the commit it ran on. Naima never computes it again for that commit: a second checkpoint on the same commit, the full one right after
+the half one say, takes the results already recorded. The release check takes the results of its commit too. When nothing landed after the full checkpoint,
+that checkpoint is the release check and nothing runs again. When something did, the release reruns only what those later commits can affect: the checks
+their landings owe, the suites whose `paths` they change, the properties they make not current. A checkpoint that fails blocks the milestone until a later
+one passes; a landing that comes in while it runs does not hide the failure, which stays the failure of the commit it ran on.
+
+Between milestones a background run checks the trunk: nightly by default, or every few landings with the option `backgroundChecks` set to `landings`
+(`backgroundEvery` landings, 10 unless you set it), or never with `off`. It follows the same rules as a checkpoint, never on a commit that already has its
+results, and it blocks nothing. It says nothing when it passes. When it fails, it files a bug for each failing check or suite, and `naima hello` says so until
+a later background run passes.
 
 A checkpoint also runs the project's test suites and its model checks, in the background through `naima run`. The coordination option `checkpointRuns` lists the
-commands, each a plain command or an object with a `command`, a `host` and a `budget`:
+commands, each a plain command or an object with a `command`, a `host`, a `budget` and the `paths` it can be affected by:
 
 ```json
-"checkpointRuns": ["deno task verify", { "command": "deno task verify", "host": "<host>", "name": "suite" }]
+"checkpointRuns": ["deno task verify", { "command": "deno task verify", "host": "<host>", "name": "suite", "paths": ["src/", "test/"] }]
 ```
 
 A command with a host runs in that host's checkout, which `naima checkpoint` first moves to the checkpoint's tip. Every transfer to a host has limits: ssh drops a connection that stops answering after about 30 seconds, no transfer runs longer than ten minutes, and a dropped or stalled one is tried again twice; one that still fails fails the run, with the reason. The checkpoint also runs `naima verify` on every property that is not current (the ones the `properties` gate blocks on), on the host the option `verifyHost` names, or on this machine when it names none. `naima checkpoint` returns once the runs have started; `naima checkpoint --status` reads each of them and, when all are over, settles the record as a pass or a failure. `naima checkpoint --wait` waits for them instead. A run that fails fails the checkpoint, blocks the gate, and files a bug titled "Checkpoint run <name> fails", or adds a note to the one already open. While the runs go, the gate is blocked as running. `naima gates` shows the last checkpoint's result, each run's, and what is still owed. A record copies a run's failure text, scrubbed the way a tracker write is: a host name, a home path or a user name in it becomes `<host>`, `<path>` or `<user>`. In a checkout of a development line, the options that say where and when heavy checks run (`heavyChecks`, `checks`, `landingHost`, `verifyHost`) are the trunk's recorded values, since the line's copy of naima.json may predate the owner's choice; the line's own value is used only when the trunk records none.
