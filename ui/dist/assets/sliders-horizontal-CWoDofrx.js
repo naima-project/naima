@@ -1,5 +1,0 @@
-<<<<<<<< HEAD:ui/dist/assets/sliders-horizontal-CWoDofrx.js
-import{Nr as e,Pr as t,n}from"./chevron-right-EHzkDXKe.js";var r={name:`sliders-horizontal`,size:24,node:[[`path`,{d:`M10 5H3`}],[`path`,{d:`M12 19H3`}],[`path`,{d:`M14 3v4`}],[`path`,{d:`M16 17v4`}],[`path`,{d:`M21 12h-9`}],[`path`,{d:`M21 19h-5`}],[`path`,{d:`M21 5h-7`}],[`path`,{d:`M8 10v4`}],[`path`,{d:`M8 12H3`}]]};r.node;var i=new Set([`$$slots`,`$$events`,`$$legacy`]);function a(a,o){let s=e(o,i);n(a,t(()=>s,{get icon(){return r}}))}export{a as t};
-========
-import{Nr as e,Pr as t,n}from"./chevron-right-BAeiBpq6.js";var r={name:`sliders-horizontal`,size:24,node:[[`path`,{d:`M10 5H3`}],[`path`,{d:`M12 19H3`}],[`path`,{d:`M14 3v4`}],[`path`,{d:`M16 17v4`}],[`path`,{d:`M21 12h-9`}],[`path`,{d:`M21 19h-5`}],[`path`,{d:`M21 5h-7`}],[`path`,{d:`M8 10v4`}],[`path`,{d:`M8 12H3`}]]};r.node;var i=new Set([`$$slots`,`$$events`,`$$legacy`]);function a(a,o){let s=e(o,i);n(a,t(()=>s,{get icon(){return r}}))}export{a as t};
->>>>>>>> origin/worker/layout-in-css:ui/dist/assets/sliders-horizontal-CGhJTVYM.js
