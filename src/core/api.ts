@@ -191,6 +191,7 @@ export {
   isAncestor,
   isGitRepo,
   mustGit,
+  ownIdentity,
   projectFiles,
   readAcrossBranches,
   readScope,

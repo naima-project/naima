@@ -54,6 +54,7 @@ import {
   ORDERED_BY,
   orderedBy,
   owedTrailer,
+  ownIdentity,
   parse,
   privateContext,
   progressFor,
@@ -557,7 +558,7 @@ export function releaseOwnClaim(ctx: Context, branch: string): string | null {
       }
       const written = runGit(repo, ["write-tree"], { env })
       if (!written.ok) throw new Error(`releasing ${branch}'s claim: git write-tree: ${gitReason(written)}`)
-      const made = runGit(repo, ["commit-tree", written.out.trim(), "-p", tip, "-F", "-"], { input: message })
+      const made = runGit(repo, [...ownIdentity(repo), "commit-tree", written.out.trim(), "-p", tip, "-F", "-"], { input: message })
       if (!made.ok) throw new Error(`releasing ${branch}'s claim: git commit-tree: ${gitReason(made)}`)
       const moved = runGit(repo, ["update-ref", "-m", "land: release the branch's claim", `refs/heads/${branch}`, made.out.trim(), tip])
       if (!moved.ok) throw new Error(`${branch} moved meanwhile: ${gitReason(moved)}`)
@@ -1064,7 +1065,7 @@ async function landBoth(
     if (trackerOnly !== undefined) own.push(`${TRACKER_ONLY}: ${trackerOnly}`)
     own.push(...meetsTrailers(met), ...orderedTrailer(ctx))
     const parents = trk.tip === trk.old ? ["-p", trk.old] : ["-p", trk.old, "-p", trk.tip]
-    const made = runGit(ctx.trackerGit, ["commit-tree", trkTree, ...parents, "-F", "-"], {
+    const made = runGit(ctx.trackerGit, [...ownIdentity(ctx.trackerGit), "commit-tree", trkTree, ...parents, "-F", "-"], {
       input: markerMessage(branch, ids, [`${CODE_TRAILER}: ${code.tip}`, ...own, `${CLI_TRAILER}: land`]),
     })
     if (!made.ok) throw new Error(`git commit-tree: ${gitReason(made)}`)
@@ -1080,7 +1081,9 @@ async function landBoth(
   let cm: string | null = null
   if (codeMoves) {
     try {
-      const made = runGit(ctx.root, ["commit-tree", codeTree, "-p", code.old, "-p", code.tip, "-F", "-"], { input: codeMarkerMessage(branch, tm, trailers) })
+      const made = runGit(ctx.root, [...ownIdentity(ctx.root), "commit-tree", codeTree, "-p", code.old, "-p", code.tip, "-F", "-"], {
+        input: codeMarkerMessage(branch, tm, trailers),
+      })
       if (!made.ok) throw new Error(`git commit-tree: ${gitReason(made)}`)
       cm = made.out.trim()
       const r = runGit(ctx.root, ["update-ref", "-m", `land: ${branch}`, `refs/heads/${code.main}`, cm, code.old])
@@ -1145,7 +1148,9 @@ export async function landOnLine(ctx: Context, branch: string, gate: string, clo
   guardLandingMessages(ctx, branch, old, tip)
   trailers.push(...owedTrailer(await lineLandingChecks(ctx, { branch, from: old, to: tip, changed: changedFiles(ctx.root, old, tip), closes: ids })))
   trailers.push(...orderedTrailer(ctx))
-  const made = runGit(ctx.root, ["commit-tree", `${tip}^{tree}`, "-p", old, "-p", tip, "-F", "-"], { input: `Land ${branch}\n\n${trailers.join("\n")}\n` })
+  const made = runGit(ctx.root, [...ownIdentity(ctx.root), "commit-tree", `${tip}^{tree}`, "-p", old, "-p", tip, "-F", "-"], {
+    input: `Land ${branch}\n\n${trailers.join("\n")}\n`,
+  })
   if (!made.ok) throw new Error(`git commit-tree: ${gitReason(made)}`)
   const marker = made.out.trim()
   moveTrunk(ctx.root, line, marker, old, `land: ${branch}`)
@@ -1232,7 +1237,7 @@ export function unfixOnLine(ctx: Context, gate: string, ref: string, reason: str
     break
   }
   const commit = (parents: string[], text: string): string => {
-    const r = runGit(ctx.root, ["commit-tree", tree, ...parents.flatMap((p) => ["-p", p]), "-F", "-"], { input: text })
+    const r = runGit(ctx.root, [...ownIdentity(ctx.root), "commit-tree", tree, ...parents.flatMap((p) => ["-p", p]), "-F", "-"], { input: text })
     if (!r.ok) throw new Error(`git commit-tree: ${gitReason(r)}`)
     return r.out.trim()
   }
@@ -1446,7 +1451,9 @@ function repairLanding(ctx: Context, branch: string): number {
     const synced = takeTree(ctx.root, old, tree)
     if (!synced.ok) throw new Error(`the main checkout could not take ${branch}'s files (${gitReason(synced)}): nothing repaired`)
     try {
-      const made = runGit(ctx.root, ["commit-tree", tree, "-p", old, "-p", tm.value, "-F", "-"], { input: codeMarkerMessage(branch, tm.sha) })
+      const made = runGit(ctx.root, [...ownIdentity(ctx.root), "commit-tree", tree, "-p", old, "-p", tm.value, "-F", "-"], {
+        input: codeMarkerMessage(branch, tm.sha),
+      })
       if (!made.ok) throw new Error(`git commit-tree: ${gitReason(made)}`)
       cm = made.out.trim()
       moveTrunk(ctx.root, cmain, cm, old, `land --repair: ${branch}`)
@@ -1664,7 +1671,9 @@ export const land: Command = {
         trailers.push(`${STALE_PROOFS}: ${stale!.trim()}`)
         for (const l of notCurrent) ctx.out(`${l} — landed anyway: ${stale!.trim()}`)
       }
-      const made = runGit(ctx.root, ["commit-tree", tree, "-p", old, "-p", tip, "-F", "-"], { input: markerMessage(branch, items.map((i) => i.id), trailers) })
+      const made = runGit(ctx.root, [...ownIdentity(ctx.root), "commit-tree", tree, "-p", old, "-p", tip, "-F", "-"], {
+        input: markerMessage(branch, items.map((i) => i.id), trailers),
+      })
       if (!made.ok) throw new Error(`git commit-tree: ${gitReason(made)}`)
       marker = made.out.trim()
       moveTrunk(ctx.root, main, marker, old, `land: ${branch}`)
