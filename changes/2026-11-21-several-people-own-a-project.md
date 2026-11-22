@@ -20,7 +20,7 @@ options:
   - added plugins.coordination.options.sharedRemote
 rules:
   - added Every change records the person who ordered it
-  - changed No locks: the coordinator is the single writer
+  - "changed No locks: the coordinator is the single writer"
 ---
 
 Every write of an item adds a line to its history, `history.jsonl`, with the person who ordered it (git's user.name, NAIMA_PERSON, or `--by` on any
