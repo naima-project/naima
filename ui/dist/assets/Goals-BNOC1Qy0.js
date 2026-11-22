@@ -1,0 +1,1 @@
+import{Gi as e,Ki as t,kr as n}from"./chevron-right-CV7tGhGr.js";import r from"./Roadmap-Tz23K2SW.js";function i(i,a){t(a,!0);let{roadmap:o}=n();r(i,{get screen(){return o},get onopen(){return a.onitem}}),e()}export{i as default};
