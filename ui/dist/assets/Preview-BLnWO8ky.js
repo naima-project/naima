@@ -1,0 +1,1 @@
+import{Ca as e,ii as t,wa as n}from"./chevron-right-BiIi9HIs.js";import{t as r}from"./App-BPfeQSbF.js";function i(i,a){n(a,!0),t(a.store),r(i,{}),e()}export{i as default};
