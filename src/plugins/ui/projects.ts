@@ -8,7 +8,7 @@
 
 import { readFileSync } from "node:fs"
 import { basename, join, resolve } from "node:path"
-import { type Context, contextOfProject, isOpen, isRetired, type KnownProject, knownProjects, runGit, personAtKeyboard, waitingOn } from "../../core/api.ts"
+import { type Context, contextOfProject, isOpen, isRetired, type KnownProject, knownProjects, personAtKeyboard, runGit, waitingOn } from "../../core/api.ts"
 import { runCommand } from "./bridge.ts"
 import type { UiView } from "./tabs.ts"
 
@@ -87,7 +87,16 @@ export async function projectRow(ctx: Context, here: boolean): Promise<ProjectRo
       lastChange: last.ok ? last.out.trim() || null : null,
     }
   } catch (e) {
-    return { ...head, gates: [], queue: null, bugs: [], tests: [], waiting: { person: null, items: [] }, lastChange: null, error: e instanceof Error ? e.message : String(e) }
+    return {
+      ...head,
+      gates: [],
+      queue: null,
+      bugs: [],
+      tests: [],
+      waiting: { person: null, items: [] },
+      lastChange: null,
+      error: e instanceof Error ? e.message : String(e),
+    }
   }
 }
 

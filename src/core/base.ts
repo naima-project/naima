@@ -338,7 +338,10 @@ const waiting: Command = {
   options: [
     { name: "--for", says: "list what waits on this person instead of the person at the keyboard" },
     { name: "--everyone", says: "list what waits on every owner, each row with the person it waits on when it names one" },
-    { name: "--at", says: "list what waited at this commit (or any ref git knows): the tracker as that commit had it, read only; the UI's Home reads the same moment" },
+    {
+      name: "--at",
+      says: "list what waited at this commit (or any ref git knows): the tracker as that commit had it, read only; the UI's Home reads the same moment",
+    },
     {
       name: "--json",
       says: "print the list as JSON: each row's reference, title, why it waits (owner, proof or failing), the person it waits on and its source",
