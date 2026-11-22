@@ -18,6 +18,7 @@ import {
   fieldValue,
   type Finding,
   gitOrNull,
+  HISTORY,
   type Item,
   label,
   linked,
@@ -112,8 +113,8 @@ const canonical = (v: unknown): string =>
 
 /**
  * One digest over what an artifact is made from: every file under each of its `inputs` (one that names nothing
- * counts as absent), and each item it `uses` — its fields but its links, its page and its attachments, by its id,
- * so a link added elsewhere or a move to the archive changes nothing.
+ * counts as absent), and each item it `uses` — its fields but its links, its page and its attachments, by its id (its history, which
+ * records each write, is not what it is made of), so a link added elsewhere or a move to the archive changes nothing.
  */
 export function inputsDigest(ctx: Context, artifact: Item): string {
   const entries: [string, string][] = []
@@ -125,7 +126,9 @@ export function inputsDigest(ctx: Context, artifact: Item): string {
   for (const used of linked(ctx, artifact, USES)) {
     const { links: _links, ...data } = used.meta
     entries.push([used.meta.id, sha256(canonical(data))])
-    for (const f of walkFiles(used.dir)) if (basename(f) !== META) entries.push([`${used.meta.id}/${posixRelative(used.dir, f)}`, sha256(readFileSync(f))])
+    for (const f of walkFiles(used.dir)) {
+      if (basename(f) !== META && basename(f) !== HISTORY) entries.push([`${used.meta.id}/${posixRelative(used.dir, f)}`, sha256(readFileSync(f))])
+    }
   }
   return sha256(canonical(entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))))
 }

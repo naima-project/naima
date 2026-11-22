@@ -107,6 +107,28 @@ export function mergeReadme(
   return { merged: joinProse({ title, description, notes }), conflicts }
 }
 
+/**
+ * An item's history merged by union: every line of both sides once, in the order they happened (each line says when).
+ * The tracker's .gitattributes does this for a project that has it; a project made before it is merged here.
+ */
+function mergeHistory(ours: string, theirs: string): string {
+  const seen = new Set<string>()
+  const lines: { at: string; line: string; n: number }[] = []
+  for (const line of `${ours}\n${theirs}`.split("\n")) {
+    if (!line.trim() || seen.has(line)) continue
+    seen.add(line)
+    let at = ""
+    try {
+      at = String((JSON.parse(line) as { at?: unknown }).at ?? "")
+    } catch {
+      // a line that is no JSON keeps its place among the others
+    }
+    lines.push({ at, line, n: lines.length })
+  }
+  lines.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.n - b.n))
+  return lines.map((l) => l.line).join("\n") + "\n"
+}
+
 /** The text of stage `n` of an unmerged path (1 base, 2 the line's, 3 the trunk's), or null when that side has none. */
 function stage(root: string, n: 1 | 2 | 3, file: string): string | null {
   const r = runGit(root, ["show", `:${n}:${file}`])
@@ -127,8 +149,9 @@ export function resolveTrackerConflicts(root: string, dataDir: string): { resolv
   for (const file of files) {
     const isMeta = file.endsWith("/meta.json")
     const isReadme = file.endsWith("/README.md")
-    const ours = isMeta || isReadme ? stage(root, 2, file) : null
-    const theirs = isMeta || isReadme ? stage(root, 3, file) : null
+    const isHistory = file.endsWith("/history.jsonl")
+    const ours = isMeta || isReadme || isHistory ? stage(root, 2, file) : null
+    const theirs = isMeta || isReadme || isHistory ? stage(root, 3, file) : null
     if (ours === null || theirs === null) {
       left.push(file)
       continue
@@ -137,7 +160,10 @@ export function resolveTrackerConflicts(root: string, dataDir: string): { resolv
     let text: string
     let found: { field: string; ours: string; theirs: string }[]
     try {
-      if (isMeta) {
+      if (isHistory) {
+        text = mergeHistory(ours, theirs)
+        found = []
+      } else if (isMeta) {
         const r = mergeMeta(base === null ? {} : JSON.parse(base), JSON.parse(ours), JSON.parse(theirs))
         text = JSON.stringify(r.merged, null, 2) + "\n"
         found = r.conflicts
