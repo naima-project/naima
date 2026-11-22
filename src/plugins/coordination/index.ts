@@ -92,6 +92,7 @@ import { applyPlan, planSweep, type SweepInputs, type SweepItem, sweepLines, typ
 import { changeNotesCheck, changesCommand } from "./changes.ts"
 import { checkpointCommand } from "./checkpoint.ts"
 import { heavyChecksCommand, heavyChecksSection } from "./heavy-checks.ts"
+import { checkPlanCommand, checkPlanJob, checkPlanSection } from "./check-plan.ts"
 import { formattedLanding, readFormatCheck } from "./formatted.ts"
 import { idOf, land, landingCheckCommand, landingReportsPoint, landingsAreMarkers, landingsPaired } from "./land.ts"
 import { claimsReports, claimsReportsPoint } from "./claims-reports.ts"
@@ -1669,7 +1670,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       {
         name: "checkpointRuns",
         says:
-          'the commands a checkpoint runs in the background through naima run, such as the project\'s suite: a list of commands, or of { "command": "...", "host": "<declared host>", "name": "...", "budget": "2h" } (a command with a host runs in that host\'s checkout, moved to the checkpoint\'s tip first); naima checkpoint --status reads them, and a failing one blocks the gate and files or updates a bug',
+          'the commands a checkpoint runs in the background through naima run, such as the project\'s suite: a list of commands, or of { "command": "...", "host": "<declared host>", "name": "...", "budget": "2h", "paths": ["src/"] } (a command with a host runs in that host\'s checkout, moved to the checkpoint\'s tip first; every one runs at low priority, under nice where the shell has it; paths are what it can be affected by, so that a release check reruns it only when one changed); naima checkpoint --status reads them, and a failing one blocks the gate and files or updates a bug; a result of the same commit is reused, never run again',
         default: "[]",
       },
       {
@@ -1677,6 +1678,35 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
         says:
           "the host a checkpoint's naima verify of every property that is not current runs on (naima verify --host): a host declared in the long-work plugin's hosts option; none, or `here`, verifies on this machine",
         default: "none: this machine",
+      },
+      {
+        name: "backgroundChecks",
+        says:
+          "while the project plans its heavy checks (checks=checkpoint, heavyChecks=checkpoint), when a background run of them goes between a milestone's checkpoints: `nightly`, once a night, or `landings`, every backgroundEvery landings, or `off`; it runs where the heavy checks run, only when that place is idle, never blocks work, never runs twice on a commit, and reports only failures, as bugs and at naima hello",
+        default: "nightly",
+      },
+      {
+        name: "backgroundEvery",
+        says: "with backgroundChecks=landings: how many landings start a background run, a whole number",
+        default: "10",
+      },
+      {
+        name: "checkPlanSince",
+        says:
+          "the day, YYYY-MM-DD, the project began planning its heavy checks per milestone: a planned checkpoint whose threshold was crossed before it is skipped, so that adopting the plan starts no checkpoint for work already done",
+        default: "none: every threshold counts",
+      },
+      {
+        name: "idleLoad",
+        says:
+          "the load per processor of this machine under which it counts as idle, so that a planned checkpoint or a background run may start on it; heavy checks never start while a heavy run of the person's own goes where they run, nor while they are paused (naima heavy-checks pause)",
+        default: "0.5",
+      },
+      {
+        name: "heavyChecksPaused",
+        says:
+          "true while the person has paused the heavy checks (naima heavy-checks pause, resume): no planned checkpoint or background run starts, and the one going stops without a result, its point due again",
+        default: "false",
       },
       {
         name: "staleAfter",
@@ -1710,6 +1740,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       landing,
       landingCheckCommand,
       checkpointCommand,
+      checkPlanCommand,
       heavyChecksCommand,
       fixCommand(policy, openWork),
       guardCommand(guarded),
@@ -1760,8 +1791,10 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       sweepSection,
       guardOffSection(guarded),
       heavyChecksSection,
+      checkPlanSection,
       handoverSection(handover),
     ],
+    jobs: [checkPlanJob],
     setup: [guardSetup(guarded)],
     hooks: [noClosingOwnWork, trunkOnlyTracker],
   }

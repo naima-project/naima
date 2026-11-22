@@ -110,10 +110,13 @@ refactor or a new test, say so in the hand-over instead (step 7), so the coordin
 Which checks to run depends on the project's check mode (the coordination option `checks`; `naima plugin` shows it). In `continuous` mode, run the project's
 full [gate](../guide/glossary.md#gate) set, including `naima check`, as follows. In `checkpoint` mode, run a build and the one or two test files you wrote or
 touched, and nothing wider: no suite, no model check, no landing check. `naima land` runs only the checks the project names as fast (`fastChecks`) and writes
-the rest into the landing marker as owed, `naima gates` lists them, and `naima checkpoint` runs them at a gate step closing, a goal reached, or when asked.
+the rest into the landing marker as owed, and `naima gates` lists them.
 Heavy checks (a browser, a suite, model checking) run only as the project agreed with its owner (`naima heavy-checks` shows the answer): when it has not
 answered, no heavy check runs, and the owner is asked once, with `naima heavy-checks landing | checkpoint | demand --host <name | here>` or `off` recording the
-answer; never choose it yourself. Say in the report which wider runs are owed.
+answer; never choose it yourself. When the answer is `checkpoint`, heavy checks run only at the planned points of each milestone (`naima check-plan` shows
+them): a checkpoint at about half its items closed and one when all are, started by Naima itself at the landing or tick that crosses the threshold, then the
+release check (`naima checkpoint <gate> --release`, the coordinator's, at release). Never start a checkpoint or a heavy run by hand: `naima checkpoint` is
+refused before its point, and a result already recorded for a commit is reused, never rerun. Say in the report which wider runs are owed.
 
 In `continuous` mode: Where the project declares [metrics](../guide/metrics-and-budgets.md), also run `naima metrics run --record` and commit the record with
 the work. Report each number together with the one it is compared to, as the command prints it. A bound loosened to make the work fit is refused unless an item

@@ -14,6 +14,7 @@ import {
   type Item,
   joinProse,
   label,
+  lowPriority,
   noHost,
   NOTES_HEADING,
   privateContext,
@@ -60,9 +61,18 @@ async function ask(ctx: Context, command: string, args: string[]): Promise<{ cod
 const lastLine = (lines: string[]): string => lines.filter(Boolean).pop() ?? "nothing said"
 
 /** The word of the run for one host's shell: the command line the host runs, at the checkpoint's tip. */
-function hostLine(tip: string, command: string): string {
+function hostLine(tip: string, command: string, windows: boolean): string {
   const ref = checkpointRef(tip)
-  return `git checkout -q --detach ${ref} && git submodule update --init -q && ${command}`
+  return `git checkout -q --detach ${ref} && git submodule update --init -q && ${lowPriority(command, windows)}`
+}
+
+/** Whether a declared host's shell is Windows' cmd, where nice does not exist. */
+function windowsHost(ctx: Context, host: string): boolean {
+  try {
+    return projectHosts(ctx.config.plugins["long-work"]?.options ?? {}).get(host)?.shell === "cmd"
+  } catch {
+    return false
+  }
 }
 
 /** Start one run through `naima run`; its record, started or failed at once. */
@@ -93,6 +103,7 @@ export async function startRuns(
   suites: CheckpointRunSpec[],
   verifyOn: string | undefined,
   send: (ctx: Context, host: string, tip: string) => string | undefined = sendTip,
+  opts: { verify?: boolean } = {},
 ): Promise<CheckpointRun[]> {
   const runs: CheckpointRun[] = []
   for (const s of suites) {
@@ -112,17 +123,19 @@ export async function startRuns(
       }
     }
     runs.push(
-      await start(ctx, tip, s.name, "suite", s.command, s.host, [s.host ? hostLine(tip, s.command) : s.command], {
+      await start(ctx, tip, s.name, "suite", s.command, s.host, [s.host ? hostLine(tip, s.command, windowsHost(ctx, s.host)) : lowPriority(s.command)], {
         budget: s.budget ?? SUITE.budget,
         stale: SUITE.stale,
       }),
     )
   }
-  const stale = await notCurrentProperties(ctx)
+  const stale = opts.verify === false ? [] : await notCurrentProperties(ctx)
   if (stale.length) {
     const slugs = stale.map((i) => i.slug)
     runs.push(
       await start(ctx, tip, "verify", "verify", `naima verify ${slugs.join(" ")}`, undefined, [
+        // At low priority on this machine, as every heavy run; the verification on a host runs there as its Naima does.
+        ...(process.platform === "win32" ? [] : ["nice", "-n", "10"]),
         ...naimaHere(ctx.trackerRoot),
         "verify",
         ...slugs,
@@ -166,11 +179,11 @@ const clean = (ctx: Context, text: string): string => redactPrivate(text.split(c
 export function fileBug(ctx: Context, r: CheckpointRun, tip: string): string | undefined {
   const type = ctx.registry.types.get("bugs")
   if (!type) return undefined
-  const title = `Checkpoint run ${r.name} fails`
+  const title = `${r.kind === "check" ? "Landing check" : "Checkpoint run"} ${r.name} fails`
   const open = ctx.repo.items.find((i) => i.type === "bugs" && i.meta["title"] === title && isOpen(ctx, i))
   const said = clean(
     ctx,
-    `The ${r.kind === "verify" ? "verification of the properties not current" : "suite"} \`${r.what}\`${
+    `The ${r.kind === "verify" ? "verification of the properties not current" : r.kind === "check" ? "landing check" : "suite"} \`${r.what}\`${
       r.host ? ` on ${r.host}` : ""
     } failed at the checkpoint of ${tip.slice(0, 12)}: ${r.why ?? "no reason read"}. Its log: naima run status ${r.run}.`,
   )
@@ -206,7 +219,7 @@ export async function settle(ctx: Context, record: CheckpointRecord): Promise<Ch
     }
   })
   const failed = [...record.failed, ...out.filter((r) => r.state === "failed").map((r) => `${r.name}: ${r.why ?? "failed"}`)]
-  return updateCheckpoint(ctx, record.id, { runs: out, pending: false, passed: failed.length === 0, failed })
+  return updateCheckpoint(ctx, record.id, { runs: out, pending: false, passed: failed.length === 0, failed, ended: ctx.now().toISOString() })
 }
 
 /** The lines `naima checkpoint --status` prints for a record. */
