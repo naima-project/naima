@@ -50,19 +50,25 @@ export class CommitGraph {
     return seen
   }
 
-  /** Every commit of the graph that has `h` among its ancestors, `h` itself excluded. */
-  descendants(h: string): Set<string> {
+  /** Each commit's children in the graph, built once. */
+  private children(): Map<string, string[]> {
     if (!this.kids) {
       this.kids = new Map()
       for (const [c, node] of this.commits) for (const p of node.parents) (this.kids.get(p) ?? this.kids.set(p, []).get(p)!).push(c)
     }
+    return this.kids
+  }
+
+  /** Every commit of the graph that has `h` among its ancestors, `h` itself excluded. */
+  descendants(h: string): Set<string> {
+    const kids = this.children()
     const seen = new Set<string>()
-    const stack = [...(this.kids.get(h) ?? [])]
+    const stack = [...(kids.get(h) ?? [])]
     while (stack.length) {
       const c = stack.pop()!
       if (seen.has(c)) continue
       seen.add(c)
-      for (const k of this.kids.get(c) ?? []) stack.push(k)
+      for (const k of kids.get(c) ?? []) stack.push(k)
     }
     return seen
   }
@@ -74,7 +80,7 @@ export class CommitGraph {
     return [...out]
   }
 
-  /** The commits of `set` that no other commit of `set` descends from... that is, the newest ones: those with no child in `set`. */
+  /** The newest commits of `set`: those with no child in it. */
   newest(set: ReadonlySet<string>): string[] {
     const out: string[] = []
     for (const c of set) {
@@ -91,8 +97,7 @@ export class CommitGraph {
   }
 
   private childrenOf(h: string): string[] {
-    this.descendants(h) // builds the children index
-    return this.kids!.get(h) ?? []
+    return this.children().get(h) ?? []
   }
 
   /**
