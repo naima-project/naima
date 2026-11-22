@@ -24,9 +24,11 @@
   import {
     afterChange,
     afterClose,
+    appliedView,
     cellText,
     clearFilters,
     type Column,
+    dropView,
     EMPTY_VIEW,
     filtersOn,
     headId,
@@ -35,9 +37,12 @@
     listModel,
     move,
     type Place,
+    pickView,
     placeId,
     regroup,
     rowId,
+    type SavedView,
+    saveView,
     sideways,
     sortBy,
     toggleColumn,
@@ -64,6 +69,9 @@
     mark?: (item: T) => string | undefined;
     /** Words said when nothing is kept: "No bug matches". */
     nothing?: string;
+    /** The views kept under a name; bind it to keep them (per project, by the caller). With none bound, the list offers
+     *  no views. */
+    saved?: SavedView[];
     /** The controls folded into one status line of words, unfolded by Adjust. */
     quiet?: boolean;
     /** What the list was opened on, said first on the status line: "bugs · waiting for you". */
@@ -80,6 +88,7 @@
     onclose,
     mark,
     nothing = "Nothing matches",
+    saved = $bindable(),
     quiet = false,
     slice = "",
   }: Props = $props();
@@ -206,6 +215,22 @@
     const c = spec.columns.find((x) => x.id === view.sort);
     return c ? `sorted by ${lower(c.label)}${view.desc ? ", descending" : ""}` : "as listed";
   });
+  // ---- Views kept under a name: pick one, keep the one on the page under a name, drop one.
+  const applied = $derived(saved ? appliedView(saved, view) : null);
+  let naming = $state(false);
+  let named = $state("");
+  let nameBox = $state<HTMLInputElement>();
+  async function startNaming() {
+    named = "";
+    naming = true;
+    await tick();
+    nameBox?.focus();
+  }
+  function keep() {
+    if (!saved || !named.trim()) return;
+    saved = saveView(saved, named, view);
+    naming = false;
+  }
   async function openSearch() {
     searching = true;
     await tick();
@@ -256,6 +281,42 @@
         {/if}
       {/each}
   {/snippet}
+  {#snippet viewsRow()}
+    {#if saved}
+      <div class="facet views" role="group" aria-label="Views" data-part="list-views">
+        <span class="flabel">Views</span>
+        {#each saved as s (s.name)}
+          <span class="vchip" class:on={applied === s.name}>
+            <button class="vpick" type="button" aria-pressed={applied === s.name} onclick={() => (view = pickView(saved ?? [], s.name, view))}>{s.name}</button>
+            <button class="vdrop" type="button" aria-label="Delete the view {s.name}" title="Delete the view" onclick={() => (saved = dropView(saved ?? [], s.name))}><X class="glyph" aria-hidden="true" /></button>
+          </span>
+        {/each}
+        {#if naming}
+          <input
+            bind:this={nameBox}
+            class="vname"
+            type="text"
+            placeholder="Name this view"
+            aria-label="Name for the view"
+            bind:value={named}
+            onkeydown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                keep();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation();
+                naming = false;
+              }
+            }}
+            onblur={() => (naming = false)}
+          />
+        {:else}
+          <button class="chip" type="button" data-part="list-save-view" disabled={applied !== null} onclick={startNaming}>Save this view</button>
+        {/if}
+      </div>
+    {/if}
+  {/snippet}
   {#if quiet && !narrow}
     <!-- Quiet: one status line of words, each a way to the controls; the search a small glyph that opens in place. -->
     <div class="status" data-part="list-status">
@@ -266,6 +327,7 @@
       {/if}
       <p class="st-line" aria-live="polite">
         {#if slice}<span class="st-slice">{slice}</span><span class="st-sep" aria-hidden="true">·</span>{/if}
+        {#if applied}<span class="st-slice" data-part="list-applied">{applied}</span><span class="st-sep" aria-hidden="true">·</span>{/if}
         <span class="st-count">{counted}</span>
         {#if spec.facets?.length}<span class="st-sep" aria-hidden="true">·</span><button class="st-part" type="button" aria-label="Filters: {filterWords}. Adjust" onclick={() => (adjusting = true)}>{filterWords}</button>{/if}
         {#if spec.groupings?.length}<span class="st-sep" aria-hidden="true">·</span><button class="st-part" type="button" aria-label="{groupWords}. Adjust" onclick={() => (adjusting = true)}>{groupWords}</button>{/if}
@@ -315,6 +377,7 @@
             {#if filtersOn(view)}<Action label="Clear filters" icon={X} size="sm" onclick={() => (view = clearFilters(view))} />{/if}
           </div>
         {/if}
+        {@render viewsRow()}
       </div>
     {/if}
   {:else}
@@ -368,6 +431,7 @@
       {#if filtersOn(view)}<Action label="Clear filters" icon={X} size="sm" onclick={() => (view = clearFilters(view))} />{/if}
     </div>
   {/if}
+  {#if !narrow}{@render viewsRow()}{/if}
   {/if}
 
   <!-- svelte-ignore a11y_interactive_supports_focus -->
@@ -631,6 +695,7 @@
     min-inline-size: var(--size-target);
   }
   .st-glyph :global(.glyph),
+  .vdrop :global(.glyph),
   .st-adjust :global(.glyph) {
     inline-size: var(--size-icon);
     block-size: var(--size-icon);
@@ -718,6 +783,53 @@
   .chip:disabled {
     opacity: 0.38;
     cursor: default;
+  }
+  /* A view kept: its name picks it, a small cross drops it. */
+  .vchip {
+    display: inline-flex;
+    align-items: center;
+    border: var(--border-width-thin) solid var(--color-border-soft);
+    border-radius: var(--radius-full);
+  }
+  .vchip.on {
+    color: var(--color-on-accent);
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+  .vpick,
+  .vdrop {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: var(--size-target);
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+  .vpick {
+    padding: var(--space-none) var(--space-sm);
+  }
+  .vdrop {
+    padding: var(--space-none) var(--space-sm) var(--space-none) var(--space-none);
+    opacity: 0.6;
+  }
+  .vdrop:hover {
+    opacity: 1;
+  }
+  .vpick:focus-visible,
+  .vdrop:focus-visible,
+  .vname:focus-visible {
+    outline: var(--border-width-focus) solid var(--color-focus);
+  }
+  .vname {
+    min-block-size: var(--size-target);
+    padding: var(--space-none) var(--space-sm);
+    font: inherit;
+    color: var(--color-text);
+    background: var(--color-surface);
+    border: var(--border-width-thin) solid var(--color-border);
+    border-radius: var(--radius-full);
   }
   .n {
     color: var(--color-text-muted);
