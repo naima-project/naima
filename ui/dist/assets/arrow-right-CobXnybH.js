@@ -1,0 +1,1 @@
+import{n as e,oi as t,si as n}from"./chevron-right-C75edB50.js";var r={name:`arrow-right`,size:24,node:[[`path`,{d:`M5 12h14`}],[`path`,{d:`m12 5 7 7-7 7`}]]};r.node;var i=new Set([`$$slots`,`$$events`,`$$legacy`]);function a(a,o){let s=t(o,i);e(a,n(()=>s,{get icon(){return r}}))}export{a as t};
