@@ -3,10 +3,10 @@
 // it under `naima run` (develop/models-tab.md §15); a person may run it by hand. It records nothing in the tracker: a
 // property that must hold for the project is a property item, decided by `naima verify`.
 
-import { existsSync, mkdirSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { type Command, type Context, parse, progressFor, str, usageError } from "../../core/api.ts"
-import { counterexamplePath } from "./counterexample.ts"
+import { counterexamplePath, idNames } from "./counterexample.ts"
 
 /** What the verifier gives back, as this command reads it. */
 interface Result {
@@ -87,7 +87,7 @@ export function modelCheck(checker: Checker): Command {
             const day = ctx.now().toISOString().slice(0, 10)
             const said = `mCRL2 counterexample of ${rel} on ${specRel}, ${day}${origin ? `, ${origin}` : ""}`
             try {
-              writeFileSync(join(folder, name), counterexamplePath(r.counterexample, said))
+              writeFileSync(join(folder, name), counterexamplePath(r.counterexample, said, idNames(readFileSync(resolve(ctx.root, specRel), "utf8"))))
               row.path = `${paths}/${name}`
             } catch (e) {
               row.output = `the counterexample could not be read as a path: ${e instanceof Error ? e.message : String(e)}`

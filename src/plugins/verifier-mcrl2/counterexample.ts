@@ -87,9 +87,26 @@ export function lineOf(label: string): string | null {
   return label
 }
 
+/**
+ * The names the stepper gives the values of an id sort, for the names the refined system gives them. A naima-codegen
+ * system declares `sort Task = struct T0 | T1` and `eqn task(0) = T0;`: the counterexample says T3, the stepper (and
+ * so a path) says task(3). Read from the system's equations of the form `name(<number>) = <Constant>`.
+ */
+export function idNames(system: string): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const m of system.matchAll(/\b([a-z][\w']*\(\d+\))\s*=\s*([A-Z][\w']*)\s*;/g)) out.set(m[2]!, m[1]!)
+  return out
+}
+
+/** A label with every id constant of `names` written as the stepper writes it; the others untouched. */
+export function withIds(label: string, names: ReadonlyMap<string, string>): string {
+  return names.size === 0 ? label : label.replace(/\b[A-Z][\w']*\b/g, (w) => names.get(w) ?? w)
+}
+
 /** The path file of a counterexample: its origin, then a line per label (§10), with the loop said when it ends in one. */
-export function counterexamplePath(aut: string, origin: string): string {
-  const { labels, loop } = tracePath(aut)
+export function counterexamplePath(aut: string, origin: string, ids: ReadonlyMap<string, string> = new Map()): string {
+  const { labels: raw, loop } = tracePath(aut)
+  const labels = raw.map((l) => withIds(l, ids))
   const lines = [`% origin: ${origin}`]
   labels.forEach((l, i) => {
     if (loop !== null && i === loop) lines.push("% the loop starts here")
