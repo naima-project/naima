@@ -23,9 +23,8 @@
 
   let dx = $state(112);
   const X0 = 40;
-  /** The drawing's height follows the card's: the line at its middle, the steps ahead spread over it. */
-  let boxH = $state(220);
-  const H = $derived(Math.max(150, boxH - 6));
+  /** The drawing's height, in its own units: the line at its middle, the steps ahead spread over it. */
+  const H = 220;
   const Y = $derived(H / 2 + 6);
   const xOf = (k: number) => X0 + k * dx;
   const xNow = $derived(xOf(position));
@@ -50,7 +49,6 @@
     <button aria-label="Further apart" onclick={() => (dx = Math.min(260, dx * 1.25))}>+</button>
   </div>
   <Pannable {label} class="pan" ignore=".state, .ahead" bind:box>
-    <span class="hmeasure" bind:clientHeight={boxH}></span>
     <svg width={W} height={H} viewBox="0 0 {W} {H}" role="img" aria-label={label}>
       <line class="track" x1={xOf(0)} x2={xOf(past.length)} y1={Y} y2={Y} />
       {#each past as p, i (i)}
@@ -132,11 +130,6 @@
   }
   svg {
     display: block;
-  }
-  .hmeasure {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
   }
   .timeline :global(.pan) {
     position: relative;
