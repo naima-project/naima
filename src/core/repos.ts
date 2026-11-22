@@ -18,7 +18,7 @@
 import { chmodSync, existsSync, readdirSync, readFileSync, realpathSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { posixRelative } from "./config.ts"
-import { gitOrNull, gitReason, mustGit, nativePath, runGit, toplevel, trunk } from "./git.ts"
+import { gitOrNull, gitReason, mustGit, nativePath, ownIdentity, runGit, toplevel, trunk } from "./git.ts"
 import { DATA_DIR, DATA_FILE, TRACKER_DIR } from "./layout.ts"
 import { writeFileAtomic } from "./files.ts"
 
@@ -405,7 +405,15 @@ export function commitTrackerPaths(trackerGit: string, command: string, paths: r
   const spec = ["--pathspec-from-file=-", "--pathspec-file-nul"]
   const added = runGit(trackerGit, ["--literal-pathspecs", "add", "-A", ...spec], { input })
   if (!added.ok) return `git add: ${gitReason(added)}`
-  const made = runGit(trackerGit, ["--literal-pathspecs", "commit", "-q", "-m", cliCommitMessage(command, paths, prefix, orderedBy), ...spec], { input })
+  const made = runGit(trackerGit, [
+    ...ownIdentity(trackerGit),
+    "--literal-pathspecs",
+    "commit",
+    "-q",
+    "-m",
+    cliCommitMessage(command, paths, prefix, orderedBy),
+    ...spec,
+  ], { input })
   return made.ok ? null : `git commit: ${gitReason(made)}`
 }
 

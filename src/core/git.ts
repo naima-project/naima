@@ -431,6 +431,17 @@ export function commitOn(root: string, lands = false): string {
 }
 
 /**
+ * The `-c` flags that give a commit an author when the repository has none of its own (no user.name or user.email,
+ * and none in the environment): the commits Naima makes in a tracker it keeps, which git would refuse without one.
+ * A repository with an identity is left to it.
+ */
+export function ownIdentity(dir: string): string[] {
+  const named = process.env["GIT_AUTHOR_NAME"] || gitOrNull(dir, "config", "user.name")?.trim()
+  const mailed = process.env["GIT_AUTHOR_EMAIL"] || gitOrNull(dir, "config", "user.email")?.trim()
+  return named && mailed ? [] : ["-c", `user.name=${named || "Naima"}`, "-c", `user.email=${mailed || "naima@localhost"}`]
+}
+
+/**
  * The trunk: the local branch origin's HEAD names, else `main`, else `master`; for a project whose trunk is named
  * otherwise and has no origin HEAD, the local branch git's own `init.defaultBranch` names, else the branch the main
  * checkout stands on; null when there is none of them. One git process when `main` or `master` exists.
