@@ -106,7 +106,7 @@ export function quoted(word: string, windows: boolean): string {
 }
 
 /** The jobs of the workbench. */
-export type Job = "check" | "generate" | "run"
+export type Job = "check" | "generate" | "run" | "build"
 
 /** What a job needs besides the study: where the project is, how Naima and naima-codegen are started, the platform. */
 export interface JobContext {
@@ -116,6 +116,8 @@ export interface JobContext {
   /** How naima-codegen is started, or null when it is not installed. */
   codegen: readonly string[] | null
   windows: boolean
+  /** The UI tab's build of the app's card page, for a model of the UI tab: the folder it runs in and its words. */
+  card?: { dir: string; build: readonly string[] } | null
 }
 
 /** naima-codegen as a command line, from where it was found (core/tools.ts, findCodegen): on Windows a script without an
@@ -188,6 +190,12 @@ export function jobLine(job: Job, study: Study, ctx: JobContext, property?: stri
       q(`naima-codegen is not installed, so the properties are checked on ${study.system} as it was last generated, not on the model as saved. ${CODEGEN_MISSING}`)
     }`
     return atRoot + (!study.codegen ? check : generate ? `${generate} && ${check}` : `${stale} && ${check}`)
+  }
+  if (job === "build") {
+    if (!ctx.card) return { refused: "the model is not one of the UI tab's, so there is no card page to build" }
+    if (!ctx.card.build.length) return { refused: "the UI tab declares no build of its card page (tab.card.build in stance-ui.json)" }
+    const dir = resolve(ctx.root, ctx.card.dir)
+    return `${ctx.windows ? `cd /d ${q(dir)}` : `cd ${q(dir)}`} && ${line(ctx.card.build)}`
   }
   if (job === "generate") {
     if (!study.codegen) return { refused: "the study's folder holds no codegen.toml: there is nothing for naima-codegen to generate" }

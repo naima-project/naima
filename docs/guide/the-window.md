@@ -587,18 +587,8 @@ is still reading is never lost, since the screen reads once more when the first 
 The components only read the machines' state and call their transitions. The colours, type and shapes are the design tokens of the interface, and the Inter
 typeface comes with it under the SIL Open Font License.
 
-## The state explorer
+## Every state of the interface
 
-The state explorer shows every state the interface can be in, without the server and without the project's data. Open it at `/#explorer` in the window, or open
-the file `ui/dist/explorer.html` of the Naima checkout straight from the disk.
-
-On the left it lists the states of each state machine of the interface. The shell's are every combination of the moment (Live, one of two commits of the past,
-or one of two goals ahead), the rail (closed or open), the screen, or a plugin's tab and subtab (two of each, as in the model), with the tab and subtab last
-shown, that the model allows. The home data's are what Home shows while it reads, once it has read (a recorded project, or an empty one), when the reading
-fails, and while a reload waits for the reading on its way. Choose a state and the real interface appears below in that state, with the map and the project
-recorded from a real one. Above it, "Path to here" gives the shortest way from the start to that state, and "Transitions" lists every step out of it; choosing
-one takes that step. Using the interface in the preview moves the explorer too. "Every state" shows a thumbnail of the interface in each state of the shell.
-
-The shell's list comes from the code generated from its model, and its count is the model's: the model has 596 states, 320 where the interface rests between two
-of your actions and 276 it only passes through inside one, while it asks the screens to read their data again or the tab shown to read its content. The explorer
-lists the 320 and says how many the model has.
+The interface's own state machines are studied in the UI tab of Naima's workshop, beside Models: each machine of the interface opens with its states,
+its steps and the real interface in the state the machine is in, and its card "Every state" shows a picture of the interface in each state the machine rests
+in ([studying a model](study-a-model.md#the-ui-tab)). The address `/#explorer` opens the UI tab.

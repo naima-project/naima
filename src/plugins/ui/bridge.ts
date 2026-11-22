@@ -440,7 +440,12 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
     "study-job": async (args) => {
       const study = studyOf(args["id"])
       const job = String(args["job"])
-      if (job !== "check" && job !== "generate" && job !== "run") throw new Error(`no job ${job}: the jobs are check, generate and run`)
+      if (job !== "check" && job !== "generate" && job !== "run" && job !== "build") {
+        throw new Error(`no job ${job}: the jobs are check, generate, run and build`)
+      }
+      // The build of the UI tab's card page is the project's declared build, for a model of the UI tab only.
+      const tab = job === "build" ? uiTab(ctx.root, ctx.program) : null
+      const card = tab?.card && inUiTab(tab, study) ? { dir: tab.dir, build: tab.card.build } : null
       const windows = process.platform === "win32"
       const codegen = findCodegen(ctx.root)
       const python = installedPython()
@@ -450,6 +455,7 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
         naima: actionCommand(opts.entry ?? selfEntry(), ctx.trackerRoot, []),
         codegen: codegenCommand(codegen, windows, python),
         windows,
+        card,
       }, text(args["property"]) ?? undefined)
       if (typeof line !== "string") throw new Error(line.refused)
       const run = `ui-study-${job}-${ctx.now().toISOString().replace(/\D/g, "").slice(0, 14)}-${++runs}`
@@ -469,7 +475,11 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
             "--stale",
             "30m",
             "--no-progress",
-            job === "generate" ? "naima-codegen and a study's build print their stages, not a count" : "a study's program writes what it writes",
+            job === "generate"
+              ? "naima-codegen and a study's build print their stages, not a count"
+              : job === "build"
+              ? "a project's build prints its stages, not a count"
+              : "a study's program writes what it writes",
           ]),
           "--",
           shellLine(line, windows),
