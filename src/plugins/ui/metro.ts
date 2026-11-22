@@ -500,7 +500,13 @@ export type JsonOf = <T>(ctx: Context, words: string[]) => Promise<T | null>
 /** The views whose data is what a command prints with --json, by the command's words: the metro reads them through the view. */
 export const VIEW_OF_COMMAND: Record<string, string> = { gates: "gates", claims: "claims", "line list": "lines" }
 
-export async function metroData(ctx: Context, read: JsonOf = commandJson): Promise<Metro> {
+/**
+ * The map. Each checkout's work not committed is one git process in that checkout (40 on this workshop, some 2 s together
+ * on a busy machine), and it is the one question that cannot be asked of all the checkouts at once. With `later`, the map is
+ * returned without those marks, and `later` is called once with the whole map, marks included, when the last check ends
+ * (and not at all when no checkout holds work not committed): what the final map says is what the map says without `later`.
+ */
+export async function metroData(ctx: Context, read: JsonOf = commandJson, later?: (whole: Metro) => void): Promise<Metro> {
   const commits: Record<string, MetroCommit> = {}
   const authors0: Authors = new Map()
   const main = trunk(ctx.root)
@@ -521,7 +527,6 @@ export async function metroData(ctx: Context, read: JsonOf = commandJson): Promi
       : Promise.resolve(null),
   }
   const trees = worktrees(ctx.root)
-  const checkouts = checkoutsOf(trees)
   const lines = (await read<{ lines: LineRow[] }>(ctx, ["line", "list"]))?.lines ?? []
   const lineNames = new Set(lines.map((l) => l.branch))
   // Each line's own commits and its fork, and each branch's base, rejoin and fork, asked of git for everything at once
@@ -662,7 +667,7 @@ export async function metroData(ctx: Context, read: JsonOf = commandJson): Promi
       if (n) r.local = n
     }
   }
-  return {
+  const result: Metro = {
     trunk: main,
     head,
     routes,
@@ -671,10 +676,17 @@ export async function metroData(ctx: Context, read: JsonOf = commandJson): Promi
     goals,
     ...(older ? { older } : {}),
     people: peopleOf(ctx, routes, authors, head, window, (await early.me) || null),
-    checkouts: await checkouts,
+    checkouts: checkoutRows(trees, later ? [] : await dirtyOf(trees)),
     names: stopNames(ctx),
     ...(remote ? { remote } : {}),
   }
+  if (later) {
+    // Asked now, after every other question: the checks would otherwise hold the slots the others wait for.
+    void dirtyOf(trees).then((dirty) => {
+      if (dirty.some((d) => d.dirty !== undefined)) later({ ...result, checkouts: checkoutRows(trees, dirty) })
+    })
+  }
+  return result
 }
 
 /** When each discussion still open on one of `ids` was filed: a question the work on it waits for. */
@@ -733,8 +745,7 @@ function peopleOf(ctx: Context, routes: readonly Route[], authors: Authors, head
 }
 
 /** The main checkout and each worktree, with the branch and the commit it stands on, and its work not committed. */
-async function checkoutsOf(all: readonly Worktree[]): Promise<Checkout[]> {
-  const dirty = await Promise.all(all.map((w) => dirtyOf(w.path)))
+function checkoutRows(all: readonly Worktree[], dirty: readonly { dirty?: number }[]): Checkout[] {
   return all.map((w, i) => ({
     name: basename(w.path),
     main: i === 0,
@@ -745,6 +756,9 @@ async function checkoutsOf(all: readonly Worktree[]): Promise<Checkout[]> {
   }))
 }
 
+/** The work not committed of each checkout, every one asked at once. */
+const dirtyOf = (all: readonly Worktree[]): Promise<{ dirty?: number }[]> => Promise.all(all.map((w) => dirtyOfOne(w.path)))
+
 /** How long one of the map's git questions about a branch may take, in ms: none should come near it. */
 const GIT_MS = 30_000
 
@@ -753,7 +767,7 @@ const DIRTY_MS = 2000
 
 /** How many tracked files of a checkout differ from its commit (untracked files are not counted: listing them walks
  *  every folder); nothing when none, or git cannot tell in time. Every checkout is asked at once, none waits on another. */
-async function dirtyOf(path: string): Promise<{ dirty?: number }> {
+async function dirtyOfOne(path: string): Promise<{ dirty?: number }> {
   const r = await runGitAsync(path, ["diff", "HEAD", "--name-only", "--ignore-submodules=all"], DIRTY_MS)
   const n = r.ok ? r.out.split("\n").filter(Boolean).length : 0
   return n ? { dirty: n } : {}

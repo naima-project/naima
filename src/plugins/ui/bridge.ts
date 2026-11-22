@@ -171,6 +171,7 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
   askHostsInBackground()
   const atCache = new AtCache()
   let runs = 0
+  let mapReads = 0
   // The live reads under way or answered, by what they read: one answer for every ask until it is SHARE_MS old, the
   // project changes (the changes feed saw it) or an action runs; a read that fails is not kept.
   const shared = new Map<string, { at: number; answer: Promise<unknown> }>()
@@ -508,7 +509,24 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       if (r.code !== 0) throw new Error(r.err.trim() || `could not stop ${name}`)
       return json({ stopped: name })
     },
-    metro: async () => (await kept("metro", async () => json(await metroData(momentOf(null), viaViews)))) as Json,
+    // The map is answered at once without each checkout's work not committed; when those checks end, the whole map replaces
+    // the kept answer and the changes feed says so once, so the screen reads it again (metroData's `later`).
+    metro: async () => {
+      return await kept("metro", async () => {
+        const mine = ++mapReads
+        return json(
+          await metroData(momentOf(null), viaViews, (whole) => {
+            // Only while this read is the latest and the kept answer stands: the project may have changed since.
+            if (mine !== mapReads || !shared.has("metro")) return
+            const data = json(whole)
+            shared.set("metro", { at: performance.now(), answer: Promise.resolve(data) })
+            if (cache) void stampNow().then((stamp) => cache.put("metro", stamp, data))
+            const c: Change = { kinds: ["items"], head: headCommit(ctx.root) || null, at: ctx.now().toISOString() }
+            for (const l of listeners) l(c)
+          }),
+        )
+      }) as Json
+    },
     action: async (args) => {
       shared.clear()
       stamped = null
