@@ -366,6 +366,7 @@
 
   /* ---- The bar: the search, then the filters, the grouping, the sort and the columns, the count at the end. */
   .bar {
+    position: relative;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -396,7 +397,7 @@
   .search input {
     flex: 1;
     min-inline-size: 0;
-    border: 0;
+    border: var(--border-width-thin) solid transparent;
     background: transparent;
     color: var(--color-text);
     font: inherit;
@@ -406,9 +407,15 @@
   }
   .pick {
     display: inline-flex;
+    flex-wrap: wrap;
+    max-inline-size: 100%;
     align-items: center;
     gap: var(--space-xs);
     color: var(--color-text-muted);
+  }
+  .pick select {
+    min-inline-size: 0;
+    max-inline-size: 100%;
   }
   .pick select,
   .dir,
@@ -422,14 +429,22 @@
     border-radius: var(--radius-full);
     cursor: pointer;
   }
-  .columns {
-    position: relative;
-  }
   .columns summary {
     display: inline-flex;
     align-items: center;
     list-style: none;
     color: var(--color-text-muted);
+  }
+  .pick select:focus-visible,
+  .dir:focus-visible,
+  .columns summary:focus-visible,
+  .chip:focus-visible,
+  .heads button:focus-visible {
+    outline: var(--border-width-focus) solid var(--color-focus);
+  }
+  /* The columns on offer are not there to reach while the box is closed. */
+  .columns:not([open]) fieldset {
+    display: none;
   }
   .columns fieldset {
     position: absolute;
@@ -441,7 +456,8 @@
     gap: var(--space-xs);
     margin: 0;
     padding: var(--space-sm) var(--space-md);
-    min-inline-size: var(--size-w-12);
+    min-inline-size: min(var(--size-w-12), 100%);
+    max-inline-size: 100%;
     background: var(--color-surface-raised);
     border: var(--border-width-thin) solid var(--color-border);
     border-radius: var(--radius-md);
@@ -451,7 +467,7 @@
     align-items: center;
     gap: var(--space-xs);
     min-block-size: var(--size-target);
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
   .count {
     margin-inline-start: auto;
@@ -541,12 +557,12 @@
   .heads button {
     min-block-size: var(--row);
     padding: 0;
+    border: var(--border-width-thin) solid transparent;
     font: inherit;
     letter-spacing: inherit;
     text-transform: inherit;
     color: inherit;
     background: none;
-    border: 0;
     cursor: pointer;
   }
   .heads [aria-sort] button {
@@ -704,6 +720,17 @@
   @media (pointer: coarse) {
     .list {
       --row: var(--size-touch);
+    }
+    .search,
+    .pick select,
+    .dir,
+    .columns summary,
+    .chip,
+    .columns label {
+      min-block-size: var(--size-control);
+    }
+    .heads button {
+      min-inline-size: var(--size-control);
     }
   }
   @media (prefers-reduced-motion: reduce) {

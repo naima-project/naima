@@ -35,10 +35,14 @@
   const W = $derived(Math.max(xOf(past.length), xNow + 1.6 * dx) + 260);
   const short = (t: string) => (t.length > 20 ? `${t.slice(0, 19)}…` : t);
 
+  /** Where the longest step ahead ends. */
+  const reach = $derived(xNow + 1.6 * dx + 36 + 7 * Math.max(0, ...drawn.map((s) => s.name.length + (s.detail?.length ?? 0))));
   let box: HTMLDivElement | undefined = $state();
   $effect(() => {
     const x = xNow;
-    if (box) box.scrollTo({ left: Math.max(0, x - box.clientWidth * 0.55), behavior: "smooth" });
+    // The current state stays in view, and, when the box is narrow, the steps ahead with it: the box shows as much of
+    // the run's end as it can, from the current state on.
+    if (box) box.scrollTo({ left: Math.max(0, Math.min(reach - box.clientWidth, x - 24)), behavior: "smooth" });
   });
 </script>
 
@@ -50,7 +54,7 @@
     <button aria-label="Further apart" onclick={() => (dx = Math.min(260, dx * 1.25))}>+</button>
   </div>
   <Pannable {label} class="pan" ignore=".state, .ahead" bind:box>
-    <svg width={W} height={H} viewBox="0 0 {W} {H}" role="img" aria-label={label}>
+    <svg width={W} height={H} viewBox="0 0 {W} {H}" role="group" aria-label={label}>
       <line class="track" x1={xOf(0)} x2={xOf(past.length)} y1={Y} y2={Y} />
       {#each past as p, i (i)}
         <g class="past" class:after={i >= position} style:opacity={i < position ? fade(i) : 0.3}>
@@ -60,25 +64,28 @@
       {/each}
       {#each Array.from({ length: past.length + 1 }, (_, k) => k) as k (k)}
         {#if k !== position}
-          <circle
+          <g
             class="state"
             class:pinned={pinned.has(k)}
             style:opacity={k < position ? fade(k) : 0.35}
-            cx={xOf(k)}
-            cy={Y}
-            r="7"
             role="button"
             tabindex="0"
             aria-label="go to step {k}"
             onclick={() => onpick(k)}
             onkeydown={(e) => e.key === "Enter" && onpick(k)}
-          />
+          >
+            <rect class="pad" x={xOf(k) - 24} y={Y - 24} width="48" height="48" />
+            <circle class="hit" cx={xOf(k)} cy={Y} r="13" />
+            <circle class="dot" cx={xOf(k)} cy={Y} r="7" />
+          </g>
         {/if}
       {/each}
       {#each drawn as s, i (s.key)}
         {@const y = yAhead(i, drawn.length)}
-        <g class="ahead" role="button" tabindex="0" aria-label="take {s.title}" onclick={() => onfire(s.key)} onkeydown={(e) => e.key === "Enter" && onfire(s.key)}>
-          <path class="branch" d="M {xNow} {Y} C {xNow + dx * 0.8} {Y}, {xNow + dx * 0.8} {y}, {xNow + dx * 1.6} {y}" />
+        <path class="branch" d="M {xNow} {Y} C {xNow + dx * 0.8} {Y}, {xNow + dx * 0.8} {y}, {xNow + dx * 1.6} {y}" />
+        <g class="ahead" role="button" tabindex="0" aria-label="{s.name}{s.detail ? ` ${s.detail}` : ''}: {s.title}" onclick={() => onfire(s.key)} onkeydown={(e) => e.key === "Enter" && onfire(s.key)}>
+          <rect class="hit" x={xNow + dx * 1.6 - 13} y={y - 13} width={40 + (s.name.length + (s.detail?.length ?? 0)) * 7} height="26" />
+          <rect class="pad" x={xNow + dx * 1.6 - 24} y={y - 24} width={48 + (s.name.length + (s.detail?.length ?? 0)) * 7} height="48" />
           <circle class="maybe" cx={xNow + dx * 1.6} cy={y} r="6" />
           <text class="label ahead-label" x={xNow + dx * 1.6 + 14} y={y + 4}>{s.name}{#if s.detail}<tspan class="arg" dx="6">{s.detail}</tspan>{/if}</text>
           <title>{s.title}</title>
@@ -102,6 +109,7 @@
   }
   .controls {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-xs);
     font-family: var(--font-family-mono);
@@ -114,12 +122,17 @@
     min-inline-size: var(--size-target);
     color: var(--color-text-muted);
     background: none;
-    border: none;
+    border: var(--border-width-thin) solid transparent;
     border-radius: var(--radius-full);
     cursor: pointer;
   }
   .controls button:hover {
     color: var(--color-accent);
+  }
+  .controls button:focus-visible,
+  .state:focus-visible,
+  .ahead:focus-visible {
+    outline: var(--border-width-focus) solid var(--color-focus);
   }
   .sep {
     flex: 1;
@@ -143,18 +156,46 @@
     stroke-width: 1.2;
   }
   .state {
+    cursor: pointer;
+    border: var(--border-width-thin) solid transparent;
+  }
+  .dot {
     fill: var(--color-surface-raised);
     stroke: var(--color-text);
     stroke-width: 1.4;
-    cursor: pointer;
   }
-  .state:hover,
-  .state:focus {
+  .state:hover .dot,
+  .state:focus .dot {
     stroke: var(--color-accent);
   }
-  .state.pinned {
+  .state.pinned .dot {
     stroke: var(--color-accent);
     stroke-width: 2.4;
+  }
+  /* What a click or a tap lands on, drawn in nothing. The padding that brings a target to a finger's size is there only
+     where the pointer is a finger. */
+  .hit {
+    fill: transparent;
+  }
+  .pad {
+    display: none;
+    fill: transparent;
+  }
+  @media (pointer: coarse) {
+    .pad {
+      display: inline;
+    }
+    .controls button {
+      min-block-size: var(--size-control);
+      min-inline-size: var(--size-control);
+    }
+  }
+  /* With more contrast asked for, nothing fades. */
+  @media (prefers-contrast: more) {
+    .past,
+    .state {
+      opacity: 1 !important;
+    }
   }
   .now {
     fill: var(--color-accent);
@@ -178,6 +219,7 @@
   }
   .ahead {
     cursor: pointer;
+    border: var(--border-width-thin) solid transparent;
   }
   .ahead:hover .maybe,
   .ahead:focus .maybe {

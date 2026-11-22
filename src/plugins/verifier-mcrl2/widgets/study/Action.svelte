@@ -187,6 +187,16 @@
     background: var(--color-surface-soft);
     border-color: var(--color-border-soft);
   }
+  /* A finger needs a whole control: the small action and the icon alone grow to it. */
+  @media (pointer: coarse) {
+    .action.sm {
+      min-block-size: var(--size-control);
+    }
+    .action.compact {
+      min-inline-size: var(--size-control);
+      justify-content: center;
+    }
+  }
   @media (prefers-reduced-motion: reduce) {
     .action,
     .disc {

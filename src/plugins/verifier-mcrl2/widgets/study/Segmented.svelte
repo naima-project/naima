@@ -42,12 +42,13 @@
 </div>
 
 <style>
+  /* One capsule whose lit segment is the button's own fill, inset by a border in the capsule's colour: the buttons are as
+     tall as a control, so a finger finds each one whole, and the fill keeps the look of a pill inside the capsule. */
   .seg {
     display: inline-flex;
     flex-wrap: wrap;
     max-inline-size: 100%;
-    padding: var(--space-xs);
-    gap: var(--space-xs);
+    padding-inline: calc(var(--space-xs) / 2);
     border-radius: var(--radius-full);
     background: var(--color-surface-soft);
     border: var(--border-width-thin) solid var(--color-border-soft);
@@ -57,13 +58,16 @@
     display: inline-flex;
     align-items: center;
     gap: var(--space-xs);
-    min-block-size: calc(var(--size-control) - 2 * var(--space-xs));
+    min-block-size: var(--size-control);
     padding: var(--space-none) var(--space-md);
     font: inherit;
     font-size: var(--font-size-sm);
     color: var(--color-text-muted);
     background: none;
-    border: none;
+    background-clip: padding-box;
+    border: solid var(--color-surface-soft);
+    border-block-width: var(--space-xs);
+    border-inline-width: calc(var(--space-xs) / 2);
     border-radius: var(--radius-full);
     cursor: pointer;
     white-space: nowrap;
@@ -71,11 +75,11 @@
   }
   .opt:hover:not(:disabled) {
     color: var(--color-text);
-    background: var(--color-accent-tint);
+    background-color: var(--color-accent-tint);
   }
   .opt.on {
     color: var(--color-on-accent);
-    background: var(--color-accent);
+    background-color: var(--color-accent);
   }
   .opt:disabled {
     opacity: 0.38;
@@ -97,5 +101,10 @@
   }
   .on .dot {
     background: var(--color-on-accent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .opt {
+      transition: none;
+    }
   }
 </style>
