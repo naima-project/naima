@@ -7,7 +7,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { basename, dirname, join, relative, resolve } from "node:path"
 import { gitPath, projectFiles } from "../../core/api.ts"
-import { applyWords, blockValues, situationsIn, stateNotesOf, type Study, studyId, wordsOnly } from "./studies.ts"
+import { applyWords, blockValues, stateNotesOf, type Study, studyId, wordsOnly } from "./studies.ts"
 
 const read = (p: string): string | null => {
   try {

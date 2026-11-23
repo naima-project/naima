@@ -852,10 +852,11 @@
     grid-template-columns: var(--tracks);
     column-gap: var(--space-md);
   }
-  /* A group off the screen is not drawn; its height is reckoned from its count of rows. */
+  /* A group off the screen is not drawn; its height is reckoned from its count of rows and its heading, with the space
+     the heading keeps above it, so that drawing it later moves nothing. */
   .group {
     content-visibility: auto;
-    contain-intrinsic-size: auto calc((var(--n) + 1) * var(--row));
+    contain-intrinsic-size: auto calc((var(--n) + 1) * var(--row) + var(--space-sm));
   }
   .heads {
     position: sticky;
