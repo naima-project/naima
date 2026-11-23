@@ -256,7 +256,7 @@ with its expected date and how sure that date is, such as "Expected 2 January ·
 is a green dot for each agent at work, and how many there are in words. Under them are the goal's three numbers, always shown: the items left to do, the items
 of the goal the agents hold, and how many items closed a day lately. A click on the number left to do opens What's left of the goal in the stage. Its
 legend names each state with its count, each a link to that part of the goal's list; when more waits for you across the project than in this goal, the
-goal's part ("2 waiting for you") is followed by the whole of it as a link of its own ("19 left"), which opens Waiting for you. When the goal
+goal's part ("2 waiting for you here") is followed by the whole of it as a link of its own ("19 in all"), which opens Waiting for you. When the goal
 has a development line, the items already fixed on it are not counted as left: a quiet green line under the number says how many there are, for example "195
 fixed on the line · closes at the release", since they close on main only when the line lands. The ring counts them as done, and What's left says them apart in
 the same words.
