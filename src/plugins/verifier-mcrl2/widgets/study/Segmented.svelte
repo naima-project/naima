@@ -1,6 +1,6 @@
-<!-- A choice of one among a few, drawn as one capsule whose lit segment is the choice; with `current`, the segment that
-     says how things stand now is marked too, so a person sees both where things are and what each choice would do.
-     One of the widget set. -->
+<!-- A choice of one among a few, set as words in a row: the chosen one inked, with a hairline under it, the others
+     quiet; with `current`, the option that says how things stand now carries a small dot, so a person sees both where
+     things are and what each choice would do. One of the widget set. -->
 <script lang="ts">
   import type { Component } from "svelte";
 
@@ -42,47 +42,45 @@
 </div>
 
 <style>
-  /* One capsule whose lit segment is the button's own fill, inset by a border in the capsule's colour: the buttons are as
-     tall as a control, so a finger finds each one whole, and the fill keeps the look of a pill inside the capsule. */
   .seg {
     display: inline-flex;
     flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-none) var(--space-sm);
     max-inline-size: 100%;
-    padding-inline: calc(var(--space-xs) / 2);
-    border-radius: var(--radius-full);
-    background: var(--color-surface-soft);
-    border: var(--border-width-thin) solid var(--color-border-soft);
   }
   .opt {
     position: relative;
     display: inline-flex;
     align-items: center;
     gap: var(--space-xs);
-    min-block-size: var(--size-control);
-    padding: var(--space-none) var(--space-md);
+    min-block-size: var(--size-target);
+    padding: var(--space-none) var(--space-xs);
     font: inherit;
     font-size: var(--font-size-sm);
     color: var(--color-text-muted);
     background: none;
-    background-clip: padding-box;
-    border: solid var(--color-surface-soft);
-    border-block-width: var(--space-xs);
-    border-inline-width: calc(var(--space-xs) / 2);
-    border-radius: var(--radius-full);
+    border: none;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     white-space: nowrap;
-    transition: background var(--motion-duration-fast) var(--motion-easing-standard), color var(--motion-duration-fast) var(--motion-easing-standard);
+    text-decoration-line: underline;
+    text-decoration-thickness: var(--border-width-thin);
+    text-underline-offset: var(--space-xs);
+    text-decoration-color: transparent;
+    transition: color var(--motion-duration-fast) var(--motion-easing-standard), text-decoration-color var(--motion-duration-fast) var(--motion-easing-standard);
   }
   .opt:hover:not(:disabled) {
     color: var(--color-text);
-    background-color: var(--color-accent-tint);
+    text-decoration-color: var(--color-border-strong);
   }
   .opt.on {
-    color: var(--color-on-accent);
-    background-color: var(--color-accent);
+    color: var(--color-text);
+    text-decoration-color: var(--color-accent);
+    text-decoration-thickness: var(--border-width-focus);
   }
   .opt:disabled {
-    opacity: 0.38;
+    opacity: 0.5;
     cursor: default;
   }
   .opt:focus-visible {
@@ -91,16 +89,18 @@
   .opt :global(.glyph) {
     inline-size: var(--font-size-md);
     block-size: var(--font-size-md);
+    stroke-width: 1.5;
   }
   .dot {
     inline-size: var(--space-xs);
     block-size: var(--space-xs);
     border-radius: var(--radius-full);
     background: var(--color-accent);
-    box-shadow: 0 0 0 var(--border-width-thin) var(--color-surface-raised);
   }
-  .on .dot {
-    background: var(--color-on-accent);
+  @media (pointer: coarse) {
+    .opt {
+      min-block-size: var(--size-control);
+    }
   }
   @media (prefers-reduced-motion: reduce) {
     .opt {
