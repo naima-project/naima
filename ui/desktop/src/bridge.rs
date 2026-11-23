@@ -31,6 +31,7 @@ pub struct Sidecar {
     next: AtomicU64,
     waiting: Arc<Mutex<HashMap<u64, mpsc::Sender<Answer>>>>,
     child: Mutex<Child>,
+    root: PathBuf,
 }
 
 /// The project the app shows: the folder its first argument names (`open -a Naima --args <project>`), else
@@ -159,7 +160,7 @@ impl Sidecar {
                 let _ = to.send(Err("Naima stopped".into()));
             }
         });
-        Ok(Arc::new(Sidecar { stdin: Mutex::new(stdin), next: AtomicU64::new(1), waiting, child: Mutex::new(child) }))
+        Ok(Arc::new(Sidecar { stdin: Mutex::new(stdin), next: AtomicU64::new(1), waiting, child: Mutex::new(child), root }))
     }
 
     /// Runs one bridge command in Naima and waits for its answer. It follows the shell's side of the sidecar
@@ -178,6 +179,11 @@ impl Sidecar {
             self.waiting.lock().unwrap().remove(&id);
             Err(format!("{command}: no answer from Naima"))
         })
+    }
+
+    /// The project's folder this sidecar answers for.
+    pub fn root(&self) -> &Path {
+        &self.root
     }
 
     /// Stops Naima, as the app quits.
@@ -271,11 +277,13 @@ async fn switch_to(app: AppHandle, current: State<'_, Current>, dir: State<'_, D
         .await
         .map_err(|e| e.to_string())??;
     let at = chosen(&recent, &root)?;
-    let next = Sidecar::start_in(app, at.clone())?;
+    let next = Sidecar::start_in(app.clone(), at.clone())?;
     let shown = Arc::clone(&next);
+    let named = Arc::clone(&next);
     let page = dir.inner().clone();
     tauri::async_runtime::spawn_blocking(move || show_bundle(&shown, &page)).await.map_err(|e| e.to_string())?;
     current.replace(next).stop();
+    tauri::async_runtime::spawn_blocking(move || crate::badge::show(&app, &named)).await.map_err(|e| e.to_string())?;
     println!("bridge: switch -> ok");
     Ok(json!({ "root": root, "path": at.display().to_string() }))
 }
