@@ -86,6 +86,7 @@ Every command: what it does, and the policy or invariant it enforces — or noth
 | [`land`](#naima-land) | coordination | land a branch on the trunk as one marker commit: a merge whose tree is the branch tip's and whose message names the items it closes (Closes: trailers); the shortcut for git merge --no-ff once the trunk is the branch's ancestor | runs from the main checkout on the trunk, clean in tracked files; first releases the branch's own claim, by one commit on the branch (in its worktree when one stands on it), when every item it names is fixed or done there; refuses a branch the trunk is not an ancestor of, one still holding a claim, one whose commits carry private infrastructure in their messages — a home-directory path, a machine or user name — in the project or in a submodule whose pointer it moves (commits no remote-tracking branch holds), unless --allow-private gives the reason; one that names no item (unless --tracker-only gives the reason and the branch changes only tracker data, or --meets names a requirement it meets) or an item open and not fixed (under --tracker-only, an item the branch claimed and did not fix stays open instead); refuses --meets for an item that is not a requirement, one with no item that verifies it and passed on the branch tip, one whose proofs all passed on the trunk already, and one an item refutes, and one that changes a behaviour path of a repository with changes/config.json (the project, or a submodule) with no change note added, unless --no-change-note gives the reason; refuses, touching nothing, a branch a landing check finds failing, whatever flag is given, and one that changes what has proofs not current — a property or a test suite reading a file it changed, outside models in development — as the landing checks find them on the branch tip's files, unless --stale-proofs gives the reason; moves the trunk only from the commit it read (compare-and-swap); once landed, adds the marker to the commits of each item it closes whose type has that field, in one commit on the trunk right after the marker, so that naima close finds a commit reachable from the trunk; then closes, through naima close and every check it makes, each item it names, or whose proof it changed, that is fixed and whose proof has passed, in one commit on the trunk that only closes items, and says each item it names that is fixed and still waits for its proof, which the landing of that proof closes; then prints what every landing report says of the files the landing changed, never undoing it |
 | [`landing-check`](#naima-landing-check) | coordination | run one landing check on a commit's files, in a checkout of that commit made for the check and removed after, and print what it found on one line: what naima land runs on the landing host, through naima run --host, for a heavy check | reads only: the checkout is a detached worktree in Naima's state folder in the git directory, with each submodule it pins as a worktree of the submodule's own repository in this checkout at the pinned commit (nothing fetched), removed when the check ends; the findings are printed as JSON on the line that starts with NAIMA-LANDING-CHECK — what fails, what is not current, what could not be asked — and the exit is 0 whatever they are, other than 0 only when the check could not be run at all |
 | [`checkpoint`](#naima-checkpoint) | coordination | run every landing check the landings since the last checkpoint owed, plus the project's heavy ones, and start the project's suites and the verification of every property not current in the background; record a pass, or a failure that blocks the gate | runs the checks named by the Checks-owed: trailers of the landings since the last passing checkpoint and by the coordination option checkpointChecks (every heavy landing check when it is empty), each as naima land would, heavy ones through naima run on the landing host; starts, through naima run and in the background, each command of the coordination option checkpointRuns (on its own host when it names one) and naima verify of every property that is not current, on the coordination option verifyHost; writes one record in the data directory's checkpoints/, pending while those runs go; naima checkpoint --status reads each run, and when all are over settles the record: a pass, or a failure that names each failing run, files or updates a bug for it, and blocks the gate it names (or every gate, when it names none) until a later checkpoint passes; exit 0 on a pass or a started checkpoint, 1 on a failure |
+| [`check-plan`](#naima-check-plan) | coordination | show each milestone's check plan — fast checks at every landing, a checkpoint at about half its items closed, one when all are closed, then the release check — with each point's state and expected duration; --start starts what is due, as the landing and the tick do | a planned point starts only once its threshold is reached, by Naima itself (the landing that crosses it, or the hourly tick), never by hand; one heavy run at a time, only where the heavy checks run is idle (no heavy run of the person's own there, the machine's load under idleLoad) and the checks are not paused; a checkpoint that runs when either changes stops without a result and its point is due again; between milestones a background run starts when its schedule (backgroundChecks) comes due, on a commit with no results yet |
 | [`heavy-checks`](#naima-heavy-checks) | coordination | show or record when and where heavy checks run (a browser, a test suite, model checking): at every landing, at a checkpoint, only on demand, or never; Naima asks the owner first and runs none until the project has answered | the answer is the owner's: an agent records it only after the owner chose; a project with a heavy check and no answer gets the question, never a run; the answer says where (this machine or a declared host) and how often, and `off` turns every heavy check off, which every start of one honours |
 | [`fix`](#naima-fix) | coordination | take a small fix from filing to landing in one step, as the normal steps would: on the main checkout, on the trunk, file the item, open its worktree, move the change there, commit it and land it; on a worker's branch, file the item, commit the change on the branch and hand it over to the coordinator | the change is what the checkout holds uncommitted outside the tracker data, and there must be one unless an earlier run left the item's branch; the item's type has fixedOn, which is set on the branch; the command releases its own claim before a landing and before a run ends done; a worker's run never touches the trunk; the coordinator's commits on the trunk are the new item (tracker data only) and the landing marker; who works is --as, the coordination plugin's who option, or coordinator when an agent runs it on the trunk, and otherwise it refuses before writing anything; a coordinator's run stops where the normal path stops: a landing refused because the trunk moved merges the trunk into the branch and is tried once more, and any other refusal once the worktree is open leaves the branch, the worktree, what was committed and the claim in place, records the reason of a refused landing on the item, committed on the branch, and says what to do next; a later run for the same title takes up that branch and worktree instead of opening new ones |
 | [`guard`](#naima-guard) | coordination | the trunk guard: whether it is on and runs in this clone; off turns it off for the project (recorded in naima.json, the hook removed), on turns it back on; server, on the owner's word, makes a GitHub ruleset that lets only the repository's admins push the trunk (with gh, else it says the request and the web page; --print only says them) | while on, the git hook refuses a commit, merge or fast-forward of the trunk made by hand (naima guard-check says what passes); off is the owner's choice, recorded, and update does not put the hook back |
@@ -163,14 +164,14 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `facts` | core | lines `naima show` prints of an item under its fields, and in its JSON as `facts`: what a plugin knows of the item that its files do not say | coordination |
 | `waiting` | core | what waits for an owner, as one source sees it: naima waiting, naima hello and the UI's waiting views list every source's together, each item once, filtered to the person at the keyboard | gates, metrics |
 | `rank` | core | an additive term of every item's urgency; lower is more urgent | triage, gates |
-| `jobs` | core | a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it, among those its canRunHere admits (a process it does not claims no attempt); what it finds is shown to the owner as messages | gates, outside-issues, long-work |
+| `jobs` | core | a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it, among those its canRunHere admits (a process it does not claims no attempt); what it finds is shown to the owner as messages | coordination, gates, outside-issues, long-work |
 | `extends` | core | additive changes to another plugin's type — statuses (an existing one only with its category), traits, transitions — or field — enum values, more types or traits it applies to | discussions, knowledge, roles |
 | `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done; `beforeText(text, ctx)` may refuse a write of free text or a file that is not an item's (a session note, an event, an attachment) or add to its record | core, trackers, coordination, triage, epics, discussions, planning, knowledge, verifier, privacy |
 | `setup` | core | what a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init` and `naima update` after their own work: `install(ctx) → lines`, each said | core, coordination, planning, backup, metrics |
 | `agent-hooks` | core | a hook the agent tool runs, which Naima installs in the tool's settings beside its own at `naima init`, `naima update` and `naima stance adopt`, and removes once the plugin is gone: `name`, `says`, `tool` (the agent tool, by adapter id), `event` and optionally `matcher` in that tool's terms, and `command`, the naima command it runs as a list of words | stance-ui |
 | `migrations` | core | a plugin's own data migrations, in order from its format 1, run by `naima update` after the core's | gates |
 | `credits` | core | what a plugin runs or builds on without installing it (a program found on PATH, say), credited by `naima credits`: name, homepage, source, authors, license, version (provisional) | verifier |
-| `landing-reports` | coordination | what `naima land` checks before a branch lands, on the trunk or on a line, and reports once it has: `name`, `says`, and `refuses(ctx, { branch, from, to, changed }) → lines`, what fails on the branch, any line refusing the landing with no flag to let it through; `blocks(ctx, landing) → lines`, what the landing changed whose proofs are not current, any line refusing a landing on the trunk unless --stale-proofs gives the reason; or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root, and `ctx.root` holds the branch tip's files; `heavy: true` says the check runs heavy work (browsers, a full suite): naima land runs it detached and waits on it, in a checkout of the tip: on the host the coordination option landingHost names, through naima run --host, or on this machine through naima run when none is named or it is `here`; a heavy check may give `covers(ctx, landing) → files`, the files of `changed` it reads, computed where naima land runs without heavy work: when it covers none, the check is not needed and needs no landing host; the landing host is the one the branch tip's configuration names, else the trunk's | gates, verifier, rules, stance-ui |
+| `landing-reports` | coordination | what `naima land` checks before a branch lands, on the trunk or on a line, and reports once it has: `name`, `says`, and `refuses(ctx, { branch, from, to, changed }) → lines`, what fails on the branch, any line refusing the landing with no flag to let it through; `blocks(ctx, landing) → lines`, what the landing changed whose proofs are not current, any line refusing a landing on the trunk unless --stale-proofs gives the reason; or `report(ctx, landing) → lines`, printed after it, never blocking; `changed` is every file the landing changed, from the project root, and `ctx.root` holds the branch tip's files; `heavy: true` says the check runs heavy work (browsers, a full suite): naima land runs it detached and waits on it, in a checkout of the tip: on the host the coordination option landingHost names, through naima run --host, or on this machine through naima run when none is named or it is `here`; a heavy check may give `covers(ctx, landing) → files`, the files of `changed` it reads, computed where naima land runs without heavy work: when it covers none, the check is not needed and needs no landing host; the landing host is the one the branch tip's configuration names, else the trunk's | coordination, gates, verifier, rules, stance-ui |
 | `claims-reports` | coordination | a section `naima claims` prints after the claims, and gives under `reports` with --json: `name`, `says`, and `lines(ctx) → lines`, none when there is nothing to report | discussions, long-work |
 | `goal-order` | coordination | the order of the goals development lines are tied to: `name`, `says`, `before(ctx, a, b) → boolean`, whether goal a comes before goal b; naima open refuses an item on the line of a goal that comes after the item's own | gates |
 | `gates` | gates | a named release or merge condition, backed by items: `title`, `says`, `decides`, `evaluate(ctx) → { holds, blocking, owed }`; `inFullSuite` makes it part of the full suite a release gate (`fullSuite`) requires | verifier |
@@ -1253,8 +1254,13 @@ Options, each with the default it takes when nothing sets it:
 | `fastChecks` | `[]` | in checkpoint mode, the landing checks (by name, as naima docs lists them) that still run on every landing: a list of names |
 | `heavyChecks` | `unset: the owner is asked` | the project's answer to how often heavy checks (a browser, a suite, model checking) run: `landing` at every landing, `checkpoint` at a checkpoint, `demand` only when asked (naima checkpoint, naima check --heavy), `off` never; written by naima heavy-checks together with checks, landingHost and verifyHost; unset, a project that already set checks, a host or checkpoint runs has answered by those, and one that set none has not answered, so naima asks the owner and runs no heavy check |
 | `checkpointChecks` | `[]` | the landing checks a checkpoint runs whether or not a landing owed them: a list of names; empty means every heavy one |
-| `checkpointRuns` | `[]` | the commands a checkpoint runs in the background through naima run, such as the project's suite: a list of commands, or of { "command": "...", "host": "<declared host>", "name": "...", "budget": "2h" } (a command with a host runs in that host's checkout, moved to the checkpoint's tip first); naima checkpoint --status reads them, and a failing one blocks the gate and files or updates a bug |
+| `checkpointRuns` | `[]` | the commands a checkpoint runs in the background through naima run, such as the project's suite: a list of commands, or of { "command": "...", "host": "<declared host>", "name": "...", "budget": "2h", "paths": ["src/"] } (a command with a host runs in that host's checkout, moved to the checkpoint's tip first; every one runs at low priority, under nice where the shell has it; paths are what it can be affected by, so that a release check reruns it only when one changed); naima checkpoint --status reads them, and a failing one blocks the gate and files or updates a bug; a result of the same commit is reused, never run again |
 | `verifyHost` | `none: this machine` | the host a checkpoint's naima verify of every property that is not current runs on (naima verify --host): a host declared in the long-work plugin's hosts option; none, or `here`, verifies on this machine |
+| `backgroundChecks` | `nightly` | while the project plans its heavy checks (checks=checkpoint, heavyChecks=checkpoint), when a background run of them goes between a milestone's checkpoints: `nightly`, once a night, or `landings`, every backgroundEvery landings, or `off`; it runs where the heavy checks run, only when that place is idle, never blocks work, never runs twice on a commit, and reports only failures, as bugs and at naima hello |
+| `backgroundEvery` | `10` | with backgroundChecks=landings: how many landings start a background run, a whole number |
+| `checkPlanSince` | `none: every threshold counts` | the day, YYYY-MM-DD, the project began planning its heavy checks per milestone: a planned checkpoint whose threshold was crossed before it is skipped, so that adopting the plan starts no checkpoint for work already done |
+| `idleLoad` | `0.5` | the load per processor of this machine under which it counts as idle, so that a planned checkpoint or a background run may start on it; heavy checks never start while a heavy run of the person's own goes where they run, nor while they are paused (naima heavy-checks pause) |
+| `heavyChecksPaused` | `false` | true while the person has paused the heavy checks (naima heavy-checks pause, resume): no planned checkpoint or background run starts, and the one going stops without a result, its point due again |
 | `staleAfter` | `24` | hours without a sign of life (a commit, a step, a session note, a file changed and not committed) after which naima stale and naima summary list a branch as stale work: a positive whole number |
 
 **Extension points** it declares: `landing-reports`, `claims-reports`, `goal-order`.
@@ -1444,12 +1450,15 @@ Run every landing check the landings since the last checkpoint owed, plus the pr
 **Enforces**: Runs the checks named by the Checks-owed: trailers of the landings since the last passing checkpoint and by the coordination option checkpointChecks (every heavy landing check when it is empty), each as naima land would, heavy ones through naima run on the landing host; starts, through naima run and in the background, each command of the coordination option checkpointRuns (on its own host when it names one) and naima verify of every property that is not current, on the coordination option verifyHost; writes one record in the data directory's checkpoints/, pending while those runs go; naima checkpoint --status reads each run, and when all are over settles the record: a pass, or a failure that names each failing run, files or updates a bug for it, and blocks the gate it names (or every gate, when it names none) until a later checkpoint passes; exit 0 on a pass or a started checkpoint, 1 on a failure.
 
 ```sh
-naima checkpoint [<gate>] [--wait]
+naima checkpoint [<gate>] [--point half|full|background
+naima --release] [--wait]
 naima checkpoint --status
 ```
 
 | Option | Default | What it does |
 |---|---|---|
+| `--point` |  | the planned point it is, as Naima starts it (naima check-plan): half, full, or background; refused when that point is not due, for a project that plans its heavy checks |
+| `--release` |  | the release check of the gate: once its full checkpoint passed; takes the results of its commit and reruns only what later commits can affect |
 | `--status` |  | read the runs of the latest checkpoint, settle it when they are over, and print each run's state and what is still owed |
 | `--wait` |  | wait for the background runs to end, then settle the checkpoint, instead of leaving them running |
 
@@ -1460,6 +1469,32 @@ naima checkpoint
 naima checkpoint release-1.2
 naima checkpoint release-1.2 --wait
 naima checkpoint --status
+```
+
+### naima check-plan
+
+Show each milestone's check plan — fast checks at every landing, a checkpoint at about half its items closed, one when all are closed, then the release check — with each point's state and expected duration; --start starts what is due, as the landing and the tick do.
+
+**Enforces**: A planned point starts only once its threshold is reached, by Naima itself (the landing that crosses it, or the hourly tick), never by hand; one heavy run at a time, only where the heavy checks run is idle (no heavy run of the person's own there, the machine's load under idleLoad) and the checks are not paused; a checkpoint that runs when either changes stops without a result and its point is due again; between milestones a background run starts when its schedule (backgroundChecks) comes due, on a commit with no results yet.
+
+```sh
+naima check-plan [<gate>] [--json]
+naima check-plan --start [<gate>] [--crossed]
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `--json` |  | print the plans as JSON: each milestone's items, closed, points (state, expected minutes), the fast checks and where heavy checks run |
+| `--start` |  | settle the checkpoint that runs, or start the point that is due, or a background run that is due: what the landing and the tick run |
+| `--crossed` |  | with --start and a gate: the gate's threshold was crossed by this landing, so a point is due even when all its items are closed |
+
+Examples:
+
+```sh
+naima check-plan
+naima check-plan release-1.2
+naima check-plan --json
+naima check-plan --start
 ```
 
 ### naima heavy-checks
@@ -1473,7 +1508,9 @@ naima heavy-checks [landing
 naima checkpoint
 naima demand --host <name
 naima here>
-naima off]
+naima off
+naima pause
+naima resume]
 ```
 
 | Option | Default | What it does |
@@ -1487,6 +1524,7 @@ naima heavy-checks
 naima heavy-checks checkpoint --host here
 naima heavy-checks demand --host <host>
 naima heavy-checks off
+naima heavy-checks pause
 ```
 
 ### naima fix
@@ -1861,13 +1899,19 @@ naima event 2026-10-05 "The plan was entered" --kind diary --about features/the-
 
 **Directories** it owns under the tracker root: `claims/`, `passes/`, `events/`, `checkpoints/`.
 
-**Summary sections**: `where we were`, `lines`, `at-risk`, `in hand`, `worker limit`, `ready queue`, `stale work`, `stale sweep`, `trunk-guard`, `heavy-checks`, `handover`.
+**Summary sections**: `where we were`, `lines`, `at-risk`, `in hand`, `worker limit`, `ready queue`, `stale work`, `stale sweep`, `trunk-guard`, `heavy-checks`, `check-plan`, `handover`.
 
 **Item facts**, printed by `naima show`
 
 | Facts | What they say |
 |---|---|
 | `lines` | an item fixed on an open development line, and not yet on the trunk: fixed on line line/<gate> |
+
+**Jobs** the tick runs when due
+
+| Job | Every | What it does |
+|---|---|---|
+| `check-plan` | hour | every hour, on the trunk's checkout: settles the checkpoint that runs (a failure files a bug), stops it without a result when the person's own heavy work runs where it runs or the checks are paused, and otherwise starts the milestone's planned point that is due, or a background run whose schedule came due, where the heavy checks run, only when that place is idle |
 
 **Write hooks**, run on every item write
 
@@ -1881,6 +1925,12 @@ naima event 2026-10-05 "The plan was entered" --kind diary --about features/the-
 | Step | What it puts in place |
 |---|---|
 | `trunk-guard` | the trunk guard, a git reference-transaction hook in the data directory's hooks, which refuses a commit, merge or fast-forward of the trunk made by hand, and a pre-push hook beside it, which refuses a push whose commits carry private infrastructure in their messages; core.hooksPath pointed there where unset, in the clone and in each submodule checked out. Nothing while the option trunkGuard is false |
+
+**Landing reports**, checked by `naima land` before a landing (refuses, or blocks until its proofs are current) or printed after it (reports)
+
+| Report | When | What it says |
+|---|---|---|
+| `formatted` | refuses | refuses a branch whose files the project's formatter rejects: the command the coordination option formatCheck names (such as `deno fmt --check`) is run on the branch tip's files, and the landing is refused when it fails |
 
 **UI views**, shown as tabs of the new UI
 
@@ -2024,7 +2074,7 @@ naima gates [name...] [--check] [--json]
 | Option | Default | What it does |
 |---|---|---|
 | `--check` |  | exit 1 when a listed gate does not hold |
-| `--json` |  | print the gates as JSON: each one's name, title, timing, whether it holds, the items blocking it or owed, its steps, its version, due date, freeze and after, the goals ordered before it, and whether its goal is finished |
+| `--json` |  | print the gates as JSON: each one's name, title, timing, whether it holds, the items blocking it or owed, its steps, its version, due date, freeze and after, the goals ordered before it, whether its goal is finished, and a milestone's check plan (checks) while the project plans its heavy checks |
 
 Examples:
 

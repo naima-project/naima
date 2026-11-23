@@ -36,16 +36,16 @@ window, so a reload brings you back to the same place.
 
 ### Testing the window while it is being changed
 
-`naima ui --watch` is for whoever changes the UI and wants to see each change as it lands in the bundle. The window reloads by itself whenever the UI is
-rebuilt (`deno task ui build` in the workshop rewrites `ui/dist`, and the files of a study's view count too). A reload keeps the screen, since the address holds
-it, and the scroll place, and the window says "Updated" for a moment in a corner. The rebuild is taken as finished once the files have been quiet for a third of
-a second and `index.html`, written last, is there again.
+`naima ui --watch` is for whoever changes the UI and wants to see each change as it lands in the bundle. The window reloads by itself whenever the UI is rebuilt
+(`deno task ui build` in the workshop rewrites `ui/dist`, and the files of a study's view count too). A reload keeps the screen, since the address holds it, and
+the scroll place, and the window says "Updated" for a moment in a corner. The rebuild is taken as finished once the files have been quiet for a third of a
+second and `index.html`, written last, is there again.
 
-With the desktop app installed, `naima ui --watch` opens the app on the project running this Naima instead of the one the project pins: the app's page comes from
-this Naima's bundle and its sidecar runs this Naima's program, so a branch that has not landed, new bridge commands included, shows in the app. This is a window
-of its own, apart from one already open on the project. It reads two variables the command sets, `NAIMA_PROGRAM` (the Naima's folder) and `NAIMA_DENO` (the Deno that
-runs it); started by hand with them set, the app does the same. With `--browser` or `--no-open`, or without the app, `--watch` serves the page in the browser and
-tells it to reload. Without `--watch` nothing is watched and nothing changes.
+With the desktop app installed, `naima ui --watch` opens the app on the project running this Naima instead of the one the project pins: the app's page comes
+from this Naima's bundle and its sidecar runs this Naima's program, so a branch that has not landed, new bridge commands included, shows in the app. This is a
+window of its own, apart from one already open on the project. It reads two variables the command sets, `NAIMA_PROGRAM` (the Naima's folder) and `NAIMA_DENO`
+(the Deno that runs it); started by hand with them set, the app does the same. With `--browser` or `--no-open`, or without the app, `--watch` serves the page in
+the browser and tells it to reload. Without `--watch` nothing is watched and nothing changes.
 
 ### What agents use
 
@@ -204,27 +204,28 @@ a new tab shows that item's page.
 
 ### Bringing anything to the chat
 
-Anything in the window can be brought to the chat you have with your agent: an item's row or its page, a count such as the bugs waiting for you, a goal, a
-day, the diary, a study on Models, or a few words you selected. Right-click it (on a touch screen, press and hold; from the keyboard, the menu key on what has
-the focus). A strip at the foot of the window says what will be brought, for example "Bring to the chat: the item bugs/login-fails", and its button brings it.
-What reaches the chat says what the thing is, its reference when it has one, the screen you were on and a short text, so the agent can take it up without
-asking which one you meant. Shift with the right-click gives the browser's own menu, and a field keeps its own menu as usual.
+Anything in the window can be brought to the chat you have with your agent: an item's row or its page, a count such as the bugs waiting for you, a goal, a day,
+the diary, a study on Models, or a few words you selected. Right-click it (on a touch screen, press and hold; from the keyboard, the menu key on what has the
+focus). A strip at the foot of the window says what will be brought, for example "Bring to the chat: the item bugs/login-fails", and its button brings it. What
+reaches the chat says what the thing is, its reference when it has one, the screen you were on and a short text, so the agent can take it up without asking
+which one you meant. Shift with the right-click gives the browser's own menu, and a field keeps its own menu as usual.
 
-The strip then says how it went. "Sent to the chat" means your chat session's Naima server took the message and wrote it into the session; "In the chat"
-means the agent has said it has it. When no chat session is listening, which is the case when your chat is the Claude desktop app, the window copies the
-message at once and the strip says "Copied — paste it in your chat", with the text shown and a "Copy again" button. It offers the same copy when the agent
-has not taken the message within about five seconds, which usually means the session was started without Naima's channel; a message nobody took by then is withdrawn, so it never arrives later as well as pasted.
+The strip then says how it went. "Sent to the chat" means your chat session's Naima server took the message and wrote it into the session; "In the chat" means
+the agent has said it has it. When no chat session is listening, which is the case when your chat is the Claude desktop app, the window copies the message at
+once and the strip says "Copied — paste it in your chat", with the text shown and a "Copy again" button. It offers the same copy when the agent has not taken
+the message within about five seconds, which usually means the session was started without Naima's channel; a message nobody took by then is withdrawn, so it
+never arrives later as well as pasted.
 
-The message travels through Claude Code's channels, which deliver an outside event into a running session. They work in Claude Code's terminal app, not
-yet in the desktop app, and while they are a research preview a channel that is not on Anthropic's list is turned on for one session at its start. Start
-Claude Code in the project's folder with the name its MCP settings give `naima ui --mcp` (often `naima` or `naima-ui`):
+The message travels through Claude Code's channels, which deliver an outside event into a running session. They work in Claude Code's terminal app, not yet in
+the desktop app, and while they are a research preview a channel that is not on Anthropic's list is turned on for one session at its start. Start Claude Code in
+the project's folder with the name its MCP settings give `naima ui --mcp` (often `naima` or `naima-ui`):
 
 ```sh
 claude --dangerously-load-development-channels server:naima
 ```
 
-Claude Code asks you once to confirm, and then shows that messages from that server reach the session. A session started without the flag still works
-as before; the window simply offers the copy.
+Claude Code asks you once to confirm, and then shows that messages from that server reach the session. A session started without the flag still works as before;
+the window simply offers the copy.
 
 ### Days, on the left of every screen
 
@@ -249,23 +250,24 @@ a sheet over the bottom of the page until you close it. It follows the time filt
 
 Home is one board under the bar, with little text, about what matters now. It fits the window, and the page itself never scrolls: the board is a header over a
 stage, the one place for details, described at the end of this section. At the top is the day, or, when the timeline shows a commit of the past, "As it was on"
-that day, with "Back to today". Then the goal nearest its expected date that still has work left: a ring with how much of it is done, its title, and one line
+that day, with "Back to today". Beside the day, a row of quiet words opens the other pages: Models, UI when the project declares it, then Bugs, Tests, Health
+and History, described in [The calm pages](#the-calm-pages). Then the goal nearest its expected date that still has work left: a ring with how much of it is done, its title, and one line
 with its expected date and how sure that date is, such as "Expected 2 January · 85% sure by 17 January" (its due date when there is no forecast yet). Beside it
 is a green dot for each agent at work, and how many there are in words. Under them are the goal's three numbers, always shown: the items left to do, the items
-of the goal the agents hold, and how many items closed a day lately. A click on the number left to do opens What's left of the goal in the stage. When the
-goal has a development line, the items already fixed on it are not counted as left: a quiet green line under the number says how many there are, for example
-"195 fixed on the line · closes at the release", since they close on main only when the line lands. The ring counts them as done, and What's left says them
-apart in the same words.
+of the goal the agents hold, and how many items closed a day lately. A click on the number left to do opens What's left of the goal in the stage. When the goal
+has a development line, the items already fixed on it are not counted as left: a quiet green line under the number says how many there are, for example "195
+fixed on the line · closes at the release", since they close on main only when the line lands. The ring counts them as done, and What's left says them apart in
+the same words.
 
-A click on the ring, or Enter on it, turns the board over. The ring and its words fade out and, in their place, the chart fades in, showing how much of the
-goal was done over time: an orange line of its percent done, with the count of items closed above it, and ahead of today a faint band from the percent now to 100% at the expected
-date, widening to the date it is 85% sure by. Its time is the river's, so each moment stands right above the same moment on the river, and the band ends above
-the goal's milestone; dragging, zooming or moving the river's today line moves the chart with it. The line passes through the goal's exact percent at the last
-landing of each of the last 30 days, and of each week before them, read from the tracker as it was at that commit. These are read in the background while the
-chart is shown, the newest first, and each commit only once, so a pan or a zoom reads only the days it adds. Until a day is read, that stretch shows an estimate
-from the dates the goal's items were planned and closed, and the line moves to each exact point as it arrives. The band ahead comes from the recent pace, as the
-expected date does. A click on the chart, Escape or Back turns the board back to the ring. The address says which side is up (`#home/chart`), so Back, Forward
-and a reload keep it. With reduced motion one side simply replaces the other.
+A click on the ring, or Enter on it, turns the board over. The ring and its words fade out and, in their place, the chart fades in, showing how much of the goal
+was done over time: an orange line of its percent done, with the count of items closed above it, and ahead of today a faint band from the percent now to 100% at
+the expected date, widening to the date it is 85% sure by. Its time is the river's, so each moment stands right above the same moment on the river, and the band
+ends above the goal's milestone; dragging, zooming or moving the river's today line moves the chart with it. The line passes through the goal's exact percent at
+the last landing of each of the last 30 days, and of each week before them, read from the tracker as it was at that commit. These are read in the background
+while the chart is shown, the newest first, and each commit only once, so a pan or a zoom reads only the days it adds. Until a day is read, that stretch shows
+an estimate from the dates the goal's items were planned and closed, and the line moves to each exact point as it arrives. The band ahead comes from the recent
+pace, as the expected date does. A click on the chart, Escape or Back turns the board back to the ring. The address says which side is up (`#home/chart`), so
+Back, Forward and a reload keep it. With reduced motion one side simply replaces the other.
 
 The top of Home shows one metric at a time, as a watch shows one face, while the river below stays where it is. The goal's ring is the first face. By default
 the others are Activity, the landings on main as soft bars, one for each slice of the river; Decisions, the decisions taken with you as orange stars joined by a
@@ -295,27 +297,27 @@ the moment Home shows: at a day of the past it says what needed you then. It is 
 in the stage. The key d still takes the decisions one at a time. When what needs you is an agent gone quiet, its detail on Home links to that agent's entry in
 Waiting for you, where one click brings the case to the chat.
 
-Last is the river, the board's widest part, about a fifth of its width tall. It shows the future first: at rest today stands near its left edge, after a
-short stub of the last few days, and the window reaches the next three goals with a date and every goal after them that follows the one before within a
-month, at most twelve. Ahead of today the river spends its width on what happens rather than on empty weeks: each stretch between two goals gets room by
-how long it is, but a long empty stretch is drawn shorter, with two small slashes across the line where time is skipped, and goals a day apart still stand
-well apart. Because of this, every goal and deadline carries its day in words. Each goal in the window, each due date of a milestone, sub-goal or epic, and
-each goal overdue is named above the line with its day and how far ahead it is, for example "1.2" over "26 Dec · in 5 weeks", in up to three rows so that no
-two names run into each other; the nearest ones are darker and the focused goal's name is bold. A due date is a ring with a dot at its heart, a forecast
-date a dashed ring, and a date only projected at the present pace a dotted one, said "about 11 Jan". Under the river you choose how much of the future it shows: a week, a month, a quarter, up to the
-next deadline, or everything. The days shown are written beside the choices (for example "21 Nov – 20 Dec"), with − and + to widen or narrow them. Ctrl
-or Cmd with the wheel, or a pinch on a trackpad, zooms around the pointer, and a double-click on an empty part of the river zooms in there. The plain wheel
-scrolls the page, never the river. The goals after the end of the window are gathered into one marker at its right edge, for example "12 more, to Jul 2027
-→"; a click on it widens the window until they all show.
+Last is the river, the board's widest part, about a fifth of its width tall. It shows the future first: at rest today stands near its left edge, after a short
+stub of the last few days, and the window reaches the next three goals with a date and every goal after them that follows the one before within a month, at most
+twelve. Ahead of today the river spends its width on what happens rather than on empty weeks: each stretch between two goals gets room by how long it is, but a
+long empty stretch is drawn shorter, with two small slashes across the line where time is skipped, and goals a day apart still stand well apart. Because of
+this, every goal and deadline carries its day in words. Each goal in the window, each due date of a milestone, sub-goal or epic, and each goal overdue is named
+above the line with its day and how far ahead it is, for example "1.2" over "26 Dec · in 5 weeks", in up to three rows so that no two names run into each other;
+the nearest ones are darker and the focused goal's name is bold. A due date is a ring with a dot at its heart, a forecast date a dashed ring, and a date only
+projected at the present pace a dotted one, said "about 11 Jan". Under the river you choose how much of the future it shows: a week, a month, a quarter, up to
+the next deadline, or everything. The days shown are written beside the choices (for example "21 Nov – 20 Dec"), with − and + to widen or narrow them. Ctrl or
+Cmd with the wheel, or a pinch on a trackpad, zooms around the pointer, and a double-click on an empty part of the river zooms in there. The plain wheel scrolls
+the page, never the river. The goals after the end of the window are gathered into one marker at its right edge, for example "12 more, to Jul 2027 →"; a click
+on it widens the window until they all show.
 
-The past is reached by dragging the river to the right, or by swiping it. The commits on main are grey dots on one line, each dot the commits of a part of
-the time shown, larger when they changed more lines. The agents at work are drawn where their work is going: under the line, a green lane runs from today
-to the ring of the goal whose work they hold, as the count beside the ring says them, named on the lane, for example "4 agents towards 1.2"; work for no goal in view
-is a short lane, "1 agent on other work". A click on a lane shows its agents. Today is a small orange tick on the line, and the river's one orange line
-stands at the goal's ring: the focus horizon. By default it stands at the next major goal of the line Home follows, such as the next release.
-Every goal with a due day has its ring ahead until that day, even one with no work left in it, so every deadline of the project can be seen on the river. Each
-ring is named by its own words: when several goals share the start of their titles (as "CAV 2027: full paper submitted" and "CAV 2027: author response"
-do), each is named by the rest of its title, and the full title shows when the pointer rests on the ring.
+The past is reached by dragging the river to the right, or by swiping it. The commits on main are grey dots on one line, each dot the commits of a part of the
+time shown, larger when they changed more lines. The agents at work are drawn where their work is going: under the line, a green lane runs from today to the
+ring of the goal whose work they hold, as the count beside the ring says them, named on the lane, for example "4 agents towards 1.2"; work for no goal in view
+is a short lane, "1 agent on other work". A click on a lane shows its agents. Today is a small orange tick on the line, and the river's one orange line stands
+at the goal's ring: the focus horizon. By default it stands at the next major goal of the line Home follows, such as the next release. Every goal with a due day
+has its ring ahead until that day, even one with no work left in it, so every deadline of the project can be seen on the river. Each ring is named by its own
+words: when several goals share the start of their titles (as "CAV 2027: full paper submitted" and "CAV 2027: author response" do), each is named by the rest of
+its title, and the full title shows when the pointer rests on the ring.
 
 Everything before the horizon is shown in full and is what Home counts: the goals between today and it, their meetings, milestones and epics, and what needs you
 from them, in the sentence, in Waiting for you and in "for when you have time". Beyond it the river is only a sketch of the road ahead, drawn faint: every later
@@ -323,20 +325,20 @@ goal as a grey ring, those with no expected or due day after the dated ones in g
 concerns a goal beyond the horizon, even on a meeting with no date, waits there until the horizon reaches it.
 
 To move the focus, drag the horizon onto another goal's ring (take the orange line anywhere along its height), press the arrow keys on it, or pick that goal's
-day on the calendar: the horizon glides there. At a later goal its events appear in full and its meetings and questions join what needs you; at an earlier one the focus narrows to
-what comes before it. The ring at the top, its caption and the faces follow that goal. The arrow keys step it one goal at a time (the left one goes a day into
-the past from the first goal ahead), and Home (the wordmark or the key H) or the Home key on the line brings it back to its default goal. The horizon moved is
-written in the address as `h=` and the goal, so Back, Forward and a reload show the same focus.
+day on the calendar: the horizon glides there. At a later goal its events appear in full and its meetings and questions join what needs you; at an earlier one
+the focus narrows to what comes before it. The ring at the top, its caption and the faces follow that goal. The arrow keys step it one goal at a time (the left
+one goes a day into the past from the first goal ahead), and Home (the wordmark or the key H) or the Home key on the line brings it back to its default goal.
+The horizon moved is written in the address as `h=` and the goal, so Back, Forward and a reload show the same focus.
 
-A click on anything drawn on the river, in the past or ahead, only shows it under the river and never moves the orange line, Home's moment or the page's scroll. A goal's ring
-ahead shows the goal and, at once, the items that have to close before it can be reached: its own open items and those of every goal it comes after, in an
-order in which they can be done, each item after the ones it waits on and the earlier goal's items first. A click on an item opens it. The small rings ahead
-of the sub-goals and epics show the same list for themselves. Moving through time is done only with the orange line, by dragging it or with its keys, or by
-picking a day on the calendar.
+A click on anything drawn on the river, in the past or ahead, only shows it under the river and never moves the orange line, Home's moment or the page's scroll.
+A goal's ring ahead shows the goal and, at once, the items that have to close before it can be reached: its own open items and those of every goal it comes
+after, in an order in which they can be done, each item after the ones it waits on and the earlier goal's items first. A click on an item opens it. The small
+rings ahead of the sub-goals and epics show the same list for themselves. Moving through time is done only with the orange line, by dragging it or with its
+keys, or by picking a day on the calendar.
 
-A goal missed, whose due day has passed with work still left, is not drawn ahead. While today is in view, its red ring stands just before today, named
-"overdue since 17 Nov"; when the river is dragged into the past, it stands at its due day, named "missed 17 Nov". When today is out of view and that day is
-before the window shown, a red "‹ 1 missed" under the river takes the window back to it. A click on the ring shows the goal.
+A goal missed, whose due day has passed with work still left, is not drawn ahead. While today is in view, its red ring stands just before today, named "overdue
+since 17 Nov"; when the river is dragged into the past, it stands at its due day, named "missed 17 Nov". When today is out of view and that day is before the
+window shown, a red "‹ 1 missed" under the river takes the window back to it. A click on the ring shows the goal.
 
 Every dated thing, on the river and in the stage's lists, says how urgent it is, quietly. It is drawn as usual while all is well. It turns amber when it is at
 risk: its forecast passes its due day, or its due day is two days away or less with work left. It turns red once it is late: its due day has passed with work
@@ -377,10 +379,9 @@ back to now. The arrow keys move through the days, Page Up and Page Down through
 
 Calendar, in the stage's index (its title, described below, marked with the same small calendar), shows the month as a calendar in the stage: a grid of its days
 with no lines, a small square on a day with a meeting, a small ring on a day a goal is due or expected, a small crown on a day a release was tagged, and today's
-number in orange. It shows the month of the moment Home shows; ‹ and › show the
-month before and after. A click on a day opens it beside the grid, which narrows to a column: the day in full, its meetings with their questions (a click holds
-one in the stage) and its goals. The address says what the stage holds (`s=meeting~<name>`, `s=calendar~<month>` with `i=` for the day), so Back, Forward and a
-reload come back to it.
+number in orange. It shows the month of the moment Home shows; ‹ and › show the month before and after. A click on a day opens it beside the grid, which narrows
+to a column: the day in full, its meetings with their questions (a click holds one in the stage) and its goals. The address says what the stage holds
+(`s=meeting~<name>`, `s=calendar~<month>` with `i=` for the day), so Back, Forward and a reload come back to it.
 
 When the project has development lines (`naima line`), the river carries them beside main. The line Home follows runs under main as a full tributary: it
 branches off where the line was cut, carries its own commits as dots and its agents as green lines, and its dotted orange path leads from today back up to main
@@ -396,10 +397,10 @@ The orange line can also be dragged back along the river, past today, with the m
 the ring and its percent, the goal's line and its expected day, the agents at work then and what needed you then, all read at the newest commit of main before
 the moment. The day at the top says "As it was on" that day, the ring and the agents' dots lose some of their colour, the line carries the day, and the commits
 after it fade. The left arrow key on the line at its default goal takes it a day back; in the past the arrow keys on the line move it a day back or on, and the
-calendar takes it to any day. Dragged past today at the river's left edge, the river opens on the past behind it. "Back to today", or the quiet "now"
-where today stands on the river (or at the edge it lies beyond), brings Home back to now, the line gliding to
-the horizon's goal. Each moment you drop the line at is a place in the browser's history, written in the address as `t=` and the time in seconds, so Back and
-Forward step through the moments seen and a reload shows the same one.
+calendar takes it to any day. Dragged past today at the river's left edge, the river opens on the past behind it. "Back to today", or the quiet "now" where
+today stands on the river (or at the edge it lies beyond), brings Home back to now, the line gliding to the horizon's goal. Each moment you drop the line at is
+a place in the browser's history, written in the address as `t=` and the time in seconds, so Back and Forward step through the moments seen and a reload shows
+the same one.
 
 A click on a dot of the river opens that part of the week's commits in the stage, each with its hour and its subject, and under a landing the items it closed;
 the same dot again gives the stage back to the diary.
@@ -432,29 +433,30 @@ line it follows. Every list looks the same, the diary's too: one row each, its d
 click on a row, or Enter, opens it beside the list: the item slides in from the right and the list narrows to a column on the left, so you can go from one item
 to the next as in a mail app, by clicking in the column or with the arrow keys. The item is said in plain words: what it is and where it stands, why it waits
 (with **Bring it to the chat** for an entry of Waiting for you), when and where a commit was made and what it closed, what the item is about, what it is linked
-to and its history; every item it names opens there in its place. Under the title of an item of the tracker is a row of what you can do with it:
-**Start now** puts it on the queue the coordinator starts first (`naima start`); **Move to a goal or release** picks one of the open goals and releases
-and puts it there, off the others; **Decide** or **Approve** settles the open question it is, or the one it is blocked by, or confirms a proposed
-requirement; **Comment** adds a note in your name; **Close as won't fix** asks why and closes it with the status its kind keeps for work deliberately not
-done (`naima close --wont-fix`). An action the item does not allow is greyed, with the reason under its name. A form opens under the row for those that
-ask something; each change runs as a command in your name, one at a time, and the row says how it goes and how it ended, then the item is read again.
-Back, Escape or a click on the stage's title give the whole list back. On a phone the column
-hides and the item takes the stage. Whatever opens in the stage, a list, an item, a day's story or a part of What's left, condenses everything above it at once,
-in one smooth move, since the full board beside a list is only noise, and folds what was open up there: the chart turns back to the ring, a detail closes, the
-gallery of faces shuts. The top and the stage take turns: while the stage shows anything but the diary's own list the top stays the bar, and scrolling never
-unfolds it over the list; and whatever you open up top, the chart, a detail, another face or the gallery, gives the stage back to the diary. Going back to the
-diary leaves the top condensed, and the bar brings Home back: the diary under the full board. So Home never shows more than two things open at once, such as a
-list and one item beside it, or the chart and one of its details. Scrolling down in the stage, with the wheel, a trackpad, a finger or the keys, first condenses
-everything above it: the top scrolls away flat, nothing in it scaled or tilted, and a thin bar fades in at the top in its place, with small pictures (a small
-ring with the goal's name and percent, then each other face chosen as a tiny chart, bars for amounts, a line for levels, stars for events) and a hairline river
-with its dots and the orange today line, while the stage takes the room freed. A long list in the stage scrolls flat too; when it is longer than its room its
-top and bottom edges fade softly, and only where there is more to scroll to. Only then does the stage itself scroll, so scrolling the diary never walks Home back in time while the board is open.
-The hairline river still works: drag it, or use the arrow keys on it, to move through time, and click it, or press Enter, to open the nearest commits in the
-stage. Scrolling back to the diary's top unfolds everything again, and a click, a tap or Enter anywhere on the bar brings Home back at once; a click on one of
-its small pictures brings Home back on that face. A scroll that stops half way goes on to the nearer end. What the stage holds is a place in the browser's
-history, written in the address as `s=` (with `i=` for the item open beside the list, and `w=` for an entry of Waiting for you sent to the chat), and the
-condensed top as `c=1`, so Back and Forward step through what the stage showed and a reload keeps it, condensed or not. With reduced motion nothing fades or
-slides: the bar simply replaces the top once it is condensed, and the item appears beside the column at once.
+to and its history; every item it names opens there in its place. Under the title of an item of the tracker is a row of what you can do with it: **Start now**
+puts it on the queue the coordinator starts first (`naima start`); **Move to a goal or release** picks one of the open goals and releases and puts it there, off
+the others; **Decide** or **Approve** settles the open question it is, or the one it is blocked by, or confirms a proposed requirement; **Comment** adds a note
+in your name; **Close as won't fix** asks why and closes it with the status its kind keeps for work deliberately not done (`naima close --wont-fix`). An action
+the item does not allow is greyed, with the reason under its name. A form opens under the row for those that ask something; each change runs as a command in
+your name, one at a time, and the row says how it goes and how it ended, then the item is read again. Back, Escape or a click on the stage's title give the
+whole list back. On a phone the column hides and the item takes the stage. Whatever opens in the stage, a list, an item, a day's story or a part of What's left,
+condenses everything above it at once, in one smooth move, since the full board beside a list is only noise, and folds what was open up there: the chart turns
+back to the ring, a detail closes, the gallery of faces shuts. The top and the stage take turns: while the stage shows anything but the diary's own list the top
+stays the bar, and scrolling never unfolds it over the list; and whatever you open up top, the chart, a detail, another face or the gallery, gives the stage
+back to the diary. Going back to the diary leaves the top condensed, and the bar brings Home back: the diary under the full board. So Home never shows more than
+two things open at once, such as a list and one item beside it, or the chart and one of its details. Scrolling down in the stage, with the wheel, a trackpad, a
+finger or the keys, first condenses everything above it: the top scrolls away flat, nothing in it scaled or tilted, while the stage takes the room freed, and
+once it has gone Home folds into the window's top bar, beside the project's name, where it fades in: the goal's ring with its percent (and its name when there
+is room), its counts (left to do, fixed on the line, and what is waiting for you, in orange when anything is), each other face chosen as a small chart, and the
+river in one line. That line is the river's own window, its first and last day at its ends: today an orange tick near the left, the goals ahead ringed as the
+river rings them, the nearest named with their short day, the deadlines as small rings, the agents at work as short green lanes, and how many goals lie after
+the window. The top bar keeps the same height folded or not, so nothing moves. A long list in the stage scrolls flat too; when it is longer than its room its
+top and bottom edges fade softly, and only where there is more to scroll to. Only then does the stage itself scroll, so scrolling the diary never walks Home
+back in time while the board is open. Scrolling back to the diary's top unfolds everything again, and a click, a tap or Enter anywhere on the folded bar brings
+Home back at once, on the face that was up. A scroll that stops half way goes on to the nearer end. What the stage holds is a place in the browser's history,
+written in the address as `s=` (with `i=` for the item open beside the list, and `w=` for an entry of Waiting for you sent to the chat), and the condensed top
+as `c=1`, so Back and Forward step through what the stage showed and a reload keeps it, condensed or not. With reduced motion nothing fades or slides: the
+folded bar simply appears once the top is condensed, and the item appears beside the column at once.
 
 The word "naima" at the top left of every screen is the way Home: a click on it, or Enter while it has the focus, returns to Home from wherever you are. On
 another screen it shows Home; on Home it gives Home back as it starts, in one smooth move: the stage closes back to the diary with no item open, the condensed
@@ -485,6 +487,28 @@ do that no agent holds yet; then the chain of items waiting on each other that d
 row, then its state and who does it. An agent holding an item is named with its robot and the colour of its line in the Days panel: pointing at it lights that
 line, and clicking it lists what it holds on the goal.
 
+### The calm pages
+
+Bugs, Tests, Health and History are pages in Home's look, each opened from the stage's index on Home (All bugs, Tests, Health, History) and kept at its own address (`#bugs`, `#failed_tests`,
+`#metrics`, `#diary`), so Back returns to Home. Each opens with the day, then a ring beside the page's title and one sentence saying how things stand. The
+ring is split into arcs by how things stand, with the number that matters at its centre, and only what waits for you is orange. Under a hairline comes the
+page's list, the same list as everywhere else, with its controls folded into one quiet line and Adjust. A click on a row, or Enter, opens it beside the list,
+which narrows to a column, and the page does not scroll.
+
+Bugs lists every bug by where it stands: what needs you, what to fix now, next, not sorted yet and later, then what is fixed and waiting to land or proven. Its
+ring counts the open bugs, and a line under the sentence says how many are fixed and how many were found and fixed this week. A bug opened beside the list says
+its release or goal, its age and who holds it, with a link to its own page.
+
+Tests lists the tests and properties that fail, those you run first at the top, and folds those that pass again this week. Its sentence is the same one Home's
+checks say. A test opened beside the list says since when it fails and when it last passed, what to do about it, and its runs over time. Under the list, the
+last 14 days day by day and every test's runs are one click away.
+
+History is the diary: what was decided and what changed the project, a day to a group, newest first, each moment with its hour and the day's routine in one
+quiet row. A choice under the sentence shows the moments, only what was decided with you, only what was finished, or everything. A moment opened beside the
+list is told whole, with the item it names and who worked on what that day. Earlier days come with "Show earlier days".
+
+Health is the metrics page, described next.
+
 ### Formal models and UI design
 
 Two pages show the project's stances, each opened from the stage's index on Home.
@@ -502,13 +526,13 @@ close the page.
 
 ### Metrics
 
-Metrics shows the project's [metrics](metrics-and-budgets.md) at the moment the window shows. At the top are the key numbers, one card each: the value, its
-change, the date of its record and a small chart of its history. Live, a card shows the newest record and its change since the record before, named by that
-record's day ("+23 since 26 Oct"). Above the cards one sentence says whether the project is getting healthier: how many metrics got better, worse or stayed
-steady since the first day the charts show. At a commit of the past it shows the value then and its change against live, and says "recorded at this commit" or,
-when that commit has no record, "no record at this commit, nearest:" with the date of the last record at or before it, the one that holds then. Clicking a card
-shows its metric in the large chart below. Beside that chart is the list of every metric with its value, its change and a small chart; picking one shows it in
-the large chart. Every chart runs along the trunk's commits in order, labelled with their dates; a commit of the past is marked by an amber line, and a bound by
+Health shows the project's [metrics](metrics-and-budgets.md) at the moment the window shows. Its ring has an arc for the metrics getting better, one for those
+getting worse and one for the steady ones, and its sentence says whether the project is getting healthier: how many metrics got better, worse or stayed steady
+since the first day the charts show. Under it are the key numbers, as Home's numbers stand: the value, its name, its change, the date of its record and a small
+chart of its history. Live, a number shows the newest record and its change since the record before, named by that record's day ("+23 since 26 Oct"). At a commit of the past it shows the value then and its change against live, and says "recorded at this commit" or,
+when that commit has no record, "no record at this commit, nearest:" with the date of the last record at or before it, the one that holds then. Under the numbers
+is the list of every metric, grouped by what it measures, with its value, the group of the metric picked open; picking one shows it in the large chart
+under the list, with what it means and how it is measured above the chart, and underlines its number. Every chart runs along the trunk's commits in order, labelled with their dates; a commit of the past is marked by an amber line, and a bound by
 a dashed one. The range picks every commit or the last 500 or 100. Each chart has a text summary that screen readers read. Clicking a point of the large chart,
 or pressing Enter on the one the arrow keys are on, selects its commit, so the whole window shows that moment, and opens below the chart the record of the run
 that measured it: the value and whether it kept its bound, when it was recorded, and how it was taken. For a test suite's number that is the suite's run, with
@@ -523,8 +547,7 @@ records. Its data is the metrics view's, whose `timeline` places every record on
 the records as they are now, since a commit's own tree holds none of the records made after it. How the screen reads a moment is a small model of its own,
 checked like the shell's: an answer that arrives after the moment changed is dropped and the new moment read. So is Record metrics: it starts one recording at a
 time, asks for its run's state one request at a time and only while it runs, and reads again when it succeeded. The record of a point is the metrics plugin's
-metric-run view, which the bridge's `data` command reads with the metric and the commit as its query. At the end, one line says how many tests and properties
-fail and links to Failed tests, which lists them.
+metric-run view, which the bridge's `data` command reads with the metric and the commit as its query.
 
 The views of the earlier window are tabs: the summary, the gates, what is next, the claims, the boards, the session notes and each item with its evidence. Every
 view's data is the same data the matching command prints with `--json`, and the new interface reads it from there.
@@ -604,27 +627,17 @@ rewrites history. Another page in your browser cannot run one.
 The interface is a Svelte app that ships with Naima, already built: Naima needs no npm package and no network to show it. It is built with the
 [UI stance](stances.md): its tokens, widgets, store and rules, which the stance's checks hold it to. Everything it reads and does goes through the stance's
 bridge, as commands of Naima's own: `describe`, `data` (a view's data, live or at a commit), `tabs`, `tab` (what a tab shows), `metro` (the rail's map),
-`studies` (the Models tab's studies, each declared by a `%@ui` block of an mCRL2 file of the project) and `study` (one of them, with its stepper's bytes and the addresses of its frames),
-`action` and `run`, and the feed `changes`, which says when the project changed. In the browser the bridge is `POST /bridge/<command>` and, for the feed, a
-stream of server-sent events at `/bridge/changes`, behind the run's token; a command is refused from any page but the server's own. Its logic is generated from
-a model. The moment, the rail, the current screen and the plugin's tab and subtab shown form one state machine, modelled in mCRL2 and checked with its
-properties, and naima-codegen generates the code the screens call. How a screen reads its data is a second one, the reader: a change that comes while a screen
-is still reading is never lost, since the screen reads once more when the first answer comes, and that answer, which may be of the moment before, is set aside.
-The components only read the machines' state and call their transitions. The colours, type and shapes are the design tokens of the interface, and the Inter
-typeface comes with it under the SIL Open Font License.
+`studies` (the Models tab's studies, each declared by a `%@ui` block of an mCRL2 file of the project) and `study` (one of them, with its stepper's bytes and the
+addresses of its frames), `action` and `run`, and the feed `changes`, which says when the project changed. In the browser the bridge is `POST /bridge/<command>`
+and, for the feed, a stream of server-sent events at `/bridge/changes`, behind the run's token; a command is refused from any page but the server's own. Its
+logic is generated from a model. The moment, the rail, the current screen and the plugin's tab and subtab shown form one state machine, modelled in mCRL2 and
+checked with its properties, and naima-codegen generates the code the screens call. How a screen reads its data is a second one, the reader: a change that comes
+while a screen is still reading is never lost, since the screen reads once more when the first answer comes, and that answer, which may be of the moment before,
+is set aside. The components only read the machines' state and call their transitions. The colours, type and shapes are the design tokens of the interface, and
+the Inter typeface comes with it under the SIL Open Font License.
 
-## The state explorer
+## Every state of the interface
 
-The state explorer shows every state the interface can be in, without the server and without the project's data. Open it at `/#explorer` in the window, or open
-the file `ui/dist/explorer.html` of the Naima checkout straight from the disk.
-
-On the left it lists the states of each state machine of the interface. The shell's are every combination of the moment (Live, one of two commits of the past,
-or one of two goals ahead), the rail (closed or open), the screen, or a plugin's tab and subtab (two of each, as in the model), with the tab and subtab last
-shown, that the model allows. The home data's are what Home shows while it reads, once it has read (a recorded project, or an empty one), when the reading
-fails, and while a reload waits for the reading on its way. Choose a state and the real interface appears below in that state, with the map and the project
-recorded from a real one. Above it, "Path to here" gives the shortest way from the start to that state, and "Transitions" lists every step out of it; choosing
-one takes that step. Using the interface in the preview moves the explorer too. "Every state" shows a thumbnail of the interface in each state of the shell.
-
-The shell's list comes from the code generated from its model, and its count is the model's: the model has 596 states, 320 where the interface rests between two
-of your actions and 276 it only passes through inside one, while it asks the screens to read their data again or the tab shown to read its content. The explorer
-lists the 320 and says how many the model has.
+The interface's own state machines are studied in the UI tab of Naima's workshop, beside Models: each machine of the interface opens with its states,
+its steps and the real interface in the state the machine is in, and its card "Every state" shows a picture of the interface in each state the machine rests
+in ([studying a model](study-a-model.md#the-ui-tab)). The address `/#explorer` opens the UI tab.

@@ -1,1 +1,0 @@
-import{di as e,fi as t}from"./chevron-right-CtR5kz8Q.js";import{t as n}from"./Action-BzCvjPuW.js";var r=new Set([`$$slots`,`$$events`,`$$legacy`]);function i(i,a){let o=e(a,r);n(i,t(()=>o))}export{i as t};

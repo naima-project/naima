@@ -66,9 +66,13 @@ import {
   label,
   linked,
   type Migration,
+  type MilestonePlan,
   orderingPerson,
   owedLine,
   parse,
+  planActive,
+  planLine,
+  planOf,
   type Plugin,
   READY,
   readyQueue,
@@ -158,6 +162,11 @@ export interface GateDef {
   freeze?: string
   /** May be async: a gate backed by an external tool awaits it. */
   evaluate(ctx: Context): GateResult | Promise<GateResult>
+  /**
+   * A milestone's progress, what its check plan counts (naima check-plan): its items, how many are done (closed, fixed, or
+   * fixed on its line), and whether its version is already released. Only a gate the project configures has one.
+   */
+  progress?(ctx: Context): { items: number; closed: number; released: boolean; closedDates: string[] }
 }
 
 const blank = (s: unknown): boolean => typeof s !== "string" || !s.trim()
@@ -556,6 +565,11 @@ interface GateRow {
   /** For a gate with steps: the method it follows, if any, and its steps in order, the method's then its own. */
   method?: string
   steps?: StepState[]
+  /**
+   * A milestone's check plan, while the project plans its heavy checks (naima check-plan): each planned point (half,
+   * full, release) with the items it waits for, its state and its expected duration; what the river marks on the goal.
+   */
+  checks?: MilestonePlan
   /** Its goal: the version it ships as, its due date and freeze, the goals it says it comes after. */
   version?: string
   due?: string
@@ -592,6 +606,20 @@ export const gatesWaiting: WaitingSource = {
 }
 
 /** The gates named — every one when none is — each evaluated now: what `naima gates` prints and the gates view shows. */
+/** A milestone's check plan for its row: only while the project plans its heavy checks, for one with items not yet released. */
+function checksOf(ctx: Context, def: GateDef): { checks?: MilestonePlan } {
+  if (!def.progress || !planActive(ctx)) return {}
+  try {
+    const p = def.progress(ctx)
+    if (!p.items || p.released) return {}
+    const tip = gitOrNull(ctx.root, "rev-parse", "HEAD") ?? undefined
+    const plan = planOf(ctx, def.name, p.items, p.closed, { ...(tip ? { tip } : {}), closedDates: p.closedDates })
+    return plan.points.length ? { checks: plan } : {}
+  } catch {
+    return {}
+  }
+}
+
 async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: GateDef; result: GateResult; row: GateRow }[]> {
   const all = gatesOf(ctx).map((g) => g.name)
   let released: Set<string> | null = null
@@ -623,6 +651,7 @@ async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: Gate
         ...(def.version ? { version: def.version } : {}),
         ...(def.due ? { due: def.due } : {}),
         ...(def.freeze ? { freeze: def.freeze } : {}),
+        ...checksOf(ctx, def),
         ...(def.after?.length ? { after: def.after } : {}),
         before: all.filter((a) => goalBefore(ctx, a, def.name)),
         // As finished() judges it, on the verdict just made rather than a second evaluation.
@@ -662,7 +691,7 @@ const gatesCommand: Command = {
     {
       name: "--json",
       says:
-        "print the gates as JSON: each one's name, title, timing, whether it holds, the items blocking it or owed, its steps, its version, due date, freeze and after, the goals ordered before it, and whether its goal is finished",
+        "print the gates as JSON: each one's name, title, timing, whether it holds, the items blocking it or owed, its steps, its version, due date, freeze and after, the goals ordered before it, whether its goal is finished, and a milestone's check plan (checks) while the project plans its heavy checks",
     },
   ],
   examples: ["gates", "gates first-public --check", "gates --json"],
@@ -671,7 +700,10 @@ const gatesCommand: Command = {
     const gates = await gateRows(ctx, p.positionals)
     if (bool(p, "json")) ctx.out(JSON.stringify(gates.map((g) => g.row), null, 2))
     else {
-      for (const g of gates) printGate(ctx, g.def, g.result)
+      for (const g of gates) {
+        printGate(ctx, g.def, g.result)
+        if (g.row.checks) ctx.out(`  ${planLine(g.row.checks)}`)
+      }
       for (const l of checkpointLines(ctx)) ctx.out(l)
       const owed = owedLine(ctx)
       if (owed) ctx.out(owed)
@@ -1409,6 +1441,14 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
         : ""),
     ...(c.method !== undefined ? { method: c.method } : {}),
     ...(c.steps?.length ? { ownSteps: c.steps } : {}),
+    progress: (ctx) => {
+      const on = gatedItems(ctx, name)
+      const line = new Set(fixedOnLine(ctx, name))
+      const done = on.filter((i) => !isOpen(ctx, i) || fieldValue(i, FIXED_ON) !== undefined || line.has(i.meta.id))
+      // The day each closed: what tells a threshold crossed before the plan began (checkPlanSince) from one crossed after.
+      const dates = done.map((i) => i.meta["closedOn"] ?? i.meta["fixedOn"]).filter((d): d is string => typeof d === "string").map((d) => d.slice(0, 10))
+      return { items: on.length, closed: done.length, released: !!c.version && releaseTags(ctx).has(versionKey(c.version)), closedDates: dates }
+    },
     evaluate: (ctx) => {
       const evaluated = evaluateGate(ctx, name, c.holdsOn ?? "code")
       const reasons = c.coverage?.length ? coverageReasons(ctx, lists, c.coverage) : []
