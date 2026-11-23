@@ -462,6 +462,24 @@ async function factsOf(
     }
     if (land && !window.has(land)) return null
     if (land) {
+      // A branch merged into the trunk within its window, or into a line: its fork and its own commits are walks over the window's graph, which
+      // (the line's, for a line) holds the merged branches' commits too, when one commit of it is where the branch and the merge's first parent meet.
+      const around = base === main ? await known.windowGraph() : graph
+      const first = around?.commits.get(land)?.parents[0]
+      if (around && first && around.has(first) && around.has(tip)) {
+        const mineAll = around.ancestors(tip)
+        const theirs = around.ancestors(first)
+        const shared = around.newest(new Set([...mineAll].filter((c) => theirs.has(c))))
+        if (shared.length === 1) {
+          const forkAt = shared[0]!
+          const behind = around.ancestors(forkAt)
+          const walk = around.firstParents(tip, (c) => behind.has(c), WINDOW)
+          if (walk.end !== "outside") {
+            recordFrom(around, walk.list, commits, authors)
+            return { name, tip, base, land, fork: forkAt, list: walk.list }
+          }
+        }
+      }
       const fork = (await ask("merge-base", `${land}^1`, tip)) || null
       return { name, tip, base, land, fork, list: fork ? await firstParentAsync(ctx, `${fork}..${tip}`, WINDOW, commits, authors) : [] }
     }
