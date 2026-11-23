@@ -254,7 +254,9 @@ that day, with "Back to today". Beside the day, a row of quiet words opens the o
 and History, described in [The calm pages](#the-calm-pages). Then the goal nearest its expected date that still has work left: a ring with how much of it is done, its title, and one line
 with its expected date and how sure that date is, such as "Expected 2 January · 85% sure by 17 January" (its due date when there is no forecast yet). Beside it
 is a green dot for each agent at work, and how many there are in words. Under them are the goal's three numbers, always shown: the items left to do, the items
-of the goal the agents hold, and how many items closed a day lately. A click on the number left to do opens What's left of the goal in the stage. When the goal
+of the goal the agents hold, and how many items closed a day lately. A click on the number left to do opens What's left of the goal in the stage. Its
+legend names each state with its count, each a link to that part of the goal's list; when more waits for you across the project than in this goal, the
+goal's part ("2 waiting for you") is followed by the whole of it as a link of its own ("19 left"), which opens Waiting for you. When the goal
 has a development line, the items already fixed on it are not counted as left: a quiet green line under the number says how many there are, for example "195
 fixed on the line · closes at the release", since they close on main only when the line lands. The ring counts them as done, and What's left says them apart in
 the same words.
@@ -531,7 +533,12 @@ close the page.
 
 ### Metrics
 
-Health shows the project's [metrics](metrics-and-budgets.md) at the moment the window shows. Its ring has an arc for the metrics getting better, one for those
+Health shows the project's [metrics](metrics-and-budgets.md) at the moment the window shows. Two buttons at the top choose how: every metric large, or
+one at a time. Every metric large uses the window's whole width: each metric, grouped by what it measures, has its value now and how it moved, its last
+change ("Last change +23 tests on 27 Oct") and its bound ("budget 6 s, met"), then its chart on axes in its own unit (its least, middle and most value), with
+a faint band where its bound is not met and its trend as a dashed straight line, green when it goes the metric's good way. The charts share one time axis and
+one set of zoom buttons; clicking a point selects its commit and opens the record of its run under the charts, as on the large chart below. Home opens Health
+this way in one step: the small charts of the folded top bar, and the quiet link "Every metric, large" at the top left of the ring's chart. Its ring has an arc for the metrics getting better, one for those
 getting worse and one for the steady ones, and its sentence says whether the project is getting healthier: how many metrics got better, worse or stayed steady
 since the first day the charts show. Under it are the key numbers, as Home's numbers stand: the value, its name, its change, the date of its record and a small
 chart of its history. Live, a number shows the newest record and its change since the record before, named by that record's day ("+23 since 26 Oct"). At a commit of the past it shows the value then and its change against live, and says "recorded at this commit" or,
