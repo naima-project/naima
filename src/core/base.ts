@@ -31,6 +31,7 @@ import { byUrgency, isEvidenceType, isOpen, label, proves, refutes } from "./lif
 import { CONTRACT } from "./contract.ts"
 import { shortOrId } from "./names.ts"
 import { readText, writeFileAtomic } from "./files.ts"
+import { resolveHere } from "./absent.ts"
 import { contextAt } from "./context.ts"
 import { addedPrivate, allowanceLine, privateContext, type PrivateFinding, privateRefusal } from "./private.ts"
 import { asRendered, type Format, linesAs, rendered } from "./rendered.ts"
@@ -308,7 +309,7 @@ const show: Command = {
     const p = parse(args, { json: { type: "boolean" } })
     const ref = p.positionals[0]
     if (!ref?.trim()) throw usageError(this)
-    const d = itemData(ctx, ctx.repo.resolve(ref))
+    const d = itemData(ctx, resolveHere(ctx, ref))
     if (bool(p, "json")) {
       ctx.out(JSON.stringify(d, null, 2))
       return 0
@@ -422,7 +423,7 @@ const set: Command = {
   run(args, ctx) {
     const [ref, ...rest] = parse(args).positionals
     if (!ref?.trim() || !rest.length) throw usageError(this)
-    const item = ctx.repo.resolve(ref)
+    const item = resolveHere(ctx, ref)
     setFields(ctx, item, pairs(rest), { authored: true })
     ctx.out(`${label(item)}: ${rest.join(" ")}`)
     return 0
@@ -438,8 +439,8 @@ const link: Command = {
   run(args, ctx) {
     const [from, rel, to] = parse(args).positionals
     if (!from || !rel || !to) throw usageError(this)
-    const a = ctx.repo.resolve(from)
-    const b = ctx.repo.resolve(to)
+    const a = resolveHere(ctx, from)
+    const b = resolveHere(ctx, to)
     ctx.out(addLink(ctx, a, rel, b) ? `${label(a)} ${rel} ${label(b)}` : "already linked")
     return 0
   },
@@ -454,9 +455,9 @@ const unlink: Command = {
   run(args, ctx) {
     const [from, rel, to] = parse(args).positionals
     if (!from || !rel || !to) throw usageError(this)
-    const a = ctx.repo.resolve(from)
+    const a = resolveHere(ctx, from)
     // A link may outlive its target: a full id that no item has still names the stored link.
-    const b = isUuid(to) && !ctx.repo.items.some((i) => i.meta.id === to) ? null : ctx.repo.resolve(to)
+    const b = isUuid(to) && !ctx.repo.items.some((i) => i.meta.id === to) ? null : resolveHere(ctx, to)
     const id = b ? b.meta.id : to
     const target = b ? label(b) : to
     const stored = a.meta.links ?? []
@@ -514,7 +515,7 @@ const note: Command = {
     if (!ref?.trim()) throw usageError(this)
     const text = proseText(this, str(p, "file"), words)
     if (headings(text).length) throw new Error(`a note sits under its own dated heading, so it holds none: write it without "${headings(text)[0]}"`)
-    const item = ctx.repo.resolve(ref)
+    const item = resolveHere(ctx, ref)
     const who = author(ctx, str(p, "by"))
     const branch = isGitRepo(ctx.root) ? currentBranch(ctx.root) : "HEAD"
     const entry = `### ${today(ctx)} — ${who}${branch === "HEAD" ? "" : `, on ${branch}`}\n\n${text}`
@@ -545,7 +546,7 @@ const describe: Command = {
     const hs = headings(text)
     if (/^#\s/.test(text)) throw new Error(`the title is not part of the description: change it with naima set ${ref} title="..."`)
     if (hs.some((h) => h.trimEnd() === NOTES_HEADING)) throw new Error(`a description holds no ${NOTES_HEADING} section: notes are added with naima note`)
-    const item = ctx.repo.resolve(ref)
+    const item = resolveHere(ctx, ref)
     const prose = splitProse(readReadme(item))
     saveProse(ctx, item, joinProse({ ...prose, title: prose.title || `# ${item.meta.title}`, description: text }), { authored: true })
     ctx.out(`${label(item)}: description replaced`)
@@ -564,7 +565,7 @@ const move: Command = {
     const p = parse(args, { force: { type: "boolean" } })
     const [ref, typeId] = p.positionals
     if (!ref?.trim() || !typeId?.trim()) throw usageError(this)
-    const item = ctx.repo.resolve(ref)
+    const item = resolveHere(ctx, ref)
     const to = typeOrThrow(ctx, typeId)
     if (to.id === item.type) throw new Error(`${label(item)} is already a ${to.id} item`)
     const force = bool(p, "force")
