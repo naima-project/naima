@@ -64,6 +64,12 @@ export interface Verifier {
    * Absent: the model alone.
    */
   inputs?(request: VerifyRequest, ctx: Context): string[] | Promise<string[]>
+  /**
+   * The text of one input file that its fingerprint is taken over, when that is not the file's bytes: what the tool
+   * reads of it, so an edit the tool cannot see (a comment) leaves a run current. Runs recorded over the file's bytes
+   * still match while the file is as it was then, or as git holds an earlier version whose meaning is the same. Absent: the bytes.
+   */
+  fingerprintText?(path: string, text: string): string
   /** The version of the tool a run uses, recorded with the run; a property run by another version is stale. Absent: none recorded. */
   version?(ctx: Context): string | Promise<string>
   /** The equivalences `compare` decides, by name, each with what it preserves; the first is the default. Absent: it cannot compare. */
@@ -88,7 +94,7 @@ export interface Verifier {
 export const verifiersPoint: ExtensionPoint<Verifier> = {
   id: "verifiers",
   says:
-    "an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest; `toolArgs`, the flags `naima verify --tool-args` may pass, which never change the verdict; and `equivalences` with `compare({ before, after, equivalence }, ctx) → { verdict, output, counterexample?, details? }` and `preserves({ property, options, equivalence }, ctx)`, for `naima equivalent`; `identityOptions(options)`, the options as they identify a run, so a run made with other effective options is never reused; `propertyFile(property, root)`, the file a property names when it is not inline, so a missing one is said as missing",
+    "an adapter to a formal-methods tool: `verify({ model, property, options }, ctx) → { verdict, output, counterexample?, details? }`; optionally `inputs(request, ctx)`, every file a run reads, and `version(ctx)`, the tool's version, both kept in the run's digest; `toolArgs`, the flags `naima verify --tool-args` may pass, which never change the verdict; and `equivalences` with `compare({ before, after, equivalence }, ctx) → { verdict, output, counterexample?, details? }` and `preserves({ property, options, equivalence }, ctx)`, for `naima equivalent`; `identityOptions(options)`, the options as they identify a run, so a run made with other effective options is never reused; `propertyFile(property, root)`, the file a property names when it is not inline, so a missing one is said as missing; `fingerprintText(path, text)`, the text of an input its fingerprint is taken over when that is not its bytes, so an edit the tool cannot see (a comment) leaves a run current",
   noun: "verifier",
   stored: true,
   key: (v) => v.id,
@@ -97,7 +103,7 @@ export const verifiersPoint: ExtensionPoint<Verifier> = {
     const a = v as Partial<Verifier> | null
     if (!a || typeof a !== "object" || typeof a.id !== "string") return "has no id"
     if (typeof a.verify !== "function") return "has no verify function"
-    for (const k of ["inputs", "version", "compare", "preserves", "identityOptions", "propertyFile"] as const) {
+    for (const k of ["inputs", "version", "compare", "preserves", "identityOptions", "propertyFile", "fingerprintText"] as const) {
       if (a[k] !== undefined && typeof a[k] !== "function") return `has a ${k} that is not a function`
     }
     const e = a.equivalences
