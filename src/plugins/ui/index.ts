@@ -538,7 +538,12 @@ const uiCommand: Command = {
       const tabs = allTabs(tabsOf(ctx), viewsOf(ctx))
       // The desktop app's sidecar names the app in the registry, unless the hello that opened it already did.
       const registered = register(ctx.root, { how: "desktop" })
+      // As in the browser's server, the views are rendered off the thread that answers the shell, side by side: the
+      // window's first screen asks some twenty at once, which one thread computed one after another. The workers start now.
+      const pool = viewPool({ root: ctx.root, data: ctx.trackerRoot, program: ctx.program })
+      pool.warm()
       return runSidecar(ctx, {
+        pool,
         views: viewsOf(ctx),
         tabs,
         tabFolder: (name) => tabFolder(ctx, tabs, name),

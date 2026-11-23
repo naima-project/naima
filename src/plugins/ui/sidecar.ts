@@ -19,6 +19,7 @@ import { createInterface } from "node:readline"
 import type { Readable } from "node:stream"
 import type { Context } from "../../core/api.ts"
 import { viewCache } from "./view-cache.ts"
+import type { ViewPool } from "./view-pool.ts"
 import { naimaBridge } from "./bridge.ts"
 import * as Model from "./generated/sidecar.ts"
 import type { Handlers, Json } from "./bridge-handler.ts"
@@ -45,6 +46,8 @@ export interface SidecarOptions {
   watch?: { interval?: number; debounce?: number }
   /** --watch: the feed reload, which tells the shell to reload its page when the UI is rebuilt (watch.ts). */
   reload?: ReloadWatch
+  /** The views and tabs are rendered in this pool of worker threads, a few at a time, instead of one after another on the thread that answers the shell. */
+  pool?: ViewPool
   /** Told each event of the sidecar's machine and each action it takes, as its model's action record has them. */
   record?: (entry: SidecarEntry) => void
 }
@@ -135,6 +138,7 @@ export async function runSidecar(ctx: Context, opts: SidecarOptions): Promise<nu
     fileUrl: (tab, rel) => desktopFileUrl(opts.os, tab, rel),
     // A UI opened again on a large project draws from the views kept on disk, then reads them again.
     cache: viewCache(ctx),
+    ...(opts.pool ? { pool: opts.pool } : {}),
     carrier: "desktop",
     // The shell switches project itself, restarting the sidecar in the one chosen: the sidecar only lists them.
     switcher: { can: true },
