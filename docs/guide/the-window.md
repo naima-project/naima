@@ -313,7 +313,7 @@ the nearest ones are darker and the focused goal's name is bold. A due date is a
 projected at the present pace a dotted one, said "about 11 Jan". Under the river you choose how much of the future it shows: a week, a month, a quarter, up to
 the next deadline, or everything. The days shown are written beside the choices (for example "21 Nov – 20 Dec"), with − and + to widen or narrow them. Ctrl or
 Cmd with the wheel, or a pinch on a trackpad, zooms around the pointer, and a double-click on an empty part of the river zooms in there. Dragging the river
-works as a music editor's timeline does: sideways it moves through time, up it zooms in around the pointer and down it zooms out, both at once in one drag. The plain wheel scrolls
+works as a music editor's timeline does: sideways it moves through time, up it zooms in around the pointer and down it zooms out, both at once in one drag. The river follows the pointer continuously, frame by frame, each mark keeping its size, and settles into place when the drag ends or the pointer rests. A mark leaves the river only once it is wholly out of view, and a label or small ring the zoom has no room for fades out and back in rather than popping; the calendar's ticks and month names come and go by degrees. The plain wheel scrolls
 the page, never the river. The goals after the end of the window are gathered into one marker at its right edge, for example "12 more, to Jul 2027 →"; a click
 on it widens the window until they all show.
 
