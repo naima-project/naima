@@ -33,6 +33,10 @@ export interface Study {
   file: string
   title: string
   says: string
+  /** Two or three sentences shown as the study's opening line, dismissible: what the machine is and why it matters. */
+  intro: string
+  /** The `%@situation <condition>: "<text>"` lines: what to say about the state the road has reached, or the step just taken. */
+  situations: { when: string; text: string; line: number }[]
   /** The model's path relative to the project, or null. */
   model: string | null
   /** The paths below are relative to the declaring file's folder, with forward slashes. */
@@ -73,6 +77,7 @@ const KEYS = [
   "view",
   "config",
   "says",
+  "intro",
   "diagrams",
   "parts",
   "paths",
@@ -150,6 +155,8 @@ function studyOf(root: string, file: string, text: string): Study | null {
     view: null,
     config: {},
     says_lines: saysIn(file, text),
+    intro: "",
+    situations: situationsIn(text),
     state_notes: [],
     problems: [],
   }
@@ -174,11 +181,12 @@ function studyOf(root: string, file: string, text: string): Study | null {
     const key = m[1]!.toLowerCase()
     if (!KEYS.includes(key)) {
       study.problems.push(`unknown key ${key} (line ${n + 1})`)
-    } else values[key] = (m[2] ?? "").trim()
+    } else values[key] = key === "intro" && values[key] ? `${values[key]} ${(m[2] ?? "").trim()}` : (m[2] ?? "").trim()
   }
   if (!closed) study.problems.push("the %@ui block has no %@ui end line")
   if (values["title"]) study.title = values["title"]
   study.says = values["says"] ?? ""
+  study.intro = values["intro"] ?? ""
   study.diagrams = values["diagrams"] ?? ""
   for (
     const part of (values["parts"] ?? "").split(";").map((p) => p.trim())
@@ -269,6 +277,7 @@ function studyOf(root: string, file: string, text: string): Study | null {
       const modelText = study.model === file ? null : read(full)
       if (modelText !== null) {
         study.says_lines.push(...saysIn(study.model, modelText))
+        study.situations.push(...situationsIn(modelText, study.model))
         study.state_notes = stateNotes(modelText)
       } else if (study.model !== file && !existsSync(full)) {
         study.problems.push(`the model file ${model} does not exist`)
@@ -358,9 +367,47 @@ export function blockValues(text: string): Record<string, string> | null {
     if (l.trim() === "" || /^%\s*$/.test(l.trim())) continue
     const m = /^%\s+([A-Za-z][A-Za-z-]*)(?:\s+(.*))?$/.exec(l.trim())
     if (!m || !KEYS.includes(m[1]!.toLowerCase())) return null
-    out[m[1]!.toLowerCase()] = (m[2] ?? "").trim()
+    const key = m[1]!.toLowerCase()
+    out[key] = key === "intro" && out[key] ? `${out[key]} ${(m[2] ?? "").trim()}` : (m[2] ?? "").trim()
   }
   return out
+}
+
+/** The `%@situation <condition>: "<text>"` lines of a file (see the guide's write-a-study-by-hand, section 7b). */
+export function situationsIn(text: string, _file?: string): { when: string; text: string; line: number }[] {
+  const out: { when: string; text: string; line: number }[] = []
+  text.split(/\r?\n/).forEach((l, i) => {
+    const m = /^\s*%@situation\s+(.+?)\s*:\s*"((?:[^"\\]|\\.)*)"\s*$/.exec(l)
+    if (m) out.push({ when: m[1]!.trim(), text: m[2]!.replace(/\\(.)/g, "$1"), line: i + 1 })
+  })
+  return out
+}
+
+/**
+ * What a block with no stepper says of its study's default study: its title, says, intro, situations, and the observer,
+ * view, parts and diagrams of an explanation view. Paths are relative to the study's folder and must stay inside it.
+ */
+export function applyWords(study: Study, root: string, block: Record<string, string> | null, text: string): void {
+  study.situations = situationsIn(text)
+  if (!block) return
+  if (block["title"]) study.title = block["title"]
+  if (block["says"]) study.says = block["says"]
+  study.intro = block["intro"] ?? ""
+  study.diagrams = block["diagrams"] ?? ""
+  const dir = join(root, dirname(study.file))
+  for (const key of ["observer", "view"] as const) {
+    const rel = block[key]
+    if (!rel) continue
+    const full = inside(dir, rel)
+    if (full === null) study.problems.push(`the ${key} ${rel} is outside the study's folder`)
+    else if (!isFile(full)) study.problems.push(`the ${key} file ${rel} does not exist`)
+    else study[key] = gitPath(relative(dir, full))
+  }
+  for (const part of (block["parts"] ?? "").split(";").map((p) => p.trim()).filter(Boolean)) {
+    const m = /^([a-z][a-z0-9-]*)\s*:\s*(.+)$/.exec(part)
+    if (m) study.parts.push({ id: m[1]!, title: m[2]!.trim() })
+    else study.problems.push(`the part ${part} is not "id: title"`)
+  }
 }
 
 /** A well-formed block with no stepper in a whole specification or a naima-codegen core: it words a default study. */

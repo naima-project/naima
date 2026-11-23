@@ -406,8 +406,8 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
           stepping: code ? "code" : "space",
           frames: {
             host: opts.fileUrl("naima-study", "host.html"),
-            observer: null,
-            view: null,
+            observer: study.observer ? opts.fileUrl(`study-${study.id}`, study.observer) : null,
+            view: study.view ? opts.fileUrl(`study-${study.id}`, study.view) : null,
             code: code ? opts.fileUrl(`study-code-${study.id}`, code) : null,
             card,
             cardBuilt: tab?.card ? existsSync(join(ctx.root, tab.card.page)) : false,

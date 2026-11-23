@@ -355,6 +355,31 @@ guessing whether something is stuck, what a status means or why a line appeared.
 The scheduler's view (in VoxLogicA, `model/frames/study/view/src/View.svelte`) does all of this; its `INTRO` table and `situation` function are the place to
 start reading.
 
+## 7b. Words and a view for a model without a stepper
+
+A model with no generated code opens in a default study: the tab explores its states and you walk through them. Such a model can still say what it is and
+what a state means, and it can have a view. Put a `%@ui` block in its `.mcrl2` file (or in the `core.mcrl2` of a naima-codegen project) and leave the
+`stepper` key out. The block then words the default study. These keys are read:
+
+- `title` and `says` as for any study.
+- `intro` is two or three sentences, shown as the study's opening line. A person closes it, and it comes back from the row above the cards. The key may be
+  repeated, and the lines join.
+- `observer`, `view`, `parts` and `diagrams` as in step 5 and 6, with paths relative to the folder of the model's file. The observer folds the steps the
+  default study takes. Each step carries its label as mCRL2 prints it, `ask(c1)`, its action and its arguments, and the state values are what mCRL2 prints,
+  strings such as `true`, `[c1, c2]` or `{m1}`. A plain model has only inputs, so an entry has no outputs.
+
+Situation lines say what the state reached means, in the same file:
+
+```
+%@situation phase = filed: "The item is filed. Next comes the fix."
+%@situation queue != [] and free = true: "{queue} wait for a lock nobody holds."
+%@situation after cut: "A candidate was cut from the branch."
+```
+
+The text before the colon is a condition. Its clauses are joined by `and`. `name = value` and `name != value` compare a parameter with the value as the
+state shows it, `name has value` asks whether a list or a set holds an element, and `after action` holds just after a step of that action. A name in braces in
+the text shows that parameter's value. Every line whose condition holds is shown at the top of the card What happened, in the file's order.
+
 ## 8. Name the diagrams you draw
 
 When a view draws something a reader already knows as a standard diagram, call it by its name and draw that notation as the standard defines it. A UML state

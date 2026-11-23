@@ -7,7 +7,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { basename, dirname, join, relative, resolve } from "node:path"
 import { gitPath, projectFiles } from "../../core/api.ts"
-import { blockValues, wordsOnly, stateNotesOf, type Study, studyId } from "./studies.ts"
+import { applyWords, blockValues, situationsIn, wordsOnly, stateNotesOf, type Study, studyId } from "./studies.ts"
 
 const read = (p: string): string | null => {
   try {
@@ -123,6 +123,8 @@ const blank = (file: string, kind: "codegen" | "plain"): Study => ({
   folder: gitPath(dirname(dirname(file))),
   title: file,
   says: "",
+  intro: "",
+  situations: [],
   diagrams: "",
   parts: [],
   paths: "paths",
@@ -177,9 +179,7 @@ export function defaultStudies(root: string, program: string | undefined, declar
     else {
       s.says_lines = saysIn(s.model, core)
       s.state_notes = stateNotesOf(core)
-      const block = blockValues(core)
-      if (block?.["title"]) s.title = block["title"]
-      if (block?.["says"]) s.says = block["says"]
+      applyWords(s, root, blockValues(core), core)
     }
     const group = firstGroup(toml)
     if (group) {
@@ -204,8 +204,8 @@ export function defaultStudies(root: string, program: string | undefined, declar
     const block = blockValues(text)
     const s = blank(f, "plain")
     s.folder = gitPath(dirname(f))
-    s.title = block?.["title"] || headingOf(text, "%") || basename(f)
-    s.says = block?.["says"] ?? ""
+    s.title = headingOf(text, "%") || basename(f)
+    applyWords(s, root, block, text)
     s.model = f
     s.system = block?.["system"] || basename(f)
     s.says_lines = saysIn(f, text)
