@@ -122,6 +122,11 @@ export interface GateResult {
   blocking: Item[]
   /** What is still owed but does not stop it. */
   owed: Item[]
+  /**
+   * Of the items it waits for, those already fixed on its open development line: they close on the trunk when the line lands, so
+   * under holdsOn "code" they are owed, never blocking. Absent when none.
+   */
+  onLine?: Item[]
   /** How many items it waits for, done or not: what a goal's progress counts, on every screen (absent for a gate on no items). */
   items?: number
   /** What stops it that is no item, in words: a number past its bound. */
@@ -302,7 +307,8 @@ export const moveGates: Migration = {
 const refuted = (ctx: Context, item: Item): boolean => refutes(ctx, item) || linked(ctx, item, "verified-by").some((v) => refutes(ctx, v))
 
 /** Fixed but unproven, or itself a proving gesture — and not refuted: owed, not blocking, under holdsOn "code". */
-const owesOnlyProof = (ctx: Context, item: Item): boolean => !refuted(ctx, item) && (fieldValue(item, FIXED_ON) !== undefined || isEvidenceType(ctx, item.type))
+const owesOnlyProof = (ctx: Context, item: Item, onLine: ReadonlySet<string> = new Set()): boolean =>
+  !refuted(ctx, item) && (fieldValue(item, FIXED_ON) !== undefined || onLine.has(item.meta.id) || isEvidenceType(ctx, item.type))
 
 export { GROUP } from "./dependencies.ts"
 
@@ -346,12 +352,14 @@ export async function fullSuite(ctx: Context): Promise<GateResult & { parts: str
   const backedBy: string[] = []
   const stuck: Item[] = []
   const retired: string[] = []
+  const onLine: Item[] = []
   for (const g of parts) {
     const r = await g.evaluate(ctx)
     for (const i of r.stuck ?? []) if (!stuck.includes(i)) stuck.push(i)
     for (const w of r.retired ?? []) if (!retired.includes(w)) retired.push(w)
     for (const i of r.blocking) if (!blocking.includes(i)) blocking.push(i)
     for (const i of r.owed) if (!owed.includes(i) && !r.blocking.includes(i)) owed.push(i)
+    for (const i of r.onLine ?? []) if (!onLine.includes(i)) onLine.push(i)
     reasons.push(...(r.reasons ?? []).map((why) => `${g.name}: ${why}`))
     if (!r.holds && !r.blocking.length && !r.reasons?.length) reasons.push(`${g.name}: does not hold`)
     backedBy.push(...(r.backedBy ?? []))
@@ -360,6 +368,7 @@ export async function fullSuite(ctx: Context): Promise<GateResult & { parts: str
     holds: !blocking.length && !reasons.length,
     blocking,
     owed: owed.filter((i) => !blocking.includes(i)),
+    ...(onLine.length ? { onLine: onLine.filter((i) => !blocking.includes(i)) } : {}),
     reasons,
     backedBy,
     ...(stuck.length ? { stuck } : {}),
@@ -376,10 +385,12 @@ async function withFullSuite(ctx: Context, own: GateResult): Promise<GateResult>
   const why = [...(own.reasons ?? []), ...(suite.reasons ?? [])]
   const stuck = [...(own.stuck ?? []), ...(suite.stuck ?? [])].filter((i, n, all) => all.indexOf(i) === n)
   const retired = [...(own.retired ?? []), ...(suite.retired ?? [])].filter((w, n, all) => all.indexOf(w) === n)
+  const onLine = [...(own.onLine ?? []), ...(suite.onLine ?? [])].filter((i, n, all) => !blocking.includes(i) && all.indexOf(i) === n)
   return {
     holds: own.holds && suite.holds,
     blocking,
     owed,
+    ...(onLine.length ? { onLine } : {}),
     ...(why.length ? { reasons: why } : {}),
     ...(suite.backedBy?.length ? { backedBy: suite.backedBy } : {}),
     ...(stuck.length ? { stuck } : {}),
@@ -398,6 +409,9 @@ interface Goal {
 /** At most this many items are named in a goal's line; past it, only their number. */
 const NAMED_LEFT = 2
 
+/** ", 234 fixed on the line, waiting for it to land": what a goal counts as fixed and not as left; "" when none. */
+const waitingOnLine = (r: Pick<GateResult, "onLine">): string => (r.onLine?.length ? ` (${r.onLine.length} fixed on the line, waiting for it to land)` : "")
+
 /** A goal's status in words: it holds, or what stops it — its last one or two items named, else how many. */
 function goalStatus(r: GateResult): string {
   if (r.holds) return "holds"
@@ -407,7 +421,7 @@ function goalStatus(r: GateResult): string {
   const items = `${n} item${n === 1 ? "" : "s"}`
   const step = r.steps?.find((s) => s.state === "next")
   const next = step ? `; next step ${step.index} of ${r.steps!.length}, ${step.name}` : ""
-  return (n <= NAMED_LEFT ? `${items} left, next ${label(first)} (${first.meta.title})` : `blocked by ${items}`) + next
+  return (n <= NAMED_LEFT ? `${items} left, next ${label(first)} (${first.meta.title})` : `blocked by ${items}`) + waitingOnLine(r) + next
 }
 
 /** A step of a gate's method in one line: ✓ closed and by what, → the next and what closes it, · waiting. */
@@ -476,10 +490,13 @@ export async function goals(ctx: Context): Promise<string[]> {
 export function evaluateGate(ctx: Context, name: string, holdsOn: "code" | "proof"): GateResult {
   const on = gatedItems(ctx, name)
   const open = on.filter((i) => isOpen(ctx, i))
-  const blocking = holdsOn === "proof" ? open : open.filter((i) => !owesOnlyProof(ctx, i))
+  // An item fixed on the gate's open development line is fixed, waiting for the line to land: the trunk's copy has no fixedOn yet.
+  const fixedThere = new Set(fixedOnLine(ctx, name))
+  const blocking = holdsOn === "proof" ? open : open.filter((i) => !owesOnlyProof(ctx, i, fixedThere))
   const owed = open.filter((i) => !blocking.includes(i))
+  const onLine = open.filter((i) => fixedThere.has(i.meta.id) && fieldValue(i, FIXED_ON) === undefined && !refuted(ctx, i))
   const retired = retiredUnder(ctx, on)
-  return { holds: blocking.length === 0, blocking, owed, items: on.length, ...(retired.length ? { retired } : {}) }
+  return { holds: blocking.length === 0, blocking, owed, items: on.length, ...(onLine.length ? { onLine } : {}), ...(retired.length ? { retired } : {}) }
 }
 
 /**
@@ -517,7 +534,7 @@ function printGate(ctx: Context, gate: GateDef, r: GateResult, hands = false): v
   ctx.out(
     `${gate.name} — ${gate.title}${gate.inFullSuite ? " [in the full suite]" : ""}${when ? ` (${when})` : ""}: ${
       r.holds ? "HOLDS" : `BLOCKED by ${r.blocking.length}`
-    }${r.owed.length ? `, ${r.owed.length} owed` : ""}`,
+    }${r.owed.length ? `, ${r.owed.length} owed` : ""}${waitingOnLine(r)}`,
   )
   const who = (i: Item) => (hands ? `  (${runByOf(ctx, i) || "unclassified"})` : "")
   for (const why of r.reasons ?? []) ctx.out(`  ✗ ${why}`)
@@ -530,7 +547,7 @@ function printGate(ctx: Context, gate: GateDef, r: GateResult, hands = false): v
   }
   for (const s of r.steps ?? []) ctx.out(stepLine(s))
   for (const i of r.blocking) ctx.out(`  ✗ ${label(i)}  ${i.meta.title}${who(i)}`)
-  for (const i of r.owed) ctx.out(`  · ${label(i)}  ${i.meta.title}${who(i)}`)
+  for (const i of r.owed) ctx.out(`  · ${label(i)}  ${i.meta.title}${who(i)}${r.onLine?.includes(i) ? "  (fixed on the line)" : ""}`)
 }
 
 /** An item a gate waits for, as `naima gates --json` and the window give it. */
@@ -557,6 +574,8 @@ interface GateRow {
   retired: string[]
   blocking: GateItemRow[]
   owed: GateItemRow[]
+  /** The refs of the items fixed on its open development line, counted fixed and waiting for the line to land, never blocking; absent when none. */
+  onLine?: string[]
   /**
    * How many items it waits for, done or not; those neither blocking nor owed are done. The one count of a goal's
    * progress every screen shows (Home, Goals, Roadmap), so that none counts its own way.
@@ -645,6 +664,7 @@ async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: Gate
         retired: result.retired ?? [],
         blocking: result.blocking.map(item),
         owed: result.owed.map(item),
+        ...(result.onLine?.length ? { onLine: result.onLine.map(label) } : {}),
         items: Math.max(result.items ?? 0, result.blocking.length + result.owed.length),
         ...(result.method ? { method: result.method } : {}),
         ...(result.steps ? { steps: result.steps } : {}),
@@ -1319,8 +1339,7 @@ const gateCommand: Command = {
       printGate(ctx, gate, r, true)
       if (gate.freeze) ctx.out(`  frozen from ${gate.freeze}${(await finished(ctx, gate)) ? ", finished: the freeze no longer holds" : ""}`)
       if (gate.after?.length) ctx.out(`  after: ${gate.after.join(", ")}`)
-      const onLine = new Set(fixedOnLine(ctx, gate.name))
-      const fixedThere = r.blocking.filter((i) => onLine.has(i.meta.id))
+      const fixedThere = r.onLine ?? []
       if (fixedThere.length) ctx.out(`  fixed on line line/${gate.name}, closed when it lands: ${fixedThere.map(label).join(", ")}`)
       if (gate.says) ctx.out(`  for: ${gate.says}`)
       if (gate.decides) ctx.out(`  decides: ${gate.decides}`)
@@ -1475,7 +1494,14 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
       const data = await Promise.all(
         gatesOf(ctx).map(async ({ value: g }) => {
           const r = await g.evaluate(ctx)
-          return { gate: g.name, when: timing(ctx, g), holds: r.holds, blocking: r.blocking.map(label), owed: r.owed.map(label) }
+          return {
+            gate: g.name,
+            when: timing(ctx, g),
+            holds: r.holds,
+            blocking: r.blocking.map(label),
+            owed: r.owed.map(label),
+            onLine: (r.onLine ?? []).length,
+          }
         }),
       )
       return rendered(
@@ -1483,8 +1509,8 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
         (gs) =>
           gs.map((g) =>
             `  ${g.gate.padEnd(16)} ${g.holds ? "holds" : `blocked by ${g.blocking.length}`}${g.owed.length ? `, ${g.owed.length} owed` : ""}${
-              g.when ? ` (${g.when})` : ""
-            }`
+              g.onLine ? `, ${g.onLine} of them fixed on the line, waiting for it to land` : ""
+            }${g.when ? ` (${g.when})` : ""}`
           ),
       )
     },

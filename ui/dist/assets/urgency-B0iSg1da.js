@@ -1,0 +1,1 @@
+var e=e=>Date.parse(`${e.slice(0,10)}T00:00:00Z`);function t(t){if(!t.left||!t.due)return`normal`;let n=t.due.slice(0,10);return n<t.today?`late`:t.expected&&t.expected.slice(0,10)>n||(e(n)-e(t.today))/864e5<=2?`risk`:`normal`}function n(e,t,n,r=`missed`){return e===`normal`||!t?``:e===`late`?`${r}, due ${n(t.slice(0,10))}`:`at risk, due ${n(t.slice(0,10))}`}export{n,t};
