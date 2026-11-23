@@ -347,7 +347,8 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       // A live read is plain JSON data already (live), shared by every ask: it is not copied for each.
       if (sha === null) return (await live(view, params)) as Json
       const from = view.moments ? momentOf(null) : atCache.get(ctx, sha)
-      return json((await view.render(params, from)).data)
+      // A past moment asks each git question once too (gitReadScope), as a live view does: the many views read together share the answers.
+      return json((await gitReadScope(() => view.render(params, from))).data)
     },
     tabs: () => json(tabList(opts.tabs)),
     tab: async (args) => {
@@ -367,7 +368,7 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       // project's stamp holds, and rendered off the serving thread, so that a slow tab (the summary takes seconds on a
       // large tracker) holds no other request and no file of the page.
       const content =
-        (at !== null ? await tab.render({ sub, query }, momentOf(at)) : await kept(`tab ${tab.name} ${JSON.stringify({ sub, query })}`, async () => {
+        (at !== null ? await gitReadScope(() => tab.render({ sub, query }, momentOf(at))) : await kept(`tab ${tab.name} ${JSON.stringify({ sub, query })}`, async () => {
           if (opts.pool) {
             try {
               return await opts.pool.renderTab(tab.name, { sub, query })

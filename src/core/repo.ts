@@ -25,7 +25,11 @@ function notItems(typeDir: string, where: string): Finding[] {
   })
 }
 
-export function loadRepo(trackerRoot: string, registry: Registry): Repo {
+/**
+ * Every item of the tracker at `trackerRoot`. `preread` holds the text of item files already known by path (a tracker read
+ * out of git, contextAt): it is used instead of opening the file, which on Windows costs a scan of each fresh file.
+ */
+export function loadRepo(trackerRoot: string, registry: Registry, preread?: ReadonlyMap<string, string>): Repo {
   const items: Item[] = []
   const unreadable: Finding[] = []
   for (const type of registry.types.values()) {
@@ -34,13 +38,14 @@ export function loadRepo(trackerRoot: string, registry: Registry): Repo {
       const dir = join(trackerRoot, type.dir, slug)
       const where = `${type.dir}/${slug}`
       const path = join(dir, META)
-      if (!existsSync(path)) {
+      const known = preread?.get(path)
+      if (known === undefined && !existsSync(path)) {
         unreadable.push({ level: "problem", message: `${where}: no ${META}` })
         continue
       }
       let meta: unknown
       try {
-        meta = JSON.parse(readFileSync(path, "utf8"))
+        meta = JSON.parse(known ?? readFileSync(path, "utf8"))
         if (!meta || typeof meta !== "object" || Array.isArray(meta)) throw new Error("not an object")
       } catch (e) {
         unreadable.push({ level: "problem", message: `${where}: ${META} is not a JSON object (${message(e)})` })

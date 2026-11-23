@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto"
 import { existsSync, mkdirSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { parseConfig, posixRelative, readRaw } from "./config.ts"
-import { gitReason, runGit } from "./git.ts"
+import { gitReason, runGit, textsAt } from "./git.ts"
 import { stateDir } from "./tick.ts"
 import { deepFreeze } from "./collections.ts"
 import { writes } from "./item.ts"
@@ -54,7 +54,7 @@ export interface Place {
   program: string
 }
 
-export function createContext(place: Place, config: Config, registry: Registry, io: IO = consoleIO): Context {
+export function createContext(place: Place, config: Config, registry: Registry, io: IO = consoleIO, preread?: ReadonlyMap<string, string>): Context {
   const trackerRoot = place.data
   const trackerGit = trackerGitOf(place.root, trackerRoot)
   let repo: Repo | null = null
@@ -73,7 +73,7 @@ export function createContext(place: Place, config: Config, registry: Registry, 
       // Every write through the core's helpers moves `writes()`: the next read sees it.
       if (repo === null || readAt !== writes()) {
         readAt = writes()
-        repo = loadRepo(trackerRoot, registry)
+        repo = loadRepo(trackerRoot, registry, preread)
       }
       return repo
     },
@@ -84,6 +84,28 @@ export function createContext(place: Place, config: Config, registry: Registry, 
     err: io.err,
     now: io.now,
   }
+}
+
+/**
+ * The text of every item's `meta.json` in the tracker the index `env` names, in one `git cat-file --batch`, by the path it
+ * has under `data`. A file just checked out is scanned by the machine at its first read (on Windows some 3 ms each, a
+ * minute for a large tracker); read from git's objects instead, the items are in hand at once.
+ */
+function metaFilesOf(ctx: Context, env: Record<string, string>, data: string): Map<string, string> | undefined {
+  const listed = runGit(ctx.trackerGit, ["ls-files", "-s", "-z"], { env })
+  if (!listed.ok) return undefined
+  const files: { sha: string; path: string }[] = []
+  for (const row of listed.out.split("\0")) {
+    const m = /^100\d+ ([0-9a-f]+) 0\t([^/]+\/[^/]+\/meta\.json)$/.exec(row)
+    if (m) files.push({ sha: m[1]!, path: m[2]! })
+  }
+  const texts = textsAt(ctx.trackerGit, files.map((f) => f.sha))
+  const found = new Map<string, string>()
+  files.forEach((f, i) => {
+    const text = texts[i]
+    if (text !== null && text !== undefined) found.set(join(data, ...f.path.split("/")), text)
+  })
+  return found
 }
 
 /**
@@ -98,18 +120,20 @@ export function contextAt(ctx: Context, ref: string): { ctx: Context; dispose():
   const data = join(dir, "data")
   mkdirSync(data, { recursive: true })
   const dispose = (): void => rmSync(dir, { recursive: true, force: true })
+  let preread: Map<string, string> | undefined
   try {
     const env = { GIT_INDEX_FILE: join(dir, "index") }
     const tree = ctx.trackerPrefix ? `${ref}:${ctx.trackerPrefix}` : `${ref}^{tree}`
     const read = runGit(ctx.trackerGit, ["read-tree", tree], { env })
     if (!read.ok) throw new Error(`no tracker on ${ref}: ${gitReason(read)}`)
-    const out = runGit(ctx.trackerGit, ["checkout-index", "-a", "-f", `--prefix=${data.split("\\").join("/")}/`], { env })
+    const out = runGit(ctx.trackerGit, ["-c", "checkout.workers=0", "checkout-index", "-a", "-f", `--prefix=${data.split("\\").join("/")}/`], { env })
     if (!out.ok) throw new Error(`the tracker on ${ref} could not be read: ${gitReason(out)}`)
+    preread = metaFilesOf(ctx, env, data)
   } catch (e) {
     dispose()
     throw e
   }
-  const at = createContext({ root: ctx.root, data, program: ctx.program }, ctx.config as Config, ctx.registry, { out: ctx.out, err: ctx.err, now: ctx.now })
+  const at = createContext({ root: ctx.root, data, program: ctx.program }, ctx.config as Config, ctx.registry, { out: ctx.out, err: ctx.err, now: ctx.now }, preread)
   return { ctx: at, dispose }
 }
 

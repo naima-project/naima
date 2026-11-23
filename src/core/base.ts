@@ -361,7 +361,8 @@ const waiting: Command = {
       }
     }
     const who = bool(p, "everyone") ? null : str(p, "for")?.trim() || undefined
-    const rows = await waitingOn(ctx, who)
+    // Reading only: each git question the plugins ask about branches and lines is asked once (gitReadScope), not once per item.
+    const rows = await gitReadScope(() => waitingOn(ctx, who))
     if (bool(p, "json")) {
       ctx.out(JSON.stringify(rows, null, 2))
       return 0
