@@ -17,7 +17,8 @@
      With `onpan`, the start and the end of a pan are reported too (`onpanstart`, `onpanend`), and with `onpinch` two
      pointers on the box pinch it (a pan under way ends first): the ratio of their distance before to after each move
      (above 1 the fingers came closer) and their middle's x in client px, for a box that zooms; its owner gives buttons and
-     keys that zoom as far without a pinch. -->
+     keys that zoom as far without a pinch; with `onzoomdrag` the drag's vertical travel is reported too, for a box that
+     zooms as a music editor's timeline does (up closer, down further), its owner again giving buttons and keys. -->
 <script lang="ts">
   import type { Snippet } from "svelte";
   import type { HTMLAttributes } from "svelte/elements";
@@ -44,6 +45,9 @@
     onpanend?: () => void;
     /** Two pointers pinch the box: their distance before over after a move, and their middle's x in client px. */
     onpinch?: (ratio: number, x: number) => void;
+    /** With `onpan`, a drag's vertical travel too, as a timeline in a music editor zooms: the travel since the last report
+     * in CSS px (up negative) and the pointer's x in client px, reported before the horizontal travel of the same move. */
+    onzoomdrag?: (dy: number, x: number) => void;
     children: Snippet;
   }
 
@@ -58,6 +62,7 @@
     onpanstart,
     onpanend,
     onpinch,
+    onzoomdrag,
     children,
     class: cls = "",
     ...rest
@@ -80,6 +85,7 @@
   let panning = $state(false);
   /** Where the pointer was at the last report to onpan. */
   let last = 0;
+  let lastY = 0;
   let swallow = false;
 
   function onpointerdown(event: PointerEvent) {
@@ -116,6 +122,7 @@
     if (ignore && (event.target as Element).closest?.(ignore)) return;
     from = { x: event.clientX, y: event.clientY, left: box?.scrollLeft ?? 0, id: event.pointerId };
     last = event.clientX;
+    lastY = event.clientY;
   }
 
   function onpointermove(event: PointerEvent) {
@@ -142,6 +149,8 @@
       if (onpan) onpanstart?.();
     }
     if (onpan) {
+      if (onzoomdrag && event.clientY !== lastY) onzoomdrag(event.clientY - lastY, event.clientX);
+      lastY = event.clientY;
       onpan(event.clientX - last);
       last = event.clientX;
     } else box.scrollLeft = from.left - dx;

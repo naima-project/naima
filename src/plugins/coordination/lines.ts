@@ -197,18 +197,26 @@ export function baseOf(root: string, ref: string): string | null {
  * oldest first, less those a later marker's Unfixes: trailer withdrew.
  */
 export function fixedOnLine(root: string, branch: string): string[] {
+  return [...fixedOnLineAt(root, branch).keys()]
+}
+
+/**
+ * The items fixed on a line, as fixedOnLine reads them, each with when the marker that fixed it was committed (seconds):
+ * what lets a chart of the past count an item fixed on the line only from that moment.
+ */
+export function fixedOnLineAt(root: string, branch: string): Map<string, number> {
   const main = trunk(root)
-  if (!main) return []
-  const format = `--format=%(trailers:key=${FIXES},valueonly,separator=%x1d)%x1f%(trailers:key=${UNFIXES},valueonly,separator=%x1d)%x1e`
+  if (!main) return new Map()
+  const format = `--format=%ct%x1f%(trailers:key=${FIXES},valueonly,separator=%x1d)%x1f%(trailers:key=${UNFIXES},valueonly,separator=%x1d)%x1e`
   const out = gitOrNull(root, "log", "--first-parent", "--reverse", format, `${main}..${branch}`) ?? ""
   const ids = (s: string): string[] => s.replaceAll("\x1d", "\n").split("\n").map((v) => v.trim()).filter(Boolean)
-  const fixed = new Set<string>()
+  const fixed = new Map<string, number>()
   for (const record of out.split("\x1e")) {
-    const [fixes = "", unfixes = ""] = record.split("\x1f")
-    for (const id of ids(fixes)) fixed.add(id)
+    const [t = "", fixes = "", unfixes = ""] = record.replace(/^\s+/, "").split("\x1f")
+    for (const id of ids(fixes)) if (!fixed.has(id)) fixed.set(id, Number(t) || 0)
     for (const id of ids(unfixes)) fixed.delete(id)
   }
-  return [...fixed]
+  return fixed
 }
 
 /** The gate the command works on: --line, --trunk, else the line this chat works on; null for the trunk. Refuses a line that is not open. */
@@ -281,7 +289,11 @@ function linesData(ctx: Context) {
   return {
     trunk: trunk(ctx.root),
     current: current === undefined ? null : current,
-    lines: lines.map((l) => ({ ...l, fixed: fixedOnLine(ctx.root, l.branch).map((id) => itemRef(ctx, id)) })),
+    lines: lines.map((l) => {
+      const at = fixedOnLineAt(ctx.root, l.branch)
+      // Each item fixed on it, and when (seconds): a chart of the past counts it only from then.
+      return { ...l, fixed: [...at.keys()].map((id) => itemRef(ctx, id)), fixedAt: Object.fromEntries([...at].map(([id, t]) => [itemRef(ctx, id), t])) }
+    }),
   }
 }
 

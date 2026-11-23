@@ -260,8 +260,11 @@ fixed on the line · closes at the release", since they close on main only when 
 the same words.
 
 A click on the ring, or Enter on it, turns the board over. The ring and its words fade out and, in their place, the chart fades in, showing how much of the goal
-was done over time: an orange line of its percent done, with the count of items closed above it, and ahead of today a faint band from the percent now to 100% at
-the expected date, widening to the date it is 85% sure by. Its time is the river's, so each moment stands right above the same moment on the river, and the band
+was done over time: an orange line of its percent done, on axes in the goal's own unit. Faint lines mark none, half and all of its items, each named by its
+count at the right, the top one with how many are closed ("403 items · 342 closed"); under the plot, the window's first day, today, the expected date and the
+date it is 85% sure by are ticked and named. Ahead of today a faint band runs from the percent now to 100% at the expected date, widening to the 85% date. An item
+fixed on the goal's development line counts as done from the day its fix landed on the line, at every moment the chart shows, so the line has no step where the
+counts read at past commits meet today's. Its time is the river's, so each moment stands right above the same moment on the river, and the band
 ends above the goal's milestone; dragging, zooming or moving the river's today line moves the chart with it. The line passes through the goal's exact percent at
 the last landing of each of the last 30 days, and of each week before them, read from the tracker as it was at that commit. These are read in the background
 while the chart is shown, the newest first, and each commit only once, so a pan or a zoom reads only the days it adds. Until a day is read, that stretch shows
@@ -307,7 +310,8 @@ above the line with its day and how far ahead it is, for example "1.2" over "26 
 the nearest ones are darker and the focused goal's name is bold. A due date is a ring with a dot at its heart, a forecast date a dashed ring, and a date only
 projected at the present pace a dotted one, said "about 11 Jan". Under the river you choose how much of the future it shows: a week, a month, a quarter, up to
 the next deadline, or everything. The days shown are written beside the choices (for example "21 Nov – 20 Dec"), with − and + to widen or narrow them. Ctrl or
-Cmd with the wheel, or a pinch on a trackpad, zooms around the pointer, and a double-click on an empty part of the river zooms in there. The plain wheel scrolls
+Cmd with the wheel, or a pinch on a trackpad, zooms around the pointer, and a double-click on an empty part of the river zooms in there. Dragging the river
+works as a music editor's timeline does: sideways it moves through time, up it zooms in around the pointer and down it zooms out, both at once in one drag. The plain wheel scrolls
 the page, never the river. The goals after the end of the window are gathered into one marker at its right edge, for example "12 more, to Jul 2027 →"; a click
 on it widens the window until they all show.
 
@@ -451,7 +455,7 @@ once it has gone Home folds into the window's top bar, beside the project's name
 is room), its counts (left to do, fixed on the line, and what is waiting for you, in orange when anything is), each other face chosen as a small chart, and the
 river in one line. That line is the river's own window, its first and last day at its ends: today an orange tick near the left, the goals ahead ringed as the
 river rings them, the nearest named with their short day, the deadlines as small rings, the agents at work as short green lanes, and how many goals lie after
-the window. The top bar keeps the same height folded or not, so nothing moves. A long list in the stage scrolls flat too; when it is longer than its room its
+the window. Dragging that line moves the river as dragging the river does, sideways through time and up or down to zoom; a click on it unfolds Home. The top bar keeps the same height folded or not, so nothing moves. A long list in the stage scrolls flat too; when it is longer than its room its
 top and bottom edges fade softly, and only where there is more to scroll to. Only then does the stage itself scroll, so scrolling the diary never walks Home
 back in time while the board is open. Scrolling back to the diary's top unfolds everything again, and a click, a tap or Enter anywhere on the folded bar brings
 Home back at once, on the face that was up. A scroll that stops half way goes on to the nearer end. What the stage holds is a place in the browser's history,
