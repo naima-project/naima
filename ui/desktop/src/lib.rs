@@ -1,4 +1,4 @@
-// The shell: one window showing the built page, the platform bridge's commands, which it forwards to the Naima
+// The shell: one window, named for the project and wearing its icon (badge.rs), showing the built page, the platform bridge's commands, which it forwards to the Naima
 // sidecar it starts (bridge.rs), and the naima-files: scheme for a tab's pages (files.rs). The mobile targets enter
 // here directly; the desktop ones through main.rs.
 //
@@ -6,6 +6,7 @@
 // page once the page has loaded and prints its report as one line, "e2e: {...}". The app stays open, so that
 // the check can take its screenshot with the result on screen, and then ends it. Without the variable
 // nothing of this runs.
+mod badge;
 mod bridge;
 mod bundle;
 mod files;
@@ -13,6 +14,7 @@ mod menu;
 
 use bridge::{Current, Sidecar};
 use bundle::{Bundle, Dir, Nothing};
+use std::sync::Arc;
 use tauri::webview::PageLoadEvent;
 use tauri::{Manager, RunEvent, WebviewWindowBuilder};
 
@@ -39,10 +41,12 @@ pub fn run() {
         .setup(move |app| {
             let sidecar = Sidecar::start(app.handle().clone())?;
             bridge::show_bundle(&sidecar, &shown);
-            app.manage(Current::new(sidecar));
+            app.manage(Current::new(Arc::clone(&sidecar)));
             for window in app.config().app.windows.iter().filter(|w| !w.create) {
                 WebviewWindowBuilder::from_config(app.handle(), window)?.build()?;
             }
+            // Each project has a window of its own: it is named for the project and wears its badge.
+            badge::show(app.handle(), &sidecar);
             app.manage(menu::Zoom::default());
             #[cfg(target_os = "macos")]
             {

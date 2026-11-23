@@ -31,6 +31,12 @@ worktree other than the clone's main checkout, so agents working in their own wo
 `naima plugin set ui atStart=false`; to turn it off for yourself everywhere, put `{"atStart": false}` in `ui.json` in your Naima config folder
 (`~/.config/naima/` on macOS and Linux).
 
+Each project has an app window of its own, and the app tells them apart. Its icon is the Naima logo (a rounded square, with the margin macOS icons have; a plain
+square on Windows and Linux). The window's title is the project's name, and the icon in the Dock (macOS) or the taskbar (Windows, Linux) carries a round badge
+in the corner: the project's initial, on a colour taken from its name, so the same project always has the same one. Switching to another recent project in the
+window changes the title and the badge with it. Wayland does not let an application set its own window icon, so on a Wayland desktop the window shows the plain
+one.
+
 In the desktop app, Cmd+R on macOS (View, Reload) and Ctrl+R or F5 on Windows and Linux reload the page, as a browser does. The address holds every state of the
 window, so a reload brings you back to the same place.
 
@@ -251,28 +257,28 @@ a sheet over the bottom of the page until you close it. It follows the time filt
 Home is one board under the bar, with little text, about what matters now. It fits the window, and the page itself never scrolls: the board is a header over a
 stage, the one place for details, described at the end of this section. At the top is the day, or, when the timeline shows a commit of the past, "As it was on"
 that day, with "Back to today". Beside the day, a row of quiet words opens the other pages: Models, UI when the project declares it, then Bugs, Tests, Health
-and History, described in [The calm pages](#the-calm-pages). Then the goal nearest its expected date that still has work left: a ring with how much of it is done, its title, and one line
-with its expected date and how sure that date is, such as "Expected 2 January · 85% sure by 17 January" (its due date when there is no forecast yet). Beside it
-is a green dot for each agent at work, and how many there are in words. Under them are the goal's three numbers, always shown: the items left to do, the items
-of the goal the agents hold, and how many items closed a day lately. A click on the number left to do opens What's left of the goal in the stage. Its
-legend names each state with its count, each a link to that part of the goal's list; when more waits for you across the project than in this goal, the
-goal's part ("2 waiting for you here") is followed by the whole of it as a link of its own ("19 in all"), which opens Waiting for you. When the goal
-has a development line, the items already fixed on it are not counted as left: a quiet green line under the number says how many there are, for example "195
-fixed on the line · closes at the release", since they close on main only when the line lands. The ring counts them as done, and What's left says them apart in
-the same words.
+and History, described in [The calm pages](#the-calm-pages). Then the goal nearest its expected date that still has work left: a ring with how much of it is
+done, its title, and one line with its expected date and how sure that date is, such as "Expected 2 January · 85% sure by 17 January" (its due date when there
+is no forecast yet). Beside it is a green dot for each agent at work, and how many there are in words. Under them are the goal's three numbers, always shown:
+the items left to do, the items of the goal the agents hold, and how many items closed a day lately. A click on the number left to do opens What's left of the
+goal in the stage. Its legend names each state with its count, each a link to that part of the goal's list; when more waits for you across the project than in
+this goal, the goal's part ("2 waiting for you here") is followed by the whole of it as a link of its own ("19 in all"), which opens Waiting for you. When the
+goal has a development line, the items already fixed on it are not counted as left: a quiet green line under the number says how many there are, for example
+"195 fixed on the line · closes at the release", since they close on main only when the line lands. The ring counts them as done, and What's left says them
+apart in the same words.
 
 A click on the ring, or Enter on it, turns the board over. The ring and its words fade out and, in their place, the chart fades in, showing how much of the goal
 was done over time: an orange line of its percent done, on axes in the goal's own unit. Faint lines mark none, half and all of its items, each named by its
 count at the right, the top one with how many are closed ("403 items · 342 closed"); under the plot, the window's first day, today, the expected date and the
-date it is 85% sure by are ticked and named. Ahead of today a faint band runs from the percent now to 100% at the expected date, widening to the 85% date. An item
-fixed on the goal's development line counts as done from the day its fix landed on the line, at every moment the chart shows, so the line has no step where the
-counts read at past commits meet today's. Its time is the river's, so each moment stands right above the same moment on the river, and the band
-ends above the goal's milestone; dragging, zooming or moving the river's today line moves the chart with it. The line passes through the goal's exact percent at
-the last landing of each of the last 30 days, and of each week before them, read from the tracker as it was at that commit. These are read in the background
-while the chart is shown, the newest first, and each commit only once, so a pan or a zoom reads only the days it adds. Until a day is read, that stretch shows
-an estimate from the dates the goal's items were planned and closed, and the line moves to each exact point as it arrives. The band ahead comes from the recent
-pace, as the expected date does. A click on the chart, Escape or Back turns the board back to the ring. The address says which side is up (`#home/chart`), so
-Back, Forward and a reload keep it. With reduced motion one side simply replaces the other.
+date it is 85% sure by are ticked and named. Ahead of today a faint band runs from the percent now to 100% at the expected date, widening to the 85% date. An
+item fixed on the goal's development line counts as done from the day its fix landed on the line, at every moment the chart shows, so the line has no step where
+the counts read at past commits meet today's. Its time is the river's, so each moment stands right above the same moment on the river, and the band ends above
+the goal's milestone; dragging, zooming or moving the river's today line moves the chart with it. The line passes through the goal's exact percent at the last
+landing of each of the last 30 days, and of each week before them, read from the tracker as it was at that commit. These are read in the background while the
+chart is shown, the newest first, and each commit only once, so a pan or a zoom reads only the days it adds. Until a day is read, that stretch shows an estimate
+from the dates the goal's items were planned and closed, and the line moves to each exact point as it arrives. The band ahead comes from the recent pace, as the
+expected date does. A click on the chart, Escape or Back turns the board back to the ring. The address says which side is up (`#home/chart`), so Back, Forward
+and a reload keep it. With reduced motion one side simply replaces the other.
 
 The top of Home shows one metric at a time, as a watch shows one face, while the river below stays where it is. The goal's ring is the first face. By default
 the others are Activity, the landings on main as soft bars, one for each slice of the river; Decisions, the decisions taken with you as orange stars joined by a
@@ -302,20 +308,22 @@ the moment Home shows: at a day of the past it says what needed you then. It is 
 in the stage. The key d still takes the decisions one at a time. When what needs you is an agent gone quiet, its detail on Home links to that agent's entry in
 Waiting for you, where one click brings the case to the chat.
 
-Last is the river, the board's widest part, about a fifth of its width tall (on a window less than about 800 pixels high it is lower, with
-one row of names above the line, so that it and the choices under it stay in view). It shows the future first: at rest today stands near its left edge, after a short
-stub of the last few days, and the window reaches the next three goals with a date and every goal after them that follows the one before within a month, at most
-twelve. Ahead of today the river spends its width on what happens rather than on empty weeks: each stretch between two goals gets room by how long it is, but a
-long empty stretch is drawn shorter, with two small slashes across the line where time is skipped, and goals a day apart still stand well apart. Because of
-this, every goal and deadline carries its day in words. Each goal in the window, each due date of a milestone, sub-goal or epic, and each goal overdue is named
-above the line with its day and how far ahead it is, for example "1.2" over "26 Dec · in 5 weeks", in up to three rows so that no two names run into each other;
-the nearest ones are darker and the focused goal's name is bold. A due date is a ring with a dot at its heart, a forecast date a dashed ring, and a date only
+Last is the river, the board's widest part, about a fifth of its width tall (on a window less than about 800 pixels high it is lower, with one row of names
+above the line, so that it and the choices under it stay in view). It shows the future first: at rest today stands near its left edge, after a short stub of the
+last few days, and the window reaches the next three goals with a date and every goal after them that follows the one before within a month, at most twelve.
+Ahead of today the river spends its width on what happens rather than on empty weeks: each stretch between two goals gets room by how long it is, but a long
+empty stretch is drawn shorter, with two small slashes across the line where time is skipped, and goals a day apart still stand well apart. Because of this,
+every goal and deadline carries its day in words. Each goal in the window, each due date of a milestone, sub-goal or epic, and each goal overdue is named above
+the line with its day and how far ahead it is, for example "1.2" over "26 Dec · in 5 weeks", in up to three rows so that no two names run into each other; the
+nearest ones are darker and the focused goal's name is bold. A due date is a ring with a dot at its heart, a forecast date a dashed ring, and a date only
 projected at the present pace a dotted one, said "about 11 Jan". Under the river you choose how much of the future it shows: a week, a month, a quarter, up to
 the next deadline, or everything. The days shown are written beside the choices (for example "21 Nov – 20 Dec"), with − and + to widen or narrow them. Ctrl or
 Cmd with the wheel, or a pinch on a trackpad, zooms around the pointer, and a double-click on an empty part of the river zooms in there. Dragging the river
-works as a music editor's timeline does: sideways it moves through time, up it zooms in around the pointer and down it zooms out, both at once in one drag. The river follows the pointer continuously, frame by frame, each mark keeping its size, and settles into place when the drag ends or the pointer rests. A mark leaves the river only once it is wholly out of view, and a label or small ring the zoom has no room for fades out and back in rather than popping; the calendar's ticks and month names come and go by degrees. The plain wheel scrolls
-the page, never the river. The goals after the end of the window are gathered into one marker at its right edge, for example "12 more, to Jul 2027 →"; a click
-on it widens the window until they all show.
+works as a music editor's timeline does: sideways it moves through time, up it zooms in around the pointer and down it zooms out, both at once in one drag. The
+river follows the pointer continuously, frame by frame, each mark keeping its size, and settles into place when the drag ends or the pointer rests. A mark
+leaves the river only once it is wholly out of view, and a label or small ring the zoom has no room for fades out and back in rather than popping; the
+calendar's ticks and month names come and go by degrees. The plain wheel scrolls the page, never the river. The goals after the end of the window are gathered
+into one marker at its right edge, for example "12 more, to Jul 2027 →"; a click on it widens the window until they all show.
 
 The past is reached by dragging the river to the right, or by swiping it. The commits on main are grey dots on one line, each dot the commits of a part of the
 time shown, larger when they changed more lines. The agents at work are drawn where their work is going: under the line, a green lane runs from today to the
@@ -457,13 +465,14 @@ once it has gone Home folds into the window's top bar, beside the project's name
 is room), its counts (left to do, fixed on the line, and what is waiting for you, in orange when anything is), each other face chosen as a small chart, and the
 river in one line. That line is the river's own window, its first and last day at its ends: today an orange tick near the left, the goals ahead ringed as the
 river rings them, the nearest named with their short day, the deadlines as small rings, the agents at work as short green lanes, and how many goals lie after
-the window. Dragging that line moves the river as dragging the river does, sideways through time and up or down to zoom; a click on it unfolds Home. The top bar keeps the same height folded or not, so nothing moves. A long list in the stage scrolls flat too; when it is longer than its room its
-top and bottom edges fade softly, and only where there is more to scroll to. Only then does the stage itself scroll, so scrolling the diary never walks Home
-back in time while the board is open. Scrolling back to the diary's top unfolds everything again, and a click, a tap or Enter anywhere on the folded bar brings
-Home back at once, on the face that was up. A scroll that stops half way goes on to the nearer end. What the stage holds is a place in the browser's history,
-written in the address as `s=` (with `i=` for the item open beside the list, and `w=` for an entry of Waiting for you sent to the chat), and the condensed top
-as `c=1`, so Back and Forward step through what the stage showed and a reload keeps it, condensed or not. With reduced motion nothing fades or slides: the
-folded bar simply appears once the top is condensed, and the item appears beside the column at once.
+the window. Dragging that line moves the river as dragging the river does, sideways through time and up or down to zoom; a click on it unfolds Home. The top bar
+keeps the same height folded or not, so nothing moves. A long list in the stage scrolls flat too; when it is longer than its room its top and bottom edges fade
+softly, and only where there is more to scroll to. Only then does the stage itself scroll, so scrolling the diary never walks Home back in time while the board
+is open. Scrolling back to the diary's top unfolds everything again, and a click, a tap or Enter anywhere on the folded bar brings Home back at once, on the
+face that was up. A scroll that stops half way goes on to the nearer end. What the stage holds is a place in the browser's history, written in the address as
+`s=` (with `i=` for the item open beside the list, and `w=` for an entry of Waiting for you sent to the chat), and the condensed top as `c=1`, so Back and
+Forward step through what the stage showed and a reload keeps it, condensed or not. With reduced motion nothing fades or slides: the folded bar simply appears
+once the top is condensed, and the item appears beside the column at once.
 
 The word "naima" at the top left of every screen is the way Home: a click on it, or Enter while it has the focus, returns to Home from wherever you are. On
 another screen it shows Home; on Home it gives Home back as it starts, in one smooth move: the stage closes back to the diary with no item open, the condensed
@@ -496,11 +505,11 @@ line, and clicking it lists what it holds on the goal.
 
 ### The calm pages
 
-Bugs, Tests, Health and History are pages in Home's look, each opened from the stage's index on Home (All bugs, Tests, Health, History) and kept at its own address (`#bugs`, `#failed_tests`,
-`#metrics`, `#diary`), so Back returns to Home. Each opens with the day, then a ring beside the page's title and one sentence saying how things stand. The
-ring is split into arcs by how things stand, with the number that matters at its centre, and only what waits for you is orange. Under a hairline comes the
-page's list, the same list as everywhere else, with its controls folded into one quiet line and Adjust. A click on a row, or Enter, opens it beside the list,
-which narrows to a column, and the page does not scroll.
+Bugs, Tests, Health and History are pages in Home's look, each opened from the stage's index on Home (All bugs, Tests, Health, History) and kept at its own
+address (`#bugs`, `#failed_tests`, `#metrics`, `#diary`), so Back returns to Home. Each opens with the day, then a ring beside the page's title and one sentence
+saying how things stand. The ring is split into arcs by how things stand, with the number that matters at its centre, and only what waits for you is orange.
+Under a hairline comes the page's list, the same list as everywhere else, with its controls folded into one quiet line and Adjust. A click on a row, or Enter,
+opens it beside the list, which narrows to a column, and the page does not scroll.
 
 Bugs lists every bug by where it stands: what needs you, what to fix now, next, not sorted yet and later, then what is fixed and waiting to land or proven. Its
 ring counts the open bugs, and a line under the sentence says how many are fixed and how many were found and fixed this week. A bug opened beside the list says
@@ -511,8 +520,8 @@ checks say. A test opened beside the list says since when it fails and when it l
 last 14 days day by day and every test's runs are one click away.
 
 History is the diary: what was decided and what changed the project, a day to a group, newest first, each moment with its hour and the day's routine in one
-quiet row. A choice under the sentence shows the moments, only what was decided with you, only what was finished, or everything. A moment opened beside the
-list is told whole, with the item it names and who worked on what that day. Earlier days come with "Show earlier days".
+quiet row. A choice under the sentence shows the moments, only what was decided with you, only what was finished, or everything. A moment opened beside the list
+is told whole, with the item it names and who worked on what that day. Earlier days come with "Show earlier days".
 
 Health is the metrics page, described next.
 
@@ -522,44 +531,46 @@ Two pages show the project's stances, each opened from the stage's index on Home
 
 Formal models lists every machine the project models in mCRL2, with how many of its properties are proven, owed or refuted and, where a run recorded it, how
 many states it has. Above the list come the measures taken over every state, such as how much of Home can be open at once. A click on a machine opens it beside
-the list: what it models and what it leaves out, as its opening comment says, the refinement its generated code is checked by, and each property in the
-sentence its author recorded with `naima explain`, with a plain phrase under each part of its formula. "Draw it and step through it" opens the same machine
-in Specs, Models, where it is drawn and can be explored.
+the list: what it models and what it leaves out, as its opening comment says, the refinement its generated code is checked by, and each property in the sentence
+its author recorded with `naima explain`, with a plain phrase under each part of its formula. "Draw it and step through it" opens the same machine in Specs,
+Models, where it is drawn and can be explored.
 
-UI design describes how the app is built: the UI stance and the commit it is pinned at, its mood, every colour of the mood board drawn in the theme the page
-is shown in, the tokens by group, and the two rules the look is held to. Every action declares how it is offered, which the stance's affordances check
-holds, and Home stays uncluttered, which the properties of Home's noise model hold. The widgets the app is made of and the stance's checks, as they last ran,
-close the page.
+UI design describes how the app is built: the UI stance and the commit it is pinned at, its mood, every colour of the mood board drawn in the theme the page is
+shown in, the tokens by group, and the two rules the look is held to. Every action declares how it is offered, which the stance's affordances check holds, and
+Home stays uncluttered, which the properties of Home's noise model hold. The widgets the app is made of and the stance's checks, as they last ran, close the
+page.
 
 ### Metrics
 
-Health shows the project's [metrics](metrics-and-budgets.md) at the moment the window shows. Two buttons at the top choose how: every metric large, or
-one at a time. Every metric large uses the window's whole width: each metric, grouped by what it measures, has its value now and how it moved, its last
-change ("Last change +23 tests on 27 Oct") and its bound ("budget 6 s, met"), then its chart on axes in its own unit (its least, middle and most value), with
-a faint band where its bound is not met and its trend as a dashed straight line, green when it goes the metric's good way. The charts share one time axis and
-one set of zoom buttons; clicking a point selects its commit and opens the record of its run under the charts, as on the large chart below. Home opens Health
-this way in one step: the small charts of the folded top bar, and the quiet link "Every metric, large" at the top left of the ring's chart. Its ring has an arc for the metrics getting better, one for those
-getting worse and one for the steady ones, and its sentence says whether the project is getting healthier: how many metrics got better, worse or stayed steady
-since the first day the charts show. Under it are the key numbers, as Home's numbers stand: the value, its name, its change, the date of its record and a small
-chart of its history. Live, a number shows the newest record and its change since the record before, named by that record's day ("+23 since 26 Oct"). At a commit of the past it shows the value then and its change against live, and says "recorded at this commit" or,
-when that commit has no record, "no record at this commit, nearest:" with the date of the last record at or before it, the one that holds then. Under the numbers
-is the list of every metric, grouped by what it measures, with its value, the group of the metric picked open; picking one shows it in the large chart
-under the list, with what it means and how it is measured above the chart, and underlines its number. Every chart runs along the trunk's commits in order, labelled with their dates; a commit of the past is marked by an amber line, and a bound by
-a dashed one. The range picks every commit or the last 500 or 100. Each chart has a text summary that screen readers read. Clicking a point of the large chart,
-or pressing Enter on the one the arrow keys are on, selects its commit, so the whole window shows that moment, and opens below the chart the record of the run
-that measured it: the value and whether it kept its bound, when it was recorded, and how it was taken. For a test suite's number that is the suite's run, with
-its command, its counts, its time and the end of its log, or the earlier run it reused because nothing the suite reads had changed; for a command's number, the
-command; for a code measure, the measure. A metric becomes a card with `"card": true` in its declaration, or with its place among the cards, `"card": 2`, and
-goes under a heading of the list with `"group"`; with no card marked, the first six metrics with records are the cards. The cards with a place come first, in
-that order, and the others after them in the list's order, which is the order of the declarations. The screen names a metric by its `"label"`, such as
-`"Function size, mean"`, or else by its declared name written as words, `function-size` as Function size. Right under how old the numbers are, the screen says
-how many of the newest commits have no record, with the main action Record metrics, which runs `naima metrics run --record` on the commit checked out, under
-`naima run` with a budget of two hours, and says how the run goes until it ends; one recording runs at a time, and when it succeeds the window reads the new
-records. Its data is the metrics view's, whose `timeline` places every record on the trunk; at a commit it gives each metric's record at that commit, read from
-the records as they are now, since a commit's own tree holds none of the records made after it. How the screen reads a moment is a small model of its own,
-checked like the shell's: an answer that arrives after the moment changed is dropped and the new moment read. So is Record metrics: it starts one recording at a
-time, asks for its run's state one request at a time and only while it runs, and reads again when it succeeded. The record of a point is the metrics plugin's
-metric-run view, which the bridge's `data` command reads with the metric and the commit as its query.
+Health shows the project's [metrics](metrics-and-budgets.md) at the moment the window shows. Two buttons at the top choose how: every metric large, or one at a
+time. Every metric large uses the window's whole width: each metric, grouped by what it measures, has its value now and how it moved, its last change ("Last
+change +23 tests on 27 Oct") and its bound ("budget 6 s, met"), then its chart on axes in its own unit (its least, middle and most value), with a faint band
+where its bound is not met and its trend as a dashed straight line, green when it goes the metric's good way. The charts share one time axis and one set of zoom
+buttons; clicking a point selects its commit and opens the record of its run under the charts, as on the large chart below. Home opens Health this way in one
+step: the small charts of the folded top bar, and the quiet link "Every metric, large" at the top left of the ring's chart. Its ring has an arc for the metrics
+getting better, one for those getting worse and one for the steady ones, and its sentence says whether the project is getting healthier: how many metrics got
+better, worse or stayed steady since the first day the charts show. Under it are the key numbers, as Home's numbers stand: the value, its name, its change, the
+date of its record and a small chart of its history. Live, a number shows the newest record and its change since the record before, named by that record's day
+("+23 since 26 Oct"). At a commit of the past it shows the value then and its change against live, and says "recorded at this commit" or, when that commit has
+no record, "no record at this commit, nearest:" with the date of the last record at or before it, the one that holds then. Under the numbers is the list of
+every metric, grouped by what it measures, with its value, the group of the metric picked open; picking one shows it in the large chart under the list, with
+what it means and how it is measured above the chart, and underlines its number. Every chart runs along the trunk's commits in order, labelled with their dates;
+a commit of the past is marked by an amber line, and a bound by a dashed one. The range picks every commit or the last 500 or 100. Each chart has a text summary
+that screen readers read. Clicking a point of the large chart, or pressing Enter on the one the arrow keys are on, selects its commit, so the whole window shows
+that moment, and opens below the chart the record of the run that measured it: the value and whether it kept its bound, when it was recorded, and how it was
+taken. For a test suite's number that is the suite's run, with its command, its counts, its time and the end of its log, or the earlier run it reused because
+nothing the suite reads had changed; for a command's number, the command; for a code measure, the measure. A metric becomes a card with `"card": true` in its
+declaration, or with its place among the cards, `"card": 2`, and goes under a heading of the list with `"group"`; with no card marked, the first six metrics
+with records are the cards. The cards with a place come first, in that order, and the others after them in the list's order, which is the order of the
+declarations. The screen names a metric by its `"label"`, such as `"Function size, mean"`, or else by its declared name written as words, `function-size` as
+Function size. Right under how old the numbers are, the screen says how many of the newest commits have no record, with the main action Record metrics, which
+runs `naima metrics run --record` on the commit checked out, under `naima run` with a budget of two hours, and says how the run goes until it ends; one
+recording runs at a time, and when it succeeds the window reads the new records. Its data is the metrics view's, whose `timeline` places every record on the
+trunk; at a commit it gives each metric's record at that commit, read from the records as they are now, since a commit's own tree holds none of the records made
+after it. How the screen reads a moment is a small model of its own, checked like the shell's: an answer that arrives after the moment changed is dropped and
+the new moment read. So is Record metrics: it starts one recording at a time, asks for its run's state one request at a time and only while it runs, and reads
+again when it succeeded. The record of a point is the metrics plugin's metric-run view, which the bridge's `data` command reads with the metric and the commit
+as its query.
 
 The views of the earlier window are tabs: the summary, the gates, what is next, the claims, the boards, the session notes and each item with its evidence. Every
 view's data is the same data the matching command prints with `--json`, and the new interface reads it from there.
@@ -650,6 +661,6 @@ the Inter typeface comes with it under the SIL Open Font License.
 
 ## Every state of the interface
 
-The interface's own state machines are studied in the UI tab of Naima's workshop, beside Models: each machine of the interface opens with its states,
-its steps and the real interface in the state the machine is in, and its card "Every state" shows a picture of the interface in each state the machine rests
-in ([studying a model](study-a-model.md#the-ui-tab)). The address `/#explorer` opens the UI tab.
+The interface's own state machines are studied in the UI tab of Naima's workshop, beside Models: each machine of the interface opens with its states, its steps
+and the real interface in the state the machine is in, and its card "Every state" shows a picture of the interface in each state the machine rests in
+([studying a model](study-a-model.md#the-ui-tab)). The address `/#explorer` opens the UI tab.
