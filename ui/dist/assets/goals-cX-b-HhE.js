@@ -1,0 +1,1 @@
+import{a as e,n as t}from"./plan.svelte-DjDw1P-L.js";function n(n){return{goals:n.of(`GOALS`,()=>{let t=e({call:n.call,at:n.at});return t.filtering(()=>n.filters.view.choice(`goals`)),t}),plan:n.of(`GOALS`,()=>t({call:n.call,at:n.at}),!1)}}export{n as make};
