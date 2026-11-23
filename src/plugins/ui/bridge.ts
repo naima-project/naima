@@ -392,9 +392,10 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       const id = text(args["id"])
       const study = findStudies(ctx.root, ctx.program, ctx.trackerRoot).find((s) => s.id === id)
       if (!study) throw new Error(`no study ${String(args["id"])}`)
-      if (study.kind !== "declared") {
-        // A default study: stepped through its generated code in a sandboxed frame, or on its space explored here.
-        const code = study.kind === "codegen" ? studyCode(ctx.root, study) : null
+      if (study.kind !== "declared" || (study.stepper === null && study.problems.length === 0)) {
+        // A default study, or a declared one with no stepper of its own (it only adds its words): stepped through its
+        // generated code in a sandboxed frame, or on its space explored here.
+        const code = study.typescript ? studyCode(ctx.root, study) : null
         if (!code && !(study.system && existsSync(join(ctx.root, dirname(study.file), study.system)))) {
           throw new Error(`the model ${study.title} cannot open: ${study.problems.join("; ") || "it has no system to explore"}`)
         }
@@ -406,8 +407,8 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
           stepping: code ? "code" : "space",
           frames: {
             host: opts.fileUrl("naima-study", "host.html"),
-            observer: null,
-            view: null,
+            observer: study.observer ? opts.fileUrl(`study-${study.id}`, study.observer) : null,
+            view: study.view ? opts.fileUrl(`study-${study.id}`, study.view) : null,
             code: code ? opts.fileUrl(`study-code-${study.id}`, code) : null,
             card,
             cardBuilt: tab?.card ? existsSync(join(ctx.root, tab.card.page)) : false,

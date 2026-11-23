@@ -7,7 +7,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { gitPath, projectFiles } from "../../core/api.ts"
-import { defaultStudies } from "./models.ts"
+import { defaultStudies, firstGroup, instanceSizes, typescriptOf } from "./models.ts"
 
 export interface SayLine {
   file: string
@@ -33,6 +33,10 @@ export interface Study {
   file: string
   title: string
   says: string
+  /** Two or three sentences shown as the study's opening line, dismissible: what the machine is and why it matters. */
+  intro: string
+  /** The `%@situation <condition>: "<text>"` lines: what to say about the state the road has reached, or the step just taken. */
+  situations: { when: string; text: string; line: number }[]
   /** The model's path relative to the project, or null. */
   model: string | null
   /** The paths below are relative to the declaring file's folder, with forward slashes. */
@@ -73,6 +77,7 @@ const KEYS = [
   "view",
   "config",
   "says",
+  "intro",
   "diagrams",
   "parts",
   "paths",
@@ -150,6 +155,8 @@ function studyOf(root: string, file: string, text: string): Study | null {
     view: null,
     config: {},
     says_lines: saysIn(file, text),
+    intro: "",
+    situations: situationsIn(text),
     state_notes: [],
     problems: [],
   }
@@ -174,11 +181,12 @@ function studyOf(root: string, file: string, text: string): Study | null {
     const key = m[1]!.toLowerCase()
     if (!KEYS.includes(key)) {
       study.problems.push(`unknown key ${key} (line ${n + 1})`)
-    } else values[key] = (m[2] ?? "").trim()
+    } else values[key] = key === "intro" && values[key] ? `${values[key]} ${(m[2] ?? "").trim()}` : (m[2] ?? "").trim()
   }
   if (!closed) study.problems.push("the %@ui block has no %@ui end line")
   if (values["title"]) study.title = values["title"]
   study.says = values["says"] ?? ""
+  study.intro = values["intro"] ?? ""
   study.diagrams = values["diagrams"] ?? ""
   for (
     const part of (values["parts"] ?? "").split(";").map((p) => p.trim())
@@ -204,7 +212,18 @@ function studyOf(root: string, file: string, text: string): Study | null {
   for (const key of ["stepper", "observer", "view"] as const) {
     const rel = values[key]
     if (!rel) {
-      if (key === "stepper") study.problems.push("no stepper is declared")
+      if (key === "stepper") {
+        // A study in a naima-codegen project that declares no stepper is stepped by the project's generated TypeScript,
+        // as its default study is: the block then only adds the words.
+        const toml = read(join(dir, "codegen.toml"))
+        const ts = toml === null ? null : typescriptOf(toml)
+        if (toml !== null && ts && existsSync(join(dir, "generated", "typescript", ts, `${ts}.ts`))) {
+          study.typescript = `generated/typescript/${ts}/${ts}.ts`
+          const group = firstGroup(toml)
+          const inst = group?.instance ? read(join(dir, "model", "instances", `${group.instance}.mcrl2`)) : null
+          if (inst) study.sizes = instanceSizes(inst)
+        } else study.problems.push("no stepper is declared")
+      }
       continue
     }
     const full = inside(dir, rel)
@@ -269,6 +288,7 @@ function studyOf(root: string, file: string, text: string): Study | null {
       const modelText = study.model === file ? null : read(full)
       if (modelText !== null) {
         study.says_lines.push(...saysIn(study.model, modelText))
+        study.situations.push(...situationsIn(modelText, study.model))
         study.state_notes = stateNotes(modelText)
       } else if (study.model !== file && !existsSync(full)) {
         study.problems.push(`the model file ${model} does not exist`)
@@ -332,6 +352,81 @@ export function findStudies(root: string, program?: string, tracker?: string): S
   return [...declared, ...defaultStudies(root, program, declared, tracker)]
 }
 
+/** The notes on a model's state: the comments beside its process's parameters, replaced or added to by its `%@state` lines. */
+export function stateNotesOf(text: string): { name: string; section: string; note: string }[] {
+  const notes = stateNotes(text)
+  for (const m of text.matchAll(/^%@state\s+([A-Za-z_][\w']*)\s*:\s*"((?:[^"\\]|\\.)*)"\s*$/gm)) {
+    const at = notes.findIndex((n) => n.name === m[1])
+    const note = { name: m[1]!, section: at >= 0 ? notes[at]!.section : "", note: m[2]!.replace(/\\(.)/g, "$1") }
+    if (at >= 0) notes[at] = note
+    else notes.push(note)
+  }
+  return notes
+}
+
+/**
+ * The `% key value` lines of a file's `%@ui` block, or null when it has none. A block that declares no stepper does not
+ * declare a study of its own: it words the model's default study (models.ts), its title, its says and its properties.
+ */
+export function blockValues(text: string): Record<string, string> | null {
+  const lines = text.split(/\r?\n/)
+  const begin = lines.findIndex((l) => BEGIN.test(l.trim()))
+  if (begin < 0) return null
+  const out: Record<string, string> = {}
+  for (const l of lines.slice(begin + 1)) {
+    if (END.test(l.trim())) break
+    if (l.trim() === "" || /^%\s*$/.test(l.trim())) continue
+    const m = /^%\s+([A-Za-z][A-Za-z-]*)(?:\s+(.*))?$/.exec(l.trim())
+    if (!m || !KEYS.includes(m[1]!.toLowerCase())) return null
+    const key = m[1]!.toLowerCase()
+    out[key] = key === "intro" && out[key] ? `${out[key]} ${(m[2] ?? "").trim()}` : (m[2] ?? "").trim()
+  }
+  return out
+}
+
+/** The `%@situation <condition>: "<text>"` lines of a file (see the guide's write-a-study-by-hand, section 7b). */
+export function situationsIn(text: string, _file?: string): { when: string; text: string; line: number }[] {
+  const out: { when: string; text: string; line: number }[] = []
+  text.split(/\r?\n/).forEach((l, i) => {
+    const m = /^\s*%@situation\s+(.+?)\s*:\s*"((?:[^"\\]|\\.)*)"\s*$/.exec(l)
+    if (m) out.push({ when: m[1]!.trim(), text: m[2]!.replace(/\\(.)/g, "$1"), line: i + 1 })
+  })
+  return out
+}
+
+/**
+ * What a block with no stepper says of its study's default study: its title, says, intro, situations, and the observer,
+ * view, parts and diagrams of an explanation view. Paths are relative to the study's folder and must stay inside it.
+ */
+export function applyWords(study: Study, root: string, block: Record<string, string> | null, text: string): void {
+  study.situations = situationsIn(text)
+  if (!block) return
+  if (block["title"]) study.title = block["title"]
+  if (block["says"]) study.says = block["says"]
+  study.intro = block["intro"] ?? ""
+  study.diagrams = block["diagrams"] ?? ""
+  const dir = join(root, dirname(study.file))
+  for (const key of ["observer", "view"] as const) {
+    const rel = block[key]
+    if (!rel) continue
+    const full = inside(dir, rel)
+    if (full === null) study.problems.push(`the ${key} ${rel} is outside the study's folder`)
+    else if (!isFile(full)) study.problems.push(`the ${key} file ${rel} does not exist`)
+    else study[key] = gitPath(relative(dir, full))
+  }
+  for (const part of (block["parts"] ?? "").split(";").map((p) => p.trim()).filter(Boolean)) {
+    const m = /^([a-z][a-z0-9-]*)\s*:\s*(.+)$/.exec(part)
+    if (m) study.parts.push({ id: m[1]!, title: m[2]!.trim() })
+    else study.problems.push(`the part ${part} is not "id: title"`)
+  }
+}
+
+/** A well-formed block with no stepper: it words the default study of the model it names or sits in, and declares none. */
+export function wordsOnly(_file: string, text: string): boolean {
+  const block = blockValues(text)
+  return block !== null && block["stepper"] === undefined
+}
+
 /** The studies a `%@ui` block declares, in the order of their files. */
 export function declaredStudies(root: string, program?: string): Study[] {
   const out: Study[] = []
@@ -339,6 +434,7 @@ export function declaredStudies(root: string, program?: string): Study[] {
     if (!file.toLowerCase().endsWith(".mcrl2")) continue
     const text = read(join(root, file))
     if (text === null || !/^%@ui\s+begin\s*$/m.test(text)) continue
+    if (wordsOnly(file, text)) continue
     const s = studyOf(root, file, text)
     if (s) out.push(s)
   }

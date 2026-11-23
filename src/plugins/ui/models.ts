@@ -7,7 +7,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { basename, dirname, join, relative, resolve } from "node:path"
 import { gitPath, projectFiles } from "../../core/api.ts"
-import { stateNotes, type Study, studyId } from "./studies.ts"
+import { applyWords, blockValues, situationsIn, stateNotesOf, type Study, studyId, wordsOnly } from "./studies.ts"
 
 const read = (p: string): string | null => {
   try {
@@ -73,7 +73,7 @@ export function firstGroup(toml: string): { group: string; instance: string | nu
 }
 
 /** The backends a codegen.toml chooses, and its TypeScript module's name when one is generated. */
-function typescriptOf(toml: string): string | null {
+export function typescriptOf(toml: string): string | null {
   const backends = /^\s*backends\s*=\s*\[([^\]]*)\]/m.exec(toml)?.[1] ?? ""
   if (!/"typescript"/.test(backends)) return null
   return /^\s*typescript_module\s*=\s*"([^"]+)"/m.exec(toml)?.[1] ?? null
@@ -123,6 +123,8 @@ const blank = (file: string, kind: "codegen" | "plain"): Study => ({
   folder: gitPath(dirname(dirname(file))),
   title: file,
   says: "",
+  intro: "",
+  situations: [],
   diagrams: "",
   parts: [],
   paths: "paths",
@@ -176,7 +178,14 @@ export function defaultStudies(root: string, program: string | undefined, declar
     if (core === null) s.problems.push("the project has no model/core.mcrl2")
     else {
       s.says_lines = saysIn(s.model, core)
-      s.state_notes = stateNotes(core)
+      s.state_notes = stateNotesOf(core)
+      const beside = files.filter((g) => g.endsWith(".mcrl2") && gitPath(dirname(g)) === dir && !g.endsWith("core.mcrl2"))
+      const words = [s.model, ...beside].map((g) => ({ g, t: g === s.model ? core : read(join(root, g)) }))
+        .find((x) => x.t !== null && wordsOnly(x.g, x.t))
+      if (words) {
+        s.says_lines.push(...(words.g === s.model ? [] : saysIn(words.g, words.t!)))
+        applyWords(s, root, blockValues(words.t!), words.t!)
+      }
     }
     const group = firstGroup(toml)
     if (group) {
@@ -194,22 +203,57 @@ export function defaultStudies(root: string, program: string | undefined, declar
     if (ts && existsSync(join(root, dir, "generated", "typescript", ts, `${ts}.ts`))) s.typescript = `generated/typescript/${ts}/${ts}.ts`
     out.push(s)
   }
+  // The models a words-only block of another file names are worded there, so they are not listed twice.
+  const wordedBy = (f: string, text: string): string | null => {
+    const block = /^%@ui\s+begin\s*$/m.test(text) ? blockValues(text) : null
+    if (!block || block["stepper"] !== undefined || isWhole(text) || !block["model"]) return null
+    const full = resolve(root, dirname(f), block["model"])
+    const t = relative(root, full).startsWith("..") ? null : read(full)
+    return t !== null && isWhole(t) ? gitPath(relative(root, full)) : null
+  }
+  const worded = new Set<string>()
+  for (const f of files) {
+    const t = f.toLowerCase().endsWith(".mcrl2") && !inProject(f) ? read(join(root, f)) : null
+    const w = t === null ? null : wordedBy(f, t)
+    if (w) worded.add(w)
+  }
   for (const f of files) {
     if (!f.toLowerCase().endsWith(".mcrl2") || inProject(f) || covered.has(f)) continue
     const text = read(join(root, f))
-    if (text === null || !isWhole(text) || /^%@ui\s+begin\s*$/m.test(text)) continue
+    if (text === null) continue
+    const block = /^%@ui\s+begin\s*$/m.test(text) ? blockValues(text) : null
+    if (block && block["stepper"] !== undefined) continue
+    // A file that is not a whole specification but has a words-only block names the model it words, beside it or below it.
+    let target = f
+    if (!isWhole(text)) {
+      const w = wordedBy(f, text)
+      if (w === null) continue
+      target = w
+    } else if (worded.has(f)) continue
+    const modelText = target === f ? text : read(join(root, target)) ?? ""
     const s = blank(f, "plain")
     s.folder = gitPath(dirname(f))
     s.title = headingOf(text, "%") || basename(f)
-    s.model = f
-    s.system = basename(f)
+    applyWords(s, root, block, text)
+    s.model = target
+    s.system = block?.["system"] || gitPath(relative(dirname(f), target))
     s.says_lines = saysIn(f, text)
-    s.state_notes = stateNotes(text)
+    if (target !== f) s.says_lines.push(...saysIn(target, modelText))
+    s.state_notes = stateNotesOf(modelText)
+    if (target !== f) {
+      for (const n of stateNotesOf(text)) {
+        const at = s.state_notes.findIndex((x) => x.name === n.name)
+        if (at < 0) s.state_notes.push(n)
+        else if (n.note) s.state_notes[at] = n
+      }
+    }
     const here = join(root, dirname(f))
     // Several whole specifications in one folder keep their paths apart, each in a folder of its name.
     const siblings = files.filter((g) => g !== f && gitPath(dirname(g)) === gitPath(dirname(f)) && g.endsWith(".mcrl2"))
     s.paths = siblings.length ? `paths/${basename(f, ".mcrl2")}` : "paths"
     s.properties = [...mcfIn(here, here), ...(isDir(join(here, "properties")) ? mcfIn(join(here, "properties"), here) : [])]
+    const named = block?.["properties"]
+    if (named && isDir(join(here, named))) { for (const p of mcfIn(join(here, named), here)) if (!s.properties.includes(p)) s.properties.push(p) }
     for (const p of fromRoot(here, items.get(f) ?? [])) if (!s.properties.includes(p)) s.properties.push(p)
     out.push(s)
   }
