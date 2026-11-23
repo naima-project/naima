@@ -1,0 +1,1 @@
+import{m as e,p as t}from"./runtime-DvDVho1J.js";import{t as n}from"./Segmented-SVumSA3j.js";var r=new Set([`$$slots`,`$$events`,`$$legacy`]);function i(i,a){let o=t(a,r);n(i,e(()=>o))}export{i as t};
