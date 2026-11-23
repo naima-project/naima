@@ -4,7 +4,7 @@
 
 import { parentPort, workerData } from "node:worker_threads"
 import { firstParty } from "./builtins.ts"
-import { askHostsInBackground, type Context } from "./core/api.ts"
+import { askHostsInBackground, type Context, gitReadScope } from "./core/api.ts"
 import { openProject } from "./core/project.ts"
 import { tabsOf, viewsOf } from "./plugins/ui/index.ts"
 import { allTabs } from "./plugins/ui/tabs.ts"
@@ -40,14 +40,15 @@ parentPort!.on("message", (ask: Ask) => {
         const tab = allTabs(tabsOf(ctx), viewsOf(ctx)).find((t) => t.name === ask.tab)
         if (!tab) throw new Error(`no tab ${ask.tab}`)
         ctx.reload()
-        const content = await tab.render(ask.params, ctx)
+        // One view or tab asks each git question once, as the server's own thread does for what it renders (gitReadScope).
+        const content = await gitReadScope(() => tab.render(ask.params, ctx))
         parentPort!.postMessage({ id: ask.id, ok: true, data: JSON.parse(JSON.stringify(content ?? null)) })
         return
       }
       const view = viewsOf(ctx).find((v) => v.name === ask.view)
       if (!view) throw new Error(`no view ${ask.view}`)
       ctx.reload()
-      const rendered = await view.render(ask.params, ctx)
+      const rendered = await gitReadScope(() => view.render(ask.params, ctx))
       parentPort!.postMessage({ id: ask.id, ok: true, data: JSON.parse(JSON.stringify(rendered.data ?? null)) })
     } catch (e) {
       parentPort!.postMessage({ id: ask.id, ok: false, error: e instanceof Error ? e.message : String(e) })
