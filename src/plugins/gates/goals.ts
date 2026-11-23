@@ -86,14 +86,35 @@ const featuresOf = (ctx: Context, ids: readonly string[]): string[] =>
 export function fixedOnLine(ctx: Context, gate: string): string[] {
   const main = trunk(ctx.root)
   if (!main) return []
-  const format = `--format=%(trailers:key=${FIXES},valueonly,separator=%x1d)%x1f%(trailers:key=${UNFIXES},valueonly,separator=%x1d)%x1e`
-  const out = gitOrNull(ctx.root, "log", "--first-parent", "--reverse", format, `${main}..refs/heads/line/${gate}`) ?? ""
+  // Every line's landings in one git log, and the lines' tips in one for-each-ref, not a log for each gate: a project has a line a
+  // goal, and the screens ask for every goal. The first-parent chain of a line down to the first commit the trunk has is read in
+  // memory, as `git log --first-parent main..<line>` gives it. Within a read scope the two git questions are asked once.
+  const tips = new Map<string, string>()
+  for (const l of (gitOrNull(ctx.root, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/line/") ?? "").split("\n")) {
+    const [ref = "", sha = ""] = l.split(" ")
+    if (ref && sha) tips.set(ref, sha)
+  }
+  let at: string | undefined = tips.get(`refs/heads/line/${gate}`)
+  if (!at) return []
+  const refs = [...tips.keys()]
+  const format = `--format=%H%x1f%P%x1f%(trailers:key=${FIXES},valueonly,separator=%x1d)%x1f%(trailers:key=${UNFIXES},valueonly,separator=%x1d)%x1e`
+  const out = gitOrNull(ctx.root, "log", format, ...refs, "--not", main, "--") ?? ""
+  const commits = new Map<string, { parent: string; fixes: string; unfixes: string }>()
+  for (const record of out.split("\x1e")) {
+    const [h = "", parents = "", fixes = "", unfixes = ""] = record.replace(/^\n/, "").split("\x1f")
+    if (h) commits.set(h, { parent: parents.split(" ")[0] ?? "", fixes, unfixes })
+  }
+  const chain: { fixes: string; unfixes: string }[] = []
+  while (at && commits.has(at)) {
+    const c: { parent: string; fixes: string; unfixes: string } = commits.get(at)!
+    chain.push(c)
+    at = c.parent
+  }
   const ids = (s: string): string[] => s.replaceAll("\x1d", "\n").split("\n").map((v) => v.trim()).filter(Boolean)
   const fixed = new Set<string>()
-  for (const record of out.split("\x1e")) {
-    const [fixes = "", unfixes = ""] = record.split("\x1f")
-    for (const id of ids(fixes)) fixed.add(id)
-    for (const id of ids(unfixes)) fixed.delete(id)
+  for (const c of chain.reverse()) {
+    for (const id of ids(c.fixes)) fixed.add(id)
+    for (const id of ids(c.unfixes)) fixed.delete(id)
   }
   return [...fixed]
 }
