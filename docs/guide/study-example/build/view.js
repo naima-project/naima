@@ -208,14 +208,14 @@ var rest_excludes$15 = /* @__PURE__ */ new Set([
 	"children",
 	"class"
 ]);
-var root$6 = from_html(`<div><!></div>`);
-var $$css$5 = {
-	hash: "svelte-j6nuxt",
-	code: ".pannable.svelte-j6nuxt {overflow-x:auto;min-width:0;max-width:100%;cursor:grab;user-select:none;-webkit-user-select:none;}.pannable.panning.svelte-j6nuxt {cursor:grabbing;}"
+var root$5 = from_html(`<div><!></div>`);
+var $$css$4 = {
+	hash: "svelte-ompztj",
+	code: ".pannable.svelte-ompztj {overflow-x:auto;min-width:0;max-width:100%;cursor:grab;user-select:none;-webkit-user-select:none;}.pannable.panning.svelte-ompztj {cursor:grabbing;}"
 };
 function Pannable($$anchor, $$props) {
 	push($$props, true);
-	append_styles($$anchor, $$css$5);
+	append_styles($$anchor, $$css$4);
 	/** What the box shows, as people call it: the box is a region named after it. */
 	/** A selector: a press on an element inside it never pans. */
 	/** The scrolling box, for its owner to scroll or measure. */
@@ -338,7 +338,7 @@ function Pannable($$anchor, $$props) {
 		event.stopPropagation();
 		event.preventDefault();
 	}
-	var div = root$6();
+	var div = root$5();
 	attribute_effect(div, () => ({
 		...rest,
 		class: `pannable ${cls() ?? ""}`,
@@ -350,7 +350,7 @@ function Pannable($$anchor, $$props) {
 		onpointercancel: onpointerup,
 		onclickcapture,
 		[CLASS]: { panning: get(panning) }
-	}), void 0, void 0, void 0, "svelte-j6nuxt");
+	}), void 0, void 0, void 0, "svelte-ompztj");
 	var node = child(div);
 	snippet(node, () => $$props.children);
 	reset(div);
@@ -1067,18 +1067,18 @@ function layout(nodes, edges, opts = {}) {
 	};
 }
 // ../../../../src/plugins/verifier-mcrl2/widgets/Icon.svelte
-var root$5 = from_html(`<span class="icon svelte-xu8iqn" role="img"><!></span>`);
-var root_1$4 = from_html(`<span class="icon svelte-xu8iqn" aria-hidden="true"><!></span>`);
-var $$css$4 = {
-	hash: "svelte-xu8iqn",
-	code: ".icon.svelte-xu8iqn {display:inline-flex;width:var(--size-icon);height:var(--size-icon);color:currentColor;flex:none;}.icon.svelte-xu8iqn svg {width:100%;height:100%;}"
+var root$4 = from_html(`<span class="icon svelte-13a9429" role="img"><!></span>`);
+var root_1$3 = from_html(`<span class="icon svelte-13a9429" aria-hidden="true"><!></span>`);
+var $$css$3 = {
+	hash: "svelte-13a9429",
+	code: ".icon.svelte-13a9429 {display:inline-flex;width:var(--size-icon);height:var(--size-icon);color:currentColor;flex:none;}.icon.svelte-13a9429 svg {width:100%;height:100%;}"
 };
 function Icon$1($$anchor, $$props) {
-	append_styles($$anchor, $$css$4);
+	append_styles($$anchor, $$css$3);
 	var fragment = comment();
 	var node = first_child(fragment);
 	var consequent = ($$anchor) => {
-		var span = root$5();
+		var span = root$4();
 		var node_1 = child(span);
 		snippet(node_1, () => $$props.children);
 		reset(span);
@@ -1086,7 +1086,7 @@ function Icon$1($$anchor, $$props) {
 		append($$anchor, span);
 	};
 	var alternate = ($$anchor) => {
-		var span_1 = root_1$4();
+		var span_1 = root_1$3();
 		var node_2 = child(span_1);
 		snippet(node_2, () => $$props.children);
 		reset(span_1);
@@ -1098,81 +1098,6 @@ function Icon$1($$anchor, $$props) {
 	});
 	append($$anchor, fragment);
 }
-// ../../../../src/plugins/verifier-mcrl2/widgets/study/Action.svelte
-var root$4 = from_html(`<span class="disc svelte-16zm9hq" aria-hidden="true"><!></span>`);
-var root_1$3 = from_html(`<span class="hint why svelte-16zm9hq"> </span>`);
-var root_2$3 = from_html(`<span class="hint svelte-16zm9hq"> </span>`);
-var root_3$2 = from_html(`<button><!> <span><span class="label svelte-16zm9hq"> </span> <!></span></button>`);
-var $$css$3 = {
-	hash: "svelte-16zm9hq",
-	code: ".action.svelte-16zm9hq {--tone: var(--color-text);--disc: var(--color-surface-sunken);--disc-ink: var(--color-text);display:inline-flex;align-items:center;gap:var(--space-sm);min-block-size:var(--size-control);padding:var(--space-xs) var(--space-md) var(--space-xs) var(--space-xs);font:inherit;font-size:var(--font-size-sm);line-height:var(--font-line-height-tight);text-align:start;color:var(--tone);background:var(--color-surface-soft);border:var(--border-width-thin) solid var(--color-border-soft);border-radius:var(--radius-full);cursor:pointer;transition:background var(--motion-duration-fast) var(--motion-easing-standard), border-color var(--motion-duration-fast) var(--motion-easing-standard), transform var(--motion-duration-fast) var(--motion-easing-standard), box-shadow var(--motion-duration-fast) var(--motion-easing-standard);}.action.sm.svelte-16zm9hq {min-block-size:var(--size-target);font-size:var(--font-size-xs);padding:var(--space-none) var(--space-sm) var(--space-none) var(--space-xs);}.action.svelte-16zm9hq:not(:has(.disc)) {padding-inline-start:var(--space-md);}.disc.svelte-16zm9hq {display:inline-grid;place-items:center;inline-size:calc(var(--size-control) - 2 * var(--space-xs));block-size:calc(var(--size-control) - 2 * var(--space-xs));border-radius:var(--radius-full);color:var(--disc-ink);background:var(--disc);transition:background var(--motion-duration-fast) var(--motion-easing-standard), color var(--motion-duration-fast) var(--motion-easing-standard);}.disc.svelte-16zm9hq .glyph {inline-size:58%;block-size:58%;stroke-width:1.75;}.sm.svelte-16zm9hq .disc:where(.svelte-16zm9hq) {inline-size:calc(var(--size-target) - var(--space-xs));block-size:calc(var(--size-target) - var(--space-xs));}.compact.svelte-16zm9hq {padding:var(--space-none);border-color:transparent;background:none;}.hidden.svelte-16zm9hq {position:absolute;inline-size:var(--border-width-thin);block-size:var(--border-width-thin);overflow:hidden;clip-path:inset(50%);}.words.svelte-16zm9hq {display:inline-flex;flex-direction:column;min-inline-size:0;}.label.svelte-16zm9hq {white-space:nowrap;}.hint.svelte-16zm9hq {font-size:var(--font-size-2xs);color:var(--color-text-muted);}\n  /* Hover: a quiet tint and the disc lit; no ring, so the edge stays one clean hairline. */.action.svelte-16zm9hq:hover:not(:disabled) {background:var(--color-accent-tint);border-color:var(--color-accent-line);}.action.svelte-16zm9hq:hover:not(:disabled) .disc:where(.svelte-16zm9hq) {--disc: var(--color-accent);--disc-ink: var(--color-on-accent);}.action.svelte-16zm9hq:active:not(:disabled) {transform:scale(0.97);}.action.svelte-16zm9hq:focus-visible {outline:var(--border-width-focus) solid var(--color-focus);outline-offset:var(--border-width-focus);}.action[aria-pressed=\"true\"].svelte-16zm9hq {border-color:var(--color-accent);color:var(--color-accent);}.action[aria-pressed=\"true\"].svelte-16zm9hq .disc:where(.svelte-16zm9hq) {--disc: var(--color-accent);--disc-ink: var(--color-on-accent);}\n  /* The move that matters now: the accent, its disc darker, so it reads first. */.primary.svelte-16zm9hq {--tone: var(--color-on-accent);--disc: var(--color-on-accent-soft);--disc-ink: var(--color-on-accent);background:linear-gradient(180deg, var(--color-accent-hover), var(--color-accent));border-color:var(--color-accent);}.primary.svelte-16zm9hq .hint:where(.svelte-16zm9hq) {color:var(--color-on-accent);}\n  /* The primary keeps its accent on hover, a shade deeper, so that its words stay readable. */.action.primary.svelte-16zm9hq:hover:not(:disabled) {background:var(--color-accent-hover);border-color:var(--color-accent-hover);}.primary.svelte-16zm9hq:hover:not(:disabled) .disc:where(.svelte-16zm9hq) {--disc: var(--color-on-accent-soft);--disc-ink: var(--color-on-accent);}.danger.svelte-16zm9hq {--tone: var(--color-danger);--disc-ink: var(--color-danger);}.action.svelte-16zm9hq:disabled {cursor:default;opacity:0.38;filter:saturate(0.4);}\n  /* Disabled with its reason in words: the control is dimmed, the reason stays readable. */.action.explained.svelte-16zm9hq:disabled {opacity:1;filter:none;}.action.explained.svelte-16zm9hq:disabled .disc:where(.svelte-16zm9hq),\n  .action.explained.svelte-16zm9hq:disabled .label:where(.svelte-16zm9hq) {opacity:0.45;}.why.svelte-16zm9hq {white-space:normal;color:var(--color-text-muted);}.primary.explained.svelte-16zm9hq:disabled {--tone: var(--color-text);background:var(--color-surface-soft);border-color:var(--color-border-soft);}\n  @media (prefers-reduced-motion: reduce) {.action.svelte-16zm9hq,\n    .disc.svelte-16zm9hq {transition:none;}\n  }"
-};
-function Action($$anchor, $$props) {
-	append_styles($$anchor, $$css$3);
-	/** What it does, in a few words, under the label when `detail` is set, else on hover. */
-	/** Why it cannot be used now, said on hover when disabled. */
-	/** Only the icon, the label said on hover and to screen readers: for a toolbar. */
-	let variant = prop($$props, "variant", 3, "quiet"), size = prop($$props, "size", 3, "md"), detail = prop($$props, "detail", 3, false), compact = prop($$props, "compact", 3, false), disabled = prop($$props, "disabled", 3, false);
-	const Icon = user_derived(() => $$props.icon);
-	/** A disabled action says why in words, where it has room for words. */
-	const explained = user_derived(() => disabled() && !!$$props.why && !compact());
-	var button = root_3$2();
-	let classes;
-	var node = child(button);
-	var consequent = ($$anchor) => {
-		var span = root$4();
-		var node_1 = child(span);
-		component(node_1, () => get(Icon), ($$anchor, Icon_1) => {
-			Icon_1($$anchor, { class: "glyph" });
-		});
-		reset(span);
-		append($$anchor, span);
-	};
-	if_block(node, ($$render) => {
-		if (get(Icon)) $$render(consequent);
-	});
-	var span_1 = sibling(node, 2);
-	let classes_1;
-	var span_2 = child(span_1);
-	var text = only_child(span_2, true);
-	var node_2 = sibling(span_2, 2);
-	var consequent_1 = ($$anchor) => {
-		var span_3 = root_1$3();
-		var text_1 = only_child(span_3, true);
-		template_effect(() => set_text(text_1, $$props.why));
-		append($$anchor, span_3);
-	};
-	var consequent_2 = ($$anchor) => {
-		var span_4 = root_2$3();
-		var text_2 = only_child(span_4, true);
-		template_effect(() => set_text(text_2, $$props.hint));
-		append($$anchor, span_4);
-	};
-	if_block(node_2, ($$render) => {
-		if (get(explained)) $$render(consequent_1);
-		else if (detail() && $$props.hint) $$render(consequent_2, 1);
-	});
-	reset(span_1);
-	reset(button);
-	template_effect(() => {
-		classes = set_class(button, 1, `action ${variant() ?? ""} ${size() ?? ""}`, "svelte-16zm9hq", classes, {
-			detail: detail(),
-			compact: compact(),
-			explained: get(explained)
-		});
-		set_attribute(button, "aria-label", get(explained) ? `${$$props.label}: ${$$props.why}` : $$props.label);
-		button.disabled = disabled();
-		set_attribute(button, "aria-pressed", $$props.pressed);
-		set_attribute(button, "title", disabled() ? $$props.why ?? $$props.hint ?? $$props.label : $$props.hint ?? $$props.label);
-		classes_1 = set_class(span_1, 1, "words svelte-16zm9hq", null, classes_1, { hidden: compact() && !!get(Icon) });
-		set_text(text, $$props.label);
-	});
-	delegated("click", button, function(...$$args) {
-		$$props.onclick?.apply(this, $$args);
-	});
-	append($$anchor, button);
-}
-delegate(["click"]);
 // node_modules/.deno/@lucide+svelte@1.60.0/node_modules/@lucide/svelte/dist/utils/defaultAttributes.js
 /**
 * @file
@@ -1966,33 +1891,34 @@ function motionMs() {
 	return Number.isFinite(n) ? v.endsWith("ms") ? n : n * 1e3 : 0;
 }
 var root$2 = from_html(`<button><!></button>`);
-var root_1$2 = from_html(`<!> <span class="gap svelte-s8ekmc"></span>`, 1);
-var root_2$2 = from_svg(`<path></path>`);
-var root_3$1 = from_svg(`<text text-anchor="middle"> </text>`);
-var root_4$1 = from_svg(`<title> </title>`);
-var root_5 = from_svg(`<g><path class="line svelte-s8ekmc"></path><!><!><!></g>`);
-var root_6 = from_svg(`<circle class="initial svelte-s8ekmc" r="8"></circle>`);
-var root_7 = from_svg(`<rect class="shape svelte-s8ekmc" rx="12"></rect><text class="nlabel svelte-s8ekmc" y="4" text-anchor="middle"> </text>`, 1);
-var root_8 = from_svg(`<circle class="halo svelte-s8ekmc" r="17"></circle><circle class="disc svelte-s8ekmc" r="11"></circle>`, 1);
-var root_9 = from_svg(`<tspan class="aarg svelte-s8ekmc" dx="6"> </tspan>`);
-var root_10 = from_svg(`<circle class="maybe svelte-s8ekmc" r="6"></circle><text class="aword svelte-s8ekmc" y="4"> <!></text>`, 1);
-var root_11 = from_svg(`<circle class="dot svelte-s8ekmc" r="7"></circle>`);
-var root_12 = from_svg(`<text class="pname svelte-s8ekmc" y="4" text-anchor="start"> </text>`);
-var root_13 = from_svg(`<text class="pname svelte-s8ekmc" text-anchor="middle"> </text>`);
-var root_14 = from_svg(`<!><!>`, 1);
-var root_15 = from_svg(`<circle class="shape svelte-s8ekmc"></circle><text class="nlabel svelte-s8ekmc" y="4" text-anchor="middle"> </text>`, 1);
-var root_16 = from_svg(`<tspan> </tspan>`);
-var root_17 = from_svg(`<text class="nsub svelte-s8ekmc" text-anchor="start"></text>`);
-var root_18 = from_svg(`<tspan x="0"> </tspan>`);
-var root_19 = from_svg(`<text class="nsub svelte-s8ekmc" text-anchor="middle"></text>`);
-var root_20 = from_svg(`<g role="button" tabindex="0"><circle class="hit svelte-s8ekmc" r="9"></circle><circle class="pinhead svelte-s8ekmc" cy="-2" r="3.6"></circle><line class="pinneedle svelte-s8ekmc" x1="0" y1="1.5" x2="0" y2="7"></line><title> </title></g>`);
-var root_21 = from_svg(`<g role="button" tabindex="0"><circle class="hit svelte-s8ekmc" r="9"></circle><path class="starshape svelte-s8ekmc" d="M0,-5 L1.5,-1.6 L5,-1.6 L2.2,0.7 L3.2,4.4 L0,2.2 L-3.2,4.4 L-2.2,0.7 L-5,-1.6 L-1.5,-1.6 Z"></path><title> </title></g>`);
-var root_22 = from_svg(`<g class="place svelte-s8ekmc"><g role="button" tabindex="0"><!><!><!></g><!><!></g>`);
-var root_23 = from_html(`<div><svg role="img"><!><!></svg></div>`);
-var root_24 = from_html(`<div class="graph svelte-s8ekmc"><div class="controls svelte-s8ekmc" role="toolbar"><!> <!> <span class="gap svelte-s8ekmc"></span> <button class="ico svelte-s8ekmc" aria-label="Closer together" title="Closer together"><!></button> <button class="ico svelte-s8ekmc" aria-label="Further apart" title="Further apart"><!></button> <span class="sep svelte-s8ekmc"></span> <button class="ico svelte-s8ekmc" aria-label="Zoom out" title="Zoom out"><!></button> <span role="status"> </span> <button class="ico svelte-s8ekmc" aria-label="Zoom in" title="Zoom in"><!></button> <!></div> <div class="window svelte-s8ekmc"><!></div></div>`);
+var root_1$2 = from_html(`<!> <span class="gap svelte-15basb6"></span>`, 1);
+var root_2$2 = from_html(`<button class="ico word svelte-15basb6" aria-label="Fit" title="Fit the whole drawing in the card"><!><span>Fit</span></button>`);
+var root_3$1 = from_svg(`<path></path>`);
+var root_4$1 = from_svg(`<text text-anchor="middle"> </text>`);
+var root_5 = from_svg(`<title> </title>`);
+var root_6 = from_svg(`<g><path class="line svelte-15basb6"></path><!><!><!></g>`);
+var root_7 = from_svg(`<circle class="initial svelte-15basb6" r="8"></circle>`);
+var root_8 = from_svg(`<rect class="shape svelte-15basb6" rx="12"></rect><text class="nlabel svelte-15basb6" y="4" text-anchor="middle"> </text>`, 1);
+var root_9 = from_svg(`<circle class="halo svelte-15basb6" r="17"></circle><circle class="disc svelte-15basb6" r="11"></circle>`, 1);
+var root_10 = from_svg(`<tspan class="aarg svelte-15basb6" dx="6"> </tspan>`);
+var root_11 = from_svg(`<circle class="maybe svelte-15basb6" r="6"></circle><text class="aword svelte-15basb6" y="4"> <!></text>`, 1);
+var root_12 = from_svg(`<circle class="dot svelte-15basb6" r="7"></circle>`);
+var root_13 = from_svg(`<text class="pname svelte-15basb6" y="4" text-anchor="start"> </text>`);
+var root_14 = from_svg(`<text class="pname svelte-15basb6" text-anchor="middle"> </text>`);
+var root_15 = from_svg(`<!><!>`, 1);
+var root_16 = from_svg(`<circle class="shape svelte-15basb6"></circle><text class="nlabel svelte-15basb6" y="4" text-anchor="middle"> </text>`, 1);
+var root_17 = from_svg(`<tspan> </tspan>`);
+var root_18 = from_svg(`<text class="nsub svelte-15basb6" text-anchor="start"></text>`);
+var root_19 = from_svg(`<tspan x="0"> </tspan>`);
+var root_20 = from_svg(`<text class="nsub svelte-15basb6" text-anchor="middle"></text>`);
+var root_21 = from_svg(`<g role="button" tabindex="0"><circle class="hit svelte-15basb6" r="9"></circle><circle class="pinhead svelte-15basb6" cy="-2" r="3.6"></circle><line class="pinneedle svelte-15basb6" x1="0" y1="1.5" x2="0" y2="7"></line><title> </title></g>`);
+var root_22 = from_svg(`<g role="button" tabindex="0"><circle class="hit svelte-15basb6" r="9"></circle><path class="starshape svelte-15basb6" d="M0,-5 L1.5,-1.6 L5,-1.6 L2.2,0.7 L3.2,4.4 L0,2.2 L-3.2,4.4 L-2.2,0.7 L-5,-1.6 L-1.5,-1.6 Z"></path><title> </title></g>`);
+var root_23 = from_svg(`<g class="place svelte-15basb6"><g role="button" tabindex="0"><rect class="pad svelte-15basb6"></rect><!><!><!></g><!><!></g>`);
+var root_24 = from_html(`<div><svg role="group"><!><!></svg></div>`);
+var root_25 = from_html(`<div class="graph svelte-15basb6"><div class="controls svelte-15basb6" role="toolbar"><!> <!> <span class="gap svelte-15basb6"></span> <button class="ico svelte-15basb6" aria-label="Closer together" title="Closer together"><!></button> <button class="ico svelte-15basb6" aria-label="Further apart" title="Further apart"><!></button> <span class="sep svelte-15basb6"></span> <button class="ico svelte-15basb6" aria-label="Zoom out" title="Zoom out"><!></button> <span role="status"> </span> <button class="ico svelte-15basb6" aria-label="Zoom in" title="Zoom in"><!></button> <!></div> <div><!></div></div>`);
 var $$css$2 = {
-	hash: "svelte-s8ekmc",
-	code: ".graph.svelte-s8ekmc {display:flex;flex-direction:column;block-size:100%;min-block-size:0;gap:var(--space-xs);}.controls.svelte-s8ekmc {display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-xs);font-family:var(--font-family-mono);font-size:var(--font-size-2xs);color:var(--color-text-muted);}.controls.svelte-s8ekmc button:where(.svelte-s8ekmc) {font:inherit;min-block-size:var(--size-target);min-inline-size:var(--size-target);padding:var(--space-none) var(--space-sm);color:var(--color-text-muted);background:none;border:var(--border-width-thin) solid transparent;border-radius:var(--radius-full);cursor:pointer;}.controls.svelte-s8ekmc button:where(.svelte-s8ekmc):hover {color:var(--color-accent);}.controls.svelte-s8ekmc .ico:where(.svelte-s8ekmc) {display:inline-flex;align-items:center;justify-content:center;padding:var(--space-none);}.controls.svelte-s8ekmc button:where(.svelte-s8ekmc):disabled {opacity:0.35;cursor:default;}.gap.svelte-s8ekmc {inline-size:var(--space-sm);}.controls.svelte-s8ekmc button.on:where(.svelte-s8ekmc) {color:var(--color-text);border-color:var(--color-border-strong);}.sep.svelte-s8ekmc {flex:1;}.pct.svelte-s8ekmc {min-inline-size:var(--size-target);text-align:center;cursor:default;user-select:none;}.pct.quiet.svelte-s8ekmc {font-style:italic;color:var(--color-text-muted);}.window.svelte-s8ekmc {position:relative;flex:1;min-block-size:0;}.graph.svelte-s8ekmc .pan {position:absolute;inset:0;overflow:auto;}.measure.fitting.svelte-s8ekmc {inline-size:100%;block-size:100%;}.measure.svelte-s8ekmc {min-inline-size:100%;min-block-size:100%;display:grid;place-items:center;}svg.svelte-s8ekmc {display:block;}svg.fit.svelte-s8ekmc {inline-size:100%;block-size:100%;}text.svelte-s8ekmc {font-family:var(--font-family-body);}\n\n\n  /* ---- edges: the road solid, the roads left dashed and faint, what may come dotted */.line.svelte-s8ekmc {fill:none;stroke:var(--color-text-muted);stroke-width:1.3;}.head.svelte-s8ekmc {fill:var(--color-text-muted);stroke:var(--color-text-muted);stroke-width:1.3;stroke-linejoin:round;}.edge.road.svelte-s8ekmc .line:where(.svelte-s8ekmc),\n  .edge.road.svelte-s8ekmc .head:where(.svelte-s8ekmc) {stroke:var(--color-text);}.edge.road.svelte-s8ekmc .head:where(.svelte-s8ekmc) {fill:var(--color-text);}\n  /* UML: a transition's arrowhead is open. */.edge.svelte-s8ekmc .head.open:where(.svelte-s8ekmc) {fill:none;}.edge.faded.svelte-s8ekmc {opacity:0.38;}.edge.faded.svelte-s8ekmc .line:where(.svelte-s8ekmc) {stroke-dasharray:5 4;}.edge.ahead.svelte-s8ekmc .line:where(.svelte-s8ekmc) {stroke-dasharray:1.5 4;stroke-linecap:round;}.edge.ahead.svelte-s8ekmc {opacity:0.55;}.elabel.svelte-s8ekmc {font-size:var(--font-size-2xs);fill:var(--color-text-muted);paint-order:stroke;stroke:var(--color-surface-raised);stroke-width:4;stroke-linejoin:round;}.edge.road.svelte-s8ekmc .elabel:where(.svelte-s8ekmc) {fill:var(--color-text);}\n\n  /* ---- nodes */.node.svelte-s8ekmc {cursor:pointer;}.shape.svelte-s8ekmc {fill:var(--color-surface-raised);stroke:var(--color-text);stroke-width:1.4;}.initial.svelte-s8ekmc {fill:var(--color-text);}.nlabel.svelte-s8ekmc {font-size:var(--font-size-xs);fill:var(--color-text);}.nsub.svelte-s8ekmc {font-size:var(--font-size-2xs);fill:var(--color-text-muted);}.node.svelte-s8ekmc:hover .shape:where(.svelte-s8ekmc),\n  .node.svelte-s8ekmc:focus .shape:where(.svelte-s8ekmc) {stroke:var(--color-accent);}.node.current.svelte-s8ekmc .shape:where(.svelte-s8ekmc) {fill:var(--color-accent);stroke:var(--color-accent);}.node.current.svelte-s8ekmc .nlabel:where(.svelte-s8ekmc) {fill:var(--color-on-accent);}.node.faded.svelte-s8ekmc {opacity:0.38;}.node.faded.pinned.svelte-s8ekmc {opacity:1;}.node.ahead.svelte-s8ekmc .shape:where(.svelte-s8ekmc) {fill:none;stroke:var(--color-text-muted);stroke-dasharray:2 3;}.node.ahead.svelte-s8ekmc .nlabel:where(.svelte-s8ekmc) {fill:var(--color-text-muted);}.node.run.svelte-s8ekmc .shape:where(.svelte-s8ekmc) {fill:var(--color-accent);stroke:var(--color-accent);}.node.run.svelte-s8ekmc .nlabel:where(.svelte-s8ekmc),\n  .node.done.svelte-s8ekmc .nlabel:where(.svelte-s8ekmc),\n  .node.queue.svelte-s8ekmc .nlabel:where(.svelte-s8ekmc) {fill:var(--color-surface-raised);}.node.ask.svelte-s8ekmc .shape:where(.svelte-s8ekmc) {stroke:var(--color-accent);stroke-width:2.6;}.node.queue.svelte-s8ekmc .shape:where(.svelte-s8ekmc) {fill:var(--color-text-muted);stroke:var(--color-text-muted);}.node.done.svelte-s8ekmc .shape:where(.svelte-s8ekmc) {fill:var(--color-text);}.node.held.svelte-s8ekmc .shape:where(.svelte-s8ekmc) {stroke-dasharray:2 3;}.node.fail.svelte-s8ekmc .shape:where(.svelte-s8ekmc) {stroke:var(--color-danger);}.node.picked.svelte-s8ekmc .shape:where(.svelte-s8ekmc) {stroke:var(--color-accent);stroke-width:3;}.node.goal.svelte-s8ekmc .shape:where(.svelte-s8ekmc) {stroke-width:3;}\n\n  /* ---- a path: the timeline's drawing */.dot.svelte-s8ekmc {fill:var(--color-surface-raised);stroke:var(--color-text);stroke-width:1.4;}.disc.svelte-s8ekmc {fill:var(--color-accent);}.halo.svelte-s8ekmc {fill:none;stroke:var(--color-accent);stroke-width:1;opacity:0.45;}.maybe.svelte-s8ekmc {fill:none;stroke:var(--color-text-muted);stroke-width:1.2;}.aword.svelte-s8ekmc {font-size:var(--font-size-sm);fill:var(--color-text-muted);}.aarg.svelte-s8ekmc {font-family:var(--font-family-mono);font-size:var(--font-size-2xs);}.node.svelte-s8ekmc:hover .maybe:where(.svelte-s8ekmc),\n  .node.svelte-s8ekmc:focus .maybe:where(.svelte-s8ekmc) {stroke:var(--color-accent);fill:var(--color-accent-soft);}.node.svelte-s8ekmc:hover .aword:where(.svelte-s8ekmc),\n  .node.svelte-s8ekmc:focus .aword:where(.svelte-s8ekmc) {fill:var(--color-accent);}.node.svelte-s8ekmc:hover .dot:where(.svelte-s8ekmc),\n  .node.svelte-s8ekmc:focus .dot:where(.svelte-s8ekmc) {stroke:var(--color-accent);}.pname.svelte-s8ekmc {font-family:var(--font-family-mono);font-size:var(--font-size-2xs);fill:var(--color-text-muted);}.elabel.big.svelte-s8ekmc {font-size:var(--font-size-sm);}.node.ahead.svelte-s8ekmc {opacity:1;}\n\n  /* ---- the marks: pin and bookmark, shown on hover and focus, always when set */\n  /* A mark nobody can see takes no clicks: a hidden mark of one state would otherwise sit over its neighbour. */.mark.svelte-s8ekmc {cursor:pointer;opacity:0;pointer-events:none;transition:opacity var(--motion-duration-fast) var(--motion-easing-standard);}.place.svelte-s8ekmc:hover .mark:where(.svelte-s8ekmc),\n  .place.svelte-s8ekmc:focus-within .mark:where(.svelte-s8ekmc),\n  .mark.set.svelte-s8ekmc {opacity:1;pointer-events:auto;}\n  /* On the current state the marks are always there, faint, so that a person finds them. */.place.svelte-s8ekmc:has(.node.current:where(.svelte-s8ekmc)) .mark:where(.svelte-s8ekmc):not(.set) {opacity:0.55;pointer-events:auto;}.hit.svelte-s8ekmc {fill:transparent;}.pinhead.svelte-s8ekmc {fill:none;stroke:var(--color-text-muted);stroke-width:1.4;}.pinneedle.svelte-s8ekmc {stroke:var(--color-text-muted);stroke-width:1.4;}.pin.set.svelte-s8ekmc .pinhead:where(.svelte-s8ekmc) {fill:var(--color-accent);stroke:var(--color-accent);}.pin.set.svelte-s8ekmc .pinneedle:where(.svelte-s8ekmc) {stroke:var(--color-accent);}.starshape.svelte-s8ekmc {fill:none;stroke:var(--color-text-muted);stroke-width:1.2;stroke-linejoin:round;}.star.set.svelte-s8ekmc .starshape:where(.svelte-s8ekmc) {fill:var(--color-accent);stroke:var(--color-accent);}.mark.svelte-s8ekmc:hover .pinhead:where(.svelte-s8ekmc),\n  .mark.svelte-s8ekmc:hover .pinneedle:where(.svelte-s8ekmc),\n  .mark.svelte-s8ekmc:hover .starshape:where(.svelte-s8ekmc) {stroke:var(--color-accent);}"
+	hash: "svelte-15basb6",
+	code: ".graph.svelte-15basb6 {position:relative;display:flex;flex-direction:column;block-size:100%;min-block-size:0;}\n  /* The view tools float over the drawing's top corner, out of the way until the pointer or the focus comes to the\n     graph; where nothing hovers, or more contrast is asked for, they always show. */.controls.svelte-15basb6 {position:absolute;z-index:4;inset-block-start:var(--space-none);inset-inline-end:var(--space-none);display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:var(--space-none);max-inline-size:100%;padding:var(--space-none) var(--space-xs);font-size:var(--font-size-2xs);color:var(--color-text-muted);background:var(--color-surface-raised);border-radius:var(--radius-md);opacity:0;transition:opacity var(--motion-duration-fast) var(--motion-easing-standard);}.graph.svelte-15basb6:focus-within .controls:where(.svelte-15basb6) {opacity:1;}\n  @media (hover: hover) {.graph.svelte-15basb6:hover .controls:where(.svelte-15basb6) {opacity:1;}\n  }\n  @media (hover: none), (prefers-contrast: more) {.controls.svelte-15basb6 {opacity:1;}\n  }.controls.svelte-15basb6 button:where(.svelte-15basb6) {font:inherit;min-block-size:var(--size-target);min-inline-size:var(--size-target);padding:var(--space-none) var(--space-sm);color:var(--color-text-muted);background:none;border:var(--border-width-thin) solid transparent;border-radius:var(--radius-full);cursor:pointer;}.controls.svelte-15basb6 button:where(.svelte-15basb6):hover {color:var(--color-accent);}.controls.svelte-15basb6 button:where(.svelte-15basb6):focus-visible,\n  .node.svelte-15basb6:focus-visible,\n  .mark.svelte-15basb6:focus-visible {outline:var(--border-width-focus) solid var(--color-focus);}.controls.svelte-15basb6 .ico:where(.svelte-15basb6) {display:inline-flex;align-items:center;justify-content:center;padding:var(--space-none);}.controls.svelte-15basb6 button:where(.svelte-15basb6):disabled {opacity:0.35;cursor:default;}.gap.svelte-15basb6 {inline-size:var(--space-sm);}.controls.svelte-15basb6 button.on:where(.svelte-15basb6) {color:var(--color-accent);}.controls.svelte-15basb6 .word:where(.svelte-15basb6) {gap:var(--space-xs);padding-inline:var(--space-xs);}.sep.svelte-15basb6 {flex:1;}.pct.svelte-15basb6 {min-inline-size:var(--size-target);text-align:center;cursor:default;user-select:none;}.pct.quiet.svelte-15basb6 {font-style:italic;color:var(--color-text-muted);}\n  /* The window takes the height the card gives; with `grow`, a card that gives none has a least of one. */.window.svelte-15basb6 {position:relative;flex:1;min-block-size:0;}.window.grow.svelte-15basb6 {min-block-size:var(--size-w-16);}.graph.svelte-15basb6 .pan {position:absolute;inset:0;overflow:auto;}.measure.fitting.svelte-15basb6 {inline-size:100%;block-size:100%;}.measure.svelte-15basb6 {min-inline-size:100%;min-block-size:100%;display:grid;place-items:center;}svg.svelte-15basb6 {display:block;}svg.fit.svelte-15basb6 {inline-size:100%;block-size:100%;}text.svelte-15basb6 {font-family:var(--font-family-body);}\n\n\n  /* ---- edges: the road solid, the roads left dashed and faint, what may come dotted */.line.svelte-15basb6 {fill:none;stroke:var(--color-text-muted);stroke-width:1.3;}.head.svelte-15basb6 {fill:var(--color-text-muted);stroke:var(--color-text-muted);stroke-width:1.3;stroke-linejoin:round;}.edge.road.svelte-15basb6 .line:where(.svelte-15basb6),\n  .edge.road.svelte-15basb6 .head:where(.svelte-15basb6) {stroke:var(--color-text);}.edge.road.svelte-15basb6 .head:where(.svelte-15basb6) {fill:var(--color-text);}\n  /* UML: a transition's arrowhead is open. */.edge.svelte-15basb6 .head.open:where(.svelte-15basb6) {fill:none;}.edge.faded.svelte-15basb6 {opacity:0.38;}.edge.faded.svelte-15basb6 .line:where(.svelte-15basb6) {stroke-dasharray:5 4;}.edge.ahead.svelte-15basb6 .line:where(.svelte-15basb6) {stroke-dasharray:1.5 4;stroke-linecap:round;}.edge.ahead.svelte-15basb6 {opacity:0.55;}.elabel.svelte-15basb6 {font-size:var(--font-size-2xs);fill:var(--color-text-muted);paint-order:stroke;stroke:var(--color-surface-raised);stroke-width:4;stroke-linejoin:round;}.edge.road.svelte-15basb6 .elabel:where(.svelte-15basb6) {fill:var(--color-text);}\n\n  /* ---- nodes */.node.svelte-15basb6 {cursor:pointer;border:var(--border-width-thin) solid transparent;}\n  /* The padding that brings a node to a finger's size, drawn in nothing, only where the pointer is a finger. */.pad.svelte-15basb6 {display:none;fill:transparent;}\n  @media (pointer: coarse) {.pad.svelte-15basb6 {display:inline;}.controls.svelte-15basb6 button:where(.svelte-15basb6) {min-block-size:var(--size-control);min-inline-size:var(--size-control);}\n  }.shape.svelte-15basb6 {fill:var(--color-surface-raised);stroke:var(--color-text);stroke-width:1.4;}.initial.svelte-15basb6 {fill:var(--color-text);}.nlabel.svelte-15basb6 {font-size:var(--font-size-xs);fill:var(--color-text);}.nsub.svelte-15basb6 {font-size:var(--font-size-2xs);fill:var(--color-text-muted);}.node.svelte-15basb6:hover .shape:where(.svelte-15basb6),\n  .node.svelte-15basb6:focus .shape:where(.svelte-15basb6) {stroke:var(--color-accent);}.node.current.svelte-15basb6 .shape:where(.svelte-15basb6) {fill:var(--color-accent);stroke:var(--color-accent);}.node.current.svelte-15basb6 .nlabel:where(.svelte-15basb6) {fill:var(--color-on-accent);}.node.faded.svelte-15basb6 {opacity:0.38;}.node.faded.pinned.svelte-15basb6 {opacity:1;}.node.ahead.svelte-15basb6 .shape:where(.svelte-15basb6) {fill:none;stroke:var(--color-text-muted);stroke-dasharray:2 3;}.node.ahead.svelte-15basb6 .nlabel:where(.svelte-15basb6) {fill:var(--color-text-muted);}.node.run.svelte-15basb6 .shape:where(.svelte-15basb6) {fill:var(--color-accent);stroke:var(--color-accent);}.node.run.svelte-15basb6 .nlabel:where(.svelte-15basb6),\n  .node.done.svelte-15basb6 .nlabel:where(.svelte-15basb6),\n  .node.queue.svelte-15basb6 .nlabel:where(.svelte-15basb6) {fill:var(--color-surface-raised);}.node.ask.svelte-15basb6 .shape:where(.svelte-15basb6) {stroke:var(--color-accent);stroke-width:2.6;}.node.queue.svelte-15basb6 .shape:where(.svelte-15basb6) {fill:var(--color-text-muted);stroke:var(--color-text-muted);}.node.done.svelte-15basb6 .shape:where(.svelte-15basb6) {fill:var(--color-text);}.node.held.svelte-15basb6 .shape:where(.svelte-15basb6) {stroke-dasharray:2 3;}.node.fail.svelte-15basb6 .shape:where(.svelte-15basb6) {stroke:var(--color-danger);}.node.picked.svelte-15basb6 .shape:where(.svelte-15basb6) {stroke:var(--color-accent);stroke-width:3;}.node.goal.svelte-15basb6 .shape:where(.svelte-15basb6) {stroke-width:3;}\n\n  /* ---- a path: the timeline's drawing */.dot.svelte-15basb6 {fill:var(--color-surface-raised);stroke:var(--color-text);stroke-width:1.4;}.disc.svelte-15basb6 {fill:var(--color-accent);}.halo.svelte-15basb6 {fill:none;stroke:var(--color-accent);stroke-width:1;opacity:0.45;}.maybe.svelte-15basb6 {fill:none;stroke:var(--color-text-muted);stroke-width:1.2;}.aword.svelte-15basb6 {font-size:var(--font-size-sm);fill:var(--color-text-muted);}.aarg.svelte-15basb6 {font-family:var(--font-family-mono);font-size:var(--font-size-2xs);}.node.svelte-15basb6:hover .maybe:where(.svelte-15basb6),\n  .node.svelte-15basb6:focus .maybe:where(.svelte-15basb6) {stroke:var(--color-accent);fill:var(--color-accent-soft);}.node.svelte-15basb6:hover .aword:where(.svelte-15basb6),\n  .node.svelte-15basb6:focus .aword:where(.svelte-15basb6) {fill:var(--color-accent);}.node.svelte-15basb6:hover .dot:where(.svelte-15basb6),\n  .node.svelte-15basb6:focus .dot:where(.svelte-15basb6) {stroke:var(--color-accent);}.pname.svelte-15basb6 {font-family:var(--font-family-mono);font-size:var(--font-size-2xs);fill:var(--color-text-muted);}.elabel.big.svelte-15basb6 {font-size:var(--font-size-sm);}.node.ahead.svelte-15basb6 {opacity:1;}\n\n  /* ---- the marks: pin and bookmark, shown on hover and focus, always when set */\n  /* A mark nobody can see takes no clicks: a hidden mark of one state would otherwise sit over its neighbour. */.mark.svelte-15basb6 {cursor:pointer;border:var(--border-width-thin) solid transparent;opacity:0;pointer-events:none;transition:opacity var(--motion-duration-fast) var(--motion-easing-standard);}.place.svelte-15basb6:focus-within .mark:where(.svelte-15basb6),\n  .mark.set.svelte-15basb6 {opacity:1;pointer-events:auto;}\n  @media (hover: hover) {.place.svelte-15basb6:hover .mark:where(.svelte-15basb6) {opacity:1;pointer-events:auto;}\n  }\n  /* Where nothing hovers (a finger) the marks are always there, faint, and as large as a finger needs. */\n  @media (hover: none) {.mark.svelte-15basb6:not(.set) {opacity:0.55;pointer-events:auto;}.mark.svelte-15basb6 .hit {r:calc(var(--size-control) / 2);}\n  }\n  /* On the current state the marks are always there, faint, so that a person finds them. */.place.svelte-15basb6:has(.node.current:where(.svelte-15basb6)) .mark:where(.svelte-15basb6):not(.set) {opacity:0.55;pointer-events:auto;}.hit.svelte-15basb6 {fill:transparent;}.pinhead.svelte-15basb6 {fill:none;stroke:var(--color-text-muted);stroke-width:1.4;}.pinneedle.svelte-15basb6 {stroke:var(--color-text-muted);stroke-width:1.4;}.pin.set.svelte-15basb6 .pinhead:where(.svelte-15basb6) {fill:var(--color-accent);stroke:var(--color-accent);}.pin.set.svelte-15basb6 .pinneedle:where(.svelte-15basb6) {stroke:var(--color-accent);}.starshape.svelte-15basb6 {fill:none;stroke:var(--color-text-muted);stroke-width:1.2;stroke-linejoin:round;}.star.set.svelte-15basb6 .starshape:where(.svelte-15basb6) {fill:var(--color-accent);stroke:var(--color-accent);}.mark.svelte-15basb6:hover .pinhead:where(.svelte-15basb6),\n  .mark.svelte-15basb6:hover .pinneedle:where(.svelte-15basb6),\n  .mark.svelte-15basb6:hover .starshape:where(.svelte-15basb6) {stroke:var(--color-accent);}"
 };
 function Graph($$anchor, $$props) {
 	push($$props, true);
@@ -2004,7 +1930,8 @@ function Graph($$anchor, $$props) {
 	/** Zoom to fit while the drawing is larger than its box and nobody has zoomed by hand. */
 	/** Where the flow goes at first: auto lets the card's shape decide (horizontal in a wide card, vertical in a tall one). */
 	/** Place each node once and never move it as the graph grows (a path explored), at the price of more crossings. */
-	let notation = prop($$props, "notation", 3, "directed-graph"), direction = prop($$props, "direction", 3, "horizontal"), pinned = prop($$props, "pinned", 19, () => /* @__PURE__ */ new Set()), bookmarked = prop($$props, "bookmarked", 19, () => /* @__PURE__ */ new Set()), follow = prop($$props, "follow", 3, null), autofit = prop($$props, "autofit", 3, false), stable = prop($$props, "stable", 3, false);
+	/** The card gives the graph no height of its own (its height is its contents'): the window has a least of its own. */
+	let notation = prop($$props, "notation", 3, "directed-graph"), direction = prop($$props, "direction", 3, "horizontal"), pinned = prop($$props, "pinned", 19, () => /* @__PURE__ */ new Set()), bookmarked = prop($$props, "bookmarked", 19, () => /* @__PURE__ */ new Set()), follow = prop($$props, "follow", 3, null), autofit = prop($$props, "autofit", 3, false), stable = prop($$props, "stable", 3, false), grow = prop($$props, "grow", 3, false);
 	const uml = user_derived(() => notation() === "uml-state-machine");
 	const path = user_derived(() => notation() === "path");
 	const isAhead = (n) => (n.cls ?? "").split(" ").includes("ahead");
@@ -2142,7 +2069,8 @@ function Graph($$anchor, $$props) {
 		return out;
 	});
 	const edgeById = user_derived(() => new Map($$props.edges.map((e) => [e.id, e])));
-	let zoom = state(proxy(untrack(() => autofit() ? null : 1)));
+	const finger = globalThis.matchMedia?.("(pointer: coarse)").matches ?? false;
+	let zoom = state(proxy(untrack(() => autofit() && !finger ? null : 1)));
 	let box = state(void 0);
 	const fit = () => set(zoom, null);
 	const zoomBy = (f) => set(zoom, Math.max(.2, Math.min(4, (get(zoom) ?? 1) * f)), true);
@@ -2178,7 +2106,7 @@ function Graph($$anchor, $$props) {
 		};
 		return get(uml) ? `M ${back(9, -1)} L ${x},${y} L ${back(9, 1)}` : `M ${back(9, -1)} L ${x},${y} L ${back(9, 1)} Z`;
 	};
-	var div = root_24();
+	var div = root_25();
 	var div_1 = child(div);
 	var node = child(div_1);
 	var consequent = ($$anchor) => {
@@ -2225,7 +2153,7 @@ function Graph($$anchor, $$props) {
 			});
 			reset(button);
 			template_effect(() => {
-				classes = set_class(button, 1, "ico svelte-s8ekmc", null, classes, { on: get(algorithm) === a() });
+				classes = set_class(button, 1, "ico svelte-15basb6", null, classes, { on: get(algorithm) === a() });
 				set_attribute(button, "aria-label", says());
 				set_attribute(button, "title", says());
 				set_attribute(button, "aria-pressed", get(algorithm) === a());
@@ -2289,7 +2217,7 @@ function Graph($$anchor, $$props) {
 			});
 			reset(button_1);
 			template_effect(() => {
-				classes_1 = set_class(button_1, 1, "ico svelte-s8ekmc", null, classes_1, { on: get(orient) === o() });
+				classes_1 = set_class(button_1, 1, "ico svelte-15basb6", null, classes_1, { on: get(orient) === o() });
 				set_attribute(button_1, "aria-label", says());
 				set_attribute(button_1, "title", says());
 				set_attribute(button_1, "aria-pressed", get(orient) === o());
@@ -2339,21 +2267,24 @@ function Graph($$anchor, $$props) {
 	reset(button_5);
 	var node_12 = sibling(button_5, 2);
 	var consequent_2 = ($$anchor) => {
-		Action($$anchor, {
-			size: "sm",
-			get icon() {
-				return Scan;
+		var button_6 = root_2$2();
+		Icon$1(child(button_6), {
+			children: ($$anchor, $$slotProps) => {
+				Scan($$anchor, {});
 			},
-			label: "Fit",
-			hint: "fit the whole drawing in the card",
-			onclick: fit
+			$$slots: { default: true }
 		});
+		next();
+		reset(button_6);
+		delegated("click", button_6, fit);
+		append($$anchor, button_6);
 	};
 	if_block(node_12, ($$render) => {
 		if (get(zoom) !== null) $$render(consequent_2);
 	});
 	reset(div_1);
 	var div_2 = sibling(div_1, 2);
+	let classes_3;
 	Pannable(child(div_2), {
 		get label() {
 			return $$props.label;
@@ -2367,112 +2298,113 @@ function Graph($$anchor, $$props) {
 			set(box, $$value, true);
 		},
 		children: ($$anchor, $$slotProps) => {
-			var div_3 = root_23();
-			let classes_3;
-			var svg = child(div_3);
+			var div_3 = root_24();
 			let classes_4;
-			var node_14 = child(svg);
-			each(node_14, 17, () => get(shown).edges, (pe) => pe.id, ($$anchor, pe) => {
+			var svg = child(div_3);
+			let classes_5;
+			var node_15 = child(svg);
+			each(node_15, 17, () => get(shown).edges, (pe) => pe.id, ($$anchor, pe) => {
 				const e = user_derived(() => get(edgeById).get(get(pe).id));
-				var g_1 = root_5();
-				let classes_5;
+				var g_1 = root_6();
+				let classes_6;
 				var path_1 = child(g_1);
-				var node_15 = sibling(path_1);
+				var node_16 = sibling(path_1);
 				var consequent_3 = ($$anchor) => {
-					var path_2 = root_2$2();
-					let classes_6;
+					var path_2 = root_3$1();
+					let classes_7;
 					template_effect(($0) => {
-						classes_6 = set_class(path_2, 0, "head svelte-s8ekmc", null, classes_6, { open: get(uml) });
+						classes_7 = set_class(path_2, 0, "head svelte-15basb6", null, classes_7, { open: get(uml) });
 						set_attribute(path_2, "d", $0);
 					}, [() => arrow(get(pe).arrow.x, get(pe).arrow.y, get(pe).arrow.angle)]);
 					append($$anchor, path_2);
 				};
-				if_block(node_15, ($$render) => {
+				if_block(node_16, ($$render) => {
 					if (!get(path) || get(pe).back || get(pe).self) $$render(consequent_3);
 				});
-				var node_16 = sibling(node_15);
+				var node_17 = sibling(node_16);
 				var consequent_4 = ($$anchor) => {
-					var text_1 = root_3$1();
-					let classes_7;
+					var text_1 = root_4$1();
+					let classes_8;
 					var text_2 = only_child(text_1, true);
 					template_effect(($0) => {
-						classes_7 = set_class(text_1, 0, "elabel svelte-s8ekmc", null, classes_7, { big: get(path) });
+						classes_8 = set_class(text_1, 0, "elabel svelte-15basb6", null, classes_8, { big: get(path) });
 						set_attribute(text_1, "x", get(pe).label.x);
 						set_attribute(text_1, "y", $0);
 						set_text(text_2, get(e).label);
 					}, [() => get(pe).label.y - (get(loopLine).get(get(pe).id) ?? 0) * 15]);
 					append($$anchor, text_1);
 				};
-				if_block(node_16, ($$render) => {
+				if_block(node_17, ($$render) => {
 					if (get(e)?.label) $$render(consequent_4);
 				});
-				var node_17 = sibling(node_16);
+				var node_18 = sibling(node_17);
 				var consequent_5 = ($$anchor) => {
-					var title = root_4$1();
+					var title = root_5();
 					var text_3 = only_child(title, true);
 					template_effect(() => set_text(text_3, get(e).title));
 					append($$anchor, title);
 				};
-				if_block(node_17, ($$render) => {
+				if_block(node_18, ($$render) => {
 					if (get(e)?.title) $$render(consequent_5);
 				});
 				reset(g_1);
 				template_effect(() => {
-					classes_5 = set_class(g_1, 0, `edge ${get(e)?.cls ?? "" ?? ""}`, "svelte-s8ekmc", classes_5, { back: get(pe).back });
+					classes_6 = set_class(g_1, 0, `edge ${get(e)?.cls ?? "" ?? ""}`, "svelte-15basb6", classes_6, { back: get(pe).back });
 					set_attribute(path_1, "d", get(pe).path);
 				});
 				append($$anchor, g_1);
 			});
-			var node_18 = sibling(node_14);
-			each(node_18, 17, () => get(shown).nodes, (pn) => pn.id, ($$anchor, pn) => {
+			var node_19 = sibling(node_15);
+			each(node_19, 17, () => get(shown).nodes, (pn) => pn.id, ($$anchor, pn) => {
 				const n = user_derived(() => get(byId).get(get(pn).id));
 				var fragment_9 = comment();
-				var node_19 = first_child(fragment_9);
+				var node_20 = first_child(fragment_9);
 				var consequent_19 = ($$anchor) => {
-					var g_2 = root_22();
+					var g_2 = root_23();
 					let styles;
 					var g_3 = child(g_2);
-					let classes_8;
-					var node_20 = child(g_3);
+					let classes_9;
+					var rect = child(g_3);
+					var node_21 = sibling(rect);
 					var consequent_6 = ($$anchor) => {
-						var circle = root_6();
+						var circle = root_7();
 						append($$anchor, circle);
 					};
 					var consequent_7 = ($$anchor) => {
-						var fragment_10 = root_7();
-						var rect = first_child(fragment_10);
-						var text_4 = sibling(rect);
+						var fragment_10 = root_8();
+						var rect_1 = first_child(fragment_10);
+						var text_4 = sibling(rect_1);
 						var text_5 = only_child(text_4, true);
 						template_effect(() => {
-							set_attribute(rect, "x", -get(pn).width / 2);
-							set_attribute(rect, "y", -get(pn).height / 2);
-							set_attribute(rect, "width", get(pn).width);
-							set_attribute(rect, "height", get(pn).height);
+							set_attribute(rect_1, "x", -get(pn).width / 2);
+							set_attribute(rect_1, "y", -get(pn).height / 2);
+							set_attribute(rect_1, "width", get(pn).width);
+							set_attribute(rect_1, "height", get(pn).height);
 							set_text(text_5, get(n).label);
 						});
 						append($$anchor, fragment_10);
 					};
 					var consequent_13 = ($$anchor) => {
-						var fragment_11 = root_14();
-						var node_21 = first_child(fragment_11);
+						var fragment_11 = root_15();
+						var node_22 = first_child(fragment_11);
 						var consequent_8 = ($$anchor) => {
-							var fragment_12 = root_8();
+							var fragment_12 = root_9();
 							next();
 							append($$anchor, fragment_12);
 						};
 						var d_1 = user_derived(() => isCurrent(get(n)));
 						var consequent_10 = ($$anchor) => {
-							var fragment_13 = root_10();
+							var fragment_13 = root_11();
 							var text_6 = sibling(first_child(fragment_13));
 							var text_7 = child(text_6, true);
-							var node_22 = sibling(text_7);
+							var node_23 = sibling(text_7);
 							var consequent_9 = ($$anchor) => {
-								var tspan = root_9();
+								var tspan = root_10();
 								var text_8 = only_child(tspan, true);
 								template_effect(() => set_text(text_8, get(n).sub));
 								append($$anchor, tspan);
 							};
-							if_block(node_22, ($$render) => {
+							if_block(node_23, ($$render) => {
 								if (get(n).sub) $$render(consequent_9);
 							});
 							reset(text_6);
@@ -2485,20 +2417,20 @@ function Graph($$anchor, $$props) {
 						};
 						var d_2 = user_derived(() => isAhead(get(n)));
 						var alternate = ($$anchor) => {
-							var circle_1 = root_11();
+							var circle_1 = root_12();
 							append($$anchor, circle_1);
 						};
-						if_block(node_21, ($$render) => {
+						if_block(node_22, ($$render) => {
 							if (get(d_1)) $$render(consequent_8);
 							else if (get(d_2)) $$render(consequent_10, 1);
 							else $$render(alternate, -1);
 						});
-						var node_23 = sibling(node_21);
+						var node_24 = sibling(node_22);
 						var consequent_12 = ($$anchor) => {
 							var fragment_14 = comment();
-							var node_24 = first_child(fragment_14);
+							var node_25 = first_child(fragment_14);
 							var consequent_11 = ($$anchor) => {
-								var text_9 = root_12();
+								var text_9 = root_13();
 								var text_10 = only_child(text_9, true);
 								template_effect(($0) => {
 									set_attribute(text_9, "x", $0);
@@ -2507,7 +2439,7 @@ function Graph($$anchor, $$props) {
 								append($$anchor, text_9);
 							};
 							var alternate_1 = ($$anchor) => {
-								var text_11 = root_13();
+								var text_11 = root_14();
 								var text_12 = only_child(text_11, true);
 								template_effect(($0) => {
 									set_attribute(text_11, "y", $0);
@@ -2515,20 +2447,20 @@ function Graph($$anchor, $$props) {
 								}, [() => isCurrent(get(n)) ? 32 : 22]);
 								append($$anchor, text_11);
 							};
-							if_block(node_24, ($$render) => {
+							if_block(node_25, ($$render) => {
 								if (get(dir) === "vertical") $$render(consequent_11);
 								else $$render(alternate_1, -1);
 							});
 							append($$anchor, fragment_14);
 						};
 						var d_3 = user_derived(() => !isAhead(get(n)) && get(n).label);
-						if_block(node_23, ($$render) => {
+						if_block(node_24, ($$render) => {
 							if (get(d_3)) $$render(consequent_12);
 						});
 						append($$anchor, fragment_11);
 					};
 					var alternate_2 = ($$anchor) => {
-						var fragment_15 = root_15();
+						var fragment_15 = root_16();
 						var circle_2 = first_child(fragment_15);
 						var text_13 = sibling(circle_2);
 						var text_14 = only_child(text_13, true);
@@ -2538,20 +2470,20 @@ function Graph($$anchor, $$props) {
 						});
 						append($$anchor, fragment_15);
 					};
-					if_block(node_20, ($$render) => {
+					if_block(node_21, ($$render) => {
 						if (get(n).kind === "initial") $$render(consequent_6);
 						else if (get(uml)) $$render(consequent_7, 1);
 						else if (get(path)) $$render(consequent_13, 2);
 						else $$render(alternate_2, -1);
 					});
-					var node_25 = sibling(node_20);
+					var node_26 = sibling(node_21);
 					var consequent_15 = ($$anchor) => {
 						var fragment_16 = comment();
-						var node_26 = first_child(fragment_16);
+						var node_27 = first_child(fragment_16);
 						var consequent_14 = ($$anchor) => {
-							var text_15 = root_17();
+							var text_15 = root_18();
 							each(text_15, 21, () => get(n).sub.split("\n"), index, ($$anchor, line, li) => {
-								var tspan_1 = root_16();
+								var tspan_1 = root_17();
 								set_attribute(tspan_1, "dy", li === 0 ? 0 : 13);
 								var text_16 = only_child(tspan_1, true);
 								template_effect(() => {
@@ -2568,9 +2500,9 @@ function Graph($$anchor, $$props) {
 							append($$anchor, text_15);
 						};
 						var alternate_3 = ($$anchor) => {
-							var text_17 = root_19();
+							var text_17 = root_20();
 							each(text_17, 21, () => get(n).sub.split("\n"), index, ($$anchor, line, li) => {
-								var tspan_2 = root_18();
+								var tspan_2 = root_19();
 								set_attribute(tspan_2, "dy", li === 0 ? 0 : 13);
 								var text_18 = only_child(tspan_2, true);
 								template_effect(() => set_text(text_18, get(line)));
@@ -2580,35 +2512,35 @@ function Graph($$anchor, $$props) {
 							template_effect(() => set_attribute(text_17, "y", get(pn).height / 2 + 14));
 							append($$anchor, text_17);
 						};
-						if_block(node_26, ($$render) => {
+						if_block(node_27, ($$render) => {
 							if (get(dir) === "vertical" && get(algorithm) === "layered") $$render(consequent_14);
 							else $$render(alternate_3, -1);
 						});
 						append($$anchor, fragment_16);
 					};
-					if_block(node_25, ($$render) => {
+					if_block(node_26, ($$render) => {
 						if (get(n).sub && !get(path)) $$render(consequent_15);
 					});
-					var node_27 = sibling(node_25);
+					var node_28 = sibling(node_26);
 					var consequent_16 = ($$anchor) => {
-						var title_1 = root_4$1();
+						var title_1 = root_5();
 						var text_19 = only_child(title_1, true);
 						template_effect(() => set_text(text_19, get(n).title));
 						append($$anchor, title_1);
 					};
-					if_block(node_27, ($$render) => {
+					if_block(node_28, ($$render) => {
 						if (get(n).title) $$render(consequent_16);
 					});
 					reset(g_3);
-					var node_28 = sibling(g_3);
+					var node_29 = sibling(g_3);
 					var consequent_17 = ($$anchor) => {
-						var g_4 = root_20();
-						let classes_9;
+						var g_4 = root_21();
+						let classes_10;
 						var title_2 = sibling(child(g_4), 3);
 						var text_20 = only_child(title_2, true);
 						reset(g_4);
 						template_effect(($0, $1, $2) => {
-							classes_9 = set_class(g_4, 0, "mark pin svelte-s8ekmc", null, classes_9, { set: $0 });
+							classes_10 = set_class(g_4, 0, "mark pin svelte-15basb6", null, classes_10, { set: $0 });
 							set_attribute(g_4, "aria-label", $1);
 							set_attribute(g_4, "transform", `translate(${get(pn).width / 2 - 2}, ${-get(pn).height / 2 - 6})`);
 							set_text(text_20, $2);
@@ -2621,18 +2553,18 @@ function Graph($$anchor, $$props) {
 						delegated("keydown", g_4, (ev) => ev.key === "Enter" && $$props.onpin?.(get(n).id));
 						append($$anchor, g_4);
 					};
-					if_block(node_28, ($$render) => {
+					if_block(node_29, ($$render) => {
 						if ($$props.onpin && get(n).kind !== "initial") $$render(consequent_17);
 					});
-					var node_29 = sibling(node_28);
+					var node_30 = sibling(node_29);
 					var consequent_18 = ($$anchor) => {
-						var g_5 = root_21();
-						let classes_10;
+						var g_5 = root_22();
+						let classes_11;
 						var title_3 = sibling(child(g_5), 2);
 						var text_21 = only_child(title_3, true);
 						reset(g_5);
 						template_effect(($0, $1, $2) => {
-							classes_10 = set_class(g_5, 0, "mark star svelte-s8ekmc", null, classes_10, { set: $0 });
+							classes_11 = set_class(g_5, 0, "mark star svelte-15basb6", null, classes_11, { set: $0 });
 							set_attribute(g_5, "aria-label", $1);
 							set_attribute(g_5, "transform", `translate(${-get(pn).width / 2 + 2}, ${-get(pn).height / 2 - 6})`);
 							set_text(text_21, $2);
@@ -2645,21 +2577,31 @@ function Graph($$anchor, $$props) {
 						delegated("keydown", g_5, (ev) => ev.key === "Enter" && $$props.onbookmark?.(get(n).id));
 						append($$anchor, g_5);
 					};
-					if_block(node_29, ($$render) => {
+					if_block(node_30, ($$render) => {
 						if ($$props.onbookmark && get(n).kind !== "initial") $$render(consequent_18);
 					});
 					reset(g_2);
-					template_effect(($0) => {
+					template_effect(($0, $1, $2, $3, $4) => {
 						styles = set_style(g_2, "", styles, { transform: `translate(${get(pn).x ?? ""}px, ${get(pn).y ?? ""}px)` });
 						set_attribute(g_3, "data-id", get(n).id);
-						classes_8 = set_class(g_3, 0, `node ${get(n).cls ?? "" ?? ""}`, "svelte-s8ekmc", classes_8, { pinned: $0 });
+						classes_9 = set_class(g_3, 0, `node ${get(n).cls ?? "" ?? ""}`, "svelte-15basb6", classes_9, { pinned: $0 });
 						set_attribute(g_3, "aria-label", get(n).title ?? get(n).label);
-					}, [() => pinned().has(get(n).id)]);
+						set_attribute(rect, "x", $1);
+						set_attribute(rect, "y", $2);
+						set_attribute(rect, "width", $3);
+						set_attribute(rect, "height", $4);
+					}, [
+						() => pinned().has(get(n).id),
+						() => -Math.max(get(pn).width, 48) / 2,
+						() => -Math.max(get(pn).height, 48) / 2,
+						() => Math.max(get(pn).width, 48),
+						() => Math.max(get(pn).height, 48)
+					]);
 					delegated("click", g_3, () => $$props.onpick?.(get(n).id));
 					delegated("keydown", g_3, (ev) => ev.key === "Enter" && $$props.onpick?.(get(n).id));
 					append($$anchor, g_2);
 				};
-				if_block(node_19, ($$render) => {
+				if_block(node_20, ($$render) => {
 					if (get(n)) $$render(consequent_19);
 				});
 				append($$anchor, fragment_9);
@@ -2668,12 +2610,12 @@ function Graph($$anchor, $$props) {
 			bind_this(svg, ($$value) => set(drawing, $$value), () => get(drawing));
 			reset(div_3);
 			template_effect(() => {
-				classes_3 = set_class(div_3, 1, "measure svelte-s8ekmc", null, classes_3, { fitting: get(zoom) === null });
+				classes_4 = set_class(div_3, 1, "measure svelte-15basb6", null, classes_4, { fitting: get(zoom) === null });
 				set_attribute(svg, "width", get(zoom) === null ? void 0 : get(W) * get(zoom));
 				set_attribute(svg, "height", get(zoom) === null ? void 0 : get(H) * get(zoom));
 				set_attribute(svg, "viewBox", `${-get(pad)} ${-get(pad)} ${get(W) ?? ""} ${get(H) ?? ""}`);
 				set_attribute(svg, "aria-label", $$props.label);
-				classes_4 = set_class(svg, 0, "svelte-s8ekmc", null, classes_4, { fit: get(zoom) === null });
+				classes_5 = set_class(svg, 0, "svelte-15basb6", null, classes_5, { fit: get(zoom) === null });
 			});
 			append($$anchor, div_3);
 		},
@@ -2685,9 +2627,10 @@ function Graph($$anchor, $$props) {
 		set_attribute(div_1, "aria-label", `${$$props.label ?? ""}: layout and zoom`);
 		button_2.disabled = get(spacing) <= .6;
 		button_3.disabled = get(spacing) >= 2;
-		classes_2 = set_class(span, 1, "pct svelte-s8ekmc", null, classes_2, { quiet: get(zoom) === null });
+		classes_2 = set_class(span, 1, "pct svelte-15basb6", null, classes_2, { quiet: get(zoom) === null });
 		set_attribute(span, "title", get(zoom) === null ? "The whole drawing fits the card" : "How large the drawing is drawn");
 		set_text(text, $0);
+		classes_3 = set_class(div_2, 1, "window svelte-15basb6", null, classes_3, { grow: grow() });
 	}, [() => get(zoom) === null ? "all in view" : `${Math.round(get(zoom) * 100)}%`]);
 	delegated("click", button_2, () => set(spacing, Math.max(.6, get(spacing) / 1.25), true));
 	delegated("click", button_3, () => set(spacing, Math.min(2, get(spacing) * 1.25), true));
@@ -2700,14 +2643,14 @@ function Graph($$anchor, $$props) {
 }
 delegate(["click", "keydown"]);
 // ../../../../src/plugins/verifier-mcrl2/widgets/study/Sequence.svelte
-var root$1 = from_svg(`<rect class="headbox svelte-1bhg0sh" y="4" width="132" height="26" rx="2"></rect><text class="who svelte-1bhg0sh" y="21" text-anchor="middle"> </text>`, 1);
-var root_1$1 = from_svg(`<line class="life svelte-1bhg0sh" y1="0"></line>`);
+var root$1 = from_svg(`<rect class="headbox svelte-1568mk7" y="4" width="132" height="26" rx="2"></rect><text class="who svelte-1568mk7" y="21" text-anchor="middle"> </text>`, 1);
+var root_1$1 = from_svg(`<line class="life svelte-1568mk7" y1="0"></line>`);
 var root_2$1 = from_svg(`<title> </title>`);
-var root_3 = from_svg(`<g><line class="svelte-1bhg0sh"></line><path class="head svelte-1bhg0sh"></path><text text-anchor="middle" class="svelte-1bhg0sh"> </text><!></g>`);
-var root_4 = from_html(`<div class="sequence svelte-1bhg0sh"><svg class="heads svelte-1bhg0sh" aria-hidden="true"></svg> <div class="body svelte-1bhg0sh"><svg role="img" class="svelte-1bhg0sh"><!><!></svg></div></div>`);
+var root_3 = from_svg(`<g><line class="svelte-1568mk7"></line><path class="head svelte-1568mk7"></path><text text-anchor="middle" class="svelte-1568mk7"> </text><!></g>`);
+var root_4 = from_html(`<div class="sequence svelte-1568mk7"><svg class="heads svelte-1568mk7" aria-hidden="true"></svg> <div class="body svelte-1568mk7"><svg role="img" class="svelte-1568mk7"><!><!></svg></div></div>`);
 var $$css$1 = {
-	hash: "svelte-1bhg0sh",
-	code: ".sequence.svelte-1bhg0sh {display:flex;flex-direction:column;align-items:center;block-size:100%;min-block-size:0;}.heads.svelte-1bhg0sh {flex:none;}.body.svelte-1bhg0sh {flex:1;inline-size:100%;min-block-size:0;overflow-y:auto;display:flex;flex-direction:column;align-items:center;}svg.svelte-1bhg0sh {display:block;inline-size:100%;block-size:auto;flex:none;}text.svelte-1bhg0sh {font-family:var(--font-family-body);}.headbox.svelte-1bhg0sh {fill:var(--color-surface-raised);stroke:var(--color-text);stroke-width:1.2;}.who.svelte-1bhg0sh {font-size:var(--font-size-xs);fill:var(--color-text);}.life.svelte-1bhg0sh {stroke:var(--color-text-muted);stroke-width:1;stroke-dasharray:5 4;}.msg.svelte-1bhg0sh line:where(.svelte-1bhg0sh) {stroke:var(--color-text-muted);stroke-width:1.2;}.msg.svelte-1bhg0sh .head:where(.svelte-1bhg0sh) {fill:var(--color-text-muted);}.msg.svelte-1bhg0sh text:where(.svelte-1bhg0sh) {font-size:var(--font-size-2xs);fill:var(--color-text-muted);}.msg.latest.svelte-1bhg0sh line:where(.svelte-1bhg0sh) {stroke:var(--color-accent);stroke-width:1.8;}.msg.latest.svelte-1bhg0sh .head:where(.svelte-1bhg0sh) {fill:var(--color-accent);}.msg.latest.svelte-1bhg0sh text:where(.svelte-1bhg0sh) {fill:var(--color-accent);}"
+	hash: "svelte-1568mk7",
+	code: ".sequence.svelte-1568mk7 {display:flex;flex-direction:column;align-items:center;block-size:100%;min-block-size:0;}.heads.svelte-1568mk7 {flex:none;}.body.svelte-1568mk7 {flex:1;inline-size:100%;min-block-size:0;overflow-y:auto;display:flex;flex-direction:column;align-items:center;}svg.svelte-1568mk7 {display:block;inline-size:100%;block-size:auto;flex:none;}text.svelte-1568mk7 {font-family:var(--font-family-body);}.headbox.svelte-1568mk7 {fill:var(--color-surface-raised);stroke:var(--color-text);stroke-width:1.2;}.who.svelte-1568mk7 {font-size:var(--font-size-xs);fill:var(--color-text);}.life.svelte-1568mk7 {stroke:var(--color-text-muted);stroke-width:1;stroke-dasharray:5 4;}.msg.svelte-1568mk7 line:where(.svelte-1568mk7) {stroke:var(--color-text-muted);stroke-width:1.2;}.msg.svelte-1568mk7 .head:where(.svelte-1568mk7) {fill:var(--color-text-muted);}.msg.svelte-1568mk7 text:where(.svelte-1568mk7) {font-size:var(--font-size-2xs);fill:var(--color-text-muted);}.msg.latest.svelte-1568mk7 line:where(.svelte-1568mk7) {stroke:var(--color-accent);stroke-width:1.8;}.msg.latest.svelte-1568mk7 .head:where(.svelte-1568mk7) {fill:var(--color-accent);}.msg.latest.svelte-1568mk7 text:where(.svelte-1568mk7) {fill:var(--color-accent);}"
 };
 function Sequence($$anchor, $$props) {
 	push($$props, true);
@@ -2784,7 +2727,7 @@ function Sequence($$anchor, $$props) {
 		});
 		reset(g);
 		template_effect(() => {
-			classes = set_class(g, 0, "msg svelte-1bhg0sh", null, classes, { latest: i === get(shown).length - 1 });
+			classes = set_class(g, 0, "msg svelte-1568mk7", null, classes, { latest: i === get(shown).length - 1 });
 			set_attribute(line_1, "x1", get(x1));
 			set_attribute(line_1, "x2", get(x2) - get(dir) * 1);
 			set_attribute(line_1, "y1", get(y));

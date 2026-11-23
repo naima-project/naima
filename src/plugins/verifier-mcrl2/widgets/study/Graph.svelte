@@ -3,14 +3,14 @@
      smoothly when the layout changes. `notation` draws a named standard diagram in its own notation, unaltered
      (named.ts): a UML state machine's states are rounded rectangles, its initial pseudostate a filled dot, its
      transitions open arrowheads; a directed graph's nodes are circles with filled arrowheads. A node may be pinned and
-     bookmarked through its marks, shown on hover and focus. -->
+     bookmarked through its marks, shown on hover and focus. Its view tools (layout, spacing, zoom) float over the
+     drawing's corner and appear when the pointer is over the graph or the focus is in it. -->
 <script lang="ts">
   import { untrack } from "svelte";
   import Pannable from "../Pannable.svelte";
   import { type Direction, type Layout, layout } from "./layout.ts";
   import { arrowOf, pathOf, route } from "./route.ts";
   import Icon from "../Icon.svelte";
-  import Action from "./Action.svelte";
   import ArrowRight from "@lucide/svelte/icons/arrow-right";
   import ArrowDown from "@lucide/svelte/icons/arrow-down";
   import ArrowLeft from "@lucide/svelte/icons/arrow-left";
@@ -293,7 +293,7 @@
     <!-- A readout, never a button: fitted, it says so quietly; zoomed, its percentage, and Fit is the action back. -->
     <span class="pct" class:quiet={zoom === null} role="status" title={zoom === null ? "The whole drawing fits the card" : "How large the drawing is drawn"}>{zoom === null ? "all in view" : `${Math.round(zoom * 100)}%`}</span>
     <button class="ico" aria-label="Zoom in" title="Zoom in" onclick={() => zoomBy(1.25)}><Icon><ZoomIn /></Icon></button>
-    {#if zoom !== null}<Action size="sm" icon={Fit} label="Fit" hint="fit the whole drawing in the card" onclick={fit} />{/if}
+    {#if zoom !== null}<button class="ico word" aria-label="Fit" title="Fit the whole drawing in the card" onclick={fit}><Icon><Fit /></Icon><span>Fit</span></button>{/if}
   </div>
   <!-- The window the drawing is seen through: its size is the card's, never the drawing's. -->
   <div class="window" class:grow bind:clientWidth={boxW} bind:clientHeight={boxH}>
@@ -417,20 +417,45 @@
 
 <style>
   .graph {
+    position: relative;
     display: flex;
     flex-direction: column;
     block-size: 100%;
     min-block-size: 0;
-    gap: var(--space-xs);
   }
+  /* The view tools float over the drawing's top corner, out of the way until the pointer or the focus comes to the
+     graph; where nothing hovers, or more contrast is asked for, they always show. */
   .controls {
+    position: absolute;
+    z-index: 4;
+    inset-block-start: var(--space-none);
+    inset-inline-end: var(--space-none);
     display: flex;
     flex-wrap: wrap;
+    justify-content: flex-end;
     align-items: center;
-    gap: var(--space-xs);
-    font-family: var(--font-family-mono);
+    gap: var(--space-none);
+    max-inline-size: 100%;
+    padding: var(--space-none) var(--space-xs);
     font-size: var(--font-size-2xs);
     color: var(--color-text-muted);
+    background: var(--color-surface-raised);
+    border-radius: var(--radius-md);
+    opacity: 0;
+    transition: opacity var(--motion-duration-fast) var(--motion-easing-standard);
+  }
+  .graph:focus-within .controls {
+    opacity: 1;
+  }
+  @media (hover: hover) {
+    .graph:hover .controls {
+      opacity: 1;
+    }
+  }
+  @media (hover: none), (prefers-contrast: more) {
+    .controls {
+      opacity: 1;
+    }
   }
   .controls button {
     font: inherit;
@@ -465,8 +490,11 @@
     inline-size: var(--space-sm);
   }
   .controls button.on {
-    color: var(--color-text);
-    border-color: var(--color-border-strong);
+    color: var(--color-accent);
+  }
+  .controls .word {
+    gap: var(--space-xs);
+    padding-inline: var(--space-xs);
   }
   .sep {
     flex: 1;
