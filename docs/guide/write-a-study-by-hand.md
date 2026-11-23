@@ -362,6 +362,8 @@ what a state means, and it can have a view. Put a `%@ui` block in its `.mcrl2` f
 `stepper` key out. The block then words the default study. These keys are read:
 
 - `title` and `says` as for any study.
+- `model` names the model the words are for, when the block is in a file of its own and not in the model's file. The model must be a whole
+  specification, and the block's file then holds the `%@say`, `%@state` and `%@situation` lines too.
 - `intro` is two or three sentences, shown as the study's opening line. A person closes it, and it comes back from the row above the cards. The key may be
   repeated, and the lines join.
 - `observer`, `view`, `parts` and `diagrams` as in step 5 and 6, with paths relative to the folder of the model's file. The observer folds the steps the

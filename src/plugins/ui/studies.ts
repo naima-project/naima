@@ -410,11 +410,10 @@ export function applyWords(study: Study, root: string, block: Record<string, str
   }
 }
 
-/** A well-formed block with no stepper in a whole specification or a naima-codegen core: it words a default study. */
-export function wordsOnly(file: string, text: string): boolean {
+/** A well-formed block with no stepper: it words the default study of the model it names or sits in, and declares none. */
+export function wordsOnly(_file: string, text: string): boolean {
   const block = blockValues(text)
-  if (!block || block["stepper"] !== undefined) return false
-  return /(^|\/)core\.mcrl2$/.test(file) || text.split(/\r?\n/).some((l) => /^\s*init\b/.test(l.replace(/%.*$/, "")))
+  return block !== null && block["stepper"] === undefined
 }
 
 /** The studies a `%@ui` block declares, in the order of their files. */
