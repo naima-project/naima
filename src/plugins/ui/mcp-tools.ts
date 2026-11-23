@@ -311,7 +311,9 @@ async function gates(r: Reader, a: O): Promise<string> {
     const lines = open.map((g) =>
       `${str(g["gate"])}: ${g["holds"] ? "holds" : `blocked by ${arr(g["blocking"]).length}`}${
         arr(g["owed"]).length ? `, ${arr(g["owed"]).length} owe proof` : ""
-      }${g["when"] ? ` · ${str(g["when"])}` : ""} · ${cut(str(g["title"]), 50)}`
+      }${arr(g["onLine"]).length ? `, ${arr(g["onLine"]).length} fixed on the line, waiting for it to land` : ""}${g["when"] ? ` · ${str(g["when"])}` : ""} · ${
+        cut(str(g["title"]), 50)
+      }`
     )
     const done = all.length - open.length
     const shown = lines.slice(0, 12)
@@ -334,6 +336,8 @@ async function gates(r: Reader, a: O): Promise<string> {
     out.push(`blocked by ${blocking.length}:`, ...blocking.slice(0, n).map((i) => `  ${str(i["ref"])} · ${cut(str(i["title"]), 60)}`))
     if (blocking.length > n) out.push(`  [${blocking.length - n} more: limit, or items with gate ${name} and a query]`)
   }
+  const onLine = arr(g["onLine"])
+  if (onLine.length) out.push(`fixed on the line, waiting for it to land: ${onLine.length}`)
   if (owed.length) out.push(`owe proof: ${owed.length}: ${owed.slice(0, 5).map((i) => str(i["ref"])).join(", ")}${owed.length > 5 ? ", …" : ""}`)
   const before = arr(g["before"])
   if (before.length) out.push(`after: ${before.map(str).join(", ")}`)

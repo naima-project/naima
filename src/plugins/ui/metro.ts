@@ -178,6 +178,8 @@ export interface GateRow {
   title: string
   holds: boolean
   blocking: unknown[]
+  /** The refs fixed on the goal's open line, waiting for it to land: not blockers. */
+  onLine?: string[]
   steps?: { name: string; title: string; state: string; closedBy?: string[] }[]
   version?: string
   due?: string
@@ -319,7 +321,8 @@ export function isGoal(g: GateRow, all: readonly GateRow[]): boolean {
   return !!(g.version || g.due || g.steps?.length || g.before?.length || all.some((x) => x.before?.includes(g.gate)))
 }
 
-const goalState = (g: GateRow): string => (g.holds ? "holds" : `blocked by ${g.blocking.length}`)
+const goalState = (g: GateRow): string =>
+  g.holds ? "holds" : `blocked by ${g.blocking.length}${g.onLine?.length ? ` · ${g.onLine.length} fixed on the release line, waiting for the release` : ""}`
 
 /** What the map needs of a branch that is no line: its base, where it rejoined, where it forked and its own commits. */
 interface BranchFacts {
