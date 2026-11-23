@@ -6,13 +6,14 @@
 
 import { type Context, contextAt, gitOrNull } from "../../core/api.ts"
 
-/** The commit `ref` names, when a local branch reaches it; refused plainly otherwise. */
+/** The commit `ref` names, when a local branch or the checkout itself (HEAD, detached on a host that checks out a commit) reaches it; refused plainly otherwise. */
 export function commitOf(ctx: Context, ref: string): string {
   if (!/^[\w./@{}^~-]{1,200}$/.test(ref) || ref.startsWith("-")) throw new Error(`naima ui: "${ref}" names no commit`)
   const sha = gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", "--end-of-options", `${ref}^{commit}`)
   if (!sha) throw new Error(`naima ui: no commit ${ref} in this repository`)
   const on = gitOrNull(ctx.root, "for-each-ref", "--count=1", "--contains", sha, "--format=%(refname)", "refs/heads")
-  if (!on) throw new Error(`naima ui: commit ${ref} is on no local branch: only a commit a branch reaches can be shown`)
+  const underHead = on || gitOrNull(ctx.root, "merge-base", "--is-ancestor", sha, "HEAD") !== null
+  if (!on && !underHead) throw new Error(`naima ui: commit ${ref} is on no local branch: only a commit a branch reaches can be shown`)
   return sha
 }
 
