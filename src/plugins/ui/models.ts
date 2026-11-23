@@ -7,7 +7,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { basename, dirname, join, relative, resolve } from "node:path"
 import { gitPath, projectFiles } from "../../core/api.ts"
-import { applyWords, blockValues, situationsIn, wordsOnly, stateNotesOf, type Study, studyId } from "./studies.ts"
+import { applyWords, blockValues, situationsIn, stateNotesOf, type Study, studyId, wordsOnly } from "./studies.ts"
 
 const read = (p: string): string | null => {
   try {
@@ -253,7 +253,7 @@ export function defaultStudies(root: string, program: string | undefined, declar
     s.paths = siblings.length ? `paths/${basename(f, ".mcrl2")}` : "paths"
     s.properties = [...mcfIn(here, here), ...(isDir(join(here, "properties")) ? mcfIn(join(here, "properties"), here) : [])]
     const named = block?.["properties"]
-    if (named && isDir(join(here, named))) for (const p of mcfIn(join(here, named), here)) if (!s.properties.includes(p)) s.properties.push(p)
+    if (named && isDir(join(here, named))) { for (const p of mcfIn(join(here, named), here)) if (!s.properties.includes(p)) s.properties.push(p) }
     for (const p of fromRoot(here, items.get(f) ?? [])) if (!s.properties.includes(p)) s.properties.push(p)
     out.push(s)
   }
