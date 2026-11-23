@@ -392,9 +392,10 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       const id = text(args["id"])
       const study = findStudies(ctx.root, ctx.program, ctx.trackerRoot).find((s) => s.id === id)
       if (!study) throw new Error(`no study ${String(args["id"])}`)
-      if (study.kind !== "declared") {
-        // A default study: stepped through its generated code in a sandboxed frame, or on its space explored here.
-        const code = study.kind === "codegen" ? studyCode(ctx.root, study) : null
+      if (study.kind !== "declared" || (study.stepper === null && study.problems.length === 0)) {
+        // A default study, or a declared one with no stepper of its own (it only adds its words): stepped through its
+        // generated code in a sandboxed frame, or on its space explored here.
+        const code = study.typescript ? studyCode(ctx.root, study) : null
         if (!code && !(study.system && existsSync(join(ctx.root, dirname(study.file), study.system)))) {
           throw new Error(`the model ${study.title} cannot open: ${study.problems.join("; ") || "it has no system to explore"}`)
         }

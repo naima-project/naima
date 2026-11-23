@@ -7,7 +7,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { gitPath, projectFiles } from "../../core/api.ts"
-import { defaultStudies } from "./models.ts"
+import { defaultStudies, firstGroup, instanceSizes, typescriptOf } from "./models.ts"
 
 export interface SayLine {
   file: string
@@ -73,6 +73,7 @@ const KEYS = [
   "view",
   "config",
   "says",
+  "intro",
   "diagrams",
   "parts",
   "paths",
@@ -204,7 +205,18 @@ function studyOf(root: string, file: string, text: string): Study | null {
   for (const key of ["stepper", "observer", "view"] as const) {
     const rel = values[key]
     if (!rel) {
-      if (key === "stepper") study.problems.push("no stepper is declared")
+      if (key === "stepper") {
+        // A study in a naima-codegen project that declares no stepper is stepped by the project's generated TypeScript,
+        // as its default study is: the block then only adds the words.
+        const toml = read(join(dir, "codegen.toml"))
+        const ts = toml === null ? null : typescriptOf(toml)
+        if (toml !== null && ts && existsSync(join(dir, "generated", "typescript", ts, `${ts}.ts`))) {
+          study.typescript = `generated/typescript/${ts}/${ts}.ts`
+          const group = firstGroup(toml)
+          const inst = group?.instance ? read(join(dir, "model", "instances", `${group.instance}.mcrl2`)) : null
+          if (inst) study.sizes = instanceSizes(inst)
+        } else study.problems.push("no stepper is declared")
+      }
       continue
     }
     const full = inside(dir, rel)

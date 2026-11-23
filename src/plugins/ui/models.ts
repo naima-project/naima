@@ -73,7 +73,7 @@ export function firstGroup(toml: string): { group: string; instance: string | nu
 }
 
 /** The backends a codegen.toml chooses, and its TypeScript module's name when one is generated. */
-function typescriptOf(toml: string): string | null {
+export function typescriptOf(toml: string): string | null {
   const backends = /^\s*backends\s*=\s*\[([^\]]*)\]/m.exec(toml)?.[1] ?? ""
   if (!/"typescript"/.test(backends)) return null
   return /^\s*typescript_module\s*=\s*"([^"]+)"/m.exec(toml)?.[1] ?? null
