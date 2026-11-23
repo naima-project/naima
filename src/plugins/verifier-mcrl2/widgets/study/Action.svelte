@@ -1,101 +1,103 @@
-<!-- An action, as the widget set draws every action: an icon in its own small disc, a word, and, when there is room, a
-     line saying what it does. Primary for the move that matters most now, quiet for the rest, danger for what fails or
-     stops. Disabled, it says why in words under its label (on hover only when compact, a toolbar's icon). One of the widget set. -->
+<!-- An action, as the widget set draws every action: a short verb set in the page's own type, with an optional quiet
+     glyph before it. No box: a faint hairline under the words says at rest that it can be pressed, inked on hover and
+     focus. Primary, in the
+     accent, for the one main action of a place; quiet for the rest; danger for what fails or stops. What it does and,
+     disabled, why it cannot be used are said on hover and to screen readers, never inside it: an action is never a
+     paragraph. Compact, only the glyph shows, for a toolbar. One of the widget set. -->
 <script lang="ts">
   import type { Component } from "svelte";
 
   interface Props {
     label: string;
-    /** What it does, in a few words, under the label when `detail` is set, else on hover. */
+    /** What it does, in a few words, said on hover and to screen readers. */
     hint?: string;
-    /** Why it cannot be used now, said on hover when disabled. */
+    /** Why it cannot be used now, said on hover and to screen readers when disabled. */
     why?: string;
     icon?: Component;
     variant?: "primary" | "quiet" | "danger";
     size?: "sm" | "md";
+    /** Kept for callers written before actions stopped carrying their explanation: it no longer draws anything. */
     detail?: boolean;
-    /** Only the icon, the label said on hover and to screen readers: for a toolbar. */
+    /** Only the glyph, the label said on hover and to screen readers: for a toolbar. */
     compact?: boolean;
     disabled?: boolean;
     pressed?: boolean;
     onclick?: () => void;
   }
-  let { label, hint, why, icon, variant = "quiet", size = "md", detail = false, compact = false, disabled = false, pressed, onclick }: Props = $props();
+  let { label, hint, why, icon, variant = "quiet", size = "md", compact = false, disabled = false, pressed, onclick }: Props = $props();
   const Icon = $derived(icon);
-  /** A disabled action says why in words, where it has room for words. */
-  const explained = $derived(disabled && !!why && !compact);
+  const said = $derived(disabled && why ? why : hint);
+  const id = $props.id();
 </script>
 
 <button
   class="action {variant} {size}"
-  class:detail
-  class:compact
-  class:explained
-  aria-label={explained ? `${label}: ${why}` : label}
+  class:compact={compact && !!Icon}
+  aria-label={label}
+  aria-describedby={said && said !== label ? `${id}-says` : undefined}
   {disabled}
   aria-pressed={pressed}
-  title={disabled ? (why ?? hint ?? label) : (hint ?? label)}
+  title={said ?? label}
   {onclick}
 >
-  {#if Icon}<span class="disc" aria-hidden="true"><Icon class="glyph" /></span>{/if}
-  <span class="words" class:hidden={compact && !!Icon}>
-    <span class="label">{label}</span>
-    {#if explained}<span class="hint why">{why}</span>{:else if detail && hint}<span class="hint">{hint}</span>{/if}
-  </span>
+  {#if Icon}<Icon class="glyph" aria-hidden="true" />{/if}
+  <span class="label" class:hidden={compact && !!Icon}>{label}</span>
+  {#if said && said !== label}<span class="hidden" id="{id}-says">{said}</span>{/if}
 </button>
 
 <style>
   .action {
-    --tone: var(--color-text);
-    --disc: var(--color-surface-sunken);
-    --disc-ink: var(--color-text);
+    --ink: var(--color-text);
+    --glyph: var(--color-text-muted);
+    --line: var(--color-border-strong);
     display: inline-flex;
     align-items: center;
-    gap: var(--space-sm);
+    gap: var(--space-xs);
     min-block-size: var(--size-control);
-    padding: var(--space-xs) var(--space-md) var(--space-xs) var(--space-xs);
+    max-inline-size: 100%;
+    padding: var(--space-none) var(--space-xs);
     font: inherit;
     font-size: var(--font-size-sm);
     line-height: var(--font-line-height-tight);
     text-align: start;
-    color: var(--tone);
-    background: var(--color-surface-soft);
-    border: var(--border-width-thin) solid var(--color-border-soft);
-    border-radius: var(--radius-full);
+    color: var(--ink);
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
     cursor: pointer;
-    transition: background var(--motion-duration-fast) var(--motion-easing-standard), border-color var(--motion-duration-fast) var(--motion-easing-standard), transform var(--motion-duration-fast) var(--motion-easing-standard), box-shadow var(--motion-duration-fast) var(--motion-easing-standard);
+    transition: color var(--motion-duration-fast) var(--motion-easing-standard);
   }
   .action.sm {
     min-block-size: var(--size-target);
     font-size: var(--font-size-xs);
-    padding: var(--space-none) var(--space-sm) var(--space-none) var(--space-xs);
   }
-  .action:not(:has(.disc)) {
-    padding-inline-start: var(--space-md);
+  /* The words end in an ellipsis when there is no room; their box leaves room under them for the hairline. */
+  .label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-block: var(--space-xs);
+    text-decoration-line: underline;
+    text-decoration-thickness: var(--border-width-thin);
+    text-underline-offset: var(--space-xs);
+    text-decoration-color: var(--line);
+    transition: text-decoration-color var(--motion-duration-fast) var(--motion-easing-standard);
   }
-  .disc {
-    display: inline-grid;
-    place-items: center;
-    inline-size: calc(var(--size-control) - 2 * var(--space-xs));
-    block-size: calc(var(--size-control) - 2 * var(--space-xs));
-    border-radius: var(--radius-full);
-    color: var(--disc-ink);
-    background: var(--disc);
-    transition: background var(--motion-duration-fast) var(--motion-easing-standard), color var(--motion-duration-fast) var(--motion-easing-standard);
-  }
-  .disc :global(.glyph) {
-    inline-size: 58%;
-    block-size: 58%;
-    stroke-width: 1.75;
-  }
-  .sm .disc {
-    inline-size: calc(var(--size-target) - var(--space-xs));
-    block-size: calc(var(--size-target) - var(--space-xs));
+  .action :global(.glyph) {
+    flex: none;
+    inline-size: var(--font-size-md);
+    block-size: var(--font-size-md);
+    stroke-width: 1.5;
+    color: var(--glyph);
+    transition: color var(--motion-duration-fast) var(--motion-easing-standard);
   }
   .compact {
+    justify-content: center;
+    min-inline-size: var(--size-target);
     padding: var(--space-none);
-    border-color: transparent;
-    background: none;
+  }
+  .compact.md {
+    min-inline-size: var(--size-control);
   }
   .hidden {
     position: absolute;
@@ -104,102 +106,54 @@
     overflow: hidden;
     clip-path: inset(50%);
   }
-  .words {
-    display: inline-flex;
-    flex-direction: column;
-    min-inline-size: 0;
+  /* Hover and focus: the hairline under the words, the glyph inked. Nothing else moves. */
+  .action:hover:not(:disabled),
+  .action:focus-visible {
+    --line: currentColor;
+    --glyph: var(--ink);
   }
-  .label {
-    white-space: nowrap;
-  }
-  .hint {
-    font-size: var(--font-size-2xs);
-    color: var(--color-text-muted);
-  }
-  /* Hover: a quiet tint and the disc lit; no ring, so the edge stays one clean hairline. */
-  .action:hover:not(:disabled) {
-    background: var(--color-accent-tint);
-    border-color: var(--color-accent-line);
-  }
-  .action:hover:not(:disabled) .disc {
-    --disc: var(--color-accent);
-    --disc-ink: var(--color-on-accent);
-  }
-  .action:active:not(:disabled) {
-    transform: scale(0.97);
+  .compact:hover:not(:disabled) {
+    --glyph: var(--color-accent);
   }
   .action:focus-visible {
     outline: var(--border-width-focus) solid var(--color-focus);
-    outline-offset: var(--border-width-focus);
+    outline-offset: var(--border-width-thin);
   }
   .action[aria-pressed="true"] {
-    border-color: var(--color-accent);
-    color: var(--color-accent);
+    --ink: var(--color-accent);
+    --glyph: var(--color-accent);
+    --line: var(--color-accent);
   }
-  .action[aria-pressed="true"] .disc {
-    --disc: var(--color-accent);
-    --disc-ink: var(--color-on-accent);
-  }
-  /* The move that matters now: the accent, its disc darker, so it reads first. */
+  /* The one main action of a place: the accent, a faint hairline at rest so it reads first. */
   .primary {
-    --tone: var(--color-on-accent);
-    --disc: var(--color-on-accent-soft);
-    --disc-ink: var(--color-on-accent);
-    background: linear-gradient(180deg, var(--color-accent-hover), var(--color-accent));
-    border-color: var(--color-accent);
-  }
-  .primary .hint {
-    color: var(--color-on-accent);
-  }
-  /* The primary keeps its accent on hover, a shade deeper, so that its words stay readable. */
-  .action.primary:hover:not(:disabled) {
-    background: var(--color-accent-hover);
-    border-color: var(--color-accent-hover);
-  }
-  .primary:hover:not(:disabled) .disc {
-    --disc: var(--color-on-accent-soft);
-    --disc-ink: var(--color-on-accent);
+    --ink: var(--color-accent);
+    --glyph: var(--color-accent);
+    --line: var(--color-accent-line);
   }
   .danger {
-    --tone: var(--color-danger);
-    --disc-ink: var(--color-danger);
+    --ink: var(--color-danger);
+    --glyph: var(--color-danger);
   }
   .action:disabled {
+    --ink: var(--color-text-muted);
+    --glyph: var(--color-text-muted);
+    --line: transparent;
     cursor: default;
-    opacity: 0.38;
-    filter: saturate(0.4);
+    opacity: 0.5;
   }
-  /* Disabled with its reason in words: the control is dimmed, the reason stays readable. */
-  .action.explained:disabled {
-    opacity: 1;
-    filter: none;
-  }
-  .action.explained:disabled .disc,
-  .action.explained:disabled .label {
-    opacity: 0.45;
-  }
-  .why {
-    white-space: normal;
-    color: var(--color-text-muted);
-  }
-  .primary.explained:disabled {
-    --tone: var(--color-text);
-    background: var(--color-surface-soft);
-    border-color: var(--color-border-soft);
-  }
-  /* A finger needs a whole control: the small action and the icon alone grow to it. */
+  /* A finger needs a whole control. */
   @media (pointer: coarse) {
     .action.sm {
       min-block-size: var(--size-control);
     }
-    .action.compact {
+    .compact {
       min-inline-size: var(--size-control);
-      justify-content: center;
     }
   }
   @media (prefers-reduced-motion: reduce) {
     .action,
-    .disc {
+    .label,
+    .action :global(.glyph) {
       transition: none;
     }
   }

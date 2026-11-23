@@ -4,7 +4,10 @@
      gutter to resize the cards on its two sides; drag a card by its title onto another card's edge to place it there,
      or onto its middle to swap the two; close a card and its neighbour takes the space; maximise one to the whole mosaic
      (Escape restores). Every drag has its keys: arrows on a gutter move it, arrows on a title swap the card with the one
-     before or after it. The arrangement is kept per key. The mosaic fills its parent, which must give it a height (a
+     before or after it. A card shows its content and its own few actions; its handle, maximise and close appear when
+     the pointer or the focus is on it. The cards closed, and the way back to the first arrangement, are in one quiet
+     Layout menu in the row above, which the page may share with its own title (`lead`) and links (`trail`). The
+     arrangement is kept per key. The mosaic fills its parent, which must give it a height (a
      flex column, for one). -->
 <script lang="ts">
   import type { Snippet } from "svelte";
@@ -13,6 +16,8 @@
   import Maximize from "@lucide/svelte/icons/maximize-2";
   import Minimize from "@lucide/svelte/icons/minimize-2";
   import X from "@lucide/svelte/icons/x";
+  import Plus from "@lucide/svelte/icons/plus";
+  import Menu, { type Entry } from "./Menu.svelte";
   import {
     arrange,
     close,
@@ -45,12 +50,14 @@
     card: Snippet<[string]>;
     /** More tools for a card's bar, shown always (a card's own controls). */
     tools?: Snippet<[string]>;
-    /** Where the closed cards are offered again: given, the mosaic leaves that row to its owner. */
-    closedRow?: Snippet<[{ id: string; title: string; reopen: () => void }[]]>;
-    /** Notes of the page closed by the person, offered again in the same row as the closed cards. */
+    /** What the row above the mosaic starts with: the page's title, say. */
+    lead?: Snippet;
+    /** What the row above the mosaic ends with, after the Layout menu: a link out, say. */
+    trail?: Snippet;
+    /** Notes of the page closed by the person, offered again in the Layout menu with the closed cards. */
     notes?: { title: string; says: string; reopen: () => void }[];
   }
-  let { key, cards, initial, card, tools, closedRow, notes = [] }: Props = $props();
+  let { key, cards, initial, card, tools, lead, trail, notes = [] }: Props = $props();
 
   let m: Mosaic = $state({ root: null, closed: [], maximised: null });
   $effect.pre(() => {
@@ -62,6 +69,17 @@
   };
   const title = (id: string) => cards.find((c) => c.id === id)?.title ?? id;
   const closed = $derived(m.closed.map((id) => ({ id, title: title(id), reopen: () => set(open(m, id)) })));
+  const layoutSays = $derived(closed.length + notes.length > 0 ? `Layout · ${closed.length + notes.length} closed` : "Layout");
+  /** The Layout menu: every card back when one fills the window, the cards and notes closed, the first arrangement. */
+  const layout = $derived.by((): Entry[] => [
+    ...(m.maximised ? [{ label: "Show every card (Esc)", onselect: () => set(maximise(m, m.maximised!)) }] : []),
+    ...[...closed.map((c) => ({ label: c.title, onselect: c.reopen })), ...notes.map((n) => ({ label: n.title, onselect: n.reopen }))].map((e, i) => ({
+      ...e,
+      icon: Plus,
+      ...(i === 0 ? { group: "Closed", rule: !!m.maximised } : {}),
+    })),
+    { label: "Reset the layout", onselect: () => set(initial), rule: true },
+  ]);
 
   // ---- a divider or a junction dragged (mosaic.ts): the drag machine says what a press drags; the dividers move by the
   // pointer's travel over the mosaic, read once when the drag starts, each from where it stood then, snapping to aligned
@@ -244,22 +262,20 @@
   {/if}
 {/snippet}
 
-{#if closedRow && closed.length > 0}{@render closedRow(closed)}{:else}
-  <!-- The row above the mosaic: the cards closed, to bring back, what a maximised card means, and the way back to the
-       first arrangement. A card is moved by its title, resized by the gaps between cards. -->
-  <div class="closed" aria-label="the cards">
-    {#if m.maximised}
-      <span class="say">{title(m.maximised)} fills the window: Esc, or Restore at its top right, brings the other cards back.</span>
-    {:else if closed.length > 0 || notes.length > 0}
-      <span class="say">Closed, a click brings it back:</span>
-      {#each notes as n (n.title)}<button class="reopen" title={`Show ${n.says} again`} onclick={n.reopen}>+ {n.title}</button>{/each}
-      {#each closed as c (c.id)}<button class="reopen" onclick={c.reopen}>+ {c.title}</button>{/each}
-    {:else}
-      <span class="say">Drag a card by its title to move it, and the gap between two cards to resize them.</span>
-    {/if}
-    <button class="reopen reset" title="Every card back where it was first, open" onclick={() => set(initial)}>Reset the layout</button>
-  </div>
-{/if}
+<!-- The row above the mosaic: the page's own lead, the Layout menu, the page's trail. A card is moved by its title and
+     resized by the gaps between cards, which the menu's trigger says on hover. -->
+<div class="top">
+  {#if lead}<div class="lead">{@render lead()}</div>{/if}
+  <span class="layout">
+    <Menu
+      label={layoutSays}
+      text={layoutSays}
+      hint="Drag a card by its title to move it, and the gap between two cards to resize them"
+      entries={layout}
+    />
+  </span>
+  {#if trail}{@render trail()}{/if}
+</div>
 
 <div class="mosaic" class:live={resizing || target !== null} bind:this={mosaicEl}>
   {#if m.maximised}
@@ -277,36 +293,18 @@
     display: grid;
     grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   }
-  .closed {
+  .top {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-xs);
+    align-items: flex-start;
+    gap: var(--space-xs) var(--space-md);
   }
-  .say {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+  .lead {
+    flex: 1 1 auto;
+    min-inline-size: 0;
   }
-  .reset {
+  .layout {
     margin-inline-start: auto;
-    border-style: solid;
-  }
-  .reopen {
-    font-family: var(--font-family-mono);
-    font-size: var(--font-size-2xs);
-    letter-spacing: var(--font-letter-spacing-label);
-    text-transform: uppercase;
-    min-block-size: var(--size-target);
-    padding: var(--space-none) var(--space-sm);
-    color: var(--color-text-muted);
-    background: none;
-    border: var(--border-width-thin) dashed var(--color-border-strong);
-    border-radius: var(--radius-full);
-    cursor: pointer;
-  }
-  .reopen:hover {
-    color: var(--color-accent);
-    border-color: var(--color-accent);
   }
 
   /* ---- the divisions: flex boxes whose sides grow by their shares; nothing is placed by hand */
@@ -370,7 +368,7 @@
   }
   .bar {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     gap: var(--space-sm);
     min-block-size: var(--size-target);
@@ -382,6 +380,7 @@
     min-inline-size: 0;
   }
   .handle :global(.draggable) {
+    flex-wrap: nowrap;
     padding: var(--space-none);
     gap: var(--space-xs);
     border: none;
@@ -392,23 +391,24 @@
   }
   .handle :global(.content) {
     min-inline-size: 0;
+    overflow: hidden;
   }
   .handle :global(.handle) {
     min-inline-size: var(--size-target);
     min-block-size: var(--size-target);
     padding: var(--space-none);
-    opacity: 0.35;
+    opacity: 0;
+    transition: opacity var(--motion-duration-fast) var(--motion-easing-standard);
   }
   .handle :global(.handle:focus-visible) {
     opacity: 1;
   }
   .title {
     display: block;
-    overflow-wrap: anywhere;
-    font-family: var(--font-family-mono);
-    font-size: var(--font-size-2xs);
-    letter-spacing: var(--font-letter-spacing-label);
-    text-transform: uppercase;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: var(--font-size-sm);
     color: var(--color-text-muted);
   }
   .own {
@@ -421,18 +421,20 @@
     min-inline-size: 0;
   }
   .tools {
-    flex: 0 1 auto;
+    flex: none;
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: flex-end;
-    opacity: 0.45;
+    opacity: 0;
     transition: opacity var(--motion-duration-fast) var(--motion-easing-standard);
   }
-  .card:focus-within .tools {
+  /* The card's chrome (its handle, maximise and close) appears when the focus is in the card or the pointer over it; where
+     nothing hovers (a finger), or more contrast is asked for, it always shows. A maximised card shows its Restore. */
+  .card:focus-within .tools,
+  .card:focus-within .handle :global(.handle),
+  .card.max .tools {
     opacity: 1;
   }
-  /* The card's tools and handle show in full when the pointer is over the card; where nothing hovers (a finger), or more
-     contrast is asked for, they always do. */
   @media (hover: hover) {
     .card:hover .handle :global(.handle),
     .card:hover .tools {
@@ -462,7 +464,6 @@
     color: var(--color-accent);
   }
   .tool:focus-visible,
-  .reopen:focus-visible,
   .body:focus-visible {
     outline: var(--border-width-focus) solid var(--color-focus);
   }
@@ -609,7 +610,6 @@
   /* Under a finger every target is a whole control. */
   @media (pointer: coarse) {
     .tool,
-    .reopen,
     .handle :global(.handle) {
       min-inline-size: var(--size-control);
       min-block-size: var(--size-control);

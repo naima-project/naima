@@ -97,31 +97,35 @@ and the mCRL2 tools (`naima tools install mcrl2`); generating needs naima-codege
 
 ## Using the tab
 
-- Open `naima ui`, then **Models**, beside the date on Home or in the menu of Home's list. Pick a study. A note at the top says where to start; close it once
-  you know.
+- Open `naima ui`, then **Models**, beside the date on Home or in the menu of Home's list. Pick a study. A one-line note at the top says where to start, with a **?** for a little
+  more; close it once you know.
 - The study fills the window with cards, like a mosaic, and the page itself never scrolls. Drag the thin gap between two cards to give one more room. Drag a
-  card by its title onto another card: onto its middle to swap the two, onto one of its edges to place it beside. Close a card with its cross and the others
-  take its space; it waits above the mosaic, where a click opens it again. Maximise a card to the whole mosaic; Escape restores. The arrangement is kept for
+  card by its title onto another card: onto its middle to swap the two, onto one of its edges to place it beside. A card's handle, maximise and close show when the
+  pointer or the keyboard focus is on it. Close a card with its cross and the others take its space; it waits in the **Layout** menu above the mosaic, which
+  opens it again and also resets the layout. Maximise a card to the whole mosaic; Escape restores. The arrangement is kept for
   that study. The arrow keys do all of this too: on a gap they move it, on a card's title they swap it with its neighbour.
 - **Timeline**: the states taken on a line, the past fading to the left, the current state as the orange disc, the steps possible now on the right. Click one of
   those to take it, or a past state to go back to it.
 - **State machine explored**: every state reached on any road, once each, as a UML state machine diagram. The road you are on is solid; the roads you went back
   from are faded, dashed and drawn below; the steps possible now are dotted. Click any state to go there. On a state, the pin keeps it from fading and the star
-  bookmarks it. Switch between horizontal and vertical layouts, zoom in and out, or fit.
+  bookmarks it. Its tools appear over the drawing's corner when the pointer or the focus is on it: switch
+  between horizontal and vertical layouts, zoom in and out, or fit.
 - **What happened** explains the last step and the model's own replies, and lists your bookmarks. **What may happen now** lists every step the model accepts in
   this state. **The state** shows every variable of the model, exactly as the model has it.
 - **The model's view**, when it has one, is a card too, or several cards, one per part of it,, and fires steps the same way. When it draws a standard diagram,
   such as a UML sequence diagram, it says so, and draws it in that standard's notation.
-- **Back** and **Forward** move along the road; firing from a past state starts a new road and keeps the old one. **Previous** and **Next state seen** move over
-  the states you visited, whatever road they are on. **Undo** removes the last step you took. Steps recorded from a real run are never undone, only branched
+- **Back** and **Forward**, the two chevrons beside the step count at the top of the path card, move along the road; firing from a past state starts a new road
+  and keeps the old one. The rest is in the card's menu (its three dots): **The state seen before** and **The state seen next** move over the states you
+  visited, whatever road they are on; **Undo the last step** removes the last step you took; **Begin again** starts a new road from the start; once there
+  are several roads, the menu lists them to switch between. Steps recorded from a real run are never undone, only branched
   from.
-- **Copy path** copies the road; **Load a path** takes one back, or a trace from the model checker, one step per line. A path loads up to the first step the
+- **Copy the path**, in the same menu, copies the road; **Load a path** takes one back, or a trace from the model checker, one step per line. A path loads up to the first step the
   model does not accept, and the tab says which step and why. A path that is already one of your roads is shown on that road, not added again.
-- A button you cannot use now is dimmed, and says why under its name.
+- Actions are short words. One you cannot use now is dimmed, and says why when you point at it or reach it with the keyboard.
 
 ## Changing, checking and running the model
 
-Three cards wait in the row above the mosaic: **The model's files**, **Properties** and **Code**. A click opens one.
+Three cards wait in the **Layout** menu above the mosaic: **The model's files**, **Properties** and **Code**. Pick one to open it.
 
 - **The model's files** lists the study's files, the mCRL2 specification first, then its own file, the other mCRL2 files, `codegen.toml`, the property formulas
   and the Rust code. Pick one and it opens in an editor that highlights mCRL2, Rust, TOML and the rest. Change it and press **Save** (or Ctrl-S, Cmd-S on a
