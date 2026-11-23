@@ -355,10 +355,19 @@ export function blockValues(text: string): Record<string, string> | null {
   const out: Record<string, string> = {}
   for (const l of lines.slice(begin + 1)) {
     if (END.test(l.trim())) break
+    if (l.trim() === "" || /^%\s*$/.test(l.trim())) continue
     const m = /^%\s+([A-Za-z][A-Za-z-]*)(?:\s+(.*))?$/.exec(l.trim())
-    if (m) out[m[1]!.toLowerCase()] = (m[2] ?? "").trim()
+    if (!m || !KEYS.includes(m[1]!.toLowerCase())) return null
+    out[m[1]!.toLowerCase()] = (m[2] ?? "").trim()
   }
   return out
+}
+
+/** A well-formed block with no stepper in a whole specification or a naima-codegen core: it words a default study. */
+export function wordsOnly(file: string, text: string): boolean {
+  const block = blockValues(text)
+  if (!block || block["stepper"] !== undefined) return false
+  return /(^|\/)core\.mcrl2$/.test(file) || text.split(/\r?\n/).some((l) => /^\s*init\b/.test(l.replace(/%.*$/, "")))
 }
 
 /** The studies a `%@ui` block declares, in the order of their files. */
@@ -368,7 +377,7 @@ export function declaredStudies(root: string, program?: string): Study[] {
     if (!file.toLowerCase().endsWith(".mcrl2")) continue
     const text = read(join(root, file))
     if (text === null || !/^%@ui\s+begin\s*$/m.test(text)) continue
-    if (blockValues(text)?.["stepper"] === undefined) continue
+    if (wordsOnly(file, text)) continue
     const s = studyOf(root, file, text)
     if (s) out.push(s)
   }

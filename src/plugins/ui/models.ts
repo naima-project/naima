@@ -7,7 +7,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { basename, dirname, join, relative, resolve } from "node:path"
 import { gitPath, projectFiles } from "../../core/api.ts"
-import { blockValues, stateNotesOf, type Study, studyId } from "./studies.ts"
+import { blockValues, wordsOnly, stateNotesOf, type Study, studyId } from "./studies.ts"
 
 const read = (p: string): string | null => {
   try {
@@ -200,8 +200,8 @@ export function defaultStudies(root: string, program: string | undefined, declar
   for (const f of files) {
     if (!f.toLowerCase().endsWith(".mcrl2") || inProject(f) || covered.has(f)) continue
     const text = read(join(root, f))
-    const block = text === null ? null : blockValues(text)
-    if (text === null || !isWhole(text) || (block && block["stepper"] !== undefined)) continue
+    if (text === null || !isWhole(text) || (/^%@ui\s+begin\s*$/m.test(text) && !wordsOnly(f, text))) continue
+    const block = blockValues(text)
     const s = blank(f, "plain")
     s.folder = gitPath(dirname(f))
     s.title = block?.["title"] || headingOf(text, "%") || basename(f)
