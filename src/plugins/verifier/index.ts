@@ -205,6 +205,53 @@ export function contentSha256(content: Uint8Array | string): string {
 
 const sha256 = (path: string): string => contentSha256(readFileSync(path))
 
+/** The verifier of `item`, when it has one. */
+const verifierOfItem = (ctx: Context, item: Item): Verifier | undefined => {
+  const id = item.meta["verifier"]
+  return typeof id === "string" ? verifierOf(ctx, id) : undefined
+}
+
+/**
+ * The fingerprint of a file as a run keeps it: the sha256 of what the verifier reads of it (its `fingerprintText`) when
+ * it declares one, so an edit the tool cannot see leaves a run current; otherwise of the file's committed content.
+ */
+export function fingerprintOf(verifier: Verifier | undefined, abs: string): string {
+  if (!verifier?.fingerprintText) return sha256(abs)
+  return contentSha256(verifier.fingerprintText(abs, readFileSync(abs, "utf8").replace(/\r\n/g, "\n")))
+}
+
+/** Whether `run` read the files `inputs` lists, each of them the same file as it was (`sameFile`), with the same tool version. */
+function sameInputs(ctx: Context, verifier: Verifier, run: RunRecord, inputs: readonly RunInput[], toolVersion: string | undefined): boolean {
+  if (run.toolVersion !== toolVersion || !run.inputs || run.inputs.length !== inputs.length) return false
+  const was = new Map(run.inputs.map((i) => [i.path, i.sha256]))
+  return inputs.every((i) => {
+    const stored = was.get(i.path)
+    return stored !== undefined && sameFile(ctx, verifier, resolve(ctx.root, i.path), stored)
+  })
+}
+
+const earlierMeaning = new Map<string, boolean>()
+
+/**
+ * Whether a run's recorded `stored` digest of the file at `abs` speaks for the file as it is now: it equals the
+ * fingerprint now; or it is the sha256 of the file's bytes, which a run recorded before fingerprints existed kept, and
+ * the file is still those bytes, or git holds those bytes as an earlier version of it whose fingerprint is the one now.
+ */
+function sameFile(ctx: Context, verifier: Verifier | undefined, abs: string, stored: string): boolean {
+  const now = fingerprintOf(verifier, abs)
+  if (stored === now) return true
+  if (!verifier?.fingerprintText) return false
+  if (stored === sha256(abs)) return true
+  const key = `${abs}\n${stored}\n${now}`
+  let same = earlierMeaning.get(key)
+  if (same === undefined) {
+    const text = earlierVersions(ctx, abs, new Set([stored])).get(stored)
+    same = text !== undefined && contentSha256(verifier.fingerprintText(abs, text.replace(/\r\n/g, "\n"))) === now
+    earlierMeaning.set(key, same)
+  }
+  return same
+}
+
 /** JSON with every object's keys sorted: the same options always hash the same. */
 const canonical = (v: unknown): string =>
   Array.isArray(v)
@@ -365,11 +412,16 @@ interface Identity {
   inputsSha256: string
 }
 
-/** Whether `run` was made on exactly `identity`, its digest consistent with the inputs it lists. */
-const madeOn = (run: RunRecord, identity: Identity): boolean =>
+/**
+ * Whether `run` was made on exactly `identity`, its digest consistent with the inputs it lists. A run that kept the
+ * file bytes' digests instead of the fingerprints (`sameFile`) is made on it too when `onSameFiles` finds each input
+ * still the same.
+ */
+const madeOn = (run: RunRecord, identity: Identity, onSameFiles: (run: RunRecord) => boolean): boolean =>
   run.verifier === identity.verifier && run.model === identity.model && run.property === identity.property &&
-  (run.optionsSha256 ?? optionsHash({})) === identity.optionsSha256 && run.inputsSha256 === identity.inputsSha256 &&
-  run.inputs !== undefined && digestOf(run.inputs, run.toolVersion) === run.inputsSha256
+  (run.optionsSha256 ?? optionsHash({})) === identity.optionsSha256 &&
+  run.inputs !== undefined && digestOf(run.inputs, run.toolVersion) === run.inputsSha256 &&
+  (run.inputsSha256 === identity.inputsSha256 || onSameFiles(run))
 
 /**
  * The count each step ended on in the earlier runs of `item` on the same verifier, model, property and options — the
@@ -513,7 +565,7 @@ export async function decideItem(ctx: Context, item: Item, progress: Progress = 
   const inputs = (await inputsOf(ctx, verifier, item, request)).map((rel): RunInput => {
     const abs = resolve(ctx.root, rel)
     if (!existsSync(abs)) throw new Error(`${label(item)}: input ${rel} does not exist`)
-    return { path: rel, sha256: sha256(abs) }
+    return { path: rel, sha256: fingerprintOf(verifier, abs) }
   })
   // A tool that cannot say its version (it is not installed, say) cannot run either: the run is an error that says why.
   let toolVersion: string | undefined
@@ -529,10 +581,11 @@ export async function decideItem(ctx: Context, item: Item, progress: Progress = 
   }
   const identity: Identity = { verifier: id, model, property, optionsSha256: identityHash(verifier, options), inputsSha256: digestOf(inputs, toolVersion) }
   if (opts.force === undefined && unversioned === undefined) {
-    const known = runsOf(item).filter((k) => conclusive(k.run.verdict) && madeOn(k.run, identity)).pop()
+    const known = runsOf(item).filter((k) => conclusive(k.run.verdict) && madeOn(k.run, identity, (r) => sameInputs(ctx, verifier, r, inputs, toolVersion)))
+      .pop()
     if (known) return { reused: known }
   }
-  const hash = sha256(path)
+  const hash = fingerprintOf(verifier, path)
   let result: VerifyResult
   const started = performance.now()
   try {
@@ -970,7 +1023,7 @@ function workDir(ctx: Context): string {
  * The earlier versions of the model at `path` that git holds, by the sha256 of their contents: those `wanted`, at
  * `from` when it is given, otherwise in the index and in the last 200 commits that changed the file.
  */
-function earlierVersions(ctx: Context, path: string, wanted: Set<string>, from?: string): Map<string, string> {
+function earlierVersions(ctx: Context, path: string, wanted: Set<string>, from?: string, verifier?: Verifier): Map<string, string> {
   const out = new Map<string, string>()
   const top = toplevel(ctx.root)
   if (!top) return out
@@ -980,8 +1033,11 @@ function earlierVersions(ctx: Context, path: string, wanted: Set<string>, from?:
   const texts = textsAt(top, revs.map((r) => `${r}:${file}`))
   for (const text of texts) {
     if (text === null) continue
-    const sha = contentSha256(text)
-    if (wanted.has(sha) && !out.has(sha)) out.set(sha, text)
+    for (
+      const sha of [contentSha256(text), ...(verifier?.fingerprintText ? [contentSha256(verifier.fingerprintText(path, text.replace(/\r\n/g, "\n")))] : [])]
+    ) {
+      if (wanted.has(sha) && !out.has(sha)) out.set(sha, text)
+    }
   }
   return out
 }
@@ -1000,7 +1056,10 @@ function carryBlockers(ctx: Context, item: Item, run: RunRecord, inputs: RunInpu
     if (canonical([...was.keys()].sort()) !== canonical([...now.keys()].sort())) {
       out.push(`its run read ${[...was.keys()].join(", ")}, the model now reads ${[...now.keys()].join(", ")}`)
     } else {
-      const changed = [...now].filter(([p, sha]) => p !== model && was.get(p) !== sha).map(([p]) => p)
+      const v = verifierOfItem(ctx, item)
+      const changed = [...now].filter(([p, sha]) =>
+        p !== model && was.get(p) !== sha && !(was.get(p) !== undefined && sameFile(ctx, v, resolve(ctx.root, p), was.get(p)!))
+      ).map(([p]) => p)
       if (changed.length) out.push(`besides the model, ${changed.join(", ")} changed since its run`)
     }
   }
@@ -1062,7 +1121,7 @@ const equivalent: Command = {
     if (!names.includes(equivalence)) throw new Error(`--modulo ${equivalence}: verifier ${id} compares modulo ${names.join(", ")}`)
     const from = str(p, "from")
     const toolVersion = verifier.version ? await verifier.version(ctx) : undefined
-    const now = sha256(path)
+    const now = fingerprintOf(verifier, path)
 
     let failing = 0
     const refuse = (item: Item, why: string): void => {
@@ -1077,7 +1136,7 @@ const equivalent: Command = {
         refuse(item, `its last run is no verdict to carry over [${item.meta.status}]`)
         continue
       }
-      if (run.modelSha256 === now && !staleness(ctx, item, run).length) {
+      if (sameFile(ctx, verifier, path, run.modelSha256) && !staleness(ctx, item, run).length) {
         ctx.out(`current     ${label(item)}  ${item.meta.title}  (${run.verdict} on the model as it is now)`)
         continue
       }
@@ -1085,7 +1144,7 @@ const equivalent: Command = {
       const request = { model: path, property, options: optionsOf(item) }
       const inputs = (await inputsOf(ctx, verifier, item, request)).map((rel): RunInput => {
         const abs = resolve(ctx.root, rel)
-        return { path: rel, sha256: existsSync(abs) ? sha256(abs) : "" }
+        return { path: rel, sha256: existsSync(abs) ? fingerprintOf(verifier, abs) : "" }
       })
       const blockers = carryBlockers(ctx, item, run, inputs, toolVersion)
       if (blockers.length) {
@@ -1101,7 +1160,7 @@ const equivalent: Command = {
     }
 
     const wanted = new Set(carries.map((c) => c.run.modelSha256))
-    const versions = earlierVersions(ctx, path, wanted, from)
+    const versions = earlierVersions(ctx, path, wanted, from, verifier)
     const progress = progressFor((l) => ctx.err(l))
     try {
       for (const [n, sha] of [...wanted].entries()) {
@@ -1236,13 +1295,13 @@ export function staleness(ctx: Context, item: Item, run: RunRecord): string[] {
   if (run.verifier !== verifier) out.push(`holds by verifier ${JSON.stringify(run.verifier)}, not ${JSON.stringify(verifier)}`)
   const path = typeof model === "string" ? modelPath(ctx.root, model) : null
   if (run.model !== model) out.push(`holds on model ${run.model}, not ${String(model)}`)
-  else if (path && existsSync(path) && run.modelSha256 !== sha256(path)) out.push("holds on a model that has changed since")
+  else if (path && existsSync(path) && !sameFile(ctx, verifierOfItem(ctx, item), path, run.modelSha256)) out.push("holds on a model that has changed since")
   if ((run.optionsSha256 ?? optionsHash({})) !== itemOptionsHash(ctx, item)) out.push("holds with other verifierOptions than it has now")
   if (run.inputs) {
     if (run.inputsSha256 !== digestOf(run.inputs, run.toolVersion)) out.push("its run record's digest does not match the inputs and tool version it lists")
     const changed = run.inputs.filter((i) => i.path !== run.model).filter((i) => {
       const abs = modelPath(ctx.root, i.path)
-      return !abs || !existsSync(abs) || sha256(abs) !== i.sha256
+      return !abs || !existsSync(abs) || !sameFile(ctx, verifierOfItem(ctx, item), abs, i.sha256)
     })
     if (changed.length) out.push(`holds on inputs that have changed since: ${changed.map((i) => i.path).join(", ")}`)
   }
