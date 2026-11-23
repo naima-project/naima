@@ -133,7 +133,13 @@ export function contextAt(ctx: Context, ref: string): { ctx: Context; dispose():
     dispose()
     throw e
   }
-  const at = createContext({ root: ctx.root, data, program: ctx.program }, ctx.config as Config, ctx.registry, { out: ctx.out, err: ctx.err, now: ctx.now }, preread)
+  const at = createContext(
+    { root: ctx.root, data, program: ctx.program },
+    ctx.config as Config,
+    ctx.registry,
+    { out: ctx.out, err: ctx.err, now: ctx.now },
+    preread,
+  )
   return { ctx: at, dispose }
 }
 
