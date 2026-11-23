@@ -485,6 +485,21 @@ do that no agent holds yet; then the chain of items waiting on each other that d
 row, then its state and who does it. An agent holding an item is named with its robot and the colour of its line in the Days panel: pointing at it lights that
 line, and clicking it lists what it holds on the goal.
 
+### Formal models and UI design
+
+Two pages show the project's stances, each opened from the stage's index on Home.
+
+Formal models lists every machine the project models in mCRL2, with how many of its properties are proven, owed or refuted and, where a run recorded it, how
+many states it has. Above the list come the measures taken over every state, such as how much of Home can be open at once. A click on a machine opens it beside
+the list: what it models and what it leaves out, as its opening comment says, the refinement its generated code is checked by, and each property in the
+sentence its author recorded with `naima explain`, with a plain phrase under each part of its formula. "Draw it and step through it" opens the same machine
+in Specs, Models, where it is drawn and can be explored.
+
+UI design describes how the app is built: the UI stance and the commit it is pinned at, its mood, every colour of the mood board drawn in the theme the page
+is shown in, the tokens by group, and the two rules the look is held to. Every action declares how it is offered, which the stance's affordances check
+holds, and Home stays uncluttered, which the properties of Home's noise model hold. The widgets the app is made of and the stance's checks, as they last ran,
+close the page.
+
 ### Metrics
 
 Metrics shows the project's [metrics](metrics-and-budgets.md) at the moment the window shows. At the top are the key numbers, one card each: the value, its
