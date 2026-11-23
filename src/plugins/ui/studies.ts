@@ -61,6 +61,11 @@ export interface Study {
   run: string | null
   says_lines: SayLine[]
   /**
+   * The actions the model's files declare (`act`) with their number of arguments: a %@say line for one of them is
+   * right even when the stepped model never takes it, as with the actions of an environment the study leaves out.
+   */
+  declared_actions?: { action: string; args: number }[]
+  /**
    * What each state variable is, in its author's words: the comment beside each parameter of the model's process, with
    * the section it is under; a `%@state <name>: "<text>"` line of the declaring file adds or replaces one.
    */

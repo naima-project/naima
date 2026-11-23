@@ -145,6 +145,29 @@ const blank = (file: string, kind: "codegen" | "plain"): Study => ({
   sizes: {},
 })
 
+/** The actions a text declares with `act`, with their number of arguments; comments are left out. */
+export function actionsIn(text: string): { action: string; args: number }[] {
+  const code = text.split(/\r?\n/).map((l) => l.replace(/%.*$/, "")).join("\n")
+  const out: { action: string; args: number }[] = []
+  const block = /(?:^|\s)act\s+([^]*?)(?=(?:^|\s)(?:act|proc|init|sort|map|eqn|var|glob|cons|comm|allow|hide|block|rename)\s|$(?![^]))/g
+  for (const b of code.matchAll(block)) {
+    for (const st of b[1]!.split(";")) {
+      const [names, sorts] = st.split(":")
+      if (!names?.trim()) continue
+      const args = sorts?.trim() ? sorts.split("#").length : 0
+      for (const n of names.split(",")) if (/^[A-Za-z_][\w']*$/.test(n.trim())) out.push({ action: n.trim(), args })
+    }
+  }
+  return out
+}
+
+/** The actions declared (`act`) by these files, each once. */
+const declaredBy = (root: string, paths: readonly string[]): { action: string; args: number }[] => {
+  const out: { action: string; args: number }[] = []
+  for (const g of paths) for (const a of actionsIn(read(join(root, g)) ?? "")) if (!out.some((o) => o.action === a.action)) out.push(a)
+  return out
+}
+
 const saysIn = (file: string, text: string) => text.split(/\r?\n/).flatMap((l, i) => (/^\s*%@say(\s|$)/.test(l) ? [{ file, line: i + 1, text: l.trim() }] : []))
 
 /**
@@ -178,6 +201,7 @@ export function defaultStudies(root: string, program: string | undefined, declar
     if (core === null) s.problems.push("the project has no model/core.mcrl2")
     else {
       s.says_lines = saysIn(s.model, core)
+      s.declared_actions = declaredBy(root, files.filter((g) => g.endsWith(".mcrl2") && (g === s.model || gitPath(dirname(g)) === `${dir}/model`)))
       s.state_notes = stateNotesOf(core)
       const beside = files.filter((g) => g.endsWith(".mcrl2") && gitPath(dirname(g)) === dir && !g.endsWith("core.mcrl2"))
       const words = [s.model, ...beside].map((g) => ({ g, t: g === s.model ? core : read(join(root, g)) }))
@@ -240,6 +264,7 @@ export function defaultStudies(root: string, program: string | undefined, declar
     s.says_lines = saysIn(f, text)
     if (target !== f) s.says_lines.push(...saysIn(target, modelText))
     s.state_notes = stateNotesOf(modelText)
+    s.declared_actions = declaredBy(root, [...new Set([f, target])])
     if (target !== f) {
       for (const n of stateNotesOf(text)) {
         const at = s.state_notes.findIndex((x) => x.name === n.name)
