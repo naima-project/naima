@@ -368,16 +368,18 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       // project's stamp holds, and rendered off the serving thread, so that a slow tab (the summary takes seconds on a
       // large tracker) holds no other request and no file of the page.
       const content =
-        (at !== null ? await gitReadScope(() => tab.render({ sub, query }, momentOf(at))) : await kept(`tab ${tab.name} ${JSON.stringify({ sub, query })}`, async () => {
-          if (opts.pool) {
-            try {
-              return await opts.pool.renderTab(tab.name, { sub, query })
-            } catch (e) {
-              if (!(e instanceof PoolDown)) throw e
+        (at !== null
+          ? await gitReadScope(() => tab.render({ sub, query }, momentOf(at)))
+          : await kept(`tab ${tab.name} ${JSON.stringify({ sub, query })}`, async () => {
+            if (opts.pool) {
+              try {
+                return await opts.pool.renderTab(tab.name, { sub, query })
+              } catch (e) {
+                if (!(e instanceof PoolDown)) throw e
+              }
             }
-          }
-          return json(await tab.render({ sub, query }, momentOf(null)))
-        })) as UiTabContent
+            return json(await tab.render({ sub, query }, momentOf(null)))
+          })) as UiTabContent
       const problem = contentProblem(content)
       if (problem) throw new Error(`the ${tab.name} tab's content ${problem}`)
       return shown(tab, sub, content)

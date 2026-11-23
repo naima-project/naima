@@ -1,0 +1,1 @@
+import{a as e,i as t}from"./index-client-X9JAE7ip.js";import"./disclose-version-xihTtKlq.js";import{t as n}from"./Segmented-DIbKo36t.js";var r=new Set([`$$slots`,`$$events`,`$$legacy`]);function i(i,a){let o=t(a,r);n(i,e(()=>o))}export{i as t};
