@@ -297,7 +297,8 @@ the moment Home shows: at a day of the past it says what needed you then. It is 
 in the stage. The key d still takes the decisions one at a time. When what needs you is an agent gone quiet, its detail on Home links to that agent's entry in
 Waiting for you, where one click brings the case to the chat.
 
-Last is the river, the board's widest part, about a fifth of its width tall. It shows the future first: at rest today stands near its left edge, after a short
+Last is the river, the board's widest part, about a fifth of its width tall (on a window less than about 800 pixels high it is lower, with
+one row of names above the line, so that it and the choices under it stay in view). It shows the future first: at rest today stands near its left edge, after a short
 stub of the last few days, and the window reaches the next three goals with a date and every goal after them that follows the one before within a month, at most
 twelve. Ahead of today the river spends its width on what happens rather than on empty weeks: each stretch between two goals gets room by how long it is, but a
 long empty stretch is drawn shorter, with two small slashes across the line where time is skipped, and goals a day apart still stand well apart. Because of
