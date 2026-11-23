@@ -1,0 +1,1 @@
+import"./modulepreload-polyfill-P2Xu9kJm.js";import{U as e}from"./runtime-DvDVho1J.js";import{C as t,Di as n,Gi as r,a as i,i as a,s as o}from"./core-A6jvYU1u.js";e(o,{target:document.getElementById(`app`),context:r(t(n(i,a)))});

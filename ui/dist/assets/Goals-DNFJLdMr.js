@@ -1,0 +1,1 @@
+import{Ct as e,wt as t}from"./runtime-DvDVho1J.js";import{Ki as n}from"./core-A6jvYU1u.js";import r from"./Roadmap-YNCLQwLO.js";function i(i,a){t(a,!0);let{roadmap:o}=n();r(i,{get screen(){return o},get onopen(){return a.onitem}}),e()}export{i as default};
