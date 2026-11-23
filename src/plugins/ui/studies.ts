@@ -332,6 +332,35 @@ export function findStudies(root: string, program?: string, tracker?: string): S
   return [...declared, ...defaultStudies(root, program, declared, tracker)]
 }
 
+/** The notes on a model's state: the comments beside its process's parameters, replaced or added to by its `%@state` lines. */
+export function stateNotesOf(text: string): { name: string; section: string; note: string }[] {
+  const notes = stateNotes(text)
+  for (const m of text.matchAll(/^%@state\s+([A-Za-z_][\w']*)\s*:\s*"((?:[^"\\]|\\.)*)"\s*$/gm)) {
+    const at = notes.findIndex((n) => n.name === m[1])
+    const note = { name: m[1]!, section: at >= 0 ? notes[at]!.section : "", note: m[2]!.replace(/\\(.)/g, "$1") }
+    if (at >= 0) notes[at] = note
+    else notes.push(note)
+  }
+  return notes
+}
+
+/**
+ * The `% key value` lines of a file's `%@ui` block, or null when it has none. A block that declares no stepper does not
+ * declare a study of its own: it words the model's default study (models.ts), its title, its says and its properties.
+ */
+export function blockValues(text: string): Record<string, string> | null {
+  const lines = text.split(/\r?\n/)
+  const begin = lines.findIndex((l) => BEGIN.test(l.trim()))
+  if (begin < 0) return null
+  const out: Record<string, string> = {}
+  for (const l of lines.slice(begin + 1)) {
+    if (END.test(l.trim())) break
+    const m = /^%\s+([A-Za-z][A-Za-z-]*)(?:\s+(.*))?$/.exec(l.trim())
+    if (m) out[m[1]!.toLowerCase()] = (m[2] ?? "").trim()
+  }
+  return out
+}
+
 /** The studies a `%@ui` block declares, in the order of their files. */
 export function declaredStudies(root: string, program?: string): Study[] {
   const out: Study[] = []
@@ -339,6 +368,7 @@ export function declaredStudies(root: string, program?: string): Study[] {
     if (!file.toLowerCase().endsWith(".mcrl2")) continue
     const text = read(join(root, file))
     if (text === null || !/^%@ui\s+begin\s*$/m.test(text)) continue
+    if (blockValues(text)?.["stepper"] === undefined) continue
     const s = studyOf(root, file, text)
     if (s) out.push(s)
   }

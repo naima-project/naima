@@ -7,7 +7,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { basename, dirname, join, relative, resolve } from "node:path"
 import { gitPath, projectFiles } from "../../core/api.ts"
-import { stateNotes, type Study, studyId } from "./studies.ts"
+import { blockValues, stateNotesOf, type Study, studyId } from "./studies.ts"
 
 const read = (p: string): string | null => {
   try {
@@ -176,7 +176,10 @@ export function defaultStudies(root: string, program: string | undefined, declar
     if (core === null) s.problems.push("the project has no model/core.mcrl2")
     else {
       s.says_lines = saysIn(s.model, core)
-      s.state_notes = stateNotes(core)
+      s.state_notes = stateNotesOf(core)
+      const block = blockValues(core)
+      if (block?.["title"]) s.title = block["title"]
+      if (block?.["says"]) s.says = block["says"]
     }
     const group = firstGroup(toml)
     if (group) {
@@ -197,19 +200,23 @@ export function defaultStudies(root: string, program: string | undefined, declar
   for (const f of files) {
     if (!f.toLowerCase().endsWith(".mcrl2") || inProject(f) || covered.has(f)) continue
     const text = read(join(root, f))
-    if (text === null || !isWhole(text) || /^%@ui\s+begin\s*$/m.test(text)) continue
+    const block = text === null ? null : blockValues(text)
+    if (text === null || !isWhole(text) || (block && block["stepper"] !== undefined)) continue
     const s = blank(f, "plain")
     s.folder = gitPath(dirname(f))
-    s.title = headingOf(text, "%") || basename(f)
+    s.title = block?.["title"] || headingOf(text, "%") || basename(f)
+    s.says = block?.["says"] ?? ""
     s.model = f
-    s.system = basename(f)
+    s.system = block?.["system"] || basename(f)
     s.says_lines = saysIn(f, text)
-    s.state_notes = stateNotes(text)
+    s.state_notes = stateNotesOf(text)
     const here = join(root, dirname(f))
     // Several whole specifications in one folder keep their paths apart, each in a folder of its name.
     const siblings = files.filter((g) => g !== f && gitPath(dirname(g)) === gitPath(dirname(f)) && g.endsWith(".mcrl2"))
     s.paths = siblings.length ? `paths/${basename(f, ".mcrl2")}` : "paths"
     s.properties = [...mcfIn(here, here), ...(isDir(join(here, "properties")) ? mcfIn(join(here, "properties"), here) : [])]
+    const named = block?.["properties"]
+    if (named && isDir(join(here, named))) for (const p of mcfIn(join(here, named), here)) if (!s.properties.includes(p)) s.properties.push(p)
     for (const p of fromRoot(here, items.get(f) ?? [])) if (!s.properties.includes(p)) s.properties.push(p)
     out.push(s)
   }
