@@ -71,11 +71,10 @@
     min-block-size: var(--size-target);
     font-size: var(--font-size-xs);
   }
-  /* The words end in an ellipsis when there is no room; their box leaves room under them for the hairline. */
+  /* The words wrap when there is no room, never cut; their box leaves room under them for the hairline. */
   .label {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
     padding-block: var(--space-xs);
     text-decoration-line: underline;
     text-decoration-thickness: var(--border-width-thin);
