@@ -1113,15 +1113,29 @@ function earlierVersions(ctx: Context, path: string, wanted: Set<string>, from?:
   // git names the top level by its real path: a project reached through a symbolic link is read by its real one too.
   const file = gitPath(relative(realpathSync(top), realpathSync(path)))
   const texts = from !== undefined ? textsAt(top, [`${from}:${file}`]) : historyOf(ctx, top, file)
-  for (const text of texts) {
-    if (text === null) continue
-    for (
-      const sha of [contentSha256(text), ...(verifier?.fingerprintText ? [contentSha256(verifier.fingerprintText(path, text.replace(/\r\n/g, "\n")))] : [])]
-    ) {
-      if (wanted.has(sha) && !out.has(sha)) out.set(sha, text)
-    }
-  }
+  const digests = digestsOf(texts, path, verifier)
+  texts.forEach((text, i) => {
+    if (text === null) return
+    for (const sha of digests[i]!) if (wanted.has(sha) && !out.has(sha)) out.set(sha, text)
+  })
   return out
+}
+
+const digested = new WeakMap<(string | null)[], Map<Verifier | undefined, string[][]>>()
+/** The digests each version answers to, as a run keeps them: of its bytes, and of what the verifier reads of it. Worked out once for a version, however many properties ask. */
+function digestsOf(texts: (string | null)[], path: string, verifier?: Verifier): string[][] {
+  let byVerifier = digested.get(texts)
+  if (!byVerifier) digested.set(texts, byVerifier = new Map())
+  let known = byVerifier.get(verifier)
+  if (!known) {
+    known = texts.map((text) =>
+      text === null
+        ? []
+        : [contentSha256(text), ...(verifier?.fingerprintText ? [contentSha256(verifier.fingerprintText(path, text.replace(/\r\n/g, "\n")))] : [])]
+    )
+    byVerifier.set(verifier, known)
+  }
+  return known
 }
 
 const tops = new Map<string, string>()
