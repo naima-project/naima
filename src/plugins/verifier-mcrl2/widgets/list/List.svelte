@@ -1377,7 +1377,7 @@
   /* A chapter folded tells what it holds: its decisions, in the words of the entries, quieter. */
   .teaser {
     display: block;
-    max-inline-size: 65ch;
+    max-inline-size: var(--size-w-39-5);
     padding-inline-start: calc(var(--size-icon) + var(--space-sm));
     color: var(--color-text-muted);
     font-size: var(--font-size-home-caption);
@@ -1386,7 +1386,7 @@
   /* A day: its date in one column of one width, its entries beside it, its notes after them. */
   .day {
     display: grid;
-    grid-template-columns: var(--size-ledger-when) minmax(0, 65ch);
+    grid-template-columns: var(--size-ledger-when) minmax(0, var(--size-w-39-5));
     column-gap: var(--space-home-line);
     padding-block: var(--space-md);
   }

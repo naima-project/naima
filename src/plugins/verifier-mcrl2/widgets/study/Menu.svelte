@@ -290,10 +290,14 @@
     opacity: 0;
     transition: opacity var(--motion-duration-fast) var(--motion-easing-standard), color var(--motion-duration-fast) var(--motion-easing-standard);
   }
-  [role^="menuitem"]:hover .remove,
   [role^="menuitem"]:focus-visible .remove,
   .remove:focus-visible {
     opacity: 1;
+  }
+  @media (hover: hover) {
+    [role^="menuitem"]:hover .remove {
+      opacity: 1;
+    }
   }
   .remove:hover {
     color: var(--color-text);
