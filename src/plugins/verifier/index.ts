@@ -11,6 +11,7 @@
 // version has changed since its run.
 
 import { Buffer } from "node:buffer"
+import process from "node:process"
 import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
@@ -496,6 +497,40 @@ export function modelPath(root: string, model: string): string | null {
 export interface VerifyOptions {
   force?: string
   toolArgs?: string[]
+  /** Where a run is stored the moment it is solved, to answer from when the same identity is asked again (what a host keeps for `--emit`). */
+  spool?: Spool
+}
+
+/** Whether this process already ignores a hangup, which it does once, for the rest of its life. */
+let hangupIgnored = false
+
+/** A store of solved runs by the digest of their identity: written when the verifier ends, read before it starts. */
+export interface Spool {
+  find(key: string): RunRecord | undefined
+  keep(key: string, run: RunRecord): void
+}
+
+/** The key of an identity in a spool: the digest of its parts. */
+const spoolKey = (identity: Identity): string => createHash("sha256").update(canonical(identity)).digest("hex")
+
+/** A spool in the folder `dir`, one file per identity; a file that is not a run of that identity, or not conclusive, is not an answer. */
+export function folderSpool(dir: string): Spool {
+  return {
+    find(key) {
+      try {
+        const run = asRun(JSON.parse(readFileSync(join(dir, `${key}.json`), "utf8")))
+        return typeof run !== "string" && conclusive(run.verdict) && run.inputs !== undefined && digestOf(run.inputs, run.toolVersion) === run.inputsSha256
+          ? run
+          : undefined
+      } catch {
+        return undefined
+      }
+    },
+    keep(key, run) {
+      mkdirSync(dir, { recursive: true })
+      writeFileAtomic(join(dir, `${key}.json`), JSON.stringify(run) + "\n")
+    },
+  }
 }
 
 /** What one property's verification came to before anything is written: a recorded run reused, or a new run. */
@@ -584,6 +619,9 @@ export async function decideItem(ctx: Context, item: Item, progress: Progress = 
     const known = runsOf(item).filter((k) => conclusive(k.run.verdict) && madeOn(k.run, identity, (r) => sameInputs(ctx, verifier, r, inputs, toolVersion)))
       .pop()
     if (known) return { reused: known }
+    // A run the host solved in a call that was dropped before its answer came back is answered from, not solved again.
+    const spooled = opts.spool?.find(spoolKey(identity))
+    if (spooled && spooled.inputsSha256 === identity.inputsSha256) return { record: spooled }
   }
   const hash = fingerprintOf(verifier, path)
   let result: VerifyResult
@@ -600,28 +638,28 @@ export async function decideItem(ctx: Context, item: Item, progress: Progress = 
   const seconds = Math.round((performance.now() - started) / 10) / 100
   const commit = gitOrNull(ctx.root, "rev-parse", "HEAD")
   const counts = steps.counts(conclusive(result.verdict))
-  return {
-    record: {
-      verifier: id,
-      model,
-      modelSha256: hash,
-      property,
-      optionsSha256: identity.optionsSha256,
-      inputs,
-      ...(toolVersion !== undefined ? { toolVersion } : {}),
-      inputsSha256: identity.inputsSha256,
-      verdict: result.verdict,
-      output: result.output,
-      at: ctx.now().toISOString(),
-      ...(result.counterexample !== undefined ? { counterexample: result.counterexample } : {}),
-      ...(result.details !== undefined ? { details: result.details } : {}),
-      ...(opts.force !== undefined ? { forced: opts.force } : {}),
-      ...(toolArgs.length ? { toolArgs } : {}),
-      ...(Object.keys(counts).length ? { counts } : {}),
-      seconds,
-      ...(commit ? { commit } : {}),
-    },
+  const record: RunRecord = {
+    verifier: id,
+    model,
+    modelSha256: hash,
+    property,
+    optionsSha256: identity.optionsSha256,
+    inputs,
+    ...(toolVersion !== undefined ? { toolVersion } : {}),
+    inputsSha256: identity.inputsSha256,
+    verdict: result.verdict,
+    output: result.output,
+    at: ctx.now().toISOString(),
+    ...(result.counterexample !== undefined ? { counterexample: result.counterexample } : {}),
+    ...(result.details !== undefined ? { details: result.details } : {}),
+    ...(opts.force !== undefined ? { forced: opts.force } : {}),
+    ...(toolArgs.length ? { toolArgs } : {}),
+    ...(Object.keys(counts).length ? { counts } : {}),
+    seconds,
+    ...(commit ? { commit } : {}),
   }
+  if (conclusive(record.verdict)) opts.spool?.keep(spoolKey(identity), record)
+  return { record }
 }
 
 /** Make a reused run the property's last one, its status from the verdict. */
@@ -677,6 +715,28 @@ function askStreaming(host: Host, args: string[], onErr: (line: string) => void)
 }
 
 /**
+ * The run already kept here that `host` made of `item` and that is current on what this checkout has: a conclusive run
+ * whose property, verifier, model, options and inputs are the ones now (each file by its fingerprint, so a comment edit
+ * does not matter) and that reads the files the model reads now. It is found before anything is sent, so a call dropped
+ * after k of n properties and run again asks the host for the other n−k only. The host's tool version is the one the run
+ * recorded; a host whose tool changed since is asked with `--force`.
+ */
+async function keptFromHost(ctx: Context, host: Host, item: Item, opts: VerifyOptions): Promise<KeptRun | undefined> {
+  if (opts.force !== undefined) return undefined
+  const { verifier, property, path } = prepared(ctx, item)
+  let now: string
+  try {
+    now = canonical(await inputsOf(ctx, verifier, item, { model: path, property, options: optionsOf(item) }))
+  } catch {
+    return undefined
+  }
+  return runsOf(item).filter((k) =>
+    k.run.host === host.name && conclusive(k.run.verdict) && k.run.inputs !== undefined && canonical(k.run.inputs.map((i) => i.path).sort()) === now &&
+    digestOf(k.run.inputs, k.run.toolVersion) === k.run.inputsSha256 && staleness(ctx, item, k.run).length === 0
+  ).pop()
+}
+
+/**
  * Verify one property in `host`'s checkout, through the host's own Naima (`naima verify --emit`, which writes
  * nothing there), and attach the run here. The run is kept only when it was made on exactly what this checkout
  * has — the property, the verifier, the options, and every input by its committed content — so a run from a host
@@ -686,6 +746,11 @@ export async function verifyOnHost(ctx: Context, host: Host, item: Item, progres
   const { verifier } = prepared(ctx, item)
   const refused = refusedToolArgs(verifier, opts.toolArgs ?? [])
   if (refused) throw new Error(`${label(item)}: ${refused}`)
+  const kept = await keptFromHost(ctx, host, item, opts)
+  if (kept) {
+    adopt(ctx, item, kept)
+    return { verdict: kept.run.verdict, reused: kept.name }
+  }
   progress.stage(`${label(item)} on ${host.name}`)
   // The commit this checkout is at goes to the host under a ref of its own and is verified there in a checkout made for
   // it, so the host's own branch does not matter: a property filed on a branch is verified without the host holding it.
@@ -962,7 +1027,21 @@ const verify: Command = {
     }
     let failing = 0
     for (const item of items) if (item.type !== TYPE) throw new Error(`${label(item)} is not a property`)
-    const progress = progressFor((l) => ctx.err(l))
+    // A host's call can be dropped at any step: a run is spooled in the host's work folder the moment it is solved, so the call
+    // run again answers from it, and the host's verifier goes on when the connection is gone (a hangup ends nothing, a closed
+    // error stream says nothing more).
+    if (emit && !hangupIgnored) {
+      hangupIgnored = true
+      try {
+        process.on("SIGHUP", () => {})
+      } catch { /* a platform with no hangup */ }
+    }
+    const spooled = emit ? { ...opts, spool: folderSpool(join(workDir(ctx), "emitted")) } : opts
+    const progress = progressFor((l) => {
+      try {
+        ctx.err(l)
+      } catch { /* the caller is gone */ }
+    })
     try {
       for (const [i, item] of items.entries()) {
         progress.overall(i, items.length, "properties")
@@ -977,7 +1056,7 @@ const verify: Command = {
           continue
         }
         if (emit) {
-          const decided = await decideItem(ctx, item, progress, opts)
+          const decided = await decideItem(ctx, item, progress, spooled)
           const out: Emitted = "reused" in decided
             ? { item: label(item), reused: decided.reused.name, run: decided.reused.run }
             : { item: label(item), run: decided.record }
