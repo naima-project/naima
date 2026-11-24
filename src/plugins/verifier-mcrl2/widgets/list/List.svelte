@@ -619,7 +619,7 @@
           <span class="cell" role="gridcell"><span class="ctitle">{g.chapter.title}</span></span>
         </div>
       {/if}
-      <div class="group" role="rowgroup" class:folded={g.folded} style:--n={g.folded ? 0 : g.count}>
+      <div class="group" role="rowgroup" class:long={g.count >= 50} class:folded={g.folded} style:--n={g.folded ? 0 : g.count}>
         {#if grouped}
           {@const id = headId(g.key)}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -1040,9 +1040,10 @@
     grid-template-columns: var(--tracks);
     column-gap: var(--space-md);
   }
-  /* A group off the screen is not drawn; its height is reckoned from its count of rows and its heading, with the space
-     the heading keeps above it, so that drawing it later moves nothing. */
-  .group {
+  /* A long group off the screen is not drawn; its height is reckoned from its count of rows and its heading, with the space
+     the heading keeps above it, so that drawing it later moves nothing. A short group is always drawn: its rows can wrap
+     to more lines than the reckoning allows for (a large text size), and a group reckoned too short lies over the next. */
+  .group.long {
     content-visibility: auto;
     contain-intrinsic-size: auto calc((var(--n) + 1) * var(--row) + var(--space-sm));
   }
@@ -1247,6 +1248,10 @@
   @container (max-width: 48rem) {
     .list:not(.narrow):not(.is-diary) .heads {
       display: none;
+    }
+    /* A group's heading is one cell over the whole width: the columns' tracks, summed, can be wider than the room. */
+    .list:not(.narrow):not(.is-diary) .ghead {
+      grid-template-columns: minmax(0, 1fr);
     }
     .list:not(.narrow):not(.is-diary) .row {
       display: flex;
