@@ -149,3 +149,29 @@ export async function runCommand(
     return { code: 1, out: out.join("\n"), err: [...err, e instanceof Error ? e.message : String(e)].join("\n") }
   }
 }
+
+/**
+ * The actions that write the tracker's data, which a development line's checkout never does (core/trunk-only.ts): the bridge
+ * runs them in the trunk's checkout when it stands on a line. The others (a claim, its release, a step of a gate, naming a
+ * commit, recording metrics) are the line's own work or hold nothing of the tracker.
+ */
+export const TRUNK_ACTIONS: ReadonlySet<string> = new Set([
+  "decide",
+  "note",
+  "start",
+  "move-gate",
+  "confirm",
+  "wont-fix",
+  "plan-propose",
+  "plan-approve",
+  "meeting-take",
+  "meeting-raise",
+  "meeting-new",
+  "meeting-add",
+  "meeting-move",
+  "meeting-off",
+  "meeting-date",
+])
+
+/** The commands among them whose first argument is an item, and whose files are the ones the change writes. */
+export const ITEM_ACTIONS: ReadonlySet<string> = new Set(["decide", "note", "start", "set", "confirm", "close"])

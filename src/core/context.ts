@@ -8,6 +8,7 @@ import { gitReason, runGit, textsAt } from "./git.ts"
 import { stateDir } from "./tick.ts"
 import { deepFreeze } from "./collections.ts"
 import { writes } from "./item.ts"
+import { trunkOverlay } from "./trunk-writes.ts"
 import { loadRepo } from "./repo.ts"
 import { trackerGitOf } from "./repos.ts"
 import type { Config, Context, Registry, Repo } from "./types.ts"
@@ -73,7 +74,7 @@ export function createContext(place: Place, config: Config, registry: Registry, 
       // Every write through the core's helpers moves `writes()`: the next read sees it.
       if (repo === null || readAt !== writes()) {
         readAt = writes()
-        repo = loadRepo(trackerRoot, registry, preread)
+        repo = loadRepo(trackerRoot, registry, preread, preread ? undefined : trunkOverlay(place.root, trackerRoot))
       }
       return repo
     },

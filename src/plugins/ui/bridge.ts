@@ -64,10 +64,12 @@
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { Buffer } from "node:buffer"
-import { basename, dirname, join, resolve } from "node:path"
+import { basename, dirname, join, relative, resolve } from "node:path"
 import {
   askHostsInBackground,
   type Context,
+  contextIn,
+  dirtyIn,
   findCodegen,
   gitOrNull,
   gitReadScope,
@@ -78,9 +80,13 @@ import {
   type KnownProject,
   knownProjects,
   personAtKeyboard,
+  rememberTrunkWrite,
+  runGit,
   trunk,
+  trunkOverlayStamp,
+  trunkSide,
 } from "../../core/api.ts"
-import { actionArgv, actionCommand, actionOf, ACTIONS, naimaEntry, runCommand, selfEntry } from "./actions.ts"
+import { actionArgv, actionCommand, actionOf, ACTIONS, ITEM_ACTIONS, naimaEntry, runCommand, selfEntry, TRUNK_ACTIONS } from "./actions.ts"
 import { showCall } from "./agent-endpoint.ts"
 import { AtCache, commitOf } from "./at.ts"
 import { knownAt, recentProjects } from "./switch.ts"
@@ -204,7 +210,7 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
   const stampNow = (): Promise<string> => {
     const now = performance.now()
     if (!stamped || now - stamped.at >= SHARE_MS) {
-      stamped = { at: now, stamp: snapshotAsync(ctx).then((s) => stampOf({ head: s.head, refs: s.refs, items: s.items })) }
+      stamped = { at: now, stamp: snapshotAsync(ctx).then((s) => stampOf({ head: s.head, refs: s.refs, items: s.items, trunk: trunkOverlayStamp(ctx.root) })) }
     }
     return stamped.stamp
   }
@@ -324,6 +330,58 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
   const viaViews: JsonOf = async <T>(c: Context, words: string[]) => {
     const view = opts.views.find((v) => v.name === VIEW_OF_COMMAND[words.join(" ")])
     return view ? json(await live(view, {}, c)) as T : await commandJson<T>(c, words)
+  }
+  /** The changes the UI runs on the trunk's checkout for a line's, by run: where, the trunk's commit before, and what was said once it succeeded. */
+  const written = new Map<string, { checkout: string; data: string; dirs: string[]; before: string; said: string }>()
+  /**
+   * Where an action of the tracker's data runs when this checkout stands on a development line: the trunk's checkout and its
+   * data folder, and the items' directories it changes. Throws, saying so plainly and offering nothing destructive, when
+   * there is no trunk checkout or it holds changes of its own in the item's files. Null when the change runs here.
+   */
+  const toTrunk = (argv: readonly string[], args: readonly string[]): { checkout: string; data: string; dirs: string[] } | null => {
+    const side = trunkSide(ctx.root, ctx.trackerRoot)
+    if (!side.onLine) return null
+    if ("why" in side) throw new Error(side.why)
+    const there = contextIn(ctx, side.checkout)
+    const dirs: string[] = []
+    if (ITEM_ACTIONS.has(argv[0]!)) {
+      let item
+      try {
+        item = there.repo.resolve(args[0] ?? "")
+      } catch {
+        // The trunk does not hold it: an item filed on the line, which the line itself writes.
+        return null
+      }
+      dirs.push(relative(there.trackerRoot, item.dir).split("\\").join("/"))
+      const dirty = dirtyIn(side.checkout, dirs.map((d) => join(relative(side.checkout, side.data), d)))
+      if (dirty.length) {
+        throw new Error(
+          `the trunk's checkout has changes of its own in this item's files (${
+            dirty.join(", ")
+          }): nothing was written. Commit or discard them there, then ask again`,
+        )
+      }
+    }
+    return { checkout: side.checkout, data: side.data, dirs }
+  }
+  /** The items a succeeded change touched on the trunk, shown from there on this line at once, and the sentence that says so. */
+  const savedOnTrunk = (on: { checkout: string; data: string; dirs: string[]; before: string }): string => {
+    const changed = new Set(on.dirs)
+    const rel = relative(on.checkout, on.data).split("\\").join("/")
+    const files = [
+      ...(runGit(on.checkout, ["diff", "--name-only", on.before, "HEAD", "--", rel]).out.split("\n")),
+      ...(runGit(on.checkout, ["status", "--porcelain", "--", rel]).out.split("\n").map((l) => l.slice(3))),
+    ].filter(Boolean)
+    for (const f of files) {
+      const parts = f.slice(rel ? rel.length + 1 : 0).split("/")
+      if (parts.length >= 3 && existsSync(join(on.data, parts[0]!, parts[1]!, "meta.json"))) changed.add(`${parts[0]}/${parts[1]}`)
+    }
+    if (changed.size) rememberTrunkWrite(ctx.root, ctx.trackerRoot, on.data, [...changed])
+    shared.clear()
+    stamped = null
+    const c: Change = { kinds: ["items"], head: headCommit(ctx.root) || null, at: ctx.now().toISOString() }
+    for (const l of listeners) l(c)
+    return `saved on ${trunk(ctx.root) ?? "the trunk"}; the line gets it at its next sync`
   }
   /** The context of the moment `at` names, the live one, read again, when absent. */
   const momentOf = (at: string | null): Context => {
@@ -636,6 +694,11 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       // is theirs and each change records who ordered it, and the command it starts runs as a person's.
       const person = personAtKeyboard(ctx.root)?.name
       const by = person && !argv.includes("--by") ? ["--by", person] : []
+      // On a development line's checkout the tracker is written only on the trunk (core/trunk-only.ts): the person is never
+      // refused for it. The change runs in the trunk's checkout, with the same name and signing, and the line shows it at
+      // once from there until it syncs (core/trunk-writes.ts).
+      const onTrunk = TRUNK_ACTIONS.has(action.name) ? toTrunk(argv, args["args"] as string[]) : null
+      const data = onTrunk?.data ?? ctx.trackerRoot
       // The command it starts runs as a person's: said to that command alone, never by changing this process's environment.
       const started = await runCommand(
         ctx,
@@ -646,11 +709,12 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
           action.budget ?? "5m",
           ...(action.progress ? ["--stale", "10m"] : ["--stale", "1m", "--no-progress", "a naima command the UI ran, which prints its result when it ends"]),
           "--",
-          ...actionCommand(opts.entry ?? naimaEntry(), ctx.trackerRoot, [...argv, ...by]),
+          ...actionCommand(opts.entry ?? naimaEntry(), data, [...argv, ...by]),
         ],
         { NAIMA_ROLE: "person" },
       )
       if (started.code !== 0) throw new Error(started.err.trim() || started.out.trim() || `naima run exited with ${started.code}`)
+      if (onTrunk) written.set(run, { ...onTrunk, before: runGit(onTrunk.checkout, ["rev-parse", "HEAD"]).out.trim(), said: "" })
       return json({ run, command: ["naima", ...argv] })
     },
     show: async (args) => {
@@ -728,7 +792,13 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       const tail = Math.min(500, Math.max(1, Number(args["tail"]) || 50))
       const r = await runCommand(ctx, ["run", "status", name, "--json", "--tail", String(tail)])
       if (r.code !== 0) throw new Error(r.err.trim() || `no run ${name}`)
-      return JSON.parse(r.out) as Json
+      const status = JSON.parse(r.out) as { [key: string]: Json }
+      const on = written.get(name)
+      if (on && status["state"] === "succeeded") {
+        if (!on.said) on.said = savedOnTrunk(on)
+        return { ...status, savedOn: on.said }
+      }
+      return status as Json
     },
   }
   // One UI hears the feeds show and agent, and is open once: they share the listener on the files (show.ts), which runs
