@@ -169,7 +169,7 @@ export const cliCommands: Omit<Command, "run">[] = [
       {
         name: "--hook",
         says:
-          "run as the turn-end hook of that agent tool, named as naima.json's agents names it: when a message is due, print what keeps the agent from ending its turn and tells it what to tell or ask the owner, in the form the tool's adapter gives; nothing otherwise; it never fails",
+          "run as the turn-end hook of that agent tool, named as naima.json's agents names it: when a message is due, print it for the owner alone, in the form the tool's adapter gives (a systemMessage), never a block or context for the model; nothing otherwise; it always exits 0",
       },
     ],
     examples: ["tick", "tick --json", "tick --hook <tool>"],

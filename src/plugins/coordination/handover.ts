@@ -454,6 +454,12 @@ export const workerMessage = (d: Depth): string =>
     d.source === "assumed" ? ", and that the window of your model is assumed" : ""
   }. The coordinator continues the item with a fresh worker; you are not the coordinator, and nothing here is about handing its role over.`
 
+/** What the turn-end hook shows the owner, and only the owner (it never makes the model run): the size and what to ask of the session. */
+export const ownerLine = (to: Addressed, d: Depth): string =>
+  to === "coordinator"
+    ? `The coordinator's context is ${d.tokens} tokens, past the ${d.limit}-token point where a handover to a fresh chat is suggested. Ask it to hand over: naima handover --propose.`
+    : `A session's context is ${d.tokens} tokens, past its bound of ${d.limit}: a worker should finish its step, write its state into its items and end (naima claim --at-bound).`
+
 /** Whom a context notice addresses: the session that holds the coordinator role, or any other. */
 export type Addressed = "coordinator" | "worker"
 
@@ -779,7 +785,7 @@ export const handoverCommand = (deps: HandoverDeps): Command => ({
       const session = str(p, "session") ?? (input ? host?.sessionOf?.(input) : undefined) ?? currentSession(ctx.root)
       const w = watch(ctx, session, tokens, o, input ? host?.transcriptPath?.(input) : undefined, model)
       if (!w) return 0
-      if (str(p, "hook") !== undefined && host?.stopFor) ctx.out(host.stopFor(w.text))
+      if (str(p, "hook") !== undefined && host?.stopFor) ctx.out(host.stopFor(ownerLine(w.to, w.depth)))
       else ctx.err(messageLine({ id: w.to === "coordinator" ? "coordinator-handover-due" : "worker-bound-reached", level: "urgent", text: w.text }))
       return 0
     }

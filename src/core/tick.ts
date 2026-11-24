@@ -443,15 +443,27 @@ export function startTick(opts: TickOptions): { finish(): Promise<TickResult> } 
     async finish() {
       await Promise.all(running)
       const now = opts.clock()
+      let shown: Notice[] = []
       try {
         escalate(opts, now)
         raiseUrgent(opts, now)
-        const shown = opts.quiet ? [] : dueNotices(opts, now).filter((n) => claimShow(opts.dir, n, now))
-        wake(opts.dir, nextDue(opts, now), now)
-        return { ran, shown }
+        shown = opts.quiet ? [] : dueNotices(opts, now).filter((n) => claimShow(opts.dir, n, now))
       } catch {
-        return { ran, shown: [] }
+        shown = []
       }
+      // The wake time is left whatever else failed, and its folder made: a hook runs the tick only when it has come.
+      let at = now.getTime() + WAKE_AT_MOST
+      try {
+        at = nextDue(opts, now)
+      } catch {
+        // an hour from now, at the latest
+      }
+      try {
+        wake(opts.dir, at, now)
+      } catch {
+        // the hook then asks again in a few minutes
+      }
+      return { ran, shown }
     },
   }
 }

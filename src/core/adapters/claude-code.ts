@@ -10,16 +10,18 @@
 //                 and, as additionalContext, what the agent is to say first.
 //   Stop          at the end of every agent turn, a shell script beside this
 //                 file (claude-code-stop.sh) reads the tick's wake files and,
-//                 only when something can be due, runs naima tick --hook
-//                 claude-code, which blocks the stop with what the agent must
-//                 tell or ask the owner. It never blocks twice in a row: a
-//                 stop the hook already continued (stop_hook_active) passes.
-//                 When the project's coordination plugin measures the
-//                 coordinator's context (naima handover), the script also
-//                 reads the transcript's last usage, and past the limit the
-//                 plugin left in the tick's folder (handover-at) it asks
-//                 naima handover --watch, which tells the coordinator to
-//                 hand over.
+//                 only when something can be due, starts naima tick --hook
+//                 claude-code in the background and returns at once. It never
+//                 makes the model run again: it always exits 0 and prints at
+//                 most {"systemMessage": "..."}, which only the owner sees, never
+//                 a block, a continue or context for the model. What the tick
+//                 has for the owner is left in a file and printed by the next
+//                 turn's hook. It never looks at the working tree. When the
+//                 project's coordination plugin measures the coordinator's
+//                 context (naima handover), the script also reads the
+//                 transcript's last usage, and past the limit the plugin left in
+//                 the tick's folder (handover-at) it starts naima handover
+//                 --watch, whose message for the owner is shown the same way.
 //   SubagentStart runs naima subagent --hook claude-code, which puts the
 //                 project's rules for agents in the sub-agent's context and
 //                 leaves a mark, by the sub-agent's id, that it has them.
@@ -154,7 +156,7 @@ const sessionStart = hook(
 const turnEnd = hook(
   "Stop",
   "turn-end hook",
-  "at the end of each agent turn, when Naima has something for you — a newer Naima, a long run that is due, an urgent message — the agent is told to say it; otherwise it costs nothing",
+  "at the end of each agent turn, when Naima has something for you — a newer Naima, a long run that is due, an urgent message — you are told by a message of the tool, never by the agent; otherwise it costs nothing",
   stopCommand,
   (c) => c.includes("claude-code-stop.sh"),
   (c) => c.includes(STOP_SCRIPT),
@@ -328,7 +330,7 @@ export const claudeCode: AgentAdapter = {
   },
   subagentContext: (context) => JSON.stringify({ hookSpecificOutput: { hookEventName: "SubagentStart", additionalContext: context } }),
   greeting: (shown, context) => JSON.stringify({ systemMessage: shown, hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: context } }),
-  stopFor: (reason) => JSON.stringify({ decision: "block", reason }),
+  stopFor: (text) => JSON.stringify({ systemMessage: text }),
   contextTokens: contextTokensFromInput,
   contextModel: contextModelFromInput,
   models: claudeCodeModels,

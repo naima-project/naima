@@ -22,7 +22,7 @@ Naima ships an agent skill, [`skills/naima/SKILL.md`](../../skills/naima/SKILL.m
   update or update. Every command is run as the greeting writes it, `sh naima-tracker/naima.sh <command>`, never as a bare `naima` the machine may not have.
   When the owner asks what Naima can do, start from [the basics](../guide/the-basics.md): set a goal, reach it in steps, publish; the rest only when asked. An
   update is applied only after the owner says yes, followed by the checks and one commit ([update Naima](../guide/update-naima.md)).
-- **Relay Naima's messages.** When a naima command prints a `NAIMA-MESSAGE` line, or a turn-end hook stops the agent with what to say, the agent tells the owner
+- **Relay Naima's messages.** When a naima command prints a `NAIMA-MESSAGE` line, the agent tells the owner (a turn-end hook shows the owner its messages itself)
   at once, says when it is urgent, and never acknowledges a message itself ([messages to the owner](messages.md)).
 - **Suggest a handover when told, and finalize only on the owner's yes.** A coordinator whose context is past the threshold suggests the handover in its next
   reply, after answering what the owner asked (`naima handover --propose`). On a yes (`--agreed`) it lands or hands off what is in flight, records a signed

@@ -1463,13 +1463,8 @@ async function endTick(tick: { finish(): Promise<TickResult> } | null): Promise<
 /** A message as a person reads it in a list: urgent ones marked, with how the owner acknowledges them. */
 const spoken = (n: Notice): string => `${n.level === "urgent" ? "URGENT: " : ""}${n.text}${n.ack ? ` (only the owner acknowledges it: ${n.ack})` : ""}`
 
-/** What an agent is told to do, at the end of its turn, with what the tick has for the owner. */
-export const stopReason = (shown: readonly Notice[]): string =>
-  [
-    "Naima has something for the owner. Before you end this turn, tell the owner in plain words, in your reply:",
-    ...shown.map((n) => `- ${spoken(n)}`),
-    "Ask before acting on any of it: nothing is applied without the owner's yes, and never acknowledge a message on the owner's behalf.",
-  ].join("\n")
+/** What the owner is shown at the end of a turn, with what the tick has for them: for the owner alone, never for the model. */
+export const stopReason = (shown: readonly Notice[]): string => ["Naima has something for you:", ...shown.map((n) => `- ${spoken(n)}`)].join("\n")
 
 /** The adapter `--hook` names, or an error that names the tools that have one. */
 function hookTool(args: string[], command: string): { tool: ReturnType<typeof adapter> | null; rest: string[] } {

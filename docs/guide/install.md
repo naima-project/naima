@@ -182,7 +182,7 @@ line". It is appended only if no entry file holds it already. The versioned `nai
 The line works with any agent that reads its entry file, but an agent may still skip it. Some agent tools can run a command by themselves when a session starts,
 and for those Naima has an adapter that installs a session-start hook running `naima hello`, so its greeting is in front of you and the agent before the first
 message. A tool that can also run a command when the agent ends its turn gets a turn-end hook too: it runs Naima's tick, so what Naima has for you during a long
-session (a newer Naima, a long run that is due, an urgent message) is said even when the agent runs no naima command for hours
+session (a newer Naima, a long run that is due, an urgent message) is shown to you even when the agent runs no naima command for hours, by the tool itself: the hook never makes the model run again
 ([what Naima tells you while you work](messages.md)). Naima itself works with any agent; an adapter only knows how one tool is configured.
 
 | Tool        | Its id in `agents` | Hooks                                                                                                                                                                                                                                                                                                                                                                                                                        | Where                                                                                        |

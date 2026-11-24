@@ -80,7 +80,7 @@ export interface AgentAdapter {
   env?: readonly string[]
   /** Its session-start hook, when the tool has one: it runs naima hello. */
   sessionStart?: AgentHook
-  /** Its turn-end hook, when the tool has one: it runs the tick, cheaply, and has the agent tell the owner what is due. */
+  /** Its turn-end hook, when the tool has one: it runs the tick, cheaply, and shows the owner what is due; it never makes the model run again. */
   turnEnd?: AgentHook
   /**
    * Its hooks on sub-agents, when the tool has them (subagents.ts): as one starts, the project's rules are put in its
@@ -102,7 +102,7 @@ export interface AgentAdapter {
   greeting?(shown: string, context: string): string
   /** The tool's own session id, from what its session-start hook is given on standard input: what naima hello --hook records as the session. */
   sessionOf?(hookInput: string): string | undefined
-  /** What naima tick --hook prints for the tool when the owner has to be told something: `reason`, for the agent. */
+  /** What naima tick --hook prints for the tool when the owner has to be told something: `text`, shown to the owner alone, never fed to the model, never a block. */
   stopFor?(reason: string): string
   /**
    * How full the agent's context is now, in tokens, from what the tool's turn-end hook is given on standard input (the

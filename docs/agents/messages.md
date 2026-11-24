@@ -20,8 +20,7 @@ NAIMA-MESSAGE {"id":"update-available-0123456789ab","level":"info","text":"A new
 
 ## At the end of your turn
 
-With a tool that has a turn-end hook, the hook may keep you from ending a turn and tell you what to say. Say it in your reply, then end the turn. The hook does
-this at most once in a row and at most once an hour for the same message, so it never keeps you going.
+With a tool that has a turn-end hook, the hook shows the owner what is due, as a message of the tool that you do not receive. It never keeps you from ending a turn, never wakes you and never adds to your context.
 
 The same hook checks capture. When a turn changed the project's files and nothing in the tracker changed, it stops the turn once with a reminder. Judge what the
 owner said since the last turn. A request, a decision, a report or a deferral that is settled is filed now, deduplicated and in your own words. Something the
