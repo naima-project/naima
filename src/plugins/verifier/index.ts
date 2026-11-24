@@ -721,7 +721,7 @@ function askStreaming(host: Host, args: string[], onErr: (line: string) => void)
  * after k of n properties and run again asks the host for the other n−k only. The host's tool version is the one the run
  * recorded; a host whose tool changed since is asked with `--force`.
  */
-async function keptFromHost(ctx: Context, host: Host, item: Item, opts: VerifyOptions): Promise<KeptRun | undefined> {
+async function keptFromHost(ctx: Context, item: Item, opts: VerifyOptions): Promise<KeptRun | undefined> {
   if (opts.force !== undefined) return undefined
   const { verifier, property, path } = prepared(ctx, item)
   let now: string
@@ -746,7 +746,7 @@ export async function verifyOnHost(ctx: Context, host: Host, item: Item, progres
   const { verifier } = prepared(ctx, item)
   const refused = refusedToolArgs(verifier, opts.toolArgs ?? [])
   if (refused) throw new Error(`${label(item)}: ${refused}`)
-  const kept = await keptFromHost(ctx, host, item, opts)
+  const kept = await keptFromHost(ctx, item, opts)
   if (kept) {
     adopt(ctx, item, kept)
     return { verdict: kept.run.verdict, reused: kept.name }
