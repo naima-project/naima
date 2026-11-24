@@ -1,0 +1,1 @@
+import{Ct as e,d as t,h as n,wt as r}from"./runtime-DvDVho1J.js";import{qi as i,ri as a}from"./core-C8tkynnh.js";function o(o,s){r(s,!1);let c=i();t(()=>a(c)),n(),e()}export{o as default};

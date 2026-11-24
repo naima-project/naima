@@ -4,6 +4,10 @@
 // while the stamp is the same. A view can read more than the stamp says (another worktree's files, the clock), so the
 // bridge reads a view it answered from here again soon after, and says a change when the answer moved.
 //
+// Stale while revalidate (bugs/opening-desktop-app-naima-dev-still-shows): a project that changes all the time (a
+// workshop with workers) never has the same stamp twice, so a window opened again would wait for every view. The last
+// answer kept of a view is therefore given back at once whatever its stamp, and the view is read again behind it.
+//
 // The cache is Naima's state folder for the clone (naima/views in the git directory), or the folder NAIMA_VIEW_CACHE
 // names; none outside git. An entry that cannot be read is a miss, and a write that fails is skipped: the cache
 // only ever saves time.
@@ -20,6 +24,8 @@ export const VIEW_CACHE_ENV = "NAIMA_VIEW_CACHE"
 export interface ViewCache {
   /** The answer kept for `key` at `stamp`, or undefined. */
   get(key: string, stamp: string): unknown
+  /** The last answer kept for `key` at any stamp, with the stamp it was kept at: what a window opened again draws at once, stale or not. */
+  peek(key: string): { stamp: string; data: unknown } | undefined
   /** Keep `data` as the answer for `key` at `stamp`. */
   put(key: string, stamp: string, data: unknown): void
   readonly dir: string
@@ -43,6 +49,14 @@ export function viewCache(ctx: Context, dir: string | null = process.env[VIEW_CA
       try {
         const kept = JSON.parse(readFileSync(file(key), "utf8")) as { key?: string; stamp?: string; data?: unknown }
         return kept.key === key && kept.stamp === stamp ? kept.data : undefined
+      } catch {
+        return undefined
+      }
+    },
+    peek(key) {
+      try {
+        const kept = JSON.parse(readFileSync(file(key), "utf8")) as { key?: string; stamp?: string; data?: unknown }
+        return kept.key === key && typeof kept.stamp === "string" && "data" in kept ? { stamp: kept.stamp, data: kept.data } : undefined
       } catch {
         return undefined
       }

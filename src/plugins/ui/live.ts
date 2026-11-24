@@ -24,6 +24,11 @@ export interface Change {
   head: string | null
   /** When the change was seen, ISO 8601. */
   at: string
+  /**
+   * How many views the bridge still reads again behind an answer it gave from its cache (stale while revalidate). Only
+   * the bridge's own events carry it; one with no kinds says nothing but this.
+   */
+  updating?: number
 }
 
 export interface Snapshot {
