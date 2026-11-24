@@ -29,13 +29,19 @@ function notItems(typeDir: string, where: string): Finding[] {
  * Every item of the tracker at `trackerRoot`. `preread` holds the text of item files already known by path (a tracker read
  * out of git, contextAt): it is used instead of opening the file, which on Windows costs a scan of each fresh file.
  */
-export function loadRepo(trackerRoot: string, registry: Registry, preread?: ReadonlyMap<string, string>): Repo {
+export function loadRepo(
+  trackerRoot: string,
+  registry: Registry,
+  preread?: ReadonlyMap<string, string>,
+  /** Item directories read from another place, by the directory they stand in: the trunk's copy of an item a line shows (core/trunk-writes.ts). */
+  elsewhere?: ReadonlyMap<string, string>,
+): Repo {
   const items: Item[] = []
   const unreadable: Finding[] = []
   for (const type of registry.types.values()) {
     unreadable.push(...notItems(join(trackerRoot, type.dir), type.dir))
     for (const slug of listDirs(join(trackerRoot, type.dir))) {
-      const dir = join(trackerRoot, type.dir, slug)
+      const dir = elsewhere?.get(join(trackerRoot, type.dir, slug)) ?? join(trackerRoot, type.dir, slug)
       const where = `${type.dir}/${slug}`
       const path = join(dir, META)
       const known = preread?.get(path)

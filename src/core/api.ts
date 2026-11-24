@@ -352,5 +352,6 @@ export {
   stageTotal,
 } from "./progress.ts"
 export { type JobOutcome, type Level, MESSAGE_PREFIX, messageId, messageLine, type Notice, stateDir, tickDir } from "./tick.ts"
+export { dirtyIn, insideData, rememberTrunkWrite, trunkCheckout, trunkOverlay, trunkOverlayStamp, trunkSide } from "./trunk-writes.ts"
 export { developmentLine, LINE_BRANCH_PREFIX, type OnLine, refuseConfigOnLine, trunkOnlyRefusal, whereOnLine } from "./trunk-only.ts"
 export { spawnSyncFed } from "./spawn-fed.ts"

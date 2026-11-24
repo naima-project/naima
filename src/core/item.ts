@@ -8,6 +8,7 @@ import { writeFileAtomic } from "./files.ts"
 import { dirsAcrossBranches } from "./git.ts"
 import { DATA_FILE } from "./layout.ts"
 import { refuseConfigOnLine } from "./trunk-only.ts"
+import { insideData } from "./trunk-writes.ts"
 import type { Context, Item, Meta, OriginRequest, TextWrite, TypeDef, Write } from "./types.ts"
 
 export const META = "meta.json"
@@ -142,6 +143,10 @@ function onDisk(dir: string): Meta | null {
  * a bug in that hook, reported as one.
  */
 function beforeWrite(ctx: Context, write: Write): void {
+  // An item a development line shows from the trunk's checkout (core/trunk-writes.ts) is the trunk's to write, never this checkout's.
+  if (!insideData(ctx.trackerRoot, write.item.dir)) {
+    throw new NaimaError(`${write.item.type}/${write.item.slug} is shown from the trunk's checkout until this line syncs: write it there`, "vetoed")
+  }
   guard?.(write.item.dir)
   for (const hook of ctx.registry.hooks) {
     const refusal = hook.beforeWrite?.(write, ctx)

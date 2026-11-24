@@ -55,6 +55,13 @@ trunk holds and the branch does not work on, a move of such an item, an event, a
 only on the trunk. Two branches that write the same item, or a branch and the trunk, meet as a merge conflict, at the sync or at the landing, resolved as for
 code.
 
+The UI never shows that refusal for what the owner does in it. When `naima ui` is open on a line's checkout, a comment, a note, a decision, a move to a goal,
+closing as won't fix, starting an item and the meeting actions run in the trunk's checkout (the main worktree, on the trunk branch), under the same name and
+signing. The open UI shows the item from there at once, and says "saved on main; the line gets it at its next sync". The line's own files are not written;
+the UI reads the trunk's copy of the item until the line's copy changes, which is its next sync. When the trunk's checkout is missing, or holds changes of its
+own in the item's files, nothing is written and the UI says so; it never discards or commits what is there. An item filed on the line, which the trunk does not
+hold, is still written on the line.
+
 ## Keep a line up to date with the trunk
 
 The trunk goes into a line, never the other way round, and never by a rebase.
