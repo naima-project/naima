@@ -396,6 +396,7 @@ export async function runUi(ctx: Context, flags: { open: boolean; port?: number;
     // A UI opened again on a large project draws from the views kept on disk, then reads them again.
     cache: viewCache(ctx),
     pool,
+    ...(deps.log ? { trace: deps.log } : {}),
     switcher: {
       can: file !== null,
       to: (project) => {
@@ -558,6 +559,8 @@ const uiCommand: Command = {
       pool.warm()
       return runSidecar(ctx, {
         pool,
+        // NAIMA_UI_TRACE=1: one line per view read, how long it took and how it was answered, on stderr.
+        ...(process.env["NAIMA_UI_TRACE"] ? { trace: (line: string) => void process.stderr.write(line + "\n") } : {}),
         views: viewsOf(ctx),
         tabs,
         tabFolder: (name) => tabFolder(ctx, tabs, name),

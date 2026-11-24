@@ -119,11 +119,14 @@ export interface BridgeOptions {
   watch?: { interval?: number; debounce?: number }
   /**
    * Where the live views computed are kept between runs (view-cache.ts), so that a UI opened again draws at once: none
-   * by default. A view answered from it is read again `recheck` ms later (2 s by default), and a change is said on the
-   * feed when its answer moved.
+   * by default. The last answer kept of a view is given at once, whatever the project's stamp; when the stamp moved the
+   * view is read again behind it (the feed's events carry how many are, `updating`, and say a change when one moved),
+   * and when it holds the view is read again `recheck` ms later (2 s by default).
    */
   cache?: ViewCache | null
   recheck?: number
+  /** Told one line per view or tab read: its name, how long the ask took, and how it was answered (live, cache, stale, shared). */
+  trace?: (line: string) => void
   /**
    * Where the live views are rendered when given: off the serving thread, a few at a time (view-pool.ts), so that a slow
    * view holds no other request. A view the pool cannot render (no worker) is rendered in this thread, as without it.
@@ -249,21 +252,71 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
         throw e
       }
     })
-  /** A live read shared as `share` does, and answered from the views' cache while the project's stamp holds. */
+  // Views answered from the cache that are read again behind the answer (stale while revalidate): the keys, and whether
+  // the answers moved. Said on the feed when the first begins and again when the last ends, so that a window shows
+  // quietly that it is updating, and reads what moved.
+  const revalidating = new Map<string, Promise<void>>()
+  let moved = false
+  const announce = (kinds: Change["kinds"]): void => {
+    const c: Change = { kinds, head: headCommit(ctx.root) || null, at: ctx.now().toISOString(), updating: revalidating.size }
+    for (const l of listeners) l(c)
+  }
+  const revalidate = (key: string, was: unknown, read: () => Promise<unknown>): void => {
+    if (revalidating.has(key)) return
+    const begun = revalidating.size === 0
+    const done = (async () => {
+      try {
+        const fresh = await read()
+        if (JSON.stringify(fresh) !== JSON.stringify(was)) moved = true
+        shared.set(key, { at: performance.now(), answer: Promise.resolve(fresh) })
+      } catch {
+        // A view that fails now is read again, and fails as it does, when next asked.
+        shared.delete(key)
+      } finally {
+        revalidating.delete(key)
+        if (revalidating.size === 0) {
+          const kinds: Change["kinds"] = moved ? ["items"] : []
+          moved = false
+          announce(kinds)
+        }
+      }
+    })()
+    revalidating.set(key, done)
+    if (begun) announce([])
+  }
+  /**
+   * A live read shared as `share` does. The last answer kept on disk is given at once, whatever the project's stamp: when
+   * the stamp holds it is read again soon after (a view can read more than the stamp says); when it moved the view is
+   * read again now, behind the answer, and the feed says when it is done. With nothing kept the view is read live.
+   */
   const kept = (key: string, compute: () => Promise<unknown>): Promise<unknown> => {
+    const began = performance.now()
+    let how = "shared"
     const read = async (): Promise<unknown> => {
       const stamp = cache ? await stampNow() : ""
+      const from = performance.now()
       // One view, or the rail's map, asks each git question once (gitReadScope). What compute answers is plain JSON data.
       const data = await gitReadScope(compute)
+      opts.trace?.(`render ${key.split(" {")[0]} ${Math.round(performance.now() - from)} ms`)
       if (cache) cache.put(key, stamp, data)
       return data
     }
-    return share(key, async () => {
-      const hit = cache ? cache.get(key, await stampNow()) : undefined
-      if (hit === undefined) return read()
-      recheckSoon(key, read)
-      return hit
+    const answer = share(key, () => {
+      const entry = cache ? cache.peek(key) : undefined
+      if (entry === undefined) {
+        how = "live"
+        return read()
+      }
+      // The stamp is compared behind the answer: walking a large tracker's files must not hold the first screen.
+      void stampNow().then((stamp) => {
+        if (stamp === entry.stamp) recheckSoon(key, read)
+        else revalidate(key, entry.data, read)
+      }, () => revalidate(key, entry.data, read))
+      how = "stale"
+      return Promise.resolve(entry.data)
     })
+    if (opts.trace) void answer.then(() => opts.trace?.(`ask ${key.split(" {")[0]} ${Math.round(performance.now() - began)} ms ${how}`), () => {})
+    return answer
   }
   /** What a command prints with --json, through the view whose data it is when there is one: what the metro reads. */
   const viaViews: JsonOf = async <T>(c: Context, words: string[]) => {
@@ -708,6 +761,8 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
     changes: (emit) => {
       const said = (c: Change) => emit(json(c))
       listeners.add(said)
+      // A window that connects while views are read again behind their answers learns it at once.
+      if (revalidating.size) announce([])
       const watch = watchProject(ctx, (c) => {
         shared.clear()
         stamped = null

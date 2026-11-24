@@ -48,6 +48,8 @@ export interface SidecarOptions {
   reload?: ReloadWatch
   /** The views and tabs are rendered in this pool of worker threads, a few at a time, instead of one after another on the thread that answers the shell. */
   pool?: ViewPool
+  /** Told one line per view read (the bridge's trace). */
+  trace?: (line: string) => void
   /** Told each event of the sidecar's machine and each action it takes, as its model's action record has them. */
   record?: (entry: SidecarEntry) => void
 }
@@ -139,6 +141,7 @@ export async function runSidecar(ctx: Context, opts: SidecarOptions): Promise<nu
     // A UI opened again on a large project draws from the views kept on disk, then reads them again.
     cache: viewCache(ctx),
     ...(opts.pool ? { pool: opts.pool } : {}),
+    ...(opts.trace ? { trace: opts.trace } : {}),
     carrier: "desktop",
     // The shell switches project itself, restarting the sidecar in the one chosen: the sidecar only lists them.
     switcher: { can: true },
