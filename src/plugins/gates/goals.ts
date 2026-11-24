@@ -12,7 +12,7 @@
 // is ready when it is up to date with the trunk and G holds on its tip.
 // The model these follow: develop/models/lines/lines.mcrl2.
 
-import { type Context, gitOrNull, isAncestor, today, trunk } from "../../core/api.ts"
+import { closedOnTip, type Context, gitOrNull, isAncestor, today, trunk } from "../../core/api.ts"
 import { type GateDef, gatesOf, releaseTags, versionKey } from "./index.ts"
 
 /** The type whose items are features: a landing that closes one is refused during a freeze. Read by name. */
@@ -117,6 +117,16 @@ export function fixedOnLine(ctx: Context, gate: string): string[] {
     for (const id of ids(c.unfixes)) fixed.delete(id)
   }
   return [...fixed]
+}
+
+/**
+ * The items fixed or proved on the line of `gate`: those fixedOnLine names, and those whose own record on the line's tip is
+ * settled (closedOnTip: a property that holds, a test that passed, a requirement that is met) while the trunk's copy is not.
+ * Each closes when the line lands, so a count read from the trunk and one read from the line's checkout agree.
+ */
+export function closingOnLine(ctx: Context, gate: string): string[] {
+  const fixed = fixedOnLine(ctx, gate)
+  return [...new Set([...fixed, ...closedOnTip(ctx, `refs/heads/line/${gate}`).keys()])]
 }
 
 /**
