@@ -1,0 +1,1 @@
+import{Dt as e,J as t,K as n,L as r,dt as i,f as a,k as o,ot as s}from"./runtime-DvDVho1J.js";var c=t(`<div><!></div>`);function l(t,l){let u=a(l,`gap`,3,`md`),d=a(l,`align`,3,`stretch`);var f=c(),p=i(f);r(p,()=>l.children),e(f),s(()=>o(f,1,`stack gap-${u()??``} align-${d()??``}`,`svelte-1382wtz`)),n(t,f)}export{l as t};

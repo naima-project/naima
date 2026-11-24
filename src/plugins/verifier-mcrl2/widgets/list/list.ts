@@ -39,7 +39,38 @@ export interface Facet<T> {
 export interface Grouping<T> {
   readonly id: string;
   readonly label: string;
-  readonly group: (item: T) => { readonly key: string; readonly title: string; readonly rank?: number };
+  readonly group: (item: T) => {
+    readonly key: string;
+    readonly title: string;
+    readonly rank?: number;
+    /** A chapter the group belongs to (the month a day is in): its heading is drawn over the first group of it. The
+     *  groups of a chapter stand together, the chapters in the order of their ranks. */
+    readonly chapter?: Chapter;
+  };
+}
+
+/** A chapter heading over a run of groups. */
+export interface Chapter {
+  readonly key: string;
+  readonly title: string;
+  readonly rank?: number;
+}
+
+/** A span of days, yyyy-mm-dd, both ends included. */
+export interface DayRange {
+  readonly from: string;
+  readonly to: string;
+}
+
+/** What items are filtered by a span of days: the day each item stands on (when it was filed, closed, told), or null
+ *  for none. An item with no day is kept only while no span is chosen. */
+export interface Range<T> {
+  readonly id: string;
+  readonly label: string;
+  readonly day: (item: T) => string | null;
+  /** The span is chosen here and kept in the view, but the list does not apply it: the caller has narrowed the items to it
+   *  already (the time window of a timeline). */
+  readonly outside?: boolean;
 }
 
 /** What the list knows of the items: how each is named, and what it can show, filter and group by. */
@@ -48,6 +79,10 @@ export interface ListSpec<T> {
   readonly columns: readonly Column<T>[];
   readonly facets?: readonly Facet<T>[];
   readonly groupings?: readonly Grouping<T>[];
+  /** The spans of days the items can be filtered by, each with the day an item stands on. */
+  readonly ranges?: readonly Range<T>[];
+  /** A second line under the title: what the item says more, quietly. None for no line. */
+  readonly second?: (item: T) => string | undefined;
 }
 
 /** What the person chose. */
@@ -60,6 +95,8 @@ export interface ListView {
   readonly group: string;
   /** By facet, the values kept; an item is kept when it has one of them, for every facet that keeps some. */
   readonly filters: Readonly<Record<string, readonly string[]>>;
+  /** By range, the span of days kept; an item is kept when its day is inside every span chosen. */
+  readonly ranges?: Readonly<Record<string, DayRange>>;
   /** The groups folded, by key. */
   readonly folded: readonly string[];
   /** The optional columns shown and the others hidden, by id: those named here turn the other way. */
@@ -72,6 +109,7 @@ export const EMPTY_VIEW: ListView = {
   desc: false,
   group: "",
   filters: {},
+  ranges: {},
   folded: [],
   toggled: [],
 };
@@ -94,6 +132,8 @@ export interface FacetChips {
 export interface ListGroup<T> {
   readonly key: string;
   readonly title: string;
+  /** The chapter the group stands in, when the grouping has chapters. */
+  readonly chapter?: Chapter;
   /** How many items the group holds, folded or not. */
   readonly count: number;
   readonly folded: boolean;
@@ -145,18 +185,36 @@ export function searchItems<T>(items: readonly T[], spec: ListSpec<T>, text: str
 }
 
 /** The items every facet keeps, leaving out the facet `except` (to count that facet's own values). */
-export function filterItems<T>(items: readonly T[], spec: ListSpec<T>, filters: ListView["filters"], except = ""): T[] {
+export function filterItems<T>(
+  items: readonly T[],
+  spec: ListSpec<T>,
+  filters: ListView["filters"],
+  except = "",
+  ranges: NonNullable<ListView["ranges"]> = {},
+): T[] {
   const active = (spec.facets ?? []).filter((f) => f.id !== except && (filters[f.id]?.length ?? 0) > 0);
-  if (!active.length) return [...items];
-  return items.filter((i) => active.every((f) => f.values(i).some((v) => filters[f.id]!.includes(v))));
+  const spans = (spec.ranges ?? []).filter((r) => !r.outside && ranges[r.id]);
+  if (!active.length && !spans.length) return [...items];
+  return items.filter((i) =>
+    active.every((f) => f.values(i).some((v) => filters[f.id]!.includes(v))) &&
+    spans.every((r) => inside(r.day(i), ranges[r.id]!))
+  );
 }
+
+/** Whether a day is inside a span. */
+export const inside = (day: string | null, r: DayRange): boolean => !!day && day >= r.from && day <= r.to;
 
 /** Each facet's values with their counts, among the items the search and the other facets keep. A value chosen stays
  *  listed with its count even when no item has it now, so it can be taken off. */
-export function facetChips<T>(found: readonly T[], spec: ListSpec<T>, filters: ListView["filters"]): FacetChips[] {
+export function facetChips<T>(
+  found: readonly T[],
+  spec: ListSpec<T>,
+  filters: ListView["filters"],
+  ranges: NonNullable<ListView["ranges"]> = {},
+): FacetChips[] {
   return (spec.facets ?? []).map((f) => {
     const counts = new Map<string, number>();
-    for (const i of filterItems(found, spec, filters, f.id)) {
+    for (const i of filterItems(found, spec, filters, f.id, ranges)) {
       for (const v of new Set(f.values(i))) counts.set(v, (counts.get(v) ?? 0) + 1);
     }
     const on = filters[f.id] ?? [];
@@ -190,25 +248,127 @@ export function sortItems<T>(items: readonly T[], col: Column<T> | undefined, de
     .map((x) => x.item);
 }
 
-/** The items in groups, ordered by the groups' ranks, then by where their first item stands. */
+/** The items in groups, ordered by their chapters' ranks, then the groups' ranks, then by where their first item stands. */
 export function groupItems<T>(
   items: readonly T[],
   grouping: Grouping<T> | undefined,
-): { key: string; title: string; items: T[] }[] {
+): { key: string; title: string; chapter?: Chapter; items: T[] }[] {
   if (!grouping) return [{ key: "", title: "", items: [...items] }];
-  const out = new Map<string, { key: string; title: string; rank: number; first: number; items: T[] }>();
+  const out = new Map<
+    string,
+    { key: string; title: string; chapter?: Chapter; chapterRank: number; rank: number; first: number; items: T[] }
+  >();
   items.forEach((i, n) => {
     const g = grouping.group(i);
     const e = out.get(g.key) ??
-      { key: g.key, title: g.title, rank: g.rank ?? Number.MAX_SAFE_INTEGER, first: n, items: [] };
+      {
+        key: g.key,
+        title: g.title,
+        ...(g.chapter ? { chapter: g.chapter } : {}),
+        chapterRank: g.chapter?.rank ?? 0,
+        rank: g.rank ?? Number.MAX_SAFE_INTEGER,
+        first: n,
+        items: [],
+      };
     e.items.push(i);
     out.set(g.key, e);
   });
-  return [...out.values()].sort((a, b) => a.rank - b.rank || a.first - b.first).map(({ key, title, items }) => ({
-    key,
-    title,
-    items,
-  }));
+  return [...out.values()]
+    .sort((a, b) => a.chapterRank - b.chapterRank || a.rank - b.rank || a.first - b.first)
+    .map(({ key, title, chapter, items }) => ({ key, title, ...(chapter ? { chapter } : {}), items }));
+}
+
+// ---- Days: a grouping by day under chapter headings, and the spans of days a filter offers.
+
+const pad = (n: number) => String(n).padStart(2, "0");
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+/** A day, yyyy-mm-dd, as a date at noon UTC, or null when it is not one. */
+function dayDate(day: string): Date | null {
+  const m = day.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12)) : null;
+}
+
+/** A day as a person says it: "Tue 24 Nov", with the year when it is not `today`'s; "Today" and "Yesterday" for those. */
+export function dayWords(day: string, today = ""): string {
+  const d = dayDate(day);
+  if (!d) return day;
+  if (day === today) return "Today";
+  const t = dayDate(today);
+  if (t && d.getTime() === t.getTime() - 864e5) return "Yesterday";
+  const y = t && t.getUTCFullYear() === d.getUTCFullYear() ? "" : ` ${d.getUTCFullYear()}`;
+  return `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]!.slice(0, 3)}${y}`;
+}
+
+/** A grouping by day, the newest first, under a chapter heading for each month ("November 2026") or each year, or none.
+ *  An item with no day stands last under "Undated". `day` gives the day an item stands on, yyyy-mm-dd. */
+export function dayGrouping<T>(
+  id: string,
+  label: string,
+  day: (item: T) => string | null,
+  opts: { readonly chapters?: "month" | "year" | "none"; readonly today?: string } = {},
+): Grouping<T> {
+  const chapters = opts.chapters ?? "month";
+  return {
+    id,
+    label,
+    group: (item) => {
+      const dd = day(item);
+      const d = dd ? dayDate(dd) : null;
+      if (!dd || !d) {
+        return {
+          key: "",
+          title: "Undated",
+          rank: Number.MAX_SAFE_INTEGER,
+          ...(chapters === "none" ? {} : { chapter: { key: "", title: "Undated", rank: Number.MAX_SAFE_INTEGER } }),
+        };
+      }
+      const rank = -Math.floor(d.getTime() / 864e5);
+      if (chapters === "none") return { key: dd, title: dayWords(dd, opts.today ?? ""), rank };
+      const y = d.getUTCFullYear();
+      const month = d.getUTCMonth();
+      const chapter = chapters === "year"
+        ? { key: String(y), title: String(y), rank: -y }
+        : { key: `${y}-${pad(month + 1)}`, title: `${MONTHS[month]} ${y}`, rank: -(y * 12 + month) };
+      return { key: dd, title: dayWords(dd, opts.today ?? ""), rank, chapter };
+    },
+  };
+}
+
+/** The spans of days a range offers, in days back from today (today included); 0 is any time. */
+export const SPANS: readonly { readonly days: number; readonly label: string }[] = [
+  { days: 0, label: "Any time" },
+  { days: 7, label: "Last 7 days" },
+  { days: 30, label: "Last 30 days" },
+  { days: 90, label: "Last 90 days" },
+];
+
+/** The span of the last `days` days up to `today`, yyyy-mm-dd. */
+export function lastDays(days: number, today: string): DayRange {
+  const t = dayDate(today) ?? new Date();
+  const f = new Date(t.getTime() - (Math.max(days, 1) - 1) * 864e5);
+  const s = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+  return { from: s(f), to: today || s(t) };
+}
+
+/** A span in words: "last 7 days" when it is one the list offers up to `today`, else "from – to". */
+export function spanWords(r: DayRange, today = ""): string {
+  const s = SPANS.find((x) => x.days > 0 && today && lastDays(x.days, today).from === r.from && r.to === today);
+  return s ? s.label.toLowerCase() : `${dayWords(r.from, today)} – ${dayWords(r.to, today)}`;
 }
 
 /** Whether a column is drawn: an optional one when toggled on, any other unless toggled off; the first grow column
@@ -221,7 +381,7 @@ export function columnShown<T>(c: Column<T>, v: ListView, spec: ListSpec<T>): bo
 /** What the list draws for the items and the view. */
 export function listModel<T>(items: readonly T[], spec: ListSpec<T>, v: ListView): ListModel<T> {
   const found = searchItems(items, spec, v.search);
-  const kept = filterItems(found, spec, v.filters);
+  const kept = filterItems(found, spec, v.filters, "", v.ranges);
   const grouping = spec.groupings?.find((g) => g.id === v.group);
   const col = v.sort ? spec.columns.find((c) => c.id === v.sort) : undefined;
   const groups = groupItems(sortItems(kept, col, v.desc), grouping).map((g) => ({
@@ -238,7 +398,7 @@ export function listModel<T>(items: readonly T[], spec: ListSpec<T>, v: ListView
   return {
     groups,
     places,
-    facets: facetChips(found, spec, v.filters),
+    facets: facetChips(found, spec, v.filters, v.ranges),
     columns: spec.columns.filter((c) => columnShown(c, v, spec)) as Column<unknown>[],
     total: items.length,
     shown: kept.length,
@@ -257,11 +417,20 @@ export function toggleFilter(v: ListView, facet: string, value: string): ListVie
   return { ...v, filters };
 }
 
-/** Every filter taken off. */
-export const clearFilters = (v: ListView): ListView => ({ ...v, filters: {} });
+/** Every filter taken off: the values and the spans of days. */
+export const clearFilters = (v: ListView): ListView => ({ ...v, filters: {}, ranges: {} });
 
-/** How many filter values are on. */
-export const filtersOn = (v: ListView): number => Object.values(v.filters).reduce((n, xs) => n + xs.length, 0);
+/** How many filter values and spans of days are on. */
+export const filtersOn = (v: ListView): number =>
+  Object.values(v.filters).reduce((n, xs) => n + xs.length, 0) + Object.keys(v.ranges ?? {}).length;
+
+/** A range's span of days chosen, or taken off with null. */
+export function setRange(v: ListView, range: string, span: DayRange | null): ListView {
+  const ranges = { ...(v.ranges ?? {}) };
+  if (span) ranges[range] = span;
+  else delete ranges[range];
+  return { ...v, ranges };
+}
 
 /** A column's heading pressed: the same column turns its direction, another starts in its own first direction; a third
  *  press on the same column goes back to the order the items came in. */
@@ -368,12 +537,20 @@ export function readView(raw: unknown): ListView {
       if (strings(xs).length) filters[k] = strings(xs);
     }
   }
+  const ranges: Record<string, DayRange> = {};
+  if (w.ranges && typeof w.ranges === "object") {
+    for (const [k, r] of Object.entries(w.ranges as Record<string, unknown>)) {
+      const { from, to } = (r ?? {}) as Partial<DayRange>;
+      if (typeof from === "string" && typeof to === "string" && dayDate(from) && dayDate(to)) ranges[k] = { from, to };
+    }
+  }
   return {
     search: typeof w.search === "string" ? w.search : "",
     sort: typeof w.sort === "string" ? w.sort : null,
     desc: w.desc === true,
     group: typeof w.group === "string" ? w.group : "",
     filters,
+    ranges,
     folded: strings(w.folded),
     toggled: strings(w.toggled),
   };
