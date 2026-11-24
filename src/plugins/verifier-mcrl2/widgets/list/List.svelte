@@ -1388,6 +1388,12 @@
     column-gap: var(--space-home-line);
     padding-block: var(--space-md);
   }
+  /* Narrower than the dates and the entries can share (about 320 px at a text size of 200%): the date stands over its entries. */
+  @container (inline-size < 17rem) {
+    .day {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
   .when {
     align-self: start;
   }
