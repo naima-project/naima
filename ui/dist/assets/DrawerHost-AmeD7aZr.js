@@ -1,1 +1,0 @@
-import{Dt as e,Et as t,m as n,v as r}from"./runtime-DXdvW7oy.js";import{ui as i,yr as a}from"./core-DXffDcy7.js";function o(o,s){e(s,!1);let c=i();n(()=>a(c)),r(),t()}export{o as default};
