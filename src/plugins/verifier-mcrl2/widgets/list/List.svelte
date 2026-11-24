@@ -1313,6 +1313,8 @@
   }
   /* A chapter: a large light month, a button that folds it into a teaser. */
   .is-diary .chapter {
+    /* One cell over the whole width: the columns' tracks, summed, can be wider than the room. */
+    grid-template-columns: minmax(0, 1fr);
     margin-block: var(--space-lg) var(--space-xs);
     padding: 0;
     border: 0;
@@ -1466,7 +1468,8 @@
   .is-diary .row.note .cell.title {
     display: block;
     overflow: visible;
-    white-space: nowrap;
+    /* A note is a line of its own and wraps only when the room is short (a wide face, the text at 200%). */
+    overflow-wrap: anywhere;
     color: var(--color-home-faint);
     font-size: var(--font-size-home-label);
     line-height: var(--font-line-height-home-caption);
