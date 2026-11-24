@@ -91,7 +91,9 @@ interface Gate {
   says: string
   decides: string
   inFullSuite: boolean
-  evaluate(ctx: Context): { holds: boolean; blocking: Item[]; owed: Item[]; reasons?: string[]; stuck?: Item[]; retired?: string[] }
+  evaluate(
+    ctx: Context,
+  ): { holds: boolean; blocking: Item[]; owed: Item[]; reasons?: string[]; stuck?: Item[]; retired?: string[]; arriving?: Item[]; arrivingOn?: string[] }
 }
 
 const verifierOf = (ctx: Context, id: string): Verifier | undefined => ctx.registry.find<Verifier>("verifiers", id)?.value
@@ -1665,11 +1667,19 @@ const allHold: Gate = {
   inFullSuite: true,
   evaluate(ctx) {
     const behind = properties(ctx).filter((i) => notCurrent(ctx, i).length > 0)
-    const gone = withMissingFiles(ctx)
+    const all = withMissingFiles(ctx)
+    // A property whose files exist only on an open development line arrives with that line: still blocking until it is
+    // verified there, but neither stuck nor to be retired, and counted as arriving, not as work left.
+    const lineOf = new Map(all.flatMap((m) => {
+      const line = heldOnLine(ctx, m.item)
+      return line ? [[m.item, line.replace(/^line\//, "")] as const] : []
+    }))
+    const gone = all.filter((m) => !lineOf.has(m.item))
     const stuck = gone.map((m) => m.item)
     const owed = behind.filter((i) => developing(ctx, i.meta["model"]) && !stuck.includes(i))
     const blocking = behind.filter((i) => !owed.includes(i))
     const reasons = gone.map((m) => `${label(m.item)}: ${m.missing.join("; ")} — ${retireHint(m.item)}`)
+    const arriving = behind.filter((i) => lineOf.has(i))
     // Every property was part of this gate: one retired is shown with its reason, never dropped from sight.
     const retired = ctx.repo.items.filter((i) => isRetired(ctx, i) && i.meta["closedFrom"] === TYPE).map((i) => retiredSays(ctx, i))
     return {
@@ -1677,6 +1687,7 @@ const allHold: Gate = {
       blocking,
       owed,
       ...(reasons.length ? { reasons, stuck } : {}),
+      ...(arriving.length ? { arriving, arrivingOn: [...new Set(arriving.map((i) => lineOf.get(i)!))] } : {}),
       ...(retired.length ? { retired } : {}),
     }
   },
