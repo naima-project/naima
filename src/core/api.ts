@@ -131,6 +131,7 @@ export {
 } from "./people.ts"
 export { type For, type WaitingEntry, waitingLine, waitingOn, waitingPoint, type WaitingRow, type WaitingSource, type WaitsFor } from "./waiting.ts"
 export { adapter, ADAPTERS, type AgentAdapter } from "./adapters/index.ts"
+export { closedOnTip, recordsOnTip, type TipRecord } from "./closes.ts"
 export { checkoutAt, contextAt, contextIn, contextOfProject, type IO } from "./context.ts"
 export { type KnownProject, knownProjects, UI_SWITCH, UI_SWITCH_ENV, type UiSwitch } from "./projects.ts"
 export { READY, readyQueue, type ReadyRecord, readyRecord } from "./ready.ts"

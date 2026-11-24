@@ -19,6 +19,7 @@
 
 import {
   bool,
+  closedOnTip,
   type Command,
   type Context,
   type ExtensionPoint,
@@ -292,7 +293,16 @@ function linesData(ctx: Context) {
     lines: lines.map((l) => {
       const at = fixedOnLineAt(ctx.root, l.branch)
       // Each item fixed on it, and when (seconds): a chart of the past counts it only from then.
-      return { ...l, fixed: [...at.keys()].map((id) => itemRef(ctx, id)), fixedAt: Object.fromEntries([...at].map(([id, t]) => [itemRef(ctx, id), t])) }
+      // Each item proved on it, and when: its own record is settled on the line's tip (a property that holds, a test that passed, a
+      // requirement that is met) and not on the trunk. It closes when the line lands, as the items fixed on it do.
+      const proved = new Map([...closedOnTip(ctx, l.branch)].filter(([id]) => !at.has(id) && ctx.repo.byId.has(id)))
+      return {
+        ...l,
+        fixed: [...at.keys()].map((id) => itemRef(ctx, id)),
+        fixedAt: Object.fromEntries([...at].map(([id, t]) => [itemRef(ctx, id), t])),
+        proved: [...proved.keys()].map((id) => itemRef(ctx, id)),
+        provedAt: Object.fromEntries([...proved].map(([id, t]) => [itemRef(ctx, id), t])),
+      }
     }),
   }
 }
