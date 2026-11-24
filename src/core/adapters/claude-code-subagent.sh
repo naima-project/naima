@@ -11,9 +11,9 @@
 #   stop  as the SubagentStop hook. A sub-agent with a mark passes, and its
 #         marks are removed (a resumed sub-agent is given the rules again). One
 #         without, that is not one of Claude Code's own internal agents (an
-#         empty agent_type), is logged and sent back once to read the rules,
-#         check its work against them and say in its report that it started
-#         without them; a stop a hook already continued passes.
+#         empty agent_type), is logged. It never blocks the stop: that would
+#         run the sub-agent's model again at the owner's cost; the rules are
+#         given when it starts.
 #
 # No Deno: it runs before every such call. It reads three top-level string
 # fields of the hook's input, agent_id, agent_type and tool_name, and the
@@ -61,10 +61,6 @@ case $mode in
     fi
     [ -n "$(field agent_type)" ] || exit 0
     mkdir -p "$dir" 2>/dev/null && printf '%s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(field agent_type)" "$id" >> "$dir/skipped"
-    case $input in
-      *'"stop_hook_active":true'* | *'"stop_hook_active": true'*) exit 0 ;;
-    esac
-    printf '{"decision":"block","reason":"Naima: you worked without reading this project'"'"'s rules. Run %s now, check what you did against them and fix what breaks one, then end with a report that says you started without reading them."}\n' "$read_rules"
     ;;
 esac
 exit 0

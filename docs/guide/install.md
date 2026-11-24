@@ -193,8 +193,8 @@ Claude Code also gets three hooks on sub-agents, so that every sub-agent has the
 ([sub-agents get the rules too](../agents/read-the-project-rules.md#sub-agents-get-the-rules-too)). A `SubagentStart` hook runs
 `naima subagent --hook
 claude-code`, which puts the rules in the sub-agent's context. A `PreToolUse` hook on Bash, Write, Edit, MultiEdit and NotebookEdit runs
-a small shell script shipped with Naima, which holds a sub-agent's call until it has the rules. A `SubagentStop` hook runs the same script and sends back, once,
-a sub-agent that never had them. These are the only hooks for sub-agents that Naima knows of. Cursor, GitHub Copilot and Gemini CLI have none, so there a
+a small shell script shipped with Naima, which holds a sub-agent's call until it has the rules. A `SubagentStop` hook runs the same script and only logs
+a sub-agent that never had them: no hook of Naima makes a model run again. These are the only hooks for sub-agents that Naima knows of. Cursor, GitHub Copilot and Gemini CLI have none, so there a
 worker's brief has to tell it to read the rules.
 
 `naima init` installs the hooks of each tool the project uses: the tools `naima.json`'s `agents` names, or, without it, the tools whose files the project holds

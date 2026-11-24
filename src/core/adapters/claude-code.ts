@@ -34,9 +34,10 @@
 //                 timeout over 60 seconds unless the command is naima run or
 //                 naima wait, and tells the agent to use naima run. It holds
 //                 for the main session and every sub-agent, and starts no Deno.
-//   SubagentStop  the same script (stop) sends a sub-agent that never had
-//                 the rules back once, to read them, check its work against
-//                 them and say so in its report, and logs it.
+//   SubagentStop  the same script (stop) logs a sub-agent that never had the
+//                 rules and clears its mark. It never blocks the stop: no hook
+//                 of Naima makes a model run again, only the session and
+//                 sub-agent starts put context in front of it, once.
 //
 // The settings are the project's own: the hooks are added to whatever they
 // hold, never over it, and an older form of Naima's own is brought up to
@@ -194,7 +195,7 @@ const timeoutGuard = hook(
 const subagentStop = hook(
   "SubagentStop",
   "sub-agent-stop hook",
-  "a sub-agent that ends without ever having had the project's rules is sent back once to read them, check its work against them and say so in its report",
+  "a sub-agent that ends without ever having had the project's rules is logged, never sent back: no hook makes a model run again",
   subagentScript("stop"),
   (c) => c.includes("claude-code-subagent.sh") && /\sstop\s*$/.test(c),
   (c) => c.includes(SUBAGENT_SCRIPT) && c.trimEnd().endsWith(" stop"),

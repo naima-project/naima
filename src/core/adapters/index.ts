@@ -85,7 +85,7 @@ export interface AgentAdapter {
   /**
    * Its hooks on sub-agents, when the tool has them (subagents.ts): as one starts, the project's rules are put in its
    * context; before each of its tool calls, one that acts is held until it has the rules; as it stops, one that never
-   * had them is sent back to read them and say so.
+   * had them is logged, never sent back.
    */
   subagentStart?: AgentHook
   subagentTool?: AgentHook
