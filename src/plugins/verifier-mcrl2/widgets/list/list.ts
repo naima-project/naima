@@ -39,7 +39,9 @@ export interface Facet<T> {
 export interface Grouping<T> {
   readonly id: string;
   readonly label: string;
-  readonly group: (item: T) => { readonly key: string; readonly title: string; readonly rank?: number };
+  readonly group: (item: T) => { readonly key: string; readonly title: string; readonly rank?: number; readonly sub?: string };
+  /** The diary look's lines under a folded group's heading: what the group holds that is worth reading before opening it. */
+  readonly teaser?: (items: readonly T[]) => readonly string[];
 }
 
 /** What the list knows of the items: how each is named, and what it can show, filter and group by. */
@@ -48,6 +50,11 @@ export interface ListSpec<T> {
   readonly columns: readonly Column<T>[];
   readonly facets?: readonly Facet<T>[];
   readonly groupings?: readonly Grouping<T>[];
+  /** The diary look: the date heading an item stands under, by a key that items of one day share (each run of items with
+   *  the same key is one dated section), its title and the line under it. */
+  readonly lead?: (item: T) => { readonly key: string; readonly title: string; readonly sub?: string };
+  /** The diary look: an item that recedes to the margin of its dated section, a quiet note and never an entry. */
+  readonly margin?: (item: T) => boolean;
 }
 
 /** What the person chose. */
@@ -94,6 +101,8 @@ export interface FacetChips {
 export interface ListGroup<T> {
   readonly key: string;
   readonly title: string;
+  /** What follows the title, quieter (a year after a month). */
+  readonly sub?: string;
   /** How many items the group holds, folded or not. */
   readonly count: number;
   readonly folded: boolean;
@@ -194,21 +203,48 @@ export function sortItems<T>(items: readonly T[], col: Column<T> | undefined, de
 export function groupItems<T>(
   items: readonly T[],
   grouping: Grouping<T> | undefined,
-): { key: string; title: string; items: T[] }[] {
+): { key: string; title: string; sub?: string; items: T[] }[] {
   if (!grouping) return [{ key: "", title: "", items: [...items] }];
-  const out = new Map<string, { key: string; title: string; rank: number; first: number; items: T[] }>();
+  const out = new Map<string, { key: string; title: string; sub?: string; rank: number; first: number; items: T[] }>();
   items.forEach((i, n) => {
     const g = grouping.group(i);
     const e = out.get(g.key) ??
-      { key: g.key, title: g.title, rank: g.rank ?? Number.MAX_SAFE_INTEGER, first: n, items: [] };
+      { key: g.key, title: g.title, ...(g.sub ? { sub: g.sub } : {}), rank: g.rank ?? Number.MAX_SAFE_INTEGER, first: n, items: [] };
     e.items.push(i);
     out.set(g.key, e);
   });
-  return [...out.values()].sort((a, b) => a.rank - b.rank || a.first - b.first).map(({ key, title, items }) => ({
+  return [...out.values()].sort((a, b) => a.rank - b.rank || a.first - b.first).map(({ key, title, sub, items }) => ({
     key,
     title,
+    ...(sub ? { sub } : {}),
     items,
   }));
+}
+
+/** A dated section of the diary look: the items that follow one another under the same lead, the entries apart from
+ *  the notes that recede to the margin. */
+export interface Section<T> {
+  readonly key: string;
+  readonly title: string;
+  readonly sub?: string;
+  readonly entries: readonly T[];
+  readonly notes: readonly T[];
+}
+
+/** The items in dated sections: each run of consecutive items with the same lead key is one section (a day), its
+ *  entries in the order they came and its margin notes apart. Without a lead, one section with no heading. */
+export function sections<T>(items: readonly T[], spec: ListSpec<T>): Section<T>[] {
+  const out: { key: string; title: string; sub?: string; entries: T[]; notes: T[] }[] = [];
+  for (const i of items) {
+    const l = spec.lead?.(i) ?? { key: "", title: "" };
+    let s = out.at(-1);
+    if (!s || s.key !== l.key) {
+      s = { key: l.key, title: l.title, ...(l.sub ? { sub: l.sub } : {}), entries: [], notes: [] };
+      out.push(s);
+    }
+    (spec.margin?.(i) ? s.notes : s.entries).push(i);
+  }
+  return out;
 }
 
 /** Whether a column is drawn: an optional one when toggled on, any other unless toggled off; the first grow column

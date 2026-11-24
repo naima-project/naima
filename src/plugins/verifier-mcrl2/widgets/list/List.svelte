@@ -11,7 +11,12 @@
      reckoned from its count. Quiet (`quiet`), its controls fold into one status line of words ("267 items · no filter
      · not grouped · as listed"), each part a quiet link, the slice the list was opened on first (`slice`); a small
      search glyph opens the search in place, and Adjust unfolds every control (the filters, the grouping, the sort, the
-     columns) in a sheet under the line. One of the widget set, beside
+     columns) in a sheet under the line. The diary look (`look="diary"`), for what a person reads as a story (the Diary on
+     Home): the items are entries set as prose under dated headings (the spec's `lead`: one heading to a run of items of
+     the same day, in one fixed column), the items the spec calls margin notes recede into one quiet line after the
+     day's entries (a day with only notes is that line beside its date), the groups are chapters (a month, large and light) that fold into a
+     teaser of what they hold (the grouping's `teaser`), a serif-free, generous page of one size scale, with a measure of
+     about 65 characters. Beside an item open it is a column of dates, the open day marked. Filters, search, grouping, sort, saved views and the keyboard are the same as in the table look. One of the widget set, beside
      Action and Segmented. -->
 <script lang="ts" generics="T">
   import { tick } from "svelte";
@@ -43,6 +48,7 @@
     rowId,
     type SavedView,
     saveView,
+    sections,
     sideways,
     sortBy,
     toggleColumn,
@@ -76,6 +82,16 @@
     quiet?: boolean;
     /** What the list was opened on, said first on the status line: "bugs · waiting for you". */
     slice?: string;
+    /** The table (columns, a row each) or the diary (entries as prose under dated headings, groups as chapters). */
+    look?: "table" | "diary";
+    /** The scrolling box of the rows, for a screen that scrolls the list by itself. */
+    grid?: HTMLDivElement;
+    /** An item pointed at or focused, by key, or none (null). */
+    onpoint?: (key: string | null) => void;
+    /** What an item is called on the status line, in one and in many: "item", "items". */
+    noun?: readonly [string, string];
+    /** The date heading (a `lead` key) the screen reads at, drawn in the colour of now. */
+    reading?: string;
   }
   let {
     items,
@@ -91,7 +107,13 @@
     saved = $bindable(),
     quiet = false,
     slice = "",
+    look = "table",
+    grid = $bindable(),
+    onpoint,
+    reading = "",
+    noun = ["item", "items"],
   }: Props = $props();
+  const diary = $derived(look === "diary");
 
   /** Each kind of column's track: the title takes the room left, the others a width of their own (a token), the same in
    *  every row, so that every row lines up without measuring anything. */
@@ -101,10 +123,12 @@
   const model = $derived(listModel(items, spec, view));
   const grouped = $derived(!!view.group && !!spec.groupings?.some((g) => g.id === view.group));
   const byKey = $derived(new Map(items.map((i) => [spec.key(i), i])));
-  const cols = $derived(narrow ? (model.columns as Column<T>[]).filter((c) => c.column) : (model.columns as Column<T>[]));
+  const cols = $derived(
+    diary ? (model.columns as Column<T>[]).filter((c) => c.width === "grow") : narrow ? (model.columns as Column<T>[]).filter((c) => c.column) : (model.columns as Column<T>[]),
+  );
   const title = $derived(cols.find((c) => c.width === "grow"));
   const tracks = $derived(
-    [mark ? "var(--dot)" : "", ...cols.map((c) => TRACK[c.width ?? "fit"])].filter(Boolean).join(" "),
+    [mark && !diary ? "var(--dot)" : "", ...cols.map((c) => TRACK[c.width ?? "fit"])].filter(Boolean).join(" "),
   );
 
   // The cursor: where the person put it, kept on what is drawn as the rows change (list.ts afterChange).
@@ -114,7 +138,6 @@
   const entry = $derived(cursor ?? (model.places[0] ? placeId(model.places[0]) : null));
   let filtering = $state(false);
   let search = $state<HTMLInputElement>();
-  let grid = $state<HTMLDivElement>();
 
   const domId = (place: string) => `${uid}-${place}`;
   async function focus(place: string | null) {
@@ -203,7 +226,7 @@
   let adjusting = $state(false);
   let searching = $state(false);
   const lower = (w: string) => w.charAt(0).toLowerCase() + w.slice(1);
-  const counted = $derived(model.shown === model.total ? `${model.total} ${model.total === 1 ? "item" : "items"}` : `${model.shown} of ${model.total}`);
+  const counted = $derived(model.shown === model.total ? `${model.total} ${model.total === 1 ? noun[0] : noun[1]}` : `${model.shown} of ${model.total}`);
   const filterWords = $derived(
     model.facets.flatMap((f) => f.chips.filter((c) => c.on).map((c) => lower(c.label))).join(", ") || "no filter",
   );
@@ -239,7 +262,38 @@
   const ariaSort = (c: Column<T>) => (view.sort === c.id ? (view.desc ? "descending" : "ascending") : undefined);
 </script>
 
-<section class="list" class:narrow aria-label={label} data-part="list">
+{#snippet diaryRow(item: T, as: "entry" | "note")}
+  {@const key = spec.key(item)}
+  {@const id = rowId(key)}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <div
+    class="row {as}"
+    role="row"
+    id={domId(id)}
+    aria-level={grouped ? 2 : 1}
+    aria-selected={open === key}
+    aria-current={open === key ? "true" : undefined}
+    tabindex={entry === id ? 0 : -1}
+    class:open={open === key}
+    class:cursor={cursor === id}
+    data-key={key}
+    data-mark={mark?.(item)}
+    onclick={() => {
+      put = id;
+      onopen?.(key);
+    }}
+    onpointerenter={() => onpoint?.(key)}
+    onpointerleave={() => onpoint?.(null)}
+    onfocus={() => onpoint?.(key)}
+    onblur={() => onpoint?.(null)}
+  >
+    {#each cols as c (c.id)}
+      <span class="cell title" role="gridcell" data-col={c.id}>{cellText(c, item)}</span>
+    {/each}
+  </div>
+{/snippet}
+
+<section class="list" class:narrow class:is-diary={diary} aria-label={label} data-part="list" data-look={look}>
   {#snippet searchBox()}
     <label class="search">
       <Search class="glyph" aria-hidden="true" />
@@ -329,9 +383,9 @@
         {#if slice}<span class="st-slice">{slice}</span><span class="st-sep" aria-hidden="true">·</span>{/if}
         {#if applied}<span class="st-slice" data-part="list-applied">{applied}</span><span class="st-sep" aria-hidden="true">·</span>{/if}
         <span class="st-count">{counted}</span>
-        {#if spec.facets?.length}<span class="st-sep" aria-hidden="true">·</span><button class="st-part" type="button" aria-label="Filters: {filterWords}. Adjust" onclick={() => (adjusting = true)}>{filterWords}</button>{/if}
+        {#if spec.facets?.length && !(diary && !filtersOn(view))}<span class="st-sep" aria-hidden="true">·</span><button class="st-part" type="button" aria-label="Filters: {filterWords}. Adjust" onclick={() => (adjusting = true)}>{filterWords}</button>{/if}
         {#if spec.groupings?.length}<span class="st-sep" aria-hidden="true">·</span><button class="st-part" type="button" aria-label="{groupWords}. Adjust" onclick={() => (adjusting = true)}>{groupWords}</button>{/if}
-        <span class="st-sep" aria-hidden="true">·</span><button class="st-part" type="button" aria-label="{sortWords}. Adjust" onclick={() => (adjusting = true)}>{sortWords}</button>
+        {#if !(diary && !view.sort)}<span class="st-sep" aria-hidden="true">·</span><button class="st-part" type="button" aria-label="{sortWords}. Adjust" onclick={() => (adjusting = true)}>{sortWords}</button>{/if}
       </p>
       <button class="st-adjust" type="button" data-part="list-adjust" aria-expanded={adjusting} onclick={() => (adjusting = !adjusting)}>
         <SlidersHorizontal class="glyph" aria-hidden="true" />{adjusting ? "Done" : "Adjust"}
@@ -436,7 +490,7 @@
 
   <!-- svelte-ignore a11y_interactive_supports_focus -->
   <div class="grid" role="treegrid" aria-label={label} aria-rowcount={model.shown} style:--tracks={tracks} bind:this={grid} onkeydown={keys} tabindex={-1}>
-    {#if !narrow}
+    {#if !narrow && !diary}
       <div class="heads" role="row">
         {#if mark}<span class="cell" role="columnheader"><span class="hidden">Mark</span></span>{/if}
         {#each cols as c (c.id)}
@@ -451,6 +505,65 @@
     {#if model.shown === 0}
       <p class="nothing">{nothing}</p>
     {/if}
+    {#if diary}
+      <!-- The diary look: chapters (the groups), dated sections (a run of items under one lead), entries as prose, notes after them. -->
+      {#each model.groups as g (g.key)}
+        {@const teaser = g.folded ? (spec.groupings?.find((x) => x.id === view.group)?.teaser?.(g.items) ?? []) : []}
+        <div class="group chapter" role="rowgroup" class:folded={g.folded} data-chapter={grouped ? g.key : undefined}>
+          {#if grouped}
+            {@const id = headId(g.key)}
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <div
+              class="ghead"
+              role="row"
+              id={domId(id)}
+              aria-level={1}
+              aria-expanded={!g.folded}
+              tabindex={entry === id ? 0 : -1}
+              class:cursor={cursor === id}
+              data-head={g.key}
+              onclick={() => {
+                put = id;
+                view = toggleFold(view, g.key);
+              }}
+            >
+              <span class="cell" role="gridcell">
+                <span class="chapter-line">
+                  <ChevronRight class="chev" aria-hidden="true" />
+                  <span class="gtitle">{g.title}</span>{#if g.sub}<span class="gsub">{g.sub}</span>{/if}
+                </span>
+                {#each teaser as line, n (n)}<span class="teaser">{line}</span>{/each}
+              </span>
+            </div>
+          {/if}
+          {#if !g.folded}
+            {#each sections(g.items, spec) as d, n (`${d.key}~${n}`)}
+              <div class="day" class:only={!d.entries.length} class:open={open !== null && [...d.entries, ...d.notes].some((i) => spec.key(i) === open)} data-day={d.key} data-reading={reading !== "" && reading === d.key ? "true" : undefined}>
+                {#if d.title}
+                  <!-- Beside an item open the entries are out of sight and the date is what is pressed; the keyboard has the rows. -->
+                  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+                  <div class="when" role="row" onclick={() => { const first = d.entries[0] ?? d.notes[0]; if (narrow && first) onopen?.(spec.key(first)); }}>
+                    <span class="cell" role="rowheader"><span class="wd" class:sr={narrow}>{d.title}</span>{#if d.sub}<span class="wn">{d.sub}</span>{/if}</span>
+                  </div>
+                {/if}
+                <div class="said" class:sr={narrow}>
+                  {#each d.entries as item (spec.key(item))}
+                    {@render diaryRow(item, "entry")}
+                  {/each}
+                  {#if d.notes.length}
+                    <div class="notes">
+                      {#each d.notes as item (spec.key(item))}
+                        {@render diaryRow(item, "note")}
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
+              </div>
+            {/each}
+          {/if}
+        </div>
+      {/each}
+    {:else}
     {#each model.groups as g (g.key)}
       <div class="group" role="rowgroup" class:folded={g.folded} style:--n={g.folded ? 0 : g.count}>
         {#if grouped}
@@ -507,6 +620,7 @@
         {/if}
       </div>
     {/each}
+    {/if}
   </div>
   {#if byKey.size === 0}<span class="hidden">The list is empty.</span>{/if}
 </section>
@@ -1052,5 +1166,237 @@
     .ghead :global(.chev) {
       transition: none;
     }
+  }
+  /* ---- The diary look: a page to read. One size scale (label, caption, reading, heading, title), the house sans-serif,
+     a measure of about 65 characters, air between days; the chapter a large light month, the date one fixed column the
+     same for every day, the entries prose, the routine a quiet note in the margin under the date. Flat, nothing scrolls
+     a transform; the soft motion is a colour and a turn of the chevron, both off under reduced motion. */
+  .is-diary .grid {
+    gap: 0;
+  }
+  .is-diary .group {
+    content-visibility: visible;
+    contain-intrinsic-size: none;
+  }
+  .is-diary .chapter {
+    padding-block-end: var(--space-lg);
+  }
+  .is-diary .ghead {
+    display: block;
+    min-block-size: 0;
+    margin-block-start: var(--space-lg);
+    padding: var(--space-sm) var(--space-sm) var(--space-sm) 0;
+    font-weight: var(--font-weight-regular);
+    border-radius: var(--radius-sm);
+  }
+  .is-diary .ghead .cell {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-xs);
+    overflow: visible;
+    white-space: normal;
+  }
+  .chapter-line {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-sm);
+  }
+  .is-diary .ghead :global(.chev) {
+    align-self: center;
+    inline-size: var(--size-icon);
+    block-size: var(--size-icon);
+  }
+  .is-diary .gtitle {
+    color: var(--color-text);
+    font-size: var(--font-size-title);
+    font-weight: var(--font-weight-light);
+    letter-spacing: var(--font-letter-spacing-title);
+    line-height: var(--font-line-height-tight);
+  }
+  .gsub {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-heading);
+    font-weight: var(--font-weight-light);
+    line-height: var(--font-line-height-tight);
+  }
+  /* A chapter folded tells what it holds: its decisions, in the words of the entries, quieter. */
+  .teaser {
+    display: block;
+    max-inline-size: 65ch;
+    padding-inline-start: calc(var(--size-icon) + var(--space-sm));
+    color: var(--color-text-muted);
+    font-size: var(--font-size-home-caption);
+    line-height: var(--font-line-height-home-caption);
+  }
+  .is-diary .ghead:hover .gtitle,
+  .is-diary .ghead:focus-visible .gtitle {
+    color: var(--color-home-now-text);
+  }
+  /* A day: its date in one column of one width, its entries beside it, its notes after them. */
+  .day {
+    display: grid;
+    grid-template-columns: var(--size-ledger-when) minmax(0, 65ch);
+    column-gap: var(--space-home-line);
+    padding-block: var(--space-md);
+  }
+  .when {
+    align-self: start;
+  }
+  .when .cell {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    overflow: visible;
+    color: var(--color-text-muted);
+  }
+  .wd {
+    font-size: var(--font-size-home-label);
+    letter-spacing: var(--font-letter-spacing-label);
+    line-height: var(--font-line-height-home-caption);
+    text-transform: uppercase;
+  }
+  .wn {
+    color: var(--color-text);
+    font-size: var(--font-size-heading);
+    font-variant-numeric: tabular-nums;
+    line-height: var(--font-line-height-tight);
+  }
+  .day[data-reading="true"] .wn {
+    color: var(--color-home-now-text);
+  }
+  .said {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    min-inline-size: 0;
+  }
+  .is-diary .row.entry {
+    display: block;
+    min-block-size: 0;
+    margin-inline: calc(var(--space-sm) * -1);
+    padding: var(--space-xs) var(--space-sm);
+  }
+  .is-diary .row.entry .cell.title {
+    display: block;
+    overflow: visible;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    color: var(--color-text);
+    font-size: var(--font-size-reading);
+    line-height: var(--font-line-height-home-caption);
+  }
+  .is-diary .row:hover,
+  .is-diary .row.open {
+    background: none;
+  }
+  .is-diary .row:hover .cell.title,
+  .is-diary .row:focus-visible .cell.title {
+    color: var(--color-home-now-text);
+  }
+  .is-diary .row.open .cell.title {
+    color: var(--color-home-now-text);
+  }
+  /* The routine of a day (what landed, what was filed) is a quiet note after its entries, never an entry. */
+  .notes {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 var(--space-md);
+  }
+  .is-diary .row.note {
+    display: block;
+    min-block-size: 0;
+    padding: 0;
+  }
+  .is-diary .row.note .cell.title {
+    display: block;
+    overflow: visible;
+    white-space: nowrap;
+    color: var(--color-home-faint);
+    font-size: var(--font-size-home-label);
+    line-height: var(--font-line-height-home-caption);
+  }
+  .is-diary .row.note:hover .cell.title,
+  .is-diary .row.note:focus-visible .cell.title {
+    color: var(--color-text-muted);
+  }
+  /* A day with only routine is one quiet line, level with the bottom of its date. */
+  .day.only .said {
+    align-self: end;
+  }
+  @media (pointer: coarse) {
+    .is-diary .row.note {
+      min-block-size: var(--size-touch);
+    }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .is-diary .cell.title,
+    .is-diary .gtitle,
+    .wn {
+      transition: color var(--motion-duration-fast) var(--motion-easing-standard);
+    }
+  }
+  /* Beside an item open: the chapters and days keep their order in a narrow column of dates, the open day marked by the
+     segment on the column's hairline. */
+  .narrow.is-diary .day {
+    position: relative;
+    grid-template-columns: minmax(0, 1fr);
+    padding-block: var(--space-xs);
+  }
+  .narrow.is-diary .when {
+    cursor: pointer;
+  }
+  .narrow.is-diary .day.open .when .cell {
+    color: var(--color-home-now-text);
+  }
+  .narrow.is-diary .day.open::after {
+    content: "";
+    position: absolute;
+    inset-block: var(--space-xs);
+    inset-inline-end: 0;
+    inline-size: var(--border-width-focus);
+    border-radius: var(--radius-full);
+    background: var(--color-accent);
+  }
+  /* The entries stay for the keyboard and the screen reader, out of sight: the column is of dates. */
+  .narrow.is-diary .said {
+    position: absolute;
+    inline-size: var(--border-width-thin);
+    block-size: var(--border-width-thin);
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .narrow.is-diary .when .cell {
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--space-xs);
+  }
+  .narrow.is-diary .wn {
+    font-size: var(--font-size-home-caption);
+    color: inherit;
+  }
+  .narrow.is-diary .wd {
+    position: absolute;
+    inline-size: var(--border-width-thin);
+    block-size: var(--border-width-thin);
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .narrow.is-diary .ghead {
+    margin-block-start: var(--space-md);
+    padding-block: var(--space-xs);
+  }
+  .narrow.is-diary .gtitle {
+    font-size: var(--font-size-home-caption);
+    font-weight: var(--font-weight-regular);
+    letter-spacing: normal;
+  }
+  .narrow.is-diary .gsub {
+    font-size: var(--font-size-home-label);
+  }
+  .narrow.is-diary .teaser {
+    display: none;
   }
 </style>
