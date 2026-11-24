@@ -121,7 +121,10 @@ and the mCRL2 tools (`naima tools install mcrl2`); generating needs naima-codege
 - **Back** and **Forward**, the two chevrons beside the step count at the top of the path card, move along the road; firing from a past state starts a new road
   and keeps the old one. The rest is in the card's menu (its three dots): **The state seen before** and **The state seen next** move over the states you
   visited, whatever road they are on; **Undo the last step** removes the last step you took; **Begin again** starts a new road from the start; once there
-  are several roads, the menu lists them to switch between. Steps recorded from a real run are never undone, only branched
+  are several roads, the menu lists them to switch between. Every road but the first has a small × at the end of its row, which appears when you point at the
+  row or reach it; Tab goes from the row to its ×, and Delete or Backspace on the row removes it. The road leaves the menu and its dashed line leaves the
+  graph at once, with no question asked. The first road, the study's own path, and your bookmarks stay; removing the road you are on shows the first road again.
+  A counterexample that a check found is removed the same way and is found again by the next check. Steps recorded from a real run are never undone, only branched
   from.
 - **Copy the path**, in the same menu, copies the road; **Load a path** takes one back, or a trace from the model checker, one step per line. A path loads up to the first step the
   model does not accept, and the tab says which step and why. A path that is already one of your roads is shown on that road, not added again.

@@ -2,7 +2,9 @@
      opens a short list. Whether the list is open is this component's own state; what an entry does is the caller's.
      The trigger has a name for screen readers; Enter, Space or the down arrow open the list on its first entry, the
      arrows move, Escape and a click outside close it and give the focus back. An entry may be a choice (checked), and a
-     line between entries groups them. One of the widget set. -->
+     line between entries groups them. An entry may be removable (`onremove`): a quiet × on its row, shown on hover or
+     focus; Tab goes from the row to its ×, Delete or Backspace on the row removes it, and the list stays open. One of
+     the widget set. -->
 <script lang="ts" module>
   import type { Component } from "svelte";
 
@@ -19,11 +21,16 @@
     rule?: boolean;
     /** A quiet heading before this entry, naming the group it starts. */
     group?: string;
+    /** Removes this entry's thing for good (a run kept, say): a × on its row. What is removed is the caller's. */
+    onremove?: () => void;
+    /** What the × says to a screen reader and on hover; "Remove <label>" when left out. */
+    removeLabel?: string;
   }
 </script>
 
 <script lang="ts">
   import More from "@lucide/svelte/icons/ellipsis";
+  import Cross from "@lucide/svelte/icons/x";
   import { tick } from "svelte";
 
   interface Props {
@@ -61,6 +68,19 @@
     hide();
     e.onselect?.();
   };
+  /** The row the focus is in: the row itself, or the × on it. */
+  const rowOf = (el: Element | null) => el?.closest<HTMLElement>("[role^='menuitem']") ?? null;
+  const removeAt = async (e: Entry, from: HTMLElement | null) => {
+    const xs = items();
+    const at = from ? xs.indexOf(from) : -1;
+    e.onremove?.();
+    await tick();
+    const rest = items();
+    // The focus stays where the removed row was, on the row now there, or on the last one; none left, on the trigger.
+    const next = rest[Math.min(Math.max(at, 0), rest.length - 1)];
+    if (next) next.focus();
+    else hide();
+  };
   const onTriggerKey = (ev: KeyboardEvent) => {
     if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
       ev.preventDefault();
@@ -69,8 +89,20 @@
   };
   const onListKey = (ev: KeyboardEvent) => {
     const xs = items();
-    const at = xs.indexOf(document.activeElement as HTMLElement);
-    if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+    const row = rowOf(document.activeElement);
+    const at = xs.indexOf(row as HTMLElement);
+    const mine = row ? entries[Number(row.dataset.at)] : undefined;
+    if ((ev.key === "Delete" || ev.key === "Backspace") && mine?.onremove) {
+      ev.preventDefault();
+      void removeAt(mine, row);
+    } else if (ev.key === "Tab" && mine?.onremove && document.activeElement === row && !ev.shiftKey) {
+      // Inside the row, Tab goes to its ×; from the × it leaves the list, as from any last stop.
+      ev.preventDefault();
+      row?.querySelector<HTMLElement>(".remove")?.focus();
+    } else if (ev.key === "Tab" && ev.shiftKey && document.activeElement !== row && row) {
+      ev.preventDefault();
+      row.focus();
+    } else if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
       ev.preventDefault();
       xs[(at + (ev.key === "ArrowDown" ? 1 : -1) + xs.length) % xs.length]?.focus();
     } else if (ev.key === "Home" || ev.key === "End") {
@@ -115,13 +147,23 @@
           role={e.checked === undefined ? "menuitem" : "menuitemradio"}
           aria-checked={e.checked}
           tabindex="-1"
+          data-at={i}
           aria-disabled={e.disabled || undefined}
           title={e.disabled ? e.why : undefined}
           onclick={() => choose(e)}
-          onkeydown={(ev) => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), choose(e))}
+          onkeydown={(ev) => ev.target === ev.currentTarget && (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), choose(e))}
         >
           <span class="mark" aria-hidden="true">{#if e.checked}•{:else if I}<I class="glyph" />{/if}</span>
           <span class="words">{e.label}{#if e.disabled && e.why}<span class="why">{e.why}</span>{/if}</span>
+          {#if e.onremove}
+            <button
+              type="button"
+              class="remove"
+              aria-label={e.removeLabel ?? `Remove ${e.label}`}
+              title={e.removeLabel ?? `Remove ${e.label}`}
+              onclick={(ev) => (ev.stopPropagation(), void removeAt(e, rowOf(ev.currentTarget as HTMLElement)))}
+            ><Cross class="glyph" aria-hidden="true" /></button>
+          {/if}
         </li>
       {/each}
     </ul>
@@ -229,6 +271,35 @@
   .words {
     display: flex;
     flex-direction: column;
+    flex: 1;
+  }
+  .remove {
+    flex: none;
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: calc(var(--font-size-md) * 1.5);
+    min-block-size: calc(var(--font-size-md) * 1.5);
+    padding: var(--space-none);
+    color: var(--color-text-muted);
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity var(--motion-duration-fast) var(--motion-easing-standard), color var(--motion-duration-fast) var(--motion-easing-standard);
+  }
+  [role^="menuitem"]:hover .remove,
+  [role^="menuitem"]:focus-visible .remove,
+  .remove:focus-visible {
+    opacity: 1;
+  }
+  .remove:hover {
+    color: var(--color-text);
+  }
+  .remove:focus-visible {
+    outline: var(--border-width-focus) solid var(--color-focus);
   }
   .why {
     font-size: var(--font-size-2xs);
@@ -251,10 +322,16 @@
       min-block-size: var(--size-control);
       min-inline-size: var(--size-control);
     }
+    .remove {
+      opacity: 1;
+      min-inline-size: var(--size-target);
+      min-block-size: var(--size-target);
+    }
   }
   @media (prefers-reduced-motion: reduce) {
     .trigger,
-    .word {
+    .word,
+    .remove {
       transition: none;
     }
   }

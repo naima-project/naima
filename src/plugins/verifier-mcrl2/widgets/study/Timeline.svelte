@@ -54,7 +54,7 @@
     <button aria-label="Further apart" onclick={() => (dx = Math.min(260, dx * 1.25))}>+</button>
   </div>
   <Pannable {label} class="pan" ignore=".state, .ahead" bind:box>
-    <svg width={W} height={H} viewBox="0 0 {W} {H}" role="group" aria-label={label}>
+    <svg style:width="calc({W}px * var(--text-scale, 1))" style:height="calc({H}px * var(--text-scale, 1))" viewBox="0 0 {W} {H}" role="group" aria-label={label}>
       <line class="track" x1={xOf(0)} x2={xOf(past.length)} y1={Y} y2={Y} />
       {#each past as p, i (i)}
         <g class="past" class:after={i >= position} style:opacity={i < position ? fade(i) : 0.3}>
@@ -231,7 +231,7 @@
     fill: var(--color-accent);
   }
   .label {
-    font-size: var(--font-size-sm);
+    font-size: calc(var(--font-size-sm) / var(--text-scale, 1));
     fill: var(--color-text);
   }
   .ahead-label {
@@ -240,7 +240,7 @@
   .arg,
   .more {
     font-family: var(--font-family-mono);
-    font-size: var(--font-size-2xs);
+    font-size: calc(var(--font-size-2xs) / var(--text-scale, 1));
     fill: var(--color-text-muted);
   }
   .real {

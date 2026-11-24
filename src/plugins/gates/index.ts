@@ -59,6 +59,7 @@ import {
   gitOrNull,
   groupBy,
   hasFlag,
+  hasTrait,
   isEvidenceType,
   isOpen,
   isRetired,
@@ -78,6 +79,7 @@ import {
   readyQueue,
   type ReadyRecord,
   readyRecord,
+  recordsOnTip,
   refutes,
   rendered,
   saveMeta,
@@ -96,8 +98,8 @@ import {
   writeJson,
 } from "../../core/api.ts"
 import { type CoverageConfig, coverageLines, coverageOf, coverageReasons, coverageUiView, COVERS, readCoverage, staleCovers } from "./coverage.ts"
-import { finished, fixedOnLine, goalBefore, goalOrder, goalsLanding, lineNotReady } from "./goals.ts"
-import { dependenciesAcyclic, dependenciesWaitOnWork, orderCommand, readyCommand, standsFor } from "./dependencies.ts"
+import { closingOnLine, finished, fixedOnLine, goalBefore, goalOrder, goalsLanding, lineNotReady } from "./goals.ts"
+import { dependenciesAcyclic, dependenciesWaitOnWork, GROUP, orderCommand, readyCommand, standsFor } from "./dependencies.ts"
 import { planCommand, type PlanDeps, planUiView } from "./plan.ts"
 import { checkpointsUiView } from "./checkpoint-view.ts"
 import { CLOSES_STEP, findMethod, methodsPoint, type MethodStep, STEP_NAME, stepRecordsCheck, type StepState, stepsVerdict } from "./methods.ts"
@@ -310,7 +312,7 @@ const refuted = (ctx: Context, item: Item): boolean => refutes(ctx, item) || lin
 const owesOnlyProof = (ctx: Context, item: Item, onLine: ReadonlySet<string> = new Set()): boolean =>
   !refuted(ctx, item) && (fieldValue(item, FIXED_ON) !== undefined || onLine.has(item.meta.id) || isEvidenceType(ctx, item.type))
 
-export { GROUP } from "./dependencies.ts"
+export { GROUP }
 
 /** The status flag of an item not yet confirmed by the owner, such as a requirement an agent proposed: no gate counts it as a goal. */
 export const PROPOSED = "proposed"
@@ -322,6 +324,31 @@ export const PROPOSED = "proposed"
 export function gatedItems(ctx: Context, name?: string): Item[] {
   const on = ctx.repo.items.filter((i) => (name === undefined ? onGates(i).length > 0 : onGates(i).includes(name)))
   return [...new Set(on.flatMap((i) => standsFor(ctx, i)))].filter((i) => !hasFlag(ctx, i, PROPOSED))
+}
+
+/**
+ * The items a goal waits for, as its open development line has them where the line's own records say so: those the trunk
+ * gates on it, less those the line took off the goal, and those the line gave it (an item it made, or moved onto the goal),
+ * each as the line's tip has it. A goal is then counted by the same items whichever checkout the data is, the trunk's or
+ * the line's own.
+ */
+export function goalItems(ctx: Context, name: string): Item[] {
+  const out = gatedItems(ctx, name)
+  const records = recordsOnTip(ctx, `refs/heads/line/${name}`)
+  // The groups the line's own records give members to: such a group stands for them, as the line's checkout reads it.
+  const grouped = new Set([...records.values()].flatMap((r) => (r.item.meta.links ?? []).filter((l) => l.rel === "part-of").map((l) => l.id)))
+  for (const [id, r] of records) {
+    if (onGates(r.item).includes(name) && !hasFlag(ctx, r.item, PROPOSED)) {
+      for (const m of standsFor(ctx, r.item)) {
+        if (m === r.item && grouped.has(id) && hasTrait(ctx, m, GROUP)) continue
+        if (!out.some((i) => i.meta.id === m.meta.id)) out.push(m)
+      }
+    } else {
+      const at = out.findIndex((i) => i.meta.id === id)
+      if (at >= 0) out.splice(at, 1)
+    }
+  }
+  return out
 }
 
 const DAY = 86_400_000
@@ -516,10 +543,11 @@ export async function goals(ctx: Context): Promise<string[]> {
 }
 
 export function evaluateGate(ctx: Context, name: string, holdsOn: "code" | "proof"): GateResult {
-  const on = gatedItems(ctx, name)
+  const on = goalItems(ctx, name)
   const open = on.filter((i) => isOpen(ctx, i))
-  // An item fixed on the gate's open development line is fixed, waiting for the line to land: the trunk's copy has no fixedOn yet.
-  const fixedThere = new Set(fixedOnLine(ctx, name))
+  // An item fixed or proved on the gate's open development line (a Fixes: trailer, or its own record settled there) is waiting for
+  // the line to land: the trunk's copy has no fixedOn yet, and reads open.
+  const fixedThere = new Set(closingOnLine(ctx, name))
   const blocking = holdsOn === "proof" ? open : open.filter((i) => !owesOnlyProof(ctx, i, fixedThere))
   const owed = open.filter((i) => !blocking.includes(i))
   // Whether the data is the trunk's (its copy has no fixedOn yet) or the line's own checkout (the copy carries it), an item the line's
@@ -1494,8 +1522,8 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
     ...(c.method !== undefined ? { method: c.method } : {}),
     ...(c.steps?.length ? { ownSteps: c.steps } : {}),
     progress: (ctx) => {
-      const on = gatedItems(ctx, name)
-      const line = new Set(fixedOnLine(ctx, name))
+      const on = goalItems(ctx, name)
+      const line = new Set(closingOnLine(ctx, name))
       const done = on.filter((i) => !isOpen(ctx, i) || fieldValue(i, FIXED_ON) !== undefined || line.has(i.meta.id))
       // The day each closed: what tells a threshold crossed before the plan began (checkPlanSince) from one crossed after.
       const dates = done.map((i) => i.meta["closedOn"] ?? i.meta["fixedOn"]).filter((d): d is string => typeof d === "string").map((d) => d.slice(0, 10))

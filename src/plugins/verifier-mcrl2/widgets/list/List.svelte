@@ -619,7 +619,7 @@
           <span class="cell" role="gridcell"><span class="ctitle">{g.chapter.title}</span></span>
         </div>
       {/if}
-      <div class="group" role="rowgroup" class:folded={g.folded} style:--n={g.folded ? 0 : g.count}>
+      <div class="group" role="rowgroup" class:long={g.count >= 50} class:folded={g.folded} style:--n={g.folded ? 0 : g.count}>
         {#if grouped}
           {@const id = headId(g.key)}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -817,7 +817,8 @@
     align-items: center;
     gap: var(--space-xs) var(--space-md);
     min-block-size: var(--size-target);
-    color: var(--color-text-muted);
+    color: var(--color-text-muted);    /* Never shrunk under its own words (a narrow stage, the text at 200%): the grid below takes what is left. */
+    flex: none;
   }
   .status .search {
     flex: 0 1 var(--size-w-16);
@@ -982,8 +983,21 @@
     padding: var(--space-none) var(--space-sm) var(--space-none) var(--space-none);
     opacity: 0.6;
   }
-  .vdrop:hover {
-    opacity: 1;
+  @media (hover: hover) {
+    .vdrop:hover {
+      opacity: 1;
+    }
+  }
+  @media (pointer: coarse) {
+    .vdrop {
+      opacity: 1;
+      min-inline-size: var(--size-touch);
+      justify-content: center;
+    }
+    .vpick,
+    .vdrop {
+      min-block-size: var(--size-touch);
+    }
   }
   .vpick:focus-visible,
   .vdrop:focus-visible,
@@ -1026,9 +1040,10 @@
     grid-template-columns: var(--tracks);
     column-gap: var(--space-md);
   }
-  /* A group off the screen is not drawn; its height is reckoned from its count of rows and its heading, with the space
-     the heading keeps above it, so that drawing it later moves nothing. */
-  .group {
+  /* A long group off the screen is not drawn; its height is reckoned from its count of rows and its heading, with the space
+     the heading keeps above it, so that drawing it later moves nothing. A short group is always drawn: its rows can wrap
+     to more lines than the reckoning allows for (a large text size), and a group reckoned too short lies over the next. */
+  .group.long {
     content-visibility: auto;
     contain-intrinsic-size: auto calc((var(--n) + 1) * var(--row) + var(--space-sm));
   }
@@ -1061,9 +1076,7 @@
     display: flex;
     align-items: center;
     min-inline-size: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
   }
   .cell.end {
     justify-content: flex-end;
@@ -1118,8 +1131,7 @@
   /* A second line under the title: smaller and muted. */
   .row .cell.title .second {
     display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
     font-size: var(--font-size-xs);
     color: var(--color-text-muted);
   }
@@ -1228,6 +1240,43 @@
   }
   .narrow .search {
     max-inline-size: none;
+  }
+
+  /* A list in a narrow container (a phone, a text at 200%, a narrow pane): the title takes a line of its own and wraps, the
+     other columns follow on the line below it, so that no word is cut and no column lies over another. The column
+     headings give way to the Sort menu. */
+  @container (max-width: 48rem) {
+    .list:not(.narrow):not(.is-diary) .heads {
+      display: none;
+    }
+    /* A group's heading is one cell over the whole width: the columns' tracks, summed, can be wider than the room. */
+    .list:not(.narrow):not(.is-diary) .ghead {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .list:not(.narrow):not(.is-diary) .row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      column-gap: var(--space-md);
+      row-gap: 0;
+      padding-block: var(--space-xs);
+    }
+    .list:not(.narrow):not(.is-diary) .row .cell {
+      flex: 0 1 auto;
+      min-inline-size: 0;
+    }
+    .list:not(.narrow):not(.is-diary) .row .cell.title {
+      order: -1;
+    }
+    .list:not(.narrow):not(.is-diary) .row .dotcell {
+      order: -2;
+      flex: none;
+      align-self: center;
+      inline-size: var(--dot);
+    }
+    .list:not(.narrow):not(.is-diary) .row .cell.title {
+      flex: 1 1 60%;
+    }
   }
 
   @media (pointer: coarse) {
@@ -1339,6 +1388,12 @@
     column-gap: var(--space-home-line);
     padding-block: var(--space-md);
   }
+  /* Narrower than the dates and the entries can share (about 320 px at a text size of 200%): the date stands over its entries. */
+  @container (inline-size < 17rem) {
+    .day {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
   .when {
     align-self: start;
   }
@@ -1373,8 +1428,8 @@
   .is-diary .row.entry {
     display: block;
     min-block-size: 0;
-    margin-inline: calc(var(--space-sm) * -1);
-    padding: var(--space-xs) var(--space-sm);
+    margin-inline: calc(var(--space-sm) * -1) 0;
+    padding: var(--space-xs) 0 var(--space-xs) var(--space-sm);
   }
   .is-diary .row.entry .cell.title {
     display: block;
@@ -1425,7 +1480,8 @@
     align-self: end;
   }
   @media (pointer: coarse) {
-    .is-diary .row.note {
+    .is-diary .row.note,
+    .is-diary .ghead.when {
       min-block-size: var(--size-touch);
     }
   }
