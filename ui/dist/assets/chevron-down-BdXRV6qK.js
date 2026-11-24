@@ -1,1 +1,0 @@
-import{m as e,o as t,p as n}from"./runtime-DvDVho1J.js";var r={name:`chevron-down`,size:24,node:[[`path`,{d:`m6 9 6 6 6-6`}]]};r.node;var i=new Set([`$$slots`,`$$events`,`$$legacy`]);function a(a,o){let s=n(o,i);t(a,e(()=>s,{get icon(){return r}}))}export{a as t};

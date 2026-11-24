@@ -1,1 +1,0 @@
-import{Ct as e,d as t,h as n,wt as r}from"./runtime-DvDVho1J.js";import{Pi as i,yr as a}from"./core-DnRJF6ek.js";function o(o,s){r(s,!1);let c=i();t(()=>a(c)),n(),e()}export{o as default};

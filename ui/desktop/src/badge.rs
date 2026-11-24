@@ -1,5 +1,5 @@
 // What tells one project's window from another's: the window's title is the project's name, and its Dock (macOS) or taskbar
-// (Windows, Linux) icon is the Naima icon with a badge in the corner, a colour taken from the name and the name's initial.
+// (Windows, Linux) icon is the Naima icon (the site's NAI tile) with a badge in the corner, a colour taken from the name and the name's initial.
 // Every project has its own app process, so the icon is set per process, at runtime; the icon in the bundle stays the plain one.
 
 use serde_json::Value;
@@ -21,7 +21,7 @@ pub fn initial(name: &str) -> Option<char> {
     name.chars().find(|c| c.is_alphanumeric()).map(|c| c.to_ascii_uppercase()).filter(char::is_ascii_alphanumeric)
 }
 
-/// Colours that stay apart from each other and from the icon's own blue, dark and white.
+/// Colours that stay apart from each other and from the icon's own light blue, dark and white.
 const COLOURS: [[u8; 3]; 8] = [
     [0xd9, 0x4f, 0x3d],
     [0xe0, 0x8a, 0x1e],

@@ -46,7 +46,11 @@ export interface Grouping<T> {
     /** A chapter the group belongs to (the month a day is in): its heading is drawn over the first group of it. The
      *  groups of a chapter stand together, the chapters in the order of their ranks. */
     readonly chapter?: Chapter;
+    /** What follows the title, quieter (the date of a day named by its weekday). */
+    readonly sub?: string;
   };
+  /** The diary look's lines under a folded chapter's heading: what its groups hold that is worth reading before opening it. */
+  readonly teaser?: (items: readonly T[]) => readonly string[];
 }
 
 /** A chapter heading over a run of groups. */
@@ -79,6 +83,8 @@ export interface ListSpec<T> {
   readonly columns: readonly Column<T>[];
   readonly facets?: readonly Facet<T>[];
   readonly groupings?: readonly Grouping<T>[];
+  /** The diary look: an item that recedes to a quiet note after the entries of its group, never an entry. */
+  readonly margin?: (item: T) => boolean;
   /** The spans of days the items can be filtered by, each with the day an item stands on. */
   readonly ranges?: readonly Range<T>[];
   /** A second line under the title: what the item says more, quietly. None for no line. */
@@ -132,11 +138,15 @@ export interface FacetChips {
 export interface ListGroup<T> {
   readonly key: string;
   readonly title: string;
+  /** What follows the title, quieter. */
+  readonly sub?: string;
   /** The chapter the group stands in, when the grouping has chapters. */
   readonly chapter?: Chapter;
   /** How many items the group holds, folded or not. */
   readonly count: number;
   readonly folded: boolean;
+  /** Its chapter is folded: the group is not drawn at all, and has no place for the keyboard. */
+  readonly hidden: boolean;
   readonly items: readonly T[];
 }
 
@@ -252,11 +262,11 @@ export function sortItems<T>(items: readonly T[], col: Column<T> | undefined, de
 export function groupItems<T>(
   items: readonly T[],
   grouping: Grouping<T> | undefined,
-): { key: string; title: string; chapter?: Chapter; items: T[] }[] {
+): { key: string; title: string; sub?: string; chapter?: Chapter; items: T[] }[] {
   if (!grouping) return [{ key: "", title: "", items: [...items] }];
   const out = new Map<
     string,
-    { key: string; title: string; chapter?: Chapter; chapterRank: number; rank: number; first: number; items: T[] }
+    { key: string; title: string; sub?: string; chapter?: Chapter; chapterRank: number; rank: number; first: number; items: T[] }
   >();
   items.forEach((i, n) => {
     const g = grouping.group(i);
@@ -264,6 +274,7 @@ export function groupItems<T>(
       {
         key: g.key,
         title: g.title,
+        ...(g.sub ? { sub: g.sub } : {}),
         ...(g.chapter ? { chapter: g.chapter } : {}),
         chapterRank: g.chapter?.rank ?? 0,
         rank: g.rank ?? Number.MAX_SAFE_INTEGER,
@@ -275,7 +286,7 @@ export function groupItems<T>(
   });
   return [...out.values()]
     .sort((a, b) => a.chapterRank - b.chapterRank || a.rank - b.rank || a.first - b.first)
-    .map(({ key, title, chapter, items }) => ({ key, title, ...(chapter ? { chapter } : {}), items }));
+    .map(({ key, title, sub, chapter, items }) => ({ key, title, ...(sub ? { sub } : {}), ...(chapter ? { chapter } : {}), items }));
 }
 
 // ---- Days: a grouping by day under chapter headings, and the spans of days a filter offers.
@@ -388,9 +399,12 @@ export function listModel<T>(items: readonly T[], spec: ListSpec<T>, v: ListView
     ...g,
     count: g.items.length,
     folded: !!grouping && v.folded.includes(g.key),
+    // A chapter folded (its key among the folds) hides every group of it.
+    hidden: !!grouping && !!g.chapter && v.folded.includes(g.chapter.key),
   }));
   const places: Place[] = [];
   for (const g of groups) {
+    if (g.hidden) continue;
     if (grouping) places.push({ kind: "head", group: g.key });
     if (!g.folded) { for (const i of g.items) places.push({ kind: "row", key: spec.key(i), group: g.key }); }
   }
