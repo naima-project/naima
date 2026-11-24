@@ -3651,6 +3651,7 @@ naima model-explore model.mcrl2 --out more.json --max 40000 --from state.json
 |---|---|---|---|
 | `mcrl2` | 202607.0 | BSL-1.0 | darwin-arm64, darwin-x64, linux-x64, linux-arm64 (none), windows-x64 |
 | `python` | 3.13.16+20261003 | PSF-2.0 (CPython; the build bundles OpenSSL, SQLite, Tcl/Tk and others under their own licences) | darwin-arm64, darwin-x64, linux-x64, linux-arm64, windows-x64 |
+| `uv` | 0.11.7 | MIT OR Apache-2.0 | darwin-arm64, darwin-x64, linux-x64, linux-arm64, windows-x64 |
 
 ## ui
 
