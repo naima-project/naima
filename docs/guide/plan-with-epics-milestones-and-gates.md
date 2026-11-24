@@ -155,6 +155,24 @@ by date. `naima gate set <gate> --freeze <date>` freezes a goal from that date u
 and its date has come): meanwhile no landing on the trunk closes a feature, and `--freeze ""` clears it. The order and the freezes decide when a
 [development line](lines.md) may land, and `naima gate show <gate> --line` judges a gate on its line's tip.
 
+## Close a goal that another one replaces
+
+Sometimes a goal is never reached because the owner decides another goal takes its place: a release that was planned, then folded into a later one. Such a goal
+would stay overdue, and its alarm would keep coming back. The owner closes it as superseded:
+
+```sh
+naima gate set release-1.1.5 --superseded-by release-1.2 --reason "its fixes shipped in 1.2" --consent "yes, 1.2 replaces 1.1.5"
+```
+
+`--reason` says why, and `--consent` restates the owner's yes, as `naima retire` asks for it; both go into `naima.json` with the day. The open items still on the
+goal move to the other one, and the command says each of them as it goes (an item already on the other goal is left alone). From then on the goal counts as
+closed: it holds, `naima gates` and the window's Goals, Home and river show it as "superseded by 1.2" (the version of the goal that replaced it, or its name
+when it has none), `naima hello` no longer names it, and neither the overdue note of `naima check` nor the alarm of a slipping goal is raised for it. A message the
+alarm raised earlier stays until the owner acknowledges it with `naima messages ack`.
+
+`naima gate set <gate> --superseded-by ""` undoes it: the goal is a goal again, its date counts and its alarm works, and the items the supersession moved go
+back to it. The other goal cannot itself be superseded, and a goal cannot be superseded by itself.
+
 ## See when things happened: the timeline
 
 ```sh

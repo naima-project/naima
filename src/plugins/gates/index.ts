@@ -174,6 +174,10 @@ export interface GateDef {
   after?: string[]
   /** The date its freeze starts, YYYY-MM-DD: until the goal is finished, no landing on the trunk closes a feature. */
   freeze?: string
+  /** The goal that superseded it, by the owner's word: it counts as closed, holds, shows "superseded by ...", and raises no alarm. */
+  supersededBy?: string
+  /** Why it was superseded, in one line. */
+  supersededBecause?: string
   /** May be async: a gate backed by an external tool awaits it. */
   evaluate(ctx: Context): GateResult | Promise<GateResult>
   /**
@@ -237,6 +241,12 @@ export interface GateConfig {
   after?: string[]
   /** From this date, YYYY-MM-DD, while the goal is unfinished, no landing on the trunk closes a feature. */
   freeze?: string
+  /** The goal that superseded this one (naima gate set --superseded-by), with why, the owner's yes, the day, and the items it moved there (their ids), so an undo can move them back. */
+  supersededBy?: string
+  supersededBecause?: string
+  supersededConsent?: string
+  supersededOn?: string
+  supersededMoved?: string[]
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -284,6 +294,17 @@ function readOptions(options: Record<string, unknown>): Record<string, GateConfi
       if (c.after.includes(name)) throw new Error(`gates: gate "${name}": a goal does not come after itself`)
     }
     if (c.freeze !== undefined && !isDate(c.freeze)) throw new Error(`gates: gate "${name}": freeze is a date, YYYY-MM-DD, got ${JSON.stringify(c.freeze)}`)
+    if (c.supersededBy !== undefined) {
+      if (typeof c.supersededBy !== "string" || !GATE_NAME.test(c.supersededBy)) throw new Error(`gates: gate "${name}": supersededBy is a gate name`)
+      if (c.supersededBy === name) throw new Error(`gates: gate "${name}": a goal cannot be superseded by itself`)
+      for (const k of ["supersededBecause", "supersededConsent"] as const) {
+        if (typeof c[k] !== "string" || !c[k]!.trim()) throw new Error(`gates: gate "${name}": ${k} says why, on one line, once it is superseded`)
+      }
+      if (!isDate(c.supersededOn)) throw new Error(`gates: gate "${name}": supersededOn is a date, YYYY-MM-DD`)
+      if (c.supersededMoved !== undefined && (!Array.isArray(c.supersededMoved) || !c.supersededMoved.every((i) => typeof i === "string"))) {
+        throw new Error(`gates: gate "${name}": supersededMoved is a list of item ids`)
+      }
+    }
   }
   return gates as Record<string, GateConfig>
 }
@@ -362,9 +383,13 @@ const DAY = 86_400_000
 /** Whole days from today to `due`: negative once it is past. */
 export const daysLeft = (ctx: Context, due: string): number => Math.round((Date.parse(`${due}T00:00:00Z`) - Date.parse(`${today(ctx)}T00:00:00Z`)) / DAY)
 const days = (n: number): string => `${n} day${n === 1 ? "" : "s"}`
+/** A superseding goal as people name it: its version when it ships as one ("1.2"), else its name. */
+const supersederName = (ctx: Context, name: string): string => ctx.registry.find<GateDef>("gates", name)?.value.version ?? name
 
 /** A milestone's date and version, in words — "version 0.9; due 2026-02-01, 17 days left" — or "" for a gate with neither. */
-export function timing(ctx: Context, g: Pick<GateDef, "due" | "version">): string {
+export function timing(ctx: Context, g: Pick<GateDef, "due" | "version" | "supersededBy">): string {
+  // A superseded goal is closed: the goal that replaced it is the only thing to say, never days overdue.
+  if (g.supersededBy) return `superseded by ${supersederName(ctx, g.supersededBy)}`
   const parts: string[] = []
   if (g.version) parts.push(`version ${g.version}`)
   if (g.due) {
@@ -563,7 +588,7 @@ export async function goals(ctx: Context): Promise<string[]> {
   for (const { value: gate } of gatesOf(ctx)) if (gate.due || gate.version) all.push({ gate, result: await gate.evaluate(ctx) })
   // A release already tagged is behind the project too: its version names a tag in git.
   const tags = releaseTags(ctx)
-  const released = (g: GateDef): boolean => !!g.version && tags.has(versionKey(g.version))
+  const released = (g: GateDef): boolean => (!!g.version && tags.has(versionKey(g.version))) || !!g.supersededBy
   const live = all.filter((g) => ahead(g.gate, g.result) && !released(g.gate))
   const byDate = (a: Goal, b: Goal): number => (a.gate.due ?? "9999-99-99").localeCompare(b.gate.due ?? "9999-99-99")
   const dated = live.filter((g) => g.gate.due).sort(byDate)
@@ -627,8 +652,13 @@ function printGate(ctx: Context, gate: GateDef, r: GateResult, hands = false): v
   const when = timing(ctx, gate)
   ctx.out(
     `${gate.name} — ${gate.title}${gate.inFullSuite ? " [in the full suite]" : ""}${when ? ` (${when})` : ""}: ${
+<<<<<<< HEAD
       r.holds ? "HOLDS" : `BLOCKED by ${r.blocking.length}`
     }${r.owed.length ? `, ${r.owed.length} owed` : ""}${waitingOnLine(r, ctx)}`,
+=======
+      gate.supersededBy ? "SUPERSEDED" : r.holds ? "HOLDS" : `BLOCKED by ${r.blocking.length}`
+    }${r.owed.length ? `, ${r.owed.length} owed` : ""}${waitingOnLine(r)}`,
+>>>>>>> origin/line/release-1.2
   )
   const who = (i: Item) => (hands ? `  (${runByOf(ctx, i) || "unclassified"})` : "")
   for (const why of r.reasons ?? []) ctx.out(`  ✗ ${why}`)
@@ -716,8 +746,10 @@ interface GateRow {
   after?: string[]
   /** Every goal ordered before it, by after, version and due date: the goal order lines follow. */
   before: string[]
-  /** Its goal is finished: its version released, or, with none, it holds and its due date has come. */
+  /** Its goal is finished: its version released, or, with none, it holds and its due date has come; or it was superseded. */
   finished: boolean
+  /** The goal that superseded it, when one did: it is finished, and its `when` says "superseded by <that goal>". */
+  supersededBy?: string
 }
 
 /** Whether a proof by these hands is a person's: a person's own hands, or the owner's. */
@@ -763,6 +795,9 @@ async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: Gate
   const all = gatesOf(ctx).map((g) => g.name)
   let released: Set<string> | null = null
   const tags = (): Set<string> => (released ??= releaseTags(ctx))
+  // As finished() judges it, on the verdict just made rather than a second evaluation.
+  const isFinished = (def: GateDef, result: GateResult, tags: () => Set<string>): boolean =>
+    !!def.supersededBy || (def.version ? tags().has(versionKey(def.version)) : result.holds && (!def.due || def.due <= today(ctx)))
   return await Promise.all((names.length ? names : all).map(async (name) => {
     const def = ctx.registry.find<GateDef>("gates", name)?.value
     if (!def) throw new Error(`no gate "${name}" — gates: ${all.join(", ") || "none configured"}`)
@@ -785,8 +820,12 @@ async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: Gate
         blocking: result.blocking.map(item),
         owed: result.owed.map(item),
         ...(result.onLine?.length ? { onLine: result.onLine.map(label) } : {}),
+<<<<<<< HEAD
         ...(result.arriving?.length ? { arriving: result.arriving.map(label), arrivingOn: result.arrivingOn ?? [] } : {}),
         count: goalCount(result, def.version ? tags().has(versionKey(def.version)) : result.holds && (!def.due || def.due <= today(ctx))),
+=======
+        count: goalCount(result, isFinished(def, result, tags)),
+>>>>>>> origin/line/release-1.2
         items: Math.max(result.items ?? 0, result.blocking.length + result.owed.length),
         ...(result.method ? { method: result.method } : {}),
         ...(result.steps ? { steps: result.steps } : {}),
@@ -796,8 +835,8 @@ async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: Gate
         ...checksOf(ctx, def),
         ...(def.after?.length ? { after: def.after } : {}),
         before: all.filter((a) => goalBefore(ctx, a, def.name)),
-        // As finished() judges it, on the verdict just made rather than a second evaluation.
-        finished: def.version ? tags().has(versionKey(def.version)) : result.holds && (!def.due || def.due <= today(ctx)),
+        finished: isFinished(def, result, tags),
+        ...(def.supersededBy ? { supersededBy: def.supersededBy } : {}),
       },
     }
   }))
@@ -1289,13 +1328,71 @@ function removeStep(ctx: Context, gate: GateDef, step: string): number {
   return 0
 }
 
+/**
+ * `gate set <gate> --superseded-by <other> --reason --consent`: the owner closes a goal as superseded by another. The goal
+ * is closed (it holds, says "superseded by <other>", raises no alarm), and every open item still on it moves to the other,
+ * said one by one; the day, the reason and the owner's yes are kept in naima.json, with the items moved, so that
+ * `--superseded-by ""` undoes it: the goal is a goal again and what moved goes back.
+ */
+function supersede(ctx: Context, name: string, by: string, reasonArg: string | undefined, consentArg: string | undefined): number {
+  const gate = findGate(ctx, name)
+  const declared = JSON.parse(readFileSync(DATA_PATH(ctx), "utf8")) as { plugins?: { gates?: { options?: { gates?: Record<string, GateConfig> } } } }
+  const config = declared.plugins?.gates?.options?.gates?.[name]
+  if (by === "") {
+    if (!gate.supersededBy || !config) throw new Error(`gate ${name} is not superseded: nothing to undo`)
+    const other = gate.supersededBy
+    const back: Item[] = []
+    for (const id of config.supersededMoved ?? []) {
+      const item = ctx.repo.byId.get(id)
+      if (item && isOpen(ctx, item) && onGates(item).includes(other)) back.push(item)
+    }
+    updateGate(ctx, name, { supersededBy: "", supersededBecause: "", supersededConsent: "", supersededOn: "", supersededMoved: "" })
+    for (const item of back) {
+      setFields(ctx, item, [[GATE.name, [...onGates(item).filter((g) => g !== other), name].join(",")]])
+      ctx.out(`${label(item)}: back from gate ${other} to gate ${name}`)
+    }
+    ctx.out(`gate ${name}: no longer superseded by ${other}; it is a goal again`)
+    return 0
+  }
+  const oneLine = (flag: string, v: string | undefined, what: string): string => {
+    const t = v?.trim()
+    if (!t) throw new Error(`--${flag} is required: ${what}`)
+    if (t.includes("\n")) throw new Error(`--${flag} takes ${what}, on one line`)
+    return t
+  }
+  const reason = oneLine("reason", reasonArg, "why another goal replaces it")
+  const consent = oneLine("consent", consentArg, "the owner's yes, restated — a goal is superseded only on the owner's word")
+  if (gate.supersededBy) throw new Error(`gate ${name} is already superseded by ${gate.supersededBy}: undo it first with --superseded-by ""`)
+  if (by === name) throw new Error(`gate ${name} cannot be superseded by itself`)
+  const other = findGate(ctx, by)
+  if (other.supersededBy) throw new Error(`gate ${by} is itself superseded by ${other.supersededBy}: name that one`)
+  const moving = ctx.repo.items.filter((i) => isOpen(ctx, i) && onGates(i).includes(name))
+  updateGate(ctx, name, {
+    supersededBy: by,
+    supersededBecause: reason,
+    supersededConsent: consent,
+    supersededOn: today(ctx),
+    supersededMoved: moving.filter((i) => !onGates(i).includes(by)).map((i) => i.meta.id),
+  })
+  for (const item of moving) {
+    const on = onGates(item)
+    if (on.includes(by)) ctx.out(`${label(item)}: already on gate ${by}; left alone`)
+    else {
+      setFields(ctx, item, [[GATE.name, [...on.filter((g) => g !== name), by].join(",")]])
+      ctx.out(`${label(item)}: moved from gate ${name} to gate ${by}`)
+    }
+  }
+  ctx.out(`gate ${name}: superseded by ${by} on ${today(ctx)}: ${reason} (${moving.length} open item${moving.length === 1 ? "" : "s"} on it)`)
+  return 0
+}
+
 const gateCommand: Command = {
   name: "gate",
   says:
-    "declare a gate — a milestone, with a date and a version, or one that follows a stance's method — put items on it or take them off, add steps of its own, close its steps, and show one; writes go to naima.json and to the items, validated, through the write hooks",
+    "declare a gate — a milestone, with a date and a version, or one that follows a stance's method — put items on it or take them off, add steps of its own, close its steps, close it as superseded by another, and show one; writes go to naima.json and to the items, validated, through the write hooks",
   enforces: "writes to naima.json and to the items are validated and pass the write hooks",
   usage:
-    'gate new <name> "<title>" [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite] [--method <stance>/<method>] | gate set <name> [--title <t>] [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite | --no-full-suite] [--method <stance>/<method>] [--after <gate>,...] [--freeze YYYY-MM-DD] | gate add <gate> <item>... | gate remove <gate> <item>... | gate step <gate> <step> --by <item> | gate step <gate> <step> --reopen --reason "<why>" | gate step add <gate> <step> "<title>" --exit <exit> [--after <step> | --first] | gate step remove <gate> <step> | gate show <gate> [--line]',
+    'gate new <name> "<title>" [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite] [--method <stance>/<method>] | gate set <name> [--title <t>] [--says <s>] [--due YYYY-MM-DD] [--version <v>] [--holds-on code|proof] [--coverage <list>,...] [--full-suite | --no-full-suite] [--method <stance>/<method>] [--after <gate>,...] [--freeze YYYY-MM-DD] | gate set <name> --superseded-by <gate> --reason "<why>" --consent "<the owner\'s yes, restated>" | gate set <name> --superseded-by "" | gate add <gate> <item>... | gate remove <gate> <item>... | gate step <gate> <step> --by <item> | gate step <gate> <step> --reopen --reason "<why>" | gate step add <gate> <step> "<title>" --exit <exit> [--after <step> | --first] | gate step remove <gate> <step> | gate show <gate> [--line]',
   options: [
     { name: "--title", says: "gate set: its new title" },
     { name: "--says", says: "gate new and set: what the gate is for, in one sentence" },
@@ -1325,7 +1422,10 @@ const gateCommand: Command = {
       name: "--reopen",
       says: "gate step: reopen a closed step whose exit does not hold; the records closing it lose the step and each gets a note with the reason",
     },
-    { name: "--reason", says: "gate step --reopen: why the exit does not hold, on one line" },
+    {
+      name: "--reason",
+      says: "gate step --reopen: why the exit does not hold, on one line; gate set --superseded-by: why the other goal replaces it, on one line",
+    },
     { name: "--exit", says: "gate step add: the step's exit criterion, what must be true and recorded for it to close" },
     {
       name: "--after",
@@ -1338,6 +1438,12 @@ const gateCommand: Command = {
       says:
         'gate new and set: the date its freeze starts, YYYY-MM-DD: from then, until the goal is finished, no landing on the trunk closes a feature; with set, "" clears the freeze',
     },
+    {
+      name: "--superseded-by",
+      says:
+        'gate set: close the goal as superseded by another goal, on the owner\'s word (--reason and --consent are required): it holds, shows "superseded by <goal>", raises no alarm, and the open items still on it move to the other goal, said one by one; "" undoes it and moves them back',
+    },
+    { name: "--consent", says: "gate set --superseded-by: the owner's yes, restated, on one line: kept in naima.json; an agent supersedes nothing without it" },
     { name: "--line", says: "gate show: judge the gate on the tip of its development line, line/<gate>, and say whether the line may land" },
   ],
   examples: [
@@ -1357,6 +1463,8 @@ const gateCommand: Command = {
     'gate step add beta skeleton "The skeleton runs" --exit "the empty app starts and serves its first screen"',
     'gate step add beta screens "The screens" --exit "the owner accepted every screen" --after skeleton',
     "gate step remove beta screens",
+    'gate set release-1.1.5 --superseded-by release-1.2 --reason "its fixes shipped in 1.2" --consent "yes, 1.2 replaces 1.1.5"',
+    'gate set release-1.1.5 --superseded-by ""',
   ],
   async run(args, ctx) {
     const p = parse(args, {
@@ -1377,6 +1485,8 @@ const gateCommand: Command = {
       line: { type: "boolean" },
       reopen: { type: "boolean" },
       reason: { type: "string" },
+      "superseded-by": { type: "string" },
+      consent: { type: "string" },
     })
     const [sub, name, ...rest] = p.positionals
     const after = str(p, "after")?.split(",").map((g) => g.trim()).filter(Boolean)
@@ -1416,6 +1526,11 @@ const gateCommand: Command = {
       if (method !== undefined) changes["method"] = method === "" ? "" : methodId(ctx, method)
       if (after !== undefined) changes["after"] = after.length ? after : ""
       if (str(p, "freeze") !== undefined) changes["freeze"] = (str(p, "freeze") ?? "").trim()
+      const by = str(p, "superseded-by")?.trim()
+      if (by !== undefined) {
+        if (Object.keys(changes).length) throw new Error("--superseded-by stands alone: change nothing else of the gate in the same command")
+        return supersede(ctx, name, by, str(p, "reason"), str(p, "consent"))
+      }
       if (!Object.keys(changes).length) throw usageError(this)
       updateGate(ctx, name, changes)
       ctx.out(`gate ${name}: ${Object.entries(changes).map(([k, v]) => (v === "" || v === false ? `${k} removed` : `${k} ${v}`)).join(", ")}`)
@@ -1497,7 +1612,7 @@ const overdue: Check = {
   async run(ctx) {
     const out: Finding[] = []
     for (const { value: g } of gatesOf(ctx)) {
-      if (!g.due || daysLeft(ctx, g.due) >= 0) continue
+      if (!g.due || g.supersededBy || daysLeft(ctx, g.due) >= 0) continue
       const r = await g.evaluate(ctx)
       if (r.holds) continue
       out.push({
@@ -1562,6 +1677,7 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
     ...(c.version !== undefined ? { version: c.version } : {}),
     ...(c.after !== undefined ? { after: c.after } : {}),
     ...(c.freeze !== undefined ? { freeze: c.freeze } : {}),
+    ...(c.supersededBy !== undefined ? { supersededBy: c.supersededBy, supersededBecause: c.supersededBecause ?? "" } : {}),
     decides:
       ((c.holdsOn ?? "code") === "code"
         ? `blocked by every open item with gate=${name} that still owes code: no fixedOn, and not itself a proving gesture. Fixed items and open proving gestures are owed, not blocking — unless refuted: one whose status refutes (a failed test, a violated property), or one verified by such an item, blocks.`
@@ -1570,6 +1686,7 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
       (c.coverage?.length
         ? ` Blocked too by every entry with NO TEST of the coverage list${c.coverage.length === 1 ? "" : "s"} ${c.coverage.join(", ")}.`
         : "") +
+      (c.supersededBy ? ` Superseded by ${c.supersededBy}: it counts as closed and holds, and raises no alarm.` : "") +
       (c.version ? " A release gate, having a version, does not hold while no item is on it." : "") +
       (c.fullSuite
         ? " A release gate: it holds only when every gate that is part of the full suite holds too (naima gates marks them), their blocking items, owed items and reasons joining its own."
@@ -1590,9 +1707,24 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
       const done = on.filter((i) => !isOpen(ctx, i) || fieldValue(i, FIXED_ON) !== undefined || line.has(i.meta.id))
       // The day each closed: what tells a threshold crossed before the plan began (checkPlanSince) from one crossed after.
       const dates = done.map((i) => i.meta["closedOn"] ?? i.meta["fixedOn"]).filter((d): d is string => typeof d === "string").map((d) => d.slice(0, 10))
-      return { items: on.length, closed: done.length, released: !!c.version && releaseTags(ctx).has(versionKey(c.version)), closedDates: dates }
+      return {
+        items: on.length,
+        closed: done.length,
+        released: !!c.supersededBy || (!!c.version && releaseTags(ctx).has(versionKey(c.version))),
+        closedDates: dates,
+      }
     },
     evaluate: (ctx) => {
+      // A superseded goal is closed: whatever was left on it moved to the goal that replaced it, and it waits for nothing.
+      if (c.supersededBy) {
+        return {
+          holds: true,
+          blocking: [],
+          owed: [],
+          items: goalItems(ctx, name).length,
+          backedBy: [`superseded by ${c.supersededBy} on ${c.supersededOn}: ${c.supersededBecause}`],
+        }
+      }
       const evaluated = evaluateGate(ctx, name, c.holdsOn ?? "code")
       const reasons = c.coverage?.length ? coverageReasons(ctx, lists, c.coverage) : []
       // A gate with steps, its method's then its own, waits for them too, closed in order: the next one is its reason.
@@ -1648,6 +1780,7 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
       "Gates are configured, never hard-coded, and any plugin may contribute one through the contract; `naima gates` lists them all. " +
       "`naima gate new` declares one in the project's configuration and `naima gate add` puts items on it, so nobody edits naima.json by hand. " +
       "A gate with a `due` date (and, optionally, a `version`) is a milestone: `naima gates` and `naima queue` say the days left, and a check warns once it is overdue. " +
+      'A goal the owner replaces with another is closed as superseded (`naima gate set <gate> --superseded-by <other> --reason ... --consent ...`): it holds, shows `superseded by <other>`, raises no overdue alarm, and its open items move to the other goal; `--superseded-by ""` undoes it. ' +
       "An item whose type carries the `group` trait — an epic — stands on a gate for the items it groups. " +
       "A coverage list is a normative list the project keeps elsewhere — paid features, limits, API endpoints — named by its source, a JSON file and a path in it, or files and a regular expression, and read from it on every run, never copied. " +
       "A proving item names the entry it proves in `covers`; `naima coverage` prints every entry with its test or NO TEST, `--check` exits 1 on one, and a gate that lists it in `coverage` is blocked by each. " +
@@ -1658,7 +1791,7 @@ export default function gates(options: Record<string, unknown> = {}): Plugin {
       {
         name: "gates",
         says:
-          `\`plugins.gates.options.gates\` in \`${DEFAULT_DATA}/${DATA_FILE}\`, written by \`naima gate new\`: gate name → { "title", "says", "holdsOn", "due", "version", "coverage", "fullSuite", "method", "steps" }. method ("<plugin>/<method>", written by \`naima gate set <gate> --method\`) makes the method's steps sub-goals the gate waits for, closed in order. steps ([{ "name", "title", "exit" }], written by \`naima gate step add|remove\`) are the gate's own sub-goals, after the method's, closed the same way. due (YYYY-MM-DD) makes the gate a milestone; version is what it ships as. holdsOn "code" (the default) waits for code, not proof: a fixed item that owes only its proving gesture, and the gestures themselves, are owed but do not block. holdsOn "proof": every open item on the gate blocks it.`,
+          `\`plugins.gates.options.gates\` in \`${DEFAULT_DATA}/${DATA_FILE}\`, written by \`naima gate new\`: gate name → { "title", "says", "holdsOn", "due", "version", "coverage", "fullSuite", "method", "steps", "supersededBy" }. supersededBy (with supersededBecause, supersededConsent, supersededOn and supersededMoved, written by \`naima gate set <gate> --superseded-by\`) closes the goal as superseded by another goal. method ("<plugin>/<method>", written by \`naima gate set <gate> --method\`) makes the method's steps sub-goals the gate waits for, closed in order. steps ([{ "name", "title", "exit" }], written by \`naima gate step add|remove\`) are the gate's own sub-goals, after the method's, closed the same way. due (YYYY-MM-DD) makes the gate a milestone; version is what it ships as. holdsOn "code" (the default) waits for code, not proof: a fixed item that owes only its proving gesture, and the gestures themselves, are owed but do not block. holdsOn "proof": every open item on the gate blocks it.`,
         default: "{}",
       },
       {

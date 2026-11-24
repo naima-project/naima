@@ -1,0 +1,5 @@
+<<<<<<<< HEAD:ui/dist/assets/index-B4yNg6Ul.js
+import"./modulepreload-polyfill-P2Xu9kJm.js";import{K as e}from"./runtime-DXdvW7oy.js";import{C as t,Gr as n,c as r,o as i,s as a,ui as o,x as s}from"./core-BmzNEZEQ.js";i(),location.hash===`#explorer`&&history.replaceState(history.state,``,`#ui_models`),s(location.hash);var c=document.getElementById(`app`);e(r,{target:c,props:{address:!0},context:o(t())}),a({bridge:n({server:`bridge`})});
+========
+import"./modulepreload-polyfill-P2Xu9kJm.js";import{K as e}from"./runtime-DXdvW7oy.js";import{C as t,Gr as n,c as r,o as i,s as a,ui as o,x as s}from"./core-ETUb9LWH.js";i(),location.hash===`#explorer`&&history.replaceState(history.state,``,`#ui_models`),s(location.hash);var c=document.getElementById(`app`);e(r,{target:c,props:{address:!0},context:o(t())}),a({bridge:n({server:`bridge`})});
+>>>>>>>> origin/line/release-1.2:ui/dist/assets/index-yApW2yIl.js
