@@ -58,8 +58,9 @@ export function goalBefore(ctx: Context, a: string, b: string): boolean {
   return false
 }
 
-/** Whether a goal is finished: its version released (a tag carries it), or, with no version, it holds and its due date has come. */
+/** Whether a goal is finished: its version released (a tag carries it), or, with no version, it holds and its due date has come; or the owner superseded it by another goal. */
 export async function finished(ctx: Context, gate: GateDef): Promise<boolean> {
+  if (gate.supersededBy) return true
   if (gate.version) return releaseTags(ctx).has(versionKey(gate.version))
   if (gate.due && gate.due > today(ctx)) return false
   return (await gate.evaluate(ctx)).holds

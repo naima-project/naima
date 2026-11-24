@@ -35,6 +35,8 @@ These rules hold:
 - **An epic's status is derived.** Don't `naima set` it. Close or remove its items instead. A write that sets it against them is refused.
 - **A date is the owner's.** Don't invent a `--due`. Ask, or leave it out ([asking the human](asking-the-human.md)). An overdue milestone shows up as a
   `naima check` note, and you report it rather than moving the date.
+- **Superseding a goal is the owner's.** Only on the owner's word, `naima gate set <gate> --superseded-by <other> --reason "<why>" --consent "<the yes,
+  restated>"` closes a goal another replaces and moves its open items there; `--superseded-by ""` undoes it. Never to silence an alarm on a goal still wanted.
 - **Never copy a timeline or a list.** The timeline is derived from the items and from git, so use `naima event` only for what can't be derived. A coverage list
   is named by its source and read from there, and a test proves an entry with `covers=<entry>` (or `<list>:<entry>`) rather than through a table someone keeps
   by hand.
