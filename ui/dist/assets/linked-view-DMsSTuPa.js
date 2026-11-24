@@ -1,1 +1,0 @@
-function e(e,t,n){return{get:()=>({...n.get(),...e.view.list(t)}),set:r=>{n.set(r),e.change(t,r)}}}export{e as t};

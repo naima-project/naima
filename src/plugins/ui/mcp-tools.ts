@@ -303,6 +303,13 @@ async function item(r: Reader, ref: string, wantFull: boolean): Promise<string> 
 
 // gates
 
+/** The goal's one count (the gates view's `count`): what is left and what is fixed on the line, as every screen says it; "" when the gate fixes nothing there. */
+function countSays(g: O): string {
+  const c = obj(g["count"])
+  const fixed = Number(c["fixed"] ?? arr(g["onLine"]).length)
+  return fixed ? `, ${c["left"] !== undefined ? `${Number(c["left"])} left in all, ` : ""}${fixed} fixed on the line, waiting for it to land` : ""
+}
+
 async function gates(r: Reader, a: O): Promise<string> {
   const all = arr(await r.view("gates")).map(obj)
   const name = textArg(a, "name")
@@ -311,9 +318,7 @@ async function gates(r: Reader, a: O): Promise<string> {
     const lines = open.map((g) =>
       `${str(g["gate"])}: ${g["holds"] ? "holds" : `blocked by ${arr(g["blocking"]).length}`}${
         arr(g["owed"]).length ? `, ${arr(g["owed"]).length} owe proof` : ""
-      }${arr(g["onLine"]).length ? `, ${arr(g["onLine"]).length} fixed on the line, waiting for it to land` : ""}${g["when"] ? ` · ${str(g["when"])}` : ""} · ${
-        cut(str(g["title"]), 50)
-      }`
+      }${countSays(g)}${g["when"] ? ` · ${str(g["when"])}` : ""} · ${cut(str(g["title"]), 50)}`
     )
     const done = all.length - open.length
     const shown = lines.slice(0, 12)
