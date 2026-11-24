@@ -14,7 +14,7 @@ import { Buffer } from "node:buffer"
 import process from "node:process"
 import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import {
   ATTACHMENTS,
@@ -1108,12 +1108,11 @@ function workDir(ctx: Context): string {
  */
 function earlierVersions(ctx: Context, path: string, wanted: Set<string>, from?: string, verifier?: Verifier): Map<string, string> {
   const out = new Map<string, string>()
-  const top = toplevel(ctx.root)
+  const top = topOf(ctx.root)
   if (!top) return out
   // git names the top level by its real path: a project reached through a symbolic link is read by its real one too.
   const file = gitPath(relative(realpathSync(top), realpathSync(path)))
-  const revs = from !== undefined ? [from] : ["", ...(gitOrNull(top, "log", "--format=%H", "-n", "200", "--", file)?.split("\n").filter(Boolean) ?? [])]
-  const texts = textsAt(top, revs.map((r) => `${r}:${file}`))
+  const texts = from !== undefined ? textsAt(top, [`${from}:${file}`]) : historyOf(ctx, top, file)
   for (const text of texts) {
     if (text === null) continue
     for (
@@ -1123,6 +1122,93 @@ function earlierVersions(ctx: Context, path: string, wanted: Set<string>, from?:
     }
   }
   return out
+}
+
+const tops = new Map<string, string>()
+/** The top level of the repository holding `root`, asked of git once: where a project lies in its repository does not change. */
+function topOf(root: string): string | null {
+  const known = tops.get(root)
+  if (known !== undefined) return known
+  const top = toplevel(root)
+  if (top) tops.set(root, top)
+  return top
+}
+
+/** What changes in a repository's refs and index, read from their files, with no git process: a commit, a checkout, a staged file. "" when it cannot be told. */
+function repoStamp(top: string): string {
+  try {
+    const dotGit = join(top, ".git")
+    const gitDir = statSync(dotGit).isFile() ? resolve(top, readFileSync(dotGit, "utf8").replace(/^gitdir:\s*/, "").trim()) : dotGit
+    let common = gitDir
+    try {
+      common = resolve(gitDir, readFileSync(join(gitDir, "commondir"), "utf8").trim())
+    } catch {
+      // not a linked worktree: its own directory holds the refs
+    }
+    const parts = [join(gitDir, "HEAD"), join(gitDir, "index"), join(common, "packed-refs")]
+    const head = readFileSync(join(gitDir, "HEAD"), "utf8").trim()
+    if (head.startsWith("ref: ")) parts.push(join(common, head.slice(5)))
+    return parts.map((p) => {
+      try {
+        const s = statSync(p, { bigint: true })
+        return `${s.mtimeNs}:${s.size}`
+      } catch {
+        return "-"
+      }
+    }).join("|")
+  } catch {
+    return ""
+  }
+}
+
+/** The earlier versions held of each model file, as the repository stood (`stamp`) when they were read. */
+const histories = new Map<string, { stamp: string; files: Map<string, (string | null)[]> }>()
+/** The most commits back that a model's earlier versions are looked for. */
+const HISTORY_DEPTH = 200
+
+/**
+ * The versions git holds of the file `file` (a path from the top level): the staged one, then those of the last
+ * 200 commits that changed it. They are read for every model the properties name, and every file their runs read, in
+ * one `git log` and one `git cat-file --batch`, not a pair of processes for each property: a read of the properties'
+ * state asks this for each one whose run was made on another version of its model.
+ */
+function historyOf(ctx: Context, top: string, file: string): (string | null)[] {
+  const stamp = repoStamp(top)
+  const cached = stamp ? histories.get(top) : undefined
+  const files = cached && cached.stamp === stamp ? cached.files : new Map<string, (string | null)[]>()
+  const hit = files.get(file)
+  if (hit) return hit
+  const wanted = new Set<string>([file])
+  const real = realpathSync(top)
+  const note = (abs: string | null): void => {
+    if (abs && existsSync(abs)) wanted.add(gitPath(relative(real, realpathSync(abs))))
+  }
+  for (const item of properties(ctx)) {
+    const model = item.meta["model"]
+    if (typeof model === "string") note(modelPath(ctx.root, model))
+    for (const k of runsOf(item)) for (const i of k.run.inputs ?? []) note(modelPath(ctx.root, i.path))
+  }
+  const todo = [...wanted].filter((f) => !files.has(f))
+  const log = gitOrNull(top, "-c", "core.quotepath=off", "log", "--no-renames", "--format=%x01%H", "--name-only", "--", ...todo)
+  const revs = new Map<string, string[]>(todo.map((f) => [f, []]))
+  let rev = ""
+  for (const line of (log ?? "").split("\n")) {
+    if (line.startsWith("\x01")) rev = line.slice(1)
+    else if (line !== "" && rev) {
+      const list = revs.get(line)
+      if (list && list.length < HISTORY_DEPTH) list.push(rev)
+    }
+  }
+  const names = todo.flatMap((f) => [`:${f}`, ...(revs.get(f) ?? []).map((r) => `${r}:${f}`)])
+  const texts = textsAt(top, names)
+  let at = 0
+  for (const f of todo) {
+    const n = 1 + (revs.get(f)?.length ?? 0)
+    files.set(f, texts.slice(at, at + n))
+    at += n
+  }
+  if (stamp) histories.set(top, { stamp, files })
+  return files.get(file) ?? []
 }
 
 /** Why `run`, on an earlier version of the model, cannot carry over to what `item` reads now beyond the model: anything but the model changed. */
