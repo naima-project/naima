@@ -19,7 +19,7 @@
 @font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:swap;src:url("fonts/plex-mono-500.woff2") format("woff2")}
 @font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:700;font-display:swap;src:url("fonts/plex-mono-700.woff2") format("woff2")}
 /* palette */
-:root{--bg:#121820;--ink:#e8efff;--dim:#9fb3d9;--faint:#6f86b3;--blue:#4d8dff;--phos:#8fb8ff;--screen:#0a1220;--line:rgba(77,141,255,.45);--card:#151d29;--on-blue:#0e1520;--head:#f2f6ff;--code:#cfe0ff;--tb:#7fa6ee;--it:#0e1a2c;--rg:#16233a;--crit:#1a2c4a}
+:root{--bg:#121820;--ink:#e8efff;--dim:#9fb3d9;--faint:#6f86b3;--blue:#4d8dff;--phos:#8fb8ff;--screen:#0a1220;--line:rgba(77,141,255,.45);--card:#151d29;--on-blue:#0e1520;--head:#f2f6ff;--code:#cfe0ff;--tb:#7fa6ee;--it:#0e1a2c;--rg:#16233a;--crit:#1a2c4a;--alarm:#ff7a6b}
 /* end palette */
 *{box-sizing:border-box;margin:0}
 html,body{overflow-x:clip}
@@ -63,42 +63,101 @@ h1 span{display:block}
 .cmd button{all:unset;cursor:pointer;font:500 12.5px 'IBM Plex Mono';color:var(--phos);border:1px solid rgba(143,184,255,.4);border-radius:6px;padding:5px 9px;flex:none}
 .cmd button:hover{background:rgba(143,184,255,.12)}
 
-/* the map */
-.sheet{position:relative;max-width:1040px;margin:56px auto 0;border:1px solid var(--line);border-radius:12px;padding:30px 26px 24px;background:rgba(10,18,32,.6)}
-.sheet svg{display:block;width:100%;height:auto;overflow:visible}
-.sheet .narrow{display:none}
-.sheet figcaption{margin-top:12px;color:var(--dim);font-size:14.5px;text-align:center}
-.tb{position:absolute;right:-1px;bottom:-1px;border:1px solid var(--line);background:var(--bg);font:400 11px/1.5 'IBM Plex Mono';color:var(--tb);padding:6px 10px;display:grid;grid-template-columns:auto auto;gap:0 14px;text-align:left}
-.draw path,.draw line{stroke-dasharray:var(--len,1200);stroke-dashoffset:var(--len,1200)}
-.drawn .draw path,.drawn .draw line{transition:stroke-dashoffset 1.4s ease-out;stroke-dashoffset:0}
+/* the real app, in the hero */
+.shot{max-width:980px;margin:56px auto 0}
+.shot .win{border-radius:12px;overflow:hidden;border:1px solid var(--line);box-shadow:0 0 0 1px rgba(143,184,255,.08),0 30px 70px rgba(0,0,0,.5),0 0 60px rgba(77,141,255,.12)}
+.shot .win{position:relative;aspect-ratio:950/742;background:rgb(22,26,30)}
+.shot .slide{position:absolute;inset:0;opacity:0;visibility:hidden;transition:opacity .6s,visibility 0s .6s}
+.shot .slide.on{opacity:1;visibility:visible;transition:opacity .6s}
+.shot img{display:block;width:100%;height:auto}
+.shot .tabs{display:flex;justify-content:center;gap:8px;margin-top:14px}
+.shot .tabs button{all:unset;cursor:pointer;position:relative;overflow:hidden;font:500 12.5px 'IBM Plex Mono';color:var(--dim);border:1px solid rgba(143,184,255,.3);border-radius:999px;padding:4px 12px}
+.shot .tabs button:hover{color:var(--ink);border-color:var(--line)}
+.shot .tabs button:focus-visible{outline:2px solid var(--phos);outline-offset:2px}
+.shot .tabs button[aria-pressed="true"]{color:var(--screen);background:var(--phos);border-color:var(--phos)}
+@media (prefers-reduced-motion:reduce){.shot .slide,.shot .slide.on{transition:none}}
 
+/* NAIMA's Models tab on its lock study: the clients' interface, a UML state machine per client and the UML sequence of messages,
+   replaying the run mCRL2 gave as the counterexample to mutual exclusion */
+.sheet{position:relative;margin:0;border:1px solid var(--line);border-radius:12px;padding:24px clamp(14px,2.4vw,26px) 20px;background:rgba(10,18,32,.6);text-align:left}
+.sheet-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 14px}
+.sheet-h b{font-weight:600;color:var(--head);font-size:clamp(16px,1.6vw,19px);line-height:1.3}
+.sheet-h span{color:var(--dim);font-size:14.5px}
+.ctl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-top:16px}
+.ctl button{all:unset;cursor:pointer;font:500 12.5px 'IBM Plex Mono';color:var(--phos);border:1px solid rgba(143,184,255,.4);border-radius:6px;padding:4px 10px}
+.ctl button:hover{background:rgba(143,184,255,.12)}
+.ctl button:focus-visible{outline:2px solid var(--phos);outline-offset:2px}
+.ctl .n{font:500 12.5px 'IBM Plex Mono';color:var(--faint);margin-left:4px}
+.ctl .n b{color:var(--ink);font-weight:500}
+.say{margin-top:10px;min-height:3em;color:var(--dim);font-size:14.5px;max-width:90ch}
+.say b{color:var(--ink);font-weight:500}
+.ban{margin-top:10px;padding:8px 12px;border-radius:8px;border:1px solid var(--alarm);color:var(--alarm);background:rgba(255,122,107,.08);font-size:14.5px;font-weight:500}
+.views{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.15fr) minmax(0,1fr);gap:14px;margin-top:16px}
+.view{background:var(--card);border:1px solid rgba(143,184,255,.18);border-radius:10px;padding:12px 14px 14px;min-width:0}
+.view .vh{font:500 12px 'IBM Plex Mono';color:var(--phos);letter-spacing:.02em}
+.view .vh span{color:var(--faint)}
+.view svg{display:block;width:100%;height:auto;overflow:visible;font-family:'IBM Plex Sans',sans-serif}
+/* the interface: what each client can do now */
+.cls{display:grid;gap:8px;margin-top:10px}
+.cl{display:grid;grid-template-columns:2.2em 1fr;align-items:center;gap:4px 10px;padding:8px 10px;border:1px solid rgba(143,184,255,.14);border-radius:8px;transition:border-color .3s,background .3s}
+.cl b{font:600 13px 'IBM Plex Mono';color:var(--ink);grid-row:span 2}
+.cl .acts{display:flex;gap:6px}
+.act{font:500 12px 'IBM Plex Mono';padding:2px 8px;border-radius:5px;border:1px solid rgba(143,184,255,.4);color:var(--phos);transition:background .25s,color .25s,opacity .25s}
+.act.off{opacity:.35}
+.act.hit{background:var(--phos);color:var(--screen);border-color:var(--phos)}
+.cl .st{font-size:12.5px;color:var(--faint)}
+.cl.holds{border-color:var(--phos);background:rgba(77,141,255,.08)}
+.cl.clash{border-color:var(--alarm);background:rgba(255,122,107,.07)}
+.lk{margin-top:10px;font:500 12px 'IBM Plex Mono';color:var(--faint);padding:6px 10px;border:1px dashed rgba(143,184,255,.3);border-radius:8px;transition:border-color .3s,color .3s}
+.lk b{color:var(--ink);font-weight:500}
+.lk.hit{border-color:var(--phos);color:var(--phos)}
+/* the UML state machines */
+.sm{margin-top:8px}
+.sm+.sm{margin-top:4px}
+.sm text{font-size:11px;fill:var(--dim)}
+.sm .who{font:600 11px 'IBM Plex Mono';fill:var(--ink)}
+.sm .s rect{fill:var(--it);stroke:var(--blue);stroke-width:1.3;transition:fill .3s,stroke .3s}
+.sm .s text{font-size:11.5px;fill:var(--ink);text-anchor:middle}
+.sm .s.now rect{fill:var(--phos);stroke:var(--phos)}
+.sm .s.now text{fill:var(--screen);font-weight:600}
+.sm .s.now.clash rect{fill:var(--alarm);stroke:var(--alarm)}
+.sm .t{stroke:var(--blue);stroke-width:1.2;fill:none;marker-end:url(#oa)}
+.sm .t.hit{stroke:var(--phos);stroke-width:2}
+.sm .ini{fill:var(--ink)}
+/* the UML sequence diagram */
+.sq .head rect{fill:var(--it);stroke:var(--blue);stroke-width:1.3}
+.sq .head text{font:600 11.5px 'IBM Plex Mono';fill:var(--ink);text-anchor:middle}
+.sq .life{stroke:var(--blue);stroke-opacity:.55;stroke-dasharray:4 4}
+.live .sq .m{opacity:0;transition:opacity .35s}
+.live .sq .m.on{opacity:1}
+.sq .m line{stroke:var(--phos);stroke-width:1.4;marker-end:url(#fa)}
+.sq .m.back line{stroke-dasharray:5 3}
+.sq .m text{font:500 11px 'IBM Plex Mono';fill:var(--dim);text-anchor:middle;paint-order:stroke;stroke:var(--card);stroke-width:4px;stroke-linejoin:round}
+.sq .m.last text{fill:var(--ink)}
+.sq .m.clash line{stroke:var(--alarm);marker-end:url(#fx)}
+.sq .m.clash text{fill:var(--alarm)}
+.fix{margin-top:14px;color:var(--dim);font-size:14px}
+.fix code{color:var(--code);background:rgba(77,141,255,.12);border:1px solid rgba(77,141,255,.22);border-radius:5px;padding:0 .35em;font-size:.9em}
+.sheet .foot{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:end;gap:12px;margin-top:14px}
+.sheet figcaption{color:var(--faint);font-size:13px;max-width:70ch}
+.tb{flex:none;border:1px solid var(--line);background:var(--bg);font:400 11px/1.5 'IBM Plex Mono';color:var(--tb);padding:6px 10px;display:grid;grid-template-columns:auto auto;gap:0 14px;text-align:left}
+@media (prefers-reduced-motion:reduce){.sq .m,.cl,.act,.lk,.sm .s rect{transition:none}}
 
-/* the plan, drawn the way NAIMA computes it */
-.plan .it{fill:var(--it);stroke:var(--blue);stroke-width:1.5;opacity:.25;transition:opacity .4s,fill .4s}
-.plan .it.crit{stroke:var(--phos);stroke-width:2.2}
-.plan .critp{stroke:var(--phos);stroke-width:3;stroke-linecap:round;filter:drop-shadow(0 0 6px rgba(143,184,255,.7));stroke-dasharray:10 14;opacity:0}
-.plan .you circle{fill:var(--screen);stroke:var(--phos);stroke-width:2.2}
-.plan .you path{stroke:var(--phos);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;opacity:0}
-.plan .ring{opacity:0}
-.plan .rg0{fill:none;stroke:var(--rg)}.plan .rs{fill:none;stroke:var(--phos);opacity:0}.plan .rc{fill:var(--screen);stroke:var(--blue);stroke-width:1.2;stroke-opacity:.5}
-.plan .goal{fill:var(--bg);stroke:var(--blue);stroke-width:2.2}
-.run .it.w1{opacity:1;transition-delay:.1s}.run .it.w2{opacity:1;transition-delay:.6s}.run .it.w3{opacity:1;transition-delay:1.1s}
-.run .it.crit{fill:var(--crit)}
-.run .critp{opacity:1;transition:opacity .3s 1.4s;animation:flow 1.2s linear infinite}
-@keyframes flow{to{stroke-dashoffset:-48}}
-.run .you path{opacity:1;transition:opacity .3s 2s}
-.run .ring{animation:ping 2.4s ease-out 2s infinite}
-@keyframes ping{0%{opacity:.8;r:20}100%{opacity:0;r:40}}
-.run .rs{opacity:1;transition:opacity .12s linear calc(2.6s + var(--s))}
-.run .rc{fill:var(--blue);fill-opacity:.18;transition:fill-opacity .4s linear 4.9s}
-@keyframes pass{to{fill:var(--phos)}}
-.run .goal{animation:goal .5s ease-out 5s forwards}
-@keyframes goal{to{fill:var(--blue);filter:drop-shadow(0 0 10px rgba(77,141,255,.8))}}
-@media (prefers-reduced-motion:reduce){.plan .it{opacity:1}.plan .critp{opacity:1;animation:none}.plan .you path{opacity:1}.plan .rs{opacity:1}.plan .goal{fill:var(--blue);animation:none}.run .ring{animation:none}}
+/* the cards: straight; on hover the edge lights in phosphor and the card lifts; while scrolling they float a little (script below) */
+.lift{position:relative;transition:transform .35s cubic-bezier(.2,.8,.2,1),box-shadow .35s,border-color .35s,translate .9s cubic-bezier(.2,.8,.2,1)}
+.lift:focus-within{border-color:var(--phos)}
+@media (hover:hover){
+  .lift:hover{transform:translateY(-4px);border-color:var(--phos);box-shadow:0 0 0 1px rgba(143,184,255,.3),0 0 26px rgba(77,141,255,.25),0 30px 56px rgba(0,0,0,.5)}
+}
+.float{will-change:translate}
+@media (prefers-reduced-motion:reduce){.lift{transition:none}.lift:hover{transform:none}.float{translate:none!important;will-change:auto}}
 
 /* sections */
 .row{max-width:1080px;margin:0 auto;padding:110px clamp(16px,4vw,40px) 0;display:grid;grid-template-columns:1fr 1fr;gap:clamp(28px,5vw,64px);align-items:center}
 .row.flip .text{order:2}
+.row>*{min-width:0}
+.fm .text{grid-column:2;grid-row:1}.fm>.card{grid-column:1;grid-row:1}.fm .sheet{grid-column:1/-1;grid-row:2}
+.fm .term{font-size:13px}
 .kicker{color:var(--phos);font:500 13.5px 'IBM Plex Mono'}
 h2{margin-top:8px;font-weight:600;font-size:clamp(28px,3.6vw,40px);line-height:1.1;letter-spacing:-.02em;color:var(--head);text-wrap:balance}
 .text p{margin-top:14px;color:var(--dim);max-width:46ch}
@@ -107,8 +166,8 @@ h2{margin-top:8px;font-weight:600;font-size:clamp(28px,3.6vw,40px);line-height:1
 .text li::before{content:"";position:absolute;left:2px;top:15px;width:9px;height:9px;border:1.5px solid var(--blue)}
 .self{display:inline-block;margin-top:18px;text-decoration:none;padding:12px 14px;border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:14.5px}
 .self b{display:block;font-weight:600}.self span{color:var(--dim)}
-.card{background:var(--card);border:1px solid rgba(143,184,255,.18);border-radius:14px;box-shadow:0 24px 50px rgba(0,0,0,.4);transition:transform .5s cubic-bezier(.2,.8,.2,1),box-shadow .5s;transform:rotate(var(--r,0deg))}
-.card:hover{transform:rotate(calc(var(--r,0deg)*-1)) translateY(-8px);box-shadow:0 34px 60px rgba(0,0,0,.5)}
+.card{background:var(--card);border:1px solid rgba(143,184,255,.18);border-radius:14px;box-shadow:0 24px 50px rgba(0,0,0,.4)}
+.card .term{border-radius:13px}
 
 /* the decision card */
 .ask{padding:20px}
@@ -120,19 +179,38 @@ h2{margin-top:8px;font-weight:600;font-size:clamp(28px,3.6vw,40px);line-height:1
 .ask button.y{background:var(--blue);color:var(--on-blue);border-color:var(--blue)}
 .ask .r{margin-top:14px;font-size:13.5px;color:var(--faint)}
 .ask.done .r{color:var(--phos)}
+/* the questions waiting for you, one card on top of the others, straight */
+.queue{position:relative;padding-bottom:20px}
+.queue .ghost{position:absolute;left:var(--x);right:var(--x);bottom:var(--y);height:60px;border-radius:14px;background:var(--card);border:1px solid rgba(143,184,255,.3);transition:opacity .4s}
+.queue .ghost.g1{--x:14px;--y:10px;opacity:.9}.queue .ghost.g2{--x:28px;--y:0;opacity:.55}
+.queue[data-left="1"] .g2,.queue[data-left="0"] .ghost{opacity:0}.queue[data-left="0"] .g1{opacity:0}
+.ask .top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.ask .count{font:600 12.5px 'IBM Plex Mono';color:var(--screen);background:var(--phos);border-radius:999px;padding:2px 10px}
+.ask .count.none{background:none;color:var(--faint);border:1px solid var(--line)}
+.ask .body{transition:opacity .3s}
+.ask.turning .body{opacity:0}
+@media (prefers-reduced-motion:reduce){.ask .body,.queue .ghost{transition:none}}
 
 /* the proof scale */
 .proof{max-width:1080px;margin:0 auto;padding:110px clamp(16px,4vw,40px) 0;text-align:center}
-.scale{margin-top:24px;padding:0;display:grid;grid-template-columns:repeat(6,1fr);border:1px solid var(--line);text-align:left}
-.scale li{list-style:none;padding:16px 14px 18px;border-right:1px solid rgba(77,141,255,.25);font-size:14.5px;color:var(--ink);position:relative}
-.scale li:last-child{border-right:0;color:var(--faint)}
-.scale li small{display:block;color:var(--faint);font-size:12.5px}
-.scale li::before{content:"";display:block;height:6px;margin-bottom:12px;background:var(--blue);opacity:var(--o)}
+.proof h2{margin:8px auto 0;max-width:24ch}
+.proof .lede{margin:14px auto 0;max-width:60ch;color:var(--dim)}
+.scale{margin-top:30px;padding:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border:1px solid var(--line);border-radius:10px;overflow:hidden;text-align:left;counter-reset:none}
+.scale li{list-style:none;padding:16px 16px 18px;border-right:1px solid rgba(77,141,255,.25);font-size:14px;color:var(--dim);position:relative}
+.scale li:last-child{border-right:0}
+.scale li::before{content:"";display:block;height:6px;margin-bottom:14px;border-radius:3px;background:var(--blue);opacity:var(--o)}
+.scale .rk{display:block;font:600 12.5px 'IBM Plex Mono';color:var(--phos)}
+.scale b{display:block;margin:4px 0 6px;font-weight:600;font-size:15.5px;line-height:1.3;color:var(--ink)}
+.scale small{display:block;font-size:13.5px;line-height:1.45}
+.scale li.no::before{background:none;border:1px dashed var(--faint);opacity:.7}
+.scale li.no b{color:var(--faint);text-decoration:line-through;text-decoration-color:var(--alarm)}
+.scale li.no .rk,.scale li.no small{color:var(--faint)}
 .ends{display:flex;justify-content:space-between;margin-top:8px;font:500 12.5px 'IBM Plex Mono';color:var(--faint)}
 
 /* terminal blocks */
 .term{padding:22px 22px 20px;font:500 14px/1.65 'IBM Plex Mono';color:var(--phos);background:var(--screen);white-space:pre;overflow-x:auto;position:relative}
 .term .dim{color:var(--faint)}
+.term .bad{display:inline-block;margin-top:10px;color:var(--screen);background:var(--alarm);padding:0 6px}
 .term .ok{display:inline-block;margin-top:10px;color:var(--screen);background:var(--phos);padding:0 6px}
 
 /* end */
@@ -144,13 +222,14 @@ h2{margin-top:8px;font-weight:600;font-size:clamp(28px,3.6vw,40px);line-height:1
 .logos .mb{height:50px}
 footer{text-align:center;padding:56px 16px 64px;color:var(--faint);font-size:13.5px}
 
-@media (prefers-reduced-motion:reduce){.card{transition:none}.draw path,.draw line{stroke-dasharray:none;stroke-dashoffset:0}html{scroll-behavior:auto}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 @media (max-width:820px){
   .bar nav .x{display:none}
   .row{grid-template-columns:1fr;padding-top:80px}.row.flip .text{order:0}
-  .scale{grid-template-columns:1fr 1fr}.scale li{border-bottom:1px solid rgba(77,141,255,.25)}
-  .sheet{padding:16px 12px 0}.sheet .wide{display:none}.sheet .narrow{display:block}
-  .proof,.end{padding-top:80px}
+  .fm .text,.fm>.card,.fm .sheet{grid-column:1;grid-row:auto}
+  .scale{grid-template-columns:1fr}.scale li{border-right:0;border-bottom:1px solid rgba(77,141,255,.25)}.scale li:last-child{border-bottom:0}
+  .sheet{padding:20px 12px 16px}
+  .views{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -164,7 +243,7 @@ footer{text-align:center;padding:56px 16px 64px;color:var(--faint);font-size:13.
   </section>
 <header class="bar">
   <a class="home" href="./" aria-label="NAIMA, home"><img src="naima-icon-64.png" alt=""><span class="name">NAIMA</span></a>
-  <nav aria-label="Pages"><a class="x" href="one-minute.html">How it works</a><a class="x" href="docs.html?p=README.md">Docs</a><a class="x" href="https://github.com/naima-project/naima">GitHub</a><a class="btn" href="install.html">Install</a></nav>
+  <nav aria-label="Pages"><a class="x" href="one-minute.html">How it works</a><a class="x" href="docs.html">Docs</a><a class="x" href="https://github.com/naima-project/naima">GitHub</a><a class="btn" href="install.html">Install</a></nav>
 </header>
 <main id="main">
   <section class="hero">
@@ -175,62 +254,93 @@ footer{text-align:center;padding:56px 16px 64px;color:var(--faint);font-size:13.
     <div class="actions"><a class="btn" href="install.html">Install in one line</a><a class="lnk" href="one-minute.html">See it in one minute</a></div>
     <div><div class="cmd"><code id="cmdtext">curl -fsSL https://naima-project.github.io/naima/install.sh | sh</code><button type="button" id="copy">Copy</button></div></div>
 
-    <figure class="sheet" id="map">
-      <svg class="wide plan" viewBox="0 0 960 300" fill="none" font-family="IBM Plex Sans" font-size="13" aria-label="A plan as NAIMA draws it: three waves of work run by up to four agents at once, a stop where it waits for you, the proof runs, then the goal">
-        <g class="hud" style="stroke:var(--blue)" stroke-width="1.5" opacity=".7"><path d="M10 30V10H30M930 10H950V30M10 270V290H30M930 290H950V270"/></g>
-        <g class="ruler" style="stroke:var(--blue)" stroke-opacity=".35"><path d="M40 40V48"/><path d="M60 40V48"/><path d="M80 40V48"/><path d="M100 40V48"/><path d="M120 40V48"/><path d="M140 40V48"/><path d="M160 40V48"/><path d="M180 40V48"/><path d="M200 40V48"/><path d="M220 40V48"/><path d="M240 40V48"/><path d="M260 40V48"/><path d="M280 40V48"/><path d="M300 40V48"/><path d="M320 40V48"/><path d="M340 40V48"/><path d="M360 40V48"/><path d="M380 40V48"/><path d="M400 40V48"/><path d="M420 40V48"/><path d="M440 40V48"/><path d="M460 40V48"/><path d="M480 40V48"/><path d="M500 40V48"/><path d="M520 40V48"/><path d="M540 40V48"/><path d="M560 40V48"/><path d="M580 40V48"/><path d="M600 40V48"/><path d="M620 40V48"/><path d="M640 40V48"/><path d="M660 40V48"/><path d="M680 40V48"/><path d="M700 40V48"/><path d="M720 40V48"/><path d="M740 40V48"/><path d="M760 40V48"/><path d="M780 40V48"/><path d="M800 40V48"/><path d="M820 40V48"/><path d="M840 40V48"/><path d="M860 40V48"/><path d="M880 40V48"/><path d="M900 40V48"/><path d="M920 40V48"/></g>
-        <g style="stroke:var(--blue)" stroke-opacity=".14"><path d="M30 78H560"/><path d="M30 128H560"/><path d="M30 178H560"/><path d="M30 228H560"/></g>
-        <g class="edges" style="stroke:var(--blue)" stroke-width="1.6" stroke-opacity=".55"><path d="M166 78H210"/><path d="M166 178H210"/><path d="M166 128C188 128 188 178 210 178"/><path d="M306 78C328 78 328 128 350 128"/><path d="M306 228H350"/><path d="M306 178C328 178 328 228 350 228"/><path d="M446 228C480 228 490 150 500 150"/></g>
-        <g class="caps"><rect class="it w1 crit" x="70" y="65" width="96" height="26" rx="13"/><rect class="it w1" x="70" y="115" width="96" height="26" rx="13"/><rect class="it w1" x="70" y="165" width="96" height="26" rx="13"/><rect class="it w2 crit" x="210" y="65" width="96" height="26" rx="13"/><rect class="it w2" x="210" y="165" width="96" height="26" rx="13"/><rect class="it w2" x="210" y="215" width="96" height="26" rx="13"/><rect class="it w3 crit" x="350" y="115" width="96" height="26" rx="13"/><rect class="it w3" x="350" y="215" width="96" height="26" rx="13"/></g>
-        <path class="critp" d="M30 78H70 M166 78H210 M306 78C328 78 328 128 350 128 M446 128C470 128 480 150 500 150"/>
-        <g class="you"><circle cx="520" cy="150" r="20"/><circle class="ring" cx="520" cy="150" r="20"/><path d="M512 150l6 6 11-12"/></g>
-        <path d="M540 150H652M748 150H860" style="stroke:var(--blue)" stroke-width="1.6" stroke-opacity=".55"/>
-        <g class="proofs"><circle class="rg0" cx="700" cy="150" r="48" stroke-width="9"/><path class="rs" style="--s:0.07s" stroke-width="9" d="M700.92 102.01A48 48 0 0 1 706.24 102.41"/><path class="rs" style="--s:0.15s" stroke-width="9" d="M708.06 102.68A48 48 0 0 1 713.27 103.87"/><path class="rs" style="--s:0.10s" stroke-width="9" d="M715.03 104.41A48 48 0 0 1 719.99 106.36"/><path class="rs" style="--s:0.17s" stroke-width="9" d="M721.65 107.16A48 48 0 0 1 726.27 109.83"/><path class="rs" style="--s:0.18s" stroke-width="9" d="M727.80 110.87A48 48 0 0 1 731.97 114.19"/><path class="rs" style="--s:0.02s" stroke-width="9" d="M733.32 115.45A48 48 0 0 1 736.95 119.36"/><path class="rs" style="--s:0.00s" stroke-width="9" d="M738.10 120.80A48 48 0 0 1 741.10 125.21"/><path class="rs" style="--s:0.59s" stroke-width="9" d="M742.02 126.80A48 48 0 0 1 744.34 131.61"/><path class="rs" style="--s:0.43s" stroke-width="9" d="M745.01 133.32A48 48 0 0 1 746.58 138.42"/><path class="rs" style="--s:0.43s" stroke-width="9" d="M746.99 140.22A48 48 0 0 1 747.79 145.49"/><path class="rs" style="--s:0.64s" stroke-width="9" d="M747.93 147.33A48 48 0 0 1 747.93 152.67"/><path class="rs" style="--s:0.49s" stroke-width="9" d="M747.79 154.51A48 48 0 0 1 746.99 159.78"/><path class="rs" style="--s:0.59s" stroke-width="9" d="M746.58 161.58A48 48 0 0 1 745.01 166.68"/><path class="rs" style="--s:0.49s" stroke-width="9" d="M744.34 168.39A48 48 0 0 1 742.02 173.20"/><path class="rs" style="--s:0.90s" stroke-width="9" d="M741.10 174.79A48 48 0 0 1 738.10 179.20"/><path class="rs" style="--s:0.76s" stroke-width="9" d="M736.95 180.64A48 48 0 0 1 733.32 184.55"/><path class="rs" style="--s:0.90s" stroke-width="9" d="M731.97 185.81A48 48 0 0 1 727.80 189.13"/><path class="rs" style="--s:0.96s" stroke-width="9" d="M726.27 190.17A48 48 0 0 1 721.65 192.84"/><path class="rs" style="--s:0.87s" stroke-width="9" d="M719.99 193.64A48 48 0 0 1 715.03 195.59"/><path class="rs" style="--s:0.93s" stroke-width="9" d="M713.27 196.13A48 48 0 0 1 708.06 197.32"/><path class="rs" style="--s:0.91s" stroke-width="9" d="M706.24 197.59A48 48 0 0 1 700.92 197.99"/><path class="rs" style="--s:1.10s" stroke-width="9" d="M699.08 197.99A48 48 0 0 1 693.76 197.59"/><path class="rs" style="--s:1.29s" stroke-width="9" d="M691.94 197.32A48 48 0 0 1 686.73 196.13"/><path class="rs" style="--s:1.25s" stroke-width="9" d="M684.97 195.59A48 48 0 0 1 680.01 193.64"/><path class="rs" style="--s:1.16s" stroke-width="9" d="M678.35 192.84A48 48 0 0 1 673.73 190.17"/><path class="rs" style="--s:1.09s" stroke-width="9" d="M672.20 189.13A48 48 0 0 1 668.03 185.81"/><path class="rs" style="--s:1.32s" stroke-width="9" d="M666.68 184.55A48 48 0 0 1 663.05 180.64"/><path class="rs" style="--s:1.21s" stroke-width="9" d="M661.90 179.20A48 48 0 0 1 658.90 174.79"/><path class="rs" style="--s:1.64s" stroke-width="9" d="M657.98 173.20A48 48 0 0 1 655.66 168.39"/><path class="rs" style="--s:1.69s" stroke-width="9" d="M654.99 166.68A48 48 0 0 1 653.42 161.58"/><path class="rs" style="--s:1.64s" stroke-width="9" d="M653.01 159.78A48 48 0 0 1 652.21 154.51"/><path class="rs" style="--s:1.70s" stroke-width="9" d="M652.07 152.67A48 48 0 0 1 652.07 147.33"/><path class="rs" style="--s:1.55s" stroke-width="9" d="M652.21 145.49A48 48 0 0 1 653.01 140.22"/><path class="rs" style="--s:1.66s" stroke-width="9" d="M653.42 138.42A48 48 0 0 1 654.99 133.32"/><path class="rs" style="--s:1.56s" stroke-width="9" d="M655.66 131.61A48 48 0 0 1 657.98 126.80"/><path class="rs" style="--s:2.06s" stroke-width="9" d="M658.90 125.21A48 48 0 0 1 661.90 120.80"/><path class="rs" style="--s:2.05s" stroke-width="9" d="M663.05 119.36A48 48 0 0 1 666.68 115.45"/><path class="rs" style="--s:1.83s" stroke-width="9" d="M668.03 114.19A48 48 0 0 1 672.20 110.87"/><path class="rs" style="--s:1.84s" stroke-width="9" d="M673.73 109.83A48 48 0 0 1 678.35 107.16"/><path class="rs" style="--s:1.86s" stroke-width="9" d="M680.01 106.36A48 48 0 0 1 684.97 104.41"/><path class="rs" style="--s:2.07s" stroke-width="9" d="M686.73 103.87A48 48 0 0 1 691.94 102.68"/><path class="rs" style="--s:1.92s" stroke-width="9" d="M693.76 102.41A48 48 0 0 1 699.08 102.01"/><circle class="rc" cx="700" cy="150" r="33.0"/></g>
-        <rect class="goal" x="866" y="136" width="28" height="28" transform="rotate(45 880 150)"/>
-      </svg>
-      <svg class="narrow plan" viewBox="0 0 360 430" fill="none" font-family="IBM Plex Sans" font-size="12" aria-hidden="true">
-        <g class="caps"><rect class="it w1 crit" x="80" y="23" width="70" height="26" rx="13"/><rect class="it w1" x="160" y="23" width="70" height="26" rx="13"/><rect class="it w1" x="240" y="23" width="70" height="26" rx="13"/><rect class="it w2 crit" x="80" y="83" width="70" height="26" rx="13"/><rect class="it w2" x="240" y="83" width="70" height="26" rx="13"/><rect class="it w3 crit" x="160" y="143" width="70" height="26" rx="13"/></g>
-        <path class="critp" d="M115 49V83 M115 109C115 130 195 130 195 143 M195 169V202"/>
-        <g class="you"><circle cx="195" cy="222" r="17"/><circle class="ring" cx="195" cy="222" r="17"/><path d="M188 222l5 5 10-11"/></g>
-        <g class="proofs"><circle class="rg0" cx="206" cy="304" r="34" stroke-width="7"/><path class="rs" style="--s:0.17s" stroke-width="7" d="M206.65 270.01A34 34 0 0 1 210.42 270.29"/><path class="rs" style="--s:0.21s" stroke-width="7" d="M211.71 270.48A34 34 0 0 1 215.40 271.32"/><path class="rs" style="--s:0.22s" stroke-width="7" d="M216.64 271.71A34 34 0 0 1 220.16 273.09"/><path class="rs" style="--s:0.26s" stroke-width="7" d="M221.34 273.66A34 34 0 0 1 224.61 275.55"/><path class="rs" style="--s:0.21s" stroke-width="7" d="M225.69 276.28A34 34 0 0 1 228.64 278.64"/><path class="rs" style="--s:0.26s" stroke-width="7" d="M229.60 279.52A34 34 0 0 1 232.17 282.29"/><path class="rs" style="--s:0.01s" stroke-width="7" d="M232.98 283.32A34 34 0 0 1 235.11 286.44"/><path class="rs" style="--s:0.49s" stroke-width="7" d="M235.77 287.57A34 34 0 0 1 237.41 290.97"/><path class="rs" style="--s:0.62s" stroke-width="7" d="M237.88 292.19A34 34 0 0 1 239.00 295.80"/><path class="rs" style="--s:0.54s" stroke-width="7" d="M239.29 297.07A34 34 0 0 1 239.85 300.81"/><path class="rs" style="--s:0.61s" stroke-width="7" d="M239.95 302.11A34 34 0 0 1 239.95 305.89"/><path class="rs" style="--s:0.39s" stroke-width="7" d="M239.85 307.19A34 34 0 0 1 239.29 310.93"/><path class="rs" style="--s:0.49s" stroke-width="7" d="M239.00 312.20A34 34 0 0 1 237.88 315.81"/><path class="rs" style="--s:0.43s" stroke-width="7" d="M237.41 317.03A34 34 0 0 1 235.77 320.43"/><path class="rs" style="--s:0.87s" stroke-width="7" d="M235.11 321.56A34 34 0 0 1 232.98 324.68"/><path class="rs" style="--s:0.88s" stroke-width="7" d="M232.17 325.71A34 34 0 0 1 229.60 328.48"/><path class="rs" style="--s:0.72s" stroke-width="7" d="M228.64 329.36A34 34 0 0 1 225.69 331.72"/><path class="rs" style="--s:0.78s" stroke-width="7" d="M224.61 332.45A34 34 0 0 1 221.34 334.34"/><path class="rs" style="--s:0.80s" stroke-width="7" d="M220.16 334.91A34 34 0 0 1 216.64 336.29"/><path class="rs" style="--s:0.98s" stroke-width="7" d="M215.40 336.68A34 34 0 0 1 211.71 337.52"/><path class="rs" style="--s:0.93s" stroke-width="7" d="M210.42 337.71A34 34 0 0 1 206.65 337.99"/><path class="rs" style="--s:1.12s" stroke-width="7" d="M205.35 337.99A34 34 0 0 1 201.58 337.71"/><path class="rs" style="--s:1.30s" stroke-width="7" d="M200.29 337.52A34 34 0 0 1 196.60 336.68"/><path class="rs" style="--s:1.12s" stroke-width="7" d="M195.36 336.29A34 34 0 0 1 191.84 334.91"/><path class="rs" style="--s:1.25s" stroke-width="7" d="M190.66 334.34A34 34 0 0 1 187.39 332.45"/><path class="rs" style="--s:1.12s" stroke-width="7" d="M186.31 331.72A34 34 0 0 1 183.36 329.36"/><path class="rs" style="--s:1.08s" stroke-width="7" d="M182.40 328.48A34 34 0 0 1 179.83 325.71"/><path class="rs" style="--s:1.32s" stroke-width="7" d="M179.02 324.68A34 34 0 0 1 176.89 321.56"/><path class="rs" style="--s:1.50s" stroke-width="7" d="M176.23 320.43A34 34 0 0 1 174.59 317.03"/><path class="rs" style="--s:1.50s" stroke-width="7" d="M174.12 315.81A34 34 0 0 1 173.00 312.20"/><path class="rs" style="--s:1.72s" stroke-width="7" d="M172.71 310.93A34 34 0 0 1 172.15 307.19"/><path class="rs" style="--s:1.68s" stroke-width="7" d="M172.05 305.89A34 34 0 0 1 172.05 302.11"/><path class="rs" style="--s:1.52s" stroke-width="7" d="M172.15 300.81A34 34 0 0 1 172.71 297.07"/><path class="rs" style="--s:1.71s" stroke-width="7" d="M173.00 295.80A34 34 0 0 1 174.12 292.19"/><path class="rs" style="--s:1.59s" stroke-width="7" d="M174.59 290.97A34 34 0 0 1 176.23 287.57"/><path class="rs" style="--s:1.99s" stroke-width="7" d="M176.89 286.44A34 34 0 0 1 179.02 283.32"/><path class="rs" style="--s:1.86s" stroke-width="7" d="M179.83 282.29A34 34 0 0 1 182.40 279.52"/><path class="rs" style="--s:2.06s" stroke-width="7" d="M183.36 278.64A34 34 0 0 1 186.31 276.28"/><path class="rs" style="--s:1.99s" stroke-width="7" d="M187.39 275.55A34 34 0 0 1 190.66 273.66"/><path class="rs" style="--s:2.07s" stroke-width="7" d="M191.84 273.09A34 34 0 0 1 195.36 271.71"/><path class="rs" style="--s:2.05s" stroke-width="7" d="M196.60 271.32A34 34 0 0 1 200.29 270.48"/><path class="rs" style="--s:1.88s" stroke-width="7" d="M201.58 270.29A34 34 0 0 1 205.35 270.01"/><circle class="rc" cx="206" cy="304" r="21.0"/></g>
-        <rect class="goal" x="184" y="378" width="22" height="22" transform="rotate(45 195 389)"/>
-      </svg>
+    <figure class="shot" id="shots" aria-roledescription="carousel" aria-label="NAIMA's app, page by page">
+      <div class="win">
+        <div class="slide on" role="group" aria-roledescription="slide" aria-label="1 of 2: Home"><img src="shots/naima-home.webp" alt="NAIMA's home: Release 1.2 at 86 percent, expected on 1 December; 61 items left to do, 13 in agents' hands; 19 things need you; a timeline with the public launch and the next releases" width="950" height="742"></div>
+        <div class="slide" role="group" aria-roledescription="slide" aria-label="2 of 2: What's left"><img src="shots/naima-left.webp" alt="What's left on Release 1.2: 64 items, 2 waiting for you, 7 to do, 55 done and waiting for their check, split into properties, tests, bugs, requirements, tasks and features" width="972" height="476" loading="lazy"></div>
+      </div>
+      <div class="tabs" role="group" aria-label="Pages"><button type="button" aria-pressed="true">Home</button><button type="button" aria-pressed="false">What’s left</button></div>
     </figure>
   </section>
 
   <section class="row">
     <div class="text"><p class="kicker">You decide</p><h2>The agents ask. You answer.</h2>
       <p>The agents work on their own and coordinate with each other. You are not there to babysit them. Only the decisions that are yours reach you, and each answer is kept for good.</p></div>
-    <div class="card ask" id="ask" style="--r:1.2deg">
-      <p class="who">Agent · needs your decision</p>
-      <p class="q">Should the app work offline first?</p>
-      <p class="s">Suggested: yes. The web version can wait until 1.3.</p>
-      <div class="b"><button class="y" type="button" data-a="Yes, offline first">Yes, offline first</button><button type="button" data-a="No">No</button></div>
-      <p class="r" id="askr">Your answer is recorded as a decision, with its reason.</p>
+    <div class="queue float" id="queue" data-left="3" data-f="10">
+      <span class="ghost g2" aria-hidden="true"></span><span class="ghost g1" aria-hidden="true"></span>
+      <div class="card ask lift" id="ask">
+        <p class="top"><span class="count" id="askn">3 waiting for you</span><span class="who">Agent · needs your decision</span></p>
+        <div class="body" aria-live="polite">
+          <p class="q" id="askq">Should the app work offline first?</p>
+          <p class="s" id="asks">Suggested: yes. The web version can wait until 1.3.</p>
+          <div class="b" id="askb"><button class="y" type="button" data-a="Yes, offline first">Yes, offline first</button><button type="button" data-a="No">No</button></div>
+          <p class="r" id="askr">Your answer is recorded as a decision, with its reason.</p>
+        </div>
+      </div>
     </div>
   </section>
 
   <section class="proof">
     <p class="kicker">Done means proven</p>
-    <ul class="scale">
-      <li style="--o:1">You tried it</li><li style="--o:.85">A recorded test run</li><li style="--o:.68">A screenshot or a number</li>
-      <li style="--o:.5">The live state</li><li style="--o:.34">Before and after</li><li style="--o:.12">“Looks right”<small>not a proof</small></li>
-    </ul>
-    <div class="ends"><span>← strongest</span><span>weaker →</span></div>
+    <h2>Nothing is done until it is shown.</h2>
+    <p class="lede">An agent can’t close an item by saying it works. It keeps the evidence with the item, and NAIMA ranks the evidence by how much it proves.</p>
+    <ol class="scale">
+      <li style="--o:1"><span class="rk">1</span><b>You saw it yourself</b><small>You did it and saw the result.</small></li>
+      <li style="--o:.72"><span class="rk">2</span><b>Something kept</b><small>A screenshot, a log line or a number, kept with the item.</small></li>
+      <li style="--o:.5"><span class="rk">3</span><b>The live state</b><small>Read from the running program: a query, an API call, its own answer.</small></li>
+      <li style="--o:.32"><span class="rk">4</span><b>Before and after</b><small>Counts, sizes or outputs, side by side.</small></li>
+      <li class="no"><span class="rk">5</span><b>“The code looks right”</b><small>Not evidence at all.</small></li>
+    </ol>
+    <div class="ends" aria-hidden="true"><span>strongest</span><span>weakest</span></div>
   </section>
 
-  <section class="row flip">
+  <section class="row flip fm">
     <div class="text"><p class="kicker">Formal methods</p><h2>Proven before it is coded.</h2>
       <p>Anything with states, a retry loop or a screen waiting for a server, is first written as a small model. The mCRL2 model checker tries every order of events and shows the exact steps that break a rule. Then the code is generated from the model.</p>
-      <a class="self" href="self-check.html"><b>NAIMA checks itself.</b><span>Its own coordination protocol, modelled and checked. See how ›</span></a></div>
-    <div class="card" style="--r:-1.4deg;overflow:hidden"><div class="term"><span class="dim">% a job is retried at most twice</span>
-[ true* . retry . true* . retry
-  . true* . retry ] false
-<span class="ok">✓ holds</span> <span class="dim">checked on every change of the model</span></div></div>
+      <p>The rule here says a lock is never held by two clients at once. Below, the model checker shows the four steps that break it.</p>
+      <a class="self lift float" href="self-check.html" data-f="6"><b>NAIMA checks itself.</b><span>Its own coordination protocol, modelled and checked. See how ›</span></a></div>
+    <div class="card lift float" data-f="10"><div class="term"><span class="dim">% mutual exclusion: once a client
+% has the lock, nobody else gets it
+% before that client lets it go</span>
+forall c, d: Client .
+  [ true* . grant(c)
+    . !release(c)* . grant(d) ] false
+<span class="bad">✗ violated</span> <span class="dim">grant(c2), then grant(c1)</span>
+<span class="ok">✓ holds</span> <span class="dim">once the grant checks free &amp;&amp;</span></div></div>
+    <figure class="sheet" id="map" aria-labelledby="map-h">
+      <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+        <marker id="oa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1L9 5L1 9" fill="none" style="stroke:var(--blue)" stroke-width="1.6"/></marker>
+        <marker id="fa" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--phos)"/></marker>
+        <marker id="fx" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--alarm)"/></marker>
+      </defs></svg>
+      <p class="sheet-h" id="map-h"><b>Four steps that break the rule.</b><span>Three clients share one lock. These are the steps mCRL2 found, in the three views NAIMA’s Models tab draws.</span></p>
+      <div class="ctl" aria-label="The run"><button type="button" id="lk-back" aria-label="Previous step">◀</button><button type="button" id="lk-play" aria-pressed="false">Play</button><button type="button" id="lk-next" aria-label="Next step">▶</button><button type="button" id="lk-again">Restart</button><span class="n" id="lk-n">step <b>0</b> of 4</span></div>
+      <p class="say" id="lk-say" aria-live="polite"><b>Three clients share one lock.</b> All three are idle and the lock is free.</p>
+      <p class="ban" id="lk-ban" role="status" hidden></p>
+      <div class="views">
+        <section class="view" aria-label="Interface"><p class="vh">Interface <span>· what each client can do</span></p>
+          <div class="cls"><div class="cl" data-c="c1"><b>c1</b><span class="acts"><span class="act" data-a="ask">ask</span><span class="act off" data-a="release">release</span></span><span class="st">idle</span></div><div class="cl" data-c="c2"><b>c2</b><span class="acts"><span class="act" data-a="ask">ask</span><span class="act off" data-a="release">release</span></span><span class="st">idle</span></div><div class="cl" data-c="c3"><b>c3</b><span class="acts"><span class="act" data-a="ask">ask</span><span class="act off" data-a="release">release</span></span><span class="st">idle</span></div></div>
+          <p class="lk" id="lk">lock · <b data-k="free">free</b> · queue <b data-k="q">empty</b></p>
+        </section>
+        <section class="view" aria-label="State"><p class="vh">State <span>· a UML state machine per client</span></p>
+          <svg class="sm" data-c="c1" viewBox="0 0 322 82" role="img" aria-label="UML state machine of client c1"><text class="who" x="0" y="30">c1</text><circle class="ini" cx="30" cy="26" r="5"/><line class="t" x1="36" y1="26" x2="48" y2="26"/><g class="s" data-s="idle"><rect x="50" y="13" width="60" height="26" rx="10"/><text x="80" y="30.5">idle</text></g><g class="s" data-s="waiting"><rect x="144" y="13" width="70" height="26" rx="10"/><text x="179" y="30.5">waiting</text></g><g class="s" data-s="holding"><rect x="248" y="13" width="70" height="26" rx="10"/><text x="283" y="30.5">holding</text></g><line class="t" data-t="ask" x1="110" y1="26" x2="142" y2="26"/><text x="126" y="9" text-anchor="middle">ask</text><line class="t" data-t="grant" x1="214" y1="26" x2="246" y2="26"/><text x="230" y="9" text-anchor="middle">grant</text><path class="t" data-t="release" d="M283 39C283 70 80 70 80 41.5"/><text x="181" y="78" text-anchor="middle">release</text></svg>
+          <svg class="sm" data-c="c2" viewBox="0 0 322 82" role="img" aria-label="UML state machine of client c2"><text class="who" x="0" y="30">c2</text><circle class="ini" cx="30" cy="26" r="5"/><line class="t" x1="36" y1="26" x2="48" y2="26"/><g class="s" data-s="idle"><rect x="50" y="13" width="60" height="26" rx="10"/><text x="80" y="30.5">idle</text></g><g class="s" data-s="waiting"><rect x="144" y="13" width="70" height="26" rx="10"/><text x="179" y="30.5">waiting</text></g><g class="s" data-s="holding"><rect x="248" y="13" width="70" height="26" rx="10"/><text x="283" y="30.5">holding</text></g><line class="t" data-t="ask" x1="110" y1="26" x2="142" y2="26"/><text x="126" y="9" text-anchor="middle">ask</text><line class="t" data-t="grant" x1="214" y1="26" x2="246" y2="26"/><text x="230" y="9" text-anchor="middle">grant</text><path class="t" data-t="release" d="M283 39C283 70 80 70 80 41.5"/><text x="181" y="78" text-anchor="middle">release</text></svg>
+          <svg class="sm" data-c="c3" viewBox="0 0 322 82" role="img" aria-label="UML state machine of client c3"><text class="who" x="0" y="30">c3</text><circle class="ini" cx="30" cy="26" r="5"/><line class="t" x1="36" y1="26" x2="48" y2="26"/><g class="s" data-s="idle"><rect x="50" y="13" width="60" height="26" rx="10"/><text x="80" y="30.5">idle</text></g><g class="s" data-s="waiting"><rect x="144" y="13" width="70" height="26" rx="10"/><text x="179" y="30.5">waiting</text></g><g class="s" data-s="holding"><rect x="248" y="13" width="70" height="26" rx="10"/><text x="283" y="30.5">holding</text></g><line class="t" data-t="ask" x1="110" y1="26" x2="142" y2="26"/><text x="126" y="9" text-anchor="middle">ask</text><line class="t" data-t="grant" x1="214" y1="26" x2="246" y2="26"/><text x="230" y="9" text-anchor="middle">grant</text><path class="t" data-t="release" d="M283 39C283 70 80 70 80 41.5"/><text x="181" y="78" text-anchor="middle">release</text></svg>
+        </section>
+        <section class="view" aria-label="Collaboration"><p class="vh">Collaboration <span>· a UML sequence diagram</span></p>
+          <svg class="sq" viewBox="0 0 330 236" role="img" aria-label="UML sequence diagram of the clients and the lock"><g class="head"><rect x="10" y="4" width="60" height="24" rx="3"/><text x="40" y="20.5">c1</text></g><line class="life" x1="40" y1="28" x2="40" y2="232"/><g class="head"><rect x="95" y="4" width="60" height="24" rx="3"/><text x="125" y="20.5">c2</text></g><line class="life" x1="125" y1="28" x2="125" y2="232"/><g class="head"><rect x="180" y="4" width="60" height="24" rx="3"/><text x="210" y="20.5">c3</text></g><line class="life" x1="210" y1="28" x2="210" y2="232"/><g class="head"><rect x="260" y="4" width="60" height="24" rx="3"/><text x="290" y="20.5">lock</text></g><line class="life" x1="290" y1="28" x2="290" y2="232"/><g class="m" data-n="1"><line x1="125" y1="64" x2="288" y2="64"/><text x="206.5" y="58">ask(c2)</text></g><g class="m" data-n="2"><line x1="290" y1="106" x2="127" y2="106"/><text x="208.5" y="100">grant(c2)</text></g><g class="m" data-n="3"><line x1="40" y1="148" x2="288" y2="148"/><text x="164" y="142">ask(c1)</text></g><g class="m" data-n="4"><line x1="290" y1="190" x2="42" y2="190"/><text x="166" y="184">grant(c1)</text></g></svg>
+        </section>
+      </div>
+      <p class="fix">The run is mCRL2’s counterexample to mutual exclusion. The bug is one missing guard in the grant, <code>free &amp;&amp;</code>; with it back, mutual exclusion, no deadlock and eventual grant all hold.</p>
+      <div class="foot">
+        <figcaption>A lock study in NAIMA’s Models tab: an mCRL2 model of a lock shared by three clients, and the three views the tab draws for it, here replaying the counterexample step by step.</figcaption>
+        <div class="tb" aria-hidden="true"><span>model</span><span>lock, mCRL2</span><span>property</span><span>mutual exclusion</span><span>buggy lock</span><span>✗ violated</span><span>with the guard</span><span>✓ holds</span></div>
+      </div>
+    </figure>
   </section>
 
   <section class="row">
-    <div class="card" style="--r:1deg;overflow:hidden"><div class="term">naima-tracker/
+    <div class="card lift float" data-f="10"><div class="term">naima-tracker/
 ├─ requests/
 ├─ bugs/
 ├─ decisions/
@@ -245,7 +355,7 @@ footer{text-align:center;padding:56px 16px 64px;color:var(--faint);font-size:13.
   <section class="end" id="install">
     <h2>Install NAIMA in one line.</h2>
     <div><div class="cmd"><code>curl -fsSL https://naima-project.github.io/naima/install.sh | sh</code><button type="button" class="copy2">Copy</button></div></div>
-    <div class="actions"><a class="btn" href="install.html">Install</a><a class="lnk" href="docs.html?p=README.md">Read the docs</a><a class="lnk" href="https://github.com/naima-project/naima">Star it on GitHub</a></div>
+    <div class="actions"><a class="btn" href="install.html">Install</a><a class="lnk" href="docs.html">Read the docs</a><a class="lnk" href="https://github.com/naima-project/naima">Star it on GitHub</a></div>
   </section>
 
   <section class="logos" aria-label="Made at">
@@ -273,11 +383,122 @@ document.querySelectorAll('#copy,.copy2').forEach(b=>b.addEventListener('click',
   try{await navigator.clipboard.writeText(txt);b.textContent='Copied';}catch(e){b.textContent='Select and copy';}
   setTimeout(()=>b.textContent='Copy',1600);
 }));
-// the decision card answers
-document.querySelectorAll('#ask button').forEach(b=>b.addEventListener('click',()=>{
-  document.getElementById('ask').classList.add('done');
-  document.getElementById('askr').textContent='Recorded as a decision: '+b.dataset.a+'.';
-}));
+// the questions waiting for you: each answer is recorded, and the next question comes up
+(function(){
+  const Q=[
+    ['Should the app work offline first?','Suggested: yes. The web version can wait until 1.3.',['Yes, offline first','No']],
+    ['Release 1.2 now, or wait a day for the two bugs fixed on a branch?','Suggested: wait. Both fixes are proven and ready to land.',['Wait a day','Release now']],
+    ['Keep sign-in by email only for now?','Suggested: yes. Signing in with Google is planned for 1.3.',['Yes, email only','Add Google now']],
+  ];
+  const q=document.getElementById('queue'), card=document.getElementById('ask'), $=id=>document.getElementById(id);
+  let i=0;
+  const count=left=>{q.dataset.left=left;const n=$('askn');n.textContent=left?left+' waiting for you':'Nothing waits for you';n.classList.toggle('none',!left);};
+  const put=k=>{
+    const [question,hint,answers]=Q[k];
+    $('askq').textContent=question;$('asks').textContent=hint;
+    $('askb').replaceChildren(...answers.map((a,j)=>{const b=document.createElement('button');b.type='button';b.textContent=a;if(!j)b.className='y';b.addEventListener('click',()=>answer(a));return b;}));
+    $('askr').textContent='Your answer is recorded as a decision, with its reason.';
+    card.classList.remove('done');
+  };
+  const answer=a=>{
+    card.classList.add('done');$('askr').textContent='Recorded as a decision: '+a+'.';
+    $('askb').querySelectorAll('button').forEach(b=>b.disabled=true);
+    i++;count(Q.length-i);
+    if(i<Q.length)setTimeout(()=>{card.classList.add('turning');setTimeout(()=>{put(i);card.classList.remove('turning');},300);},1300);
+    else setTimeout(()=>{$('askq').textContent='The agents carry on with the work.';$('asks').textContent='The next question reaches you only when it is yours to answer.';$('askb').replaceChildren();},1300);
+  };
+  put(0);
+})();
+// the app's pages, one after the other: a new one every 6 s while on screen and not pointed at; a tab shows one at once
+(function(){
+  const f=document.getElementById('shots'), ss=[...f.querySelectorAll('.slide')], ts=[...f.querySelectorAll('.tabs button')];
+  let i=0, t=0, seen=false, held=false;
+  const go=k=>{i=k;ss.forEach((s,j)=>s.classList.toggle('on',j===k));ts.forEach((b,j)=>b.setAttribute('aria-pressed',j===k));};
+  const still=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const run=()=>{clearTimeout(t);if(!still&&seen&&!held)t=setTimeout(()=>{go((i+1)%ss.length);run();},6000);};
+  ts.forEach((b,j)=>b.addEventListener('click',()=>{go(j);held=true;clearTimeout(t);}));
+  f.addEventListener('pointerenter',()=>{held=true;clearTimeout(t);});
+  f.addEventListener('pointerleave',()=>{held=false;run();});
+  new IntersectionObserver(es=>es.forEach(e=>{seen=e.isIntersecting;run();}),{threshold:.4}).observe(f);
+})();
+// the lock replays mCRL2's counterexample in the three views: one step every 1.7 s while on screen,
+// a pause at the end, then again; under prefers-reduced-motion it shows the last step and moves only on request
+(function(){
+  const fig=document.getElementById('map'), C=['c1','c2','c3'];
+  const RUN=[['ask','c2'],['grant','c2'],['ask','c1'],['grant','c1']];
+  const $=(q,r=fig)=>r.querySelector(q), $$=(q,r=fig)=>[...r.querySelectorAll(q)];
+  fig.classList.add('live');
+  const at=n=>{
+    const ph={c1:'idle',c2:'idle',c3:'idle'}, q=[], held=[];
+    for(const [a,c] of RUN.slice(0,n)){
+      if(a==='ask'){ph[c]='waiting';q.push(c);}
+      if(a==='grant'){ph[c]='holding';q.shift();held.push(c);}
+    }
+    return {ph,q,held};
+  };
+  const say=(n,s)=>{
+    if(!n)return '<b>Three clients share one lock.</b> All three are idle and the lock is free.';
+    const [a,c]=RUN[n-1];
+    if(a==='ask')return `<b>${c} asks for the lock.</b> It joins the end of the queue.`;
+    return `<b>The lock grants it to ${c}.</b> ${c} has waited longest, so ${c} now holds the lock.`+(s.held.length>1?' This lock grants whenever someone waits, even while another client holds the lock.':'');
+  };
+  let n=0;
+  const show=k=>{
+    n=k;
+    const s=at(n), last=RUN[n-1]||[], clash=s.held.length>1;
+    $('#lk-n').innerHTML='step <b>'+n+'</b> of 4'+(n?' · '+last[0]+'('+last[1]+')':'');
+    $('#lk-say').innerHTML=say(n,s);
+    const ban=$('#lk-ban');ban.hidden=!clash;ban.textContent=clash?'Mutual exclusion is violated: '+s.held.join(' and ')+' hold the lock at the same time.':'';
+    for(const c of C){
+      const p=s.ph[c], el=$('.cl[data-c="'+c+'"]');
+      el.classList.toggle('holds',p==='holding');el.classList.toggle('clash',clash&&p==='holding');
+      $('.st',el).textContent=p;
+      $('[data-a="ask"]',el).classList.toggle('off',p!=='idle');
+      $('[data-a="release"]',el).classList.toggle('off',p!=='holding');
+      $$('.act',el).forEach(x=>x.classList.toggle('hit',last[1]===c&&x.dataset.a===last[0]));
+      const sm=$('.sm[data-c="'+c+'"]');
+      $$('.s',sm).forEach(x=>{x.classList.toggle('now',x.dataset.s===p);x.classList.toggle('clash',clash&&p==='holding');});
+      $$('.t[data-t]',sm).forEach(x=>x.classList.toggle('hit',last[1]===c&&x.dataset.t===last[0]));
+    }
+    const lk=$('#lk');$('[data-k="free"]',lk).textContent=s.held.length?'held':'free';$('[data-k="q"]',lk).textContent=s.q.join(', ')||'empty';
+    lk.classList.toggle('hit',last[0]==='grant');
+    $$('.sq .m').forEach(m=>{const i=+m.dataset.n;m.classList.toggle('on',i<=n);m.classList.toggle('last',i===n);m.classList.toggle('clash',clash&&i===4);});
+  };
+  let timer=0, playing=false, seen=false;
+  const btn=$('#lk-play');
+  const tick=()=>{timer=setTimeout(()=>{show(n<4?n+1:0);tick();},n<4?1700:5000);};
+  const play=on=>{playing=on;btn.textContent=on?'Pause':'Play';btn.setAttribute('aria-pressed',on);clearTimeout(timer);if(on)tick();};
+  btn.addEventListener('click',()=>play(!playing));
+  $('#lk-next').addEventListener('click',()=>{play(false);show(Math.min(4,n+1));});
+  $('#lk-back').addEventListener('click',()=>{play(false);show(Math.max(0,n-1));});
+  $('#lk-again').addEventListener('click',()=>{show(0);play(true);});
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches){show(4);return;}
+  show(0);
+  new IntersectionObserver(es=>es.forEach(e=>{
+    if(e.isIntersecting&&!seen){seen=true;play(true);}
+    else if(!e.isIntersecting&&playing){play(false);seen=false;}
+  }),{threshold:.3}).observe(fig);
+})();
+// the cards float a little while the page scrolls: each drifts up to data-f pixels against the scroll,
+// by how far its centre is from the middle of the screen; only cards on screen are moved, once per frame,
+// all positions read before any is written; nothing moves under prefers-reduced-motion
+(function(){
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  const on=new Set(), at=new Map();
+  let queued=false;
+  const io=new IntersectionObserver(es=>{es.forEach(e=>e.isIntersecting?on.add(e.target):on.delete(e.target));ask();},{rootMargin:'80px 0px'});
+  document.querySelectorAll('.float').forEach(el=>{at.set(el,0);io.observe(el);});
+  const frame=()=>{
+    queued=false;
+    const h=innerHeight, next=[];
+    for(const el of on){const r=el.getBoundingClientRect(), mid=r.top+r.height/2-at.get(el);next.push([el,Math.max(-1,Math.min(1,(mid-h/2)/h))*-(+el.dataset.f||8)]);}
+    for(const [el,y] of next){at.set(el,y);el.style.translate='0 '+y.toFixed(1)+'px';}
+  };
+  const ask=()=>{if(!queued){queued=true;requestAnimationFrame(frame);}};
+  addEventListener('scroll',ask,{passive:true});
+  addEventListener('resize',ask,{passive:true});
+  ask();
+})();
 </script>
 </body>
 </html>
