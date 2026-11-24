@@ -1215,10 +1215,7 @@
   }
   .narrow .row .cell.title {
     grid-row: 2;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
+    /* The whole title, however many lines the reader's text size makes of it: none is cut off or left to run over the row below. */
     white-space: normal;
     font-size: var(--font-size-sm);
     color: var(--color-text-muted);
