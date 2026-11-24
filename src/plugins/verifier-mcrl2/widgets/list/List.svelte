@@ -1313,6 +1313,8 @@
   }
   /* A chapter: a large light month, a button that folds it into a teaser. */
   .is-diary .chapter {
+    /* One cell over the whole width: the columns' tracks, summed, can be wider than the room. */
+    grid-template-columns: minmax(0, 1fr);
     margin-block: var(--space-lg) var(--space-xs);
     padding: 0;
     border: 0;
