@@ -1,2 +1,0 @@
-const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["./start-CqO6lUdD.js","./runtime-DXdvW7oy.js","./core-DW7we29R.js","./rolldown-runtime-DK3Fl9T5.js","./core-Cw_K_s-T.css","./registry-GZoFhj4q.js","./start-B6rgRyga.css"])))=>i.map(i=>d[i]);
-import"./modulepreload-polyfill-P2Xu9kJm.js";import{Tr as e,r as t}from"./core-DW7we29R.js";for(let e of[`localStorage`,`sessionStorage`])Object.defineProperty(globalThis,e,{value:t(),configurable:!0});e(()=>import(`./start-CqO6lUdD.js`),__vite__mapDeps([0,1,2,3,4,5,6]),import.meta.url);
