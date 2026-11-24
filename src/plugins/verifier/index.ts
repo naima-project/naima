@@ -715,7 +715,7 @@ function askStreaming(host: Host, args: string[], onErr: (line: string) => void)
 }
 
 /**
- * The run already kept here that `host` made of `item` and that is current on what this checkout has: a conclusive run
+ * The run already kept here that a host made of `item` (a record names no host, only that one made it) and that is current on what this checkout has: a conclusive run
  * whose property, verifier, model, options and inputs are the ones now (each file by its fingerprint, so a comment edit
  * does not matter) and that reads the files the model reads now. It is found before anything is sent, so a call dropped
  * after k of n properties and run again asks the host for the other n−k only. The host's tool version is the one the run
@@ -731,7 +731,7 @@ async function keptFromHost(ctx: Context, host: Host, item: Item, opts: VerifyOp
     return undefined
   }
   return runsOf(item).filter((k) =>
-    k.run.host === host.name && conclusive(k.run.verdict) && k.run.inputs !== undefined && canonical(k.run.inputs.map((i) => i.path).sort()) === now &&
+    k.run.host !== undefined && conclusive(k.run.verdict) && k.run.inputs !== undefined && canonical(k.run.inputs.map((i) => i.path).sort()) === now &&
     digestOf(k.run.inputs, k.run.toolVersion) === k.run.inputsSha256 && staleness(ctx, item, k.run).length === 0
   ).pop()
 }
@@ -810,7 +810,7 @@ async function verifyThere(ctx: Context, host: Host, item: Item, progress: Progr
     adopt(ctx, item, here)
     return { verdict: here.run.verdict, reused: here.name }
   }
-  keepRun(ctx, item, { ...run, host: run.host ?? host.name }, host)
+  keepRun(ctx, item, { ...run, host: "<host>" }, host)
   return { verdict: run.verdict }
 }
 
@@ -850,6 +850,8 @@ export function redactRun(record: RunRecord, root: string, remote?: Host): RunRe
     return redactPrivate(root ? t.split(root).join("<root>") : t, pc)
   }
   const out: RunRecord = { ...record, output: clean(record.output) }
+  // The host's declared name is a machine name; the record says only that a host made the run.
+  if (record.host !== undefined) out.host = "<host>"
   if (record.counterexample !== undefined) out.counterexample = clean(record.counterexample)
   if (record.details !== undefined) out.details = redactDeep(record.details, clean)
   if (record.carried !== undefined) {
