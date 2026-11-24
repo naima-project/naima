@@ -409,8 +409,36 @@ interface Goal {
 /** At most this many items are named in a goal's line; past it, only their number. */
 const NAMED_LEFT = 2
 
-/** ", 234 fixed on the line, waiting for it to land": what a goal counts as fixed and not as left; "" when none. */
-const waitingOnLine = (r: Pick<GateResult, "onLine">): string => (r.onLine?.length ? ` (${r.onLine.length} fixed on the line, waiting for it to land)` : "")
+/** A goal's count, the one every view and sentence of the server gives (the UI's goalCount, ui/src/screens/home/count.ts, counts the same way). */
+export interface GoalCount {
+  /** The items it waits for, done or not. */
+  items: number
+  /** Of them, those neither left nor fixed on the line... */
+  done: number
+  /** ...those still left: neither done nor fixed on its line. */
+  left: number
+  /** Those fixed on its open development line, counted done: they close on the trunk when the line lands. */
+  fixed: number
+  /** Done out of items, rounded down, 99 at most until the goal is finished. */
+  pct: number
+}
+
+/** A goal's count from its result: items fixed on the line are fixed, done and not left, whichever checkout the data is. */
+export function goalCount(r: Pick<GateResult, "blocking" | "owed" | "onLine" | "items">, finished = false): GoalCount {
+  const waiting = new Set([...r.blocking, ...r.owed])
+  const items = Math.max(r.items ?? 0, waiting.size)
+  const fixed = finished ? 0 : (r.onLine ?? []).filter((i) => waiting.has(i)).length
+  const done = items - waiting.size + fixed
+  const pct = finished ? 100 : items ? Math.min(99, Math.floor((done / items) * 100)) : 0
+  return { items, done, left: items - done, fixed, pct }
+}
+
+/** ", 29 left, 234 fixed on the line, waiting for it to land": what a goal counts as fixed and not as left; "" when none fixed. */
+const waitingOnLine = (r: Pick<GateResult, "blocking" | "owed" | "onLine" | "items">): string => {
+  if (!r.onLine?.length) return ""
+  const c = goalCount(r)
+  return ` (${c.left ? `${c.left} left in all, ` : ""}${c.fixed} fixed on the line, waiting for it to land)`
+}
 
 /** A goal's status in words: it holds, or what stops it — its last one or two items named, else how many. */
 function goalStatus(r: GateResult): string {
@@ -494,7 +522,9 @@ export function evaluateGate(ctx: Context, name: string, holdsOn: "code" | "proo
   const fixedThere = new Set(fixedOnLine(ctx, name))
   const blocking = holdsOn === "proof" ? open : open.filter((i) => !owesOnlyProof(ctx, i, fixedThere))
   const owed = open.filter((i) => !blocking.includes(i))
-  const onLine = open.filter((i) => fixedThere.has(i.meta.id) && fieldValue(i, FIXED_ON) === undefined && !refuted(ctx, i))
+  // Whether the data is the trunk's (its copy has no fixedOn yet) or the line's own checkout (the copy carries it), an item the line's
+  // landings fix is fixed on the line.
+  const onLine = open.filter((i) => fixedThere.has(i.meta.id) && !refuted(ctx, i))
   const retired = retiredUnder(ctx, on)
   return { holds: blocking.length === 0, blocking, owed, items: on.length, ...(onLine.length ? { onLine } : {}), ...(retired.length ? { retired } : {}) }
 }
@@ -576,6 +606,8 @@ interface GateRow {
   owed: GateItemRow[]
   /** The refs of the items fixed on its open development line, counted fixed and waiting for the line to land, never blocking; absent when none. */
   onLine?: string[]
+  /** Its count, the one every screen and sentence gives: items, done, left, fixed on the line and percent (goalCount). */
+  count: GoalCount
   /**
    * How many items it waits for, done or not; those neither blocking nor owed are done. The one count of a goal's
    * progress every screen shows (Home, Goals, Roadmap), so that none counts its own way.
@@ -665,6 +697,7 @@ async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: Gate
         blocking: result.blocking.map(item),
         owed: result.owed.map(item),
         ...(result.onLine?.length ? { onLine: result.onLine.map(label) } : {}),
+        count: goalCount(result, def.version ? tags().has(versionKey(def.version)) : result.holds && (!def.due || def.due <= today(ctx))),
         items: Math.max(result.items ?? 0, result.blocking.length + result.owed.length),
         ...(result.method ? { method: result.method } : {}),
         ...(result.steps ? { steps: result.steps } : {}),
