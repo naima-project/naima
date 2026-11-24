@@ -302,8 +302,8 @@
       <svg
         bind:this={drawing}
         class:fit={zoom === null}
-        width={zoom === null ? undefined : W * zoom}
-        height={zoom === null ? undefined : H * zoom}
+        style:width={zoom === null ? undefined : `calc(${W * zoom}px * var(--text-scale, 1))`}
+        style:height={zoom === null ? undefined : `calc(${H * zoom}px * var(--text-scale, 1))`}
         viewBox="{-pad} {-pad} {W} {H}"
         role="group"
         aria-label={label}
@@ -582,7 +582,7 @@
     opacity: 0.55;
   }
   .elabel {
-    font-size: var(--font-size-2xs);
+    font-size: calc(var(--font-size-2xs) / var(--text-scale, 1));
     fill: var(--color-text-muted);
     paint-order: stroke;
     stroke: var(--color-surface-raised);
@@ -621,11 +621,11 @@
     fill: var(--color-text);
   }
   .nlabel {
-    font-size: var(--font-size-xs);
+    font-size: calc(var(--font-size-xs) / var(--text-scale, 1));
     fill: var(--color-text);
   }
   .nsub {
-    font-size: var(--font-size-2xs);
+    font-size: calc(var(--font-size-2xs) / var(--text-scale, 1));
     fill: var(--color-text-muted);
   }
   .node:hover .shape,
@@ -708,12 +708,12 @@
     stroke-width: 1.2;
   }
   .aword {
-    font-size: var(--font-size-sm);
+    font-size: calc(var(--font-size-sm) / var(--text-scale, 1));
     fill: var(--color-text-muted);
   }
   .aarg {
     font-family: var(--font-family-mono);
-    font-size: var(--font-size-2xs);
+    font-size: calc(var(--font-size-2xs) / var(--text-scale, 1));
   }
   .node:hover .maybe,
   .node:focus .maybe {
@@ -730,11 +730,11 @@
   }
   .pname {
     font-family: var(--font-family-mono);
-    font-size: var(--font-size-2xs);
+    font-size: calc(var(--font-size-2xs) / var(--text-scale, 1));
     fill: var(--color-text-muted);
   }
   .elabel.big {
-    font-size: var(--font-size-sm);
+    font-size: calc(var(--font-size-sm) / var(--text-scale, 1));
   }
   .node.ahead {
     opacity: 1;

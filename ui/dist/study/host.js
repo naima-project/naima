@@ -135,6 +135,10 @@ async function view(mod) {
       const root = document.documentElement;
       for (const [k, v] of Object.entries(m.vars)) root.style.setProperty(k, v);
       root.dataset.theme = m.theme;
+      // The page's text scale: the root size and --text-scale follow it, so the rem of the tokens and the figures scale.
+      const scale = Number(m.scale) > 0 ? Number(m.scale) : 1;
+      root.style.setProperty("--text-scale", String(scale));
+      root.style.fontSize = scale === 1 ? "" : `${scale * 100}%`;
       // A frame whose colour scheme differs from its page's is painted opaque: it follows the page's.
       root.style.colorScheme = m.theme === "dark" ? "dark" : "light";
     } else if (m.t === "says") says = m.says;
