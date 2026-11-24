@@ -39,14 +39,14 @@
 
 <div class="sequence">
   <!-- The heads stay in view; the messages scroll under them. -->
-  <svg class="heads" style:max-inline-size="{W}px" viewBox="0 0 {W} 34" aria-hidden="true">
+  <svg class="heads" style:max-inline-size="calc({W}px * var(--text-scale, 1))" viewBox="0 0 {W} 34" aria-hidden="true">
     {#each lifelines as l (l)}
       <rect class="headbox" x={lx(l) - 66} y="4" width="132" height="26" rx="2" />
       <text class="who" x={lx(l)} y="21" text-anchor="middle">{l}</text>
     {/each}
   </svg>
   <div class="body" bind:this={box}>
-    <svg style:max-inline-size="{W}px" viewBox="0 0 {W} {H}" role="img" aria-label={label}>
+    <svg style:max-inline-size="calc({W}px * var(--text-scale, 1))" viewBox="0 0 {W} {H}" role="img" aria-label={label}>
       {#each lifelines as l (l)}
         <line class="life" x1={lx(l)} x2={lx(l)} y1="0" y2={H - 8} />
       {/each}
@@ -101,7 +101,7 @@
     stroke-width: 1.2;
   }
   .who {
-    font-size: var(--font-size-xs);
+    font-size: calc(var(--font-size-xs) / var(--text-scale, 1));
     fill: var(--color-text);
   }
   .life {
@@ -117,7 +117,7 @@
     fill: var(--color-text-muted);
   }
   .msg text {
-    font-size: var(--font-size-2xs);
+    font-size: calc(var(--font-size-2xs) / var(--text-scale, 1));
     fill: var(--color-text-muted);
   }
   .msg.latest line {

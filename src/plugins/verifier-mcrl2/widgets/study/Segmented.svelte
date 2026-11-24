@@ -63,7 +63,8 @@
     border: none;
     border-radius: var(--radius-sm);
     cursor: pointer;
-    white-space: nowrap;
+    max-inline-size: 100%;
+    text-align: start;
     text-decoration-line: underline;
     text-decoration-thickness: var(--border-width-thin);
     text-underline-offset: var(--space-xs);
