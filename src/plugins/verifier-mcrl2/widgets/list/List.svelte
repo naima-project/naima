@@ -11,6 +11,7 @@
      reckoned from its count. Quiet (`quiet`), its controls fold into one status line of words ("267 items · no filter
      · not grouped · as listed"), each part a quiet link, the slice the list was opened on first (`slice`); a small
      search glyph opens the search in place, and Adjust unfolds every control (the filters, the grouping, the sort, the
+<<<<<<< HEAD
      columns) in a sheet under the line. The diary look (`look="diary"`), for what a person reads as a story (the Diary on
      Home): the items are entries set as prose under dated headings (the spec's `lead`: one heading to a run of items of
      the same day, in one fixed column), the items the spec calls margin notes recede into one quiet line after the
@@ -18,6 +19,13 @@
      teaser of what they hold (the grouping's `teaser`), a serif-free, generous page of one size scale, with a measure of
      about 65 characters. Beside an item open it is a column of dates, the open day marked. Filters, search, grouping, sort, saved views and the keyboard are the same as in the table look. One of the widget set, beside
      Action and Segmented. -->
+=======
+     columns) in a sheet under the line. The filters are of three kinds: the values of a facet (kind, state, person),
+     the spans of days of a range (when it was filed, told, closed: Any time, the last 7, 30 or 90 days), and the words
+     searched; all of them one `view`. A grouping by day (dayGrouping) draws a chapter heading over the days of each
+     month; `compact` draws a thinner row, and the spec's `second` a quiet second line under the title. One of the widget
+     set, beside Action and Segmented. -->
+>>>>>>> origin/line/release-1.2
 <script lang="ts" generics="T">
   import { tick } from "svelte";
   import Search from "@lucide/svelte/icons/search";
@@ -34,9 +42,11 @@
     clearFilters,
     type Column,
     dropView,
+    type DayRange,
     EMPTY_VIEW,
     filtersOn,
     headId,
+    lastDays,
     type ListSpec,
     type ListView,
     listModel,
@@ -48,9 +58,15 @@
     rowId,
     type SavedView,
     saveView,
+<<<<<<< HEAD
     sections,
+=======
+    setRange,
+>>>>>>> origin/line/release-1.2
     sideways,
     sortBy,
+    SPANS,
+    spanWords,
     toggleColumn,
     toggleFilter,
     toggleFold,
@@ -82,6 +98,7 @@
     quiet?: boolean;
     /** What the list was opened on, said first on the status line: "bugs · waiting for you". */
     slice?: string;
+<<<<<<< HEAD
     /** The table (columns, a row each) or the diary (entries as prose under dated headings, groups as chapters). */
     look?: "table" | "diary";
     /** The scrolling box of the rows, for a screen that scrolls the list by itself. */
@@ -92,6 +109,12 @@
     noun?: readonly [string, string];
     /** The date heading (a `lead` key) the screen reads at, drawn in the colour of now. */
     reading?: string;
+=======
+    /** One thinner line a row, for a long list read at a glance. */
+    compact?: boolean;
+    /** Today, yyyy-mm-dd, for the spans of days ("Last 7 days") and the day headings ("Today"); the clock's when left out. */
+    today?: string;
+>>>>>>> origin/line/release-1.2
   }
   let {
     items,
@@ -107,6 +130,7 @@
     saved = $bindable(),
     quiet = false,
     slice = "",
+<<<<<<< HEAD
     look = "table",
     grid = $bindable(),
     onpoint,
@@ -114,6 +138,13 @@
     noun = ["item", "items"],
   }: Props = $props();
   const diary = $derived(look === "diary");
+=======
+    compact = false,
+    today = "",
+  }: Props = $props();
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const now = $derived(today || ((d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`)(new Date()));
+>>>>>>> origin/line/release-1.2
 
   /** Each kind of column's track: the title takes the room left, the others a width of their own (a token), the same in
    *  every row, so that every row lines up without measuring anything. */
@@ -122,6 +153,8 @@
   const narrow = $derived(column ?? open !== null);
   const model = $derived(listModel(items, spec, view));
   const grouped = $derived(!!view.group && !!spec.groupings?.some((g) => g.id === view.group));
+  const chaptered = $derived(grouped && model.groups.some((g) => g.chapter));
+  const second = $derived(!narrow && spec.second ? spec.second : null);
   const byKey = $derived(new Map(items.map((i) => [spec.key(i), i])));
   const cols = $derived(
     diary ? (model.columns as Column<T>[]).filter((c) => c.width === "grow") : narrow ? (model.columns as Column<T>[]).filter((c) => c.column) : (model.columns as Column<T>[]),
@@ -226,10 +259,26 @@
   let adjusting = $state(false);
   let searching = $state(false);
   const lower = (w: string) => w.charAt(0).toLowerCase() + w.slice(1);
+<<<<<<< HEAD
   const counted = $derived(model.shown === model.total ? `${model.total} ${model.total === 1 ? noun[0] : noun[1]}` : `${model.shown} of ${model.total}`);
   const filterWords = $derived(
     model.facets.flatMap((f) => f.chips.filter((c) => c.on).map((c) => lower(c.label))).join(", ") || "no filter",
+=======
+  const counted = $derived(model.shown === model.total ? `${model.total} ${model.total === 1 ? "item" : "items"}` : `${model.shown} of ${model.total}`);
+  const rangeWords = $derived(
+    (spec.ranges ?? []).flatMap((r) => (view.ranges?.[r.id] ? [`${lower(r.label)} ${spanWords(view.ranges[r.id]!, now)}`] : [])),
+>>>>>>> origin/line/release-1.2
   );
+  const filterWords = $derived(
+    [...model.facets.flatMap((f) => f.chips.filter((c) => c.on).map((c) => lower(c.label))), ...rangeWords].join(", ") || "no filter",
+  );
+  const hasFilters = $derived(!!spec.facets?.length || !!spec.ranges?.length);
+  /** The span chosen for a range is one of the spans offered, by its days; 0 for none chosen. */
+  const spanOn = (id: string, days: number) => {
+    const r = view.ranges?.[id];
+    return days === 0 ? !r : !!r && lastDays(days, now).from === r.from && r.to === now;
+  };
+  const pickSpan = (id: string, days: number) => (view = setRange(view, id, days === 0 ? null : lastDays(days, now)));
   const groupWords = $derived.by(() => {
     const g = (spec.groupings ?? []).find((x) => x.id === view.group);
     return g ? `grouped by ${lower(g.label)}` : "not grouped";
@@ -262,6 +311,7 @@
   const ariaSort = (c: Column<T>) => (view.sort === c.id ? (view.desc ? "descending" : "ascending") : undefined);
 </script>
 
+<<<<<<< HEAD
 {#snippet diaryRow(item: T, as: "entry" | "note")}
   {@const key = spec.key(item)}
   {@const id = rowId(key)}
@@ -294,6 +344,9 @@
 {/snippet}
 
 <section class="list" class:narrow class:is-diary={diary} aria-label={label} data-part="list" data-look={look}>
+=======
+<section class="list" class:narrow class:compact class:has-second={!!second} aria-label={label} data-part="list">
+>>>>>>> origin/line/release-1.2
   {#snippet searchBox()}
     <label class="search">
       <Search class="glyph" aria-hidden="true" />
@@ -334,6 +387,18 @@
           </div>
         {/if}
       {/each}
+  {/snippet}
+  {#snippet rangeRows()}
+    {#each spec.ranges ?? [] as r (r.id)}
+      {@const custom = view.ranges?.[r.id] && !SPANS.some((x) => spanOn(r.id, x.days))}
+      <div class="facet" role="group" aria-label={r.label} data-part="list-range">
+        <span class="flabel">{r.label}</span>
+        {#each SPANS as s (s.days)}
+          <button class="chip" class:on={spanOn(r.id, s.days)} type="button" aria-pressed={spanOn(r.id, s.days)} onclick={() => pickSpan(r.id, s.days)}>{s.label}</button>
+        {/each}
+        {#if custom}<button class="chip on" type="button" aria-pressed="true" title="Take this span off" onclick={() => pickSpan(r.id, 0)}>{spanWords(view.ranges![r.id]!, now)}</button>{/if}
+      </div>
+    {/each}
   {/snippet}
   {#snippet viewsRow()}
     {#if saved}
@@ -383,7 +448,11 @@
         {#if slice}<span class="st-slice">{slice}</span><span class="st-sep" aria-hidden="true">·</span>{/if}
         {#if applied}<span class="st-slice" data-part="list-applied">{applied}</span><span class="st-sep" aria-hidden="true">·</span>{/if}
         <span class="st-count">{counted}</span>
+<<<<<<< HEAD
         {#if spec.facets?.length && !(diary && !filtersOn(view))}<span class="st-sep" aria-hidden="true">·</span><button class="st-part" type="button" aria-label="Filters: {filterWords}. Adjust" onclick={() => (adjusting = true)}>{filterWords}</button>{/if}
+=======
+        {#if hasFilters}<span class="st-sep" aria-hidden="true">·</span><button class="st-part" type="button" aria-label="Filters: {filterWords}. Adjust" onclick={() => (adjusting = true)}>{filterWords}</button>{/if}
+>>>>>>> origin/line/release-1.2
         {#if spec.groupings?.length}<span class="st-sep" aria-hidden="true">·</span><button class="st-part" type="button" aria-label="{groupWords}. Adjust" onclick={() => (adjusting = true)}>{groupWords}</button>{/if}
         {#if !(diary && !view.sort)}<span class="st-sep" aria-hidden="true">·</span><button class="st-part" type="button" aria-label="{sortWords}. Adjust" onclick={() => (adjusting = true)}>{sortWords}</button>{/if}
       </p>
@@ -425,9 +494,10 @@
       </details>
     {/if}
         </div>
-        {#if spec.facets?.length}
+        {#if hasFilters}
           <div class="facets" role="group" aria-label="Filters">
             {@render facetRows(true)}
+            {@render rangeRows()}
             {#if filtersOn(view)}<Action label="Clear filters" icon={X} size="sm" onclick={() => (view = clearFilters(view))} />{/if}
           </div>
         {/if}
@@ -438,7 +508,7 @@
   <div class="bar">
     {@render searchBox()}
     {#if !narrow}
-      {#if spec.facets?.length}
+      {#if hasFilters}
         <Action
           label={filtersOn(view) ? `Filters · ${filtersOn(view)}` : "Filters"}
           hint="Show only some kinds, releases, states, people or tags"
@@ -482,6 +552,7 @@
   {#if !narrow && (filtering || filtersOn(view))}
     <div class="facets" role="group" aria-label="Filters">
       {@render facetRows(filtering)}
+      {#if filtering}{@render rangeRows()}{/if}
       {#if filtersOn(view)}<Action label="Clear filters" icon={X} size="sm" onclick={() => (view = clearFilters(view))} />{/if}
     </div>
   {/if}
@@ -505,6 +576,7 @@
     {#if model.shown === 0}
       <p class="nothing">{nothing}</p>
     {/if}
+<<<<<<< HEAD
     {#if diary}
       <!-- The diary look: chapters (the groups), dated sections (a run of items under one lead), entries as prose, notes after them. -->
       {#each model.groups as g (g.key)}
@@ -565,6 +637,14 @@
       {/each}
     {:else}
     {#each model.groups as g (g.key)}
+=======
+    {#each model.groups as g, gi (g.key)}
+      {#if chaptered && g.chapter && g.chapter.key !== model.groups[gi - 1]?.chapter?.key}
+        <div class="chapter" role="row" aria-level={1} data-part="list-chapter" data-chapter={g.chapter.key}>
+          <span class="cell" role="gridcell"><span class="ctitle">{g.chapter.title}</span></span>
+        </div>
+      {/if}
+>>>>>>> origin/line/release-1.2
       <div class="group" role="rowgroup" class:folded={g.folded} style:--n={g.folded ? 0 : g.count}>
         {#if grouped}
           {@const id = headId(g.key)}
@@ -573,7 +653,7 @@
             class="ghead"
             role="row"
             id={domId(id)}
-            aria-level={1}
+            aria-level={chaptered ? 2 : 1}
             aria-expanded={!g.folded}
             tabindex={entry === id ? 0 : -1}
             class:cursor={cursor === id}
@@ -598,7 +678,7 @@
               class="row"
               role="row"
               id={domId(id)}
-              aria-level={grouped ? 2 : 1}
+              aria-level={grouped ? (chaptered ? 3 : 2) : 1}
               aria-selected={open === key}
               aria-current={open === key ? "true" : undefined}
               tabindex={entry === id ? 0 : -1}
@@ -613,7 +693,7 @@
             >
               {#if mark}<span class="cell dotcell" role="gridcell"><span class="dot" aria-hidden="true"></span></span>{/if}
               {#each cols as c (c.id)}
-                <span class="cell" role="gridcell" class:title={c === title} class:end={c.align === "end"} data-col={c.id}>{cellText(c, item)}</span>
+                <span class="cell" role="gridcell" class:title={c === title} class:end={c.align === "end"} data-col={c.id}>{cellText(c, item)}{#if second && c === title}{@const more = second(item)}{#if more}<span class="second" data-part="list-second">{more}</span>{/if}{/if}</span>
               {/each}
             </div>
           {/each}
@@ -959,6 +1039,12 @@
     flex-direction: column;
     outline: none;
   }
+  .compact {
+    --row: calc(var(--size-target) * 0.75);
+  }
+  .has-second {
+    --row: calc(var(--size-target) * 1.5);
+  }
   .heads,
   .row,
   .ghead {
@@ -1037,6 +1123,30 @@
   }
   .nothing {
     margin: var(--space-sm) 0;
+    color: var(--color-text-muted);
+  }
+
+  /* A chapter's heading, over the groups of a month or a year: larger and quiet, never folded. */
+  .chapter {
+    margin-block-start: var(--space-md);
+    padding-block-end: var(--space-xs);
+    border-block-end: var(--border-width-thin) solid var(--color-border-soft);
+    font-size: var(--font-size-md);
+    font-weight: 600;
+    color: var(--color-text);
+  }
+  .chapter .cell {
+    grid-column: 1 / -1;
+  }
+  .chapter + .group .ghead {
+    margin-block-start: var(--space-xs);
+  }
+  /* A second line under the title: smaller and muted. */
+  .row .cell.title .second {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--font-size-xs);
     color: var(--color-text-muted);
   }
 

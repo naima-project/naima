@@ -180,27 +180,27 @@ The window the timeline shows is also the time filter of the screens. Zoom in or
 those days alone, and the screen says which ones in words, for example "Showing Mon 3 – Sun 9 Nov", with an All time button beside it. All time, or zooming out
 until the window covers the whole history, shows every day again. Until you zoom or move the window, every day is shown.
 
-### The Filter button
+### Adjust, the one filter
 
-Every screen with entries (the Diary, Bugs, Features, Failed tests, Goals, Roadmap, Meetings and the list of Metrics) has the same Filter button above its list.
-It opens a panel under it: words to search for in the titles and what the entries say, then a menu for each thing the screen's entries can be told apart by (the
-kind of item, the goal, the line of work, the person or agent who asked, the status in the screen's own words), each value with how many entries it would keep,
-and the time window: All time, the last 7, 30 or 90 days. The time window is the time filter above, so choosing one narrows every screen, as zooming the
-timeline does. A menu shows only when the screen's entries differ in it. What you chose shows beside the button as chips, each with a cross that takes it away,
-with Clear all when there are two or more, and "Showing 12 of 87" says how many entries are shown of all the screen lists. The Diary filters its moments and the
-folded routine of each day alike.
+Every list in the window has the same Adjust beside its search, under a quiet line that says what the list shows, for example "12 of 87 · to fix now · grouped
+by category · as listed". Adjust opens one sheet: the grouping, the sort, the columns, and the filters. A filter is a value of something the entries can be told
+apart by (the kind of item, its state, its priority, the release or goal, the person who holds it or asked for it, a tag), each value with how many entries it
+would keep, or a span of days: when the entry was filed, when it was closed, and the time window, which is Any time or the last 7, 30 or 90 days. The time window
+is the time filter above, so choosing one narrows every screen, as zooming the timeline does. A value that no entry has is not offered. Clear filters takes every
+choice away except the time window, which is the timeline's.
 
-Each screen keeps its own choice, and the window remembers it for your next visit. The address carries it too, after the screen's name, as in
-`#bugs?goal=release-2&q=slow`, so a link opens the screen filtered the same way; changing the choice replaces the address rather than adding a step to Back. An
-agent can set the same choice through the UI's MCP server (`naima-ui`), with the store's `filters` transitions: `pick`, `drop`, `search`, `clear`, `within`,
-`show` and `hide`.
+A list that is grouped by day puts a heading for each month over its days. A list in a narrow column beside an open item shows no sheet; the filters keep what they
+were.
+
+Each screen keeps its own search and filters, and the window remembers them for your next visit. The address carries them too, after the screen's name, as in
+`#bugs?gate=Release%202&priority=now&q=slow`, so a link opens the screen filtered the same way; changing the choice replaces the address rather than adding a step to
+Back. An agent can set the same choice through the UI's MCP server (`naima-ui`), with the store's `filters` transitions: `pick`, `drop`, `search`, `clear`,
+`follow` and `within`.
 
 ### Lists, links and the item drawer
 
-Bugs, Features and the Requirements of Specs open on their answer: how many bugs are to fix now, how many features are being built, how many requirements are
-proven of how many, then the other states with their counts, and one sentence saying what the screen lists. Each count shows only its rows in the table under
-it, and pressed again shows them all; the same choice is the row of chips marked "Show only". Grouping, the columns shown, closer rows and saved views are in
-the Arrange menu beside the search. A feature built and not yet landed on the main line is listed as built and waiting to land, as a fixed bug is.
+Bugs and Features open on their answer: one sentence saying how many bugs are to fix now, or how many features are being built, and the one list under it. Grouping,
+the columns shown, the filters and saved views are in the list's Adjust. A feature built and not yet landed on the main line is listed as built and waiting to land, as a fixed bug is.
 
 What a screen names is a link. A release or goal in a row, in the item drawer or on All projects opens the Plan with What's left on that goal unfolded; a worker
 holding an item opens Workers; an item named by its reference in a description or a note (bugs/<slug> and the like) opens in the drawer. A row opens its item in
