@@ -652,13 +652,8 @@ function printGate(ctx: Context, gate: GateDef, r: GateResult, hands = false): v
   const when = timing(ctx, gate)
   ctx.out(
     `${gate.name} — ${gate.title}${gate.inFullSuite ? " [in the full suite]" : ""}${when ? ` (${when})` : ""}: ${
-<<<<<<< HEAD
-      r.holds ? "HOLDS" : `BLOCKED by ${r.blocking.length}`
-    }${r.owed.length ? `, ${r.owed.length} owed` : ""}${waitingOnLine(r, ctx)}`,
-=======
       gate.supersededBy ? "SUPERSEDED" : r.holds ? "HOLDS" : `BLOCKED by ${r.blocking.length}`
-    }${r.owed.length ? `, ${r.owed.length} owed` : ""}${waitingOnLine(r)}`,
->>>>>>> origin/line/release-1.2
+    }${r.owed.length ? `, ${r.owed.length} owed` : ""}${waitingOnLine(r, ctx)}`,
   )
   const who = (i: Item) => (hands ? `  (${runByOf(ctx, i) || "unclassified"})` : "")
   for (const why of r.reasons ?? []) ctx.out(`  ✗ ${why}`)
@@ -820,12 +815,8 @@ async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: Gate
         blocking: result.blocking.map(item),
         owed: result.owed.map(item),
         ...(result.onLine?.length ? { onLine: result.onLine.map(label) } : {}),
-<<<<<<< HEAD
         ...(result.arriving?.length ? { arriving: result.arriving.map(label), arrivingOn: result.arrivingOn ?? [] } : {}),
-        count: goalCount(result, def.version ? tags().has(versionKey(def.version)) : result.holds && (!def.due || def.due <= today(ctx))),
-=======
         count: goalCount(result, isFinished(def, result, tags)),
->>>>>>> origin/line/release-1.2
         items: Math.max(result.items ?? 0, result.blocking.length + result.owed.length),
         ...(result.method ? { method: result.method } : {}),
         ...(result.steps ? { steps: result.steps } : {}),
