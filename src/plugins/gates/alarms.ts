@@ -3,7 +3,7 @@
 // owner does not have to notice: an hourly job says so, once per state, in a message to whoever runs the next
 // `naima hello` and the next turn-end tick (a warning for at risk, an urgent message acknowledged by the owner for
 // late), and files one question on the agenda of the owner's next meeting. A goal that becomes late after being at risk
-// raises again, for the new state; a goal with no work left, or already released, raises nothing. The behaviour is the
+// raises again, for the new state; a goal with no work left, already released, or superseded by another, raises nothing. The behaviour is the
 // model's: develop/models/goal-alarm/goal-alarm.mcrl2.
 
 import { readFileSync } from "node:fs"
@@ -64,7 +64,7 @@ export async function slipping(ctx: Context): Promise<GoalUrgency[]> {
   const now = Date.parse(`${today(ctx)}T00:00:00Z`)
   const out: GoalUrgency[] = []
   for (const { value: g } of gatesOf(ctx)) {
-    if (!g.due || (g.version && tags.has(versionKey(g.version)))) continue
+    if (!g.due || g.supersededBy || (g.version && tags.has(versionKey(g.version)))) continue
     const result = await g.evaluate(ctx)
     if (result.holds) continue
     const left = result.blocking.length || 1
