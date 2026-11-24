@@ -1,1 +1,0 @@
-import"./modulepreload-polyfill-P2Xu9kJm.js";import{K as e}from"./runtime-DXdvW7oy.js";import{Oi as t,S as n,li as r,o as i,s as a,w as o}from"./core-CIizOYmG.js";location.hash===`#explorer`&&history.replaceState(history.state,``,`#ui_models`),n(location.hash);var s=document.getElementById(`app`);e(a,{target:s,props:{address:!0},context:t(o())}),i({bridge:r({server:`bridge`})});

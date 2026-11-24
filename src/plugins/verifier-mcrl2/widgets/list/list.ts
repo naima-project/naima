@@ -39,11 +39,6 @@ export interface Facet<T> {
 export interface Grouping<T> {
   readonly id: string;
   readonly label: string;
-<<<<<<< HEAD
-  readonly group: (item: T) => { readonly key: string; readonly title: string; readonly rank?: number; readonly sub?: string };
-  /** The diary look's lines under a folded group's heading: what the group holds that is worth reading before opening it. */
-  readonly teaser?: (items: readonly T[]) => readonly string[];
-=======
   readonly group: (item: T) => {
     readonly key: string;
     readonly title: string;
@@ -51,7 +46,11 @@ export interface Grouping<T> {
     /** A chapter the group belongs to (the month a day is in): its heading is drawn over the first group of it. The
      *  groups of a chapter stand together, the chapters in the order of their ranks. */
     readonly chapter?: Chapter;
+    /** What follows the title, quieter (the date of a day named by its weekday). */
+    readonly sub?: string;
   };
+  /** The diary look's lines under a folded chapter's heading: what its groups hold that is worth reading before opening it. */
+  readonly teaser?: (items: readonly T[]) => readonly string[];
 }
 
 /** A chapter heading over a run of groups. */
@@ -76,7 +75,6 @@ export interface Range<T> {
   /** The span is chosen here and kept in the view, but the list does not apply it: the caller has narrowed the items to it
    *  already (the time window of a timeline). */
   readonly outside?: boolean;
->>>>>>> origin/line/release-1.2
 }
 
 /** What the list knows of the items: how each is named, and what it can show, filter and group by. */
@@ -85,18 +83,12 @@ export interface ListSpec<T> {
   readonly columns: readonly Column<T>[];
   readonly facets?: readonly Facet<T>[];
   readonly groupings?: readonly Grouping<T>[];
-<<<<<<< HEAD
-  /** The diary look: the date heading an item stands under, by a key that items of one day share (each run of items with
-   *  the same key is one dated section), its title and the line under it. */
-  readonly lead?: (item: T) => { readonly key: string; readonly title: string; readonly sub?: string };
-  /** The diary look: an item that recedes to the margin of its dated section, a quiet note and never an entry. */
+  /** The diary look: an item that recedes to a quiet note after the entries of its group, never an entry. */
   readonly margin?: (item: T) => boolean;
-=======
   /** The spans of days the items can be filtered by, each with the day an item stands on. */
   readonly ranges?: readonly Range<T>[];
   /** A second line under the title: what the item says more, quietly. None for no line. */
   readonly second?: (item: T) => string | undefined;
->>>>>>> origin/line/release-1.2
 }
 
 /** What the person chose. */
@@ -146,16 +138,15 @@ export interface FacetChips {
 export interface ListGroup<T> {
   readonly key: string;
   readonly title: string;
-<<<<<<< HEAD
-  /** What follows the title, quieter (a year after a month). */
+  /** What follows the title, quieter. */
   readonly sub?: string;
-=======
   /** The chapter the group stands in, when the grouping has chapters. */
   readonly chapter?: Chapter;
->>>>>>> origin/line/release-1.2
   /** How many items the group holds, folded or not. */
   readonly count: number;
   readonly folded: boolean;
+  /** Its chapter is folded: the group is not drawn at all, and has no place for the keyboard. */
+  readonly hidden: boolean;
   readonly items: readonly T[];
 }
 
@@ -271,29 +262,11 @@ export function sortItems<T>(items: readonly T[], col: Column<T> | undefined, de
 export function groupItems<T>(
   items: readonly T[],
   grouping: Grouping<T> | undefined,
-<<<<<<< HEAD
-): { key: string; title: string; sub?: string; items: T[] }[] {
-  if (!grouping) return [{ key: "", title: "", items: [...items] }];
-  const out = new Map<string, { key: string; title: string; sub?: string; rank: number; first: number; items: T[] }>();
-  items.forEach((i, n) => {
-    const g = grouping.group(i);
-    const e = out.get(g.key) ??
-      { key: g.key, title: g.title, ...(g.sub ? { sub: g.sub } : {}), rank: g.rank ?? Number.MAX_SAFE_INTEGER, first: n, items: [] };
-    e.items.push(i);
-    out.set(g.key, e);
-  });
-  return [...out.values()].sort((a, b) => a.rank - b.rank || a.first - b.first).map(({ key, title, sub, items }) => ({
-    key,
-    title,
-    ...(sub ? { sub } : {}),
-    items,
-  }));
-=======
-): { key: string; title: string; chapter?: Chapter; items: T[] }[] {
+): { key: string; title: string; sub?: string; chapter?: Chapter; items: T[] }[] {
   if (!grouping) return [{ key: "", title: "", items: [...items] }];
   const out = new Map<
     string,
-    { key: string; title: string; chapter?: Chapter; chapterRank: number; rank: number; first: number; items: T[] }
+    { key: string; title: string; sub?: string; chapter?: Chapter; chapterRank: number; rank: number; first: number; items: T[] }
   >();
   items.forEach((i, n) => {
     const g = grouping.group(i);
@@ -301,6 +274,7 @@ export function groupItems<T>(
       {
         key: g.key,
         title: g.title,
+        ...(g.sub ? { sub: g.sub } : {}),
         ...(g.chapter ? { chapter: g.chapter } : {}),
         chapterRank: g.chapter?.rank ?? 0,
         rank: g.rank ?? Number.MAX_SAFE_INTEGER,
@@ -312,7 +286,7 @@ export function groupItems<T>(
   });
   return [...out.values()]
     .sort((a, b) => a.chapterRank - b.chapterRank || a.rank - b.rank || a.first - b.first)
-    .map(({ key, title, chapter, items }) => ({ key, title, ...(chapter ? { chapter } : {}), items }));
+    .map(({ key, title, sub, chapter, items }) => ({ key, title, ...(sub ? { sub } : {}), ...(chapter ? { chapter } : {}), items }));
 }
 
 // ---- Days: a grouping by day under chapter headings, and the spans of days a filter offers.
@@ -406,33 +380,6 @@ export function lastDays(days: number, today: string): DayRange {
 export function spanWords(r: DayRange, today = ""): string {
   const s = SPANS.find((x) => x.days > 0 && today && lastDays(x.days, today).from === r.from && r.to === today);
   return s ? s.label.toLowerCase() : `${dayWords(r.from, today)} – ${dayWords(r.to, today)}`;
->>>>>>> origin/line/release-1.2
-}
-
-/** A dated section of the diary look: the items that follow one another under the same lead, the entries apart from
- *  the notes that recede to the margin. */
-export interface Section<T> {
-  readonly key: string;
-  readonly title: string;
-  readonly sub?: string;
-  readonly entries: readonly T[];
-  readonly notes: readonly T[];
-}
-
-/** The items in dated sections: each run of consecutive items with the same lead key is one section (a day), its
- *  entries in the order they came and its margin notes apart. Without a lead, one section with no heading. */
-export function sections<T>(items: readonly T[], spec: ListSpec<T>): Section<T>[] {
-  const out: { key: string; title: string; sub?: string; entries: T[]; notes: T[] }[] = [];
-  for (const i of items) {
-    const l = spec.lead?.(i) ?? { key: "", title: "" };
-    let s = out.at(-1);
-    if (!s || s.key !== l.key) {
-      s = { key: l.key, title: l.title, ...(l.sub ? { sub: l.sub } : {}), entries: [], notes: [] };
-      out.push(s);
-    }
-    (spec.margin?.(i) ? s.notes : s.entries).push(i);
-  }
-  return out;
 }
 
 /** Whether a column is drawn: an optional one when toggled on, any other unless toggled off; the first grow column
@@ -452,9 +399,12 @@ export function listModel<T>(items: readonly T[], spec: ListSpec<T>, v: ListView
     ...g,
     count: g.items.length,
     folded: !!grouping && v.folded.includes(g.key),
+    // A chapter folded (its key among the folds) hides every group of it.
+    hidden: !!grouping && !!g.chapter && v.folded.includes(g.chapter.key),
   }));
   const places: Place[] = [];
   for (const g of groups) {
+    if (g.hidden) continue;
     if (grouping) places.push({ kind: "head", group: g.key });
     if (!g.folded) { for (const i of g.items) places.push({ kind: "row", key: spec.key(i), group: g.key }); }
   }

@@ -11,21 +11,16 @@
      reckoned from its count. Quiet (`quiet`), its controls fold into one status line of words ("267 items · no filter
      · not grouped · as listed"), each part a quiet link, the slice the list was opened on first (`slice`); a small
      search glyph opens the search in place, and Adjust unfolds every control (the filters, the grouping, the sort, the
-<<<<<<< HEAD
-     columns) in a sheet under the line. The diary look (`look="diary"`), for what a person reads as a story (the Diary on
-     Home): the items are entries set as prose under dated headings (the spec's `lead`: one heading to a run of items of
-     the same day, in one fixed column), the items the spec calls margin notes recede into one quiet line after the
-     day's entries (a day with only notes is that line beside its date), the groups are chapters (a month, large and light) that fold into a
-     teaser of what they hold (the grouping's `teaser`), a serif-free, generous page of one size scale, with a measure of
-     about 65 characters. Beside an item open it is a column of dates, the open day marked. Filters, search, grouping, sort, saved views and the keyboard are the same as in the table look. One of the widget set, beside
-     Action and Segmented. -->
-=======
      columns) in a sheet under the line. The filters are of three kinds: the values of a facet (kind, state, person),
      the spans of days of a range (when it was filed, told, closed: Any time, the last 7, 30 or 90 days), and the words
      searched; all of them one `view`. A grouping by day (dayGrouping) draws a chapter heading over the days of each
-     month; `compact` draws a thinner row, and the spec's `second` a quiet second line under the title. One of the widget
-     set, beside Action and Segmented. -->
->>>>>>> origin/line/release-1.2
+     month; `compact` draws a thinner row, and the spec's `second` a quiet second line under the title. The diary look
+     (`look="diary"`), for what a person reads as a story (the Diary on Home): a group by day is a dated section under one
+     fixed date column (the group's title over its `sub`), the items the spec calls margin notes recede into one quiet
+     line after the day's entries, the chapters (months) are large light headings that fold, a past one into a teaser of
+     what it held (the grouping's `teaser`), all of one size scale with a measure of about 65 characters; beside an item
+     open it is a column of dates, the open day marked. The spans of days, filters, sort, saved views and the keyboard
+     are the same as in the table look. One of the widget set, beside Action and Segmented. -->
 <script lang="ts" generics="T">
   import { tick } from "svelte";
   import Search from "@lucide/svelte/icons/search";
@@ -58,11 +53,7 @@
     rowId,
     type SavedView,
     saveView,
-<<<<<<< HEAD
-    sections,
-=======
     setRange,
->>>>>>> origin/line/release-1.2
     sideways,
     sortBy,
     SPANS,
@@ -98,23 +89,20 @@
     quiet?: boolean;
     /** What the list was opened on, said first on the status line: "bugs · waiting for you". */
     slice?: string;
-<<<<<<< HEAD
-    /** The table (columns, a row each) or the diary (entries as prose under dated headings, groups as chapters). */
+    /** One thinner line a row, for a long list read at a glance. */
+    compact?: boolean;
+    /** The table (columns, a row each) or the diary (entries as prose under dated headings, chapters as months). */
     look?: "table" | "diary";
     /** The scrolling box of the rows, for a screen that scrolls the list by itself. */
     grid?: HTMLDivElement;
     /** An item pointed at or focused, by key, or none (null). */
     onpoint?: (key: string | null) => void;
+    /** The group (a day's key) the screen reads at, its date drawn in the colour of now. */
+    reading?: string;
     /** What an item is called on the status line, in one and in many: "item", "items". */
     noun?: readonly [string, string];
-    /** The date heading (a `lead` key) the screen reads at, drawn in the colour of now. */
-    reading?: string;
-=======
-    /** One thinner line a row, for a long list read at a glance. */
-    compact?: boolean;
     /** Today, yyyy-mm-dd, for the spans of days ("Last 7 days") and the day headings ("Today"); the clock's when left out. */
     today?: string;
->>>>>>> origin/line/release-1.2
   }
   let {
     items,
@@ -130,7 +118,8 @@
     saved = $bindable(),
     quiet = false,
     slice = "",
-<<<<<<< HEAD
+    compact = false,
+    today = "",
     look = "table",
     grid = $bindable(),
     onpoint,
@@ -138,13 +127,8 @@
     noun = ["item", "items"],
   }: Props = $props();
   const diary = $derived(look === "diary");
-=======
-    compact = false,
-    today = "",
-  }: Props = $props();
   const pad2 = (n: number) => String(n).padStart(2, "0");
   const now = $derived(today || ((d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`)(new Date()));
->>>>>>> origin/line/release-1.2
 
   /** Each kind of column's track: the title takes the room left, the others a width of their own (a token), the same in
    *  every row, so that every row lines up without measuring anything. */
@@ -259,15 +243,9 @@
   let adjusting = $state(false);
   let searching = $state(false);
   const lower = (w: string) => w.charAt(0).toLowerCase() + w.slice(1);
-<<<<<<< HEAD
   const counted = $derived(model.shown === model.total ? `${model.total} ${model.total === 1 ? noun[0] : noun[1]}` : `${model.shown} of ${model.total}`);
-  const filterWords = $derived(
-    model.facets.flatMap((f) => f.chips.filter((c) => c.on).map((c) => lower(c.label))).join(", ") || "no filter",
-=======
-  const counted = $derived(model.shown === model.total ? `${model.total} ${model.total === 1 ? "item" : "items"}` : `${model.shown} of ${model.total}`);
   const rangeWords = $derived(
     (spec.ranges ?? []).flatMap((r) => (view.ranges?.[r.id] ? [`${lower(r.label)} ${spanWords(view.ranges[r.id]!, now)}`] : [])),
->>>>>>> origin/line/release-1.2
   );
   const filterWords = $derived(
     [...model.facets.flatMap((f) => f.chips.filter((c) => c.on).map((c) => lower(c.label))), ...rangeWords].join(", ") || "no filter",
@@ -311,7 +289,6 @@
   const ariaSort = (c: Column<T>) => (view.sort === c.id ? (view.desc ? "descending" : "ascending") : undefined);
 </script>
 
-<<<<<<< HEAD
 {#snippet diaryRow(item: T, as: "entry" | "note")}
   {@const key = spec.key(item)}
   {@const id = rowId(key)}
@@ -343,10 +320,7 @@
   </div>
 {/snippet}
 
-<section class="list" class:narrow class:is-diary={diary} aria-label={label} data-part="list" data-look={look}>
-=======
-<section class="list" class:narrow class:compact class:has-second={!!second} aria-label={label} data-part="list">
->>>>>>> origin/line/release-1.2
+<section class="list" class:narrow class:is-diary={diary} data-look={look} class:compact class:has-second={!!second} aria-label={label} data-part="list">
   {#snippet searchBox()}
     <label class="search">
       <Search class="glyph" aria-hidden="true" />
@@ -448,11 +422,7 @@
         {#if slice}<span class="st-slice">{slice}</span><span class="st-sep" aria-hidden="true">·</span>{/if}
         {#if applied}<span class="st-slice" data-part="list-applied">{applied}</span><span class="st-sep" aria-hidden="true">·</span>{/if}
         <span class="st-count">{counted}</span>
-<<<<<<< HEAD
-        {#if spec.facets?.length && !(diary && !filtersOn(view))}<span class="st-sep" aria-hidden="true">·</span><button class="st-part" type="button" aria-label="Filters: {filterWords}. Adjust" onclick={() => (adjusting = true)}>{filterWords}</button>{/if}
-=======
-        {#if hasFilters}<span class="st-sep" aria-hidden="true">·</span><button class="st-part" type="button" aria-label="Filters: {filterWords}. Adjust" onclick={() => (adjusting = true)}>{filterWords}</button>{/if}
->>>>>>> origin/line/release-1.2
+        {#if hasFilters && !(diary && filterWords === "no filter")}<span class="st-sep" aria-hidden="true">·</span><button class="st-part" type="button" aria-label="Filters: {filterWords}. Adjust" onclick={() => (adjusting = true)}>{filterWords}</button>{/if}
         {#if spec.groupings?.length}<span class="st-sep" aria-hidden="true">·</span><button class="st-part" type="button" aria-label="{groupWords}. Adjust" onclick={() => (adjusting = true)}>{groupWords}</button>{/if}
         {#if !(diary && !view.sort)}<span class="st-sep" aria-hidden="true">·</span><button class="st-part" type="button" aria-label="{sortWords}. Adjust" onclick={() => (adjusting = true)}>{sortWords}</button>{/if}
       </p>
@@ -576,75 +546,79 @@
     {#if model.shown === 0}
       <p class="nothing">{nothing}</p>
     {/if}
-<<<<<<< HEAD
     {#if diary}
-      <!-- The diary look: chapters (the groups), dated sections (a run of items under one lead), entries as prose, notes after them. -->
-      {#each model.groups as g (g.key)}
-        {@const teaser = g.folded ? (spec.groupings?.find((x) => x.id === view.group)?.teaser?.(g.items) ?? []) : []}
-        <div class="group chapter" role="rowgroup" class:folded={g.folded} data-chapter={grouped ? g.key : undefined}>
-          {#if grouped}
-            {@const id = headId(g.key)}
+      <!-- The diary look: chapters (months), dated sections (the groups, days), entries as prose, notes after them. -->
+      {#each model.groups as g, gi (g.key)}
+        {#if chaptered && g.chapter && g.chapter.key !== model.groups[gi - 1]?.chapter?.key}
+          {@const ch = g.chapter}
+          {@const shut = view.folded.includes(ch.key)}
+          {@const parts = /^(.*) (\d{4})$/.exec(ch.title)}
+          {@const teaser = shut ? (spec.groupings?.find((x) => x.id === view.group)?.teaser?.(model.groups.filter((x) => x.chapter?.key === ch.key).flatMap((x) => [...x.items])) ?? []) : []}
+          <div class="chapter" role="row" aria-level={1} data-part="list-chapter" data-chapter={ch.key} data-head={ch.key}>
+            <span class="cell" role="gridcell">
+              <button class="chead" type="button" aria-expanded={!shut} onclick={() => (view = toggleFold(view, ch.key))}>
+                <ChevronRight class="chev" aria-hidden="true" />
+                <span class="ctitle">{parts ? parts[1] : ch.title}</span>{#if parts}<span class="gsub">{parts[2]}</span>{/if}
+              </button>
+              {#each teaser as line, n (n)}<span class="teaser">{line}</span>{/each}
+            </span>
+          </div>
+        {/if}
+        {#if !g.hidden}
+          {@const id = headId(g.key)}
+          {@const entries = g.items.filter((i) => !spec.margin?.(i))}
+          {@const notes = g.items.filter((i) => spec.margin?.(i))}
+          <div
+            class="group day"
+            role="rowgroup"
+            class:only={!entries.length}
+            class:folded={g.folded}
+            class:open={open !== null && g.items.some((i) => spec.key(i) === open)}
+            data-day={g.key}
+            data-reading={reading !== "" && reading === g.key ? "true" : undefined}
+          >
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <div
-              class="ghead"
+              class="ghead when"
               role="row"
               id={domId(id)}
-              aria-level={1}
+              aria-level={chaptered ? 2 : 1}
               aria-expanded={!g.folded}
               tabindex={entry === id ? 0 : -1}
               class:cursor={cursor === id}
-              data-head={g.key}
               onclick={() => {
                 put = id;
-                view = toggleFold(view, g.key);
+                const first = g.items[0];
+                if (narrow && first) onopen?.(spec.key(first));
+                else view = toggleFold(view, g.key);
               }}
             >
-              <span class="cell" role="gridcell">
-                <span class="chapter-line">
-                  <ChevronRight class="chev" aria-hidden="true" />
-                  <span class="gtitle">{g.title}</span>{#if g.sub}<span class="gsub">{g.sub}</span>{/if}
-                </span>
-                {#each teaser as line, n (n)}<span class="teaser">{line}</span>{/each}
-              </span>
+              <span class="cell" role="rowheader"><span class="wd" class:sr={narrow}>{g.title}</span>{#if g.sub}<span class="wn">{g.sub}</span>{/if}</span>
             </div>
-          {/if}
-          {#if !g.folded}
-            {#each sections(g.items, spec) as d, n (`${d.key}~${n}`)}
-              <div class="day" class:only={!d.entries.length} class:open={open !== null && [...d.entries, ...d.notes].some((i) => spec.key(i) === open)} data-day={d.key} data-reading={reading !== "" && reading === d.key ? "true" : undefined}>
-                {#if d.title}
-                  <!-- Beside an item open the entries are out of sight and the date is what is pressed; the keyboard has the rows. -->
-                  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-                  <div class="when" role="row" onclick={() => { const first = d.entries[0] ?? d.notes[0]; if (narrow && first) onopen?.(spec.key(first)); }}>
-                    <span class="cell" role="rowheader"><span class="wd" class:sr={narrow}>{d.title}</span>{#if d.sub}<span class="wn">{d.sub}</span>{/if}</span>
+            {#if !g.folded}
+              <div class="said" class:sr={narrow}>
+                {#each entries as item (spec.key(item))}
+                  {@render diaryRow(item, "entry")}
+                {/each}
+                {#if notes.length}
+                  <div class="notes">
+                    {#each notes as item (spec.key(item))}
+                      {@render diaryRow(item, "note")}
+                    {/each}
                   </div>
                 {/if}
-                <div class="said" class:sr={narrow}>
-                  {#each d.entries as item (spec.key(item))}
-                    {@render diaryRow(item, "entry")}
-                  {/each}
-                  {#if d.notes.length}
-                    <div class="notes">
-                      {#each d.notes as item (spec.key(item))}
-                        {@render diaryRow(item, "note")}
-                      {/each}
-                    </div>
-                  {/if}
-                </div>
               </div>
-            {/each}
-          {/if}
-        </div>
+            {/if}
+          </div>
+        {/if}
       {/each}
     {:else}
-    {#each model.groups as g (g.key)}
-=======
     {#each model.groups as g, gi (g.key)}
       {#if chaptered && g.chapter && g.chapter.key !== model.groups[gi - 1]?.chapter?.key}
         <div class="chapter" role="row" aria-level={1} data-part="list-chapter" data-chapter={g.chapter.key}>
           <span class="cell" role="gridcell"><span class="ctitle">{g.chapter.title}</span></span>
         </div>
       {/if}
->>>>>>> origin/line/release-1.2
       <div class="group" role="rowgroup" class:folded={g.folded} style:--n={g.folded ? 0 : g.count}>
         {#if grouped}
           {@const id = headId(g.key)}
@@ -1288,18 +1262,14 @@
     content-visibility: visible;
     contain-intrinsic-size: none;
   }
+  /* A chapter: a large light month, a button that folds it into a teaser. */
   .is-diary .chapter {
-    padding-block-end: var(--space-lg);
-  }
-  .is-diary .ghead {
-    display: block;
-    min-block-size: 0;
-    margin-block-start: var(--space-lg);
-    padding: var(--space-sm) var(--space-sm) var(--space-sm) 0;
+    margin-block: var(--space-lg) var(--space-xs);
+    padding: 0;
+    border: 0;
     font-weight: var(--font-weight-regular);
-    border-radius: var(--radius-sm);
   }
-  .is-diary .ghead .cell {
+  .is-diary .chapter .cell {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -1307,18 +1277,33 @@
     overflow: visible;
     white-space: normal;
   }
-  .chapter-line {
-    display: flex;
+  .chead {
+    display: inline-flex;
     align-items: baseline;
     gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-sm) var(--space-sm) 0;
+    border: var(--border-width-thin) solid transparent;
+    border-radius: var(--radius-sm);
+    background: none;
+    font: inherit;
+    color: var(--color-text);
+    cursor: pointer;
   }
-  .is-diary .ghead :global(.chev) {
+  .chead:focus-visible {
+    outline: var(--border-width-focus) solid var(--color-focus);
+  }
+  .chead :global(.chev) {
     align-self: center;
     inline-size: var(--size-icon);
     block-size: var(--size-icon);
+    color: var(--color-text-muted);
+    transform: rotate(90deg);
+    transition: transform var(--motion-duration-fast) var(--motion-easing-standard);
   }
-  .is-diary .gtitle {
-    color: var(--color-text);
+  .chead[aria-expanded="false"] :global(.chev) {
+    transform: none;
+  }
+  .ctitle {
     font-size: var(--font-size-title);
     font-weight: var(--font-weight-light);
     letter-spacing: var(--font-letter-spacing-title);
@@ -1328,7 +1313,15 @@
     color: var(--color-text-muted);
     font-size: var(--font-size-heading);
     font-weight: var(--font-weight-light);
-    line-height: var(--font-line-height-tight);
+    margin-inline-start: var(--space-sm);
+  }
+  /* The date heading of a day, the group's head: not a chevron and a count, the date itself. */
+  .is-diary .ghead.when {
+    display: block;
+    min-block-size: 0;
+    margin: 0;
+    padding: 0;
+    font-weight: var(--font-weight-regular);
   }
   /* A chapter folded tells what it holds: its decisions, in the words of the entries, quieter. */
   .teaser {
@@ -1338,10 +1331,6 @@
     color: var(--color-text-muted);
     font-size: var(--font-size-home-caption);
     line-height: var(--font-line-height-home-caption);
-  }
-  .is-diary .ghead:hover .gtitle,
-  .is-diary .ghead:focus-visible .gtitle {
-    color: var(--color-home-now-text);
   }
   /* A day: its date in one column of one width, its entries beside it, its notes after them. */
   .day {
@@ -1442,7 +1431,7 @@
   }
   @media (prefers-reduced-motion: no-preference) {
     .is-diary .cell.title,
-    .is-diary .gtitle,
+    .ctitle,
     .wn {
       transition: color var(--motion-duration-fast) var(--motion-easing-standard);
     }
@@ -1494,11 +1483,13 @@
     overflow: hidden;
     clip-path: inset(50%);
   }
-  .narrow.is-diary .ghead {
+  .narrow.is-diary .chapter {
     margin-block-start: var(--space-md);
+  }
+  .narrow.is-diary .chead {
     padding-block: var(--space-xs);
   }
-  .narrow.is-diary .gtitle {
+  .narrow.is-diary .ctitle {
     font-size: var(--font-size-home-caption);
     font-weight: var(--font-weight-regular);
     letter-spacing: normal;
