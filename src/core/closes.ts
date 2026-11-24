@@ -13,6 +13,19 @@ export interface TipRecord {
   readonly at: number
 }
 
+/**
+ * The tip of `branch`. A line's is read from the one for-each-ref of every line's tips that fixedOnLine asks too (asked once
+ * within a read scope), not a process for each of the goals, most of which have no line.
+ */
+function lineTip(root: string, branch: string): string | null {
+  if (!branch.startsWith("refs/heads/line/")) return gitOrNull(root, "rev-parse", "--verify", "--quiet", `${branch}^{commit}`)
+  for (const l of (gitOrNull(root, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/line/") ?? "").split("\n")) {
+    const [ref, sha] = l.split(" ")
+    if (ref === branch && sha) return sha
+  }
+  return null
+}
+
 const memo = new Map<string, Map<string, TipRecord>>()
 
 /**
@@ -23,9 +36,11 @@ const memo = new Map<string, Map<string, TipRecord>>()
 export function recordsOnTip(ctx: Context, branch: string): Map<string, TipRecord> {
   const main = trunk(ctx.root)
   if (!main) return new Map()
-  const tip = gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `${branch}^{commit}`)
+  const tip = lineTip(ctx.root, branch)
+  // Asked for every goal, and most have no line: the trunk's tip is looked for only when the line has one.
+  if (!tip) return new Map()
   const tipOfMain = gitOrNull(ctx.root, "rev-parse", "--verify", "--quiet", `${main}^{commit}`)
-  if (!tip || !tipOfMain) return new Map()
+  if (!tipOfMain) return new Map()
   const key = `${ctx.root}\0${ctx.trackerDir}\0${tip}\0${tipOfMain}`
   const kept = memo.get(key)
   if (kept) return kept
