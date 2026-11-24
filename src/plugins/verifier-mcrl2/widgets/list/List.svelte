@@ -1468,7 +1468,8 @@
   .is-diary .row.note .cell.title {
     display: block;
     overflow: visible;
-    white-space: nowrap;
+    /* A note is a line of its own and wraps only when the room is short (a wide face, the text at 200%). */
+    overflow-wrap: anywhere;
     color: var(--color-home-faint);
     font-size: var(--font-size-home-label);
     line-height: var(--font-line-height-home-caption);
