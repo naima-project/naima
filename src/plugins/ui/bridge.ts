@@ -69,6 +69,7 @@ import {
   askHostsInBackground,
   type Context,
   findCodegen,
+  gitOrNull,
   gitReadScope,
   headCommit,
   installedProgram,
@@ -77,6 +78,7 @@ import {
   type KnownProject,
   knownProjects,
   personAtKeyboard,
+  trunk,
 } from "../../core/api.ts"
 import { actionArgv, actionCommand, actionOf, ACTIONS, naimaEntry, runCommand, selfEntry } from "./actions.ts"
 import { showCall } from "./agent-endpoint.ts"
@@ -371,6 +373,11 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
         app: "naima",
         root: ctx.root.split(/[\\/]/).filter(Boolean).pop() ?? "",
         path: resolve(ctx.root),
+        // What the window shows, for its quiet note in the top bar: the branch this checkout stands on (null when detached),
+        // the trunk's name, and the commit it stands on (short).
+        branch: gitOrNull(ctx.root, "symbolic-ref", "--quiet", "--short", "HEAD") ?? null,
+        trunk: trunk(ctx.root) ?? null,
+        commit: gitOrNull(ctx.root, "rev-parse", "--short=9", "HEAD") ?? null,
         actions: ACTIONS,
         uiTab: uiTab(ctx.root, ctx.program) !== null,
       }),
