@@ -308,6 +308,7 @@ export {
   windowsCommandLine,
 } from "./hosts.ts"
 export { installedPython, PYTHON } from "./python.ts"
+export { installedUv, UV } from "./uv.ts"
 export {
   CODEGEN_MISSING,
   findCodegen,
