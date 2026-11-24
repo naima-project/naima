@@ -337,8 +337,22 @@ export const realDeps: UiDeps = {
   },
 }
 
-/** The folder of a tab's files now, by the tab's name: null for a tab with none, or one whose folder fails. */
+/** How long a folder found for a tab's files is kept, in ms: a page of the app asks for a hundred files at once, and finding the folder lists the project's files. */
+const FOLDER_KEPT_MS = 5_000
+const folders = new Map<string, { at: number; dir: string | null }>()
+
+/** The folder of a tab's files, by the tab's name: null for a tab with none, or one whose folder fails. */
 export function tabFolder(ctx: Context, tabs: readonly UiTab[], name: string): string | null {
+  if (name === "naima-study") return folderNow(ctx, tabs, name)
+  const key = `${ctx.root}\0${name}`
+  const kept = folders.get(key)
+  if (kept && Date.now() - kept.at < FOLDER_KEPT_MS) return kept.dir
+  const dir = folderNow(ctx, tabs, name)
+  folders.set(key, { at: Date.now(), dir })
+  return dir
+}
+
+function folderNow(ctx: Context, tabs: readonly UiTab[], name: string): string | null {
   try {
     // The Models tab's: a study's frames come from its declaring file's folder, the frame's host page from the bundle.
     if (name === "naima-study") return join(BUNDLE, "study")

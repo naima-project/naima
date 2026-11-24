@@ -389,7 +389,9 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       const all = findStudies(ctx.root, ctx.program, ctx.trackerRoot)
       if (text(args["source"]) !== "ui") return json({ studies: all })
       const tab = uiTab(ctx.root, ctx.program)
-      return json({ studies: tab ? all.filter((s) => inUiTab(tab, s)) : [] })
+      // The app as one thing: its name and the machine that routes between its screens, which the tab opens first.
+      const app = tab ? { name: tab.app.name ?? (ctx.root.split(/[\\/]/).filter(Boolean).pop() ?? ""), machine: tab.app.machine, parts: tab.app.parts } : null
+      return json({ studies: tab ? all.filter((s) => inUiTab(tab, s)) : [], app })
     },
     study: (args) => {
       const id = text(args["id"])
@@ -403,7 +405,12 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
           throw new Error(`the model ${study.title} cannot open: ${study.problems.join("; ") || "it has no system to explore"}`)
         }
         const tab = uiTab(ctx.root, ctx.program)
-        const card = tab?.card && inUiTab(tab, study) && existsSync(join(ctx.root, tab.card.page)) ? opts.fileUrl("ui-card", basename(tab.card.page)) : null
+        // A machine the app does not hold as generated code (the desktop helper, the agent endpoint, a worker's status) has no screen to show.
+        const name = basename(dirname(study.file))
+        const inApp = tab?.generated ? existsSync(join(ctx.root, tab.generated, name, `${name}.ts`)) : true
+        const card = tab?.card && inUiTab(tab, study) && inApp && existsSync(join(ctx.root, tab.card.page))
+          ? opts.fileUrl("ui-card", basename(tab.card.page))
+          : null
         return json({
           ...study,
           stepper: null,

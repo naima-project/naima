@@ -68,6 +68,8 @@ export interface UiTabDeclaration {
   card: { page: string; build: string[] } | null
   /** The folder of the stance's file that declares the tab, relative to the project: where its paths start. */
   dir: string
+  /** The app as one thing: its name (the project's folder name when none is declared) and the machine that routes between its screens (`shell` when none is declared). */
+  app: { name: string | null; machine: string; parts: Record<string, { name: string; says: string }> }
 }
 
 /** The project's UI tab, or null when no stance-ui.json declares one. */
@@ -80,7 +82,7 @@ export function uiTab(root: string, program?: string): UiTabDeclaration | null {
 }
 
 function declaration(root: string, file: string): UiTabDeclaration | null {
-  let tab: { models?: unknown; generated?: unknown; card?: { page?: unknown; build?: unknown } }
+  let tab: { models?: unknown; generated?: unknown; card?: { page?: unknown; build?: unknown }; app?: { name?: unknown; machine?: unknown; parts?: unknown } }
   try {
     tab = (JSON.parse(readFileSync(join(root, file), "utf8")) as { tab?: typeof tab }).tab ?? {}
   } catch {
@@ -100,7 +102,23 @@ function declaration(root: string, file: string): UiTabDeclaration | null {
     generated: typeof tab.generated === "string" ? rel(tab.generated) : null,
     card: page ? { page, build } : null,
     dir: gitPath(dir),
+    app: {
+      name: typeof tab.app?.name === "string" && tab.app.name.trim() ? tab.app.name.trim() : null,
+      machine: typeof tab.app?.machine === "string" && tab.app.machine.trim() ? tab.app.machine.trim() : "shell",
+      parts: partsOf(tab.app?.parts),
+    },
   }
+}
+
+/** The plain names the declaration gives the app's parts, by the folder of each part's machine; anything else in it is ignored. */
+function partsOf(raw: unknown): Record<string, { name: string; says: string }> {
+  const out: Record<string, { name: string; says: string }> = {}
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return out
+  for (const [machine, v] of Object.entries(raw)) {
+    const p = v as { name?: unknown; says?: unknown } | null
+    if (typeof p?.name === "string" && p.name.trim()) out[machine] = { name: p.name.trim(), says: typeof p.says === "string" ? p.says.trim() : "" }
+  }
+  return out
 }
 
 /** Whether a study is one of the UI tab's: a naima-codegen project under a folder the declaration names. */

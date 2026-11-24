@@ -31,15 +31,19 @@ A project that uses the UI stance can declare its app's machines in `stance-ui.j
 "tab": {
   "models": ["../develop/models/ui"],
   "generated": "src/logic/generated",
-  "card": { "page": "dist/uicard.html", "build": ["deno", "task", "build"] }
+  "card": { "page": "dist/uicard.html", "build": ["deno", "task", "build"] },
+  "app": { "name": "Naima", "machine": "shell", "parts": { "diary": { "name": "The diary", "says": "The story of the project, a day at a time." } } }
 }
 ```
 
-The paths are relative to that file. The UI tab then lists the naima-codegen projects under those folders, and opens each like the Models tab does, with one
+The paths are relative to that file. The UI tab then shows the app as one thing: an entry named after it (`app.name`, the project's folder name when left out),
+which opens the machine that routes between its screens (`app.machine`, `shell` when left out) with the app at full size. Under it are the app's parts, the other
+naima-codegen projects under those folders, each with the plain name and line `app.parts` gives it. Each part opens like the Models tab opens a model, with one
 card more: the app itself, in the state the machine is in. The card is the page the project builds for it, which mounts the app on recorded data and walks
 the machine along the path from its start, so what it shows is what the real code does in that state. Its controls work, and a step taken there is added
 to the path. When the app asks for a step the model refuses in that state, the card says so above the app until you dismiss it. Naima's own UI declares
-its machines this way, its card being the copy of the page the product ships, and a model that has no place in the app's `src/uicard/places.ts` opens without the app.
+its machines this way, its card being the copy of the page the product ships. A machine the app holds no generated code for opens without the app. The card's page
+may connect nowhere, so the data it shows is bundled into it, not fetched.
 
 When the project has not built the card's page yet, the card says so and offers Build, which runs the build the declaration names as a job of the study, as
 Generate runs naima-codegen. Once it ends well the card shows the app.
