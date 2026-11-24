@@ -18,7 +18,8 @@
 // properties and the generated code — so a change to any of them, a
 // regeneration included, makes the verdict stale.
 //
-// naima-codegen is found on PATH: `naima tools` does not install it. The
+// naima-codegen is found on PATH: `naima tools` does not install it, but installs uv, which its launcher runs it through (the
+// launcher fetches the Python it pins, so no Python is needed; NAIMA_PYTHON overrides). The
 // launcher grants it to `naima verify` alone (launcher.ts, `uiGrant`), so this
 // first-party adapter adds no program to any other command. The adapter is
 // made for one commit of naima-codegen, `CODEGEN_PIN`: its git object id is the
@@ -29,7 +30,7 @@
 import { spawn } from "node:child_process"
 import { existsSync, realpathSync, statSync } from "node:fs"
 import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
-import { type Context, installedPython, message, NO_PROGRESS, projectFiles } from "../../../core/api.ts"
+import { type Context, installedPython, installedUv, message, NO_PROGRESS, projectFiles } from "../../../core/api.ts"
 import type { Verifier, VerifyRequest, VerifyResult } from "../contract.ts"
 
 /** The program, by name on PATH: what the launcher grants `naima verify`. */
@@ -42,15 +43,17 @@ export const CODEGEN_REPOSITORY = "https://github.com/naima-project/naima-codege
  * The naima-codegen this adapter is made for: a commit of its repository, which has no releases. The commit's git
  * object id is its checksum: git verifies the content against it when the commit is checked out.
  */
-export const CODEGEN_PIN = { commit: "1ed7c58997677df81cb0bfeb5ea0876c08c3e504", repository: CODEGEN_REPOSITORY }
+export const CODEGEN_PIN = { commit: "b333b3a31824655d091ab30730e8496634a00dc1", repository: CODEGEN_REPOSITORY }
 
 const short = (commit: string): string => commit.slice(0, 12)
 
 const MISSING =
-  `tool missing: ${CODEGEN_PROGRAM} is not on PATH — naima tools does not install it: git clone ${CODEGEN_REPOSITORY}, check out the pinned commit ${CODEGEN_PIN.commit} (git -C naima-codegen checkout ${CODEGEN_PIN.commit}) and put its ${CODEGEN_PROGRAM} script on PATH (it needs Python 3.11 or later and the mCRL2 toolset the model pins)`
+  `tool missing: ${CODEGEN_PROGRAM} is not on PATH — naima tools does not install it: git clone ${CODEGEN_REPOSITORY}, check out the pinned commit ${CODEGEN_PIN.commit} (git -C naima-codegen checkout ${CODEGEN_PIN.commit}) and put its ${CODEGEN_PROGRAM} script on PATH (it runs through uv, which fetches the Python it pins: naima tools install uv, or the launcher installs uv for the user; the mCRL2 toolset the model pins is naima tools install mcrl2)`
 
 /** The executables Windows starts without a shell: what PATH finds besides a script by its bare name. */
 const WINDOWS_EXECUTABLES = [".exe", ".com"]
+/** Batch files, which Windows runs only through cmd.exe: naima-codegen.cmd is the launcher there. */
+const WINDOWS_BATCH = [".cmd", ".bat"]
 
 /**
  * The program `name` as PATH finds it, its links resolved; null when it is not there or cannot be read. On Windows a
@@ -59,7 +62,9 @@ const WINDOWS_EXECUTABLES = [".exe", ".com"]
  */
 export function programOnPath(name: string, opts: { script?: boolean; os?: string; path?: string } = {}): string | null {
   const windows = (opts.os ?? process.platform) === "win32"
-  const exes = windows && !WINDOWS_EXECUTABLES.some((e) => name.toLowerCase().endsWith(e)) ? WINDOWS_EXECUTABLES.map((e) => name + e) : []
+  const exes = windows && ![...WINDOWS_EXECUTABLES, ...WINDOWS_BATCH].some((e) => name.toLowerCase().endsWith(e))
+    ? [...WINDOWS_EXECUTABLES, ".cmd"].map((e) => name + e)
+    : []
   const names = opts.script ? [name, ...exes] : [...exes, name]
   for (const n of names) {
     for (const dir of (opts.path ?? process.env["PATH"] ?? "").split(delimiter)) {
@@ -77,8 +82,10 @@ export function programOnPath(name: string, opts: { script?: boolean; os?: strin
 export const WINDOWS_PYTHON = "python"
 
 /**
- * How `program` is started: as itself, or on Windows, when PATH finds only the extensionless script of a naima-codegen
- * checkout, through Python with the script's path first (GitHub issue #7): the Python Naima installed, else the one on PATH.
+ * How `program` is started: as itself, or on Windows through cmd.exe when PATH finds naima-codegen.cmd, the launcher (or the
+ * extensionless sh script of a checkout, whose naima-codegen.cmd sits beside it). The launcher runs the tool through uv, which
+ * fetches the Python it pins; a checkout from before the launchers, whose script is Python, is handed to the Python Naima installed,
+ * else the one on PATH (GitHub issue #7).
  */
 export function commandOf(
   program: string,
@@ -90,7 +97,17 @@ export function commandOf(
   if (os !== "win32" || isAbsolute(program)) return [program, args]
   const found = programOnPath(program, { os, ...(path !== undefined ? { path } : {}) })
   if (!found) return [program, args]
-  return WINDOWS_EXECUTABLES.some((e) => found.toLowerCase().endsWith(e)) ? [program, args] : [python, [found, ...args]]
+  const lower = found.toLowerCase()
+  if (WINDOWS_EXECUTABLES.some((e) => lower.endsWith(e))) return [program, args]
+  const shell = process.env["ComSpec"] ?? "cmd.exe"
+  if (WINDOWS_BATCH.some((e) => lower.endsWith(e))) return [shell, ["/d", "/c", found, ...args]]
+  if (existsSync(`${found}.cmd`)) return [shell, ["/d", "/c", `${found}.cmd`, ...args]]
+  return [python, [found, ...args]]
+}
+
+/** The environment naima-codegen's launcher is started with: the caller's, and NAIMA_UV when Naima installed uv and the caller names none. */
+export function codegenRunEnv(base: NodeJS.ProcessEnv = process.env, uv: string | null = installedUv()): NodeJS.ProcessEnv {
+  return { ...base, ...(uv && !base["NAIMA_UV"] ? { NAIMA_UV: uv } : {}), NO_COLOR: "1" }
 }
 
 /** What one run of the program gave. */
@@ -119,7 +136,7 @@ export const realCodegenRun: CodegenRunner = (program, args, cwd, timeoutMs, onL
     let child: ReturnType<typeof spawn>
     try {
       const [command, argv] = commandOf(program, args)
-      child = spawn(command, argv, { cwd, env: { ...process.env, NO_COLOR: "1" }, stdio: ["ignore", "pipe", "pipe"], windowsHide: true })
+      child = spawn(command, argv, { cwd, env: codegenRunEnv(), stdio: ["ignore", "pipe", "pipe"], windowsHide: true })
     } catch (e) {
       finish({ exit: -1, stdout: "", stderr: "", error: message(e) })
       return
@@ -295,8 +312,14 @@ export function codegenVerifier(config: { run?: CodegenRunner; program?: string 
       const r = await run(program, ["--version"], ctx.root)
       if (r.missing) throw new Error(MISSING)
       if (r.error) throw new Error(`${CODEGEN_PROGRAM} could not start: ${r.error}`)
-      if (r.exit === 0 && r.stdout.trim()) return r.stdout.trim().split("\n")[0]!.trim()
-      // The pinned naima-codegen has no --version: it answers with its usage. Its version is then the commit of the
+      if (r.exit === 0 && r.stdout.trim()) {
+        // `naima-codegen <version> (<commit of its checkout>)`: the commit is compared with the pin.
+        const line = r.stdout.trim().split("\n")[0]!.trim()
+        const commit = /\(([0-9a-f]{40})\)/.exec(line)?.[1]
+        if (!commit) return line
+        return commit === CODEGEN_PIN.commit ? `${line} (the pinned commit)` : `${line}, not the pinned ${short(CODEGEN_PIN.commit)}`
+      }
+      // A naima-codegen from before --version answers with its usage. Its version is then the commit of the
       // git checkout the program runs from, compared with the pin.
       const pinned = short(CODEGEN_PIN.commit)
       const found = programOnPath(program, { script: true })

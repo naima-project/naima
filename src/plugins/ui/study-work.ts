@@ -120,24 +120,22 @@ export interface JobContext {
   card?: { dir: string; build: readonly string[] } | null
 }
 
-/** naima-codegen as a command line, from where it was found (core/tools.ts, findCodegen): on Windows a script without an
- * extension is handed to Python, the one Naima installed (`naima tools install python`) when `python` names it, else the
- * one on PATH; null when it was found nowhere. */
-export function codegenCommand(found: string | null, windows: boolean, python: string | null = null): string[] | null {
+/** naima-codegen as a command line, from where it was found (core/tools.ts, findCodegen): on Windows the launcher beside a script
+ * without an extension, naima-codegen.cmd, which runs the tool through uv (no Python is needed); null when it was found nowhere. */
+export function codegenCommand(found: string | null, windows: boolean): string[] | null {
   if (!found) return null
-  return windows && !/\.(exe|com|cmd|bat)$/i.test(found) ? [python ?? "python", found] : [found]
+  return windows && !/\.(exe|com|cmd|bat)$/i.test(found) ? [`${found}.cmd`] : [found]
 }
 
 /**
  * What a study's build script needs to start naima-codegen itself, as environment variables: on Windows `NAIMA_CODEGEN`,
- * which a batch file calls, so a program or the `naima-codegen.cmd` that sits beside the script (it starts the script
- * with the Python named by `NAIMA_PYTHON`), which the launcher found and hands on as `NAIMA_CODEGEN_BATCH`, and that Python when Naima installed one. Elsewhere the script runs itself and
- * the launcher has already named it.
+ * which a batch file calls, so a program or the `naima-codegen.cmd` that sits beside the script, which the launcher found and hands
+ * on as `NAIMA_CODEGEN_BATCH`; and everywhere `NAIMA_UV`, the uv Naima installed (`naima tools install uv`), which the launchers run
+ * the tool through (they install uv for the user when there is none). Elsewhere the script runs itself and the launcher has already named it.
  */
-export function codegenEnv(found: string | null, windows: boolean, python: string | null, batch: string | null = null): Record<string, string> {
-  if (!found || !windows) return {}
-  const runnable = /\.(exe|com|cmd|bat)$/i.test(found) ? found : batch
-  return { ...(runnable ? { NAIMA_CODEGEN: runnable } : {}), ...(python ? { NAIMA_PYTHON: python } : {}) }
+export function codegenEnv(found: string | null, windows: boolean, uv: string | null, batch: string | null = null): Record<string, string> {
+  const runnable = found && windows ? (/\.(exe|com|cmd|bat)$/i.test(found) ? found : batch) : null
+  return { ...(runnable ? { NAIMA_CODEGEN: runnable } : {}), ...(uv ? { NAIMA_UV: uv } : {}) }
 }
 
 /**

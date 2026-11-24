@@ -380,12 +380,12 @@ project: the model, the policy, `codegen.toml`, its properties and the generated
 longer current, and a run on exactly the same files is reused. A project naima-codegen refuses, such as a model outside the subset it accepts, is recorded as an
 error whose output begins with `refused:` and lists the problems.
 
-naima-codegen is not installed by `naima tools`, and it has no releases yet. The verifier is made for one commit of it, `1ed7c5899767`. Clone its repository,
-check out that commit, and put its `naima-codegen` script on `PATH`; it needs Python 3.11 or later (`naima tools install python` installs one for Naima to use, as it does on Windows, where the system has none) and the mCRL2 tools at the version the model pins.
+naima-codegen is not installed by `naima tools` (which installs the uv it runs through), and it has no releases yet. The verifier is made for one commit of it, `b333b3a31824`. Clone its repository,
+check out that commit, and put its `naima-codegen` script on `PATH`; it needs no Python of its own: its launcher runs it through uv, which fetches the Python it pins (`naima tools install uv` installs uv; the launcher installs it for the user when there is none, with no administrator rights), and the mCRL2 tools at the version the model pins.
 
 ```sh
 git clone https://github.com/naima-project/naima-codegen
-git -C naima-codegen checkout 1ed7c58997677df81cb0bfeb5ea0876c08c3e504
+git -C naima-codegen checkout b333b3a31824655d091ab30730e8496634a00dc1
 ```
 
 The commit id is also the checksum: git checks the files against it. Each run records the version it ran with, which is the commit of the checkout the script

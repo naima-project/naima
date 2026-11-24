@@ -75,8 +75,8 @@ import {
   gitReadScope,
   headCommit,
   installedProgram,
-  installedPython,
   type InstalledToolRef,
+  installedUv,
   type KnownProject,
   knownProjects,
   personAtKeyboard,
@@ -581,12 +581,12 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       const card = tab?.card && inUiTab(tab, study) ? { dir: tab.dir, build: tab.card.build } : null
       const windows = process.platform === "win32"
       const codegen = findCodegen(ctx.root)
-      const python = installedPython()
+      const uv = installedUv()
       const line = jobLine(job as Job, study, {
         root: ctx.root,
         // This program, never the one the project pins: model-check may be newer than it.
         naima: actionCommand(opts.entry ?? selfEntry(), ctx.trackerRoot, []),
-        codegen: codegenCommand(codegen, windows, python),
+        codegen: codegenCommand(codegen, windows),
         windows,
         card,
       }, text(args["property"]) ?? undefined)
@@ -594,7 +594,7 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       const run = `ui-study-${job}-${ctx.now().toISOString().replace(/\D/g, "").slice(0, 14)}-${++runs}`
       // The run is started with this environment, handed to the process, not written into the line: the installed mCRL2 first
       // on PATH, and on Windows the batch file a study's build.cmd calls. Put back when the run has started.
-      const env = jobEnv(codegenEnv(codegen, windows, python, process.env["NAIMA_CODEGEN_BATCH"] ?? null), mcrl2Folders(ctx), process.env["PATH"], windows)
+      const env = jobEnv(codegenEnv(codegen, windows, uv, process.env["NAIMA_CODEGEN_BATCH"] ?? null), mcrl2Folders(ctx), process.env["PATH"], windows)
       const before = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]))
       Object.assign(process.env, env)
       let started
