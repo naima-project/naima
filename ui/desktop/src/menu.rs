@@ -9,14 +9,13 @@
 // Reload (Cmd+R in View) reloads the page: the address holds its state, so the place is kept. Windows and Linux have no
 // menu bar, so the page itself takes Ctrl+R and F5 (RELOAD_KEYS).
 //
-// Zoom is the webview's own (set_zoom), in the steps a browser takes, from the menu, its shortcuts and Cmd or Ctrl with
-// the wheel; on macOS a pinch on the trackpad magnifies the page too, and Actual Size undoes both.
-use std::sync::Mutex;
+// Zoom is not the webview's: scaling the page would shrink its layout into a small column in wide margins. The menu's
+// Zoom In, Zoom Out and Actual Size (Cmd plus, minus and 0) send the page a step as the naima-text-scale event, and the
+// page keeps a scale of its text and figures, applied as its root font size (ui/src/logic/text-scale.ts). Windows and
+// Linux have no menu bar, so the page takes Ctrl plus, minus, 0 and the wheel itself; the webview's own zoom keys
+// (zoomHotkeysEnabled) are off in the window's configuration, and no pinch magnifies the page.
 use tauri::menu::{CheckMenuItemBuilder, Menu, MenuBuilder, MenuEvent, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, Manager, Runtime, Webview};
-
-/// The zoom steps, as a browser takes them.
-const STEPS: [f64; 13] = [0.5, 0.67, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
 
 /// The screens of the navigation, in its order: the menu entry's id, its name, the address it writes, its shortcut.
 const SCREENS: [(&str, &str, &str, &str); 7] = [
@@ -49,51 +48,16 @@ pub fn timeline_placed<R: Runtime>(app: AppHandle<R>, position: String) {
     check_place(&app, &position);
 }
 
-/// The page's zoom, as an index into STEPS.
-pub struct Zoom(Mutex<usize>);
-
-impl Default for Zoom {
-    fn default() -> Self {
-        Zoom(Mutex::new(5))
+/// The step a zoom entry of the menu asks of the page's text scale (+1 larger, -1 smaller, 0 normal), none for any other.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn text_step(id: &str) -> Option<i32> {
+    match id {
+        "zoom-in" => Some(1),
+        "zoom-out" => Some(-1),
+        "zoom-reset" => Some(0),
+        _ => None,
     }
 }
-
-/// The step after `at` in the direction `by` (+1 in, -1 out, 0 actual size), kept within the steps.
-fn step(at: usize, by: i32) -> usize {
-    match by {
-        0 => 5,
-        b if b > 0 => (at + 1).min(STEPS.len() - 1),
-        _ => at.saturating_sub(1),
-    }
-}
-
-/// Zoom the page in (+1), out (-1) or back to its actual size (0).
-pub fn zoom<R: Runtime>(webview: &Webview<R>, by: i32) {
-    let zoom = webview.state::<Zoom>();
-    let mut at = zoom.0.lock().unwrap();
-    *at = step(*at, by);
-    let _ = webview.set_zoom(STEPS[*at]);
-    #[cfg(target_os = "macos")]
-    if by == 0 {
-        let _ = webview.with_webview(|w| unsafe {
-            let view: &objc2::runtime::AnyObject = &*(w.inner() as *const objc2::runtime::AnyObject);
-            let _: () = objc2::msg_send![view, setMagnification: 1.0f64];
-        });
-    }
-}
-
-/// The command the page's wheel listener calls (see WHEEL): Cmd or Ctrl with the wheel zooms in or out.
-#[tauri::command]
-pub fn zoom_by<R: Runtime>(webview: Webview<R>, by: i32) {
-    zoom(&webview, by.signum());
-}
-
-/// Evaluated in the page once loaded: Cmd or Ctrl with the wheel (or the trackpad's scroll) zooms, a step for each
-/// 100 pixels of scroll, instead of scrolling.
-pub const WHEEL: &str = "(() => { if (window.__naimaZoomWheel) return; window.__naimaZoomWheel = true; let acc = 0; \
-    addEventListener('wheel', (e) => { if (!(e.metaKey || e.ctrlKey)) return; e.preventDefault(); acc += e.deltaY; \
-    if (Math.abs(acc) < 100) return; const by = acc < 0 ? 1 : -1; acc = 0; \
-    window.__TAURI_INTERNALS__.invoke('zoom_by', { by }); }, { passive: false }); })()";
 
 /// Evaluated in the page once loaded, on Windows and Linux, which have no menu bar to carry the accelerator: Ctrl+R and
 /// F5 reload the page as a browser does. The address holds every state of the page, so a reload keeps the place.
@@ -102,17 +66,6 @@ pub const RELOAD_KEYS: &str = "(() => { if (window.__naimaReloadKeys) return; wi
     addEventListener('keydown', (e) => { const key = e.key.toLowerCase(); \
     if ((key === 'r' && e.ctrlKey && !e.altKey && !e.metaKey) || (key === 'f5' && !e.altKey && !e.metaKey)) { \
     e.preventDefault(); location.reload(); } }); })()";
-
-/// On macOS, let a pinch on the trackpad magnify the page.
-pub fn allow_pinch<R: Runtime>(webview: &Webview<R>) {
-    #[cfg(target_os = "macos")]
-    let _ = webview.with_webview(|w| unsafe {
-        let view: &objc2::runtime::AnyObject = &*(w.inner() as *const objc2::runtime::AnyObject);
-        let _: () = objc2::msg_send![view, setAllowsMagnification: true];
-    });
-    #[cfg(not(target_os = "macos"))]
-    let _ = webview;
-}
 
 /// The menu bar.
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
@@ -174,10 +127,11 @@ pub fn on_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
     let Some(window) = app.get_webview_window("main") else { return };
     let webview: &Webview<R> = window.as_ref();
     let id = event.id().as_ref();
+    if let Some(by) = text_step(id) {
+        let _ = webview.eval(&format!("dispatchEvent(new CustomEvent('naima-text-scale', {{ detail: {by} }}))"));
+        return;
+    }
     let script = match id {
-        "zoom-in" => return zoom(webview, 1),
-        "zoom-out" => return zoom(webview, -1),
-        "zoom-reset" => return zoom(webview, 0),
         "reload" => "location.reload()".to_string(),
         "go-back" => "history.back()".to_string(),
         "go-forward" => "history.forward()".to_string(),
@@ -194,13 +148,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn zoom_steps_stay_within_bounds_and_reset_to_actual_size() {
-        assert_eq!(STEPS[5], 1.0);
-        assert_eq!(step(5, 1), 6);
-        assert_eq!(step(5, -1), 4);
-        assert_eq!(step(STEPS.len() - 1, 1), STEPS.len() - 1);
-        assert_eq!(step(0, -1), 0);
-        assert_eq!(step(9, 0), 5);
+    fn the_zoom_entries_step_the_text_scale_and_nothing_else_does() {
+        assert_eq!(text_step("zoom-in"), Some(1));
+        assert_eq!(text_step("zoom-out"), Some(-1));
+        assert_eq!(text_step("zoom-reset"), Some(0));
+        assert_eq!(text_step("reload"), None);
+    }
+
+    #[test]
+    fn the_shell_no_longer_zooms_the_webview() {
+        let src = include_str!("menu.rs");
+        let lib = include_str!("lib.rs");
+        let call = ["set", "_zoom("].concat();
+        assert!(src.matches(&call).count() == 0 && lib.matches(&call).count() == 0);
+        assert!(!lib.contains("allow_pinch") && !lib.contains("zoom_by"));
     }
 
     #[test]

@@ -47,7 +47,6 @@ pub fn run() {
             }
             // Each project has a window of its own: it is named for the project and wears its badge.
             badge::show(app.handle(), &sidecar);
-            app.manage(menu::Zoom::default());
             #[cfg(target_os = "macos")]
             {
                 let bar = menu::build(app.handle())?;
@@ -72,15 +71,12 @@ pub fn run() {
             bridge::switch,
             bridge::bridge,
             e2e_report,
-            menu::zoom_by,
             menu::timeline_placed
         ])
         .on_page_load(move |webview, payload| {
             if let PageLoadEvent::Finished = payload.event() {
-                let _ = webview.eval(menu::WHEEL);
                 #[cfg(not(target_os = "macos"))]
                 let _ = webview.eval(menu::RELOAD_KEYS);
-                menu::allow_pinch(webview);
             }
             if let (Some(script), PageLoadEvent::Finished) = (&e2e, payload.event()) {
                 println!("e2e: page loaded, running the script");
