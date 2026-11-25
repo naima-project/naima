@@ -8,7 +8,8 @@ This tutorial takes about twenty minutes from start to finish. You will install 
 fix the bug, prove the fix, and close it. You type every command yourself, and the only code you touch is one word in a one-line script. If you'd like the
 overview of the ideas first, read [the primer](primer.md).
 
-Every output below is what the commands printed when this tutorial was run. Yours will differ only in the item ids, the dates, the commit and the folder.
+Every output below is what the commands printed when this tutorial was run. Yours will differ only in the item ids, the dates, the commits, the folder and the names
+of the people.
 
 What you need: a terminal, and git. Naima installs the rest.
 
@@ -35,8 +36,9 @@ Run this one line from the root of the repository (on Windows, use PowerShell an
 $ curl -fsSL https://naima-project.github.io/naima/install.sh | sh
 naima: cloning https://github.com/naima-project/naima.git (dist) into naima-tracker/naima
 wrote naima-tracker/: README.md, .gitignore, naima-data/naima.json — locked to https://github.com/naima-project/naima.git at 89530499e809
-next: naima new bugs "<the first thing to do>"
-0 items, 31 checks
+…
+next: naima new todos "<the first thing to do>"
+0 items, 84 checks
 
 all invariants hold
 
@@ -51,7 +53,9 @@ Agents: read naima-tracker/naima/skills/naima/SKILL.md
 
 The installer put a copy of Naima in `naima-tracker/naima/` (the [program directory](glossary.md#program-directory), which git ignores), and `naima init` wrote
 the [data directory](glossary.md#data-directory), `naima-tracker/naima-data/`, [locked](glossary.md#lock) to that exact copy. Then `naima check` ran every
-[check](glossary.md#check), and since there are no items yet, they all hold. If Deno was missing, the installer installed it first and told you so.
+[check](glossary.md#check), and since there are no items yet, they all hold. If Deno was missing, the installer installed it first and told you so. The line of dots
+stands for what `naima init` also printed: the launchers it wrote, the pointer it added to `AGENTS.md`, the hooks it set up for your agent tool, and a note that the
+trunk is guarded.
 
 Now do the two things it suggests. The alias lets you type `naima` instead of the long command, and if you add it to your shell's startup file it will stay.
 
@@ -66,14 +70,23 @@ Write the bug down before you fix it. Its title says what happened, not what to 
 
 ```console
 $ naima new bugs "greet.sh says Helo instead of Hello"
-naima-tracker/naima-data/bugs/greet-sh-says-helo-instead-hello/  f7c43c69-d654-49e5-9c1f-c9c30488afff
+first write of free text in this worktree: the no-leaks checklist (naima-tracker/naima/docs/agents/NOLEAKS.md) is shown once and the write goes on — from now on, check each one against it and sign it with --revised naima-tracker/naima/docs/agents/NOLEAKS.md
+  # The no-leaks checklist
+  …
+naima-tracker/naima-data/bugs/greet-sh-says-helo-instead-hello/  9cda8523-aba4-47d3-9d40-63c9058f4f0a
+warning: bugs/greet-sh-says-helo-instead-hello: its body is still the bugs template — naima describe greet-sh-says-helo-instead-hello "<what it is about>" before it is read
 ```
+
+The first time you write free text, Naima shows the [no-leaks checklist](../agents/NOLEAKS.md): five points about what must never end up in a repository, such as
+machine names, home paths and things the owner said in private. The write goes through. Every later write of free text (a title, a note, an attached file) is
+refused unless you sign it by naming the checklist, `--revised naima-tracker/naima/docs/agents/NOLEAKS.md`, to say that you read the text against it. The commands
+below that need it carry it. ([The rule](rules.md#free-text-and-files-are-signed-against-the-no-leaks-checklist).)
 
 The bug is now an [item](glossary.md#item), which is a folder holding a page (`README.md`), its fields (`meta.json`) and a place for evidence (`attachments/`).
 The long string is its permanent [id](glossary.md#id), and the folder name is its [slug](glossary.md#slug). From now on you can refer to it by any part of the
 slug that is unique, such as `greet-sh-says`.
 
-Open `README.md` in that folder in your editor and write down what you saw, in your own words:
+The warning says the page is still the template. Open `README.md` in that folder in your editor and write down what you saw, in your own words:
 
 ```markdown
 # greet.sh says Helo instead of Hello
@@ -105,9 +118,13 @@ $ naima board bugs
 
 ## (no section)
   open      greet.sh says Helo instead of Hello  — bugs/greet-sh-says-helo-instead-hello
+
+── metrics
+  nothing recorded yet — naima metrics run --record
 ```
 
-`naima bugs` shows how many bugs are left, as three numbers that are never added together:
+The last block is the project's metrics, the numbers it keeps against budgets. Nothing has been measured yet, and every board and queue ends with it
+([metrics and budgets](metrics-and-budgets.md)). `naima bugs` shows how many bugs are left, as three numbers that are never added together:
 
 ```console
 $ naima bugs
@@ -125,6 +142,10 @@ declared any yet, so the queue is empty ([read the board, the queue and the gate
 $ naima queue
 all gates: 0 open — agent 0, human 0, build 0, unclassified 0
   with no code yet: 0; owing only proof: 0
+  waiting on you: 0
+
+── metrics
+  nothing recorded yet — naima metrics run --record
 ```
 
 `naima summary` puts everything on one screen:
@@ -138,14 +159,19 @@ $ naima summary
   1 unfixed · 0 fixed, unproven · 0 resolved, not closed
 
 ── next up
-  high    now     ·       bugs/greet-sh-says-helo-instead-hello  greet.sh says Helo instead of Hello
+  high    now     ·       bugs/greet-sh-says-helo-instead-hello  greet.sh says Helo instead of Hello  (0d unclaimed)
   (0 untriaged, 1 without effort — naima triage missing)
 
 ── gates
   properties       holds
+  metrics          blocked by 0
+
+── metrics
+  nothing recorded yet — naima metrics run --record
 ```
 
-(`properties` is a gate every project has, and it holds when every formal [property](glossary.md#property) holds. Since there are none, it holds.)
+(`properties` is a gate every project has, and it holds when every formal [property](glossary.md#property) holds. Since there are none, it holds. `metrics`
+holds while no recorded number is past its bound, and nothing is recorded.)
 
 ## 6. Fix it
 
@@ -170,7 +196,7 @@ Naima notices that nothing proves the fix yet. It reports this as a note, not a 
 
 ```console
 $ naima check
-1 items, 31 checks
+1 items, 84 checks
 
 notes (not failures):
   · bugs/greet-sh-says-helo-instead-hello is fixed, and nothing verifies it
@@ -185,8 +211,9 @@ A fix on its own is only a claim. The [proof](glossary.md#proof) is a [gesture](
 is needed ([run by](glossary.md#run-by)):
 
 ```console
-$ naima new tests "greet.sh greets with Hello" --set runBy=agent
-naima-tracker/naima-data/tests/greet-sh-greets-hello/  3194a839-43bd-4e1d-8e51-861cb0cb04a5
+$ naima new tests "greet.sh greets with Hello" --set runBy=agent --revised naima-tracker/naima/docs/agents/NOLEAKS.md
+naima-tracker/naima-data/tests/greet-sh-greets-hello/  5a2210e2-8300-4db1-8ba8-bc64f168bdad
+warning: tests/greet-sh-greets-hello: its body is still the tests template — naima describe greet-sh-greets-hello "<what it is about>" before it is read
 $ naima link greet-sh-greets verifies greet-sh-says
 tests/greet-sh-greets-hello verifies bugs/greet-sh-says-helo-instead-hello
 $ naima triage set greet-sh-greets impact=high priority=now confidence=measured effort=S
@@ -201,7 +228,7 @@ Write the gesture on the test's page, `README.md` in its folder, so that someone
 Run `sh greet.sh Ada`. It must print exactly `Hello, Ada`.
 ```
 
-The test now shows as open on its own board, and the note from step 6 is gone:
+The test now shows as open on its own board, and the note from step 6 says what the bug is waiting for:
 
 ```console
 $ naima board tests
@@ -211,8 +238,14 @@ $ naima board tests
 
 ## (no section)
   open      greet.sh greets with Hello  — tests/greet-sh-greets-hello
+
+── metrics
+  nothing recorded yet — naima metrics run --record
 $ naima check
-2 items, 31 checks
+2 items, 84 checks
+
+notes (not failures):
+  · bugs/greet-sh-says-helo-instead-hello is fixed, waiting for its proof: tests/greet-sh-greets-hello [open]
 
 all invariants hold
 ```
@@ -227,12 +260,13 @@ naima: bugs/greet-sh-says-helo-instead-hello is fixed: closing takes fixedOn and
 ## 8. Perform the gesture, keep the evidence
 
 Run the test and keep what it printed in the test's `attachments/` folder, so the [evidence](glossary.md#evidence) stays with the claim. `naima attach` copies
-the file there and records that it is your own (`--own`). A file someone else gave you goes in with their permission instead (`--consent "…"`).
+the file there and records that it is your own (`--own`). A file someone else gave you goes in with their permission instead (`--consent "…"`). An attached file is free text too, so it is signed
+with `--revised` as well.
 
 ```console
 $ sh greet.sh Ada | tee run.txt
 Hello, Ada
-$ naima attach greet-sh-greets run.txt --own
+$ naima attach greet-sh-greets run.txt --own --revised naima-tracker/naima/docs/agents/NOLEAKS.md
 tests/greet-sh-greets-hello: attached run.txt (your own)
 $ naima set greet-sh-greets status=passed
 tests/greet-sh-greets-hello: status=passed
@@ -240,20 +274,29 @@ tests/greet-sh-greets-hello: status=passed
 
 ## 9. Name the commit, then close it
 
-Commit the fix and the tracker's record of it together, as one change, and then name that commit on the bug. That way the fix is tied to the code that made it,
-not only to a date.
+Commit the fix, then name that commit on the bug. That way the fix is tied to the code that made it, not only to a date.
+
+Naima guards the trunk: in a project that has it on, which `naima init` does for a new one, a commit made by hand on `main` is refused, and work lands through
+`naima open` and `naima land` instead ([working on lines](lines.md)). In this tutorial you are the only one at work, so turn the guard off:
+
+```console
+$ naima guard off
+the trunk guard is off: commits on main made by hand are not refused, landings-are-markers asks only from the first landing marker, and the landing rule is not shipped. Commit naima-tracker/naima-data/naima.json and the removed naima-tracker/naima-data/hooks/reference-transaction; naima guard on turns it back on
+```
+
+One commit carries the fixed script and the tracker's record of the work so far:
 
 ```console
 $ git add -A && git commit -qm "Fix the greeting"
-$ naima set greet-sh-says commits=$(git rev-parse HEAD)
-bugs/greet-sh-says-helo-instead-hello: commits=802f1664a18a5bce71f6d46245feafd297fd056d
 ```
 
-Without the commit, `naima close` refuses, because a fix with no commit reachable from the trunk hasn't actually landed:
+Without a commit named on the bug, `naima close` refuses, because a fix with no commit reachable from the trunk hasn't actually landed:
 
 ```console
 $ naima close greet-sh-says
-naima: bugs/greet-sh-says-helo-instead-hello cannot be closed: none of its commits is a real commit reachable from the trunk — set commits, or close --force
+naima: bugs/greet-sh-says-helo-instead-hello cannot be closed: none of its commits is a real commit reachable from the trunk, or one of a declared repository on its default branch — set commits, or close --force
+$ naima set greet-sh-says commits=$(git rev-parse HEAD)
+bugs/greet-sh-says-helo-instead-hello: commits=e2b726c91dba3ed4a81ebd0b36fd9090e7a84e68
 ```
 
 The bug is now [resolved](glossary.md#resolved). It is fixed, proven by a test that passed, and tied to the commit that fixed it. Closing it moves it to the
@@ -268,28 +311,44 @@ bugs: 0 open
   fixed, not proven     0
   resolved, not closed  0
 $ naima check
-2 items, 31 checks
+2 items, 84 checks
+
+notes (not failures):
+  · tests/greet-sh-greets-hello passed as a regression test, and no red run is recorded — set redSeen once it is seen failing before the fix
 
 all invariants hold
 ```
+
+The note asks whether you saw the test fail before the fix, which is how a regression test shows it can catch the bug. This tutorial fixed the code before it wrote
+the test, so there is nothing to record.
 
 The closed item keeps everything, including what proves it and which commit fixed it:
 
 ```console
 $ naima show greet-sh-says
 greet.sh says Helo instead of Hello
-closed/greet-sh-says-helo-instead-hello  f7c43c69-d654-49e5-9c1f-c9c30488afff  [closed]
+closed/greet-sh-says-helo-instead-hello  9cda8523-aba4-47d3-9d40-63c9058f4f0a  [closed]
   created: 2026-10-01
+  origin: {"askedBy":"agent","filedBy":{"name":"Ada","role":"coordinator"},"on":"2026-10-01T10:12:49.007Z","branch":"main"}
+  revised: {"checklist":"d7af1054b1d38996","by":"Ada","on":"2026-10-01","shown":true}
   impact: high
   priority: now
   confidence: measured
   triagedOn: 2026-10-01
   fixedOn: 2026-10-01
   effort: S
-  commits: ["802f1664a18a5bce71f6d46245feafd297fd056d"]
+  commits: ["e2b726c91dba3ed4a81ebd0b36fd9090e7a84e68"]
   closedFrom: bugs
   closedOn: 2026-10-01
   is proven by tests/greet-sh-greets-hello [passed]  (inverse)
+  asked by agent, filed by Ada (coordinator)
+  changes, and who ordered them:
+    2026-10-01 Ada (coordinator): filed — naima new
+    2026-10-01 Ada (coordinator): set confidence, impact, priority, triagedOn — naima triage
+    2026-10-01 Ada (coordinator): set fixedOn — naima set
+    2026-10-01 Ada (coordinator): set effort — naima triage
+    2026-10-01 Ada (coordinator): set commits — naima set
+    2026-10-01 Ada (coordinator): moved to closed; status closed; set closedFrom, closedOn — naima close
 
 # greet.sh says Helo instead of Hello
 
@@ -299,8 +358,9 @@ closed/greet-sh-says-helo-instead-hello  f7c43c69-d654-49e5-9c1f-c9c30488afff  [
 Bugs closed before the `commits` field existed aren't given one after the fact by guessing which commit it was. `naima check` only asks for it from the date set
 in [`plugins.trackers.options.commitsRequiredFrom`](prove-and-close.md#4-name-the-commit).
 
+On the trunk Naima commits its own tracker changes (`set`, `close`), so nothing is left to commit:
+
 ```console
-$ git add -A && git commit -qm "Close the bug, with its proof"
 $ git status --short
 ```
 

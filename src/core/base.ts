@@ -1026,7 +1026,7 @@ const allowed = new WeakMap<Write, string>()
 const privateInfrastructure: WriteHook = {
   name: "private-infrastructure",
   says:
-    "a write of an item's title, fields or prose that adds a machine name, an IP address, a URI with a port, a home-directory path, the user's name or a word of the private list is refused, each finding listed with the placeholder to write instead; --allow-private \"<reason>\" lets a deliberate mention through and records the reason in the item's notes",
+    "a write of an item's title, fields or prose that adds this machine's own name, a machine of the private hosts file, an IP address, a URI with a port, a home-directory path, the user's name or a word of the private list is refused, each finding listed with the placeholder to write instead; --allow-private \"<reason>\" lets a deliberate mention through and records the reason in the item's notes",
   beforeWrite(write, ctx) {
     const pc = privateContext()
     const found: { what: string; findings: PrivateFinding[] }[] = []

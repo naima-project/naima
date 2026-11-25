@@ -512,7 +512,6 @@ const uiCommand: Command = {
     "open the new interface on the project: the desktop app when it is installed, its window already open there brought forward, else served in the default browser, from this machine only, live from the files: the rail, the screens and the tabs the plugins contribute — the summary, the boards, the metrics, each item with its evidence and the others; Ctrl-C stops it",
   enforces:
     "the interface is served only on the loopback interface, and every request without this run's token is refused; a bridge command comes only from the server's own page; an action runs only a command of its short list, through naima run",
-  hidden: true,
   usage: "ui [--browser] [--no-open] [--log] [--watch] [--port <port>] | ui --install-desktop | ui --sidecar | ui --mcp | ui --mcp-tracker",
   long: {
     reports:

@@ -94,15 +94,16 @@ const where = (point: ExtensionPoint, c: Contribution): string =>
 export function documentationGaps(ctx: Context): string[] {
   const out: string[] = []
   const said = (who: string, gaps: readonly string[]): string[] => gaps.map((g) => (g.startsWith(":") ? `${who}${g}` : `${who} ${g}`))
-  for (const p of ctx.registry.plugins) {
+  const whole = ctx.programRegistry?.() ?? ctx.registry
+  for (const p of whole.plugins) {
     if (blank(p.says)) out.push(`plugin "${p.name}" does not say what it is`)
     for (const o of p.options ?? []) if (blank(o.says)) out.push(`plugin "${p.name}": option ${o.name} does not say what it does`)
   }
-  const commands = ctx.registry.points.get("commands")
+  const commands = whole.points.get("commands")
   for (const c of cliCommands) out.push(...said(`command "${c.name}" (core)`, commands?.gaps?.(c) ?? []))
-  for (const point of ctx.registry.points.values()) {
+  for (const point of whole.points.values()) {
     if (blank(point.says)) out.push(`extension point "${point.id}" does not say what it is`)
-    for (const c of ctx.registry.contributions(point.id)) out.push(...said(where(point, c), point.gaps?.(c.value) ?? []))
+    for (const c of whole.contributions(point.id)) out.push(...said(where(point, c), point.gaps?.(c.value) ?? []))
   }
   return out
 }
@@ -111,14 +112,14 @@ export function documentationGaps(ctx: Context): string[] {
 export function unstatedEnforcement(ctx: Context): string[] {
   const commands = [
     ...cliCommands.map((c) => ({ c, by: "core" })),
-    ...ctx.registry.contributions("commands").map((c) => ({ c: c.value as Command, by: c.plugin })),
+    ...(ctx.programRegistry?.() ?? ctx.registry).contributions("commands").map((c) => ({ c: c.value as Command, by: c.plugin })),
   ]
   return commands.filter(({ c }) => blank(c.enforces)).map(({ c, by }) => `command "${c.name}" (${by}) does not say what it enforces`)
 }
 
 /** The reference, generated from the manifests of the loaded plugins: every point's contributions, as each point documents them. Deterministic. */
 export function renderReference(ctx: Context): string {
-  const r = ctx.registry
+  const r = ctx.programRegistry?.() ?? ctx.registry
   const points = [...r.points.values()]
   /** A point's contributions the program makes: the ones the project's configuration makes are the project's, not in the program's reference. */
   const programs = (point: ExtensionPoint): readonly Contribution[] => r.contributions(point.id).filter((c) => !point.configured?.(c.value))
@@ -127,7 +128,7 @@ export function renderReference(ctx: Context): string {
     "",
     GENERATED + " Do not edit: change the manifest, then run `naima docs --write`. -->",
     "",
-    "Everything the loaded plugins contribute, generated from their manifests so it cannot drift from the code.",
+    "Everything the program's plugins contribute, the opt-in ones included, generated from their manifests so it cannot drift from the code.",
     "Every contribution below has a qualified id, `<plugin>/<name>`, and goes by its short name while no other loaded plugin's contribution of its kind takes it. A name stored in the data — a type, field, relation, directory, gate or verifier — is never declared twice; a project that loads two plugins declaring one renames one of them in naima.json. No plugin command may take a name the entry point answers.",
     "",
     "## Contents",
@@ -159,7 +160,9 @@ export function renderReference(ctx: Context): string {
     ),
   ]
   for (const p of r.plugins) {
-    L.push("", `## ${p.name}`, "", sentence(p.says), "", `Its contributions' qualified ids are ${code(`${p.name}/<name>`)}.`)
+    L.push("", `## ${p.name}`, "", sentence(p.says))
+    if (ctx.optInPlugins?.includes(p.name)) L.push("", `Opt-in: turn it on with ${code(`naima plugin enable ${p.name}`)}.`)
+    L.push("", `Its contributions' qualified ids are ${code(`${p.name}/<name>`)}.`)
     if (p.about) L.push("", p.about)
     if (p.options?.length) L.push("", "Options, each with the default it takes when nothing sets it:", ...optionsTable(p.options, "Option"))
     if (p.points?.length) L.push("", `**Extension points** it declares: ${p.points.map((pt) => code(pt.id)).join(", ")}.`)

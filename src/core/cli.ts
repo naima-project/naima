@@ -2227,6 +2227,7 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
     const given = opts.launched && opts.data ? opts.data : flag ?? opts.data
     const data = findData(opts.cwd, real(opts.programRoot), given)
     if (command === "init") {
+      if (args.includes("--help") || args.includes("-h")) return commandHelp(cliCommands.find((c) => c.name === "init") as Command, io)
       const known = [
         "--write-excludes",
         "--write-agent-pointer",
