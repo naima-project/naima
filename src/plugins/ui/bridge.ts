@@ -462,8 +462,27 @@ export function naimaBridge(ctx: Context, opts: BridgeOptions): NaimaBridge {
       }
       // A view that places a commit itself is read from the files as they are, with the commit as its parameter.
       if (sha !== null && view.moments) params["at"] = [sha]
-      // A live read is plain JSON data already (live), shared by every ask: it is not copied for each.
-      if (sha === null) return (await live(view, params)) as Json
+      // A live read is plain JSON data already (live), shared by every ask: it is not copied for each. An item the trunk
+      // does not hold yet, though an open development line does (filed or moved there, and counted by its goal), is read
+      // at that line's tip, so that what a list names always opens; `line` says which line it was read on.
+      if (sha === null) {
+        try {
+          return (await live(view, params)) as Json
+        } catch (e) {
+          if (name !== "item" || !(e instanceof Error) || !e.message.includes("no item matches")) throw e
+          const lines = await viaViews<{ lines?: { gate: string; tip: string }[] }>(ctx, ["line", "list"])
+          for (const l of lines?.lines ?? []) {
+            const tip = commitOf(ctx, l.tip)
+            const onLine = { ...params, ...(view.moments ? { at: [tip] } : {}) }
+            const read = await gitReadScope(() => view.render(onLine, view.moments ? momentOf(null) : atCache.get(ctx, tip))).then(
+              (r) => r.data,
+              () => null,
+            )
+            if (read && typeof read === "object" && !Array.isArray(read)) return json({ ...read, line: l.gate })
+          }
+          throw e
+        }
+      }
       const from = view.moments ? momentOf(null) : atCache.get(ctx, sha)
       // A past moment asks each git question once too (gitReadScope), as a live view does: the many views read together share the answers.
       return json((await gitReadScope(() => view.render(params, from))).data)
