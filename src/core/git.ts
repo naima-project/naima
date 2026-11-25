@@ -96,7 +96,28 @@ function envFor(cwd: string, extra?: Record<string, string>): NodeJS.ProcessEnv 
   return own || extra ? { ...process.env, ...(own ? hook : {}), ...(extra ?? {}) } : undefined
 }
 
+/**
+ * The programs a git run ended by its time limit left behind (a transport command, an ssh): Windows ends only the process
+ * it is told to, so they live on holding the folder the run was in. Each descendant of `pid` is ended; none is looked for
+ * elsewhere than under the pid the run had.
+ */
+function endOrphans(pid: number): void {
+  const script = `$all = Get-CimInstance Win32_Process; $todo = @(${pid}); $seen = @(); ` +
+    `while ($todo.Count) { $p = $todo[0]; $todo = @($todo | Select-Object -Skip 1); ` +
+    `foreach ($c in ($all | Where-Object { $_.ParentProcessId -eq $p })) { $seen += $c.ProcessId; $todo += $c.ProcessId } }; ` +
+    `foreach ($id in $seen) { Stop-Process -Id $id -Force -ErrorAction SilentlyContinue }`
+  spawnSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], { stdio: "ignore", timeout: 20_000 })
+}
+
 function spawnGit(cwd: string, args: string[], opts: GitOptions, encoding: "utf8" | "buffer") {
+  const r = spawnGitNow(cwd, args, opts, encoding)
+  if (process.platform === "win32" && opts.timeoutMs !== undefined && (r.error as { code?: string } | undefined)?.code === "ETIMEDOUT" && r.pid) {
+    endOrphans(r.pid)
+  }
+  return r
+}
+
+function spawnGitNow(cwd: string, args: string[], opts: GitOptions, encoding: "utf8" | "buffer") {
   calls++
   const env = envFor(cwd, opts.env)
   return spawnSyncFed("git", args, {

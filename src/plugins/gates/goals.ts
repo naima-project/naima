@@ -127,7 +127,7 @@ export function fixedOnLine(ctx: Context, gate: string): string[] {
  */
 export function closingOnLine(ctx: Context, gate: string): string[] {
   const fixed = fixedOnLine(ctx, gate)
-  return [...new Set([...fixed, ...closedOnTip(ctx, `refs/heads/line/${gate}`).keys()])]
+  return [...new Set([...fixed, ...closedOnTip(ctx, `refs/heads/line/${gate}`, (m) => typeof m["fixedOn"] === "string" && m["fixedOn"] !== "").keys()])]
 }
 
 /**

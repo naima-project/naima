@@ -74,14 +74,15 @@ export function recordsOnTip(ctx: Context, branch: string): Map<string, TipRecor
 }
 
 /**
- * The ids of the items settled on `branch`, by a done status or by a fixedOn date, each with when (seconds) the line last touched its record: its status on the
- * line's tip is a done one. Whether the trunk's copy of it is open is the reader's to say.
+ * The ids of the items settled on `branch`, each with when (seconds) the line last touched its record: its status on the
+ * line's tip is a done one, or `settled` says so of its fields (a plugin's own marker, which the core does not name).
+ * Whether the trunk's copy of it is open is the reader's to say.
  */
-export function closedOnTip(ctx: Context, branch: string): Map<string, number> {
+export function closedOnTip(ctx: Context, branch: string, settled?: (meta: Record<string, unknown>) => boolean): Map<string, number> {
   const out = new Map<string, number>()
   for (const [id, r] of recordsOnTip(ctx, branch)) {
     const status = ctx.registry.types.get(r.item.type)?.statuses
-    const fixed = typeof r.item.meta["fixedOn"] === "string" && r.item.meta["fixedOn"] !== ""
+    const fixed = settled?.(r.item.meta as Record<string, unknown>) ?? false
     if (fixed || (status && Object.hasOwn(status, r.item.meta.status) && status[r.item.meta.status]!.category === "done")) out.set(id, r.at)
   }
   return out
