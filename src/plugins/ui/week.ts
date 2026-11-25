@@ -24,6 +24,9 @@ export interface WeekCommit {
   changes: number
   files: number
   subject: string
+  /** The items of each kind the commit touched in the tracker (bugs, features, tests, decisions, ...), by the type in the
+   *  item's folder: how many distinct items; absent when it touched none or the tracker's files are not read. */
+  kinds?: Record<string, number>
   /** False when the commit's tree has no tracker where the project keeps it now (the data kept elsewhere then, or not
    *  yet made): Home cannot be read at it, and the moments shown keep to the commits that have one. Absent otherwise. */
   tracker?: false
@@ -80,6 +83,51 @@ export function parseWeek(out: string): WeekCommit[] {
 }
 
 const SHORTSTAT = ["--first-parent", "--diff-merges=first-parent", "--shortstat", `-n${WEEK_MAX}`, "--format=%x1e%H%x09%ct%x09%s"]
+
+/** The tracker's item folders in a commit's changed paths: <prefix><type>/<slug>/..., the type told by the folder. */
+export function parseKinds(out: string, prefix: string): Map<string, Record<string, number>> {
+  const found = new Map<string, Record<string, number>>()
+  const seen = new Set<string>()
+  for (const record of out.split("\x1e")) {
+    const [hash = "", ...paths] = record.split("\n")
+    if (!hash.trim()) continue
+    const kinds: Record<string, number> = {}
+    for (const path of paths) {
+      const m = path.startsWith(prefix) ? /^([a-z][a-z-]*)\/([^/]+)\//.exec(path.slice(prefix.length)) : null
+      if (!m || m[1] === "closed" || seen.has(`${hash}\0${m[1]}/${m[2]}`)) continue
+      seen.add(`${hash}\0${m[1]}/${m[2]}`)
+      kinds[m[1]!] = (kinds[m[1]!] ?? 0) + 1
+    }
+    if (Object.keys(kinds).length) found.set(hash.trim(), kinds)
+  }
+  return found
+}
+
+/** Marks each commit with the kinds of item it touched, asked of git in one more log limited to the tracker's data folder. */
+async function withKinds(ctx: Context, ref: string, since: number, until: number, commits: WeekCommit[]): Promise<WeekCommit[]> {
+  const prefix = ctx.trackerPrefix ? `${ctx.trackerPrefix}/` : ""
+  if (!commits.length || ctx.sibling) return commits
+  const r = await runGitAsync(
+    ctx.root,
+    [
+      "log",
+      "--first-parent",
+      "--diff-merges=first-parent",
+      "--name-only",
+      `-n${WEEK_MAX}`,
+      `--since=@${since}`,
+      `--until=@${until}`,
+      "--format=%x1e%H",
+      ref,
+      "--",
+      `${prefix}.`,
+    ],
+    GIT_MS,
+  )
+  if (!r.ok) return commits
+  const kinds = parseKinds(r.out, prefix)
+  return commits.map((c) => (kinds.has(c.hash) ? { ...c, kinds: kinds.get(c.hash)! } : c))
+}
 
 /** A line's opening commit on `ref` (its branch, or a landed tip): its first parent and its time; null when none. */
 async function cutOf(ctx: Context, ref: string, branch: string): Promise<RiverLine["cut"]> {
@@ -164,7 +212,7 @@ export async function weekData(ctx: Context, at: string | null, days: number = W
     ],
     GIT_MS,
   )
-  const commits = withoutTracker(ctx, r.ok ? parseWeek(r.out).filter((c) => c.t > since && c.t <= until) : [])
+  const commits = withoutTracker(ctx, r.ok ? await withKinds(ctx, ref, since, until, parseWeek(r.out).filter((c) => c.t > since && c.t <= until)) : [])
   const main = trunk(ctx.root)
   const lines = at === null && main && r.ok ? await riverLines(ctx, main, commits, since, until) : []
   return { ref: r.ok ? ref : null, until, days, commits, lines }
