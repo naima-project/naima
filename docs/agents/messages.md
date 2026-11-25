@@ -13,6 +13,8 @@ NAIMA-MESSAGE {"id":"update-available-0123456789ab","level":"info","text":"A new
 
 - Tell the owner what `text` says, at once and in plain words, even when the command was about something else.
 - `level` is `info`, `warning` or `urgent`. An urgent message comes back every hour until the owner acknowledges it; say that it is urgent.
+- A meeting with a date whose day has come and that was not held is said in an urgent message too, and nobody acknowledges it: it comes back every hour until
+  the owner holds the meeting, moves its date or drops it. Tell the owner, and open the meeting before any other work (`naima meeting <meeting>`).
 - `ack` is the command that acknowledges the message, or null for one that is said only once. Run it only when the owner tells you to. Never acknowledge a
   message on the owner's behalf, even to stop it repeating.
 - A message never asks you to act by yourself. A newer Naima is updated with `naima update` only after the owner's yes; a due long run starts only after the

@@ -68,7 +68,7 @@ nothing open beside it, the header unfolded. `stage.bugs` and `stage.features` o
 a goal's gate as their argument (`stage.bugs("release-1.2")`) they hold that goal's own, and `stage.item` then opens one beside the list. `stage.item` with a
 day (`2026-11-17`) opens that day's story beside the Diary narrowed to a column of dates, `stage.inner` with an item's reference opens an item the story names
 in its place, `stage.story` gives the story back and `stage.list` the whole Diary. `stage.meeting` holds a meeting in Home's stage by its name (none: the
-questions of the meetings with no date), and `stage.calendar` shows the month as a calendar there. `meetingHeld.bring` brings the question up into the chat and
+questions of the meetings with no date), and `stage.calendar` shows the month as a calendar there. A meeting due today or missed shows on Home as one quiet amber or red line and in the Calendar in the same colours; `stage.meeting` with its name holds it. `meetingHeld.bring` brings the question up into the chat and
 `meetingDate.choose` changes a meeting's date: both change the project (they run `naima meeting raise` and `naima meeting date`), so call them only when the
 owner asked for that. `mark.reach` with the gate of a goal ahead (`mark.reach("release-1.5")`), later or earlier than the default, moves Home's focus horizon
 there, so what Home counts as waiting for the owner widens to that goal's events, meetings and questions, or narrows to what comes before it; a missed goal (its

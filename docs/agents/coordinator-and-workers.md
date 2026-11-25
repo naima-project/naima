@@ -153,6 +153,12 @@ meeting with `naima meeting <meeting> --close` when the owner stops, and starts 
 while no waiter runs is kept until one starts, so nothing is lost between two waits. Over MCP the same is the tool `meetings` and the store's machine
 `meetings`, whose `taken` is the last meeting taken from the open UI.
 
+A dated meeting not yet held raises an alarm from its day on, in the same urgent message as an overdue goal's, at `naima hello` and at every turn end,
+once an hour. Nobody acknowledges it, you included: it stops only when the owner holds the meeting, moves its date or drops it (`naima meeting date <meeting>
+none`). When `naima hello` or a message says a meeting is due or missed, tell the owner at once and open that meeting (`naima meeting <meeting>`) before any
+other work. A meeting with discussions and no date, or only the date of a meeting already held, is to schedule: ask the owner for a day and give it
+(`naima meeting date <meeting> <day>`); it raises no alarm. The model is `develop/models/meeting/alarm/` in the workshop.
+
 The same wait wakes the coordinator when the owner sends one thing that waits for them to the chat: a click on an entry of the UI's Waiting for you, or
 `naima meeting raise <item>` (`helper:<branch>` for an agent gone quiet). It prints the topic with its context (why it waits, where it stands, the meeting it is
 on, what waits on it) and ends. The coordinator raises it with the owner at once, before anything else, settles it with them (`naima decide`, a landing, a
