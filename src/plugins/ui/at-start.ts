@@ -30,6 +30,10 @@ export interface UiRecord {
   pid: number
   how: "claim" | "browser" | "desktop"
   url?: string
+  /** The project's root the server serves, so that a client can tell whose server it reached. */
+  root?: string
+  /** When the server began serving, in ms since the epoch. */
+  since?: number
 }
 
 /** The registry's folder for the project at `root`, in the clone's state folder: null outside git. */
@@ -137,11 +141,11 @@ export function register(root: string, rec: Omit<UiRecord, "pid">): { dir: strin
 }
 
 /** Remove this process's record as it stops, when it still holds it. Never throws. */
-export function unregister(at: { dir: string; gen: number } | null): void {
+export function unregister(at: { dir: string; gen: number } | null, pid = process.pid): void {
   if (!at) return
   try {
     const c = current(at.dir)
-    if (c.gen === at.gen && c.rec?.pid === process.pid) rmSync(fileOf(at.dir, at.gen), { force: true })
+    if (c.gen === at.gen && c.rec?.pid === pid) rmSync(fileOf(at.dir, at.gen), { force: true })
   } catch {
     // left behind, it is stale once this process ends
   }
@@ -194,11 +198,25 @@ export interface AtStartDeps {
   newToken(): string
 }
 
+/**
+ * The environment a UI is started with: the caller's, without what names one project's data or state, which the UI of
+ * another project would take for its own (the launcher serves the data NAIMA_DATA names, whatever folder it runs in),
+ * then what the start names itself.
+ */
+export function uiEnv(inherited: Record<string, string | undefined>, own: Record<string, string>): Record<string, string> {
+  const kept: Record<string, string> = {}
+  for (const [k, v] of Object.entries(inherited)) if (v !== undefined && !PROJECT_ENV.includes(k)) kept[k] = v
+  return { ...kept, ...own }
+}
+
+/** The variables that belong to one project: its data, the state of its clone and its views' cache. */
+const PROJECT_ENV = ["NAIMA_DATA", "NAIMA_TICK_DIR", "NAIMA_VIEW_CACHE", "NAIMA_PROJECT", "NAIMA_UI_TOKEN"]
+
 export const realAtStartDeps: AtStartDeps = {
   alive: processAlive,
   start(command, env, cwd) {
     const [program, ...args] = command
-    const child = spawn(program!, args, { detached: true, stdio: "ignore", cwd, env: { ...process.env, ...env } })
+    const child = spawn(program!, args, { detached: true, stdio: "ignore", cwd, env: uiEnv(process.env, env) })
     child.once("error", () => {})
     child.unref()
     return child.pid ?? null

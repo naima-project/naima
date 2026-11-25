@@ -77,6 +77,7 @@ import {
   revisedOption,
   revisedPath,
 } from "./private.ts"
+import { announceProgramMoved } from "./program-moved.ts"
 import { DATA_DIR, DATA_FILE, DEFAULT_DATA, findData, globalOptions, PROGRAM_DIR, real, RELAUNCH, runtimeOf, trackerOf, trackerReadme } from "./layout.ts"
 import { SH_LAUNCHER } from "./launchers.ts"
 import {
@@ -984,6 +985,8 @@ async function moveLock(
   // Move the program first, and only then the lock: a refusal leaves both where they were.
   await align({ ...t, commit: to, ...(release ? { release } : {}) })
   writeRaw(place.data, next)
+  // A UI running on the project restarts on the program that has just moved (plugins/ui/restart.ts).
+  announceProgramMoved(place.root, to)
   const toLabel = release ? `version ${release.version} (${short(to)})` : short(to)
   // The same commit moves nothing: only the lock's form changes, from a release to a commit of main or back.
   const form = (l: { version?: string | undefined }) => (l.version ? `release ${l.version}` : "commit of the source's main")
@@ -2265,6 +2268,7 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
         const code = e instanceof NaimaError ? e.code : null
         if (!((readOnly && code === SOURCE_CHANGED) || (moving && (code === COMMIT_UNAVAILABLE || code === OLD_LAYOUT)))) throw e
       }
+      if (moved?.from && moved.from !== place.lock.commit) announceProgramMoved(place.root, place.lock.commit)
       for (const line of moved?.repaired ?? []) io.err(`naima: ${line}`)
       const linked = held ? null : linkedNote(targetOf(place, place.lock, opts))
       if (linked) io.err(`naima: ${linked}`)

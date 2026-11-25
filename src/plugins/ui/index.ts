@@ -55,8 +55,23 @@ import { runUiMcp } from "./mcp.ts"
 import { chatSide } from "./chat-channel.ts"
 import { runTrackerMcp } from "./mcp-tracker.ts"
 import { runSidecar } from "./sidecar.ts"
-import { buildDir, desktopFirst, findCargo, installDesktop, installedApp, PRODUCT } from "./desktop-app.ts"
-import { desktopApp, desktopAppDirs, naimaCommand, offReason, openAtStart, register, registryDir, unregister, userAtStart } from "./at-start.ts"
+import { settle, settled, takeSeat } from "./one-server.ts"
+import { remoteServer } from "./remote.ts"
+import { programFeed, restartWatch } from "./restart.ts"
+import { buildDir, desktopFirst, findCargo, installDesktop, installedApp, PRODUCT, realDesktopDeps } from "./desktop-app.ts"
+import {
+  desktopApp,
+  desktopAppDirs,
+  naimaCommand,
+  offReason,
+  openAtStart,
+  processAlive,
+  register,
+  registryDir,
+  type UiRecord,
+  unregister,
+  userAtStart,
+} from "./at-start.ts"
 import { nameStopCommand } from "./stops.ts"
 import { viewPool } from "./view-pool.ts"
 import { reloadWatch } from "./watch.ts"
@@ -313,6 +328,18 @@ export interface UiDeps {
   switchFile?: string | null
   /** The address a run that switched keeps: the launcher's by default, null for a run started afresh. */
   resume?: { port: number; token: string } | null
+  /** This process's id, for the registry: the real one by default. */
+  pid?: number
+  /** The project's registry of UIs (at-start.ts): the clone's state folder by default, null for none. */
+  registry?: string | null
+  /** Whether a process runs: the registry's liveness test (a record whose process does not is stale). */
+  alive?(pid: number): boolean
+  /** Waits `ms`: for the server a client of the same project is still starting. */
+  sleep?(ms: number): Promise<void>
+  /** Brings the desktop app's window on the project forward: whether one answered. */
+  raise?(root: string): Promise<boolean>
+  /** Restarts this server on the new program when `naima update` moved it: the polling of its file, replaced by a test. */
+  restartWatch?: typeof restartWatch
 }
 
 /** How long a run that switches serves on after answering the switch, so that the answer reaches the page, in ms. */
@@ -375,9 +402,25 @@ export function tabFolders(ctx: Context, tabs: readonly UiTab[]): string[] {
 }
 
 /** `naima ui`: serve the UI through the bridge, open it in the browser unless asked not to, and stop on Ctrl-C. */
-export async function runUi(ctx: Context, flags: { open: boolean; port?: number; token?: string; watch?: boolean }, deps: UiDeps = realDeps): Promise<number> {
+export async function runUi(
+  ctx: Context,
+  flags: { open: boolean; port?: number; token?: string; watch?: boolean; browser?: boolean },
+  deps: UiDeps = realDeps,
+): Promise<number> {
   // A run that switched project from another keeps its address and token, so the page that asked finds it there.
   const back = deps.resume !== undefined ? deps.resume : resumed()
+  // One server per project: the process that takes the seat serves; any other attaches to the live server (one-server.ts).
+  // Not a run that switched (its page expects this address), nor the one naima hello started with its address and token
+  // (hello's own record names it).
+  const byHello = flags.port !== undefined && flags.token !== undefined
+  const dir = back || byHello ? null : deps.registry !== undefined ? deps.registry : registryDir(ctx.root)
+  const me = deps.pid ?? process.pid
+  const seat = takeSeat(dir, me, deps.alive ?? processAlive)
+  if (seat.kind === "attach") {
+    // Only the desktop app is open and an address was asked for: it serves none, so a browser server runs beside it.
+    const addressWanted = flags.port !== undefined || !flags.open || flags.browser === true
+    if (!(seat.live.how === "desktop" && addressWanted)) return await attachRun(ctx, dir!, seat.live, flags.open, deps)
+  }
   const file = deps.switchFile !== undefined ? deps.switchFile : switchFile()
   const token = back?.token ?? flags.token ?? newToken()
   const key = filesKey(token)
@@ -410,7 +453,7 @@ export async function runUi(ctx: Context, flags: { open: boolean; port?: number;
   const reloads = flags.watch ? reloadWatch({ bundle: BUNDLE, folders: () => tabFolders(ctx, tabs) }) : null
   const options: ServeOptions = {
     ...bridge,
-    ...(reloads ? { feeds: { ...bridge.feeds, reload: reloads.feed } } : {}),
+    feeds: { ...bridge.feeds, reload: programFeed(Date.now(), reloads?.feed) },
     token,
     tabFolder: (name) => tabFolder(ctx, tabs, name),
     ...(flags.port ? { port: flags.port } : {}),
@@ -419,8 +462,16 @@ export async function runUi(ctx: Context, flags: { open: boolean; port?: number;
   // The port the run before listened on may have been taken meanwhile: then a free one, which the address printed says.
   const served = back ? await serve({ ...options, port: back.port }).catch(() => serve(options)) : await serve(options)
   port = served.port
-  // Named in the registry, so that naima hello reuses it instead of opening a second one (at-start.ts).
-  const registered = register(ctx.root, { how: "browser", url: served.url })
+  // Named in the registry, so that every other client attaches to it instead of starting a second one (one-server.ts).
+  const named = { how: "browser", url: served.url, root: ctx.root } as const
+  const registered = seat.kind === "serve" ? { dir: seat.dir, gen: seat.gen } : register(ctx.root, named)
+  settle(seat, me, named)
+  // naima update moved the program: this server runs the old one, so it is served again by the new one on this address.
+  const restarted = (deps.restartWatch ?? restartWatch)({ root: ctx.root }, () => {
+    if (file === null) return
+    writeSwitch(file, { root: ctx.root, port, token })
+    setTimeout(switched, SWITCH_GRACE_MS)
+  })
   try {
     if (back) {
       ctx.out(`naima ui: serving ${ctx.root.split(/[\\/]/).filter(Boolean).pop() ?? ""} at ${served.url} — Ctrl-C stops it`)
@@ -432,12 +483,27 @@ export async function runUi(ctx: Context, flags: { open: boolean; port?: number;
     }
     return await Promise.race([deps.interrupted().then(() => 0), switching])
   } finally {
-    unregister(registered)
+    restarted.stop()
+    unregister(registered, me)
     deps.forget?.()
     reloads?.stop()
     bridge.close()
     await served.close()
   }
+}
+
+/** What a client says and does when a live server of the project stands: the address, opened in a browser if wanted; the desktop window, brought forward. */
+async function attachRun(ctx: Context, dir: string, live: UiRecord, open: boolean, deps: UiDeps): Promise<number> {
+  const name = ctx.root.split(/[\\/]/).filter(Boolean).pop() ?? ""
+  const rec = await settled(dir, live, { alive: deps.alive ?? processAlive, sleep: deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))) })
+  if (rec?.how === "desktop") {
+    const raised = await (deps.raise ?? realDesktopDeps.raise)(ctx.root)
+    ctx.out(`naima ui: the desktop app is already open on ${name}${raised ? ": brought its window to the front" : ""}; one UI runs per project`)
+  } else if (rec?.url) {
+    const b = open ? await deps.browser(rec.url) : null
+    ctx.out(`naima ui: already running on ${name} at ${rec.url} — ${b?.opened ? "opened it in the browser" : "open it in a browser"}; one UI runs per project`)
+  } else ctx.out(`naima ui: a UI is starting on ${name}; one UI runs per project`)
+  return 0
 }
 
 const uiCommand: Command = {
@@ -551,14 +617,21 @@ const uiCommand: Command = {
     }
     if (bool(p, "sidecar")) {
       const tabs = allTabs(tabsOf(ctx), viewsOf(ctx))
-      // The desktop app's sidecar names the app in the registry, unless the hello that opened it already did.
-      const registered = register(ctx.root, { how: "desktop" })
+      // One server per project: when a browser's server already runs on it, this sidecar is a client of that one (remote.ts);
+      // else it serves, and names the app in the registry, unless the hello that opened it already did.
+      const dir = registryDir(ctx.root)
+      const seat = takeSeat(dir, process.pid, processAlive)
+      const live = seat.kind === "attach" ? await settled(dir!, seat.live, { alive: processAlive, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) }) : null
+      const attached = live?.how === "browser" && live.url ? live.url : null
+      const registered = attached ? null : seat.kind === "serve" ? { dir: seat.dir, gen: seat.gen } : register(ctx.root, { how: "desktop" })
+      if (seat.kind === "serve") settle(seat, process.pid, { how: "desktop", root: ctx.root })
       // As in the browser's server, the views are rendered off the thread that answers the shell, side by side: the
       // window's first screen asks some twenty at once, which one thread computed one after another. The workers start now.
-      const pool = viewPool({ root: ctx.root, data: ctx.trackerRoot, program: ctx.program })
-      pool.warm()
+      const pool = attached ? null : viewPool({ root: ctx.root, data: ctx.trackerRoot, program: ctx.program })
+      pool?.warm()
       return runSidecar(ctx, {
-        pool,
+        ...(pool ? { pool } : {}),
+        ...(attached ? { remote: remoteServer(attached) } : {}),
         // NAIMA_UI_TRACE=1: one line per view read, how long it took and how it was answered, on stderr.
         ...(process.env["NAIMA_UI_TRACE"] ? { trace: (line: string) => void process.stderr.write(line + "\n") } : {}),
         views: viewsOf(ctx),
@@ -577,7 +650,13 @@ const uiCommand: Command = {
     const token = port !== undefined ? process.env["NAIMA_UI_TOKEN"] || undefined : undefined
     return await runUi(
       ctx,
-      { open: !bool(p, "no-open"), ...(bool(p, "watch") ? { watch: true } : {}), ...(port !== undefined ? { port } : {}), ...(token ? { token } : {}) },
+      {
+        open: !bool(p, "no-open"),
+        ...(bool(p, "browser") ? { browser: true } : {}),
+        ...(bool(p, "watch") ? { watch: true } : {}),
+        ...(port !== undefined ? { port } : {}),
+        ...(token ? { token } : {}),
+      },
       bool(p, "log") ? { ...realDeps, log: (l) => ctx.err(l) } : realDeps,
     )
   },
@@ -623,7 +702,7 @@ export default function ui(options: Record<string, unknown> = {}): Plugin {
       "`action` runs `decide`, `note`, `gate step`, `claim`, `release` or `name-stop` as a run of `naima run`, and `run` shows that run, its state, exit code and log; a bridge command is refused from any page but the server's own. " +
       "Plain `naima ui` opens the desktop app on the project when it is installed, as hello does, and brings forward its window already open on the project (a show the shell takes for itself) instead of opening a second one; it serves the browser with `--browser`, `--no-open` or `--port`, when the app is not installed (on macOS saying that `naima ui --install-desktop` installs it) and when the app cannot start. `naima ui --install-desktop` builds the app on macOS from the shell the product ships beside the bundle (ui/desktop, the Tauri project) with Rust and Tauri's command-line tool, in Naima's folder of the user's caches, kept between builds, and installs it as Naima.app in the user's Applications folder, reporting its stage and the crates compiled; the app also takes its project from its first argument. The same commands serve the desktop app, the Tauri shell around the same bundle: it starts `naima ui --sidecar` in the project's folder, which answers them on its standard input and output, one JSON object a line, pushes the feeds' events there too, and reads a tab's files for the shell's naima-files: scheme, with no network listener. " +
       "Two MCP servers serve an agent on standard input and output, split by what they touch. `naima ui --mcp` (the UI stance's bridge-mcp.ts) drives the screen the way a person does, and imports only the UI stance's registry and its agent channel (agent-endpoint.ts): `show` (a screen, a plugin's view, an item, a commit or a line), `store`, `transitions` and `transition`, `read_page` and `screenshot` all ask every UI open on the project on the feed `agent` (the request `{ id, tool, args }` of the UI stance's agent protocol, answered on the command `agent-answer` as `{ id, ok, answer }` or `{ id, ok: false, error }`), one request at a time; a show opens a UI as naima hello opens one when none is, so that an agent shows the owner something in the UI instead of making a page of its own. `naima ui --mcp-tracker` never touches the screen: it reads Naima's core directly (the views, the lines' map, git) for `overview`, `items`, `gates`, `lines`, `history`, `work`, `metrics`, `meetings` and `view`, and runs the UI's actions with `action` and `run`. " +
-      "At a session start `naima hello` opens the UI on the project by itself, in the background, and says so on its greeting's line, with the address in a browser: the desktop app when it is installed, else `naima ui` on a port it picks, which opens the browser; a UI already open on the project, named in a registry in the clone's Naima state folder that `naima ui` and the sidecar write too, is reused instead. It is off with the option `atStart` false, for a user with `{\"atStart\": false}` in the ui.json of their Naima config folder, and never on CI, with NAIMA_NO_UI or NAIMA_DATA set, nor in a worktree other than the clone's main checkout.",
+      "At a session start `naima hello` opens the UI on the project by itself, in the background, and says so on its greeting's line, with the address in a browser: the desktop app when it is installed, else `naima ui` on a port it picks, which opens the browser; a UI already open on the project, named in a registry in the clone's Naima state folder that `naima ui` and the sidecar write too, is reused instead. At most one UI server runs per project on a machine: whoever would serve it (`naima ui`, the desktop app's sidecar, the MCP server's show) takes the registry's next record first, and every other attaches to the live server instead of starting one (`naima ui` says its address and opens it, the sidecar asks it over HTTP, the MCP server's requests reach it through the state folder), a record whose process is dead being replaced. `naima update` says in the state folder that the program moved: the live server then restarts on the new program on the same address (the desktop app's shell starts its sidecar again) and its page reloads. A window names its project in the top bar, and a quiet agent is named by its branch and the items it holds. It is off with the option `atStart` false, for a user with `{\"atStart\": false}` in the ui.json of their Naima config folder, and never on CI, with NAIMA_NO_UI or NAIMA_DATA set, nor in a worktree other than the clone's main checkout.",
     points: [viewsPoint, uiTabsPoint],
     contributes: { "ui-views": [summaryView, boardView, itemView, peopleView, waitingView, mapView, projectsView, weekView] },
     commands: [uiCommand, nameStopCommand],

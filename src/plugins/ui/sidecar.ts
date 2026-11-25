@@ -19,10 +19,12 @@ import { createInterface } from "node:readline"
 import type { Readable } from "node:stream"
 import type { Context } from "../../core/api.ts"
 import { viewCache } from "./view-cache.ts"
+import { type Remote } from "./remote.ts"
+import { restartWatch } from "./restart.ts"
 import type { ViewPool } from "./view-pool.ts"
 import { naimaBridge } from "./bridge.ts"
 import * as Model from "./generated/sidecar.ts"
-import type { Handlers, Json } from "./bridge-handler.ts"
+import type { Feeds, Handlers, Json } from "./bridge-handler.ts"
 import { BUNDLE, fileIn } from "./serve.ts"
 import type { ReloadWatch } from "./watch.ts"
 import { PAGE_TYPES, type UiTab, type UiView } from "./tabs.ts"
@@ -52,6 +54,10 @@ export interface SidecarOptions {
   trace?: (line: string) => void
   /** Told each event of the sidecar's machine and each action it takes, as its model's action record has them. */
   record?: (entry: SidecarEntry) => void
+  /** A UI server already runs on the project: the commands and feeds are its, and this sidecar serves nothing of its own (remote.ts). */
+  remote?: Remote
+  /** Called when naima update moved the program: the shell starts the sidecar again on the new one. Pushed as the feed restart. */
+  restartWatch?: typeof restartWatch
 }
 
 /** An event of the sidecar's machine, or an action it takes: the entries of its model's action record. */
@@ -132,9 +138,17 @@ export function sidecarHandlers(bridge: Handlers, opts: Pick<SidecarOptions, "bu
   }
 }
 
+/** The bridge of a sidecar attached to a server: no commands of its own, the server's feeds. */
+function remoteBridge(remote: Remote): { handlers: Handlers; feeds: Feeds; close(): void } {
+  const feeds: Feeds = {}
+  for (const name of ["changes", "show", "agent", "reload"]) feeds[name] = (emit) => remote.feed(name, emit)
+  return { handlers: {}, feeds, close() {} }
+}
+
 /** Answers the shell until its input ends and every request read is answered; returns the exit code. */
 export async function runSidecar(ctx: Context, opts: SidecarOptions): Promise<number> {
-  const bridge = naimaBridge(ctx, {
+  const remote = opts.remote
+  const bridge = remote ? remoteBridge(remote) : naimaBridge(ctx, {
     views: opts.views,
     tabs: opts.tabs,
     fileUrl: (tab, rel) => desktopFileUrl(opts.os, tab, rel),
@@ -148,6 +162,8 @@ export async function runSidecar(ctx: Context, opts: SidecarOptions): Promise<nu
     ...(opts.watch ? { watch: opts.watch } : {}),
   })
   const handlers = sidecarHandlers(bridge.handlers, opts)
+  const lookup = (command: string): Handlers[string] | undefined =>
+    Object.hasOwn(handlers, command) ? handlers[command] : remote ? (args) => remote.call(command, args) : undefined
   const send = (message: { [key: string]: Json }) => opts.write(JSON.stringify(message))
   let exited: () => void = () => {}
   const stopped = new Promise<void>((resolve) => (exited = resolve))
@@ -159,13 +175,15 @@ export async function runSidecar(ctx: Context, opts: SidecarOptions): Promise<nu
     else exited()
   }, opts.record)
   const feeds = opts.reload ? { ...bridge.feeds, reload: opts.reload.feed } : bridge.feeds
-  const stops = (opts.reload ? ["changes", "show", "agent", "reload"] : ["changes", "show", "agent"]).map((feed) =>
+  const stops = (opts.reload || remote ? ["changes", "show", "agent", "reload"] : ["changes", "show", "agent"]).map((feed) =>
     feeds[feed]!((e) => {
       event = { feed, event: e }
       machine.change()
     })
   )
-  const stop = () => stops.forEach((s) => s())
+  // naima update moved the program: the shell is asked to start this sidecar again on the new one, and then reloads its window.
+  const moved = (opts.restartWatch ?? restartWatch)({ root: ctx.root }, () => send({ feed: "restart", event: null }))
+  const stop = () => (moved.stop(), stops.forEach((s) => s()))
   try {
     for await (const line of createInterface({ input: opts.input, crlfDelay: Infinity })) {
       if (!line.trim()) continue
@@ -180,7 +198,7 @@ export async function runSidecar(ctx: Context, opts: SidecarOptions): Promise<nu
       const id = typeof request.id === "number" ? request.id : null
       const command = String(request.command)
       const args = request.args && typeof request.args === "object" && !Array.isArray(request.args) ? request.args as { [key: string]: Json } : {}
-      const handler = Object.hasOwn(handlers, command) ? handlers[command] : undefined
+      const handler = lookup(command)
       machine.request(id)
       void (async () => {
         let answer: { [key: string]: Json }

@@ -13,7 +13,7 @@ import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSy
 import { delimiter, join, posix } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { Context, Progress } from "../../core/api.ts"
-import { claim, desktopApp, desktopAppDirs, drop, processAlive, registryDir, rewrite, type UiRecord } from "./at-start.ts"
+import { claim, desktopApp, desktopAppDirs, drop, processAlive, registryDir, rewrite, uiEnv, type UiRecord } from "./at-start.ts"
 import { askShow, openUis, taken } from "./show.ts"
 
 /** This Naima's folder, which ships the shell (ui/desktop) beside the bundle (ui/dist). */
@@ -25,7 +25,7 @@ export const RAISE_MS = 2_000
 /** How long an app just started must keep running before it counts as started, in ms: one that cannot reach its project ends sooner. */
 export const SETTLE_MS = 2_000
 
-export type DesktopOpened = { opened: true; how: "raised" | "started" | "starting" } | { opened: false; reason: string }
+export type DesktopOpened = { opened: true; how: "raised" | "started" | "starting" } | { opened: false; reason: string; attach?: true }
 
 /** What opening the desktop app does outside this module: each replaced by a test. */
 export interface DesktopDeps {
@@ -48,7 +48,7 @@ export const realDesktopDeps: DesktopDeps = {
   alive: processAlive,
   start(command, env, cwd) {
     const [program, ...args] = command
-    const child = spawn(program!, args, { detached: true, stdio: "ignore", cwd, env: { ...process.env, ...env } })
+    const child = spawn(program!, args, { detached: true, stdio: "ignore", cwd, env: uiEnv(process.env, env) })
     child.once("error", () => {})
     child.unref()
     return child.pid ?? null
@@ -98,7 +98,9 @@ export async function openDesktop(
       mkdirSync(dir, { recursive: true })
       const got = claim(dir, { pid: process.pid, how: "claim" }, deps.alive)
       // An app named in the registry whose window does not answer yet is one still starting: hello's, or another naima ui's.
-      if (got && "live" in got && got.live.how === "desktop") return { opened: true, how: "starting" }
+      if (got && "live" in got && (got.live.how === "desktop" || got.live.how === "claim")) return { opened: true, how: "starting" }
+      // A browser's server already runs on the project: one UI per project, so the app does not open beside it; naima ui attaches to it.
+      if (got && "live" in got && got.live.how === "browser") return { opened: false, reason: "a UI already runs on the project", attach: true }
       if (got && "gen" in got) gen = got.gen
     }
     const pid = deps.start([app], { NAIMA_PROJECT: root }, root)
@@ -168,6 +170,7 @@ export async function desktopFirst(
   }
   const name = ctx.root.split(/[\\/]/).filter(Boolean).pop() ?? ctx.root
   const o = await openDesktop(ctx.root, registryDir(ctx.root), app, deps, watch ? liveEnv(env, ctx.trackerRoot) : null)
+  if (!o.opened && o.attach) return false
   if (o.opened) {
     ctx.out(
       watch ? `naima ui: opened the desktop app on ${name}, live: it runs this Naima (${PRODUCT}) and reloads when its UI is rebuilt` : desktopLine(o, name),
