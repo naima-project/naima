@@ -43,7 +43,7 @@ export const CODEGEN_REPOSITORY = "https://github.com/naima-project/naima-codege
  * The naima-codegen this adapter is made for: a commit of its repository, which has no releases. The commit's git
  * object id is its checksum: git verifies the content against it when the commit is checked out.
  */
-export const CODEGEN_PIN = { commit: "b333b3a31824655d091ab30730e8496634a00dc1", repository: CODEGEN_REPOSITORY }
+export const CODEGEN_PIN = { commit: "9caa1d765c08c2dded60c490615a9f3b02dfb00a", repository: CODEGEN_REPOSITORY }
 
 const short = (commit: string): string => commit.slice(0, 12)
 

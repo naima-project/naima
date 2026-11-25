@@ -1,0 +1,1 @@
+import{Dt as e,Et as t,m as n,v as r}from"./runtime-DXdvW7oy.js";import{br as i,di as a}from"./core-CAj6BEin.js";function o(o,s){e(s,!1);let c=a();n(()=>i(c)),r(),t()}export{o as default};
