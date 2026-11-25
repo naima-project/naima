@@ -564,17 +564,30 @@ export function versionKey(version: string): string {
 const tagsOf = (repo: string): string[] => (gitOrNull(repo, "tag", "--list") ?? "").split("\n").map((t) => t.trim()).filter(Boolean)
 
 /**
- * Every tag a release may be marked with, as version keys: the project's own, the tracker's repository's when it has
- * one of its own, and each submodule's, such as a product kept as a submodule of the repository that tracks it.
+ * The repositories a release is tagged in, by the name `naima gates` says them by: the project's own ("."), the
+ * tracker's repository when it has one of its own ("tracker"), and the submodules the project declares as its own with
+ * the gates plugin's option `releaseRepos` (their paths, such as a product kept as a submodule of the repository that
+ * tracks it). A submodule that is another project's (a vendored dependency carrying its own v1.1.0) is not one.
  */
-export function releaseTags(ctx: Context): Set<string> {
-  const repos = new Set([ctx.root, ctx.trackerGit])
-  const paths = gitOrNull(ctx.root, "config", "--file", ".gitmodules", "--get-regexp", "^submodule\\..*\\.path$") ?? ""
-  for (const line of paths.split("\n")) {
-    const path = line.trim().split(/\s+/)[1]
-    if (path && existsSync(join(ctx.root, path, ".git"))) repos.add(join(ctx.root, path))
+export function releaseRepos(ctx: Context): { name: string; path: string }[] {
+  const out = [{ name: ".", path: ctx.root }]
+  if (ctx.trackerGit !== ctx.root) out.push({ name: "tracker", path: ctx.trackerGit })
+  const declared = ctx.config.plugins["gates"]?.options?.["releaseRepos"]
+  for (const name of Array.isArray(declared) ? declared : []) {
+    if (typeof name === "string" && existsSync(join(ctx.root, name, ".git"))) out.push({ name, path: join(ctx.root, name) })
   }
-  return new Set([...repos].flatMap(tagsOf).map(versionKey))
+  return out
+}
+
+/** Where the tag of a version stands: the repositories (releaseRepos) whose tags carry it, by name; none when it is unreleased. */
+export function releasedIn(ctx: Context, version: string): string[] {
+  const key = versionKey(version)
+  return releaseRepos(ctx).filter((r) => tagsOf(r.path).some((t) => versionKey(t) === key)).map((r) => r.name)
+}
+
+/** Every tag a release may be marked with, as version keys, from the project's own repositories (releaseRepos). */
+export function releaseTags(ctx: Context): Set<string> {
+  return new Set(releaseRepos(ctx).flatMap((r) => tagsOf(r.path)).map(versionKey))
 }
 
 /**
@@ -745,6 +758,8 @@ interface GateRow {
   finished: boolean
   /** The goal that superseded it, when one did: it is finished, and its `when` says "superseded by <that goal>". */
   supersededBy?: string
+  /** Where its release tag was found: the repositories whose tags carry its version (releaseRepos); absent when untagged. */
+  releasedIn?: string[]
 }
 
 /** Whether a proof by these hands is a person's: a person's own hands, or the owner's. */
@@ -786,7 +801,7 @@ function checksOf(ctx: Context, def: GateDef): { checks?: MilestonePlan } {
   }
 }
 
-async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: GateDef; result: GateResult; row: GateRow }[]> {
+export async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: GateDef; result: GateResult; row: GateRow }[]> {
   const all = gatesOf(ctx).map((g) => g.name)
   let released: Set<string> | null = null
   const tags = (): Set<string> => (released ??= releaseTags(ctx))
@@ -827,6 +842,7 @@ async function gateRows(ctx: Context, names: string[] = []): Promise<{ def: Gate
         ...(def.after?.length ? { after: def.after } : {}),
         before: all.filter((a) => goalBefore(ctx, a, def.name)),
         finished: isFinished(def, result, tags),
+        ...(def.version && releasedIn(ctx, def.version).length ? { releasedIn: releasedIn(ctx, def.version) } : {}),
         ...(def.supersededBy ? { supersededBy: def.supersededBy } : {}),
       },
     }
@@ -874,6 +890,7 @@ const gatesCommand: Command = {
     else {
       for (const g of gates) {
         printGate(ctx, g.def, g.result)
+        if (g.row.releasedIn) ctx.out(`  release tag ${g.def.version} found in ${g.row.releasedIn.map((r) => (r === "." ? "this repository" : r)).join(", ")}`)
         for (const l of await waitsLines(ctx, g.def)) ctx.out(l)
         if (g.row.checks) ctx.out(`  ${planLine(g.row.checks)}`)
       }
