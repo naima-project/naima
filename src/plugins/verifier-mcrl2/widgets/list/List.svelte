@@ -817,7 +817,8 @@
     align-items: center;
     gap: var(--space-xs) var(--space-md);
     min-block-size: var(--size-target);
-    color: var(--color-text-muted);
+    color: var(--color-text-muted);    /* Never shrunk under its own words (a narrow stage, the text at 200%): the grid below takes what is left. */
+    flex: none;
   }
   .status .search {
     flex: 0 1 var(--size-w-16);
@@ -982,8 +983,21 @@
     padding: var(--space-none) var(--space-sm) var(--space-none) var(--space-none);
     opacity: 0.6;
   }
-  .vdrop:hover {
-    opacity: 1;
+  @media (hover: hover) {
+    .vdrop:hover {
+      opacity: 1;
+    }
+  }
+  @media (pointer: coarse) {
+    .vdrop {
+      opacity: 1;
+      min-inline-size: var(--size-touch);
+      justify-content: center;
+    }
+    .vpick,
+    .vdrop {
+      min-block-size: var(--size-touch);
+    }
   }
   .vpick:focus-visible,
   .vdrop:focus-visible,
@@ -1061,9 +1075,7 @@
     display: flex;
     align-items: center;
     min-inline-size: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
   }
   .cell.end {
     justify-content: flex-end;
@@ -1118,8 +1130,7 @@
   /* A second line under the title: smaller and muted. */
   .row .cell.title .second {
     display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
     font-size: var(--font-size-xs);
     color: var(--color-text-muted);
   }
@@ -1228,6 +1239,39 @@
   }
   .narrow .search {
     max-inline-size: none;
+  }
+
+  /* A list in a narrow container (a phone, a text at 200%, a narrow pane): the title takes a line of its own and wraps, the
+     other columns follow on the line below it, so that no word is cut and no column lies over another. The column
+     headings give way to the Sort menu. */
+  @container (max-width: 48rem) {
+    .list:not(.narrow):not(.is-diary) .heads {
+      display: none;
+    }
+    .list:not(.narrow):not(.is-diary) .row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      column-gap: var(--space-md);
+      row-gap: 0;
+      padding-block: var(--space-xs);
+    }
+    .list:not(.narrow):not(.is-diary) .row .cell {
+      flex: 0 1 auto;
+      min-inline-size: 0;
+    }
+    .list:not(.narrow):not(.is-diary) .row .cell.title {
+      order: -1;
+    }
+    .list:not(.narrow):not(.is-diary) .row .dotcell {
+      order: -2;
+      flex: none;
+      align-self: center;
+      inline-size: var(--dot);
+    }
+    .list:not(.narrow):not(.is-diary) .row .cell.title {
+      flex: 1 1 60%;
+    }
   }
 
   @media (pointer: coarse) {
@@ -1373,8 +1417,8 @@
   .is-diary .row.entry {
     display: block;
     min-block-size: 0;
-    margin-inline: calc(var(--space-sm) * -1);
-    padding: var(--space-xs) var(--space-sm);
+    margin-inline: calc(var(--space-sm) * -1) 0;
+    padding: var(--space-xs) 0 var(--space-xs) var(--space-sm);
   }
   .is-diary .row.entry .cell.title {
     display: block;
@@ -1425,7 +1469,8 @@
     align-self: end;
   }
   @media (pointer: coarse) {
-    .is-diary .row.note {
+    .is-diary .row.note,
+    .is-diary .ghead.when {
       min-block-size: var(--size-touch);
     }
   }
