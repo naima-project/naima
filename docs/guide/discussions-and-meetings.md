@@ -76,15 +76,21 @@ Each of these is noted on the item, so its page says where it went and when. A m
 
 ```sh
 naima meeting date review 2026-11-20
-naima meeting date review none                     # no date: whenever you're ready
+naima meeting date review none                     # no date: it waits for you to give it a day
 ```
 
 You don't need to type these. Ask the agent in the chat ("put this on Friday's review", "move the review to Monday") and it runs them. On Home you can also drag
 a meeting's square along the river to another day, or off it to take its date away ([Home](the-window.md#home)).
 
+## When a meeting's day comes
+
+A meeting with a date and nothing held on it raises an alarm from its day on, the same way an overdue goal does: an urgent message at `naima hello` and at the end of every turn, once an hour, saying the meeting is due today, or was due on its day and was not held. It tells the agent to tell you now and to open the meeting before any other work, and `naima hello` says the same at the start of a session. The message does not wait for you to acknowledge it. It comes back until you hold the meeting (take it and close it), move its date or drop it (`naima meeting date review none`).
+
+A meeting that has discussions and no date, or only the date of a meeting already held, is shown as to schedule, in `naima meeting`, on Home and in the Calendar, until you give it a day. The alarm is for meetings that need the owner; a meeting that needs only others raises none.
+
 ## In the app
 
-The Meetings screen lists your meetings: the one on now, then those coming up by date, then those waiting with no date, which take place whenever you're ready.
+The Meetings screen lists your meetings: the one on now, then those coming up by date, then those to schedule: meetings with discussions and no date.
 Each says when it is, how many things are on it, and opens to show its agenda. Every item that waits for you, on any screen, says so, and says which meeting it
 is on, or that it is on none yet. Home's Needs you starts with your next meeting and the others waiting. On Home, the meetings with a date before the focus
 horizon are two small rings overlapping on the river ahead; a click holds one in the stage, one question at a time, and a click on the question brings it into

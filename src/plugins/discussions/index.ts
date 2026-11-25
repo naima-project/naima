@@ -31,12 +31,17 @@
 // `naima hello` names each meeting with open discussions, so the agent opens
 // with its agenda when the people it needs are there.
 //
+// A dated meeting with the owner that is not held raises an alarm from its day on: an urgent message at hello and at the
+// turn end, every hour, until the owner holds, moves or drops it (alarm.ts; the model develop/models/meeting/alarm/alarm.mcrl2).
+// A meeting with discussions and no date, or only a date its holding spent, is to schedule.
+//
 // The model: develop/models/meeting/meeting.mcrl2 in the workshop, with its
 // properties (nothing starts without the owner's yes, no work starts during a
 // meeting, approved work is started).
 
 import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
+import { type MeetingAlarm, meetingAlarmJob } from "./alarm.ts"
 import {
   addLink,
   bool,
@@ -46,6 +51,7 @@ import {
   type Context,
   CONTRACT,
   createItem,
+  currentBranch,
   DATA_FILE,
   DEFAULT_DATA,
   fieldValue,
@@ -76,6 +82,7 @@ import {
   strs,
   type SummarySection,
   today,
+  trunk,
   type TypeDef,
   usageError,
   type WriteHook,
@@ -171,11 +178,42 @@ function meetingOfItem(i: Item, meetings: Record<string, MeetingConfig>): string
   const m = fieldValue(i, MEETING)
   return m && Object.hasOwn(meetings, m) ? m : null
 }
+/** Whether holding the meeting spent its date: it was held on that day or after it. */
+const spent = (m: MeetingConfig): boolean => !!m.on && !!m.held && m.held >= m.on
+/** The date a meeting still waits for: its own, unless holding it spent it, and then it has none until the owner gives it another. */
+const dateOf = (m: MeetingConfig): string | undefined => (spent(m) ? undefined : m.on)
 /** Where a meeting stands. */
 function stateOf(ctx: Context, name: string, m: MeetingConfig): MeetingState {
   if (m.taken) return "taken"
   if (m.held && !openAgenda(ctx, name).length && !othersOn(ctx, name).length) return "held"
-  return m.on ? "scheduled" : "waiting"
+  return dateOf(m) ? "scheduled" : "waiting"
+}
+
+/** What the owner is told of a dated meeting not yet held: due on its day, missed after it. Null for any other, a meeting that does not need the owner included. */
+export type Alarm = "due" | "missed"
+export function alarmOf(ctx: Context, name: string, m: MeetingConfig): Alarm | null {
+  const on = dateOf(m)
+  if (!on || !needsOf(m).includes("owner") || stateOf(ctx, name, m) !== "scheduled" || on > today(ctx)) return null
+  return on === today(ctx) ? "due" : "missed"
+}
+
+/** A meeting with discussions and no date, or only a date its holding spent: it waits for the owner to give it a day. */
+export function toSchedule(ctx: Context, name: string, m: MeetingConfig): boolean {
+  return !m.taken && !dateOf(m) && (openAgenda(ctx, name).length > 0 || othersOn(ctx, name).length > 0)
+}
+
+/** Whether this is the trunk's checkout: the one whose meetings are the project's. */
+const onTrunk = (ctx: Context): boolean => {
+  const t = trunk(ctx.root)
+  return !!t && currentBranch(ctx.root) === t
+}
+
+/** The meetings whose day has come and are not held, as the alarm says them. */
+function alarmsOf(ctx: Context, meetings: Record<string, MeetingConfig>): MeetingAlarm[] {
+  return Object.entries(meetings).flatMap(([name, m]) => {
+    const alarm = alarmOf(ctx, name, m)
+    return alarm ? [{ name, title: m.title, on: dateOf(m)!, alarm, open: openAgenda(ctx, name).length + othersOn(ctx, name).length }] : []
+  }).sort((a, b) => a.on.localeCompare(b.on) || a.name.localeCompare(b.name))
 }
 
 /** Where an open discussion stands on the agenda, in the order the meeting takes them. */
@@ -294,14 +332,21 @@ function changeMeeting(ctx: Context, name: string, change: (m: MeetingConfig) =>
   return out!
 }
 
+/** How a meeting stands for the owner, for its header: due, missed, or to schedule; nothing otherwise. */
+function standing(ctx: Context, name: string, m: MeetingConfig): string {
+  const a = alarmOf(ctx, name, m)
+  if (a) return a === "due" ? "; DUE today, not held" : `; MISSED, was due ${dateOf(m)}, not held`
+  return toSchedule(ctx, name, m) ? "; to schedule: give it a day with naima meeting date" : ""
+}
+
 function agendaLines(ctx: Context, name: string, m: MeetingConfig, meetings: Record<string, MeetingConfig>): string[] {
   const all = agendaOf(ctx, name)
   const ordered = orderedAgenda(ctx, name, meetings)
   const others = othersOn(ctx, name)
   const state = stateOf(ctx, name, m)
   const out = [
-    `${name} — ${m.title} (needs ${needsOf(m).join(", ")}; ${whenOf(m)}${
-      state === "taken" ? `; taken ${m.taken}` : ""
+    `${name} — ${m.title} (needs ${needsOf(m).join(", ")}; ${whenOf(m)}${state === "taken" ? `; taken ${m.taken}` : ""}${
+      standing(ctx, name, m)
     }): ${ordered.length} open of ${all.length}${others.length ? `, and ${others.length} other item${others.length === 1 ? "" : "s"}` : ""}`,
   ]
   let n = 0
@@ -509,7 +554,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 export const WAIT_POLL_MS = 500
 
 /** Whether a meeting is due now: always without a date, from its date on with one. */
-const dueNow = (ctx: Context, m: MeetingConfig): boolean => !m.on || m.on <= today(ctx)
+const dueNow = (ctx: Context, m: MeetingConfig): boolean => !dateOf(m) || dateOf(m)! <= today(ctx)
 
 /** A work package: an open item and the decisions about it not yet turned into work. */
 interface Package {
@@ -928,6 +973,10 @@ export interface MeetingRow {
   held: string | null
   /** Whether it is due now: always without a date, from its date on with one. */
   due: boolean
+  /** A dated meeting with the owner not yet held: due on its day, missed after it. */
+  alarm: Alarm | null
+  /** It has discussions and no date to wait for: the owner has to give it a day. */
+  toSchedule: boolean
   /** The open items on its agenda, in the order it takes them: its discussions, then the other items moved there. */
   agenda: { ref: string; title: string; type: string; status: string; place: Place | "other" }[]
   /** The decided discussions not yet turned into work. */
@@ -950,11 +999,13 @@ export function meetingsData(
     name,
     title: m.title,
     needs: needsOf(m),
-    on: m.on ?? null,
+    on: dateOf(m) ?? (stateOf(ctx, name, m) === "held" ? m.on ?? null : null),
     state: stateOf(ctx, name, m),
     taken: m.taken ?? null,
     held: m.held ?? null,
     due: dueNow(ctx, m),
+    alarm: alarmOf(ctx, name, m),
+    toSchedule: toSchedule(ctx, name, m),
     agenda: [
       ...orderedAgenda(ctx, name, meetings).map(({ item, place }) => ({
         ref: label(item),
@@ -1028,25 +1079,36 @@ function helloSection(base: Record<string, MeetingConfig>): SummarySection {
             meeting: name,
             title: m.title,
             needs: needsOf(m),
+            alarm: alarmOf(ctx, name, m),
+            on: dateOf(m) ?? null,
             open: [...ordered.filter((o) => o.place !== "deferred").map((o) => label(o.item)), ...othersOn(ctx, name).filter(mine).map(label)],
             taken: m.taken ?? null,
             deferred: ordered.filter((o) => o.place === "deferred").map((o) => label(o.item)),
             toClose: packagesOf(ctx, name).packages.filter((k) => mine(k.item)).map((k) => label(k.item)),
           }
         })
-        .filter((r) => r.taken || r.open.length || r.toClose.length)
+        .filter((r) => r.taken || r.open.length || r.toClose.length || r.alarm)
       return rendered(
         rows,
         (rs) =>
           rs.flatMap((r) => {
             const who = `${r.needs.join(" and ")} ${r.needs.length > 1 ? "are" : "is"}`
             return [
+              ...(r.alarm && !r.taken
+                ? [
+                  `Meeting ${r.meeting} (${r.title}) ${
+                    r.alarm === "due" ? "is today" : `was due on ${r.on} and was not held`
+                  }, with ${r.open.length} discussion${
+                    r.open.length === 1 ? "" : "s"
+                  } to take: open it before any other work — naima meeting ${r.meeting} — and tell the owner now. Naima says it again every hour until the owner holds it, moves its date (naima meeting date ${r.meeting} <day>) or drops it (naima meeting date ${r.meeting} none).`,
+                ]
+                : []),
               ...(r.taken
                 ? [
                   `Meeting ${r.meeting} (${r.title}) was taken at ${r.taken}: ${who} here now. Open with its agenda — naima meeting ${r.meeting} — and close it when it ends.`,
                 ]
                 : []),
-              ...(!r.taken && r.open.length
+              ...(!r.taken && !r.alarm && r.open.length
                 ? [
                   `Meeting ${r.meeting} (${r.title}) has ${r.open.length} discussion${r.open.length === 1 ? "" : "s"} to take${
                     r.deferred.length ? ` (${r.deferred.length} more deferred)` : ""
@@ -1150,5 +1212,6 @@ export default function discussions(options: Record<string, unknown> = {}): Plug
     hooks: [hook],
     checks: [checks(meetings)],
     summary: [helloSection(meetings)],
+    jobs: [meetingAlarmJob({ alarms: (ctx) => alarmsOf(ctx, liveMeetings(ctx, meetings)), onTrunk })],
   }
 }

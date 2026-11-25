@@ -2,7 +2,7 @@
 // hands back to it, is declared here and nowhere else.
 
 import type { PluginApi } from "./api.ts"
-import type { JobOutcome } from "./tick.ts"
+import type { JobOutcome, Notice } from "./tick.ts"
 
 /** A typed cross-reference. `id` is always a permanent item id, never a slug. */
 export interface Link {
@@ -288,6 +288,8 @@ export interface TickJob {
    */
   canRunHere?(ctx: Context): boolean
   run(ctx: Context, signal: AbortSignal): Promise<JobOutcome> | JobOutcome
+  /** Whether a live notice (`live: true`) this job raised is still true now, asked whenever it may be shown: it ends at once with its cause. */
+  stillHolds?(ctx: Context, notice: Notice): boolean
 }
 
 /** One additive term of an item's urgency. Lower is more urgent. */
