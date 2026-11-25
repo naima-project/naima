@@ -57,8 +57,10 @@ function runsRefusal(c: unknown): string | null {
   const runs = (c as { runs?: unknown } | null)?.runs
   if (runs === undefined) return null
   if (!Array.isArray(runs)) return "declares runs that is not a list of programs"
-  const bad = runs.find((tool) => typeof tool !== "string" || !/^[^\s,]+$/.test(tool))
-  return bad === undefined ? null : `runs ${JSON.stringify(bad)}: a program is named by one word or an absolute path, with no comma or space`
+  // A space is allowed only inside an absolute path (a Windows home such as C:\Users\Ada Lovelace\.deno\bin\deno.exe); a command line such as "deno --allow-all" is not a program.
+  const absolute = /^(?:[A-Za-z]:[\\/]|\/|\\\\)(?!.*\s-)[^,]+$/
+  const bad = runs.find((tool) => typeof tool !== "string" || !(/^[^\s,]+$/.test(tool) || absolute.test(tool)))
+  return bad === undefined ? null : `runs ${JSON.stringify(bad)}: a program is named by one word or an absolute path, with no comma, and no space unless in an absolute path`
 }
 
 /** Every point: the core's, then each plugin's in load order. A point declared twice, or by a manifest key's name, is an error. */
