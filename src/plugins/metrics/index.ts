@@ -548,7 +548,7 @@ export interface Judgement {
 /** A number against its metric's bound: within it, past it, or — a ratchet — a gain the bound has not followed. */
 export function judge(m: MetricConfig, value: number): Judgement {
   const b = boundOf(m)
-  if (!b) return { holds: true, why: "recorded, no bound" }
+  if (!b) return { holds: true, why: "nothing to hold it to" }
   const slack = m.tolerance ?? 0
   const word = BOUND_WORD[b.bound]
   if (b.bound === "equals") {

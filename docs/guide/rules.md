@@ -177,7 +177,7 @@ option `excusePhrases`.
 
 ### A partial item says what is left
 
-**Enforced by** the check `partial-says-what-is-left`, which requires an item in status `partial` to carry at least one unticked `- [ ]` line on its page.
+**Enforced by** the check `partial-says-what-is-left`, as a note, on an item in status `partial` whose page has no unticked `- [ ]` line.
 
 ### A deferred item says why, and what would reopen it
 
@@ -396,9 +396,11 @@ Why: evidence is copied verbatim on purpose, and a verbatim command or log carri
 it's committed, it stays in the history of a repository that anyone may be able to read.
 
 **Enforced by** the write hook `private-infrastructure` and by `naima pass`, `naima event` and `naima attach`. Every write of tracker text that the CLI makes is
-checked before anything reaches the disk, and it is refused if it adds a machine name, an IP address other than the loopback, a URI with a port on a host other
-than the loopback or an example domain, a path under `/Users/`, `/home/` or `C:\Users\`, the user's login name, or a word from the user's private list. Each
-finding is listed with its line and the placeholder to write instead. Nothing is rewritten silently, so the author rewrites the text and runs the command again.
+checked before anything reaches the disk, and it is refused if it adds the name of the machine Naima runs on (a generic one such as `Mac` is let through), a
+machine named in the user's private hosts file (`hosts.json`, beside the private list, whose `ssh` entries name them), an IP address other than the loopback, a URI
+with a port on a host other than the loopback or an example domain, a path under `/Users/`, `/home/` or `C:\Users\`, the user's login name, or a word from the
+user's private list. The check cannot recognise any other hostname, so the name of a machine that is not this one, nor in the hosts file, nor on the private list
+goes through: put such a name on the private list, or write `<host>` for it. Each finding is listed with its line and the placeholder to write instead. Nothing is rewritten silently, so the author rewrites the text and runs the command again.
 A deliberate mention can go through with `--allow-private "<reason>"`, and then the reason is recorded in the item's notes, the session note or the event,
 together with the counts by kind but never the values. What reached the tracker some other way, a file copied in by hand or one a tool wrote, is caught by the
 check `private-data`: `naima check` reads every tracker file, attachments included, with the same patterns and fails on each finding, naming its file, line,
@@ -615,7 +617,7 @@ uuid. **Convention** for the project's own files. Naima's claims and [session no
 
 ### A claim names real items
 
-**Enforced by** the check `claims-resolve`.
+**Enforced by** the check `claims-resolve`, as a note, on a claim written in this worktree that names an item that is not here.
 
 ### Nobody commits on the trunk while branches are being prepared
 
