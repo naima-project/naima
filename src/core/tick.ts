@@ -47,6 +47,12 @@ export interface Notice {
   text: string
   /** The command that acknowledges it, for a message that waits on the owner; absent for one shown once. */
   ack?: string
+  /**
+   * A message that lasts as long as its cause, and no longer: shown, an urgent one every hour, for as long as the job
+   * that raised it still holds it (its `stillHolds`), and then no more. It is never made an item, so nobody acknowledges
+   * it, the owner included: only its cause ending ends it.
+   */
+  live?: boolean
 }
 
 /** What one run of a job came to. */
@@ -78,6 +84,8 @@ export interface TickTask extends Schedule {
    */
   canRunHere?(): boolean
   run(signal: AbortSignal): Promise<JobOutcome> | JobOutcome
+  /** Whether a live notice this job raised is still true now: asked whenever the notice may be shown, so that it ends at once with its cause. */
+  stillHolds?(notice: Notice): boolean
   /** The urgent message a failing streak since `since` (YYYY-MM-DD) raises. */
   escalation?(since: string): { title: string; text: string }
 }
@@ -475,7 +483,7 @@ export function startTick(opts: TickOptions): { finish(): Promise<TickResult> } 
 function raiseUrgent(opts: TickOptions, now: Date): void {
   for (const task of opts.tasks) {
     for (const n of lastSuccess(task, opts.dir)?.notices ?? []) {
-      if (n.level !== "urgent" || ackedHere(opts.dir).has(n.id)) continue
+      if (n.level !== "urgent" || n.live || ackedHere(opts.dir).has(n.id)) continue
       const title = n.text.split(/(?<=[.!?])\s/)[0] ?? n.text
       const created = now.toISOString().slice(0, 10)
       if (publish(join(opts.dir, "messages", `${n.id}.json`), JSON.stringify({ id: n.id, level: "urgent", title, text: n.text, created }))) {
@@ -509,12 +517,12 @@ function escalate(opts: TickOptions, now: Date): void {
 }
 
 /** Every message that may be shown now, not yet acknowledged, deduplicated by id: the urgent ones first. */
-export function currentNotices(tick: string, tasks: readonly Pick<Schedule, "name">[], store?: MessageStore): Notice[] {
+export function currentNotices(tick: string, tasks: readonly (Pick<Schedule, "name"> & Pick<TickTask, "stillHolds">)[], store?: MessageStore): Notice[] {
   const acked = new Set([...ackedHere(tick), ...(store?.acknowledged() ?? [])])
   const all: Notice[] = [
     ...raisedHere(tick).map(({ id, level, text, ack }) => ({ id, level, text, ...(ack ? { ack } : {}) })),
     ...(store?.pending() ?? []),
-    ...tasks.flatMap((t) => lastSuccess(t, tick)?.notices ?? []),
+    ...tasks.flatMap((t) => (lastSuccess(t, tick)?.notices ?? []).filter((n) => !n.live || !t.stillHolds || t.stillHolds(n))),
   ]
   const seen = new Set<string>()
   const out = all.filter((n) => !acked.has(n.id) && !seen.has(n.id) && (seen.add(n.id), true))

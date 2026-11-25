@@ -164,7 +164,7 @@ Every kind of contribution is an extension point: the core's own, and any a plug
 | `facts` | core | lines `naima show` prints of an item under its fields, and in its JSON as `facts`: what a plugin knows of the item that its files do not say | coordination |
 | `waiting` | core | what waits for an owner, as one source sees it: naima waiting, naima hello and the UI's waiting views list every source's together, each item once, filtered to the person at the keyboard | gates, metrics |
 | `rank` | core | an additive term of every item's urgency; lower is more urgent | triage, gates |
-| `jobs` | core | a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it, among those its canRunHere admits (a process it does not claims no attempt); what it finds is shown to the owner as messages | coordination, gates, outside-issues, long-work |
+| `jobs` | core | a job the tick runs when it is due, once an hour or once a day, whichever naima process wins it, among those its canRunHere admits (a process it does not claims no attempt); what it finds is shown to the owner as messages | coordination, gates, discussions, outside-issues, long-work |
 | `extends` | core | additive changes to another plugin's type — statuses (an existing one only with its category), traits, transitions — or field — enum values, more types or traits it applies to | discussions, knowledge, roles |
 | `hooks` | core | hooks on every item write: `beforeWrite(write, ctx)` may change or refuse it, `afterWrite(write, ctx)` sees it done; `beforeText(text, ctx)` may refuse a write of free text or a file that is not an item's (a session note, an event, an attachment) or add to its record | core, trackers, coordination, triage, epics, discussions, planning, knowledge, verifier, privacy |
 | `setup` | core | what a plugin puts in place in the project's clone where it is missing (a git hook, a file), run by `naima init` and `naima update` after their own work: `install(ctx) → lines`, each said | core, coordination, planning, backup, metrics |
@@ -2535,6 +2535,12 @@ Discussions: a question that needs time with a person, not a quick answer: the t
 | `discussions` | a decided discussion records its decision; an open one is on a meeting's agenda, or it waits for no one; a decision taken in a meeting is turned into work when the meeting closes |
 
 **Summary sections**: `meetings`.
+
+**Jobs** the tick runs when due
+
+| Job | Every | What it does |
+|---|---|---|
+| `meeting-alarm` | hour | every hour, on the trunk's checkout: each dated meeting with the owner whose day has come and that is not held (due on its day, missed after it) is said in an urgent message shown at naima hello and at the turn-end tick, once an hour, until the owner holds the meeting, moves its date or drops it; nobody acknowledges it |
 
 **Extensions** of other plugins' types and fields
 

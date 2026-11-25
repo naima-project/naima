@@ -1432,8 +1432,13 @@ function stanceNews(root: string, raw: Record<string, unknown>): { lines: string
 
 /** A plugin's job as the tick runs it, in the project's context. */
 const asTask = (ctx: Context, job: TickJob): TickTask => {
-  const { canRunHere, ...rest } = job
-  return { ...rest, ...(canRunHere ? { canRunHere: () => canRunHere(ctx) } : {}), run: (signal) => job.run(ctx, signal) }
+  const { canRunHere, stillHolds, ...rest } = job
+  return {
+    ...rest,
+    ...(canRunHere ? { canRunHere: () => canRunHere(ctx) } : {}),
+    ...(stillHolds ? { stillHolds: (n: Notice) => stillHolds(ctx, n) } : {}),
+    run: (signal) => job.run(ctx, signal),
+  }
 }
 
 /** Whether this run ticks: launched, always; run directly, only when a test asks. */

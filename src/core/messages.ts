@@ -27,7 +27,7 @@ import {
   raisedHere,
   tickDir,
 } from "./tick.ts"
-import type { Command, Context, FieldDef, Item, TypeDef } from "./types.ts"
+import type { Command, Context, FieldDef, Item, TickJob, TypeDef } from "./types.ts"
 
 /** The trait of the type messages to the owner are items of: the tick finds it by the trait. */
 export const MESSAGES_TRAIT = "messages"
@@ -45,6 +45,15 @@ export const messagesType: TypeDef = {
   creatable: false,
   traits: [MESSAGES_TRAIT],
   transitions: { acknowledged: [] },
+}
+
+/** The jobs that have left state, with the check that ends a live notice with its cause: the plugins' own, in this project. */
+function liveJobs(ctx: Context, tick: string) {
+  const own = new Map(ctx.registry.contributions("jobs").map((c) => [(c.value as TickJob).name, c.value as TickJob]))
+  return jobsIn(tick).map((j) => {
+    const stillHolds = own.get(j.name)?.stillHolds
+    return stillHolds ? { ...j, stillHolds: (n: Notice) => stillHolds(ctx, n) } : j
+  })
 }
 
 export const LEVEL: FieldDef = {
@@ -139,7 +148,7 @@ export const messagesCommand: Command = {
     }
     if (p.positionals.length) throw usageError(messagesCommand)
     const acked = new Set([...(tick ? ackedHere(tick) : []), ...items.filter((i) => !isOpen(ctx, i)).map((i) => i.slug)])
-    const current = tick ? currentNotices(tick, jobsIn(tick), itemStore(ctx)) : items.filter((i) => isOpen(ctx, i)).map(noticeOf)
+    const current = tick ? currentNotices(tick, liveJobs(ctx, tick), itemStore(ctx)) : items.filter((i) => isOpen(ctx, i)).map(noticeOf)
     const rows = current.map((n) => ({ ...n, status: n.ack ? "unread" : "said" }))
     if (bool(p, "all")) {
       for (const i of items) if (acked.has(i.slug)) rows.push({ ...noticeOf(i), status: "acknowledged" })
