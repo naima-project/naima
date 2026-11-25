@@ -292,6 +292,8 @@
     min-inline-size: 0;
     display: grid;
     grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+    /* Where the box is too narrow for the tools of its narrowest cards (a phone, text at 200%), it scrolls. */
+    overflow: auto;
   }
   .top {
     display: flex;
@@ -368,13 +370,13 @@
   }
   .bar {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-sm);
     min-block-size: var(--size-target);
     padding: var(--space-xs) var(--space-sm) var(--space-none) var(--space-md);
   }
-  /* The title gives way first: it ends in an ellipsis, the card's tools always stay inside it. */
+  /* The title gives way first: it wraps onto more lines, and the card's tools always stay inside it. */
   .handle {
     flex: 0 1 auto;
     min-inline-size: 0;
@@ -391,7 +393,6 @@
   }
   .handle :global(.content) {
     min-inline-size: 0;
-    overflow: hidden;
   }
   .handle :global(.handle) {
     min-inline-size: var(--size-target);
@@ -405,9 +406,7 @@
   }
   .title {
     display: block;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
     font-size: var(--font-size-sm);
     color: var(--color-text-muted);
   }

@@ -20,7 +20,10 @@
     justify-content: center;
     gap: var(--space-sm);
     min-height: var(--size-control);
-    padding: 0 var(--space-lg);
+    max-inline-size: 100%;
+    padding: var(--space-xs) var(--space-lg);
+    overflow-wrap: anywhere;
+    text-align: center;
     border: var(--border-width-thin) solid var(--color-border-strong);
     border-radius: var(--radius-sm);
     background: var(--color-surface);

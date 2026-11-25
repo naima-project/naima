@@ -101,6 +101,7 @@
   @media (pointer: coarse) {
     .opt {
       min-block-size: var(--size-control);
+      min-inline-size: var(--size-control);
     }
   }
   @media (prefers-reduced-motion: reduce) {
