@@ -11,7 +11,7 @@ import { FORMAT, formatOf, formatRefusal, formatsOf, migrateConfig, MIGRATIONS, 
 import { DATA_FILE, trackerOf } from "./layout.ts"
 import { migrationsOf } from "./manifest.ts"
 import { buildRegistry } from "./registry.ts"
-import type { Config, Context, FirstParty, Plugin } from "./types.ts"
+import type { Config, Context, FirstParty, Plugin, Registry } from "./types.ts"
 
 type Json = Record<string, unknown>
 
@@ -73,18 +73,27 @@ async function load(raw: Json, place: Place, opts: OpenOptions, io: IO): Promise
 /** Load a project into a context: its config in this Naima's formats, every plugin, the registry. */
 export async function openProject(place: Place, opts: OpenOptions, io: IO = consoleIO): Promise<Context> {
   const { config, plugins } = await load(readRaw(place.data), place, opts, io)
-  return createContext(
-    place,
-    config,
-    buildRegistry([corePlugin, ...plugins], {
+  const registryOf = (loaded: Plugin[]): Registry =>
+    buildRegistry([corePlugin, ...loaded], {
       reserved: [...RESERVED],
       severities: severitiesOf(config),
       rename: config.rename,
       // The core and the first-party plugins read their own names as declared: only a third-party plugin's can be renamed.
       fixedNames: [corePlugin.name, ...opts.firstParty.map((p) => p.name)],
-    }),
-    io,
-  )
+    })
+  const registry = registryOf(plugins)
+  // The program's whole set, built when the reference asks: the opt-in plugins this project leaves off are switched on, with their default options.
+  const off = opts.firstParty.filter((p) => p.optIn && !config.plugins[p.name])
+  let whole: Registry | undefined
+  const programRegistry = off.length
+    ? await pluginsOf(
+      { ...config, plugins: { ...config.plugins, ...Object.fromEntries(off.map((p) => [p.name, { enabled: true, options: {}, checks: {} }])) } },
+      place,
+      opts,
+    )
+      .then((all) => () => (whole ??= registryOf(all)))
+    : () => registry
+  return createContext(place, config, registry, io, undefined, programRegistry, opts.firstParty.filter((p) => p.optIn).map((p) => p.name))
 }
 
 /** The formats a new project starts at: every plugin's own that has moved past format 1. */

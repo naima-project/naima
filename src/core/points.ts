@@ -68,6 +68,24 @@ export function commandGaps(c: Pick<Command, "says" | "usage" | "options" | "exa
   return out
 }
 
+/** A usage string's alternative forms: split at the " | " that sits outside every bracket, so `[--json | --csv]` stays whole. */
+export function usageForms(usage: string): string[] {
+  const forms: string[] = []
+  let depth = 0
+  let from = 0
+  for (let i = 0; i < usage.length; i++) {
+    const ch = usage[i]
+    if (ch === "[" || ch === "(" || ch === "<") depth++
+    else if (ch === "]" || ch === ")" || ch === ">") depth = Math.max(0, depth - 1)
+    else if (depth === 0 && usage.startsWith(" | ", i)) {
+      forms.push(usage.slice(from, i))
+      from = i + 3
+    }
+  }
+  forms.push(usage.slice(from))
+  return forms
+}
+
 /** A command's section of the reference: heading, what it does, usage, options, examples. */
 export function commandSection(c: Pick<Command, "name" | "says" | "usage" | "options" | "examples" | "enforces" | "long">): string[] {
   const long = c.long === undefined
@@ -84,7 +102,7 @@ export function commandSection(c: Pick<Command, "name" | "says" | "usage" | "opt
     ...long,
     "",
     "```sh",
-    ...c.usage.split(" | ").map((u) => `naima ${u}`),
+    ...usageForms(c.usage).map((u) => `naima ${u}`),
     "```",
     ...optionsTable(c.options ?? [], "Option"),
     ...(c.examples?.length ? ["", "Examples:", "", "```sh", ...c.examples.map((e) => `naima ${e}`), "```"] : []),

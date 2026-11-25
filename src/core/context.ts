@@ -55,7 +55,15 @@ export interface Place {
   program: string
 }
 
-export function createContext(place: Place, config: Config, registry: Registry, io: IO = consoleIO, preread?: ReadonlyMap<string, string>): Context {
+export function createContext(
+  place: Place,
+  config: Config,
+  registry: Registry,
+  io: IO = consoleIO,
+  preread?: ReadonlyMap<string, string>,
+  programRegistry?: () => Registry,
+  optInPlugins?: readonly string[],
+): Context {
   const trackerRoot = place.data
   const trackerGit = trackerGitOf(place.root, trackerRoot)
   let repo: Repo | null = null
@@ -70,6 +78,8 @@ export function createContext(place: Place, config: Config, registry: Registry, 
     program: place.program,
     config: deepFreeze(config),
     registry,
+    ...(programRegistry ? { programRegistry } : {}),
+    ...(optInPlugins ? { optInPlugins } : {}),
     get repo() {
       // Every write through the core's helpers moves `writes()`: the next read sees it.
       if (repo === null || readAt !== writes()) {

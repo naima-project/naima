@@ -2,7 +2,7 @@
 // hands back to it, is declared here and nowhere else.
 
 import type { PluginApi } from "./api.ts"
-import type { JobOutcome } from "./tick.ts"
+import type { JobOutcome, Notice } from "./tick.ts"
 
 /** A typed cross-reference. `id` is always a permanent item id, never a slug. */
 export interface Link {
@@ -288,6 +288,8 @@ export interface TickJob {
    */
   canRunHere?(ctx: Context): boolean
   run(ctx: Context, signal: AbortSignal): Promise<JobOutcome> | JobOutcome
+  /** Whether a live notice (`live: true`) this job raised is still true now, asked whenever it may be shown: it ends at once with its cause. */
+  stillHolds?(ctx: Context, notice: Notice): boolean
 }
 
 /** One additive term of an item's urgency. Lower is more urgent. */
@@ -695,6 +697,13 @@ export interface Context {
   /** Frozen, like the registry. */
   readonly config: Config
   readonly registry: Registry
+  /**
+   * The registry of everything the program ships, the opt-in first-party plugins on as well as the ones this project loads:
+   * what the reference documents, whatever the project turned on. Absent where a context is made without a program's plugin list.
+   */
+  readonly programRegistry?: () => Registry
+  /** The first-party plugins that are off until `naima plugin enable`, whether this project has them on or not. */
+  readonly optInPlugins?: readonly string[]
   /** The items, read on first access, again after any write through the core's helpers, and after `reload()`. */
   readonly repo: Repo
   /** Forget the items read, for a change made on disk without the helpers (by hand, by git). */

@@ -335,7 +335,7 @@ words: when several goals share the start of their titles (as "CAV 2027: full pa
 its title, and the full title shows when the pointer rests on the ring.
 
 Everything before the horizon is shown in full and is what Home counts: the goals between today and it, their meetings, milestones and epics, and what needs you
-from them, in the sentence, in Waiting for you and in "for when you have time". Beyond it the river is only a sketch of the road ahead, drawn faint: every later
+from them, in the sentence, in Waiting for you and in "to schedule". Beyond it the river is only a sketch of the road ahead, drawn faint: every later
 goal as a grey ring, those with no expected or due day after the dated ones in goal order, and the milestones, with no epics or sub-goals. A question that only
 concerns a goal beyond the horizon, even on a meeting with no date, waits there until the horizon reaches it.
 
@@ -362,7 +362,7 @@ the row's date does, and the words say it under the title ("at risk, due 2 Dec")
 
 On Home's upper part, what can be clicked says what it does with a faint mark after its words. A small chevron (⌄) reveals something in place, just under it,
 and turns over once open, as the goal's caption, the agents and two of the three numbers do. A small arrow down (↓) opens a list in the stage below: what is
-left to do, what needs you, the bugs, the features, the questions for when you have time.
+left to do, what needs you, the bugs, the features, the questions to schedule.
 
 Everything else ahead that has a day stands on the river too, as a small grey ring at that day: the milestones the goals' rings leave out, the sub-goals with a
 due or expected day, and the epics with work left and a planned or expected end. A ring is larger when there is more of it: the items a milestone has left, the
@@ -378,8 +378,10 @@ Your meetings with a date stand on the river ahead at their day, before the hori
 of questions waiting on it. A click on a meeting, or Enter on it, holds that meeting in the stage, one question at a time: the question up is large, the next
 ones recede behind it. A click on the question up brings it into the chat, where the agent raises it with you at once (as `naima meeting raise` would); once it
 is answered there it goes, and the next one rises into its place. A click on a question behind brings that one up and into the chat instead. The questions of
-the meetings with no date, those that concern a goal before the horizon, are one quiet phrase beside the caption, such as "and 3 for when you have time", and a
+the meetings with no date, those that concern a goal before the horizon, are one quiet phrase beside the caption, such as "and 3 questions to schedule", and a
 click on it holds them in the stage the same way.
+
+A meeting whose day has come and that was not held says so in one quiet line beside that phrase, in amber on its day and in red once the day has passed: "Design review is due today", or "Design review was missed, due 12 November" with how many more there are. A click holds the meeting in the stage, where its date can be moved or taken away, and a right-click on the line brings the meeting into the chat. In the Calendar the same meeting is marked amber on its day and red after it, and the meetings still to schedule are listed beside the grid.
 
 A meeting's date can be changed from Home. Drag it along the river to another day, drag it off the river to take its date away, or drag a meeting with no date
 onto the river; with the keyboard, the arrow keys on a meeting move it a day at a time, and Escape gives the move up. The meeting held in the stage also has its
