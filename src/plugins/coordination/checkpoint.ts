@@ -28,6 +28,8 @@ import {
   verifyHost,
   writeCheckpoint,
 } from "../../core/api.ts"
+import { existsSync, readdirSync } from "node:fs"
+import { join } from "node:path"
 import { type LandingReport } from "./land.ts"
 import { EMPTY_TREE, landingChecks } from "./land.ts"
 import { fileBug, settle, startRuns, statusLines } from "./checkpoint-runs.ts"
@@ -109,6 +111,27 @@ function refuseOffLine(ctx: Context, gate: string): void {
     `${gate} has a line, ${line}, and a checkpoint checks the checkout it runs in, which is not on it: run naima checkpoint ${gate} in a checkout of the line ` +
       `(git worktree add <folder> ${line}), where its options and properties are`,
   )
+}
+
+/**
+ * The metric step of a checkpoint: the project's declared metrics are measured on the tip and recorded in the data
+ * directory beside the checkpoint's own record, so they are committed with it, on the line or trunk the checkpoint
+ * ran in. A tip that already has a record is not measured again. A metric that misses its bound is advisory and does
+ * not fail the checkpoint; a measurement that cannot be made does, and is named.
+ */
+export async function recordMetrics(ctx: Context, tip: string): Promise<{ lines: string[]; failure?: string }> {
+  const cmd = ctx.registry.commands.get("metrics")
+  if (!cmd || ctx.registry.contributions("metrics").length === 0) return { lines: [] }
+  const dir = join(ctx.trackerRoot, "metrics")
+  if (existsSync(dir) && readdirSync(dir).some((f) => f.startsWith(`${tip}-`))) return { lines: [`metrics already recorded on ${tip.slice(0, 12)}`] }
+  const lines: string[] = []
+  const quiet: Context = { ...ctx, out: (l = "") => void lines.push(l) }
+  try {
+    await cmd.run(["run", "--record"], quiet)
+  } catch (e) {
+    return { lines, failure: `metrics: could not be recorded on ${tip.slice(0, 12)}: ${(e as Error).message}` }
+  }
+  return { lines: lines.filter((l) => l.startsWith("wrote ") || /metrics? (hold|fail)/.test(l)) }
 }
 
 export const checkpointCommand: Command = {
@@ -212,6 +235,10 @@ export const checkpointCommand: Command = {
       }),
     ]
     const failed = [...findings, ...reusedChecks.flatMap((n) => known.checks.get(n)!.passed ? [] : known.checks.get(n)!.why ?? [`${n}: failed`])]
+    // The checkpoint measures and records the project's metrics on the tip: they reach the data with its own record.
+    const measured = answer.when === "off" ? { lines: [] as string[] } : await recordMetrics(ctx, tip)
+    for (const l of measured.lines) ctx.out(l)
+    if (measured.failure) failed.push(measured.failure)
     const started = answer.when === "off" ? [] : await startRuns(ctx, tip, suites, verifyHost(ctx), undefined, { verify: !verifyKnown })
     const carried: CheckpointRun[] = [...reusedRuns, ...(verifyKnown && answer.when !== "off" ? [verifyKnown] : [])].map(({ record, ...r }) => ({
       ...r,
