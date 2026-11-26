@@ -159,7 +159,7 @@ export function contextAt(ctx: Context, ref: string): { ctx: Context; dispose():
  * the git directory, and a context there with this one's configuration and plugins, writing through `io` (this context's
  * own by default). What a landing check reads of a branch no checkout stands on is read there. Each submodule the commit
  * pins is there too, as a detached worktree of the submodule's own repository in this checkout, at the pinned commit
- * (nothing is fetched or cloned: one this checkout does not hold at that commit stays empty), so that a check reading
+ * (a commit the submodule does not hold yet is fetched from its origin first; one it cannot get fails the checkout), so that a check reading
  * files across the submodule's path, the stance's agent-endpoint check reading the product's MCP server, finds them.
  * `dispose` removes every worktree.
  */
@@ -179,7 +179,13 @@ export function checkoutAt(ctx: Context, rev: string, io: IO = { out: ctx.out, e
     const own = join(ctx.root, path!)
     if (!existsSync(join(own, ".git"))) continue
     mkdirSync(join(dir, path!), { recursive: true })
+    // A commit this checkout's submodule does not hold yet (a host whose submodules a run updates only later) is fetched
+    // from the submodule's own origin first: without it the folder would stay empty and a check would read nothing there.
+    if (!runGit(own, ["cat-file", "-e", `${commit}^{commit}`]).ok) runGit(own, ["fetch", "--quiet", "origin", commit!])
     if (runGit(own, ["worktree", "add", "--detach", "--quiet", "--force", join(dir, path!), commit!]).ok) subs.push(own)
+    else {throw new Error(
+        `no checkout of ${path} at ${commit!.slice(0, 12)}, the commit ${rev} pins: its repository does not hold it, and its origin did not give it`,
+      )}
   }
   const dispose = (): void => {
     if (!runGit(ctx.root, ["worktree", "remove", "--force", dir]).ok) rmSync(dir, { recursive: true, force: true })
