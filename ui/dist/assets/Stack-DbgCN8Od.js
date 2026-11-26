@@ -1,0 +1,1 @@
+import{M as e,Q as t,V as n,X as r,h as i,ht as a,jt as o,ut as s}from"./runtime-Bi5JbOE1.js";var c=t(`<div><!></div>`);function l(t,l){let u=i(l,`gap`,3,`md`),d=i(l,`align`,3,`stretch`);var f=c(),p=a(f);n(p,()=>l.children),o(f),s(()=>e(f,1,`stack gap-${u()??``} align-${d()??``}`,`svelte-1382wtz`)),r(t,f)}export{l as t};

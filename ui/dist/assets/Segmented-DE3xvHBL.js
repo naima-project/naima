@@ -1,0 +1,1 @@
+import{_ as e,g as t}from"./runtime-Bi5JbOE1.js";import{m as n}from"./core-6kG37JY_.js";var r=new Set([`$$slots`,`$$events`,`$$legacy`]);function i(i,a){let o=t(a,r);n(i,e(()=>o))}export{i as t};
