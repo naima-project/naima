@@ -46,7 +46,7 @@ Naima is installed in ~/demo.
 
 Next:
   git add naima-tracker AGENTS.md && git commit -m "Track this project with Naima" -m "Naima-Setup: install"
-  alias naima='deno run -A "$(git rev-parse --show-toplevel)/naima-tracker/naima/naima.ts"'
+  alias naima='sh "$(git rev-parse --show-toplevel)/naima-tracker/naima.sh"'
 
 Agents: read naima-tracker/naima/skills/naima/SKILL.md
 ```
@@ -61,7 +61,7 @@ Now do the two things it suggests. The alias lets you type `naima` instead of th
 
 ```console
 $ git add naima-tracker AGENTS.md && git commit -qm "Track this project with Naima" -m "Naima-Setup: install"
-$ alias naima='deno run -A "$(git rev-parse --show-toplevel)/naima-tracker/naima/naima.ts"'
+$ alias naima='sh "$(git rev-parse --show-toplevel)/naima-tracker/naima.sh"'
 ```
 
 ## 3. File the bug

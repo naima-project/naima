@@ -157,7 +157,7 @@ grants access to exactly these files, for those commands only. Test runners need
 The full command is long, so an alias helps:
 
 ```sh
-alias naima='deno run -A "$(git rev-parse --show-toplevel)/naima-tracker/naima/naima.ts"'
+alias naima='sh "$(git rev-parse --show-toplevel)/naima-tracker/naima.sh"'
 ```
 
 The rest of the documentation writes `naima <command>` for it.
