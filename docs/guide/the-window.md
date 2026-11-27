@@ -1,11 +1,10 @@
 # The Naima window
 
-`naima ui` opens a window onto the project. It starts a small web server on your own machine, on a free port it picks each
-time, and shows it in a window of your system's own webview: WebKit on macOS, WebKitGTK on Linux, WebView2 on Windows. The
-window is opened from the project's own Naima, with nothing built and nothing installed; the webview library's small native
-part is fetched once into Deno's cache the first time. Closing the window leaves the server running; Ctrl-C in the terminal
-stops it. When the desktop app is installed (on macOS, Naima.app in an Applications folder), `naima ui` opens the app on the
-project instead, and if the app already has a window open on it, it brings that window to the front.
+`naima ui` opens a window onto the project. It starts a small web server on your own machine, on a free port it picks each time, and shows it in a window of
+your system's own webview: WebKit on macOS, WebKitGTK on Linux, WebView2 on Windows. The window is opened from the project's own Naima, with nothing built and
+nothing installed; the webview library's small native part is fetched once into Deno's cache the first time. Closing the window leaves the server running;
+Ctrl-C in the terminal stops it. When the desktop app is installed (on macOS, Naima.app in an Applications folder), `naima ui` opens the app on the project
+instead, and if the app already has a window open on it, it brings that window to the front.
 
 ```sh
 naima ui                     # a window of the system's webview on the project (the desktop app, when it is installed)
@@ -14,13 +13,11 @@ naima ui --no-open           # print the address, with its token, and serve unti
 naima ui --install-desktop   # build the desktop app and install it, on macOS
 ```
 
-When no window can be opened, `naima ui` opens your default browser and says why. On Linux the window needs WebKitGTK,
-which most desktops already have. The webview library Naima downloads by default is built for GTK 4 and WebKitGTK 6 on
-glibc 2.33 or newer. On an older system, such as Ubuntu 20.04 or 22.04, Naima falls back to its own builds for GTK 3 (with
-WebKit2GTK 4.1 or 4.0, the packages `libwebkit2gtk-4.1-0` or `libwebkit2gtk-4.0-37`), which come with it in
-`src/plugins/ui/webview/linux/`. If none of them runs, it tries Chrome, Chromium, Edge or Brave in app mode, a window with
-no tabs or address bar, before the browser. On a machine with no display, such as a server reached with ssh, there is no
-window to open.
+When no window can be opened, `naima ui` opens your default browser and says why. On Linux the window needs WebKitGTK, which most desktops already have. The
+webview library Naima downloads by default is built for GTK 4 and WebKitGTK 6 on glibc 2.33 or newer. On an older system, such as Ubuntu 20.04 or 22.04, Naima
+falls back to its own builds for GTK 3 (with WebKit2GTK 4.1 or 4.0, the packages `libwebkit2gtk-4.1-0` or `libwebkit2gtk-4.0-37`), which come with it in
+`src/plugins/ui/webview/linux/`. If none of them runs, it tries Chrome, Chromium, Edge or Brave in app mode, a window with no tabs or address bar, before the
+browser. On a machine with no display, such as a server reached with ssh, there is no window to open.
 
 ### Installing the desktop app
 
@@ -32,10 +29,10 @@ compiles only what changed; the build's output is in `build.log` there. Run it a
 the project it shows from its first argument too, so `open -a Naima --args <project folder>` opens it on a project from the Finder's side.
 
 You rarely need to type it. When an agent session starts, `naima hello` opens the window on the project by itself, in the background, and its one-line greeting
-says so, with the address: the desktop app when it is installed (on macOS, Naima.app in an Applications folder), otherwise `naima ui` in a window of the system's webview. If a
-window is already open on the project, it is reused rather than opened a second time. It stays closed on CI, with `NAIMA_NO_UI` or `NAIMA_DATA` set, and in a
-worktree other than the clone's main checkout, so agents working in their own worktrees never open one. To turn it off for a project, run
-`naima plugin set ui atStart=false`; to turn it off for yourself everywhere, put `{"atStart": false}` in `ui.json` in your Naima config folder
+says so, with the address: the desktop app when it is installed (on macOS, Naima.app in an Applications folder), otherwise `naima ui` in a window of the
+system's webview. If a window is already open on the project, it is reused rather than opened a second time. It stays closed on CI, with `NAIMA_NO_UI` or
+`NAIMA_DATA` set, and in a worktree other than the clone's main checkout, so agents working in their own worktrees never open one. To turn it off for a project,
+run `naima plugin set ui atStart=false`; to turn it off for yourself everywhere, put `{"atStart": false}` in `ui.json` in your Naima config folder
 (`~/.config/naima/` on macOS and Linux).
 
 Each project has an app window of its own, and the app tells them apart. Its icon is the Naima logo (a rounded square, with the margin macOS icons have; a plain
@@ -192,22 +189,23 @@ until the window covers the whole history, shows every day again. Until you zoom
 Every list in the window has the same Adjust beside its search, under a quiet line that says what the list shows, for example "12 of 87 · to fix now · grouped
 by category · as listed". Adjust opens one sheet: the grouping, the sort, the columns, and the filters. A filter is a value of something the entries can be told
 apart by (the kind of item, its state, its priority, the release or goal, the person who holds it or asked for it, a tag), each value with how many entries it
-would keep, or a span of days: when the entry was filed, when it was closed, and the time window, which is Any time or the last 7, 30 or 90 days. The time window
-is the time filter above, so choosing one narrows every screen, as zooming the timeline does. A value that no entry has is not offered. Clear filters takes every
-choice away except the time window, which is the timeline's.
+would keep, or a span of days: when the entry was filed, when it was closed, and the time window, which is Any time or the last 7, 30 or 90 days. The time
+window is the time filter above, so choosing one narrows every screen, as zooming the timeline does. A value that no entry has is not offered. Clear filters
+takes every choice away except the time window, which is the timeline's.
 
-A list that is grouped by day puts a heading for each month over its days. A list in a narrow column beside an open item shows no sheet; the filters keep what they
-were.
+A list that is grouped by day puts a heading for each month over its days. A list in a narrow column beside an open item shows no sheet; the filters keep what
+they were.
 
 Each screen keeps its own search and filters, and the window remembers them for your next visit. The address carries them too, after the screen's name, as in
-`#bugs?gate=Release%202&priority=now&q=slow`, so a link opens the screen filtered the same way; changing the choice replaces the address rather than adding a step to
-Back. An agent can set the same choice through the UI's MCP server (`naima-ui`), with the store's `filters` transitions: `pick`, `drop`, `search`, `clear`,
-`follow` and `within`.
+`#bugs?gate=Release%202&priority=now&q=slow`, so a link opens the screen filtered the same way; changing the choice replaces the address rather than adding a
+step to Back. An agent can set the same choice through the UI's MCP server (`naima-ui`), with the store's `filters` transitions: `pick`, `drop`, `search`,
+`clear`, `follow` and `within`.
 
 ### Lists, links and the item drawer
 
-Bugs and Features open on their answer: one sentence saying how many bugs are to fix now, or how many features are being built, and the one list under it. Grouping,
-the columns shown, the filters and saved views are in the list's Adjust. A feature built and not yet landed on the main line is listed as built and waiting to land, as a fixed bug is.
+Bugs and Features open on their answer: one sentence saying how many bugs are to fix now, or how many features are being built, and the one list under it.
+Grouping, the columns shown, the filters and saved views are in the list's Adjust. A feature built and not yet landed on the main line is listed as built and
+waiting to land, as a fixed bug is.
 
 What a screen names is a link. A release or goal in a row, in the item drawer or on All projects opens the Plan with What's left on that goal unfolded; a worker
 holding an item opens Workers; an item named by its reference in a description or a note (bugs/<slug> and the like) opens in the drawer. A row opens its item in
@@ -342,9 +340,9 @@ words: when several goals share the start of their titles (as "CAV 2027: full pa
 its title, and the full title shows when the pointer rests on the ring.
 
 Everything before the horizon is shown in full and is what Home counts: the goals between today and it, their meetings, milestones and epics, and what needs you
-from them, in the sentence, in Waiting for you and in "to schedule". Beyond it the river is only a sketch of the road ahead, drawn faint: every later
-goal as a grey ring, those with no expected or due day after the dated ones in goal order, and the milestones, with no epics or sub-goals. A question that only
-concerns a goal beyond the horizon, even on a meeting with no date, waits there until the horizon reaches it.
+from them, in the sentence, in Waiting for you and in "to schedule". Beyond it the river is only a sketch of the road ahead, drawn faint: every later goal as a
+grey ring, those with no expected or due day after the dated ones in goal order, and the milestones, with no epics or sub-goals. A question that only concerns a
+goal beyond the horizon, even on a meeting with no date, waits there until the horizon reaches it.
 
 To move the focus, drag the horizon onto another goal's ring (take the orange line anywhere along its height), press the arrow keys on it, or pick that goal's
 day on the calendar: the horizon glides there. At a later goal its events appear in full and its meetings and questions join what needs you; at an earlier one
@@ -388,7 +386,10 @@ is answered there it goes, and the next one rises into its place. A click on a q
 the meetings with no date, those that concern a goal before the horizon, are one quiet phrase beside the caption, such as "and 3 questions to schedule", and a
 click on it holds them in the stage the same way.
 
-A meeting whose day has come and that was not held says so in one quiet line beside that phrase, in amber on its day and in red once the day has passed: "Design review is due today", or "Design review was missed, due 12 November" with how many more there are. A click holds the meeting in the stage, where its date can be moved or taken away, and a right-click on the line brings the meeting into the chat. In the Calendar the same meeting is marked amber on its day and red after it, and the meetings still to schedule are listed beside the grid.
+A meeting whose day has come and that was not held says so in one quiet line beside that phrase, in amber on its day and in red once the day has passed: "Design
+review is due today", or "Design review was missed, due 12 November" with how many more there are. A click holds the meeting in the stage, where its date can be
+moved or taken away, and a right-click on the line brings the meeting into the chat. In the Calendar the same meeting is marked amber on its day and red after
+it, and the meetings still to schedule are listed beside the grid.
 
 A meeting's date can be changed from Home. Drag it along the river to another day, drag it off the river to take its date away, or drag a meeting with no date
 onto the river; with the keyboard, the arrow keys on a meeting move it a day at a time, and Escape gives the move up. The meeting held in the stage also has its
