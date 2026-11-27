@@ -14,9 +14,13 @@ naima ui --no-open           # print the address, with its token, and serve unti
 naima ui --install-desktop   # build the desktop app and install it, on macOS
 ```
 
-When no window can be opened, `naima ui` opens your default browser and says why. On Linux the window needs WebKitGTK
-(the package `libwebkit2gtk-4.1`), which most desktops already have; on a machine with no display, such as a server
-reached with ssh, there is no window to open.
+When no window can be opened, `naima ui` opens your default browser and says why. On Linux the window needs WebKitGTK,
+which most desktops already have. The webview library Naima downloads by default is built for GTK 4 and WebKitGTK 6 on
+glibc 2.33 or newer. On an older system, such as Ubuntu 20.04 or 22.04, Naima falls back to its own builds for GTK 3 (with
+WebKit2GTK 4.1 or 4.0, the packages `libwebkit2gtk-4.1-0` or `libwebkit2gtk-4.0-37`), which come with it in
+`src/plugins/ui/webview/linux/`. If none of them runs, it tries Chrome, Chromium, Edge or Brave in app mode, a window with
+no tabs or address bar, before the browser. On a machine with no display, such as a server reached with ssh, there is no
+window to open.
 
 ### Installing the desktop app
 
