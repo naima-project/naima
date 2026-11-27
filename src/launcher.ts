@@ -51,6 +51,7 @@
 import { PROJECTS_ENV, rememberProject, switchTarget, UI_SWITCH, UI_SWITCH_ENV, type UiSwitch } from "./core/projects.ts"
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs"
 import { buildDir, desktopAppDirs, installedApp } from "./plugins/ui/desktop.ts"
+import { commandDir } from "./core/command.ts"
 import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
@@ -318,7 +319,16 @@ export function uiGrant(
     return {
       net: [],
       read: [deno, ...apps],
-      runs: [deno, os === "windows" ? "tasklist" : "ps", ...apps.flatMap((d) => programsIn(d)), ...(github ? ["gh"] : [])],
+      // PowerShell on Windows: hello puts the naima command's folder on the user's PATH (core/command.ts).
+      runs: [
+        deno,
+        os === "windows" ? "tasklist" : "ps",
+        ...(os === "windows" ? ["powershell.exe"] : []),
+        ...apps.flatMap((d) => programsIn(d)),
+        ...(github ? ["gh"] : []),
+      ],
+      // The naima command's folder: hello installs the command there when it is missing.
+      writeDirs: [commandDir(env, os)],
     }
   }
   // naima-codegen, the verifier plugin's naima-codegen adapter (adapters/naima-codegen.ts): a first-party verifier's program, granted to verify alone.

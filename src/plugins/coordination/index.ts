@@ -68,6 +68,7 @@ import {
   type WriteHook,
   writeJson,
 } from "../../core/api.ts"
+import { ensureCommand } from "../../core/command.ts"
 import {
   ahead,
   exists,
@@ -1530,6 +1531,12 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       data,
     }
   }
+  /** naima hello installs what a project's session needs and is missing: the naima command (core/command.ts), once per user. */
+  const commandSection: SummarySection = {
+    name: "naima command",
+    render: () => rendered([], () => []),
+    greeting: () => ensureCommand(process.env, process.platform === "win32" ? "windows" : process.platform),
+  }
   const sweepSection: SummarySection = {
     name: "stale sweep",
     render: () => rendered([], () => []),
@@ -1789,6 +1796,7 @@ export default function coordination(options: Record<string, unknown> = {}): Plu
       readySection(policy),
       staleSection(stale),
       sweepSection,
+      commandSection,
       guardOffSection(guarded),
       heavyChecksSection,
       checkPlanSection,
