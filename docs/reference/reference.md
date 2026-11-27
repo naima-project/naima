@@ -1877,7 +1877,7 @@ naima event 2026-10-05 "The plan was entered" --kind diary --about features/the-
 
 **Directories** it owns under the tracker root: `claims/`, `passes/`, `events/`, `checkpoints/`.
 
-**Summary sections**: `where we were`, `lines`, `at-risk`, `in hand`, `worker limit`, `ready queue`, `stale work`, `stale sweep`, `trunk-guard`, `heavy-checks`, `check-plan`, `handover`.
+**Summary sections**: `where we were`, `lines`, `at-risk`, `in hand`, `worker limit`, `ready queue`, `stale work`, `stale sweep`, `naima command`, `trunk-guard`, `heavy-checks`, `check-plan`, `handover`.
 
 **Item facts**, printed by `naima show`
 
