@@ -1,1 +1,0 @@
-import{q as e}from"./runtime-Bi5JbOE1.js";import{C as t,Gr as n,c as r,di as i,o as a,s as o,x as s}from"./core-C2cxH6Hw.js";a(),location.hash===`#explorer`&&history.replaceState(history.state,``,`#ui_models`),s(location.hash);var c=document.getElementById(`app`);e(r,{target:c,props:{address:!0},context:i(t())}),o({bridge:n({server:`bridge`})});
