@@ -45,7 +45,7 @@ import { naimaBridge } from "./bridge.ts"
 import { mapView } from "./graphs.ts"
 import { projectsView } from "./projects.ts"
 import { weekView } from "./week.ts"
-import { browserCommand, openBrowser, type Opened, osName } from "./open.ts"
+import { browserCommand, openBrowser, type Opened, openWindow, osName } from "./open.ts"
 import { BUNDLE, filesKey, filesUrl, newToken, serve, type ServeOptions } from "./serve.ts"
 import { studyFolder } from "./studies.ts"
 import { codeFolder, uiTab } from "./study-space.ts"
@@ -319,6 +319,8 @@ export function tabsOf(ctx: Context): UiTab[] {
 /** What `naima ui` does besides serving: each replaced by a test. */
 export interface UiDeps {
   browser(url: string): Promise<Opened>
+  /** Opens `url` in a window of the system's webview titled `title` (open.ts): tried before the browser; none in a test. */
+  window?(url: string, title: string): Promise<Opened>
   /** Resolves when the person stops `naima ui` (Ctrl-C). */
   interrupted(): Promise<void>
   /** Stop listening for Ctrl-C, once `naima ui` is done: a listener left behind would keep the process alive. */
@@ -349,6 +351,7 @@ const listening: (() => void)[] = []
 
 export const realDeps: UiDeps = {
   browser: (url) => openBrowser(browserCommand(osName(), url)),
+  window: (url, title) => openWindow(url, title),
   interrupted: () =>
     new Promise((done) => {
       const stop = () => done()
@@ -399,6 +402,27 @@ function folderNow(ctx: Context, tabs: readonly UiTab[], name: string): string |
 /** The folders of the tab files this run serves, each once: what --watch watches besides the bundle. */
 export function tabFolders(ctx: Context, tabs: readonly UiTab[]): string[] {
   return [...new Set(tabs.map((t) => tabFolder(ctx, tabs, t.name)).filter((d): d is string => d !== null))]
+}
+
+/**
+ * Show the UI at `url`: in a window of the system's webview, opened from this Naima with nothing installed, else (or with
+ * --browser) in the default browser. Where it went, or why it did not, and why there is no window when one was tried.
+ */
+async function showAt(
+  ctx: Context,
+  deps: UiDeps,
+  url: string,
+  browser: boolean,
+): Promise<{ where: "window" | "browser" | null; why: string; noWindow: string }> {
+  let noWindow = ""
+  if (!browser && deps.window) {
+    const name = ctx.root.split(/[\\/]/).filter(Boolean).pop() ?? ""
+    const w = await deps.window(url, name ? `Naima — ${name}` : "Naima")
+    if (w.opened) return { where: "window", why: "", noWindow: "" }
+    noWindow = ` (no window: ${w.reason})`
+  }
+  const b = await deps.browser(url)
+  return b.opened ? { where: "browser", why: "", noWindow } : { where: null, why: b.reason, noWindow }
 }
 
 /** `naima ui`: serve the UI through the bridge, open it in the browser unless asked not to, and stop on Ctrl-C. */
@@ -476,8 +500,13 @@ export async function runUi(
     if (back) {
       ctx.out(`naima ui: serving ${ctx.root.split(/[\\/]/).filter(Boolean).pop() ?? ""} at ${served.url} — Ctrl-C stops it`)
     } else if (flags.open) {
-      const b = await deps.browser(served.url)
-      ctx.out(`naima ui: ${b.opened ? `opened ${served.url} in the browser` : `open ${served.url} in a browser (${b.reason})`} — Ctrl-C stops it`)
+      const b = await showAt(ctx, deps, served.url, flags.browser === true)
+      const said = b.where === "window"
+        ? `opened ${served.url} in a window`
+        : b.where === "browser"
+        ? `opened ${served.url} in the browser`
+        : `open ${served.url} in a browser (${b.why})`
+      ctx.out(`naima ui: ${said}${b.noWindow} — Ctrl-C stops it`)
     } else {
       ctx.out(`naima ui: serving ${served.url} — open it in a browser; Ctrl-C stops it`)
     }
@@ -500,8 +529,9 @@ async function attachRun(ctx: Context, dir: string, live: UiRecord, open: boolea
     const raised = await (deps.raise ?? realDesktopDeps.raise)(ctx.root)
     ctx.out(`naima ui: the desktop app is already open on ${name}${raised ? ": brought its window to the front" : ""}; one UI runs per project`)
   } else if (rec?.url) {
-    const b = open ? await deps.browser(rec.url) : null
-    ctx.out(`naima ui: already running on ${name} at ${rec.url} — ${b?.opened ? "opened it in the browser" : "open it in a browser"}; one UI runs per project`)
+    const b = open ? await showAt(ctx, deps, rec.url, false) : null
+    const said = b?.where === "window" ? "opened it in a window" : b?.where === "browser" ? "opened it in the browser" : "open it in a browser"
+    ctx.out(`naima ui: already running on ${name} at ${rec.url} — ${said}; one UI runs per project`)
   } else ctx.out(`naima ui: a UI is starting on ${name}; one UI runs per project`)
   return 0
 }
@@ -521,7 +551,7 @@ const uiCommand: Command = {
     {
       name: "--browser",
       says:
-        "serve the interface in the browser even when the desktop app is installed (naima ui opens the app on the project when it is, and brings forward its window already open there)",
+        "serve the interface in the default browser, not in a window of the system's webview, and even when the desktop app is installed (naima ui opens the app on the project when it is, and brings forward its window already open there)",
     },
     {
       name: "--install-desktop",

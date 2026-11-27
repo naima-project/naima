@@ -3774,7 +3774,7 @@ naima ui --mcp-tracker
 
 | Option | Default | What it does |
 |---|---|---|
-| `--browser` |  | serve the interface in the browser even when the desktop app is installed (naima ui opens the app on the project when it is, and brings forward its window already open there) |
+| `--browser` |  | serve the interface in the default browser, not in a window of the system's webview, and even when the desktop app is installed (naima ui opens the app on the project when it is, and brings forward its window already open there) |
 | `--install-desktop` |  | build the desktop app from the shell this Naima ships and install it as Naima.app in the user's Applications folder, on macOS; it needs Rust, and its first build takes some minutes |
 | `--watch` |  | for continuous testing: the window reloads by itself, keeping its screen and scroll place and saying Updated, whenever this Naima's UI is rebuilt (the bundle in ui/dist, or the files of a study's view); with the desktop app installed it opens the app on THIS Naima (its bundle and its program, an unlanded branch included) instead of the project's pinned one, in the browser it serves the page and tells it to reload; without --watch nothing is watched |
 | `--no-open` |  | open no browser: print the address, with its token, and serve until Ctrl-C (for a port forwarded from another machine) |

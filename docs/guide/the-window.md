@@ -1,19 +1,22 @@
 # The Naima window
 
-`naima ui` opens a window onto the project. When the desktop app is installed (on macOS, Naima.app in an Applications folder), it opens the app on the project,
-and if the app already has a window open on it, it brings that window to the front instead of opening a second one. Otherwise it opens the window in your
-default browser: `naima ui` starts a small web server on your own machine, on a free port it picks each time, and the window is a page of that server. Ctrl-C in
-the terminal stops the server, and the window with it.
+`naima ui` opens a window onto the project. It starts a small web server on your own machine, on a free port it picks each
+time, and shows it in a window of your system's own webview: WebKit on macOS, WebKitGTK on Linux, WebView2 on Windows. The
+window is opened from the project's own Naima, with nothing built and nothing installed; the webview library's small native
+part is fetched once into Deno's cache the first time. Closing the window leaves the server running; Ctrl-C in the terminal
+stops it. When the desktop app is installed (on macOS, Naima.app in an Applications folder), `naima ui` opens the app on the
+project instead, and if the app already has a window open on it, it brings that window to the front.
 
 ```sh
-naima ui                     # the desktop app on the project when it is installed, otherwise the browser
-naima ui --browser           # the browser, even with the desktop app installed
+naima ui                     # a window of the system's webview on the project (the desktop app, when it is installed)
+naima ui --browser           # the default browser instead
 naima ui --no-open           # print the address, with its token, and serve until Ctrl-C
 naima ui --install-desktop   # build the desktop app and install it, on macOS
 ```
 
-`naima ui` goes to the browser by itself when the app is not installed, and on macOS it then says that `naima ui --install-desktop` would install it. It goes
-there too when the app cannot start, and says why.
+When no window can be opened, `naima ui` opens your default browser and says why. On Linux the window needs WebKitGTK
+(the package `libwebkit2gtk-4.1`), which most desktops already have; on a machine with no display, such as a server
+reached with ssh, there is no window to open.
 
 ### Installing the desktop app
 
@@ -25,7 +28,7 @@ compiles only what changed; the build's output is in `build.log` there. Run it a
 the project it shows from its first argument too, so `open -a Naima --args <project folder>` opens it on a project from the Finder's side.
 
 You rarely need to type it. When an agent session starts, `naima hello` opens the window on the project by itself, in the background, and its one-line greeting
-says so, with the address: the desktop app when it is installed (on macOS, Naima.app in an Applications folder), otherwise `naima ui` in the browser. If a
+says so, with the address: the desktop app when it is installed (on macOS, Naima.app in an Applications folder), otherwise `naima ui` in a window of the system's webview. If a
 window is already open on the project, it is reused rather than opened a second time. It stays closed on CI, with `NAIMA_NO_UI` or `NAIMA_DATA` set, and in a
 worktree other than the clone's main checkout, so agents working in their own worktrees never open one. To turn it off for a project, run
 `naima plugin set ui atStart=false`; to turn it off for yourself everywhere, put `{"atStart": false}` in `ui.json` in your Naima config folder
