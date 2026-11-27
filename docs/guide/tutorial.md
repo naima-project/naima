@@ -46,7 +46,7 @@ Naima is installed in ~/demo.
 
 Next:
   git add naima-tracker AGENTS.md && git commit -m "Track this project with Naima" -m "Naima-Setup: install"
-  alias naima='sh "$(git rev-parse --show-toplevel)/naima-tracker/naima.sh"'
+  naima hello     # in this project, or any other that uses Naima
 
 Agents: read naima-tracker/naima/skills/naima/SKILL.md
 ```
@@ -57,11 +57,10 @@ the [data directory](glossary.md#data-directory), `naima-tracker/naima-data/`, [
 stands for what `naima init` also printed: the launchers it wrote, the pointer it added to `AGENTS.md`, the hooks it set up for your agent tool, and a note that the
 trunk is guarded.
 
-Now do the two things it suggests. The alias lets you type `naima` instead of the long command, and if you add it to your shell's startup file it will stay.
+Now commit, as it suggests. The installer has also installed the `naima` command for you (in `~/.local/bin`; it says so, and prints the line to add to your shell's profile if that folder is not on your PATH), so `naima` works in this project and in any other that uses Naima.
 
 ```console
 $ git add naima-tracker AGENTS.md && git commit -qm "Track this project with Naima" -m "Naima-Setup: install"
-$ alias naima='sh "$(git rev-parse --show-toplevel)/naima-tracker/naima.sh"'
 ```
 
 ## 3. File the bug

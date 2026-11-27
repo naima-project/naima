@@ -154,13 +154,13 @@ is left alone, and the line to add by hand is printed instead. Together with the
 ([below](#the-agent-harness-entry-point)), which `init` and `update` write, this is the only way Naima ever writes outside `naima-tracker/`, and the launcher
 grants access to exactly these files, for those commands only. Test runners need nothing, because the clone holds no tests.
 
-The full command is long, so an alias helps:
-
-```sh
-alias naima='sh "$(git rev-parse --show-toplevel)/naima-tracker/naima.sh"'
-```
-
-The rest of the documentation writes `naima <command>` for it.
+The installer also installs a `naima` command for you, once, without administrator rights: on macOS and Linux a small
+script in `~/.local/bin`, on Windows `naima.cmd` in your own programs folder (`%LOCALAPPDATA%\Programs\naima`), which it adds
+to your PATH. Typed in any folder of a project that uses Naima, `naima` runs that project's own launcher with what you
+typed, so each project keeps the Naima its lock names; outside such a project it says how to install Naima there. When
+`~/.local/bin` is not on your PATH, the installer prints the one line to add to your shell's profile. A `naima` command that
+is not Naima's is left alone. The rest of the documentation writes `naima <command>` for it; without the command,
+`sh naima-tracker/naima.sh <command>` (on Windows `naima-tracker\naima.cmd <command>`) is the same.
 
 ## The agent-harness entry point
 
