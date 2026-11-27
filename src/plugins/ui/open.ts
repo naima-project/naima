@@ -1,4 +1,4 @@
-// Where `naima ui` shows its server: a window of the system's webview opened from this Naima (window-main.ts), and the
+// Where `naima ui` shows its server: a window of the system's webview opened from this Naima (src/window-main.ts), and the
 // default browser when no window can be opened. The desktop app is the Tauri shell around the same bundle, with Naima as
 // its sidecar, not this command.
 
@@ -35,7 +35,7 @@ export function openBrowser(command: [string, ...string[]]): Promise<Opened> {
 }
 
 /** The window's own program, beside this file. */
-export const WINDOW_MAIN: string = fileURLToPath(new URL("./window-main.ts", import.meta.url))
+export const WINDOW_MAIN: string = fileURLToPath(new URL("../../window-main.ts", import.meta.url))
 
 /** How long a window has to fail before it counts as open, in ms: a webview that cannot start ends within it. */
 export const WINDOW_SETTLE_MS = 4_000

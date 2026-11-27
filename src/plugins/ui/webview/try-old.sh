@@ -2,7 +2,7 @@
 # try-old.sh <image> <runtime-packages> <library-dir> <window-main.ts> <deno>: in a container of <image> holding only
 # the runtime packages, run the window (window-main.ts) under a virtual display, first with the published webview
 # library, then with the one in <library-dir>, and say which stays up. For example, from this folder on a Linux host:
-#   sh try-old.sh ubuntu:20.04 "libwebkit2gtk-4.0-37 libgtk-3-0" linux/gtk3-webkit40 ../window-main.ts "$(command -v deno)"
+#   sh try-old.sh ubuntu:20.04 "libwebkit2gtk-4.0-37 libgtk-3-0" linux/gtk3-webkit40 ../../../window-main.ts "$(command -v deno)"
 IMG=$1; PKG=$2; LIB=$(cd "$3" && pwd); MAIN=$(cd "$(dirname "$4")" && pwd)/$(basename "$4"); DENO=$5
 CT=${CONTAINER:-podman}
 $CT run --rm -e DEBIAN_FRONTEND=noninteractive -v "$DENO":/usr/local/bin/deno:ro -v "$LIB":/lib-wv:ro -v "$MAIN":/w/window-main.ts:ro "$IMG" sh -c "

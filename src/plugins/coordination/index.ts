@@ -26,6 +26,7 @@ import {
   type Context,
   CONTRACT,
   currentBranch,
+  ensureCommand,
   fieldValue,
   fieldValues,
   filesAt,
@@ -68,7 +69,6 @@ import {
   type WriteHook,
   writeJson,
 } from "../../core/api.ts"
-import { ensureCommand } from "../../core/command.ts"
 import {
   ahead,
   exists,

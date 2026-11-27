@@ -286,6 +286,7 @@ export {
   writeGitHook,
 } from "./repos.ts"
 export { checkpointRef, dropRef, dropRefCommand, type Exec, realExec, sendTipWith, TRANSFER_LIMIT_MS, transferEnv, verifyRef } from "./send.ts"
+export { ensureCommand } from "./command.ts"
 export { githubRepo } from "./visibility.ts"
 export { WAIVERS } from "./waivers.ts"
 export {
