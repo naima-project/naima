@@ -49,7 +49,8 @@ const onPath = (dir: string, env: Record<string, string | undefined>, os: string
 
 /**
  * Install the naima command when it is missing or Naima's own is older: what was done, in one line, or null when there was
- * nothing to do. `addToPath` puts the folder on the user's PATH on Windows; on macOS and Linux the line to add is said.
+ * nothing to do. `addToPath` puts the folder on the user's PATH on Windows, unless NAIMA_BIN named it; otherwise the
+ * line to add is said.
  */
 export function ensureCommand(
   env: Record<string, string | undefined>,
@@ -70,11 +71,13 @@ export function ensureCommand(
   writeFileSync(file, text)
   if (os !== "windows") chmodSync(file, 0o755)
   if (onPath(dir, env, os)) return `installed the naima command in ${dir}`
-  if (os === "windows") {
+  // A folder named by NAIMA_BIN is the person's own choice, and so is whether it is on their PATH: it is never added.
+  if (os === "windows" && !env["NAIMA_BIN"]) {
     return addToPath(dir)
       ? `installed the naima command in ${dir}, now on your PATH: a new terminal has it`
       : `installed the naima command in ${dir}; add that folder to your PATH to use it`
   }
+  if (os === "windows") return `installed the naima command in ${dir}; add that folder to your PATH to use it`
   return `installed the naima command in ${dir}, which is not on your PATH: add export PATH="${dir}:$PATH" to your shell's profile`
 }
 
